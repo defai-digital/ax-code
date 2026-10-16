@@ -54,7 +54,7 @@ export type AxEngineInstallRuntime = {
   clearQuarantine?: (binaryPath: string) => Promise<void>
   smoke?: (binaryPath: string, expectedVersion: string) => Promise<void>
   runningServerBinary?: () => Promise<string | undefined>
-  acquireServerLock?: () => Promise<Disposable>
+  acquireServerLock?: (signal?: AbortSignal) => Promise<Disposable>
 }
 
 function assetNameFromUrl(url: string): string {
@@ -205,13 +205,15 @@ async function clearQuarantine(binaryPath: string): Promise<void> {
 
 // A cold server start holds this lock until the model is ready, so wait a
 // bounded time and report a busy server as a domain error, not a lock timeout.
-async function acquireServerLockForInstall(): Promise<Disposable> {
+async function acquireServerLockForInstall(signal?: AbortSignal): Promise<Disposable> {
   try {
     return await FileLock.acquire(AxEnginePaths.serverLock, {
       timeoutMs: 30_000,
       staleMs: AX_ENGINE_SERVER_LOCK_STALE_MS,
+      signal,
     })
   } catch (error) {
+    signal?.throwIfAborted()
     throw new Error(
       `${AX_ENGINE_ERROR.ServerRunning}: an ax-engine server is starting or stopping; retry once it settles (${toErrorMessage(error)})`,
     )
@@ -321,7 +323,11 @@ export async function installAxEngineBinary(
     }
     await assertReplaceable()
 
-    using _ = await FileLock.acquire(AxEnginePaths.installLock, { timeoutMs: 60_000, staleMs: 45 * 60_000 })
+    using _ = await FileLock.acquire(AxEnginePaths.installLock, {
+      timeoutMs: 60_000,
+      staleMs: 45 * 60_000,
+      signal: input.signal,
+    })
 
     // Another process may have finished the install while we waited for the lock.
     const afterLock = await present()
@@ -357,6 +363,7 @@ export async function installAxEngineBinary(
         sha256: release.sha256,
         fetcher: (url) => Ssrf.pinnedFetch(url, { label: "ax-engine.release", signal }),
       }).catch((error: unknown) => {
+        input.signal?.throwIfAborted()
         log.warn("ax-engine binary download failed", {
           status: "error",
           durationMs: 0,
@@ -390,9 +397,10 @@ export async function installAxEngineBinary(
 
       // Keep replacement, state publication and old-version cleanup in the same
       // server critical section. Startup must never observe a half-switched tree.
-      using _server = await acquireServerLock()
+      using _server = await acquireServerLock(input.signal)
       input.signal?.throwIfAborted()
       await assertReplaceable()
+      input.signal?.throwIfAborted()
       await fs.mkdir(AxEnginePaths.bin, { recursive: true })
       // @scan-suppress security_scan - mkdtemp-owned directory plus a fixed backup leaf.
       const previous = path.join(staging, "previous")
@@ -405,6 +413,7 @@ export async function installAxEngineBinary(
       )
       let promoted = false
       try {
+        input.signal?.throwIfAborted()
         await fs.rename(stagedDir, installDir)
         promoted = true
         const state: AxEngineInstallState = {

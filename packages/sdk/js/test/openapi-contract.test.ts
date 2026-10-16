@@ -27,6 +27,22 @@ describe("OpenAPI snapshot contract", () => {
     expect(validateOpenApiSnapshot(snapshot)).toEqual([])
   })
 
+  test("exposes managed AX Engine update fields through the status response", () => {
+    const paths = snapshotPaths(parseOpenApiSnapshot(readFileSync(openApiSnapshotPath, "utf8"))) as Record<
+      string,
+      { get: { responses: Record<string, { content: Record<string, { schema: unknown }> }> } }
+    >
+    expect(paths["/provider/ax-engine/status"].get.responses["200"].content["application/json"].schema).toMatchObject({
+      type: "object",
+      properties: {
+        dependency: {
+          type: "object",
+          properties: { pinnedVersion: { type: "string" }, updateAvailable: { type: "boolean" } },
+        },
+      },
+    })
+  })
+
   test("guards the cross-language route set", () => {
     const snapshot = parseOpenApiSnapshot(readFileSync(openApiSnapshotPath, "utf8"))
     const paths = snapshotPaths(snapshot)

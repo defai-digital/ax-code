@@ -38,6 +38,7 @@ import {
   listDownloadJobs,
   stopServer,
 } from "@/provider/ax-engine"
+import { AxEngineStatus } from "@/provider/ax-engine/status"
 import { isSupportedHost } from "@/provider/ax-engine/platform"
 import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/model-cache"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
@@ -730,7 +731,7 @@ export const ProviderRoutes = lazy(() =>
             description: "ax-engine status",
             content: {
               "application/json": {
-                schema: resolver(z.any()),
+                schema: resolver(AxEngineStatus),
               },
             },
           },

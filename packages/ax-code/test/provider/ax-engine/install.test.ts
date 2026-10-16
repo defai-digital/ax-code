@@ -343,6 +343,40 @@ echo '${detected}'
     expect(events).toEqual(["check", "check", "lock", "check", "unlock"])
   })
 
+  test("cancellation during the final server check preserves the old installation", async () => {
+    const old = await installAt("9.9.8")
+    const controller = new AbortController()
+    let checks = 0
+    await expect(
+      installAxEngineBinary(
+        { signal: controller.signal },
+        baseRuntime({
+          runningServerBinary: async () => {
+            if (++checks === 3) controller.abort(new Error("cancel during check"))
+            return undefined
+          },
+        }),
+      ),
+    ).rejects.toThrow("cancel during check")
+    expect(await getManagedBinary()).toEqual({ path: old.binaryPath, version: "9.9.8" })
+  })
+
+  test("preserves the caller cancellation reason during download", async () => {
+    const controller = new AbortController()
+    const reason = new Error("cancel download")
+    await expect(
+      installAxEngineBinary(
+        { signal: controller.signal },
+        baseRuntime({
+          install: async () => {
+            controller.abort(reason)
+            throw reason
+          },
+        }),
+      ),
+    ).rejects.toBe(reason)
+  })
+
   test("failed same-version repair preserves the installed payload", async () => {
     const old = await installAt(RELEASE.version)
     const content = await fs.readFile(old.binaryPath)

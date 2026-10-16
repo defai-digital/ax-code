@@ -15553,8 +15553,139 @@ export type ProviderAxEngineStatusResponses = {
   /**
    * ax-engine status
    */
-  200: unknown
+  200: {
+    eligibility: {
+      supported: boolean
+      platform: string
+      arch: string
+      macosVersion?: string
+      macosMajor?: number
+      chip?: string
+      chipGeneration?: "unknown" | "m1" | "m2" | "m3" | "m4" | "m5-or-newer"
+      memoryBytes?: number
+      blockers?: Array<string>
+      warnings?: Array<string>
+    }
+    dependency: {
+      available: boolean
+      mode: "configured" | "path" | "managed" | "bundled" | "missing"
+      binaryPath?: string
+      version?: string
+      managedVersion?: string
+      installable?: boolean
+      pinnedVersion?: string
+      updateAvailable?: boolean
+      blockers?: Array<string>
+      warnings?: Array<string>
+    }
+    disk: {
+      path: string
+      modelID:
+        | "tiel-coder-35b-axq-mxfp4"
+        | "tiel-coder-35b-axq-mxfp8"
+        | "swift-1.5-qwen3.8-27b-axq-mxfp4"
+        | "swift-1.5-qwen3.8-27b-axq-mxfp8"
+        | "cyber-tiel-coder-35b-axq-mxfp4"
+        | "cyber-tiel-coder-35b-axq-mxfp8"
+        | "qwen3.8-flash-next-axq-mxfp4"
+        | "qwen3.8-27b-axq-6bit"
+        | "ornith-35b-axq-6bit"
+        | "qwen3-coder-next-axq-6bit"
+        | string
+      quantization: "mlx6bit" | "mlx"
+      freeBytes?: number
+      requiredBytes: number
+      ok: boolean
+      blockers?: Array<string>
+    }
+    model: {
+      present: boolean
+      modelID:
+        | "tiel-coder-35b-axq-mxfp4"
+        | "tiel-coder-35b-axq-mxfp8"
+        | "swift-1.5-qwen3.8-27b-axq-mxfp4"
+        | "swift-1.5-qwen3.8-27b-axq-mxfp8"
+        | "cyber-tiel-coder-35b-axq-mxfp4"
+        | "cyber-tiel-coder-35b-axq-mxfp8"
+        | "qwen3.8-flash-next-axq-mxfp4"
+        | "qwen3.8-27b-axq-6bit"
+        | "ornith-35b-axq-6bit"
+        | "qwen3-coder-next-axq-6bit"
+        | string
+      quantization: "mlx6bit" | "mlx"
+      path?: string
+      revision?: string
+      bytes?: number
+      complete?: boolean
+      blockers?: Array<string>
+    }
+    server: {
+      running: boolean
+      ready: boolean
+      state?: {
+        pid: number
+        port: number
+        baseURL: string
+        modelID:
+          | "tiel-coder-35b-axq-mxfp4"
+          | "tiel-coder-35b-axq-mxfp8"
+          | "swift-1.5-qwen3.8-27b-axq-mxfp4"
+          | "swift-1.5-qwen3.8-27b-axq-mxfp8"
+          | "cyber-tiel-coder-35b-axq-mxfp4"
+          | "cyber-tiel-coder-35b-axq-mxfp8"
+          | "qwen3.8-flash-next-axq-mxfp4"
+          | "qwen3.8-27b-axq-6bit"
+          | "ornith-35b-axq-6bit"
+          | "qwen3-coder-next-axq-6bit"
+          | string
+        apiModelID?: string
+        modelPath: string
+        modelRevision?: string
+        binaryPath: string
+        binaryIdentity?: string
+        contextTokens?: number
+        blockSizeTokens?: number
+        prefillChunk?: number
+        maxOutputTokens?: number
+        maxOutputTokensFlag?: boolean
+        maxConcurrentRequests?: number
+        speculationProfile?: string
+        mtpMode?: string
+        mtpPolicy?: "disabled" | "auto" | "required"
+        prefixCacheDir?: string
+        prefixCacheMaxBytes?: number
+        prefixCacheDiskMaxBytes?: number
+        prefixCacheDiskMaxEntryBytes?: number
+        qwen38ExactMtpProfile?: string
+        startedAt: number
+        lastHealthAt?: number
+      }
+      mtp?: {
+        requestedPolicy: "disabled" | "auto" | "required"
+        launchedPolicy?: "disabled" | "auto" | "required"
+        effective: "active" | "inactive" | "unknown"
+        pendingRestart: boolean
+        observedAt?: number
+        draftedTokens?: number
+        acceptedTokens?: number
+      }
+      blockers?: Array<string>
+    }
+    capability: {
+      toolcall: boolean
+      attachment: boolean
+      reason?: string
+    }
+    lifecycle: {
+      phase: "unavailable" | "missing_dependency" | "missing_model" | "starting" | "ready" | "degraded" | "error"
+      backend: "in_process" | "sidecar_http"
+      blockers?: Array<string>
+    }
+  }
 }
+
+/** Successful response payload for `GET /provider/ax-engine/status` — Get ax-engine local provider status */
+export type ProviderAxEngineStatusResponse = ProviderAxEngineStatusResponses[keyof ProviderAxEngineStatusResponses]
 
 /** Request payload shape for `POST /provider/ax-engine/install` — Install a configured self-contained ax-engine binary */
 export type ProviderAxEngineInstallData = {

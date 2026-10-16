@@ -32839,7 +32839,513 @@
             "description": "ax-engine status",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "eligibility": {
+                      "type": "object",
+                      "properties": {
+                        "supported": {
+                          "type": "boolean"
+                        },
+                        "platform": {
+                          "type": "string"
+                        },
+                        "arch": {
+                          "type": "string"
+                        },
+                        "macosVersion": {
+                          "type": "string"
+                        },
+                        "macosMajor": {
+                          "type": "number"
+                        },
+                        "chip": {
+                          "type": "string"
+                        },
+                        "chipGeneration": {
+                          "default": "unknown",
+                          "type": "string",
+                          "enum": [
+                            "unknown",
+                            "m1",
+                            "m2",
+                            "m3",
+                            "m4",
+                            "m5-or-newer"
+                          ]
+                        },
+                        "memoryBytes": {
+                          "type": "number"
+                        },
+                        "blockers": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "warnings": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "supported",
+                        "platform",
+                        "arch"
+                      ]
+                    },
+                    "dependency": {
+                      "type": "object",
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "configured",
+                            "path",
+                            "managed",
+                            "bundled",
+                            "missing"
+                          ]
+                        },
+                        "binaryPath": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "string"
+                        },
+                        "managedVersion": {
+                          "type": "string"
+                        },
+                        "installable": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "pinnedVersion": {
+                          "type": "string"
+                        },
+                        "updateAvailable": {
+                          "type": "boolean"
+                        },
+                        "blockers": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "warnings": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "available",
+                        "mode"
+                      ]
+                    },
+                    "disk": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "modelID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "tiel-coder-35b-axq-mxfp4",
+                                "tiel-coder-35b-axq-mxfp8",
+                                "swift-1.5-qwen3.8-27b-axq-mxfp4",
+                                "swift-1.5-qwen3.8-27b-axq-mxfp8",
+                                "cyber-tiel-coder-35b-axq-mxfp4",
+                                "cyber-tiel-coder-35b-axq-mxfp8",
+                                "qwen3.8-flash-next-axq-mxfp4",
+                                "qwen3.8-27b-axq-6bit",
+                                "ornith-35b-axq-6bit",
+                                "qwen3-coder-next-axq-6bit"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^AutomatosX\\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}@[a-f0-9]{40}$"
+                            }
+                          ]
+                        },
+                        "quantization": {
+                          "type": "string",
+                          "enum": [
+                            "mlx6bit",
+                            "mlx"
+                          ]
+                        },
+                        "freeBytes": {
+                          "type": "number"
+                        },
+                        "requiredBytes": {
+                          "type": "number"
+                        },
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "blockers": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "modelID",
+                        "quantization",
+                        "requiredBytes",
+                        "ok"
+                      ]
+                    },
+                    "model": {
+                      "type": "object",
+                      "properties": {
+                        "present": {
+                          "type": "boolean"
+                        },
+                        "modelID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "tiel-coder-35b-axq-mxfp4",
+                                "tiel-coder-35b-axq-mxfp8",
+                                "swift-1.5-qwen3.8-27b-axq-mxfp4",
+                                "swift-1.5-qwen3.8-27b-axq-mxfp8",
+                                "cyber-tiel-coder-35b-axq-mxfp4",
+                                "cyber-tiel-coder-35b-axq-mxfp8",
+                                "qwen3.8-flash-next-axq-mxfp4",
+                                "qwen3.8-27b-axq-6bit",
+                                "ornith-35b-axq-6bit",
+                                "qwen3-coder-next-axq-6bit"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^AutomatosX\\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}@[a-f0-9]{40}$"
+                            }
+                          ]
+                        },
+                        "quantization": {
+                          "type": "string",
+                          "enum": [
+                            "mlx6bit",
+                            "mlx"
+                          ]
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "revision": {
+                          "type": "string"
+                        },
+                        "bytes": {
+                          "type": "number"
+                        },
+                        "complete": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "blockers": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "present",
+                        "modelID",
+                        "quantization"
+                      ]
+                    },
+                    "server": {
+                      "type": "object",
+                      "properties": {
+                        "running": {
+                          "type": "boolean"
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        },
+                        "state": {
+                          "type": "object",
+                          "properties": {
+                            "pid": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "port": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "baseURL": {
+                              "type": "string"
+                            },
+                            "modelID": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "tiel-coder-35b-axq-mxfp4",
+                                    "tiel-coder-35b-axq-mxfp8",
+                                    "swift-1.5-qwen3.8-27b-axq-mxfp4",
+                                    "swift-1.5-qwen3.8-27b-axq-mxfp8",
+                                    "cyber-tiel-coder-35b-axq-mxfp4",
+                                    "cyber-tiel-coder-35b-axq-mxfp8",
+                                    "qwen3.8-flash-next-axq-mxfp4",
+                                    "qwen3.8-27b-axq-6bit",
+                                    "ornith-35b-axq-6bit",
+                                    "qwen3-coder-next-axq-6bit"
+                                  ]
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^AutomatosX\\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}@[a-f0-9]{40}$"
+                                }
+                              ]
+                            },
+                            "apiModelID": {
+                              "type": "string"
+                            },
+                            "modelPath": {
+                              "type": "string"
+                            },
+                            "modelRevision": {
+                              "type": "string"
+                            },
+                            "binaryPath": {
+                              "type": "string"
+                            },
+                            "binaryIdentity": {
+                              "type": "string"
+                            },
+                            "contextTokens": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "blockSizeTokens": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "prefillChunk": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "maxOutputTokens": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "maxOutputTokensFlag": {
+                              "type": "boolean"
+                            },
+                            "maxConcurrentRequests": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "speculationProfile": {
+                              "type": "string"
+                            },
+                            "mtpMode": {
+                              "type": "string"
+                            },
+                            "mtpPolicy": {
+                              "type": "string",
+                              "enum": [
+                                "disabled",
+                                "auto",
+                                "required"
+                              ]
+                            },
+                            "prefixCacheDir": {
+                              "type": "string"
+                            },
+                            "prefixCacheMaxBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "prefixCacheDiskMaxBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "prefixCacheDiskMaxEntryBytes": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "qwen38ExactMtpProfile": {
+                              "type": "string"
+                            },
+                            "startedAt": {
+                              "type": "number"
+                            },
+                            "lastHealthAt": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "pid",
+                            "port",
+                            "baseURL",
+                            "modelID",
+                            "modelPath",
+                            "binaryPath",
+                            "startedAt"
+                          ]
+                        },
+                        "mtp": {
+                          "type": "object",
+                          "properties": {
+                            "requestedPolicy": {
+                              "type": "string",
+                              "enum": [
+                                "disabled",
+                                "auto",
+                                "required"
+                              ]
+                            },
+                            "launchedPolicy": {
+                              "type": "string",
+                              "enum": [
+                                "disabled",
+                                "auto",
+                                "required"
+                              ]
+                            },
+                            "effective": {
+                              "type": "string",
+                              "enum": [
+                                "active",
+                                "inactive",
+                                "unknown"
+                              ]
+                            },
+                            "pendingRestart": {
+                              "type": "boolean"
+                            },
+                            "observedAt": {
+                              "type": "number"
+                            },
+                            "draftedTokens": {
+                              "type": "number",
+                              "minimum": 0
+                            },
+                            "acceptedTokens": {
+                              "type": "number",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "requestedPolicy",
+                            "effective",
+                            "pendingRestart"
+                          ]
+                        },
+                        "blockers": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "running",
+                        "ready"
+                      ]
+                    },
+                    "capability": {
+                      "type": "object",
+                      "properties": {
+                        "toolcall": {
+                          "type": "boolean"
+                        },
+                        "attachment": {
+                          "type": "boolean"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "toolcall",
+                        "attachment"
+                      ]
+                    },
+                    "lifecycle": {
+                      "type": "object",
+                      "properties": {
+                        "phase": {
+                          "type": "string",
+                          "enum": [
+                            "unavailable",
+                            "missing_dependency",
+                            "missing_model",
+                            "starting",
+                            "ready",
+                            "degraded",
+                            "error"
+                          ]
+                        },
+                        "backend": {
+                          "type": "string",
+                          "enum": [
+                            "in_process",
+                            "sidecar_http"
+                          ]
+                        },
+                        "blockers": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "phase",
+                        "backend"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "eligibility",
+                    "dependency",
+                    "disk",
+                    "model",
+                    "server",
+                    "capability",
+                    "lifecycle"
+                  ]
+                }
               }
             }
           }
