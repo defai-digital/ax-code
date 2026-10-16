@@ -28,6 +28,8 @@ import { Log } from "@/util/log"
 import { withTimeout } from "@/util/timeout"
 import { ToolBoolean } from "./schema"
 import { TaskOutputSchema } from "./task-output-schema"
+import { Provider } from "../provider/provider"
+import { TokenEstimate } from "../provider/token-estimate"
 
 export const MAX_BACKGROUND_SUBAGENTS = 8
 
@@ -61,6 +63,16 @@ const baseParameters = z.object({
   command: z.string().describe("The command that triggered this task").optional(),
   background: ToolBoolean.optional().describe(
     "Run the agent in the background. Returns immediately with a task_id. You will be notified when it completes. DO NOT sleep, poll, or proactively check on its progress. Default false.",
+  ),
+  // ADR-239: optional fork copies the parent's model-visible history into the
+  // child session as its starting context (read-only to the parent). The
+  // child keeps the standard subagent denials (no further fan-out, ADR-005)
+  // and the same scope of permission rules as a non-fork subagent. Refused
+  // when the calling session is itself a subagent, when the projected
+  // history would exceed 60% of the child's context window, or when combined
+  // with task_id (which resumes an existing session instead of forking).
+  fork: ToolBoolean.optional().describe(
+    "Copy the parent's model-visible history into the child session as its starting context. Read-only to the parent. The child cannot fan out further. Refused when the parent is itself a subagent or when the copied history would exceed 60% of the child's context window.",
   ),
   output_schema: TaskOutputSchema.Parameter.optional(),
 })
@@ -312,10 +324,86 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
       ensureNotAborted()
       if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
+      // Hoisted for the fork branch below: the async iife cannot see the
+      // narrowed `assistant` type for `msg.info` after the throw above, so
+      // we capture the two fields it needs (parent model) into a local
+      // before crossing the closure boundary.
+      const msgFallback = { modelID: msg.info.modelID, providerID: msg.info.providerID }
       const constraints = await taskParentConstraints(msg.info)
       ensureNotAborted()
 
       const session = await iife(async () => {
+        // ADR-239: fork copies the parent's model-visible history into the
+        // child as its starting context. Must come before the resume branch
+        // (task_id) because the two are mutually exclusive: resume continues
+        // an existing session, fork creates a new one from the parent.
+        if (params.fork) {
+          if (params.task_id) {
+            throw new Error(
+              "fork is not supported with task_id — fork creates a new child session from the parent's history; pass task_id alone to resume an existing session.",
+            )
+          }
+          const parentSession = await Session.get(ctx.sessionID)
+          if (parentSession?.parentID) {
+            throw new Error(
+              "fork is not available when the calling session is itself a subagent — the child would carry the parent's subagent ruleset and tool history, which would bypass the ADR-005 fan-out deny that applies to that parent. Call fork from the root session instead.",
+            )
+          }
+          // Size guard (ADR-239 D3). The forked child starts from the same
+          // model-visible prefix the parent just sent, so projecting the
+          // parent's current messages gives the exact token cost the child
+          // will pay on its first turn. Resolved here rather than after
+          // the iife so the guard runs before any session is created.
+          // `msgFallback` is hoisted out of this async closure so we do
+          // not have to re-narrow the assistant union across an `await`.
+          const forkModel = resolvePoolModel({
+            pool: config.agents?.model_pool,
+            requested: params.model,
+            agentPin: await agentModel(agent),
+            fallback: msgFallback,
+          })
+          ensureNotAborted()
+          const providerModel = await Provider.getModel(forkModel.providerID, forkModel.modelID).catch(() => undefined)
+          if (providerModel) {
+            const projected = await MessageV2.toModelMessages(ctx.messages, providerModel, { stripMedia: true })
+            let projectedTokens = 0
+            for (const m of projected) projectedTokens += TokenEstimate.messageTokens(m)
+            const contextWindow = providerModel.limit.context
+            // The child also needs room for its own first turn (prompt +
+            // tools + response), so 60% is the documented budget for the
+            // copied prefix. A 0-context model (custom gateway with no
+            // declared window) is treated as "unknown" and skipped so a
+            // missing cap never silently allows a giant fork.
+            if (contextWindow > 0 && projectedTokens > 0.6 * contextWindow) {
+              throw new Error(
+                `fork refused: the parent's history projects to ~${projectedTokens} tokens, ` +
+                  `which exceeds 60% of ${providerModel.name ?? forkModel.modelID}'s ${contextWindow}-token context window. ` +
+                  `Use a regular task and inline only the context the child actually needs.`,
+              )
+            }
+          }
+          ensureNotAborted()
+          // Session.fork copies every message strictly before ctx.messageID
+          // (the parent's assistant turn that contains this tool call), so
+          // the child starts at the same prefix the parent just sent to its
+          // own model. ctx.messageID is the cutoff, not a message to copy.
+          const forked = await Session.fork({ sessionID: ctx.sessionID, messageID: ctx.messageID })
+          // The forked session inherits the parent's permission, but a fork
+          // exists so a child can carry the parent's prompt cache without
+          // also inheriting the parent's allow rules. ADR-239 D2: inherited
+          // approvals are not carried over; the child keeps the standard
+          // subagent denials (canFanOut=false → task:deny), and any of the
+          // parent's deny rules survive so the child cannot exceed its
+          // scope. Same shape as the non-fork create path, so existing
+          // surfaces (subagent panel, session ruleset) render unchanged.
+          const permission = subagentSessionPermissions({
+            canFanOut: false,
+            primaryTools: config.experimental?.primary_tools,
+            inherited: constraints.permissionDenials,
+          })
+          await Session.setPermission({ sessionID: forked.id, permission })
+          return { ...forked, permission }
+        }
         if (params.task_id) {
           const found = await Session.get(SessionID.make(params.task_id)).catch((e) => {
             if (NotFoundError.isInstance(e)) return undefined

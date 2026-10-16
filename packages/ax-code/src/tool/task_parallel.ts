@@ -28,6 +28,10 @@ import { withTimeout } from "@/util/timeout"
 import { WriteIsolation } from "../session/write-isolation"
 import { EnsemblePreflight } from "../mode/preflight"
 import type { ModelID, ProviderID } from "../provider/schema"
+import { Instance } from "../project/instance"
+import { InstanceBootstrap } from "../project/bootstrap"
+import { Worktree } from "../worktree"
+import { git } from "../util/git"
 
 /**
  * Members a single swarm call may carry. Raised from 8 once the batch deadline
@@ -196,6 +200,105 @@ function swarmMemberDescription(item: string) {
   return bounded.length > 0 ? bounded : "swarm member"
 }
 
+/**
+ * Capture the current HEAD of the project worktree so each writer's
+ * worktree can be created from the same anchor and the post-pool pass can
+ * report a diff against the original state. Returns null on failure
+ * (non-git project or detached HEAD), which the caller treats as "no
+ * diff anchor available" — writers still run, they just have nothing
+ * to diff against.
+ */
+async function captureBaseCommit(): Promise<string | null> {
+  if (Instance.project.vcs !== "git") return null
+  const result = await git(["rev-parse", "HEAD"], { cwd: Instance.worktree })
+  if (result.exitCode !== 0) return null
+  return result.stdout.toString().trim() || null
+}
+
+/**
+ * Slug for a parallel writer's worktree directory. Kept short (≤24 chars)
+ * so the full name (e.g. "swarm-0-build-the-thing") fits inside the 38-char
+ * branch-name limit imposed by `Worktree.makeWorktreeInfo`. Non-ASCII is
+ * stripped so the name always validates.
+ */
+function slugifyForWorktree(input: string): string {
+  const slug = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "")
+  return slug.length > 0 ? slug.slice(0, 24) : "writer"
+}
+
+/**
+ * Post-pool worktree cleanup for one writer. Runs from the project
+ * Instance (NOT the worktree Instance) so `Worktree.remove` operates on
+ * the same registry that created the worktree. Returns the per-writer
+ * report that the call result aggregates.
+ */
+async function finalizeWriterWorktree(input: {
+  outcome: TaskOutcome
+  index: number
+}): Promise<WriterWorktreeReport | undefined> {
+  const { outcome, index } = input
+  if (!outcome.worktree) return undefined
+  const { info, startPoint } = outcome.worktree
+
+  let diffStat = ""
+  let dirty = false
+  try {
+    const [stat, status] = await Promise.all([
+      git(["diff", "--stat", startPoint, "HEAD", "--"], { cwd: info.directory }),
+      git(["status", "--porcelain=v1"], { cwd: info.directory }),
+    ])
+    diffStat = stat.exitCode === 0 ? stat.stdout.toString().trim() : ""
+    dirty = status.exitCode === 0 && status.stdout.toString().trim().length > 0
+  } catch (error) {
+    log.warn("failed to read worktree diff status", {
+      directory: info.directory,
+      error: toErrorMessage(error),
+    })
+  }
+
+  const hasChanges = diffStat.length > 0 || dirty
+  let kept = true
+  let removed = false
+  if (!hasChanges && outcome.ok) {
+    // ADR-231: zero commits and a clean tree → remove the worktree. A
+    // failed member's empty worktree is also a candidate for removal —
+    // it produced no patch either.
+    try {
+      await Worktree.remove({ directory: info.directory })
+      removed = true
+      kept = false
+    } catch (error) {
+      log.warn("failed to remove empty writer worktree", {
+        directory: info.directory,
+        error: toErrorMessage(error),
+      })
+    }
+  }
+
+  log.info("parallel writer worktree finalised", {
+    memberIndex: index,
+    branch: info.branch,
+    kept,
+    diffLines: diffStat.split("\n").filter(Boolean).length,
+  })
+
+  return { directory: info.directory, branch: info.branch, diffStat, dirty, kept, removed }
+}
+
+type WriterWorktreeReport = {
+  directory: string
+  branch: string
+  diffStat: string
+  dirty: boolean
+  kept: boolean
+  removed: boolean
+}
+
 type TaskItemInput = z.infer<typeof TaskItem>
 
 type TaskOutcome = {
@@ -208,6 +311,14 @@ type TaskOutcome = {
   structured?: unknown
   // Mirrors tool/task.ts: set only when this task requested output_schema.
   structuredStatus?: "absent" | "captured"
+  // ADR-231: set when this writer ran inside its own Worktree.createReady
+  // worktree. Captured here so the post-pool pass can compute a diff stat
+  // and decide whether to keep or remove the worktree. Undefined for
+  // read-only members (which always share the main tree).
+  worktree?: {
+    info: Worktree.Info
+    startPoint: string
+  }
 }
 
 async function runOneTask(input: {
@@ -218,9 +329,89 @@ async function runOneTask(input: {
   agent: Agent.Info
   constraints: Awaited<ReturnType<typeof taskParentConstraints>>
   onSessionCreated?: (sessionID: SessionID) => void
+  // ADR-231: when set, allocate a Worktree.createReady worktree for this
+  // writer before doing anything else. Creation failure surfaces as a
+  // member failure (not a thrown error) so the rest of the swarm keeps
+  // running. The worktree info is returned in the outcome so the post-pool
+  // pass can summarise diffs and decide whether to keep the worktree.
+  worktreeSetup?: { name: string; startPoint: string }
 }): Promise<TaskOutcome> {
-  const { params, ctx, model, config, agent, constraints } = input
+  const { params, ctx, model, config, agent, constraints, worktreeSetup } = input
   const canFanOut = taskFanOutAllowed(agent)
+
+  // ADR-231: allocate the writer's worktree up front. A non-git project or
+  // a hostile start point fails this member only — the swarm continues
+  // with the remaining members, which is the documented "fails that child
+  // only with a clear message" behaviour.
+  if (worktreeSetup) {
+    let worktreeInfo: Worktree.Info
+    try {
+      worktreeInfo = await Worktree.createReady(worktreeSetup)
+    } catch (error) {
+      const failure = toErrorMessage(error, "worktree creation failed")
+      log.warn("worktree creation failed for parallel writer", {
+        agent: agent.name,
+        error: failure,
+      })
+      return {
+        description: params.description,
+        subagent_type: agent.name,
+        task_id: "",
+        ok: false,
+        text: "",
+        error: `worktree creation failed: ${failure}. The rest of the swarm continues.`,
+        ...(params.output_schema ? { structuredStatus: "absent" as const } : {}),
+      }
+    }
+    // Wrap the rest of the member's work inside the new Instance so the
+    // child session, the prompt path, and any tool that reads
+    // Instance.directory all operate on the worktree. Mirrors the pattern
+    // in src/tool/arena-implement.ts:433-525.
+    const outcome = await Instance.provide({
+      directory: worktreeInfo.directory,
+      init: InstanceBootstrap,
+      fn: () =>
+        runMemberInsideInstance({
+          params,
+          ctx,
+          model,
+          config,
+          agent,
+          constraints,
+          canFanOut,
+          onSessionCreated: input.onSessionCreated,
+        }),
+    })
+    return { ...outcome, worktree: { info: worktreeInfo, startPoint: worktreeSetup.startPoint } }
+  }
+
+  return await runMemberInsideInstance({
+    params,
+    ctx,
+    model,
+    config,
+    agent,
+    constraints,
+    canFanOut,
+    onSessionCreated: input.onSessionCreated,
+  })
+}
+
+// The original body of runOneTask, lifted out so it can run either inside
+// the writer's worktree (via Instance.provide) or directly on the main
+// tree (no worktree). Behaviour is byte-identical to the pre-ADR-231 code
+// for the no-worktree path.
+async function runMemberInsideInstance(input: {
+  params: TaskItemInput
+  ctx: Tool.Context
+  model: { modelID: ModelID; providerID: ProviderID }
+  config: Awaited<ReturnType<typeof Config.get>>
+  agent: Agent.Info
+  constraints: Awaited<ReturnType<typeof taskParentConstraints>>
+  canFanOut: boolean
+  onSessionCreated?: (sessionID: SessionID) => void
+}): Promise<TaskOutcome> {
+  const { params, ctx, model, config, agent, constraints, canFanOut } = input
 
   const session = await Session.create({
     parentID: ctx.sessionID,
@@ -473,6 +664,14 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
           name: agent.name,
           permission: agent.permission,
         })),
+        // ADR-231: opt-in worktree mode. Only effective for git projects — a
+        // non-git project keeps the strict multi-writer reject because
+        // Worktree.createReady would otherwise fail every writer. The flag
+        // also has no effect when there is at most one writer, so
+        // single-writer swarms behave unchanged.
+        {
+          allowWorktree: config.agents?.task_parallel?.worktree_isolation === true && Instance.project.vcs === "git",
+        },
       )
       if (!isolation.ok) throw new Error(isolation.message)
 
@@ -485,12 +684,19 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
         providerID: msg.info.providerID,
       }
 
+      // ADR-231: capture the base commit before any worktree is created so
+      // each writer's diff stat can be measured against the same anchor. We
+      // only need this in worktree mode, but computing it once is cheap and
+      // keeps the post-pool cleanup simple.
+      const worktreeBaseCommit = isolation.mode === "worktree" ? await captureBaseCommit() : null
+
       toolCtx.metadata({
         title: `Parallel digs (${members.length})`,
         metadata: {
           count: members.length,
           writers: isolation.writers,
           readers: isolation.readers,
+          ...(isolation.mode === "worktree" ? { worktreeIsolation: true, baseCommit: worktreeBaseCommit } : {}),
         },
       })
 
@@ -535,6 +741,19 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
             return
           }
           const { task, agent } = entry
+          // ADR-231: when worktree mode is on, every writer member gets its
+          // own worktree. Read-only members share the main tree (no
+          // worktreeSetup). The name is the member index + a short slug so
+          // tests can locate the worktree on disk; random adjective-noun
+          // names are not predictable enough to assert against.
+          const isWriter = isolation.writers.includes(agent.name)
+          const worktreeSetup =
+            isolation.mode === "worktree" && isWriter && worktreeBaseCommit
+              ? {
+                  name: `swarm-${index}-${slugifyForWorktree(task.description)}`,
+                  startPoint: worktreeBaseCommit,
+                }
+              : undefined
           try {
             outcomes[index] = await runOneTask({
               params: task,
@@ -555,6 +774,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
                 started.push({ sessionID, agent: agent.name })
                 if (failed) void cancelChild(sessionID)
               },
+              ...(worktreeSetup ? { worktreeSetup } : {}),
             })
           } catch (error) {
             // A member that throws before its session exists is reported as that
@@ -572,6 +792,20 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       // Whatever stopped the pool, let the members still in flight settle before
       // reporting: an unawaited promise would keep running past the response.
       await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => runPool()))
+
+      // ADR-231: per-writer worktree cleanup. For every writer that
+      // successfully created a worktree, compute a short diff stat against
+      // the base commit, then keep the worktree (with the diff) if there is
+      // any change or new commit, or remove it (the documented "zero commits
+      // and a clean tree" case) if the writer produced no patch. A removal
+      // failure is logged but never fails the call — the user can re-run
+      // `ax-code worktree remove` to clean up afterwards.
+      const worktreeReports = await Promise.all(
+        outcomes.map(async (outcome, index) => {
+          if (!outcome?.worktree) return undefined
+          return await finalizeWriterWorktree({ outcome, index })
+        }),
+      )
       const settled = outcomes.filter((outcome): outcome is NonNullable<typeof outcome> => outcome !== undefined)
       const stopped = new Set(settled.map((outcome) => outcome.task_id))
       // Hooks run concurrently: they are independent notifications, and awaiting
@@ -642,10 +876,23 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
         const body = truncated
           ? `${full.slice(0, MEMBER_TEXT_INLINE_LIMIT)}\n\n[truncated at ${MEMBER_TEXT_INLINE_LIMIT} characters; the member session ${result.task_id} holds the full text]`
           : full
+        const worktree = worktreeReports[index]
         return [
           header,
           `status: ${report.status}`,
           `task_id: ${result.task_id}`,
+          ...(worktree
+            ? [
+                `worktree: ${worktree.kept ? "kept" : "removed"}${worktree.removed ? " (clean tree, no diff)" : ""}`,
+                `branch: ${worktree.branch}`,
+                `worktree_path: ${worktree.directory}`,
+                worktree.diffStat
+                  ? `diff_stat:\n${worktree.diffStat}`
+                  : worktree.dirty
+                    ? `diff_stat: (uncommitted changes only)`
+                    : `diff_stat: (no changes)`,
+              ]
+            : []),
           "",
           "<task_result>",
           body,
@@ -654,10 +901,13 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
         ].join("\n")
       })
 
+      const worktreeKept = worktreeReports.filter((r) => r?.kept).length
+      const worktreeRemoved = worktreeReports.filter((r) => r?.removed).length
+
       return {
         title: `Parallel digs ${okCount}/${reports.length} ok${deadlineHit ? " (deadline reached)" : ""}`,
         metadata: {
-          results: reports.map((report) => {
+          results: reports.map((report, index) => {
             const result = report.outcome
             if (!result) {
               return {
@@ -673,6 +923,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
                       : "not started",
               }
             }
+            const worktree = worktreeReports[index]
             return {
               description: result.description,
               subagent_type: result.subagent_type,
@@ -685,10 +936,30 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
                     structuredStatus: result.structuredStatus,
                     ...(result.structured === undefined ? {} : { structured: result.structured }),
                   }),
+              ...(worktree
+                ? {
+                    worktree: {
+                      branch: worktree.branch,
+                      directory: worktree.directory,
+                      diffStat: worktree.diffStat,
+                      dirty: worktree.dirty,
+                      kept: worktree.kept,
+                      removed: worktree.removed,
+                    },
+                  }
+                : {}),
             }
           }),
           writers: isolation.writers,
           readers: isolation.readers,
+          ...(isolation.mode === "worktree"
+            ? {
+                worktreeIsolation: true,
+                baseCommit: worktreeBaseCommit,
+                worktreesKept: worktreeKept,
+                worktreesRemoved: worktreeRemoved,
+              }
+            : {}),
           ...(deadlineHit ? { deadlineReached: true } : {}),
         },
         output: [
@@ -698,9 +969,11 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
                 `The call reached its ${Math.round(SWARM_DEADLINE_MS / 60_000)}-minute deadline: members still running were cancelled and the rest were not started. Re-run the unfinished items.`,
               ]
             : []),
-          isolation.writers.length > 0
-            ? `Writers in this batch (serialized capability, single writer): ${isolation.writers.join(", ")}`
-            : "All agents classified read-only.",
+          isolation.mode === "worktree"
+            ? `Worktree isolation (ADR-231) is on. ${worktreeKept} writer worktree(s) kept, ${worktreeRemoved} removed (clean tree, no diff). Nothing was merged.`
+            : isolation.writers.length > 0
+              ? `Writers in this batch (serialized capability, single writer): ${isolation.writers.join(", ")}`
+              : "All agents classified read-only.",
           "",
           ...lines,
         ].join("\n"),

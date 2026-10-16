@@ -151,8 +151,22 @@ describe("task tool model pool parameter (ADR-218)", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await TaskTool.init()
+        // The set of declared parameters is itself load-bearing: the new
+        // fork parameter (ADR-239) MUST appear in the no-pool case so a
+        // caller can opt in without a pool. Only `model` is the field the
+        // pool controls, so the negative check is what proves the pool
+        // is truly absent.
         expect(Object.keys((tool.parameters as any).shape).sort()).toEqual(
-          ["background", "command", "description", "output_schema", "prompt", "subagent_type", "task_id"].sort(),
+          [
+            "background",
+            "command",
+            "description",
+            "fork",
+            "output_schema",
+            "prompt",
+            "subagent_type",
+            "task_id",
+          ].sort(),
         )
         expect("model" in (tool.parameters as any).shape).toBe(false)
 

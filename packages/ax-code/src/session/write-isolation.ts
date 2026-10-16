@@ -20,7 +20,7 @@ export namespace WriteIsolation {
   }
 
   export type ParallelDecision =
-    | { ok: true; writers: string[]; readers: string[] }
+    | { ok: true; writers: string[]; readers: string[]; mode?: "shared" | "worktree" }
     | { ok: false; reason: "multi_writer"; writers: string[]; message: string }
 
   /** Tools that can mutate the workspace when allowed. */
@@ -74,8 +74,17 @@ export namespace WriteIsolation {
    * Parallel fan-out is allowed when at most one writer is present.
    * Zero writers (all explore) is the preferred path.
    * Two or more writers require worktree isolation (not implemented in Phase 1).
+   *
+   * `options.allowWorktree` opts in to the multi-writer worktree lane
+   * (ADR-231): when true, multi-writer sets are accepted with `mode: "worktree"`
+   * and the caller is responsible for placing each writer in its own
+   * Worktree.createReady worktree. The default (no opt-in) keeps the
+   * pre-ADR-231 strict-deny behaviour so existing callers are unaffected.
    */
-  export function evaluateParallelAgents(agents: readonly AgentLike[]): ParallelDecision {
+  export function evaluateParallelAgents(
+    agents: readonly AgentLike[],
+    options?: { allowWorktree?: boolean },
+  ): ParallelDecision {
     const writers: string[] = []
     const readers: string[] = []
     for (const agent of agents) {
@@ -85,6 +94,13 @@ export namespace WriteIsolation {
     }
 
     if (writers.length > 1) {
+      if (options?.allowWorktree) {
+        // ADR-231: opt-in worktree mode lifts the multi-writer rejection.
+        // The call site is responsible for creating one worktree per writer
+        // and reporting per-writer diffs; this function only flips the
+        // policy decision. Read-only agents still share the main tree.
+        return { ok: true, writers, readers: [], mode: "worktree" }
+      }
       return {
         ok: false,
         reason: "multi_writer",
@@ -92,10 +108,10 @@ export namespace WriteIsolation {
         message:
           `Parallel fan-out refuses concurrent writers (${writers.join(", ")}). ` +
           `Use read-only agents (e.g. explore) for concurrent digs, run writers one at a time, ` +
-          `or use worktree isolation for multi-writer workflows.`,
+          `or enable task_parallel.worktree_isolation for multi-writer workflows.`,
       }
     }
 
-    return { ok: true, writers, readers }
+    return { ok: true, writers, readers, mode: "shared" }
   }
 }
