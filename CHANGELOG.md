@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.26.3] - 2026-10-16
+
+### Fixed
+
+- Keep each Wiki page's unverified source indicators scoped to its own recorded evidence, including when graph limits omit source nodes and edges.
+- Preserve bounded per-page unverified source identities in graph snapshots, validate their consistency, and retain compatibility with older snapshots.
+- Account for citations beyond the page source-list cap when displaying page freshness and changed-source totals.
+
+### Changed
+
+- Publish SDK 2.6.25 with the updated Wiki visualization page fields.
+- Refresh the upstream model snapshot.
+
 ## [7.26.2] - 2026-10-16
 
 ### Fixed
