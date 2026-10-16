@@ -7,6 +7,7 @@ import path from "path"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { BashTool } from "../../src/tool/bash"
+import { BackgroundShell } from "../../src/tool/bash-background"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
@@ -216,12 +217,15 @@ process.stdout.write(first, () => {
     })
   })
 
-  test("returns structured hang metadata on timeout", async () => {
+  test("adopts a timed-out command into the background and reports hang metadata", async () => {
+    // username keeps Config off the os.userInfo() fallback, which sandboxed
+    // runners cannot resolve.
+    await using tmp = await tmpdir({ git: true, config: { username: "bash-timeout-test" } })
     await Instance.provide({
-      directory: projectRoot,
+      directory: tmp.path,
       fn: async () => {
         const bash = await BashTool.init()
-        const command = `"${process.execPath}" -e "setTimeout(() => {}, 1000)"`
+        const command = `"${process.execPath}" -e "setTimeout(() => {}, 30000)"`
         const result = await bash.execute(
           {
             command,
@@ -234,8 +238,16 @@ process.stdout.write(first, () => {
         expect(hang["timedOut"]).toBe(true)
         expect(hang["timeoutMs"]).toBe(50)
         expect(hang["processId"]).toBeTypeOf("number")
-        expect(hang["killStartedAt"]).toBeTypeOf("number")
-        expect(result.output).toContain("bash tool terminated command after exceeding timeout 50 ms")
+        const background = (result.metadata as Record<string, any>)["background"] as {
+          shellID: string
+          adopted: boolean
+        }
+        expect(background.adopted).toBe(true)
+        expect(background.shellID).toMatch(/^bash_\d+$/)
+        expect(result.output).toContain("moved to the background")
+        expect(result.output).toContain(background.shellID)
+        expect(BackgroundShell.get(background.shellID, ctx.sessionID)?.status).toBe("running")
+        await BackgroundShell.kill(background.shellID, ctx.sessionID)
       },
     })
   })
@@ -614,8 +626,8 @@ describe("tool.bash truncation", () => {
     })
   })
 
-  test("redirect blast radius ignores timeout-killed commands", async () => {
-    await using tmp = await tmpdir({ git: true })
+  test("redirect blast radius ignores timeout-adopted commands", async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "bash-blast-test" } })
     await withAutonomous(async () => {
       const sessionID = SessionID.make("ses_bash_blast_timeout")
       BlastRadius.reset(sessionID)
@@ -626,7 +638,7 @@ describe("tool.bash truncation", () => {
           fn: async () => {
             const bash = await BashTool.init()
             const target = path.join(tmp.path, "large.txt")
-            const script = "process.stdout.write('x'.repeat(1000)); setTimeout(() => {}, 1000)"
+            const script = "process.stdout.write('x'.repeat(1000)); setTimeout(() => {}, 30000)"
             const result = await bash.execute(
               {
                 command: `${shellQuote(process.execPath)} -e ${shellQuote(script)} > ${shellQuote(target)}`,
@@ -636,8 +648,17 @@ describe("tool.bash truncation", () => {
               { ...ctx, sessionID },
             )
 
+            // The timeout adopts the still-running writer into the background
+            // instead of killing it; either way the redirect must not be
+            // recorded as a completed write (the process never finished under
+            // the foreground call).
             expect((result.metadata.hang as Record<string, unknown>)["timedOut"]).toBe(true)
-            expect(result.output).toContain("bash tool terminated command after exceeding timeout 1 ms")
+            const background = (result.metadata as Record<string, any>)["background"] as { shellID: string }
+            expect(background.shellID).toMatch(/^bash_\d+$/)
+            expect(result.output).toContain("moved to the background")
+            expect(BlastRadius.get(sessionID).files.size).toBe(0)
+            expect(BlastRadius.get(sessionID).lines).toBe(0)
+            await BackgroundShell.kill(background.shellID, sessionID)
           },
         })
       } finally {
@@ -2430,12 +2451,13 @@ describe("tool.bash isolation", () => {
 })
 
 test.skipIf(process.platform === "win32")(
-  "external reviewer timeout includes recovery guidance without claiming success",
+  "external reviewer timeout adopts the CLI and warns without claiming success",
   async () => {
     await using tmp = await tmpdir({
       git: true,
+      config: { username: "bash-reviewer-test" },
       init: async (dir) => {
-        await fs.writeFile(path.join(dir, "claude"), "#!/bin/sh\nsleep 5\n", { mode: 0o700 })
+        await fs.writeFile(path.join(dir, "claude"), "#!/bin/sh\nsleep 30\n", { mode: 0o700 })
       },
     })
     await Instance.provide({
@@ -2447,9 +2469,13 @@ test.skipIf(process.platform === "win32")(
           ctx,
         )
         expect(result.metadata.hang.timedOut).toBe(true)
-        expect(result.output).toContain("External CLI review (claude) did not complete")
-        expect(result.output).toContain("concrete correction or transient failure")
-        expect(result.metadata.exit).not.toBe(0)
+        expect(result.metadata.exit).toBeNull()
+        expect(result.output).toContain("The external CLI review (claude) has not completed")
+        expect(result.output).toContain("bash_output")
+        expect(result.output).toContain("do not start a duplicate review")
+        const background = (result.metadata as Record<string, any>)["background"] as { shellID: string }
+        expect(BackgroundShell.get(background.shellID, ctx.sessionID)?.status).toBe("running")
+        await BackgroundShell.kill(background.shellID, ctx.sessionID)
       },
     })
   },

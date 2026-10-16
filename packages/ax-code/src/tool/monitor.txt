@@ -1,4 +1,4 @@
-Run a background shell command as a live event monitor. Each complete stdout or stderr line becomes a real-time notification pushed to the session. Use a selective, line-buffered command because high-rate output is rate-limited.
+Run a background shell command as a live event monitor. Matching stdout/stderr lines are recorded as session notifications and delivered to the model on the session's next model step (bounded and rate-limited). Use a selective, line-buffered command because high-rate output is throttled.
 
 Parameters:
 - command: Shell command or script. Each stdout line is an event; exit ends the watch.
@@ -9,8 +9,9 @@ Parameters:
 
 Usage notes:
 - The command should be line-buffered (e.g. `cmd | grep --line-buffered pattern`) for timely delivery.
-- High-rate output (>100 lines/sec) may be throttled. Prefer filtering at the source.
+- High-rate output (>100 lines/sec) is throttled, and recorded line batches are size-capped. Prefer filtering at the source.
 - Use this for watching dev server logs, test runners, deployment status, or file watchers.
 - The monitor runs in the background. This tool returns immediately with a monitor ID.
-- Monitor events are delivered as notifications; you do not need to poll.
+- Matching lines and the monitor's exit are recorded as notifications and delivered on the session's next model step, batched and bounded; they are not pushed instantly, and an idle session is not woken for them.
+- Full output always stays available through bash_output with the monitor's shell ID.
 - To stop a monitor, use kill_shell with the monitor's shell ID.

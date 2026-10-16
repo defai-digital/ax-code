@@ -2031,6 +2031,22 @@ test("untrusted project config may still point the browser tools at a local CDP 
   })
 })
 
+test("bash.auto_background_on_timeout is accepted from project config", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      // username is set so the merged config never falls back to
+      // os.userInfo(), which sandboxed runners cannot resolve.
+      await writeConfig(dir, { bash: { auto_background_on_timeout: false }, username: "cfg-test" })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect((await Config.get()).bash).toEqual({ auto_background_on_timeout: false })
+    },
+  })
+})
+
 test("an untrusted project entry cannot borrow a trusted source's MCP identity", async () => {
   // MCP trust records a source per server *name*, and the gate short-circuits
   // for a trusted source without ever consulting the fingerprint. A later

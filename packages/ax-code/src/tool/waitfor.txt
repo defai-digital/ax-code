@@ -1,18 +1,20 @@
 Wait for a background task to finish and read its result inline, in this turn.
 
 Parameters:
-- task_id: the task_id (ses_...) or queue_id (tsk_...) returned when the background task was started.
+- task_id: the task_id (ses_...), queue_id (tsk_...), or background shell id (bash_...) returned when the background task was started.
 - timeout: seconds to wait, 1-600 (required). The 600s cap is hard; pick the shortest timeout that covers your need.
 
 When to use waitfor:
 - You launched a background task (task with background=true) and you need its result NOW, in this turn, to continue — e.g. the next step depends on its output.
+- You launched a command with run_in_background (or a command that was moved to the background after exceeding its bash timeout) and you need its completion and output tail now.
 
 When NOT to use waitfor:
 - Do not wait in a loop. Make at most one wait per turn; if it times out, continue with other work and wait again later if still needed.
 - Fire-and-forget background tasks deliver their result automatically — you will be notified when they finish. Do not wait on a task whose result you do not need right now.
-- Do not use waitfor to check progress or re-run work the background task is already doing.
+- Do not use waitfor to check progress or re-run work the background task is already doing; use bash_output for incremental output.
 
 Notes:
 - Waiting on a task that has not started because it is gated on this session going idle is refused — that would deadlock. End your turn instead.
 - Consuming a result with waitfor claims it for this tool call and suppresses the automatic completion notification (handoff) for that task. If the automatic handoff already claimed it, waitfor reports that state without repeating the result.
+- Waiting on a background shell (bash_...) consumes its unread output exactly like bash_output, and suppresses its pending exit notification. Later bash_output calls for that shell report no unread output.
 - On timeout, waitfor returns normally with "Still running" — the task keeps running and you will be notified when it finishes.

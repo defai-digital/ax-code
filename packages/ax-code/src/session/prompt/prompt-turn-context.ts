@@ -2,6 +2,7 @@ import { ScopedFlag } from "../../flag/scoped"
 import { SessionGoal } from "../goal"
 import { GoalPlan } from "../goal-plan"
 import { IntelligenceNudge } from "../intelligence-nudge"
+import { BackgroundNotification } from "../background-notification"
 import type { MessageV2 } from "../message-v2"
 import type { SessionID } from "../schema"
 import { SystemPrompt } from "../system"
@@ -137,11 +138,21 @@ export async function buildTurnContext(input: {
         ].join("\n")
       : undefined
 
+  // Background-work results (background shell exits, monitor lines/exits)
+  // recorded since the previous model step. Draining here delivers them on
+  // the next step of a BUSY session only — an idle session runs no prompt
+  // loop, so nothing is delivered and no turn is started for them. The
+  // drain claims each notification at most once.
+  const backgroundNotifications = input.sessionID
+    ? BackgroundNotification.drainForModelStep(input.sessionID)
+    : undefined
+
   const sections = [
     ...(decisionHints ? [decisionHints] : []),
     ...(intelligenceNudge.active ? [intelligenceNudge.text] : []),
     ...(goalSection ? [goalSection] : []),
     ...(pendingTodosSection ? [pendingTodosSection] : []),
+    ...(backgroundNotifications ? [backgroundNotifications] : []),
   ]
   if (sections.length === 0) return undefined
   return [`<turn_context>`, ...sections, `</turn_context>`].join("\n")

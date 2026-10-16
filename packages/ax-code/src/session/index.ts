@@ -24,6 +24,7 @@ import { SessionPrompt } from "./prompt"
 import { SelfCorrection } from "./correction"
 import { BlastRadius } from "./blast-radius"
 import { BackgroundShell } from "../tool/bash-background"
+import { BackgroundNotification } from "./background-notification"
 import { SessionStatus } from "./status"
 import { SessionMetadata } from "./metadata"
 import { fn } from "@/util/fn"
@@ -1051,6 +1052,8 @@ export namespace Session {
       await BackgroundShell.killForSession(item.id).catch((e) =>
         log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
       )
+      // Pending background-work notifications die with the session too.
+      BackgroundNotification.forgetSession(item.id)
       // Drop the out-of-band session_diff blob written by revert/summary.
       // CASCADE only covers DB rows, so without this every session that ever
       // recorded a diff would leak its file on delete.

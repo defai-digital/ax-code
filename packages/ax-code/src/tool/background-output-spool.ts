@@ -113,6 +113,39 @@ export class BackgroundOutputSpool {
     return { output, dropped }
   }
 
+  /**
+   * Non-destructive tail preview of unread output, for bounded completion
+   * notifications. Unlike read() it advances no cursor and releases nothing.
+   * Returns undefined when there is nothing unread or the spool is not
+   * readable (already consumed, expired, or in a storage-error state).
+   */
+  peekTail(maxBytes: number): string | undefined {
+    if (!this.size || this.fd === undefined) return undefined
+    try {
+      const length = Math.min(this.size, maxBytes)
+      const bytes = Buffer.allocUnsafe(length)
+      let offset = 0
+      let position = (this.head + this.size - length) % BackgroundOutputSpool.capacity
+      while (offset < bytes.length) {
+        const count = fs.readSync(
+          this.fd,
+          bytes,
+          offset,
+          Math.min(bytes.length - offset, BackgroundOutputSpool.capacity - position),
+          position,
+        )
+        if (!count) throw new Error("Spool output is incomplete")
+        offset += count
+        position = (position + count) % BackgroundOutputSpool.capacity
+      }
+      // The tail edge of the preview can land inside a UTF-8 character.
+      const start = bytes.length - safeUtf8SuffixLength(bytes, bytes.length)
+      return bytes.toString("utf8", start)
+    } catch {
+      return undefined
+    }
+  }
+
   expire() {
     this.integrity = "expired"
     this.dropped = true

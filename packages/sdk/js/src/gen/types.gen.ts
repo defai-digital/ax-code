@@ -338,6 +338,15 @@ export type Config = {
    */
   shell?: string
   /**
+   * Bash tool execution behavior
+   */
+  bash?: {
+    /**
+     * When a foreground bash command exceeds its timeout, keep it running by adopting the live process into the background shell registry instead of killing it (default: true). The tool result returns a shell id; output captured so far is preserved and stays readable via bash_output/waitfor. A user abort still kills the command regardless of this setting.
+     */
+    auto_background_on_timeout?: boolean
+  }
+  /**
    * UI language (English only)
    */
   language?: "en"
@@ -1171,6 +1180,9 @@ export type Event =
   | EventTaskQueueCreated
   | EventTaskQueueUpdated
   | EventTaskQueueDeleted
+  | EventQuestionAsked
+  | EventQuestionReplied
+  | EventQuestionRejected
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventPermissionAsked
@@ -1179,9 +1191,6 @@ export type Event =
   | EventTodoUpdated
   | EventSessionStatus
   | EventSessionIdle
-  | EventQuestionAsked
-  | EventQuestionReplied
-  | EventQuestionRejected
   | EventSessionCompacted
   | EventFileEdited
   | EventVcsBranchUpdated

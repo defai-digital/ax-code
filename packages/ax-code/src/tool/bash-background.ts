@@ -8,6 +8,7 @@ import { Bus } from "@/bus"
 import { NotificationEvent } from "@/notification/events"
 import { TOAST_DURATION_LONG_MS } from "@/constants/server"
 import { abortError } from "@/util/abort"
+import { BackgroundNotification } from "../session/background-notification"
 
 const log = Log.create({ service: "bash-background" })
 
@@ -125,11 +126,16 @@ export namespace BackgroundShell {
     return { text: bytes.toString("utf8", 0, end), truncated: text.length > limit || end < bytes.length }
   }
 
+  /** Bounded unread-output tail included in exit notifications. */
+  const EXIT_NOTIFICATION_TAIL_BYTES = 2048
+
   export function register(input: {
     sessionID: string
     command: string
     description: string
     proc: ChildProcess
+    /** Output captured before adoption (foreground timeout path); seeds the spool. */
+    seedOutput?: string
     onExited?: () => void
   }): Info {
     const proc = input.proc
@@ -162,6 +168,10 @@ export namespace BackgroundShell {
     }
     shells.set(id, entry)
     retentionTimer ??= setInterval(expireFinished, 60_000).unref()
+
+    // Seed before any stream listener can fire so the adopted history stays
+    // ordered ahead of live output. The spool enforces its own size caps.
+    if (input.seedOutput) entry.spool.append(input.seedOutput)
 
     const appendText = (stream: OutputStream, text: string) => {
       if (!text || entry.status !== "running" || shells.get(id) !== entry) return
@@ -259,6 +269,24 @@ export namespace BackgroundShell {
     entry.onExited?.()
     entry.onExited = undefined
     entry.proc = undefined
+    // Deliberate kills (kill_shell, monitor timeout, session teardown) are
+    // already known to their initiator; only natural exits notify.
+    if (status !== "killed") {
+      try {
+        BackgroundNotification.recordShellExit({
+          sessionID: entry.sessionID,
+          shellID: entry.id,
+          description: entry.description,
+          status,
+          exitCode,
+          durationMs: entry.endedAt - entry.startedAt,
+          outputTail: entry.spool.peekTail(EXIT_NOTIFICATION_TAIL_BYTES),
+          outputIntegrity: entry.spool.integrity,
+        })
+      } catch {
+        // Notification recording is best-effort; exit handling continues.
+      }
+    }
     const info = toInfo(entry)
     for (const observer of entry.observers) {
       try {
@@ -506,6 +534,7 @@ export namespace BackgroundShell {
   export function resetForTests() {
     for (const entry of shells.values()) forget(entry)
     BackgroundOutputSpool.reset()
+    BackgroundNotification.resetForTests()
     counter = 0
   }
 }

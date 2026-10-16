@@ -5,6 +5,8 @@ import { Session } from "../session"
 import { SessionID, TaskQueueID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { TaskQueue } from "../session/task-queue"
+import { BackgroundShell } from "./bash-background"
+import { BackgroundNotification } from "../session/background-notification"
 import { childVisibleText, isEmptySubagentResultText } from "../session/background-subagent-handoff"
 import { Log } from "@/util/log"
 import { abortError } from "@/util/abort"
@@ -29,7 +31,7 @@ const parameters = z.object({
   task_id: z
     .string()
     .describe(
-      "The task_id (child session id, ses_...) or queue_id (tsk_...) of a background task started from this session",
+      "The task_id (child session id, ses_...), queue_id (tsk_...), or background shell id (bash_...) of a background task started from this session",
     )
     .optional(),
   timeout: z
@@ -52,10 +54,12 @@ export async function resolveTarget(taskID: string): Promise<TaskQueue.Info | un
   if (taskID.startsWith("ses_")) {
     // Newest-first: the default queue order is oldest-first, so a bounded limit
     // would keep the oldest rows and drop the live one for a busy child session.
-    const items = await TaskQueue.list({ sessionID: SessionID.make(taskID), limit: 100, descending: true }).catch((e) => {
-      if (NotFoundError.isInstance(e)) return [] as TaskQueue.Info[]
-      throw e
-    })
+    const items = await TaskQueue.list({ sessionID: SessionID.make(taskID), limit: 100, descending: true }).catch(
+      (e) => {
+        if (NotFoundError.isInstance(e)) return [] as TaskQueue.Info[]
+        throw e
+      },
+    )
     // A child session can hold multiple subagent queue items; list order is
     // not creation order, so `.at(-1)` can return a stale row. Pick the item
     // with the greatest time.created (tie-break: greatest id).
@@ -114,6 +118,98 @@ function isIdleGatedOn(item: TaskQueue.Info, sessionID: SessionID) {
   return item.status === "waiting_for_idle" && item.sessionID === sessionID
 }
 
+/**
+ * Background-shell branch (bash_ ids: run_in_background, timeout adoption,
+ * or monitors). Waits for the shell to leave "running" within the caller's
+ * timeout, then returns the status plus the unread output tail. The terminal
+ * read consumes the shell record exactly like bash_output, and any pending
+ * exit notification for that shell is dropped so the result is not
+ * presented twice.
+ */
+async function waitForShell(
+  shellID: string,
+  timeoutSeconds: number,
+  ctx: Tool.Context,
+): Promise<{ title: string; metadata: Record<string, any>; output: string }> {
+  let info = BackgroundShell.get(shellID, ctx.sessionID)
+  if (!info) {
+    throw new Error(
+      `No background shell with ID "${shellID}" in this session. Finished records may have been consumed or evicted by retention limits; call bash_output without shell_id to list available shells.`,
+    )
+  }
+
+  const deadline = Date.now() + timeoutSeconds * 1000
+  let vanished = false
+  while (info.status === "running") {
+    if (ctx.abort.aborted) throw abortError()
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) break
+    await sleep(Math.min(WaitForInternals.pollIntervalMs, remaining), { signal: ctx.abort })
+    const next = BackgroundShell.get(shellID, ctx.sessionID)
+    // A finished record is forgotten once read: another reader (bash_output)
+    // consumed it while we waited. Stop polling instead of spinning on the
+    // stale running snapshot until the timeout.
+    if (!next) {
+      vanished = true
+      break
+    }
+    info = next
+  }
+
+  if (vanished) {
+    return {
+      title: `Waiting on ${info.description}`,
+      metadata: {
+        shellID: info.id,
+        status: info.status,
+        timedOut: true,
+        consumed: true,
+      },
+      output:
+        `Background shell "${shellID}" finished and its record was consumed by another reader (e.g. bash_output). ` +
+        `No unread output remains for waitfor.`,
+    }
+  }
+
+  if (info.status === "running") {
+    return {
+      title: `Waiting on ${info.description}`,
+      metadata: {
+        shellID: info.id,
+        status: info.status,
+        timedOut: true,
+      },
+      output: `Still running after ${timeoutSeconds}s. shell_id=${info.id}; read incremental output with bash_output, wait again later, or use kill_shell to stop it.`,
+    }
+  }
+
+  const read = BackgroundShell.read(shellID, ctx.sessionID)
+  // The read consumed the record; a pending exit notification would repeat
+  // the same tail on the next model step. Drop it (claim semantics, the
+  // same reason the task branch claims its delivery).
+  BackgroundNotification.clearShell(ctx.sessionID, shellID)
+  const exit = info.exitCode === null ? "" : ` (exit ${info.exitCode})`
+  const integrity = info.outputStatus === "complete" ? "" : `; output ${info.outputStatus}`
+  const tail = (read?.output ?? "").trimEnd()
+  return {
+    title: info.description,
+    metadata: {
+      shellID: info.id,
+      status: info.status,
+      exitCode: info.exitCode,
+      timedOut: false,
+    },
+    output: [
+      `shell_id: ${info.id}`,
+      `state: ${info.status}${exit}${integrity}`,
+      "",
+      "<shell_output>",
+      ...(tail ? [tail] : ["(no unread output; it may already have been consumed via bash_output)"]),
+      "</shell_output>",
+    ].join("\n"),
+  }
+}
+
 export const WaitForTool = Tool.define("waitfor", async () => {
   return {
     description: DESCRIPTION,
@@ -121,8 +217,12 @@ export const WaitForTool = Tool.define("waitfor", async () => {
     async execute(params: z.infer<typeof parameters>, ctx) {
       if (!params.task_id) {
         throw new Error(
-          "task_id is required: pass the task_id (ses_...) or queue_id (tsk_...) returned when the background task was started.",
+          "task_id is required: pass the task_id (ses_...), queue_id (tsk_...), or background shell id (bash_...) returned when the background task was started.",
         )
+      }
+
+      if (params.task_id.startsWith("bash_")) {
+        return await waitForShell(params.task_id, params.timeout, ctx)
       }
 
       const item = await resolveTarget(params.task_id)

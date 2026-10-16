@@ -313,6 +313,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a finite positive number.`)
       }
       const timeout = params.timeout ?? DEFAULT_TIMEOUT
+      // Foreground timeout adoption (bash.auto_background_on_timeout, default
+      // true): a timed-out command keeps running in the background registry
+      // instead of being killed, so slow builds/test suites are not lost.
+      const autoBackgroundOnTimeout = (await Config.get()).bash?.auto_background_on_timeout !== false
       // Fail fast before permission prompts and before spawning: a shell
       // spawned past the capacity limit would leak.
       if (params.run_in_background) BackgroundShell.assertCapacity(ctx.sessionID)
@@ -1512,6 +1516,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           OsSandbox.cleanupProfile(activeWrap?.active === true ? activeWrap.profilePath : undefined)
           throw error
         }
+        const commandStartedAt = Date.now()
         const seatbeltProfile = activeWrap?.active === true ? activeWrap.profilePath : undefined
         const cleanupSeatbelt = () => OsSandbox.cleanupProfile(seatbeltProfile)
         if (proc.pid) {
@@ -1695,8 +1700,57 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
 
         ctx.abort.addEventListener("abort", abortHandler, { once: true })
 
+        // Timeout adoption: hand the live child to the background shell
+        // registry so its progress survives the tool call, instead of
+        // killing it. Aborts never adopt — the abort handler above keeps
+        // its kill semantics.
+        const adoptIntoBackground = (): BackgroundShell.Info | undefined => {
+          let info: BackgroundShell.Info | undefined
+          try {
+            info = BackgroundShell.register({
+              sessionID: ctx.sessionID,
+              command: params.command,
+              description,
+              proc,
+              seedOutput: output,
+              onExited: () => {
+                if (proc.pid) forgetTrackedPID(proc.pid)
+              },
+            })
+          } catch (error) {
+            // Capacity can fill while this command ran (pre-spawn checks
+            // cover only explicit background starts). Fall back to kill.
+            log.warn("bash timeout adoption failed; killing instead", { pid: proc.pid, error })
+            return undefined
+          }
+          // Ownership transfer to the registry: the foreground listeners stop
+          // capturing (and stop growing `output`), and the turn's abort
+          // signal releases the process — the same rule as run_in_background
+          // shells. These detachments are synchronous with register(), so no
+          // stream chunk can reach both listener sets.
+          proc.stdout?.off("data", appendStdout)
+          proc.stderr?.off("data", appendStderr)
+          ctx.abort.removeEventListener("abort", abortHandler)
+          log.info("bash command adopted into background on timeout", {
+            shellID: info.id,
+            pid: proc.pid,
+            timeout,
+          })
+          return info
+        }
+
+        let adoptedInfo: BackgroundShell.Info | undefined
+        let settleWait: (() => void) | undefined
+
         const timeoutTimer = setTimeout(() => {
           timedOut = true
+          if (autoBackgroundOnTimeout && !ctx.abort.aborted) {
+            adoptedInfo = adoptIntoBackground()
+            if (adoptedInfo) {
+              settleWait?.()
+              return
+            }
+          }
           void kill().catch((error) => {
             log.warn("bash timeout kill failed", {
               timeout,
@@ -1708,6 +1762,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         let procExitCode: number | null = null
 
         await new Promise<void>((resolve, reject) => {
+          settleWait = resolve
           const cleanup = () => {
             clearTimeout(timeoutTimer)
             ctx.abort.removeEventListener("abort", abortHandler)
@@ -1753,6 +1808,39 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             })
           }
         })
+
+        // Timeout adoption result: a normal (non-error) completion that ends
+        // the tool call promptly while the command keeps running. Placed
+        // before the timed-out kill handling and the sandbox-escalation
+        // retry: both would assume a finished process, and escalating would
+        // spawn a duplicate command.
+        if (adoptedInfo) {
+          const elapsedSeconds = Math.round((Date.now() - commandStartedAt) / 100) / 10
+          let msg =
+            `Command exceeded its ${timeout} ms timeout after ${elapsedSeconds}s and is still running. ` +
+            `It was moved to the background instead of being killed, and the output captured so far is preserved.\n` +
+            `Shell ID: ${adoptedInfo.id}\n` +
+            `Use bash_output with shell_id "${adoptedInfo.id}" to read incremental output, ` +
+            `waitfor with task_id "${adoptedInfo.id}" to wait for completion (timeout in seconds), ` +
+            `or kill_shell to terminate it. Do not rerun the command while it is still running.`
+          if (externalReviewClis.size) {
+            msg +=
+              `\nThe external CLI review (${[...externalReviewClis].join(", ")}) has not completed; ` +
+              `read its output with bash_output before drawing any conclusion, and do not start a duplicate review.`
+          }
+          return {
+            title: description,
+            metadata: {
+              output: truncateBashMetadata(output, MAX_METADATA_LENGTH),
+              exit: null,
+              description,
+              hang: hangMetadata(),
+              background: { shellID: adoptedInfo.id, pid: proc.pid ?? null, adopted: true },
+              truncated: false as const,
+            },
+            output: msg,
+          }
+        }
 
         const resultMetadata: string[] = []
 

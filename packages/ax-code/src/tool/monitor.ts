@@ -7,6 +7,7 @@ import { NotificationEvent } from "@/notification/events"
 import { ToolBoolean, ToolNumber } from "./schema"
 import { BashTool } from "./bash"
 import { BackgroundShell } from "./bash-background"
+import { BackgroundNotification } from "../session/background-notification"
 import { Permission } from "@/permission"
 import { Session } from "../session"
 import { NotFoundError } from "../storage/db"
@@ -131,6 +132,22 @@ export const MonitorTool = Tool.define("monitor", {
       lineCount += 1
       if (lineCount > MAX_LINES_PER_SECOND) return
       linesEmitted += 1
+      // Recorded for the owning session and delivered to the model on its
+      // next step (bounded and batched); the Bus event below serves any
+      // future UI consumer.
+      try {
+        BackgroundNotification.recordMonitorLine({
+          sessionID: ctx.sessionID,
+          monitorID: shellID,
+          description: params.description,
+          line: trimmed,
+        })
+      } catch (error) {
+        log.warn("monitor line record failed", {
+          id: shellID,
+          error: error instanceof Error ? error.message : error,
+        })
+      }
       try {
         Bus.publishDetached(NotificationEvent.MonitorLine, {
           monitorID: shellID,
@@ -162,6 +179,19 @@ export const MonitorTool = Tool.define("monitor", {
         for (const stream of ["stdout", "stderr"] as const) {
           if (partial[stream].trimEnd()) emitLine(partial[stream])
           partial[stream] = ""
+        }
+        try {
+          BackgroundNotification.recordMonitorExit({
+            sessionID: ctx.sessionID,
+            monitorID: shellID,
+            description: params.description,
+            exitCode: info.exitCode,
+          })
+        } catch (error) {
+          log.warn("monitor exit record failed", {
+            id: shellID,
+            error: error instanceof Error ? error.message : error,
+          })
         }
         try {
           Bus.publishDetached(NotificationEvent.MonitorExit, {
@@ -205,7 +235,8 @@ export const MonitorTool = Tool.define("monitor", {
       `Description: ${params.description}\n` +
       (filterRe ? `Filter: ${params.filter}\n` : "") +
       (persistent ? `Mode: persistent (runs until session ends or kill_shell)\n` : `Timeout: ${timeoutMs}ms\n`) +
-      `Lines will be delivered as notifications. Use kill_shell with "${shellID}" to stop.`
+      `Matching lines are recorded (rate-limited) and delivered as a notification on this session's next model step. ` +
+      `Full output stays available through bash_output with shell_id "${shellID}". Use kill_shell with "${shellID}" to stop.`
 
     return {
       title: params.description,

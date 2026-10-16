@@ -665,6 +665,17 @@ export const Info = z
       .describe(
         "Default shell to use for terminal and bash tool (e.g. /bin/bash, /usr/bin/zsh). Overrides $SHELL environment variable.",
       ),
+    bash: z
+      .object({
+        auto_background_on_timeout: z
+          .boolean()
+          .optional()
+          .describe(
+            "When a foreground bash command exceeds its timeout, keep it running by adopting the live process into the background shell registry instead of killing it (default: true). The tool result returns a shell id; output captured so far is preserved and stays readable via bash_output/waitfor. A user abort still kills the command regardless of this setting.",
+          ),
+      })
+      .optional()
+      .describe("Bash tool execution behavior"),
     language: z.literal("en").optional().describe("UI language (English only)"),
     disabled_providers: z.array(z.string()).optional().describe("Disable providers that are loaded automatically"),
     enabled_providers: z
