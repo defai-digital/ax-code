@@ -6,6 +6,7 @@ import {
   modulesCss,
   pageModuleMatrix,
   renderModulesView,
+  shortGroupLabel,
   stronglyConnected,
 } from "../src/modules-view.js"
 
@@ -422,4 +423,47 @@ test("shows the empty states and the hidden-page note", () => {
   expect(text).toContain("Page 0")
   expect(text).toContain("Page 59")
   expect(text).not.toContain("Page 60")
+})
+
+test("truncates a group label on character boundaries", () => {
+  // The 24-character cut lands inside the surrogate pair of the emoji.
+  const label = shortGroupLabel(`dir/あ😀${"あ".repeat(23)}`, 24)
+  expect(label.startsWith("…")).toBe(true)
+  // A lone surrogate half renders as U+FFFD; encodeURIComponent rejects one.
+  expect(() => encodeURIComponent(label)).not.toThrow()
+})
+
+test("names the full group path in a heatmap cell tooltip", () => {
+  const first = "packages/a/src/quality/model-registry"
+  const second = "packages/b/src/quality/model-registry"
+  // Both shorten to the same display label, so the shortened form cannot say
+  // which directory a cell counts.
+  expect(shortGroupLabel(first, 24)).toBe(shortGroupLabel(second, 24))
+  const container = new FakeNode("div")
+  const graph = {
+    modules: modules([first, second], [[first, second, 1]], { [first]: 1, [second]: 1 }),
+    pages: [page("p1", "Alpha", [`${first}/one.ts`]), page("p2", "Beta", [`${second}/two.ts`])],
+  } as unknown as WikiGraph
+  renderModulesView(fakeDocument(), container as unknown as HTMLElement, graph, {})
+  const titles = walk(container)
+    .filter((node) => node.tag === "title")
+    .map(textOf)
+  expect(titles).toContain(`Alpha cites ${first}: 1`)
+  expect(titles).toContain(`Beta cites ${second}: 1`)
+})
+
+test("never renders a split surrogate pair", () => {
+  const container = new FakeNode("div")
+  const group = `dir/あ😀${"あ".repeat(23)}`
+  const graph = {
+    modules: modules([group], [], { [group]: 1 }),
+    // A title that needs cutting one unit into an emoji.
+    pages: [page("p1", `${"t".repeat(38)}🚀 tail`, [`${group}/f.ts`])],
+  } as unknown as WikiGraph
+  renderModulesView(fakeDocument(), container as unknown as HTMLElement, graph, {})
+  const written = walk(container)
+    .map((node) => node.textContent)
+    .filter((text): text is string => typeof text === "string" && text.length > 0)
+  expect(written.length).toBeGreaterThan(0)
+  for (const text of written) expect(() => encodeURIComponent(text)).not.toThrow()
 })

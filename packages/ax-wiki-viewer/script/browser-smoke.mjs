@@ -556,6 +556,20 @@ try {
     slack = await edgeSlack()
   }
   assert.ok(slack >= 0, `an edge starts ${(-slack).toFixed(2)} units inside a bubble`)
+  // Enter cycles through the matches, so the box has to keep focus: otherwise
+  // the second Enter goes to the detail heading and the cycle stops at one.
+  // Reset first: a live selection narrows the result list to its neighborhood.
+  await page.getByRole("button", { name: "Show all / reset" }).click()
+  const searchBox = page.locator(".panel-map input[type=search]")
+  await searchBox.click()
+  await searchBox.fill("src/")
+  await page.keyboard.press("Enter")
+  const firstMatch = await page.locator(".detail").innerText()
+  const keptFocus = await page.evaluate(() => document.activeElement?.getAttribute("type") === "search")
+  await page.keyboard.press("Enter")
+  const secondMatch = await page.locator(".detail").innerText()
+  assert.equal(keptFocus, true, "the search box must keep focus after selecting a match")
+  assert.notEqual(secondMatch, firstMatch, "Enter must advance to the next match")
   await page.getByRole("button", { name: "Show all / reset" }).click()
   // Wheel zooms toward the pointer: one notch in shrinks the viewBox, one notch out restores it.
   const wheeled = await page.evaluate(() => {

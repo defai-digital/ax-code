@@ -244,7 +244,11 @@ export function mountMap(
   // synthesize a mouseenter on whatever is under the cursor as capture ends.
   let hoverLock = false
   let suppressCanvasClick = false
-  let lastVisible: WikiGraphNode[] = []
+  // Every match for the current query and filters, before the selection's
+  // neighborhood narrows the list. The rendered list cannot drive the Enter
+  // cycle: selecting a match shrinks it to that node's neighborhood, which
+  // would pin the cycle to whatever the first Enter picked.
+  let matchList: WikiGraphNode[] = []
   let matchIndex = 0
   let filters: ViewFilters = defaultFilters(),
     zoom = 1,
@@ -497,9 +501,13 @@ export function mountMap(
   /** Scale about a screen point. Falls back to the view center when the SVG has no screen transform yet. */
   function applyZoom(factor: number, clientX: number, clientY: number) {
     const ctm = svg.getScreenCTM()
+    const viewWidth = LAYOUT_WORLD.width / zoom
+    // The visible world rect is viewBox(), i.e. `viewWidth` wide and
+    // `viewWidth / aspect` tall — not LAYOUT_WORLD.height, which is the 3:2
+    // canvas the layouts were authored against.
     const anchor = ctm
       ? new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse())
-      : { x: offsetX + LAYOUT_WORLD.width / zoom / 2, y: offsetY + LAYOUT_WORLD.height / zoom / 2 }
+      : { x: offsetX + viewWidth / 2, y: offsetY + viewWidth / canvasAspect() / 2 }
     const next = zoomAbout({ zoom, offsetX, offsetY }, factor, anchor)
     zoom = next.zoom
     offsetX = next.offsetX
@@ -879,13 +887,17 @@ export function mountMap(
   function renderList() {
     const near = neighborhood()
     const query = filters.query.trim()
-    const visible = graph.nodes.filter((node) => {
-      if ((near && !near.has(node.id)) || !isNodeVisible(node, filters)) return false
-      // The flat result list follows the picture: pages and files first. Symbols join a search or a selection.
+    const matches = graph.nodes.filter((node) => isNodeVisible(node, filters))
+    // The Enter cycle walks every match for the query and filters, ignoring the
+    // selection: a selected node shrinks the rendered list to its neighborhood,
+    // which would pin the cycle to whatever the first Enter picked.
+    matchList = matches.filter((node) => !(node.kind === "symbol" && query === ""))
+    // The flat result list follows the picture: pages and files first. Symbols join a search or a selection.
+    const visible = matches.filter((node) => {
+      if (near && !near.has(node.id)) return false
       if (node.kind === "symbol" && !near && query === "") return false
       return true
     })
-    lastVisible = visible
     list.replaceChildren()
     treeTools.style.display = query === "" ? "" : "none"
     if (query !== "") {
@@ -1357,7 +1369,7 @@ export function mountMap(
           ring.setAttribute("width", String(treemapBox.w))
           ring.setAttribute("height", String(treemapBox.h))
           ring.setAttribute("rx", "3")
-        } else ring.setAttribute("r", String(node.radius + 3.5))
+        } else ring.setAttribute("r", String(drawn + 3.5))
         ring.setAttribute("fill", "none")
         ring.setAttribute("stroke", STALE_RING)
         ring.setAttribute("stroke-width", "2")
@@ -1370,7 +1382,7 @@ export function mountMap(
         ? treemapBox.w >= 28 && treemapBox.h >= 20
           ? { x: treemapBox.w / 2 - 10, y: -treemapBox.h / 2 + 10 }
           : undefined
-        : { x: node.radius * 0.75, y: -node.radius * 0.75 }
+        : { x: drawn * 0.75, y: -drawn * 0.75 }
       if (omitted > 0 && badgeAt) {
         const badge = doc.createElementNS(svgNS, "g")
         badge.setAttribute("class", "badge")
@@ -1790,8 +1802,12 @@ export function mountMap(
       render()
       return
     }
-    if (!cameraTouched) fitView()
-    else viewBox()
+    if (!cameraTouched) {
+      fitView()
+      // The refit chose a new zoom and label culling follows it, like every
+      // other camera path.
+      applyEmphasis()
+    } else viewBox()
   })
   resize.observe(canvas)
 
@@ -1871,11 +1887,14 @@ export function mountMap(
     render()
   }
   search.onkeydown = (event) => {
-    if (event.key === "Enter" && lastVisible.length > 0) {
+    if (event.key === "Enter" && matchList.length > 0) {
       event.preventDefault()
-      const node = lastVisible[matchIndex % lastVisible.length]
+      const node = matchList[matchIndex % matchList.length]
       matchIndex++
       select(node)
+      // `select` moves focus to the detail heading, which would swallow the
+      // next Enter and the rest of the query: cycling keeps the box focused.
+      search.focus()
     }
   }
   const doReset = () => {

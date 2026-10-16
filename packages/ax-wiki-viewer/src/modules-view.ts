@@ -78,6 +78,22 @@ function groupLabel(path: string): string {
   return path === "" ? "(root)" : path
 }
 
+/**
+ * A slice that never splits a surrogate pair. A lone half renders as U+FFFD,
+ * so a truncated astral character (an emoji in a directory name) would garble
+ * the label instead of shortening it.
+ */
+function safeCut(value: string, from: number, to: number): string {
+  const cut = value.slice(from, to)
+  let start = 0
+  let end = cut.length
+  const first = cut.charCodeAt(start)
+  if (from > 0 && first >= 0xdc00 && first <= 0xdfff) start += 1
+  const last = cut.charCodeAt(end - 1)
+  if (to < value.length && last >= 0xd800 && last <= 0xdbff) end -= 1
+  return cut.slice(start, end)
+}
+
 /** Display form of a group path: its last segments, so deep paths do not push the matrix aside. */
 export function shortGroupLabel(path: string, max = 32): string {
   if (path === "") return "(root)"
@@ -89,7 +105,7 @@ export function shortGroupLabel(path: string, max = 32): string {
     label = next
   }
   if (label !== path) label = `…/${label}`
-  return label.length > max + 2 ? `…${label.slice(label.length - max)}` : label
+  return label.length > max + 2 ? `…${safeCut(label, label.length - max, label.length)}` : label
 }
 
 /**
@@ -687,7 +703,7 @@ function renderHeatmap(
 ): SVGSVGElement {
   const colLabels = columns.map((path) => shortGroupLabel(path, 24))
   const fullColumns = columns.map(groupLabel)
-  const rowLabels = rows.map((row) => (row.title.length > 40 ? `${row.title.slice(0, 39)}…` : row.title))
+  const rowLabels = rows.map((row) => (row.title.length > 40 ? `${safeCut(row.title, 0, 39)}…` : row.title))
   const metrics = gridMetrics(rowLabels, colLabels)
   const chart = createChart(doc, metrics)
   let max = 0
@@ -708,7 +724,10 @@ function renderHeatmap(
       if (count > 0) {
         rect.setAttribute("fill-opacity", String(opacityOf(count, max)))
         const title = svg(doc, "title")
-        title.textContent = `${rows[row].title} cites ${colLabels[column]}: ${count}`
+        // The full group path, not the shortened column label: two groups can
+        // shorten to the same text and the cell tooltip is the only place the
+        // cited directory is named.
+        title.textContent = `${rows[row].title} cites ${fullColumns[column]}: ${count}`
         rect.append(title)
         if (showNumber) {
           marks.push({ x: x + metrics.cell / 2, y: y + metrics.cell / 2, text: String(count), diag: false })
