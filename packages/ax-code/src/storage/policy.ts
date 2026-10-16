@@ -11,6 +11,12 @@ export const DurableStoragePolicy = {
   walAutoCheckpointPages: 1_000,
   journalSizeLimitBytes: 64 * 1024 * 1024,
   shutdownCheckpointMode: "TRUNCATE",
+  // Pre-migration safety net (storage/backup.ts): before journal migrations
+  // touch an existing database whose schema is behind, a VACUUM INTO backup
+  // is taken. Databases larger than this cap are skipped with a warning, and
+  // only the newest `preMigrationBackupsKept` backups are kept per database.
+  preMigrationBackupMaxSourceBytes: 2 * 1024 * 1024 * 1024,
+  preMigrationBackupsKept: 2,
 } as const
 
 export function describeDurableStoragePolicy() {

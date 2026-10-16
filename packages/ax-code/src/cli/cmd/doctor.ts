@@ -19,7 +19,7 @@ import { Database } from "../../storage/db"
 import { getDoctorConfiguration, getConfiguredCredentialProviders } from "./doctor-config"
 import { Locale } from "@/util/locale"
 import { getTuiPreloadCheck } from "./doctor-preload"
-import { getDoctorDatabaseCheck } from "./doctor-storage"
+import { getDoctorDatabaseCheck, getDoctorDatabaseIntegrityCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import path from "path"
 import { realpathSync } from "fs"
@@ -431,6 +431,7 @@ export const DOCTOR_CHECK_IDS = [
   "tui-engine",
   "legacy-render-flags",
   "feature-flags",
+  "db-integrity",
 ] as const
 
 export type DoctorCheckId = (typeof DOCTOR_CHECK_IDS)[number]
@@ -775,6 +776,10 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
   if (Flag.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN) flags.push("DEBUG_ENGINE_NATIVE_SCAN=on")
   const featureFlags = getFeatureFlagsCheck(flags)
   if (featureFlags) push("feature-flags", featureFlags)
+
+  // 15. Database integrity — PRAGMA quick_check + pre-migration backup listing
+  // (skips with a note when the database is absent or over the size cap).
+  push("db-integrity", await getDoctorDatabaseIntegrityCheck({ databasePath: Database.Path }))
 
   return checks
 }

@@ -3,12 +3,15 @@ import { type NodeSQLiteDatabase } from "drizzle-orm/node-sqlite"
 import type { StatementResultingChanges } from "node:sqlite"
 import type { DrizzleTypeError } from "drizzle-orm"
 import path from "path"
+import { statSync } from "node:fs"
 import { init } from "#db"
 import { Context } from "../util/context"
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { DurableStoragePolicy } from "./policy"
+import { isCorruptError as isCorrupt, raiseCorruptDatabaseError } from "./corrupt"
+import { readSchemaTableCount, takePreMigrationBackup } from "./backup"
 import type { ProjectID } from "../project/schema"
 
 // Per-project SQLite shards (Phase 2). Slice 0 lays the foundation: path
@@ -63,6 +66,24 @@ export namespace Shard {
     }
   }
 
+  // ProjectIDs whose shard file produced a structural (corrupt /
+  // not-a-database) error. While set, opening that shard fails fast with
+  // CorruptDatabaseError and its shutdown/LRU checkpoint is skipped — the
+  // shard twin of db.ts's poison state. Never checkpoint a damaged file: a
+  // handle that kept writing after corruption and then checkpointed made the
+  // file unopenable in another agent's field incident.
+  const corruptedShards = new Set<string>()
+
+  function markShardCorruption(projectID: string, error: unknown): void {
+    if (!isCorrupt(error)) return
+    corruptedShards.add(projectID)
+    log.error("shard corruption detected; later writes fail fast and the checkpoint is skipped", {
+      projectID,
+      file: pathFor(projectID as ProjectID),
+      error: toErrorMessage(error),
+    })
+  }
+
   // A separate context from the registry's "database" context (db.ts). Sharing
   // one would let a shard `use` leak its tx into a registry write (or vice
   // versa) when a shard callback nests a registry operation. See db.ts:222.
@@ -115,15 +136,25 @@ export namespace Shard {
     try {
       db.run("PRAGMA wal_checkpoint(PASSIVE)")
     } catch (error) {
+      // Structural failures stay fatal for the caller's corruption
+      // classification; only transient failures are downgraded to a warning.
+      if (isCorrupt(error)) throw error
       log.warn("shard wal checkpoint during open failed", { file, error: toErrorMessage(error) })
     }
   }
 
   function closeClient(key: string, db: ShardClient) {
-    try {
-      db.run(`PRAGMA wal_checkpoint(${DurableStoragePolicy.shutdownCheckpointMode})`)
-    } catch (error) {
-      log.warn("shard wal checkpoint during close failed", { projectID: key, error: toErrorMessage(error) })
+    if (corruptedShards.has(key)) {
+      // Never checkpoint a damaged file — a TRUNCATE checkpoint after a
+      // structural error can leave the shard unopenable for every later
+      // tool (see db.ts).
+      log.warn("skipping shard wal checkpoint for corrupt database", { projectID: key })
+    } else {
+      try {
+        db.run(`PRAGMA wal_checkpoint(${DurableStoragePolicy.shutdownCheckpointMode})`)
+      } catch (error) {
+        log.warn("shard wal checkpoint during close failed", { projectID: key, error: toErrorMessage(error) })
+      }
     }
     // Same guard as Database.close (BUG-008): one handle that fails its own
     // close must not abort closeAll, LRU eviction, or project removal and
@@ -411,16 +442,43 @@ export namespace Shard {
     },
   ]
 
-  function applyColumnMigrations(db: ShardClient) {
-    for (const migration of SHARD_COLUMN_MIGRATIONS) {
+  function pendingColumnMigrations(db: ShardClient) {
+    return SHARD_COLUMN_MIGRATIONS.filter((migration) => {
       const columns = db.$client.prepare(`PRAGMA table_info("${migration.table}")`).all() as { name: string }[]
-      if (columns.some((column) => column.name === migration.column)) continue
-      db.run(migration.ddl)
+      return !columns.some((column) => column.name === migration.column)
+    })
+  }
+
+  function applyColumnMigrations(db: ShardClient) {
+    for (const migration of pendingColumnMigrations(db)) db.run(migration.ddl)
+  }
+
+  // Pre-migration safety net matching the registry DB (db.ts): an existing
+  // shard that a column migration is about to alter gets a VACUUM INTO
+  // backup first. New shards (empty file) and unmodified ones back up
+  // nothing — see storage/backup.ts.
+  function backupBeforeColumnMigration(db: ShardClient, file: string) {
+    if (pendingColumnMigrations(db).length === 0) return
+    let fileBytes = 0
+    try {
+      fileBytes = statSync(file, { throwIfNoEntry: false })?.size ?? 0
+    } catch {
+      // Unstatable — treat as empty; the size cap below uses the zero size.
     }
+    takePreMigrationBackup({
+      dbPath: file,
+      fileBytes,
+      existingSchema: readSchemaTableCount(db.$client) > 0,
+      migrationPending: true,
+      vacuumInto: (target) => db.$client.prepare("VACUUM INTO ?").run(target),
+    })
   }
 
   function open(projectID: ProjectID): ShardClient {
     const key = projectID as string
+    // A previously classified corrupt shard is never reopened: fail fast
+    // with the actionable error instead of touching the damaged file again.
+    if (corruptedShards.has(key)) raiseCorruptDatabaseError(pathFor(projectID), undefined)
     const existing = cache.get(key)
     if (existing) {
       // LRU touch: re-insert to move this entry to the most-recently-used end.
@@ -431,10 +489,34 @@ export namespace Shard {
 
     const file = pathFor(projectID)
     log.info("opening shard", { projectID, file })
-    const db = init(file)
-    applyStartupPragmas(db, file)
-    for (const statement of SHARD_SCHEMA_DDL) db.run(statement)
-    applyColumnMigrations(db)
+    let db: ShardClient
+    try {
+      db = init(file)
+    } catch (error) {
+      if (isCorrupt(error)) {
+        markShardCorruption(key, error)
+        raiseCorruptDatabaseError(file, error)
+      }
+      throw error
+    }
+    try {
+      applyStartupPragmas(db, file)
+      backupBeforeColumnMigration(db, file)
+      for (const statement of SHARD_SCHEMA_DDL) db.run(statement)
+      applyColumnMigrations(db)
+    } catch (error) {
+      if (isCorrupt(error)) {
+        markShardCorruption(key, error)
+        // Release the handle WITHOUT a checkpoint — see closeClient().
+        try {
+          db.$client.close()
+        } catch (closeError) {
+          log.warn("failed to close corrupt shard handle", { projectID, error: toErrorMessage(closeError) })
+        }
+        raiseCorruptDatabaseError(file, error)
+      }
+      throw error
+    }
 
     cache.set(key, db)
     while (cache.size > MAX_OPEN) {
@@ -499,9 +581,17 @@ export namespace Shard {
         }
         return withInUse(key, () => {
           const effects: Effect[] = []
-          const result = shardCtx.provide({ effects, tx: open(projectID), inTransaction: false, projectID: key }, () =>
-            callback(open(projectID)),
-          )
+          let result: T
+          try {
+            result = shardCtx.provide({ effects, tx: open(projectID), inTransaction: false, projectID: key }, () =>
+              callback(open(projectID)),
+            )
+          } catch (error) {
+            // Structural failures poison this shard: later writes fail fast
+            // and checkpoints are skipped.
+            markShardCorruption(key, error)
+            throw error
+          }
           runEffects(effects)
           return result
         })
@@ -520,16 +610,23 @@ export namespace Shard {
           const effects: Effect[] = []
           // BEGIN IMMEDIATE, matching Database.transaction (db.ts) so shard
           // write transactions acquire the RESERVED lock up front.
-          const result = open(projectID).transaction<T>(
-            (tx) => {
-              return requireSync(
-                shardCtx.provide({ tx, effects, inTransaction: true, projectID: key }, () =>
-                  callback(tx),
-                ) as SyncTransactionResult<T>,
-              ) as SyncTransactionResult<T>
-            },
-            { behavior: "immediate" },
-          ) as SyncTransactionResult<T>
+          let result: SyncTransactionResult<T>
+          try {
+            result = open(projectID).transaction<T>(
+              (tx) => {
+                return requireSync(
+                  shardCtx.provide({ tx, effects, inTransaction: true, projectID: key }, () =>
+                    callback(tx),
+                  ) as SyncTransactionResult<T>,
+                ) as SyncTransactionResult<T>
+              },
+              { behavior: "immediate" },
+            ) as SyncTransactionResult<T>
+          } catch (error) {
+            // Structural failures poison this shard (see use()).
+            markShardCorruption(key, error)
+            throw error
+          }
           runEffects(effects)
           return result
         })

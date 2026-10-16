@@ -8,6 +8,7 @@ import { toErrorMessage } from "../../../util/error-message"
 import { mkdirSync, closeSync, openSync } from "node:fs"
 import { dirname } from "node:path"
 import { once } from "node:events"
+import { getDoctorDatabaseIntegrityCheck } from "../doctor-storage"
 
 async function openDatabase(dbPath: string, options: { readonly: boolean }) {
   const { DatabaseSync } = await import("node:sqlite")
@@ -164,6 +165,17 @@ const VacuumCommand = cmd({
   },
 })
 
+const CheckCommand = cmd({
+  command: "check",
+  describe: "run PRAGMA quick_check on the database and list pre-migration backups",
+  handler: async () => {
+    const check = await getDoctorDatabaseIntegrityCheck({ databasePath: Database.Path })
+    const icon = check.status === "ok" ? "✓" : check.status === "warn" ? "△" : "✗"
+    UI.println(`${icon} ${check.name}: ${check.detail}`)
+    if (check.status === "fail") process.exitCode = 1
+  },
+})
+
 export const DbCommand = cmd({
   command: "db",
   describe: "database tools",
@@ -173,6 +185,7 @@ export const DbCommand = cmd({
       .command(PathCommand)
       .command(MigrateCommand)
       .command(VacuumCommand)
+      .command(CheckCommand)
       .demandCommand()
   },
   handler: () => {},

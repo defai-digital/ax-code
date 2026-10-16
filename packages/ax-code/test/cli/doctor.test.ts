@@ -348,6 +348,7 @@ describe("cli doctor machine contract", () => {
       "tui-engine",
       "legacy-render-flags",
       "feature-flags",
+      "db-integrity",
     ])
     for (const id of DOCTOR_CHECK_IDS) expect(id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/)
   })

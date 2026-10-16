@@ -12,7 +12,7 @@ import { Log } from "../util/log"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
 import path from "path"
-import { readFileSync, readdirSync, existsSync } from "fs"
+import { readFileSync, readdirSync, existsSync, statSync } from "fs"
 import { Installation } from "../installation"
 import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
@@ -20,10 +20,19 @@ import { sleep as sleepDefault } from "@/util/timeout"
 import { init } from "#db"
 import { DurableStoragePolicy } from "./policy"
 import { Shard } from "./shard"
+import { isCorruptError as isCorruptErrorImpl, raiseCorruptDatabaseError } from "./corrupt"
+import {
+  journalMigrationPending,
+  readAppliedJournalVersion,
+  readSchemaTableCount,
+  takePreMigrationBackup,
+} from "./backup"
 import { toErrorMessage } from "../util/error-message"
 import type { ProjectID } from "../project/schema"
 
 declare const AX_CODE_MIGRATIONS: { sql: string; timestamp: number; name: string }[] | undefined
+
+export { CorruptDatabaseError } from "./corrupt"
 
 export const NotFoundError = NamedError.create(
   "NotFoundError",
@@ -48,6 +57,30 @@ export namespace Database {
   })
 
   export type Transaction = SQLiteTransaction<"sync", StatementResultingChanges>
+
+  // Poisoning for structural (corrupt / not-a-database) failures. Once set,
+  // entry points fail fast with CorruptDatabaseError instead of reopening or
+  // writing through the damaged file, and the shutdown WAL checkpoint is
+  // skipped: a handle that kept writing after corruption and then
+  // checkpointed made the file unopenable in another agent's field incident.
+  let corruptState: { file: string; error?: unknown } | undefined
+
+  function assertDatabaseHealthy(): void {
+    if (corruptState) raiseCorruptDatabaseError(corruptState.file, corruptState.error)
+  }
+
+  function isCorrupted(): boolean {
+    return corruptState !== undefined
+  }
+
+  function markCorruption(error: unknown): void {
+    if (corruptState || !isCorruptErrorImpl(error)) return
+    corruptState = { file: Path, error }
+    log.error("database corruption detected; later writes fail fast and the shutdown wal checkpoint is skipped", {
+      path: Path,
+      error: toErrorMessage(error),
+    })
+  }
 
   type Client = NodeSQLiteDatabase
 
@@ -107,6 +140,10 @@ export namespace Database {
     try {
       input.run("PRAGMA wal_checkpoint(PASSIVE)")
     } catch (error) {
+      // Structural failures must stay fatal so the caller's corruption
+      // classification can raise CorruptDatabaseError — only contention or
+      // read-only style failures are downgraded to a warning here.
+      if (isCorruptErrorImpl(error)) throw error
       input.warn?.("failed to checkpoint wal during startup", {
         path: input.path,
         error: toErrorMessage(error),
@@ -115,50 +152,104 @@ export namespace Database {
   }
 
   export const Client = lazy(() => {
+    // A previously classified corrupt database must never be reopened by a
+    // later access: fail fast with the actionable error instead.
+    assertDatabaseHealthy()
     log.info("opening database", { path: Path })
-
-    const db = init(Path)
-
-    applyStartupPragmas({
-      run: (sql) => db.run(sql),
-      warn: (message, extra) => log.warn(message, extra),
-      path: Path,
-    })
-
-    // Apply schema migrations
-    const entries =
-      typeof AX_CODE_MIGRATIONS !== "undefined"
-        ? AX_CODE_MIGRATIONS
-        : migrations(path.join(import.meta.dirname, "../../migration"))
-    if (entries.length > 0) {
-      log.info("applying migrations", {
-        count: entries.length,
-        mode: typeof AX_CODE_MIGRATIONS !== "undefined" ? "bundled" : "dev",
-      })
-      if (Flag.AX_CODE_SKIP_MIGRATIONS) {
-        // Silent skip left developers/ops unaware their schema was frozen
-        // (BP-12). Surface prominently whenever this escape hatch is used.
-        log.warn(
-          "AX_CODE_SKIP_MIGRATIONS is set — schema migrations are being skipped. " +
-            "This is unsafe for production data and should only be used for deliberate recovery.",
-          { count: entries.length },
-        )
-      }
-      const journal = Flag.AX_CODE_SKIP_MIGRATIONS ? entries.map((item) => ({ ...item, sql: "select 1;" })) : entries
-      // Serialize against sibling processes booting at the same time: drizzle
-      // reads the journal before its transaction, so without a cross-process
-      // lock two processes can both run the same non-idempotent DDL and the
-      // loser crashes on "table already exists" (see migrate-lock.ts).
-      const release = MigrationLock.acquire(Path)
-      try {
-        migrate(db, journal)
-      } finally {
-        release()
-      }
-    }
-
-    return db
+    return openClient()
   })
+
+  function openClient(): ReturnType<typeof init> {
+    let db: ReturnType<typeof init> | undefined
+    try {
+      const client = init(Path)
+      db = client
+
+      applyStartupPragmas({
+        run: (sql) => client.run(sql),
+        warn: (message, extra) => log.warn(message, extra),
+        path: Path,
+      })
+
+      // Apply schema migrations
+      const entries =
+        typeof AX_CODE_MIGRATIONS !== "undefined"
+          ? AX_CODE_MIGRATIONS
+          : migrations(path.join(import.meta.dirname, "../../migration"))
+      if (entries.length > 0) {
+        log.info("applying migrations", {
+          count: entries.length,
+          mode: typeof AX_CODE_MIGRATIONS !== "undefined" ? "bundled" : "dev",
+        })
+        if (Flag.AX_CODE_SKIP_MIGRATIONS) {
+          // Silent skip left developers/ops unaware their schema was frozen
+          // (BP-12). Surface prominently whenever this escape hatch is used.
+          log.warn(
+            "AX_CODE_SKIP_MIGRATIONS is set — schema migrations are being skipped. " +
+              "This is unsafe for production data and should only be used for deliberate recovery.",
+            { count: entries.length },
+          )
+        }
+        const journal = Flag.AX_CODE_SKIP_MIGRATIONS ? entries.map((item) => ({ ...item, sql: "select 1;" })) : entries
+        // Serialize against sibling processes booting at the same time: drizzle
+        // reads the journal before its transaction, so without a cross-process
+        // lock two processes can both run the same non-idempotent DDL and the
+        // loser crashes on "table already exists" (see migrate-lock.ts).
+        const release = MigrationLock.acquire(Path)
+        try {
+          backupBeforeMigration(client, entries)
+          migrate(client, journal)
+        } finally {
+          release()
+        }
+      }
+
+      return client
+    } catch (error) {
+      if (isCorruptErrorImpl(error)) {
+        markCorruption(error)
+        // Release the handle WITHOUT a checkpoint (see close()). Best-effort:
+        // a close failure on the damaged file must not mask the classified
+        // error below.
+        try {
+          db?.$client.close()
+        } catch (closeError) {
+          log.warn("failed to close corrupt database handle", {
+            path: Path,
+            error: toErrorMessage(closeError),
+          })
+        }
+        raiseCorruptDatabaseError(Path, error)
+      }
+      throw error
+    }
+  }
+
+  // Pre-migration safety net: when an existing database is about to be
+  // migrated (journal ahead of the applied schema version), snapshot it with
+  // VACUUM INTO first so a failed migration never loses all history. Backup
+  // failures only warn and startup continues (storage/backup.ts), and no
+  // backup is taken unless a migration will actually run.
+  function backupBeforeMigration(client: ReturnType<typeof init>, entries: Journal) {
+    if (Flag.AX_CODE_SKIP_MIGRATIONS) return
+    const latest = entries.reduce((max, entry) => Math.max(max, entry.timestamp), 0)
+    if (latest <= 0) return
+    let fileBytes = 0
+    try {
+      fileBytes = statSync(Path, { throwIfNoEntry: false })?.size ?? 0
+    } catch {
+      // Unstatable — treat as empty; the backup helper skips it.
+    }
+    const applied = readAppliedJournalVersion(client.$client)
+    if (!journalMigrationPending(applied, latest)) return
+    takePreMigrationBackup({
+      dbPath: Path,
+      fileBytes,
+      existingSchema: readSchemaTableCount(client.$client) > 0,
+      migrationPending: true,
+      vacuumInto: (target) => client.$client.prepare("VACUUM INTO ?").run(target),
+    })
+  }
 
   export async function close() {
     // Drain any queued replay events before tearing down the SQLite
@@ -177,18 +268,25 @@ export namespace Database {
     }
     const client = Client.peek()
     if (client) {
-      try {
-        // Keep the file-backed SQLite database as the durable source of truth,
-        // but opportunistically shrink the WAL during graceful shutdown. This
-        // addresses the "disk sidecar keeps growing" class of problems without
-        // introducing a separate in-memory source of truth or async sync window
-        // where acknowledged writes can be lost.
-        client.run(`PRAGMA wal_checkpoint(${DurableStoragePolicy.shutdownCheckpointMode})`)
-      } catch (error) {
-        log.warn("failed to truncate wal during shutdown", {
-          path: Path,
-          error: toErrorMessage(error),
-        })
+      if (isCorrupted()) {
+        // Never checkpoint a damaged file — a TRUNCATE checkpoint after a
+        // structural error can leave the database unopenable for every later
+        // tool (field incident). Just close the handle below.
+        log.warn("skipping shutdown wal checkpoint for corrupt database", { path: Path })
+      } else {
+        try {
+          // Keep the file-backed SQLite database as the durable source of truth,
+          // but opportunistically shrink the WAL during graceful shutdown. This
+          // addresses the "disk sidecar keeps growing" class of problems without
+          // introducing a separate in-memory source of truth or async sync window
+          // where acknowledged writes can be lost.
+          client.run(`PRAGMA wal_checkpoint(${DurableStoragePolicy.shutdownCheckpointMode})`)
+        } catch (error) {
+          log.warn("failed to truncate wal during shutdown", {
+            path: Path,
+            error: toErrorMessage(error),
+          })
+        }
       }
       // `close()` is followed by NativeStore/Shard teardown below (BUG-008):
       // an uncaught throw here must not skip them, or the exact fd/WAL leak
@@ -247,6 +345,12 @@ export namespace Database {
     }
     return false
   }
+
+  // Structural SQLite failures (SQLITE_CORRUPT=11, SQLITE_NOTADB=26, plus
+  // their code/message variants through wrapped causes) are never retried as
+  // contention, and the open/migrate path raises CorruptDatabaseError for
+  // them. Implementation in storage/corrupt.ts (shared with the shard layer).
+  export const isCorruptError = isCorruptErrorImpl
 
   // Resolver for the ambient projectID, wired by project/instance.ts at module
   // init (see the ScopedFlag.setDirectoryResolver precedent there). Kept as an
@@ -366,12 +470,21 @@ export namespace Database {
   }
 
   export function use<T>(callback: (trx: TxOrDb) => T): T {
+    assertDatabaseHealthy()
     const current = ctx.peek()
     if (current) {
       return requireSyncTransactionResult(callback(current.tx))
     }
     const effects: Effect[] = []
-    const result = ctx.provide({ effects, tx: Client(), inTransaction: false }, () => callback(Client()))
+    let result: T
+    try {
+      result = ctx.provide({ effects, tx: Client(), inTransaction: false }, () => callback(Client()))
+    } catch (error) {
+      // Structural failures poison the handle: later writes fail fast and
+      // shutdown skips the WAL checkpoint.
+      markCorruption(error)
+      throw error
+    }
     runEffects(effects)
     return result
   }
@@ -411,14 +524,22 @@ export namespace Database {
     // `inTransaction`, so its `tx` is only the plain client. Starting a real
     // transaction here is exactly the top-level behavior — `use()`'s tx never
     // had a BEGIN of its own to conflict with.
-    const result = Client().transaction<T>(
-      (tx) => {
-        return requireSyncTransactionResult(
-          ctx.provide({ tx, effects, inTransaction: true }, () => callback(tx)) as SyncTransactionResult<T>,
-        ) as SyncTransactionResult<T>
-      },
-      { behavior: "immediate" },
-    ) as SyncTransactionResult<T>
+    assertDatabaseHealthy()
+    let result: SyncTransactionResult<T>
+    try {
+      result = Client().transaction<T>(
+        (tx) => {
+          return requireSyncTransactionResult(
+            ctx.provide({ tx, effects, inTransaction: true }, () => callback(tx)) as SyncTransactionResult<T>,
+          ) as SyncTransactionResult<T>
+        },
+        { behavior: "immediate" },
+      ) as SyncTransactionResult<T>
+    } catch (error) {
+      // Structural failures poison the handle (see use()).
+      markCorruption(error)
+      throw error
+    }
     runEffects(effects)
     return result
   }

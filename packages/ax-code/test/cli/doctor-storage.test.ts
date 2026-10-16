@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest"
-import { getDoctorDatabaseCheck } from "../../src/cli/cmd/doctor-storage"
+import fs from "node:fs"
+import path from "node:path"
+import { DatabaseSync } from "node:sqlite"
+import { getDoctorDatabaseCheck, getDoctorDatabaseIntegrityCheck } from "../../src/cli/cmd/doctor-storage"
 import { describeDurableStoragePolicy, DurableStoragePolicy } from "../../src/storage/policy"
+import { takePreMigrationBackup } from "../../src/storage/backup"
+import { tmpdir } from "../fixture/fixture"
 
 describe("getDoctorDatabaseCheck", () => {
   test("reports the active bundled database path", async () => {
@@ -112,5 +117,108 @@ describe("getDoctorDatabaseCheck", () => {
     expect(check.status).toBe("fail")
     expect(check.detail).toContain("cannot inspect database files")
     expect(check.detail).toContain("ax-code.db: permission denied")
+  })
+})
+
+function createHealthyDatabase(file: string, rows = 500) {
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  const db = new DatabaseSync(file)
+  db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, payload TEXT)")
+  db.exec("BEGIN")
+  const insert = db.prepare("INSERT INTO t (id, payload) VALUES (?, ?)")
+  for (let i = 0; i < rows; i++) insert.run(i, "x".repeat(100))
+  db.exec("COMMIT")
+  db.close()
+  return file
+}
+
+describe("getDoctorDatabaseIntegrityCheck", () => {
+  test("reports quick_check ok for a healthy database with no backups yet", async () => {
+    await using tmp = await tmpdir()
+    const file = createHealthyDatabase(path.join(tmp.path, "ax-code.db"))
+
+    const check = await getDoctorDatabaseIntegrityCheck({ databasePath: file })
+
+    expect(check).toMatchObject({ name: "Database integrity", status: "ok" })
+    expect(check.detail).toContain("PRAGMA quick_check ok")
+    expect(check.detail).toContain("no pre-migration backups")
+  })
+
+  test("fails with the corruption wording for a not-a-database file", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "ax-code.db")
+    fs.mkdirSync(tmp.path, { recursive: true })
+    fs.writeFileSync(file, "this is definitely not a sqlite database\n")
+
+    const check = await getDoctorDatabaseIntegrityCheck({ databasePath: file })
+
+    expect(check.status).toBe("fail")
+    expect(check.detail).toContain("quick_check failed")
+    expect(check.detail).toContain("file is not a database")
+    expect(check.detail).toContain("left untouched")
+  })
+
+  test("fails for a damaged (truncated) database", async () => {
+    await using tmp = await tmpdir()
+    const file = createHealthyDatabase(path.join(tmp.path, "ax-code.db"))
+    fs.truncateSync(file, Math.max(1, Math.floor(fs.statSync(file).size / 3)))
+
+    const check = await getDoctorDatabaseIntegrityCheck({ databasePath: file })
+
+    expect(check.status).toBe("fail")
+    expect(check.detail).toContain("database disk image is malformed")
+  })
+
+  test("skips quick_check with a note over the size cap", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "ax-code.db")
+    fs.mkdirSync(tmp.path, { recursive: true })
+    fs.writeFileSync(file, "SQLite format 3\0")
+    // Sparse file: reports a size over the cap without occupying the disk.
+    fs.truncateSync(file, DurableStoragePolicy.preMigrationBackupMaxSourceBytes + 1)
+
+    const check = await getDoctorDatabaseIntegrityCheck({ databasePath: file })
+
+    expect(check.status).toBe("warn")
+    expect(check.detail).toContain("quick_check skipped")
+    expect(check.detail).toContain("exceeds cap")
+  })
+
+  test("skips with a note when the database is not created yet", async () => {
+    const check = await getDoctorDatabaseIntegrityCheck({
+      databasePath: "/tmp/ax-code/ax-code.db",
+      exists: async () => false,
+    })
+
+    expect(check.status).toBe("ok")
+    expect(check.detail).toContain("quick_check skipped (database not created yet)")
+  })
+
+  test("lists existing backups with age and size", async () => {
+    await using tmp = await tmpdir()
+    const file = createHealthyDatabase(path.join(tmp.path, "ax-code.db"))
+    const result = takePreMigrationBackup({
+      dbPath: file,
+      fileBytes: fs.statSync(file).size,
+      migrationPending: true,
+      existingSchema: true,
+      vacuumInto: (target) => {
+        const db = new DatabaseSync(file)
+        try {
+          db.prepare("VACUUM INTO ?").run(target)
+        } finally {
+          db.close()
+        }
+      },
+    })
+    expect(result.took).toBe(true)
+    const backedUpAt = fs.statSync(result.backupPath!).mtimeMs
+
+    const check = await getDoctorDatabaseIntegrityCheck({ databasePath: file, now: () => backedUpAt + 5 * 60_000 })
+
+    expect(check.detail).toContain("1 backup(s)")
+    expect(check.detail).toContain(path.basename(result.backupPath!))
+    expect(check.detail).toContain("5m old")
+    expect(check.detail).toMatch(/old, \d+ (?:B|KiB|MiB|GiB|TiB)\)$/)
   })
 })
