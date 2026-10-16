@@ -298,9 +298,7 @@ export const ReadTool = Tool.define("read", {
       const { preview, truncated } = rendered
       let output = rendered.output
 
-      if (instructions.length > 0) {
-        output += `\n\n<system-reminder>\n${instructions.map((i) => i.content).join("\n\n")}\n</system-reminder>`
-      }
+      output += InstructionPrompt.renderReminder(instructions)
 
       // Opportunistic warmup for later semantic navigation. Schedule it
       // after the read's last awaited work so current output is not held

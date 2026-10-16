@@ -17,6 +17,7 @@ import { FileTime } from "../file/time"
 import DESCRIPTION from "./apply_patch.txt"
 import { collectDiagnostics } from "./diagnostics"
 import { appendPostEditDependentsNotice } from "./post-edit-dependents"
+import { InstructionPrompt } from "@/session/instruction"
 import { toErrorMessage, errorCode } from "@/util/error-message"
 import { Log } from "../util/log"
 import { BlastRadius } from "@/session/blast-radius"
@@ -614,6 +615,14 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       output +=
         "\n\nLSP document cleanup was incomplete. File changes were saved; run a full project type check to verify diagnostics."
     output = await appendPostEditDependentsNotice(output, ctx, changedFiles)
+    // Nested AGENTS.md and path-scoped rules (ADR-219) discovered for the
+    // changed files; per-message claims dedupe a rule matched by several
+    // files in one patch.
+    const instructions: { filepath: string; content: string }[] = []
+    for (const file of changedFiles) {
+      instructions.push(...(await InstructionPrompt.resolve(ctx.messages, file, ctx.messageID)))
+    }
+    output += InstructionPrompt.renderReminder(instructions)
 
     return {
       title: output,
@@ -621,6 +630,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         diff: totalDiff,
         files,
         diagnostics,
+        loaded: instructions.map((i) => i.filepath),
       },
       output,
     }

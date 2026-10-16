@@ -12,6 +12,7 @@ import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { appendPostEditDependentsNotice } from "./post-edit-dependents"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
+import { InstructionPrompt } from "@/session/instruction"
 import { normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
 
 function validateInternalBugReport(filepath: string, content: string) {
@@ -132,6 +133,11 @@ export const WriteTool = Tool.define("write", {
     })
     let output = "Wrote file successfully." + diagOutput
     output = await appendPostEditDependentsNotice(output, ctx, filepath)
+    // Nested AGENTS.md and path-scoped rules (ADR-219) discovered on write,
+    // via the same resolve/claim mechanism read uses, so edits surface the
+    // same project instructions reads do.
+    const instructions = await InstructionPrompt.resolve(ctx.messages, filepath, ctx.messageID)
+    output += InstructionPrompt.renderReminder(instructions)
 
     return {
       title: relativePath,
@@ -139,6 +145,7 @@ export const WriteTool = Tool.define("write", {
         diagnostics,
         filepath,
         exists: exists,
+        loaded: instructions.map((i) => i.filepath),
       },
       output,
     }

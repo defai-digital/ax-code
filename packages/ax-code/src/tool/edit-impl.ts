@@ -17,6 +17,7 @@ import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { appendPostEditDependentsNotice } from "./post-edit-dependents"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
+import { InstructionPrompt } from "@/session/instruction"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { parseNativeJson } from "../util/native-json"
@@ -263,12 +264,17 @@ export const EditTool = Tool.define("edit", {
         : ""
     let output = "Edit applied successfully." + snippet + diagOutput
     output = await appendPostEditDependentsNotice(output, ctx, filePath)
+    // Nested AGENTS.md and path-scoped rules (ADR-219) discovered on edit,
+    // via the same resolve/claim mechanism read uses.
+    const instructions = await InstructionPrompt.resolve(ctx.messages, filePath, ctx.messageID)
+    output += InstructionPrompt.renderReminder(instructions)
 
     return {
       metadata: {
         diagnostics,
         diff,
         filediff,
+        loaded: instructions.map((i) => i.filepath),
       },
       title: `${relativePath}`,
       output,

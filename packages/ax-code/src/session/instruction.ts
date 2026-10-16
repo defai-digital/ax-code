@@ -1,6 +1,7 @@
 import path from "path"
 import os from "os"
 import fs from "fs/promises"
+import matter from "gray-matter"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { Config } from "../config/config"
@@ -17,6 +18,98 @@ import { detectHiddenUnicode } from "../util/untrusted-content"
 const log = Log.create({ service: "instruction" })
 
 const FILES = ["AGENTS.md", "CLAUDE.md"]
+
+// ADR-219: path-scoped rule files under <worktree>/.ax-code/rules/*.md.
+// A rule carries YAML frontmatter `paths: [glob, ...]` (worktree-relative,
+// minimatch syntax) and is injected once per session when a file the session
+// reads or edits matches — through the same claim/dedupe mechanism as nested
+// AGENTS.md. A rule without `paths` is ignored here (use AGENTS.md).
+const RULES_DIR = path.join(".ax-code", "rules")
+const RULES_PATTERN = path.join(RULES_DIR, "*.md")
+// Size cap per rule file. A rule is context injected on matching file access;
+// an oversized rule is almost certainly the wrong tool (AGENTS.md or a skill
+// fits better), so it is skipped with a warning instead of truncated.
+const RULE_MAX_BYTES = 64 * 1024
+
+export type PathRule = {
+  filepath: string
+  paths: string[]
+  content: string
+}
+
+function parsePathRule(filepath: string, raw: string): PathRule | undefined {
+  const bytes = Buffer.byteLength(raw, "utf8")
+  if (bytes > RULE_MAX_BYTES) {
+    log.warn("path rule exceeds size cap; skipping", { path: filepath, bytes, cap: RULE_MAX_BYTES })
+    return undefined
+  }
+  let parsed: matter.GrayMatterFile<string>
+  try {
+    parsed = matter(raw)
+  } catch (err) {
+    log.warn("path rule frontmatter parse failed", { path: filepath, err })
+    return undefined
+  }
+  const pathsValue = (parsed.data as Record<string, unknown> | null)?.paths
+  // A rule without `paths` (or with an empty list) is deliberately ignored.
+  if (pathsValue === undefined || (Array.isArray(pathsValue) && pathsValue.length === 0)) return undefined
+  if (!Array.isArray(pathsValue) || pathsValue.some((p) => typeof p !== "string" || p.length === 0)) {
+    log.warn("path rule has invalid paths; expected a non-empty glob array", { path: filepath })
+    return undefined
+  }
+  const content = parsed.content.trim()
+  if (!content) return undefined
+  return { filepath, paths: pathsValue as string[], content }
+}
+
+// Parsed rules are cached per (path, mtime) so every read/edit does not
+// re-parse the whole rules directory. Negative results (ignored or invalid
+// rules) are cached against the same mtime.
+const ruleCache = Instance.state(() => new Map<string, { mtimeMs: number; rule?: PathRule }>())
+
+async function loadPathRules(): Promise<PathRule[]> {
+  // Project trust: rules are project-scoped instructions, so they follow the
+  // same project-config gate as the root AGENTS.md.
+  if (Flag.AX_CODE_DISABLE_PROJECT_CONFIG) return []
+  const dir = path.join(Instance.worktree, RULES_DIR)
+  if (!Filesystem.contains(Instance.worktree, dir)) return []
+  const files = await Glob.scan(RULES_PATTERN, { cwd: Instance.worktree, absolute: true, include: "file" }).catch(
+    () => [] as string[],
+  )
+  const cache = ruleCache()
+  const rules: PathRule[] = []
+  for (const file of files) {
+    const resolved = path.resolve(file)
+    if (!Filesystem.contains(Instance.worktree, resolved)) continue
+    const stat = await fs.stat(resolved).catch(() => undefined)
+    if (!stat) continue
+    const mtimeMs = stat.mtimeMs
+    const cached = cache.get(resolved)
+    if (cached && cached.mtimeMs === mtimeMs) {
+      if (cached.rule) rules.push(cached.rule)
+      continue
+    }
+    const raw = await Filesystem.readText(resolved).catch((err) => {
+      log.warn("path rule read failed", { path: resolved, err })
+      return ""
+    })
+    const rule = raw ? parsePathRule(resolved, raw) : undefined
+    cache.set(resolved, { mtimeMs, rule })
+    if (rule) rules.push(rule)
+  }
+  return rules
+}
+
+/** Rules whose frontmatter globs match the worktree-relative form of `target`. */
+async function matchingPathRulesImpl(target: string): Promise<PathRule[]> {
+  const rules = await loadPathRules()
+  if (rules.length === 0) return []
+  const relative = path.relative(path.resolve(Instance.worktree), path.resolve(target))
+  // Rules apply to worktree files only; paths outside the worktree have no
+  // project-relative form to match against.
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return []
+  return rules.filter((rule) => rule.paths.some((pattern) => Glob.match(pattern, relative)))
+}
 
 async function realpathOrResolved(input: string) {
   return fs.realpath(input).catch(() => input)
@@ -90,6 +183,15 @@ async function resolveRelative(instruction: string): Promise<string[]> {
 }
 
 export namespace InstructionPrompt {
+  /** Rules whose frontmatter globs match the worktree-relative form of `target` (ADR-219). */
+  export const matchingPathRules = matchingPathRulesImpl
+
+  /** Shared <system-reminder> rendering for instructions resolved during a tool call. */
+  export function renderReminder(instructions: { filepath: string; content: string }[]): string {
+    if (instructions.length === 0) return ""
+    return `\n\n<system-reminder>\n${instructions.map((i) => i.content).join("\n\n")}\n</system-reminder>`
+  }
+
   const state = Instance.state(() => {
     return {
       claims: new Map<string, Set<string>>(),
@@ -282,11 +384,17 @@ export namespace InstructionPrompt {
     })
   }
 
+  // Tools whose completed parts may carry a `loaded` metadata array of
+  // instruction filepaths discovered during that call (read historically;
+  // write/edit/apply_patch since ADR-219 path rules). This is the session-wide
+  // dedupe layer on top of the per-message claim set.
+  const LOADED_PART_TOOLS: ReadonlySet<string> = new Set(["read", "write", "edit", "multiedit", "apply_patch"])
+
   export function loaded(messages: MessageV2.WithParts[]) {
     const paths = new Set<string>()
     for (const msg of messages) {
       for (const part of msg.parts) {
-        if (part.type === "tool" && part.tool === "read" && part.state.status === "completed") {
+        if (part.type === "tool" && LOADED_PART_TOOLS.has(part.tool) && part.state.status === "completed") {
           if (part.state.time.compacted) continue
           const loaded = part.state.metadata?.loaded
           if (!loaded || !Array.isArray(loaded)) continue
@@ -329,6 +437,18 @@ export namespace InstructionPrompt {
         }
       }
       current = path.dirname(current)
+    }
+
+    // ADR-219: inject path-scoped rules matching this file, through the same
+    // claim/dedupe gates as nested AGENTS.md, so each rule is injected at
+    // most once per session.
+    for (const rule of await matchingPathRules(target)) {
+      if (system.has(rule.filepath) || already.has(rule.filepath) || isClaimed(messageID, rule.filepath)) continue
+      claim(messageID, rule.filepath)
+      const hidden = detectHiddenUnicode(rule.content)
+      if (hidden > 0)
+        log.warn("instruction file contains hidden Unicode characters", { path: rule.filepath, count: hidden })
+      results.push({ filepath: rule.filepath, content: "Instructions from: " + rule.filepath + "\n" + rule.content })
     }
 
     return results
