@@ -583,7 +583,12 @@ test("admits every page before sources and sources round-robin before any symbol
   }
   const graph = projectWikiManifest({ schemaVersion: 1, generator: "ax-wiki", pages }, { snapshot: "fair", inventory })
   expect(graph.nodes).toHaveLength(GRAPH_LIMITS.nodes)
-  expect(graph.nodes.slice(0, 4).map((node) => node.id)).toEqual(["page:p0.md", "page:p1.md", "page:p2.md", "page:p3.md"])
+  expect(graph.nodes.slice(0, 4).map((node) => node.id)).toEqual([
+    "page:p0.md",
+    "page:p1.md",
+    "page:p2.md",
+    "page:p3.md",
+  ])
   expect(graph.nodes.some((node) => node.kind === "symbol")).toBe(false)
   const perPage = [0, 1, 2, 3].map((p) => graph.nodes.filter((node) => node.path.startsWith(`src/p${p}/`)).length)
   expect(perPage).toEqual([49, 49, 49, 49])
@@ -621,7 +626,13 @@ test("projects readable pages with related pages, freshness counts and bounded m
     },
   )
   const [a, b, c, d] = graph.pages!
-  expect(a).toMatchObject({ purpose: "Explain A", generatedAt: "2026-10-14T00:00:00.000Z", stale: 1, unknown: 0, changed: ["src/y.ts"] })
+  expect(a).toMatchObject({
+    purpose: "Explain A",
+    generatedAt: "2026-10-14T00:00:00.000Z",
+    stale: 1,
+    unknown: 0,
+    changed: ["src/y.ts"],
+  })
   expect(a.markdown).toBe("# A\nBody text")
   expect(a.related).toEqual([
     { id: "page:b.md", shared: 2 },
@@ -629,7 +640,11 @@ test("projects readable pages with related pages, freshness counts and bounded m
   ])
   expect(b.truncated).toBe(true)
   expect(b.markdown.length).toBe(GRAPH_LIMITS.markdown)
-  expect(c).toMatchObject({ markdown: "", truncated: false, unknown: 1, related: [
+  expect(c).toMatchObject({
+    markdown: "",
+    truncated: false,
+    unknown: 1,
+    related: [
       { id: "page:a.md", shared: 1 },
       { id: "page:b.md", shared: 1 },
     ],
@@ -750,7 +765,10 @@ test("reports citations past the cap so a page state matches its node", () => {
     {
       snapshot: "fixture",
       // Everything the list can name is fresh; only the citation past the cap is gone.
-      observed: new Map([...listed.map((source) => [source, digest]), [sorted.at(-1)!, null]]),
+      observed: new Map<string, string | null>([
+        ...listed.map((source): [string, string] => [source, digest]),
+        [sorted.at(-1)!, null],
+      ]),
     },
   )
   const page = graph.pages![0]!
@@ -824,3 +842,40 @@ test("cuts graph text on a code-point boundary", () => {
   expect(cutGraphText(value, 4)).toBe("a𝄞")
   for (let max = 0; max <= value.length; max++) expect(() => encodeURIComponent(cutGraphText(value, max))).not.toThrow()
 })
+
+test("projects page-specific unverified source identities before applying the node cap", () => {
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "a.md": { title: "Known", sources: ["src/a.ts", "src/b.ts"], sourceHashes: { "src/a.ts": hash } },
+        "b.md": { title: "Unknown", sources: ["src/a.ts"], sourceHashes: {} },
+      },
+    },
+    {
+      snapshot: "fixture",
+      observed: new Map([
+        ["src/a.ts", hash],
+        ["src/b.ts", hash],
+      ]),
+    },
+  )
+  expect(graph.pages!.map((page) => [page.path, page.unverified, page.unknown])).toEqual([
+    ["a.md", ["src/b.ts"], 1],
+    ["b.md", ["src/a.ts"], 1],
+  ])
+  expect(parseWikiGraph(graph)).toEqual(graph)
+  const legacy = { ...graph, pages: graph.pages!.map(({ unverified, ...page }) => page) }
+  expect(parseWikiGraph(legacy).pages!.every((page) => page.unverified === undefined)).toBe(true)
+  expect(() => parseWikiGraph({ ...graph, pages: [{ ...graph.pages![0], unverified: ["../escape"] }] })).toThrow()
+})
+
+test.each([[], ["src/other.ts"], ["src/a.ts", "src/a.ts"]].map((unverified) => ({ unverified })))(
+  "rejects inconsistent unverified source identities %j",
+  ({ unverified }) => {
+    const graph = projectWikiManifest(manifest(), { snapshot: "fixture" })
+    graph.pages![0].unverified = unverified
+    expect(() => parseWikiGraph(graph)).toThrow("Invalid unverified sources")
+  },
+)

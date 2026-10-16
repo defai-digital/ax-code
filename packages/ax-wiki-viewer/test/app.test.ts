@@ -1,4 +1,5 @@
 import { expect, test } from "vitest"
+import { projectWikiManifest } from "@ax-code/ax-wiki/graph"
 import type { WikiGraphNode, WikiGraphPage } from "@ax-code/ax-wiki/graph"
 import { pageState, searchPage, sourceUnverified } from "../src/app.js"
 
@@ -73,4 +74,66 @@ test("counts the citations the page projection could not list", () => {
   expect(pageState({ ...citing, omitted: { sources: 1, stale: 0, unknown: 0 } })).toBe("fresh")
   // A page with no citations at all is unverified, not current.
   expect(pageState({ ...page(""), omitted: { sources: 0, stale: 0, unknown: 0 } })).toBe("unknown")
+})
+
+test.each(["fresh", "stale"] as const)(
+  "keeps a page's unverified file separate from another page's %s citation",
+  (other) => {
+    const current = "a".repeat(64)
+    const graph = projectWikiManifest(
+      {
+        schemaVersion: 1,
+        generator: "ax-wiki",
+        pages: {
+          "known.md": {
+            title: "Known",
+            sources: ["src/a.ts"],
+            sourceHashes: { "src/a.ts": other === "fresh" ? current : "b".repeat(64) },
+          },
+          "unknown.md": { title: "Unknown", sources: ["src/a.ts"], sourceHashes: {} },
+        },
+      },
+      { snapshot: "fixture", observed: new Map([["src/a.ts", current]]) },
+    )
+    const known = graph.pages!.find((page) => page.path === "known.md")!
+    const unknown = graph.pages!.find((page) => page.path === "unknown.md")!
+    expect(sourceUnverified("src/a.ts", known, graph.nodes)).toBe(false)
+    expect(sourceUnverified("src/a.ts", unknown, graph.nodes)).toBe(true)
+  },
+)
+
+test("keeps mixed page sources distinct after the node cap omits all source nodes", () => {
+  const current = "a".repeat(64)
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: {
+        "a.md": { title: "Mixed", sources: ["src/a.ts", "src/b.ts"], sourceHashes: { "src/a.ts": current } },
+        ...Object.fromEntries(
+          Array.from({ length: 200 }, (_, index) => [`p${index}.md`, { title: "Page", sources: [], sourceHashes: {} }]),
+        ),
+      },
+    },
+    {
+      snapshot: "fixture",
+      observed: new Map([
+        ["src/a.ts", current],
+        ["src/b.ts", current],
+      ]),
+    },
+  )
+  const mixed = graph.pages!.find((page) => page.path === "a.md")!
+  expect(graph.nodes.every((node) => node.kind === "page")).toBe(true)
+  expect(sourceUnverified("src/a.ts", mixed, graph.nodes)).toBe(false)
+  expect(sourceUnverified("src/b.ts", mixed, graph.nodes)).toBe(true)
+})
+
+test("legacy pages with no unknown evidence do not inherit aggregate uncertainty", () => {
+  expect(
+    sourceUnverified("src/a.ts", { ...page(""), sources: ["src/a.ts"] }, [sourceNode("src/a.ts", "unknown")]),
+  ).toBe(false)
+  expect(
+    sourceUnverified("src/a.ts", { ...page(""), sources: ["src/a.ts"], unknown: 1 }, [sourceNode("src/a.ts", "stale")]),
+  ).toBe(true)
 })

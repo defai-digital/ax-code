@@ -4870,6 +4870,7 @@ export type WikiVisualizationGraph = {
     stale: number
     unknown: number
     changed: Array<string>
+    unverified?: Array<string>
     omitted: {
       sources: number
       stale: number

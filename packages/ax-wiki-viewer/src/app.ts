@@ -188,15 +188,14 @@ export function pageState(page: WikiGraphPage): "fresh" | "stale" | "unknown" {
   return "fresh"
 }
 
-/**
- * Whether one cited file is unverified rather than unchanged. The file's own
- * node carries its recorded freshness when the view cap admitted that source;
- * `page.unknown` only counts this page's unverified files without naming them,
- * so it is the fallback and marks every file the page cites.
- */
+/** Page-specific unknown evidence takes precedence over cross-page source aggregates. */
 export function sourceUnverified(path: string, page: WikiGraphPage, nodes: readonly WikiGraphNode[]): boolean {
+  if (page.unverified !== undefined) return page.unverified.includes(path)
+  // Older snapshots lack source identities for the unknown count. A page with
+  // no unknown evidence must not inherit another page's unknown source state.
+  if (page.unknown === 0 || page.changed.includes(path)) return false
   const node = nodes.find((candidate) => candidate.id === `source:${path}`)
-  return node ? node.freshness === "unknown" : page.unknown > 0
+  return node?.freshness !== "fresh"
 }
 
 /** Compact table form of the page state. */

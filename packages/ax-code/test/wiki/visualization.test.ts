@@ -64,9 +64,7 @@ describe("Wiki visualization snapshot", () => {
       '---\ntitle: "Guide"\nsymbols:\n  - "a"\n---\n\n<!-- AX-WIKI:START -->\n# Guide\n\nSee `src/a.ts`.\n<!-- AX-WIKI:END -->\n',
     )
     const graph = await WikiVisualization.snapshot(tmp.path)
-    const freshness = Object.fromEntries(
-      graph.nodes.filter((n) => n.kind !== "symbol").map((n) => [n.id, n.freshness]),
-    )
+    const freshness = Object.fromEntries(graph.nodes.filter((n) => n.kind !== "symbol").map((n) => [n.id, n.freshness]))
     expect(freshness).toEqual({ "page:guide.md": "stale", "source:src/a.ts": "fresh", "source:src/b.ts": "stale" })
     expect(graph.pages?.[0]).toMatchObject({ stale: 1, unknown: 0, changed: ["src/b.ts"], truncated: false })
     expect(graph.pages?.[0].markdown).toBe("# Guide\n\nSee `src/a.ts`.")
@@ -97,6 +95,8 @@ describe("Wiki visualization snapshot", () => {
     )
     const graph = await WikiVisualization.snapshot(tmp.path)
     const page = graph.nodes.find((n) => n.id === "page:guide.md")!
+    expect(graph.pages?.[0].unverified).toEqual(["src/a.ts"])
+    expect(WikiGraphSchema.parse(graph)).toEqual(graph)
     expect(page.summary).toBe("Guide summary.")
     expect(page.symbols).toEqual([
       { name: "Foo", provenance: "verified" },
