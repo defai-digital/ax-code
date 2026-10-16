@@ -516,6 +516,18 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       category: t("category.system"),
     },
     {
+      title: t("command.checkForUpdates"),
+      value: "app.update.check",
+      slash: {
+        name: "update",
+        aliases: ["upgrade"],
+      },
+      onSelect: () => {
+        void dialogs.showUpdateDialog()
+      },
+      category: t("category.system"),
+    },
+    {
       title: t("command.theme"),
       value: "theme.switch",
       keybind: "theme_list",

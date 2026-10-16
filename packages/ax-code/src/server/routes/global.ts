@@ -439,6 +439,34 @@ export const GlobalRoutes = lazy(() =>
         return c.json(true)
       },
     )
+    .get(
+      "/upgrade/check",
+      describeRoute({
+        summary: "Check for an ax-code update",
+        description: "Report whether a newer ax-code release is available without installing anything.",
+        operationId: "global.upgrade.check",
+        responses: {
+          200: {
+            description: "Version check result",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    current: z.string(),
+                    latest: z.string().nullable(),
+                    upToDate: z.boolean().nullable(),
+                    method: z.enum(["curl", "brew", "unknown"]),
+                    releaseType: z.enum(["patch", "minor", "major", "unknown"]).optional(),
+                    error: z.string().optional(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => c.json(await Installation.check({ unknownMethod: "curl" })),
+    )
     .post(
       "/upgrade",
       describeRoute({

@@ -8,6 +8,16 @@ Owner: AX Code maintainers
 Downloads and updates use the public `download.ax-code.com` origin. No private
 GitHub token is required. Use the same installation channel you already use.
 
+## Check and update from the TUI
+
+Type `/update` (alias `/upgrade`) or choose **Check for updates** in the command
+palette. The dialog checks the release index, offers the new version, installs it
+and tells you when to restart. The TUI also checks in the background about 30
+seconds after launch, at most once a day. To check again sooner, run `/update`. Patch releases install automatically for the standalone installer;
+minor and major releases and Homebrew installs only show the update dialog. Set
+`autoupdate` to `false` or `"notify"` in the config, or `AX_CODE_DISABLE_AUTOUPDATE=1`,
+to change that. Only one upgrade runs at a time across ax-code processes.
+
 ## Standalone installer users
 
 Check your installation before upgrading:

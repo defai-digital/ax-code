@@ -13,7 +13,7 @@ export async function upgrade(): Promise<boolean> {
   const config = await Config.global()
   const method = await Installation.method()
   const latest = await Installation.latest(method).catch((err) => {
-    log.debug("version check failed, skipping upgrade", { method, err })
+    log.warn("version check failed, skipping upgrade", { method, err })
     return undefined
   })
   if (!latest) return false
@@ -57,6 +57,12 @@ export async function upgrade(): Promise<boolean> {
       )
     })
     .catch(async (err) => {
+      // Another process is already installing; its result reaches this one
+      // through the next check, so do not nag with a prompt.
+      if (err instanceof Installation.UpgradeBusyError) {
+        log.info("upgrade skipped, another upgrade is running", { method, version: latest })
+        return
+      }
       log.error("upgrade failed", { method, version: latest, err })
       await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })
     })

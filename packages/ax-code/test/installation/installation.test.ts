@@ -614,4 +614,75 @@ describe("installation", () => {
       )
     })
   })
+
+  describe("check", () => {
+    const releases = (...tags: string[]) => jsonResponse(tags.map((tag_name) => ({ tag_name })))
+
+    test("reports an available release with its release type", async () => {
+      const report = await withTestDependencies(
+        {
+          fetch: () =>
+            releases("desktop-v9.0.0", `v${Installation.VERSION.replace(/\d+$/, (n) => String(Number(n) + 1))}`),
+        },
+        () => Installation.check({ method: "curl" }),
+      )
+      expect(report.upToDate).toBe(false)
+      expect(report.releaseType).toBe("patch")
+      expect(report.latest).not.toBe(Installation.VERSION)
+      expect(report.error).toBeUndefined()
+    })
+
+    test("reports up to date, a failed probe, and an unknown method", async () => {
+      await expect(
+        withTestDependencies({ fetch: () => releases(`v${Installation.VERSION}`) }, () =>
+          Installation.check({ method: "curl" }),
+        ),
+      ).resolves.toMatchObject({ upToDate: true, latest: Installation.VERSION })
+      const failed = await withTestDependencies({ fetch: () => new Response("", { status: 503 }) }, () =>
+        Installation.check({ method: "curl" }),
+      )
+      expect(failed.upToDate).toBeNull()
+      expect(failed.error).toContain("failed to resolve the latest version")
+      const unknown = await Installation.check({ method: "unknown" })
+      expect(unknown.error).toContain("could not determine the install method")
+    })
+
+    test("falls back to the installer index for an unknown method when asked", async () => {
+      const report = await withTestDependencies({ fetch: () => releases(`v${Installation.VERSION}`) }, () =>
+        Installation.check({ method: "unknown", unknownMethod: "curl" }),
+      )
+      expect(report).toMatchObject({ upToDate: true, method: "unknown" })
+    })
+  })
+
+  describe("upgrade lock", () => {
+    test("refuses a second concurrent upgrade instead of racing the installer", async () => {
+      const { FileLock } = await import("../../src/util/filelock")
+      let invoked = false
+      using _held = await FileLock.tryAcquire(Installation.upgradeLockPath())
+      await expect(
+        withTestDependencies(
+          {
+            run: () => {
+              invoked = true
+              return { code: 0, stdout: "", stderr: "" }
+            },
+          },
+          () => Installation.upgrade("brew", "5.3.0"),
+        ),
+      ).rejects.toBeInstanceOf(Installation.UpgradeBusyError)
+      expect(invoked).toBe(false)
+    })
+
+    test("releases the lock after a failed upgrade", async () => {
+      await expect(
+        withTestDependencies({ run: () => ({ code: 1, stdout: "", stderr: "nope" }) }, () =>
+          Installation.upgrade("brew", "5.3.0"),
+        ),
+      ).rejects.toBeInstanceOf(Installation.UpgradeFailedError)
+      const { FileLock } = await import("../../src/util/filelock")
+      using again = await FileLock.tryAcquire(Installation.upgradeLockPath())
+      expect(again).toBeDefined()
+    })
+  })
 })

@@ -950,23 +950,20 @@ export const TuiThreadCommand = cmd({
       // surfaces. Keep them away from the first interactive turn, especially
       // in packaged installs where the TUI shares a stdio backend with prompt
       // submission.
-      const upgradeTimer =
-        upgradeDelayMs === 0
-          ? undefined
-          : setTimeout(() => {
-              shouldRunStartupUpgradeCheck()
-                .then(async (shouldRun) => {
-                  if (!shouldRun) return
-                  const checked = await client.call("checkUpgrade", { directory: cwd })
-                  if (checked) await recordStartupUpgradeCheck()
-                })
-                .catch((error) => {
-                  log.debug("upgrade check request failed", {
-                    directory: cwd,
-                    error,
-                  })
-                })
-            }, upgradeDelayMs)
+      const runUpgradeCheck = () =>
+        shouldRunStartupUpgradeCheck()
+          .then(async (shouldRun) => {
+            if (!shouldRun) return
+            const checked = await client.call("checkUpgrade", { directory: cwd })
+            if (checked) await recordStartupUpgradeCheck()
+          })
+          .catch((error) => {
+            log.debug("upgrade check request failed", {
+              directory: cwd,
+              error,
+            })
+          })
+      const upgradeTimer = upgradeDelayMs === 0 ? undefined : setTimeout(runUpgradeCheck, upgradeDelayMs)
       upgradeTimer?.unref?.()
 
       try {

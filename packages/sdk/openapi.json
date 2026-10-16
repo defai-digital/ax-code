@@ -738,6 +738,82 @@
         ]
       }
     },
+    "/global/upgrade/check": {
+      "get": {
+        "operationId": "global.upgrade.check",
+        "summary": "Check for an ax-code update",
+        "description": "Report whether a newer ax-code release is available without installing anything.",
+        "responses": {
+          "200": {
+            "description": "Version check result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "current": {
+                      "type": "string"
+                    },
+                    "latest": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "upToDate": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": [
+                        "curl",
+                        "brew",
+                        "unknown"
+                      ]
+                    },
+                    "releaseType": {
+                      "type": "string",
+                      "enum": [
+                        "patch",
+                        "minor",
+                        "major",
+                        "unknown"
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "current",
+                    "latest",
+                    "upToDate",
+                    "method"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.global.upgrade.check({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/global/upgrade": {
       "post": {
         "operationId": "global.upgrade",

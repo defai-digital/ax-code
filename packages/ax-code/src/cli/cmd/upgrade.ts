@@ -2,7 +2,6 @@ import type { Argv } from "yargs"
 import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
-import { toErrorMessage } from "../../util/error-message"
 import { cmd } from "./cmd"
 
 export type UpgradeCheckReport = {
@@ -18,59 +17,12 @@ export type UpgradeCheckOutcome = {
   exitCode: 0 | 1 | 2
 }
 
-// Non-interactive version probe behind `ax-code upgrade check`. Reuses the
-// exact version sources of the interactive flow (Installation.method +
-// Installation.latest) and never installs anything.
+// Non-interactive version probe behind `ax-code upgrade check`. Shares
+// Installation.check with the TUI update dialog and never installs anything.
 export async function runUpgradeCheck(input: { method?: "curl" | "brew" } = {}): Promise<UpgradeCheckOutcome> {
-  const current = Installation.VERSION
-  const method: Installation.Method = input.method ?? (await Installation.method().catch(() => "unknown" as const))
-  if (method === "unknown") {
-    return {
-      exitCode: 2,
-      report: {
-        current,
-        latest: null,
-        upToDate: null,
-        method,
-        error: "could not determine the install method; re-run with --method curl|brew",
-      },
-    }
-  }
-
-  let latest: string
-  try {
-    latest = await Installation.latest(method)
-  } catch (error) {
-    return {
-      exitCode: 2,
-      report: {
-        current,
-        latest: null,
-        upToDate: null,
-        method,
-        error: `failed to resolve the latest version: ${toErrorMessage(error)}`,
-      },
-    }
-  }
-
-  if (latest === current) {
-    return { exitCode: 0, report: { current, latest, upToDate: true, method } }
-  }
-  const compare = Installation.compareVersions(current, latest)
-  if (compare === undefined) {
-    return {
-      exitCode: 2,
-      report: {
-        current,
-        latest,
-        upToDate: null,
-        method,
-        error: `cannot compare current version ${current} with reported latest version ${latest}`,
-      },
-    }
-  }
-  const upToDate = compare <= 0
-  return { exitCode: upToDate ? 0 : 1, report: { current, latest, upToDate, method } }
+  const { releaseType: _releaseType, ...report } = await Installation.check({ method: input.method })
+  const exitCode = report.error ? 2 : report.upToDate ? 0 : 1
+  return { report, exitCode }
 }
 
 export function renderUpgradeCheckHuman(report: UpgradeCheckReport): string {

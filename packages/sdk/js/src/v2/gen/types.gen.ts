@@ -5553,6 +5553,32 @@ export type GlobalDisposeResponses = {
 /** Successful response payload for `POST /global/dispose` — Dispose instance */
 export type GlobalDisposeResponse = GlobalDisposeResponses[keyof GlobalDisposeResponses]
 
+/** Request payload shape for `GET /global/upgrade/check` — Check for an ax-code update */
+export type GlobalUpgradeCheckData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/upgrade/check"
+}
+
+/** Success response payloads for `GET /global/upgrade/check` — Check for an ax-code update */
+export type GlobalUpgradeCheckResponses = {
+  /**
+   * Version check result
+   */
+  200: {
+    current: string
+    latest: string | null
+    upToDate: boolean | null
+    method: "curl" | "brew" | "unknown"
+    releaseType?: "patch" | "minor" | "major" | "unknown"
+    error?: string
+  }
+}
+
+/** Successful response payload for `GET /global/upgrade/check` — Check for an ax-code update */
+export type GlobalUpgradeCheckResponse = GlobalUpgradeCheckResponses[keyof GlobalUpgradeCheckResponses]
+
 /** Request payload shape for `POST /global/upgrade` — Upgrade ax-code */
 export type GlobalUpgradeData = {
   body?: {

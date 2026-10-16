@@ -80,6 +80,7 @@ import type {
   GlobalRuntimeResponses,
   GlobalRuntimeStopErrors,
   GlobalRuntimeStopResponses,
+  GlobalUpgradeCheckResponses,
   GlobalUpgradeErrors,
   GlobalUpgradeResponses,
   GraphGetErrors,
@@ -499,6 +500,21 @@ export class Config extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Upgrade` (auto-generated from the OpenAPI contract). */
+export class Upgrade extends HeyApiClient {
+  /**
+   * Check for an ax-code update
+   *
+   * Report whether a newer ax-code release is available without installing anything.
+   */
+  public check<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalUpgradeCheckResponses, unknown, ThrowOnError>({
+      url: "/global/upgrade/check",
+      ...options,
+    })
+  }
+}
+
 /** AX Code API schema `Global` (auto-generated from the OpenAPI contract). */
 export class Global extends HeyApiClient {
   /**
@@ -608,6 +624,11 @@ export class Global extends HeyApiClient {
   private _config?: Config
   get config(): Config {
     return (this._config ??= new Config({ client: this.client }))
+  }
+
+  private _upgrade?: Upgrade
+  get upgrade2(): Upgrade {
+    return (this._upgrade ??= new Upgrade({ client: this.client }))
   }
 }
 

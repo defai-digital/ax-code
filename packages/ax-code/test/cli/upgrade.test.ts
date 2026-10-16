@@ -285,3 +285,14 @@ describe("cli upgrade check", () => {
     }
   })
 })
+
+describe("cli upgrade busy installer", () => {
+  test("stays quiet when another process is already installing", async () => {
+    setup({ latest: patch })
+    installSpy!.mockRejectedValue(new Installation.UpgradeBusyError())
+
+    await upgrade()
+
+    expect(publishSpy).not.toHaveBeenCalled()
+  })
+})

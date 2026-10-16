@@ -48,7 +48,6 @@ import { PromptHistoryProvider } from "./component/prompt/history"
 import { FrecencyProvider } from "./component/prompt/frecency"
 import { PromptStashProvider } from "./component/prompt/stash"
 import { DialogAlert } from "./ui/dialog-alert"
-import { DialogConfirm } from "./ui/dialog-confirm"
 import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
 import { TUI_BACKEND_EXITED } from "./util/resilient-stream"
@@ -107,7 +106,7 @@ import { responseErrorMessage, unknownErrorMessage } from "@tui/util/error-messa
 import { registerTuiEventListener } from "@tui/util/lifecycle"
 import { createTerminalSuspendController } from "@tui/util/terminal-suspend"
 import { resolveSessionFirstRoute } from "./navigation/launch-policy"
-import { formatTuiUpgradeCompleteMessage } from "./upgrade-check-view-model"
+import { interactiveUpgrade } from "./update-session"
 import { parseJsonPayload } from "@/util/json-value"
 import { isRecord } from "@/util/record"
 import { createTuiDialogLoaders } from "./tui-dialogs"
@@ -1310,7 +1309,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   )
 
   let updateHandlerDisposed = false
-  let interactiveUpgradeVersion: string | undefined
   const eventUnsubs = [
     sdk.event.on("server.resync_required", () => turnComplete.reset()),
     sdk.event.on("server.serialization_error", () => turnComplete.reset()),
@@ -1385,62 +1383,22 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         const { gt } = await import("semver")
         if (!gt(version, skipped)) return
       }
-
-      const choice = await DialogConfirm.show(
-        dialog,
-        `Update Available`,
-        `A new release v${version} is available. Would you like to update now?`,
-        "skip",
-      )
       if (updateHandlerDisposed) return
 
-      if (choice === false) {
-        kv.set("skipped_version", version)
-        return
-      }
-
-      if (choice !== true) return
-
-      toast.show({
-        variant: "info",
-        message: `Updating to v${version}...`,
-        duration: 30000,
-      })
-
-      // The upgrade route emits installation.updated before returning. Mark
-      // this version as interactive so its event is not also rendered as a
-      // silent-background-update toast (SSE delivery may trail the response).
-      interactiveUpgradeVersion = version
-      const result = await sdk.client.global.upgrade({ target: version })
+      const { DialogUpdate } = await import("@tui/component/dialog-update")
       if (updateHandlerDisposed) return
-
-      if (result.error || !result.data?.success) {
-        interactiveUpgradeVersion = undefined
-        const reason =
-          (result.data as { success: false; error: string } | undefined)?.error ||
-          unknownErrorMessage(result.error) ||
-          "Update failed"
-        toast.show({
-          variant: "error",
-          title: uiText("ui.updateFailed"),
-          message: reason,
-          duration: 10000,
-        })
-        return
-      }
-
-      await DialogAlert.show(
-        dialog,
-        "Update Complete",
-        formatTuiUpgradeCompleteMessage(result.data.version, result.data.warnings),
-      )
-      if (updateHandlerDisposed) return
-
-      exit()
+      // Esc leaves the version un-skipped so /update and the next check can
+      // offer it again; only the explicit "Later" button remembers it.
+      dialog.replace(() => (
+        <DialogUpdate
+          available={{ current: Installation.VERSION, latest: version }}
+          onSkip={() => kv.set("skipped_version", version)}
+        />
+      ))
     }),
 
     sdk.event.on("installation.updated", (evt) => {
-      if (interactiveUpgradeVersion === evt.properties.version) return
+      if (interactiveUpgrade.version === evt.properties.version) return
       // Silent background patch upgrade finished — the running process still
       // holds the old binary, so the new version only takes effect on restart.
       const warnings = evt.properties.warnings ?? []

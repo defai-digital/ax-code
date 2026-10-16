@@ -242,6 +242,16 @@ export function createTuiDialogLoaders(input: {
           return () => <DialogStatus />
         },
       }),
+    showUpdateDialog: () =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load update dialog",
+        fail: "Failed to open update check",
+        load: async () => {
+          const { DialogUpdate } = await import("@tui/component/dialog-update")
+          return () => <DialogUpdate />
+        },
+      }),
     showThemeListDialog: () =>
       replaceLazyDialog({
         ...host,

@@ -19,6 +19,8 @@ import { Process } from "../util/process"
 import { powershellEnvironment } from "../util/powershell-env"
 import { whichAll } from "../util/which"
 import { parseJsonResult } from "../util/json-value"
+import { FileLock } from "../util/filelock"
+import { Global } from "../global"
 
 declare global {
   const AX_CODE_VERSION: string
@@ -95,8 +97,15 @@ export namespace Installation {
     return CHANNEL === "local"
   }
 
+  // A version probe runs from a background timer; a stalled connection must
+  // not leave the check pending for the whole process lifetime.
+  export const VERSION_PROBE_TIMEOUT_MS = 20_000
+  // Installs download and verify a full runtime archive; a lock older than
+  // this belongs to a crashed upgrader and may be taken over.
+  const UPGRADE_LOCK_STALE_MS = 15 * 60 * 1_000
+
   export class UpgradeFailedError extends Error {
-    override readonly name = "UpgradeFailedError"
+    override name: string = "UpgradeFailedError"
 
     constructor(readonly input: { stderr: string }) {
       super(input.stderr || "Upgrade failed")
@@ -105,6 +114,16 @@ export namespace Installation {
 
     get stderr() {
       return this.input.stderr
+    }
+  }
+
+  // Another ax-code process (a second TUI, `ax-code upgrade`) holds the
+  // install lock. Running two installers at once races on the same runtime
+  // directory, so the caller either waits for the next check or reports it.
+  export class UpgradeBusyError extends UpgradeFailedError {
+    constructor() {
+      super({ stderr: "Another ax-code upgrade is already running. Try again when it finishes." })
+      this.name = "UpgradeBusyError"
     }
   }
 
@@ -206,7 +225,10 @@ export namespace Installation {
   }
 
   async function fetchJson<T>(schema: z.ZodType<T>, url: string) {
-    const response = await fetchOk(url, { headers: { accept: "application/json" } })
+    const response = await fetchOk(url, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(VERSION_PROBE_TIMEOUT_MS),
+    })
     return schema.parse(parseJson(await response.text(), `response from ${url}`))
   }
 
@@ -386,7 +408,81 @@ export namespace Installation {
     throw new Error("No stable CLI public release (vX.Y.Z) found")
   }
 
+  export type CheckReport = {
+    current: string
+    latest: string | null
+    upToDate: boolean | null
+    method: Method
+    releaseType?: ReleaseType
+    error?: string
+  }
+
+  // One version probe shared by `ax-code upgrade check`, the TUI update
+  // dialog and the server route. Never installs anything. `unknownMethod`
+  // chooses what an undetected install method is checked against: the CLI
+  // reports an error, interactive callers fall back to the public installer
+  // index exactly as `upgrade()` falls back to the curl installer.
+  export async function check(input: { method?: Method; unknownMethod?: "error" | "curl" } = {}): Promise<CheckReport> {
+    const current = VERSION
+    const detected: Method = input.method ?? (await Installation.method().catch(() => "unknown" as const))
+    if (detected === "unknown" && input.unknownMethod !== "curl") {
+      return {
+        current,
+        latest: null,
+        upToDate: null,
+        method: detected,
+        error: "could not determine the install method; re-run with --method curl|brew",
+      }
+    }
+    let found: string
+    try {
+      found = await Installation.latest(detected === "unknown" ? "curl" : detected)
+    } catch (error) {
+      return {
+        current,
+        latest: null,
+        upToDate: null,
+        method: detected,
+        error: `failed to resolve the latest version: ${toErrorMessage(error)}`,
+      }
+    }
+    if (found === current) return { current, latest: found, upToDate: true, method: detected }
+    const compare = Installation.compareVersions(current, found)
+    if (compare === undefined) {
+      return {
+        current,
+        latest: found,
+        upToDate: null,
+        method: detected,
+        error: `cannot compare current version ${current} with reported latest version ${found}`,
+      }
+    }
+    if (compare <= 0) return { current, latest: found, upToDate: true, method: detected }
+    return {
+      current,
+      latest: found,
+      upToDate: false,
+      method: detected,
+      releaseType: Installation.getReleaseType(current, found),
+    }
+  }
+
+  export function upgradeLockPath() {
+    return path.join(Global.Path.state, "upgrade")
+  }
+
   export async function upgrade(m: Method, target: string): Promise<void> {
+    using _lock = await acquireUpgradeLock()
+    await install(m, target)
+  }
+
+  async function acquireUpgradeLock(): Promise<Disposable> {
+    const lock = await FileLock.tryAcquire(upgradeLockPath(), { staleMs: UPGRADE_LOCK_STALE_MS })
+    if (!lock) throw new UpgradeBusyError()
+    return lock
+  }
+
+  async function install(m: Method, target: string): Promise<void> {
     let result: CommandResult | undefined
     switch (m) {
       case "curl":

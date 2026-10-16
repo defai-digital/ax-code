@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest"
 import {
-  formatTuiUpgradeCompleteMessage,
   nextTuiStartupUpgradeCheckState,
   shouldRunTuiStartupUpgradeCheck,
 } from "../../../src/cli/tui/upgrade-check-view-model"
@@ -57,14 +56,5 @@ describe("tui upgrade check view model", () => {
       currentVersion: "6.3.3",
       checkedAt: 42,
     })
-  })
-
-  test("keeps post-upgrade warnings in the restart dialog", () => {
-    expect(formatTuiUpgradeCompleteMessage("7.6.4")).toBe(
-      "Successfully updated to ax-code v7.6.4. Please restart the application.",
-    )
-    expect(formatTuiUpgradeCompleteMessage("7.6.4", ["PATH still resolves an older launcher."])).toContain(
-      "Warnings:\n- PATH still resolves an older launcher.",
-    )
   })
 })
