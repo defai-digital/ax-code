@@ -23,6 +23,16 @@ import { Bus } from "../bus"
 import { NotificationEvent } from "../notification/events"
 import { WindowsSnapshotPaths } from "./windows-paths"
 import { retainedSnapshotHashes } from "./retention"
+import {
+  CapturePacker,
+  PACK_TIMEOUT_MS,
+  captureFailure,
+  clearStaleSnapshotLocks,
+  recoverInterruptedCapture,
+  removeCaptureMarker,
+  withCaptureRetry,
+  writeCaptureMarker,
+} from "./capture-guards"
 
 export namespace Snapshot {
   export const UnsupportedPathError = NamedError.create(
@@ -78,6 +88,19 @@ export namespace Snapshot {
   // transaction by repository, not just individual Git commands or instances.
   const operations = new KeyedSerialQueue()
   const coverageNotice = new Set<string>()
+  // Per-store packing counters and in-process capture markers (ADR-248).
+  const packers = new Map<string, CapturePacker>()
+  const capturing = new Set<string>()
+
+  function packerFor(current: State) {
+    const key = process.platform === "win32" ? current.gitdir.toLowerCase() : current.gitdir
+    let packer = packers.get(key)
+    if (!packer) {
+      packer = new CapturePacker()
+      packers.set(key, packer)
+    }
+    return { key, packer }
+  }
 
   function warnCoverageOff(directory: string, kind: string, message: string) {
     const key = `${directory}\0${kind}`
@@ -569,7 +592,7 @@ export namespace Snapshot {
       exitCode: result.code,
       stderr: result.stderr,
     })
-    throw new Error(`Snapshot staging failed: git add exited with code ${result.code}`)
+    throw captureFailure("Snapshot staging failed: git add", result.code, result.stderr)
   }
 
   async function checkoutIndex(current: State) {
@@ -753,98 +776,146 @@ export namespace Snapshot {
     await withOperationLock(current, () => cleanupFor(current, { auto: true }))
   }
 
+  /**
+   * Pack the store with a bounded `gc --auto`. Skipped while a capture runs and
+   * while another pack is in flight; failures are logged, never thrown.
+   */
+  async function maybePack(current: State) {
+    const { key, packer } = packerFor(current)
+    await packer.maybePack(
+      async () => {
+        const result = await runGit(["-c", gcAutoThreshold, ...args(current, ["gc", "--auto"])], {
+          cwd: current.directory,
+          timeout: PACK_TIMEOUT_MS,
+        })
+        if (result.code !== 0) log.warn("snapshot packing failed", { exitCode: result.code, stderr: result.stderr })
+        else log.info("packed snapshot store", { captures: packer.captures })
+      },
+      { capturing: capturing.has(key) },
+    )
+  }
+
+  async function captureOnce(current: State) {
+    if (!(await enabled())) return
+
+    await ensureRepo(current)
+
+    if (current.prevHash) {
+      await checkWindowsHistory(current)
+      // HEAD stays unborn in this tree-only repository. Compare against the
+      // recorded tree, including work outside a session's subdirectory and
+      // files newly admitted by ignore rules. patch/restore may change the
+      // index independently of prevHash, so index cleanliness is insufficient.
+      await syncExclude(current)
+      const diff = await runGit(
+        [...cfg, ...args(current, ["diff", "--no-ext-diff", "--quiet", current.prevHash, "--", "."])],
+        { cwd: current.worktree },
+      )
+      if (diff.code !== 0 && diff.code !== 1) {
+        log.error("failed to inspect snapshot diff", {
+          cwd: current.worktree,
+          exitCode: diff.code,
+          stderr: diff.stderr,
+        })
+        throw new Error(`Snapshot diff failed: git diff exited with code ${diff.code}`)
+      }
+      if (diff.code === 0) {
+        const untracked = await runGit(
+          [...cfg, ...args(current, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."])],
+          { cwd: current.worktree },
+        )
+        if (untracked.code !== 0) {
+          log.error("failed to inspect snapshot untracked files", {
+            cwd: current.worktree,
+            exitCode: untracked.code,
+            stderr: untracked.stderr,
+          })
+          throw new Error(`Snapshot untracked check failed: git ls-files exited with code ${untracked.code}`)
+        }
+        if (untracked.text.length === 0) {
+          log.info("tracking (unchanged)", { hash: current.prevHash })
+          return current.prevHash
+        }
+      }
+    }
+
+    try {
+      await add(current, { excludesSynced: Boolean(current.prevHash) })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (!message.startsWith("Snapshot staging failed")) throw error
+      warnCoverageOff(
+        current.worktree,
+        "staging-failed",
+        "Undo coverage is off this turn: snapshot staging failed. The session continues without a new rollback baseline.",
+      )
+      log.warn("snapshot staging failed; continuing without a new baseline", {
+        cwd: current.worktree,
+        error,
+      })
+      return current.prevHash
+    }
+    const result = await runGit(args(current, ["write-tree"]), { cwd: current.directory })
+    if (result.code !== 0) {
+      log.error("failed to write snapshot tree", {
+        cwd: current.directory,
+        exitCode: result.code,
+        stderr: result.stderr,
+      })
+      throw captureFailure("Snapshot tracking failed: write-tree", result.code, result.stderr)
+    }
+    const hash = result.text.trim()
+    if (!valid(hash)) {
+      log.error("failed to validate snapshot tree hash", { hash })
+      throw new Error("Snapshot tracking failed: write-tree returned an invalid hash")
+    }
+    const updateRef = await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], {
+      cwd: current.directory,
+    })
+    if (updateRef.code !== 0) {
+      log.error("failed to update snapshot ref", {
+        hash,
+        gitdir: current.gitdir,
+        exitCode: updateRef.code,
+        stderr: updateRef.stderr,
+      })
+      throw captureFailure("Snapshot tracking failed: update-ref", updateRef.code, updateRef.stderr)
+    }
+    await writeSnapshotMeta(current, hash)
+    current.prevHash = hash
+    log.info("tracking", { hash, cwd: current.directory, git: current.gitdir })
+    return hash
+  }
+
   export async function track() {
     const current = await state()
     return withOperationLock(current, async () => {
       if (!(await enabled())) return
-
-      await ensureRepo(current)
-
-      if (current.prevHash) {
-        await checkWindowsHistory(current)
-        // HEAD stays unborn in this tree-only repository. Compare against the
-        // recorded tree, including work outside a session's subdirectory and
-        // files newly admitted by ignore rules. patch/restore may change the
-        // index independently of prevHash, so index cleanliness is insufficient.
-        await syncExclude(current)
-        const diff = await runGit(
-          [...cfg, ...args(current, ["diff", "--no-ext-diff", "--quiet", current.prevHash, "--", "."])],
-          { cwd: current.worktree },
-        )
-        if (diff.code !== 0 && diff.code !== 1) {
-          log.error("failed to inspect snapshot diff", {
-            cwd: current.worktree,
-            exitCode: diff.code,
-            stderr: diff.stderr,
-          })
-          throw new Error(`Snapshot diff failed: git diff exited with code ${diff.code}`)
-        }
-        if (diff.code === 0) {
-          const untracked = await runGit(
-            [...cfg, ...args(current, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."])],
-            { cwd: current.worktree },
-          )
-          if (untracked.code !== 0) {
-            log.error("failed to inspect snapshot untracked files", {
-              cwd: current.worktree,
-              exitCode: untracked.code,
-              stderr: untracked.stderr,
-            })
-            throw new Error(`Snapshot untracked check failed: git ls-files exited with code ${untracked.code}`)
-          }
-          if (untracked.text.length === 0) {
-            log.info("tracking (unchanged)", { hash: current.prevHash })
-            return current.prevHash
-          }
-        }
-      }
-
+      const { key, packer } = packerFor(current)
+      capturing.add(key)
+      let done = false
       try {
-        await add(current, { excludesSynced: Boolean(current.prevHash) })
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        if (!message.startsWith("Snapshot staging failed")) throw error
-        warnCoverageOff(
-          current.worktree,
-          "staging-failed",
-          "Undo coverage is off this turn: snapshot staging failed. The session continues without a new rollback baseline.",
-        )
-        log.warn("snapshot staging failed; continuing without a new baseline", {
-          cwd: current.worktree,
-          error,
-        })
-        return current.prevHash
+        // ADR-248: a leftover marker means a previous capture was interrupted;
+        // its partial index is discarded before this attempt stages anything.
+        if (await recoverInterruptedCapture({ gitdir: current.gitdir })) {
+          log.warn("discarded interrupted snapshot capture", { gitdir: current.gitdir })
+        }
+        await clearStaleSnapshotLocks({ gitdir: current.gitdir })
+        await writeCaptureMarker(current.gitdir, { pid: process.pid, startedAt: Date.now() })
+        // A failed attempt leaves the marker in place on purpose: if the
+        // process dies next, the following run discards its partial state.
+        const hash = await withCaptureRetry(() => captureOnce(current))
+        await removeCaptureMarker(current.gitdir)
+        done = true
+        if (packer.recordSuccess()) {
+          capturing.delete(key)
+          await maybePack(current)
+        }
+        return hash
+      } finally {
+        if (!done) await removeCaptureMarker(current.gitdir)
+        capturing.delete(key)
       }
-      const result = await runGit(args(current, ["write-tree"]), { cwd: current.directory })
-      if (result.code !== 0) {
-        log.error("failed to write snapshot tree", {
-          cwd: current.directory,
-          exitCode: result.code,
-          stderr: result.stderr,
-        })
-        throw new Error(`Snapshot tracking failed: write-tree exited with code ${result.code}`)
-      }
-      const hash = result.text.trim()
-      if (!valid(hash)) {
-        log.error("failed to validate snapshot tree hash", { hash })
-        throw new Error("Snapshot tracking failed: write-tree returned an invalid hash")
-      }
-      const updateRef = await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], {
-        cwd: current.directory,
-      })
-      if (updateRef.code !== 0) {
-        log.error("failed to update snapshot ref", {
-          hash,
-          gitdir: current.gitdir,
-          exitCode: updateRef.code,
-          stderr: updateRef.stderr,
-        })
-        throw new Error(`Snapshot tracking failed: update-ref exited with code ${updateRef.code}`)
-      }
-      await writeSnapshotMeta(current, hash)
-      current.prevHash = hash
-      log.info("tracking", { hash, cwd: current.directory, git: current.gitdir })
-      return hash
     })
   }
 
