@@ -13,6 +13,14 @@ const cases: [string, string, unknown][] = [
     [2, 3, 4, true, 5, "object", "function", "undefined"],
   ],
   ["var hoisting", "x=2;var x;var x;function f(a){var a;return a}; [x,f(3)]", [2, 3]],
+  ["var redeclaration with function", "function f(){return 1}; var f; typeof f", "function"],
+  ["var initializer overwrites a function declaration", "var f=2; function f(){return 1}; typeof f", "number"],
+  ["duplicate function declarations use the last", "function f(){return 1}; function f(){return 2}; f()", 2],
+  [
+    "function body shares the function scope",
+    "function outer(){ var inner=2; function inner(){return 1}; return typeof inner }; outer()",
+    "number",
+  ],
   ["array-like", "Array.from({length:3},(_,i)=>i)", [0, 1, 2]],
   ["bindings", "var a=1; let b=2; const c=3; a+=b; b++; [a,b,c]", [3, 3, 3]],
   [
@@ -27,6 +35,8 @@ const cases: [string, string, unknown][] = [
   ["for", "let n=0; for(let i=0;i<6;i++){if(i===2)continue;if(i===5)break;n+=i} n", 8],
   ["for-of", "let n=0; for(const v of [1,2,3])n+=v; n", 6],
   ["for-in", "let keys=[]; for(const k in {a:1,b:2})keys.push(k); keys", ["a", "b"]],
+  ["for-in array", "let keys=[]; for(const k in [10,20])keys.push(k); keys", ["0", "1"]],
+  ["for-in string", "let keys=[]; for(const k in 'ab')keys.push(k); keys", ["0", "1"]],
   ["while", "let i=0; while(i<3)i++; do{i--}while(i>1); i", 1],
   ["return", "1; return {ok:true}; 3", { ok: true }],
   ["functions", "function f(x){return y=>x+y}; const g=f(2); g(4)", 6],

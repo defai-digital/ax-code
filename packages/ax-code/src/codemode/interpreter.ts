@@ -43,6 +43,15 @@ class Completion {
 const shortCircuit = Symbol("optional chain")
 type Reference = { get(): Value; set(value: Value): Value; receiver?: Value }
 
+/** Own enumerable string keys, matching `for...in` over the values we model. */
+function enumerableKeys(value: Value): string[] {
+  if (typeof value === "string") return Array.from({ length: value.length }, (_, index) => String(index))
+  if (!tagged(value)) return []
+  if (value.kind === "array") return value.items.map((_, index) => String(index))
+  if (value.kind === "object" || value.kind === "error") return [...value.props.keys()]
+  return []
+}
+
 class Interpreter {
   fatal?: Fault
   lastYieldStep = 0
@@ -70,7 +79,8 @@ class Interpreter {
       if (pattern.type === "Identifier") {
         if (!env.bindings.has(pattern.name)) {
           this.budget.allocate(1)
-          env.define(pattern.name, undefined)
+          // `var` can be redeclared by a function declaration or another var.
+          env.define(pattern.name, undefined, false, true)
         }
       } else if (pattern.type === "ArrayPattern") {
         for (const item of pattern.elements) if (item) names(item)
@@ -91,6 +101,15 @@ class Interpreter {
         } else if (value && typeof value === "object" && "type" in value) nodes.push(value as AnyNode)
       }
     }
+  }
+  declareFunction(scope: Env, name: string, value: Value) {
+    const existing = scope.bindings.get(name)
+    // A hoisted `var` (or an earlier declaration) is overwritten, as in JS.
+    if (existing && !existing.constant) {
+      existing.value = value
+      return
+    }
+    scope.define(name, value)
   }
   async settle(value: Value): Promise<Value> {
     while (tagged(value) && value.kind === "promise") value = await value.promise
@@ -170,7 +189,7 @@ class Interpreter {
         this.hoist(node.body, scope)
         try {
           if (node.body.type !== "BlockStatement") return await this.eval(node.body, scope)
-          await this.eval(node.body, scope)
+          await this.eval(node.body, scope, true)
           return undefined
         } catch (error) {
           if (error instanceof Completion && error.type === "return") return error.value
@@ -338,7 +357,7 @@ class Interpreter {
         throw new Error(`Unsupported operator: ${operator}`)
     }
   }
-  async eval(node: AnyNode, env: Env): Promise<Value> {
+  async eval(node: AnyNode, env: Env, reuseBlock = false): Promise<Value> {
     if (this.fatal) throw this.fatal
     this.budget.step()
     // Yield to the event loop so external aborts and the wall timer run during
@@ -352,11 +371,12 @@ class Interpreter {
       switch (node.type) {
         case "Program":
         case "BlockStatement": {
-          const scope = node.type === "Program" ? env : new Env(env)
+          // A function body is its own scope already; only nested blocks add one.
+          const scope = node.type === "Program" || reuseBlock ? env : new Env(env)
           this.budget.allocate(1)
           for (const statement of node.body)
             if (statement.type === "FunctionDeclaration" && statement.id)
-              scope.define(statement.id.name, this.closure(statement, scope))
+              this.declareFunction(scope, statement.id.name, this.closure(statement, scope))
           let value: Value
           for (const statement of node.body) value = await this.eval(statement, scope)
           return value
@@ -570,7 +590,7 @@ class Interpreter {
         case "ForInStatement": {
           if (node.type === "ForOfStatement" && node.await) unsupported(node, this.source, "for-await")
           const value = await this.eval(node.right, env)
-          const values = node.type === "ForInStatement" ? [...object(value).keys()] : iterable(value, this.budget)
+          const values = node.type === "ForInStatement" ? enumerableKeys(value) : iterable(value, this.budget)
           for (let i = 0; i < values.length; i++) {
             this.budget.step()
             const scope = new Env(env)
