@@ -221,6 +221,19 @@ export namespace MCP {
     }),
   )
 
+  /** ADR-255: a trust decision changed; no config values travel with it. */
+  export const TrustChanged = BusEvent.define(
+    "mcp.trust.changed",
+    z
+      .object({
+        server: z.string(),
+        fingerprint: z.string(),
+        action: z.enum(["trust", "untrust"]),
+        sourceKind: Config.McpSourceKind,
+      })
+      .meta({ ref: "McpTrustChanged" }),
+  )
+
   export const BrowserOpenFailed = BusEvent.define(
     "mcp.browser.open.failed",
     z.object({
@@ -287,6 +300,18 @@ export namespace MCP {
             path: z.string().optional(),
             url: z.string().optional(),
           }),
+          // ADR-255: what trusting this exact fingerprint would run, built by the
+          // runtime so a client never parses config. Values of environment
+          // variables and headers are never included.
+          review: z
+            .object({
+              transport: z.enum(["local", "remote"]),
+              command: z.string().array().optional(),
+              environmentKeys: z.string().array().optional(),
+              url: z.string().optional(),
+              headerKeys: z.string().array().optional(),
+            })
+            .optional(),
         })
         .meta({
           ref: "MCPStatusNeedsTrust",
@@ -497,7 +522,7 @@ export namespace MCP {
 
             const trust = await McpTrust.decision(key, mcp, entries[key]?.source ?? Config.trustedMcpSource("unknown"))
             if (!trust.trusted) {
-              if (!next.disposed) status[key] = needsTrustStatus(trust, webmcpTrustNote(key, mcp))
+              if (!next.disposed) status[key] = needsTrustStatus(trust, mcp, webmcpTrustNote(key, mcp))
               return
             }
 
@@ -677,7 +702,28 @@ export namespace MCP {
     })
   }
 
-  function needsTrustStatus(decision: McpTrust.Decision, error?: string): Status {
+  /** ADR-255: the review a client shows before trusting; argv and keys only, never env or header values. */
+  export function trustReview(mcp: Config.Mcp) {
+    if (mcp.type === "remote") {
+      let url = mcp.url
+      try {
+        const parsed = new URL(mcp.url)
+        url = `${parsed.origin}${parsed.pathname}`
+      } catch {
+        // The config schema already rejects malformed URLs; keep the raw value if parsing ever fails.
+      }
+      const headerKeys = Object.keys(mcp.headers ?? {}).sort()
+      return { transport: "remote" as const, url, ...(headerKeys.length > 0 ? { headerKeys } : {}) }
+    }
+    const environmentKeys = Object.keys(mcp.environment ?? {}).sort()
+    return {
+      transport: "local" as const,
+      command: [...mcp.command],
+      ...(environmentKeys.length > 0 ? { environmentKeys } : {}),
+    }
+  }
+
+  function needsTrustStatus(decision: McpTrust.Decision, mcp: Config.Mcp, error?: string): Status {
     return {
       status: "needs_trust",
       fingerprint: decision.fingerprint,
@@ -687,6 +733,7 @@ export namespace MCP {
         path: decision.source.path,
         url: decision.source.url,
       },
+      ...(isConfigured(mcp) ? { review: trustReview(mcp) } : {}),
     }
   }
 
@@ -1017,7 +1064,7 @@ export namespace MCP {
       // granted to the same project entry before the network policy changed.
       if (mcp.allowLoopback) {
         const trust = await trustDecision(key, mcp)
-        if (!trust.trusted) return { mcpClient: undefined, status: needsTrustStatus(trust) }
+        if (!trust.trusted) return { mcpClient: undefined, status: needsTrustStatus(trust, mcp) }
       }
       let callbackListenerStarted = false
       try {
@@ -1433,7 +1480,7 @@ export namespace MCP {
 
     const trust = await trustDecision(name, mcp)
     if (!trust.trusted && !webmcpTrustExempt(mcp)) {
-      s.status[name] = needsTrustStatus(trust, webmcpTrustNote(name, mcp))
+      s.status[name] = needsTrustStatus(trust, mcp, webmcpTrustNote(name, mcp))
       if (s.clients[name]) {
         await closeIfPossible(s.clients[name], name, "trust revoked")
         delete s.clients[name]
@@ -1756,15 +1803,56 @@ export namespace MCP {
     )
   }
 
+  function publishTrustChanged(name: string, decision: McpTrust.Decision, action: "trust" | "untrust") {
+    try {
+      Bus.publishDetached(TrustChanged, {
+        server: name,
+        fingerprint: decision.fingerprint,
+        action,
+        sourceKind: decision.source.kind,
+      })
+    } catch (error) {
+      log.warn("mcp.trust.changed publish failed", { server: name, error: toErrorMessage(error) })
+    }
+  }
+
   export async function trust(name: string): Promise<Record<string, Status>> {
     const entry = await Config.mcpEntry(name)
     const mcp = entry?.config
     if (!mcp || !isConfigured(mcp)) {
       throw new Error(`MCP server not found: ${name}`)
     }
-    await McpTrust.trust(name, mcp, entry.source)
+    const decision = await McpTrust.trust(name, mcp, entry.source)
+    publishTrustChanged(name, decision, "trust")
     await connect(name)
     return status()
+  }
+
+  export type TrustReviewedOutcome =
+    | { ok: true; status: Record<string, Status> }
+    | { ok: false; reason: "not_found" }
+    | { ok: false; reason: "not_pending" }
+    | { ok: false; reason: "fingerprint_mismatch"; fingerprint: string }
+
+  /**
+   * ADR-255: trust exactly the config the user reviewed. The fingerprint the
+   * client showed must still be the current one; a changed config, a server
+   * that is already trusted or trusted by its source, or an unknown name is
+   * refused and nothing is recorded.
+   */
+  export async function trustReviewed(name: string, fingerprint: string): Promise<TrustReviewedOutcome> {
+    const entry = await Config.mcpEntry(name)
+    const mcp = entry?.config
+    if (!mcp || !isConfigured(mcp)) return { ok: false, reason: "not_found" }
+    const current = await trustDecision(name, mcp)
+    if (current.trusted || current.source.trustedByDefault) return { ok: false, reason: "not_pending" }
+    if (current.fingerprint !== fingerprint) {
+      return { ok: false, reason: "fingerprint_mismatch", fingerprint: current.fingerprint }
+    }
+    const decision = await McpTrust.trust(name, mcp, entry.source)
+    publishTrustChanged(name, decision, "trust")
+    await connect(name)
+    return { ok: true, status: await status() }
   }
 
   export async function untrust(name: string): Promise<Record<string, Status>> {
@@ -1774,6 +1862,7 @@ export namespace MCP {
       throw new Error(`MCP server not found: ${name}`)
     }
     const decision = await McpTrust.untrust(name, mcp)
+    publishTrustChanged(name, decision, "untrust")
     await withConnectLock(name, "MCP untrust failed", async (s) => {
       invalidateTools(s)
       const client = s.clients[name]
@@ -1782,7 +1871,7 @@ export namespace MCP {
         delete s.clients[name]
       }
       await closePendingOAuthTransport(name)
-      s.status[name] = needsTrustStatus(decision)
+      s.status[name] = needsTrustStatus(decision, mcp)
     })
     return status()
   }

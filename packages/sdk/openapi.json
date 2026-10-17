@@ -35596,6 +35596,165 @@
         ]
       }
     },
+    "/mcp/{name}/trust": {
+      "post": {
+        "operationId": "mcp.trust",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "required": true
+          }
+        ],
+        "description": "Trust a project-configured MCP server for the exact configuration the user reviewed, then connect it. The fingerprint must match the server's current needs_trust fingerprint.",
+        "responses": {
+          "200": {
+            "description": "Trusted and connected; the MCP status map",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/MCPStatus"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fingerprint": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "fingerprint"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.mcp.trust({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/mcp/{name}/untrust": {
+      "post": {
+        "operationId": "mcp.untrust",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "required": true
+          }
+        ],
+        "description": "Remove trust for a project-configured MCP server's current configuration and disconnect it.",
+        "responses": {
+          "200": {
+            "description": "Untrusted and disconnected; the MCP status map",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/MCPStatus"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.mcp.untrust({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/mcp/{name}/disconnect": {
       "post": {
         "operationId": "mcp.disconnect",
@@ -41257,6 +41416,9 @@
             "$ref": "#/components/schemas/Event.mcp.tools.changed"
           },
           {
+            "$ref": "#/components/schemas/Event.mcp.trust.changed"
+          },
+          {
             "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
           },
           {
@@ -41984,6 +42146,22 @@
             "required": [
               "server"
             ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.trust.changed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.trust.changed"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/McpTrustChanged"
           }
         },
         "required": [
@@ -47534,6 +47712,42 @@
             "required": [
               "kind"
             ]
+          },
+          "review": {
+            "type": "object",
+            "properties": {
+              "transport": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "remote"
+                ]
+              },
+              "command": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "environmentKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "url": {
+                "type": "string"
+              },
+              "headerKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "transport"
+            ]
           }
         },
         "required": [
@@ -47804,6 +48018,45 @@
           "name",
           "uri",
           "client"
+        ]
+      },
+      "McpTrustChanged": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "trust",
+              "untrust"
+            ]
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "wellknown",
+              "global",
+              "custom",
+              "project",
+              "config_directory",
+              "inline",
+              "account",
+              "managed",
+              "runtime",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "server",
+          "fingerprint",
+          "action",
+          "sourceKind"
         ]
       },
       "Message": {

@@ -116,6 +116,10 @@ import type {
   McpRevokeWebMcpApprovalErrors,
   McpRevokeWebMcpApprovalResponses,
   McpStatusResponses,
+  McpTrustErrors,
+  McpTrustResponses,
+  McpUntrustErrors,
+  McpUntrustResponses,
   McpWebMcpApprovalsErrors,
   McpWebMcpApprovalsResponses,
   McpWebMcpChromeErrors,
@@ -7499,6 +7503,69 @@ export class Mcp extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<McpConnectResponses, unknown, ThrowOnError>({
       url: "/mcp/{name}/connect",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Trust a project-configured MCP server for the exact configuration the user reviewed, then connect it. The fingerprint must match the server's current needs_trust fingerprint.
+   */
+  public trust<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      fingerprint: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "fingerprint" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<McpTrustResponses, McpTrustErrors, ThrowOnError>({
+      url: "/mcp/{name}/trust",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Remove trust for a project-configured MCP server's current configuration and disconnect it.
+   */
+  public untrust<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<McpUntrustResponses, McpUntrustErrors, ThrowOnError>({
+      url: "/mcp/{name}/untrust",
       ...options,
       ...params,
     })

@@ -6,7 +6,7 @@ import { MCP } from "../../mcp"
 import { WebMcpApprovals } from "../../mcp/webmcp-approvals"
 import { WebMcpChrome } from "../../mcp/webmcp-chrome"
 import { Config } from "../../config/config"
-import { errors, invalidRequest, notFound } from "../error"
+import { appErrorResponse, errors, invalidRequest, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { withRouteParam } from "./route-params"
 import { ServerRuntimeAuth } from "../runtime-auth"
@@ -375,6 +375,73 @@ export const McpRoutes = lazy(() =>
       withMcpName(async (name, c) => {
         await MCP.connect(name)
         return c.json(true)
+      }),
+    )
+    .post(
+      "/:name/trust",
+      describeRoute({
+        description:
+          "Trust a project-configured MCP server for the exact configuration the user reviewed, then connect it. The fingerprint must match the server's current needs_trust fingerprint.",
+        operationId: "mcp.trust",
+        responses: {
+          200: {
+            description: "Trusted and connected; the MCP status map",
+            content: {
+              "application/json": {
+                schema: resolver(z.record(z.string(), MCP.Status)),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", MCP_NAME_PARAM_OBJECT),
+      validator("json", z.object({ fingerprint: z.string().min(1).max(200) })),
+      withMcpName(async (name, c) => {
+        const { fingerprint } = c.req.valid("json")
+        const outcome = await MCP.trustReviewed(name, fingerprint)
+        if (outcome.ok) return c.json(outcome.status)
+        if (outcome.reason === "not_found") {
+          return notFound(c, { message: `MCP server not found: ${name}`, resource: "mcpServer" })
+        }
+        return appErrorResponse(c, {
+          name: "ConflictError",
+          message:
+            outcome.reason === "fingerprint_mismatch"
+              ? "The MCP server configuration changed after it was reviewed; review it again"
+              : "The MCP server is not waiting for trust",
+          status: 409,
+          details: {
+            reason: outcome.reason,
+            ...(outcome.reason === "fingerprint_mismatch" ? { fingerprint: outcome.fingerprint } : {}),
+          },
+        })
+      }),
+    )
+    .post(
+      "/:name/untrust",
+      describeRoute({
+        description: "Remove trust for a project-configured MCP server's current configuration and disconnect it.",
+        operationId: "mcp.untrust",
+        responses: {
+          200: {
+            description: "Untrusted and disconnected; the MCP status map",
+            content: {
+              "application/json": {
+                schema: resolver(z.record(z.string(), MCP.Status)),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", MCP_NAME_PARAM_OBJECT),
+      withMcpName(async (name, c) => {
+        const entry = await Config.mcpEntry(name)
+        if (!entry?.config || !MCP.isConfigured(entry.config)) {
+          return notFound(c, { message: `MCP server not found: ${name}`, resource: "mcpServer" })
+        }
+        return c.json(await MCP.untrust(name))
       }),
     )
     .post(

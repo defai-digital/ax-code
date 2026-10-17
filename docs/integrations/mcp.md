@@ -132,6 +132,10 @@ The Playwright MCP server gains significant capability over your browser. When s
 
 Mutating MCP HTTP routes require a process-local runtime authorization header in addition to general server protections. This protects local runtime-control actions such as adding, connecting, disconnecting, and authenticating MCP servers. Read-only MCP status remains available through `GET /mcp`.
 
+A client can grant the same per-fingerprint trust as `ax-code mcp trust` through `POST /mcp/{name}/trust` with `{ "fingerprint": "..." }`. The fingerprint must be the one the server currently reports in its `needs_trust` status; if the configuration changed after it was reviewed, the route answers 409 and records nothing. A `needs_trust` status includes a `review` of what would run (the full command, or the URL without query string, and the names but never the values of environment variables and headers) so a client can show it before asking. `POST /mcp/{name}/untrust` revokes trust for the current fingerprint and disconnects. Both publish `mcp.trust.changed` with the server, fingerprint, action and source kind only.
+
+When an MCP server asks for input (form or URL elicitation), every outcome publishes `mcp.elicitation.resolved` with the server, session, mode, action, a category such as `autonomous`, `user_accepted` or `unsupported_form`, the field count and up to eight field names, and for URL mode the host only. Values, answers, the server's message and the URL path or query are never included. In autonomous mode requests are declined without asking; switch the project to manual mode to answer them.
+
 ## Figma MCP
 
 ### Figma Desktop

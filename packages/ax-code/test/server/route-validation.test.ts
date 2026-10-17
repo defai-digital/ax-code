@@ -1059,6 +1059,64 @@ describe("server route validation", () => {
     })
   })
 
+  test("mcp trust route needs the runtime token and maps refusals to 404 and 409", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const trustSpy = vi.spyOn(MCP, "trustReviewed")
+        try {
+          const headers = { "content-type": "application/json", ...ServerRuntimeAuth.headers() }
+          const unauthorized = await Server.Default().request("/mcp/local/trust", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ fingerprint: "abc" }),
+          })
+          expect(unauthorized.status).toBe(403)
+          expect(trustSpy).not.toHaveBeenCalled()
+
+          const malformed = await Server.Default().request("/mcp/local/trust", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({}),
+          })
+          expect(malformed.status).toBe(400)
+
+          trustSpy.mockResolvedValueOnce({ ok: false, reason: "not_found" })
+          const missing = await Server.Default().request("/mcp/local/trust", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ fingerprint: "abc" }),
+          })
+          expect(missing.status).toBe(404)
+
+          trustSpy.mockResolvedValueOnce({ ok: false, reason: "fingerprint_mismatch", fingerprint: "def" })
+          const stale = await Server.Default().request("/mcp/local/trust", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ fingerprint: "abc" }),
+          })
+          expect(stale.status).toBe(409)
+          expect(await stale.json()).toMatchObject({
+            name: "ConflictError",
+            details: { reason: "fingerprint_mismatch", fingerprint: "def" },
+          })
+
+          trustSpy.mockResolvedValueOnce({ ok: true, status: { local: { status: "connected" } } })
+          const trusted = await Server.Default().request("/mcp/local/trust", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ fingerprint: "abc" }),
+          })
+          expect(trusted.status).toBe(200)
+          expect(await trusted.json()).toEqual({ local: { status: "connected" } })
+          expect(trustSpy).toHaveBeenLastCalledWith("local", "abc")
+        } finally {
+          trustSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("mcp resource routes list and read connected resources", async () => {
     await Instance.provide({
       directory: root,

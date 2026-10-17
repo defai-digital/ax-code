@@ -1319,6 +1319,7 @@ export type Event =
   | EventQuestionRejected
   | EventMcpElicitationResolved
   | EventMcpToolsChanged
+  | EventMcpTrustChanged
   | EventMcpBrowserOpenFailed
   | EventPermissionAutoAcceptChanged
   | EventPermissionAutoAccepted
@@ -1532,6 +1533,12 @@ export type EventMcpToolsChanged = {
   properties: {
     server: string
   }
+}
+
+/** Server event payload with `type: "mcp.trust.changed"` (auto-generated). */
+export type EventMcpTrustChanged = {
+  type: "mcp.trust.changed"
+  properties: McpTrustChanged
 }
 
 /** Server event payload with `type: "message.part.delta"` (auto-generated). */
@@ -3193,6 +3200,13 @@ export type McpStatusNeedsTrust = {
     path?: string
     url?: string
   }
+  review?: {
+    transport: "local" | "remote"
+    command?: Array<string>
+    environmentKeys?: Array<string>
+    url?: string
+    headerKeys?: Array<string>
+  }
 }
 
 /** AX Code API schema `McpElicitationResolved` (auto-generated from the OpenAPI contract). */
@@ -3322,6 +3336,24 @@ export type McpResource = {
   description?: string
   mimeType?: string
   client: string
+}
+
+/** AX Code API schema `McpTrustChanged` (auto-generated from the OpenAPI contract). */
+export type McpTrustChanged = {
+  server: string
+  fingerprint: string
+  action: "trust" | "untrust"
+  sourceKind:
+    | "wellknown"
+    | "global"
+    | "custom"
+    | "project"
+    | "config_directory"
+    | "inline"
+    | "account"
+    | "managed"
+    | "runtime"
+    | "unknown"
 }
 
 /** AX Code API schema `Message` (auto-generated from the OpenAPI contract). */
@@ -17128,6 +17160,88 @@ export type McpConnectResponses = {
 
 /** Successful response payload for `POST /mcp/{name}/connect` — Connect an MCP server */
 export type McpConnectResponse = McpConnectResponses[keyof McpConnectResponses]
+
+/** Request payload shape for `POST /mcp/{name}/trust` — Trust a project-configured MCP server for the exact configuration the user reviewed, then connect it. The fingerprint must match the server's current needs_trust fingerprint. */
+export type McpTrustData = {
+  body?: {
+    fingerprint: string
+  }
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/mcp/{name}/trust"
+}
+
+/** Error response payloads for `POST /mcp/{name}/trust` — Trust a project-configured MCP server for the exact configuration the user reviewed, then connect it. The fingerprint must match the server's current needs_trust fingerprint. */
+export type McpTrustErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /mcp/{name}/trust` — Trust a project-configured MCP server for the exact configuration the user reviewed, then connect it. The fingerprint must match the server's current needs_trust fingerprint. */
+export type McpTrustError = McpTrustErrors[keyof McpTrustErrors]
+
+/** Success response payloads for `POST /mcp/{name}/trust` — Trust a project-configured MCP server for the exact configuration the user reviewed, then connect it. The fingerprint must match the server's current needs_trust fingerprint. */
+export type McpTrustResponses = {
+  /**
+   * Trusted and connected; the MCP status map
+   */
+  200: {
+    [key: string]: McpStatus
+  }
+}
+
+/** Successful response payload for `POST /mcp/{name}/trust` — Trust a project-configured MCP server for the exact configuration the user reviewed, then connect it. The fingerprint must match the server's current needs_trust fingerprint. */
+export type McpTrustResponse = McpTrustResponses[keyof McpTrustResponses]
+
+/** Request payload shape for `POST /mcp/{name}/untrust` — Remove trust for a project-configured MCP server's current configuration and disconnect it. */
+export type McpUntrustData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/mcp/{name}/untrust"
+}
+
+/** Error response payloads for `POST /mcp/{name}/untrust` — Remove trust for a project-configured MCP server's current configuration and disconnect it. */
+export type McpUntrustErrors = {
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /mcp/{name}/untrust` — Remove trust for a project-configured MCP server's current configuration and disconnect it. */
+export type McpUntrustError = McpUntrustErrors[keyof McpUntrustErrors]
+
+/** Success response payloads for `POST /mcp/{name}/untrust` — Remove trust for a project-configured MCP server's current configuration and disconnect it. */
+export type McpUntrustResponses = {
+  /**
+   * Untrusted and disconnected; the MCP status map
+   */
+  200: {
+    [key: string]: McpStatus
+  }
+}
+
+/** Successful response payload for `POST /mcp/{name}/untrust` — Remove trust for a project-configured MCP server's current configuration and disconnect it. */
+export type McpUntrustResponse = McpUntrustResponses[keyof McpUntrustResponses]
 
 /** Request payload shape for `POST /mcp/{name}/disconnect` — Disconnect an MCP server */
 export type McpDisconnectData = {
