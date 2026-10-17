@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.26.5] - 2026-10-17
+
+### Fixed
+
+- Cancel MCP form and URL elicitation when a tool aborts before prompting or races a resolved answer, preventing late browser opens and returned form values.
+- Preserve cancellation while browser opening or prompt rejection settles, and decline empty URL answers without throwing.
+- Include committed fixes for path-rule symlink containment, serialized OSV cache writes, and write-capable arguments in the plan-agent shell classifier.
+- Preserve reviewed MCP trust fingerprints and redacted elicitation resolution events.
+
+### Changed
+
+- Publish SDK 2.6.27 with project MCP trust/untrust routes and typed elicitation-resolution events.
+- Clarify independent Desktop and CLI installation and update paths in public operator documentation.
+
 ## [7.26.4] - 2026-10-17
 
 ### Fixed
