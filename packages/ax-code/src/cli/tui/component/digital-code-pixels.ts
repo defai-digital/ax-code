@@ -1,7 +1,16 @@
+import { createRacingPixelPainter } from "./racing-pixels"
+import { isRacingStyle } from "./racing-view-model"
 import { renderTextScenePixels } from "./text-scene-pixels"
 import { isTextSceneStyle } from "./text-scene-view-model"
 import { createFoliagePixelPainter, isFoliageVariant, type OverlayStyle } from "./foliage-view-model"
-import { applyCinema, chooseCinemaMove, cinemaShot, type CinemaMove } from "./scene-cinema"
+import {
+  applyCinema,
+  chooseCinemaMove,
+  cinemaShot,
+  sceneCinemaMove,
+  CINEMA_FADE_IN_MS,
+  type CinemaMove,
+} from "./scene-cinema"
 import { deflateSync } from "node:zlib"
 import { randomInt } from "node:crypto"
 import {
@@ -364,8 +373,9 @@ export function kittyDigitalCodeFrame(
  * image over the same cells either way; a smaller raster only looks softer.
  * The pixel budget is the starting ceiling, the frame budget steers below it.
  */
-export const SCENE_PIXEL_BUDGET = 1600 * 900
-export const SCENE_FRAME_BUDGET_MS = 30
+export const SCENE_PIXEL_BUDGET = 1280 * 720
+// Leave headroom inside the 50ms tick for terminal output and input handling.
+export const SCENE_FRAME_BUDGET_MS = 36
 export const SCENE_MIN_QUALITY = 0.4
 
 export function sceneQualityCeiling(width: number, height: number): number {
@@ -394,9 +404,14 @@ export function finishScenePixels(
   painted: Buffer,
   width: number,
   height: number,
-  input: { elapsedMs: number; durationMs?: number; move: CinemaMove },
+  input: { elapsedMs: number; durationMs?: number; move: CinemaMove; style?: OverlayStyle },
 ): Buffer {
-  return applyCinema(painted, width, height, cinemaShot({ width, height, ...input }))
+  return applyCinema(
+    painted,
+    width,
+    height,
+    cinemaShot({ width, height, ...input, move: sceneCinemaMove(input.style, input.move) }),
+  )
 }
 
 // The caller supplies the renderer's native output queue, never intercepted
@@ -411,13 +426,16 @@ export function digitalCodePixelPlayer(
   const id = randomInt(1, 0x7fffffff)
   let frame: DigitalCodePixels | undefined
   let foliagePainter: { width: number; height: number; paint: (elapsedMs: number) => Buffer } | undefined
+  let racingPainter: { width: number; height: number; paint: (elapsedMs: number) => Buffer } | undefined
+  let qualityDeadline = 0
+  let slowFrames = 0
   let tick = 0
   const started = now()
   let size = ""
   let closed = false
   let quality = 1
   let ceiling = 1
-  let cost: number | undefined
+  const costs: number[] = []
   let sceneFrames = 0
   const clear = () => write(kittyDigitalCodeDeleteSequence(id))
   return {
@@ -438,11 +456,14 @@ export function digitalCodePixelPlayer(
         if (frame) clear()
         frame = createDigitalCodePixels(input.width, input.height, input.direction, undefined, input.style)
         foliagePainter = undefined
+        racingPainter = undefined
+        qualityDeadline = (input.elapsedMs ?? now() - started) + CINEMA_FADE_IN_MS
+        slowFrames = 0
         size = next
         tick = 0
         ceiling = sceneQualityCeiling(frame.width, frame.height)
         quality = ceiling
-        cost = undefined
+        costs.length = 0
         sceneFrames = 0
       } else if (!isTextSceneStyle(input.style) && !isFoliageVariant(input.style)) {
         // Scene and foliage styles never render the rain; don't pay per-frame
@@ -460,13 +481,22 @@ export function digitalCodePixelPlayer(
       }
       const raster = sceneRasterSize(frame.width, frame.height, quality)
       let painted: Buffer
+      let coldPainter = false
       if (isFoliageVariant(style)) {
-        if (!foliagePainter || foliagePainter.width !== raster.width || foliagePainter.height !== raster.height)
+        if (!foliagePainter || foliagePainter.width !== raster.width || foliagePainter.height !== raster.height) {
+          coldPainter = true
           foliagePainter = {
             ...raster,
             paint: createFoliagePixelPainter(raster.width, raster.height, style),
           }
+        }
         painted = foliagePainter.paint(elapsedMs)
+      } else if (isRacingStyle(style)) {
+        if (!racingPainter || racingPainter.width !== raster.width || racingPainter.height !== raster.height) {
+          coldPainter = true
+          racingPainter = { ...raster, paint: createRacingPixelPainter(raster.width, raster.height, style) }
+        }
+        painted = racingPainter.paint(elapsedMs)
       } else painted = renderTextScenePixels(raster.width, raster.height, style, elapsedMs)
       write(
         kittyDigitalCodeFrame(
@@ -474,17 +504,31 @@ export function digitalCodePixelPlayer(
           frame,
           input.columns,
           input.rows,
-          finishScenePixels(painted, raster.width, raster.height, { elapsedMs, durationMs: input.durationMs, move }),
+          finishScenePixels(painted, raster.width, raster.height, {
+            elapsedMs,
+            durationMs: input.durationMs,
+            move,
+            style,
+          }),
           raster,
         ),
       )
       const spent = now() - begin
       // A scene's first frame pays one-time setup (caches, warm-up); it says
       // nothing about steady frame cost, so it never steers the raster.
-      if (sceneFrames++ === 0) return
-      cost = cost === undefined ? spent : cost * 0.5 + spent * 0.5
-      const adjusted = nextSceneQuality({ quality, ceiling, costMs: cost })
-      if (adjusted < quality) cost = undefined // a smaller raster starts its own cost history
+      if (sceneFrames++ === 0 || coldPainter) return
+      costs.push(spent)
+      if (costs.length > 3) costs.shift()
+      if (costs.length < 3) return
+      // One GC pause or a late initialization must not permanently blur a shot.
+      const cost = [...costs].sort((a, b) => a - b)[1]!
+      // Negotiate during the fade, then keep detail stable for the visible shot.
+      // A sustained severe stall can still reduce quality on slow hardware.
+      // Never grow it again within a playback: this also avoids cache churn.
+      slowFrames = spent > 100 ? slowFrames + 1 : 0
+      if (elapsedMs > qualityDeadline && sceneFrames > 3 && slowFrames < 3) return
+      const adjusted = Math.min(quality, nextSceneQuality({ quality, ceiling, costMs: cost }))
+      if (adjusted < quality) costs.length = 0 // a smaller raster starts its own cost history
       quality = adjusted
     },
     dispose() {
@@ -493,6 +537,7 @@ export function digitalCodePixelPlayer(
       const active = frame
       frame = undefined
       foliagePainter = undefined
+      racingPainter = undefined
       if (active) clear()
     },
   }

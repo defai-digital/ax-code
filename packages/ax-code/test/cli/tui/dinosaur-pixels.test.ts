@@ -30,3 +30,13 @@ test.each(["dinosaur-day", "dinosaur-night"] as const)("%s renders at any size",
     expect(renderDinosaurPixels(width!, height!, style, 700)).toHaveLength(width! * height! * 3)
   }
 })
+
+test("moonlight separates the dinosaur from the valley without turning the whole night into day", () => {
+  const night = renderDinosaurPixels(WIDTH, HEIGHT, "dinosaur-night", 900)
+  const day = renderDinosaurPixels(WIDTH, HEIGHT, "dinosaur-day", 900)
+  const luma = (rgb: number[]) => rgb[0]! * 0.299 + rgb[1]! * 0.587 + rgb[2]! * 0.114
+  const body = luma(pixel(night, 250, 280))
+  const valley = luma(pixel(night, 450, 280))
+  expect(body - valley).toBeGreaterThan(25)
+  expect(luma(pixel(night, 400, 40))).toBeLessThan(luma(pixel(day, 400, 40)) * 0.4)
+})

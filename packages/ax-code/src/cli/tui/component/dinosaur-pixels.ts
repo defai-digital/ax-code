@@ -1,3 +1,4 @@
+import { paintContour, paintVolume } from "./scene-volume"
 import { blendPixel } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
@@ -60,7 +61,7 @@ export function renderDinosaurPixels(width: number, height: number, style: Dinos
   }
   const ground = hdHex(c.ground)
   const groundDark = hdHex(c.groundDark)
-  const dino = hdHex(c.dinoBg)
+  const dino = hdHex(night ? "#718e92" : "#829676")
   const orb = night ? DINOSAUR_MOON : DINOSAUR_SUN
   const orbX = hd.X(orb.x)
   const orbY = hd.Y(orb.y)
@@ -98,15 +99,24 @@ export function renderDinosaurPixels(width: number, height: number, style: Dinos
   }
 
   // Volcano cone with a lava cap and drifting smoke.
-  hd.mass(
-    DINOSAUR_VOLCANO.x + 1,
-    DINOSAUR_VOLCANO.top,
-    DINOSAUR_VOLCANO.base + 2,
-    1.6,
-    7.5,
-    hdHex(c.volcano),
-    hdDarken(hdHex(c.volcano), 0.75),
-    hdHex(c.lava),
+  paintContour(
+    hd,
+    [
+      [55.5, 14],
+      [58, 11.5],
+      [60.1, 8.4],
+      [61.5, 6],
+      [64.4, 6.1],
+      [66, 8.8],
+      [68, 11.7],
+      [71, 14],
+    ],
+    (x, y) => {
+      const sx = x / cw,
+        sy = y / ch
+      const ridge = 0.7 + noise1(sx * 1.2 - sy * 0.25, 32) * 0.3
+      return hdDarken(hdHex(night ? "#4a4646" : "#8e8276"), ridge * (0.85 + (64 - sx) * 0.025))
+    },
   )
   hd.blob(hd.X(DINOSAUR_VOLCANO.x + 1), hd.Y(DINOSAUR_VOLCANO.top + 0.2), cw * 1.2, ch * 0.3, hdHex(c.lava))
   if (night) glow(hd.X(DINOSAUR_VOLCANO.x + 1), hd.Y(DINOSAUR_VOLCANO.top), cw * 4, ch * 1.6, hdHex(c.lava), 0.5)
@@ -166,6 +176,20 @@ export function renderDinosaurPixels(width: number, height: number, style: Dinos
         Math.max(0.8, cw * 0.12 * scale),
         hdDarken(fern, 0.85 + hash(k, seed) * 0.3),
       )
+      for (let leaf = 1; leaf <= 5; leaf++) {
+        const t = leaf / 6
+        const lx = topX + (k * 0.85 * scale + sway) * t
+        const ly = topY + (-(1.5 - Math.abs(k) * 0.28) * scale + Math.abs(k) * 0.35 * scale) * t
+        for (const side of [-1, 1])
+          hd.stroke(
+            lx,
+            ly,
+            lx + side * 0.45 * scale,
+            ly - 0.32 * scale,
+            Math.max(0.7, cw * 0.07 * scale),
+            hdMix(fern, night ? [74, 107, 94] : [98, 148, 62], 0.4),
+          )
+      }
     }
   }
   fernTree(3.5, 1.15, 3)
@@ -188,49 +212,113 @@ export function renderDinosaurPixels(width: number, height: number, style: Dinos
     }
   }
 
-  // Sauropod: barrel body, four pillar legs, tapering tail, long neck.
-  const bob = Math.sin(theta * 2) * 0.08
-  const bodyCx = hd.X(23)
-  const bodyCy = hd.Y(14.6 + bob)
-  hd.blob(bodyCx, hd.Y(17.9), cw * 13, ch * 0.5, hdDarken(groundDark, 0.8))
-  for (const lx of [15.5, 20, 27, 31.5]) {
-    hd.rect(hd.X(lx), hd.Y(15.4 + bob), hd.X(lx + 2.1), hd.Y(18.1), hdDarken(dino, 0.88))
-    hd.blob(hd.X(lx + 1), hd.Y(18.1), cw * 1.15, ch * 0.22, hdDarken(dino, 0.8))
+  // Sculpted sauropod: overlapping depth planes, muscular shoulder, curved
+  // neck and a long tapering tail. The moon is a key light, not a glowing eye.
+  const bob = Math.sin(theta * 2) * 0.06
+  const graze = (Math.sin(theta) * 0.5 + 0.5) * 0.65
+  const skin = (x: number, y: number): RGB => {
+    const sy = y / ch
+    const gain = 0.62 + Math.max(0, 1 - (sy - 10) / 8) * 0.4
+    const mottling = 0.94 + noise1((x / cw) * 1.6 + sy * 0.7, 83) * 0.1
+    return hdDarken(dino, gain * mottling * (0.98 + hash(x >> 1, y >> 1) * 0.04))
   }
-  hd.blob(bodyCx, bodyCy, cw * 12.5, ch * 2.5, dino)
-  hd.blob(bodyCx, hd.Y(15.6 + bob), cw * 10.5, ch * 1.5, hdHex(c.belly))
-  hd.blob(bodyCx - cw * 3, hd.Y(13.6 + bob), cw * 7, ch * 1.1, hdMix(dino, hdHex("#ffffff"), night ? 0.05 : 0.16))
-  // Back spots.
-  for (let i = 0; i < 5; i++) {
-    hd.blob(
-      hd.X(15 + i * 3.6),
-      hd.Y(13.9 + bob + hash(i, 4) * 0.7),
-      cw * (0.7 + hash(i, 5) * 0.6),
-      ch * 0.32,
-      hdDarken(dino, 0.78),
+  glow(hd.X(25), hd.Y(18.5), cw * 15, ch * 0.75, hdHex("#050e0d"), 0.7)
+  // Far legs are darker and end higher to establish ground-plane depth.
+  for (const x of [19.2, 30]) {
+    paintContour(
+      hd,
+      [
+        [x, 14.8],
+        [x + 2, 14.7],
+        [x + 1.5, 16.8],
+        [x + 1.8, 18.1],
+        [x - 0.1, 18.1],
+        [x + 0.2, 16.4],
+      ],
+      () => hdDarken(dino, 0.48),
     )
   }
-  // Tail sweeping right and down in tapering segments.
-  const tailWag = Math.sin(theta * 2 + 1) * 0.5
-  let tailX = 34.5
-  let tailY = 14.2 + bob
-  for (let seg = 0; seg < 5; seg++) {
-    const nextX = tailX + 2.6
-    const nextY = tailY + 0.75 + seg * 0.1 + tailWag * 0.12 * seg
-    hd.stroke(tailX, tailY, nextX, nextY, Math.max(0.9, cw * (0.85 - seg * 0.16)), dino)
-    tailX = nextX
-    tailY = nextY
+  const wag = Math.sin(theta * 2 + 1) * 0.45
+  paintContour(
+    hd,
+    [
+      [30, 13.9],
+      [35, 14],
+      [41, 15.2],
+      [48, 16.5 + wag],
+      [53, 16.7 + wag],
+      [48, 17 + wag],
+      [40, 16.5],
+      [34, 16.1],
+      [30, 15.8],
+    ],
+    skin,
+  )
+  paintVolume(hd, 25, 14.7 + bob, 11.2, 2.65, dino, night)
+  // Neck sweeps upward from the shoulder, widening smoothly at its root.
+  const hx = 10.8 - graze * 0.4,
+    hy = 7.1 + graze
+  paintContour(
+    hd,
+    [
+      [15, 15],
+      [12.7, 12.2],
+      [11.5, 9.6],
+      [hx - 0.1, hy + 0.25],
+      [hx + 1.2, hy + 0.1],
+      [13.5, 9.6],
+      [15.4, 11.7],
+      [19.5, 14.5],
+    ],
+    skin,
+  )
+  // A continuous key-light strip along the neck describes its round section.
+  paintContour(
+    hd,
+    [
+      [hx + 0.3, hy + 0.4],
+      [12.2, 10],
+      [14.1, 12.5],
+      [16.8, 14.1],
+      [16.1, 14.3],
+      [13.5, 12.7],
+      [11.7, 10],
+      [hx, hy + 0.6],
+    ],
+    () => hdMix(dino, night ? [151, 187, 204] : [198, 207, 167], night ? 0.52 : 0.35),
+  )
+  paintVolume(hd, hx, hy, 1.65, 0.58, dino, night)
+  paintVolume(hd, hx - 1.1, hy + 0.16, 0.9, 0.32, hdDarken(dino, 0.86), night)
+  hd.stroke(hx - 1.6, hy + 0.35, hx - 0.5, hy + 0.36, Math.max(0.5, cw * 0.035), hdHex("#283a34"))
+  hd.disk(hd.X(hx + 0.25), hd.Y(hy - 0.13), Math.max(0.65, cw * 0.095), hdHex("#101c1b"))
+  blend(Math.round(hd.X(hx + 0.23)), Math.round(hd.Y(hy - 0.16)), [205, 220, 195], 0.85)
+  // Forelegs carry weight: wider at the joint, toes planted in contact shade.
+  for (const x of [17, 29]) {
+    paintContour(
+      hd,
+      [
+        [x - 0.5, 14.4],
+        [x + 2.2, 14.3],
+        [x + 2, 16.4],
+        [x + 1.7, 18.2],
+        [x + 2.2, 18.5],
+        [x - 0.2, 18.5],
+        [x - 0.5, 17.9],
+        [x, 16.2],
+      ],
+      skin,
+    )
+    for (let toe = 0; toe < 3; toe++)
+      paintVolume(hd, x + toe * 0.62, 18.36, 0.27, 0.16, hdMix(dino, [168, 166, 137], 0.45), night)
   }
-  // Neck rising left with a small head that dips as it grazes.
-  const graze = (Math.sin(theta) * 0.5 + 0.5) * 1.1
-  const headX = 10.5 - graze * 0.4
-  const headY = 7.6 + graze
-  hd.stroke(13.5, 13.6 + bob, headX + 0.8, headY + 0.5, Math.max(1.2, cw * 0.85), dino)
-  hd.stroke(14.5, 14.4 + bob, headX + 1.4, headY + 0.9, Math.max(1, cw * 0.7), hdHex(c.belly))
-  hd.blob(hd.X(headX), hd.Y(headY), cw * 1.7, ch * 0.55, dino)
-  hd.blob(hd.X(headX - 1.2), hd.Y(headY + 0.25), cw * 0.8, ch * 0.3, hdDarken(dino, 0.9))
-  hd.disk(hd.X(headX + 0.4), hd.Y(headY - 0.2), Math.max(1.2, cw * 0.22), hdHex(c.eye))
-  if (night) glow(hd.X(headX + 0.4), hd.Y(headY - 0.2), cw * 0.9, ch * 0.45, hdHex(c.eye), 0.6)
+  // Sparse folds and dorsal ridges follow the form instead of polka dots.
+  for (let i = 0; i < 14; i++) {
+    const x = 17 + i * 1.15,
+      y = 12.4 + Math.pow((x - 25) / 11, 2) * 1.1 + bob
+    paintVolume(hd, x, y, 0.22, 0.16, hdDarken(dino, 0.82), night)
+  }
+  for (let i = 0; i < 5; i++)
+    hd.stroke(20 + i * 0.42, 15.8, 20.4 + i * 0.42, 16.3, Math.max(0.5, cw * 0.035), hdDarken(dino, 0.63))
 
   // Baby dinosaur toddling west through the foreground.
   const walker = dinosaurWalker(elapsed)
@@ -305,6 +393,35 @@ export function renderDinosaurPixels(width: number, height: number, style: Dinos
     }
     hd.blob(hd.X(flock.x), hd.Y(flock.y + 0.1), cw * 0.35, ch * 0.18, feather)
     hd.disk(hd.X(flock.x + 0.35), hd.Y(flock.y), Math.max(1, cw * 0.14), feather)
+  }
+
+  // Close fern silhouettes anchor the bottom corners and establish foreground scale.
+  for (const side of [-1, 1]) {
+    const rootX = side < 0 ? 1.5 : 74.5,
+      rootY = 23.8
+    for (let frond = 0; frond < 5; frond++) {
+      const reach = 3.4 + frond * 1.05,
+        lift = 2.1 + (4 - frond) * 0.4
+      let lastX = rootX,
+        lastY = rootY
+      for (let segment = 1; segment <= 9; segment++) {
+        const t = segment / 9
+        const x = rootX - side * reach * t,
+          y = rootY - lift * Math.sin(t * Math.PI * 0.65)
+        hd.stroke(lastX, lastY, x, y, Math.max(0.6, cw * 0.055), hdHex(night ? "#214c40" : "#315e39"))
+        for (const leafSide of [-1, 1])
+          hd.stroke(
+            x,
+            y,
+            x - side * 0.5 + leafSide * 0.4,
+            y - 0.32 * (1 - t) + leafSide * 0.22,
+            Math.max(0.8, cw * 0.13 * (1 - t)),
+            hdHex(night ? "#315b4b" : "#4a7946"),
+          )
+        lastX = x
+        lastY = y
+      }
+    }
   }
 
   // Fireflies after dark, dust motes by day.

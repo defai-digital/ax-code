@@ -2,20 +2,30 @@
 
 Status: Current
 Scope: TUI opening and ending animations and rendering fallbacks
-Last reviewed: 2026-10-13
+Last reviewed: 2026-10-16
 Owner: AX Code TUI maintainers
 
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
 manual overrides, and the difference between pixel graphics and text rendering.
 
-Each TUI launch randomly selects one of thirty-seven animation pairs with equal probability (1/37 each).
+Each TUI launch randomly selects one of thirty-nine animation pairs with equal probability (1/39 each).
 In pixel mode, Foliage and every landmark scene also pass through a finishing
 pass: a fade in from black and out to black, a soft glow around bright lights,
 a gentle contrast and color grade, and a vignette. Each playback also draws its
 own camera move. Most often the camera holds still; otherwise it slowly pushes
 in, pulls back, or drifts left or right, with a random depth (4–10%), pacing,
 and focal point. The opening and ending draw independently, so the same scene
-can play differently on each launch. The text fallback is unchanged.
+can play differently on each launch. Scenes with edge labels or a tightly framed subject (Racing, Mahjong, and
+Sanguozhi) hold their full composition. Singapore and Dinosaur limit camera
+travel to a shallow 3.5% zoom. The text fallback is unchanged.
+
+The pixel transport is bounded to 1920x1080. Illustrated scenes start within a
+1280x720 pixel budget at 16:9; smaller windows keep their native raster. During
+the fade-in, the player can reduce resolution to fit the rendering budget.
+It then holds the selected detail level for the visible shot, unless sustained
+severe stalls require another reduction. A resize starts fresh. Actual clarity
+and frame rate depend on the machine and terminal; the maximum transport size
+is not a promise of native 1080p animation.
 
 The pairs are:
 
@@ -55,6 +65,8 @@ The pairs are:
 - Steppe: daytime for the opening, night for the ending.
 - Canyon: daytime for the opening, night for the ending.
 - Singapore: Marina Bay daytime for the opening, illuminated bay for the ending.
+- Racing: a red GT car on a mountain highway by day, with cool body reflections and warm track lights at night.
+- Dinosaur: a shaded sauropod valley by day and a moonlit valley with fireflies at night.
 - Sanguozhi: in pixel mode, a shaded-relief campaign map of the late Han heartland with rivers, roads, walled cities, and their historical names. The opening is the age of rival warlords in 184: armies march under faction banners while the date panel turns the months. The ending settles the map at dusk in 280: city lamps come up and every banner turns to one color, spreading outward from Luoyang. The text fallback shows a walled city at dawn and at dusk. Preview with `/sanguozhi` and `/sanguozhi-ending`, or search `Sanguozhi` in the command palette.
 
 Fuji Mountain includes a snow-capped mountain, a reflective lake, cherry blossoms,
@@ -115,7 +127,7 @@ colors.
 Explicit theme previews do not change this launch's selected pair.
 
 Press `Ctrl+P` (the default command-palette key) and search `Digital Code`,
-`Foliage`, `Bench`, `Fuji Mountain`, `Mahjong`, and more. All seventy-two opening/ending previews are
+`Foliage`, `Bench`, `Fuji Mountain`, `Mahjong`, and more. All seventy-eight opening/ending previews are
 available independently of the launch selection. Family names remain searchable
 in all fourteen interface languages.
 
@@ -204,3 +216,17 @@ Space opens with one ascent during the three-second playback. The rocket
 rises for 2.4 seconds and holds its final altitude without returning to the
 launch pad; stars and atmospheric effects continue moving. Its drift ending
 retains the looping environment. Preview with `/space` or `/space-ending`.
+
+Racing pixel scenes use a low, wide red GT body, tinted glass, carbon deck stripe,
+rear wing, diffuser, and recessed exhausts. The closer chase framing keeps the
+whole car above the lower edge; quiet track titles replace the large arcade HUD.
+The landscape is cached for each playback while road markings, cars, and passing
+lamps continue moving. The cache is replaced on resize or style changes and
+released with the player.
+
+Dinosaur pixel scenes use a curved neck and tapered tail, shaded skin, weight-bearing
+legs, a textured volcanic ridge, and foreground fern fronds. Directional moonlight
+separates the animal from the dark valley. Singapore uses a carved Merlion profile,
+facade ribs on the hotel towers, and wave-displaced reflections sampled from the
+actual skyline. These improvements retain the existing text fallback, paired
+selection, three-second timing, input dismissal, and graphics capability checks.

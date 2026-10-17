@@ -1,3 +1,4 @@
+import { paintContour, paintVolume } from "./scene-volume"
 import {
   SINGAPORE_BAY_TOP,
   SINGAPORE_COLORS,
@@ -339,6 +340,18 @@ export function renderSingaporePixels(width: number, height: number, style: Sing
         hd.rect(X(center + bow + x), Y(y), X(center + bow + x + 0.32), Y(y + 0.14), tone)
       }
     }
+    for (const rib of [-2.2, -0.8, 0.7, 2.15]) {
+      let lastX = center + rib,
+        lastY = 7.4
+      for (let step = 1; step <= 18; step++) {
+        const depth = step / 18,
+          nextY = 7.4 + depth * 10.3,
+          nextX = center + bowAt(depth) + rib * (1 + depth * 0.15)
+        hd.stroke(lastX, lastY, nextX, nextY, line * 0.6, hdMix(tower, light, night ? 0.14 : 0.32))
+        lastX = nextX
+        lastY = nextY
+      }
+    }
     hd.stroke(center - 2.5, 17.8, center + 2.6, 17.8, line, light)
     streak(center, night ? light : glass, index, 1.7)
   }
@@ -436,6 +449,27 @@ export function renderSingaporePixels(width: number, height: number, style: Sing
     if (night) streak(tree.x, canopy, index, 1.1)
   }
 
+  // Reflect the actual skyline and SkyPark, displaced by coherent wave bands.
+  // All samples are above the shoreline, so reflection never feeds back into itself.
+  const shore = Math.floor(Y(SINGAPORE_BAY_TOP))
+  for (let py = shore; py < hd.h; py++) {
+    const depth = (py - shore) / Math.max(1, hd.h - shore)
+    const sourceY = Math.max(0, shore - 1 - Math.floor((py - shore) * 1.75))
+    const shift =
+      Math.sin(depth * 44 - phase * 2) * cw * (0.15 + depth * 0.8) + Math.sin(depth * 113 + phase) * cw * 0.16
+    const wave = 0.78 + 0.22 * Math.sin(depth * 160 - phase * 3)
+    const strength = (night ? 0.64 : 0.34) * (1 - depth * 0.65) * wave
+    for (let px = 0; px < hd.w; px++) {
+      const sourceX = Math.max(0, Math.min(hd.w - 1, Math.round(px + shift)))
+      const src = (sourceY * hd.w + sourceX) * 3,
+        dst = (py * hd.w + px) * 3
+      for (let channel = 0; channel < 3; channel++)
+        hd.pixels[dst + channel] = Math.round(
+          hd.pixels[dst + channel]! * (1 - strength) + hd.pixels[src + channel]! * strength,
+        )
+    }
+  }
+
   // Foreground Merlion: maned lion head, scaled fish body, tail fanning up behind.
   const lion = SINGAPORE_MERLION
   hd.blob(X(lion.x - 1), Y(lion.base + 0.35), X(7), Y(0.6), hdMix(waterDeep, shade, 0.6))
@@ -462,107 +496,146 @@ export function renderSingaporePixels(width: number, height: number, style: Sing
       hdMix(fountain, waterTop, 0.25),
     )
   }
-  // Tail: sweeps left from the belly, rises in an S-curve, and ends in a fan fin.
-  const tailAt = (t: number) => ({
-    x: 13.3 - t * 6.6 + Math.sin(t * Math.PI * 2) * 0.5,
-    y: 18.9 - Math.pow(t, 1.4) * 5.6,
-  })
-  for (let i = 0; i <= 48; i += 2) {
-    const t = i / 48,
-      p = tailAt(t),
-      r = 1.6 - t * 0.85
-    hd.blob(X(p.x + r * 0.25), Y(p.y), X(r), Y(0.68), stoneShade)
-    hd.blob(X(p.x), Y(p.y), X(r * 0.8), Y(0.56), stone)
+  // Carved Merlion in profile. A continuous fish silhouette and folded mane
+  // replace the former stack of round blobs. Cool occlusion preserves stone volume.
+  const stoneKey = hdMix(stone, [220, 229, 222], night ? 0.28 : 0.12)
+  const stoneFace = (x: number, y: number): RGB => {
+    const sx = x / cw,
+      sy = y / ch
+    const gain = 0.78 + 0.2 * Math.max(0, Math.min(1, (sx - 10) / 7))
+    return hdDarken(hdMix(stoneKey, stoneShade, Math.max(0, (sy - 14) / 9) * 0.24), gain)
   }
-  const fin = tailAt(1)
-  // Forked caudal fin: a broad fan of tapered rays joined by a scalloped membrane.
-  const sway = Math.sin(phase * 2) * 0.06
-  const tips: { x: number; y: number }[] = []
-  for (let k = 0; k <= 16; k++) {
-    const a = (k / 16) * 2 - 1
-    const angle = -Math.PI / 2 - 0.12 + a * 1.0 + sway
-    const reach = 0.9 + 2.1 * Math.pow(Math.abs(a), 1.2) + 0.25 * (1 - Math.abs(a))
-    const tip = { x: fin.x + Math.cos(angle) * reach, y: fin.y + Math.sin(angle) * reach }
-    tips.push(tip)
-    hd.stroke(fin.x, fin.y, tip.x, tip.y, line * 2.4, a < 0 ? hdMix(stone, stoneShade, 0.25) : stone)
-  }
-  for (let k = 1; k < tips.length; k++) {
-    const mid = { x: (tips[k - 1]!.x + tips[k]!.x) / 2, y: (tips[k - 1]!.y + tips[k]!.y) / 2 }
-    hd.disk(X(mid.x), Y(mid.y), line * 1.6, stone)
-  }
-  for (let k = 0; k <= 8; k++) {
-    const a = (k / 8) * 2 - 1
-    const angle = -Math.PI / 2 - 0.12 + a * 1.0 + sway
-    const reach = 0.9 + 2.1 * Math.pow(Math.abs(a), 1.2) + 0.25 * (1 - Math.abs(a))
-    hd.stroke(
-      fin.x + Math.cos(angle) * 0.5,
-      fin.y + Math.sin(angle) * 0.5,
-      fin.x + Math.cos(angle) * reach * 0.95,
-      fin.y + Math.sin(angle) * reach * 0.95,
-      line * 0.5,
-      stoneShade,
-    )
-  }
-  hd.disk(X(fin.x), Y(fin.y), line * 2.6, stone)
-  // Body: shaded back side first, then the lit belly, widest at the chest.
-  const spine = (t: number) => ({
-    x: 14.1 - Math.sin(t * Math.PI) * 0.5,
-    y: 13.4 + t * 5.6,
-    r: 1.6 + Math.sin(t * Math.PI * 0.8) * 0.9 - t * 0.5,
-  })
-  for (let i = 0; i <= 40; i += 2) {
-    const p = spine(i / 40)
-    hd.blob(X(p.x + p.r * 0.3), Y(p.y), X(p.r), Y(0.56), stoneShade)
-  }
-  for (let i = 0; i <= 40; i += 2) {
-    const p = spine(i / 40)
-    hd.blob(X(p.x - 0.1), Y(p.y), X(p.r * 0.8), Y(0.56), stone)
-  }
-  hd.blob(X(15.9), Y(16.1), X(0.8), Y(0.45), stoneShade)
-  hd.stroke(15.2, 15.8, 16.5, 16.7, line * 1.2, stoneShade)
-  const scaleTone = hdMix(stone, stoneShade, 0.55)
+  paintContour(
+    hd,
+    [
+      [13.8, 18.7],
+      [10.5, 18.4],
+      [8.2, 16.4],
+      [7.9, 14.4],
+      [6.4, 13.4],
+      [4.7, 13.4],
+      [6.1, 14.6],
+      [6.4, 17],
+      [8.8, 19.1],
+      [12.8, 19.6],
+    ],
+    stoneFace,
+  )
+  paintContour(
+    hd,
+    [
+      [7.9, 14.5],
+      [6.8, 13.1],
+      [4.8, 12.7],
+      [5.4, 14.1],
+      [4.7, 15.2],
+      [6.7, 15.1],
+      [8, 15.7],
+    ],
+    stoneFace,
+  )
+  for (let ray = 0; ray < 5; ray++) hd.stroke(7.8, 15.2, 5.3 + ray * 0.35, 13.1 + ray * 0.42, line * 0.45, stoneShade)
+  paintContour(
+    hd,
+    [
+      [11.8, 13.5],
+      [14.6, 13.2],
+      [16.1, 14.2],
+      [16.6, 16.2],
+      [15.4, 18.2],
+      [13.6, 19.7],
+      [11.3, 19.6],
+      [12.5, 17.4],
+      [11.3, 15.1],
+    ],
+    stoneFace,
+  )
+  // Scales follow the fish's taper, with a lit lip and recessed lower edge.
   for (let row = 0; row < 8; row++) {
-    for (let column = 0; column < 3; column++) {
-      const x = 12.8 + column * 0.85 + (row % 2) * 0.42,
-        y = 15.1 + row * 0.55
-      hd.stroke(x - 0.32, y - 0.08, x, y + 0.12, line * 0.8, scaleTone)
-      hd.stroke(x, y + 0.12, x + 0.32, y - 0.08, line * 0.8, scaleTone)
+    const y = 15 + row * 0.48,
+      center = 14.1 - Math.max(0, y - 16) * 0.45
+    for (let col = -1; col <= 1; col++) {
+      const x = center + col * 0.85 + (row % 2) * 0.32
+      hd.stroke(x - 0.36, y, x, y + 0.2, line * 0.55, stoneShade)
+      hd.stroke(x, y + 0.2, x + 0.36, y, line * 0.55, stoneShade)
+      hd.stroke(x - 0.3, y - 0.07, x + 0.3, y - 0.07, line * 0.35, stoneKey)
     }
   }
-  // Head: two rings of curled mane tufts, round face, ears, brow, eye, muzzle and open mouth.
-  const hx = 14.4,
-    hy = 12
-  for (let i = 0; i < 18; i++) {
-    const angle = (i / 18) * Math.PI * 2
-    const tx = hx + Math.cos(angle) * 2.3,
-      ty = hy + Math.sin(angle) * 2.05
-    hd.blob(X(tx), Y(ty), cw * 1.05, ch * 0.8, i % 2 === 0 ? hdMix(stoneShade, shade, 0.35) : stoneShade)
-    if (i % 2 === 0) hd.blob(X(tx - 0.25), Y(ty - 0.3), cw * 0.55, ch * 0.4, hdMix(stone, stoneShade, 0.6))
+  // Swept mane and lion brow, facing the fountain's shared mouth anchor.
+  paintContour(
+    hd,
+    [
+      [11.6, 10],
+      [13.2, 9.7],
+      [14.5, 10.2],
+      [15, 11.3],
+      [14.6, 13.1],
+      [13.7, 14.6],
+      [11.8, 15],
+      [10.6, 13.7],
+      [10.4, 11.8],
+    ],
+    stoneFace,
+  )
+  for (let fold = 0; fold < 7; fold++) {
+    const x = 10.9 + fold * 0.43
+    hd.stroke(x, 10.7, x - 0.15, 12.3, line * 0.7, hdMix(stoneShade, shade, 0.1))
+    hd.stroke(x - 0.15, 12.3, x + 0.4, 14.1, line * 0.6, stoneShade)
+    hd.stroke(x + 0.14, 10.9, x + 0.1, 12.2, line * 0.4, stoneKey)
   }
-  for (let i = 0; i < 12; i++) {
-    const angle = (i / 12) * Math.PI * 2 + 0.25
-    hd.blob(
-      X(hx + Math.cos(angle) * 1.7),
-      Y(hy + Math.sin(angle) * 1.5),
-      cw * 0.9,
-      ch * 0.7,
-      i % 2 === 0 ? stoneShade : hdMix(stoneShade, stone, 0.5),
-    )
-  }
-  hd.blob(X(hx + 0.55), Y(hy + 0.5), X(1.8), Y(1.55), hdMix(stone, stoneShade, 0.55))
-  hd.blob(X(hx + 0.7), Y(hy + 0.4), X(1.75), Y(1.5), stone)
-  hd.blob(X(hx + 0.9), Y(hy + 1.35), X(0.9), Y(0.35), hdMix(stone, stoneShade, 0.7))
-  hd.disk(X(hx - 0.6), Y(hy - 1.45), line * 2.2, stoneShade)
-  hd.disk(X(hx + 1), Y(hy - 1.6), line * 2.2, stoneShade)
-  hd.disk(X(hx - 0.65), Y(hy - 1.5), line * 1.1, stone)
-  hd.disk(X(hx + 0.95), Y(hy - 1.65), line * 1.1, stone)
-  hd.blob(X(hx + 1.95), Y(hy + 1), X(1.15), Y(0.7), stone)
-  hd.blob(X(hx + 1.8), Y(hy + 1.9), X(0.85), Y(0.32), stoneShade)
-  hd.blob(X(hx + 2.55), Y(hy + 0.4), X(0.28), Y(0.2), shade)
-  hd.blob(X(hx + 2.4), Y(hy + 1.1), X(0.4), Y(0.18), shade)
-  hd.stroke(hx + 0.7, hy - 0.45, hx + 2, hy - 0.8, line * 1.1, stoneShade)
-  hd.disk(X(hx + 1.25), Y(hy - 0.1), line * 2.6, shade)
-  hd.disk(X(hx + 1.32), Y(hy - 0.18), line * 0.9, light)
+  paintContour(
+    hd,
+    [
+      [13.9, 10.6],
+      [15, 10.75],
+      [15.65, 11.35],
+      [15.8, 11.95],
+      [16.95, 12.2],
+      [17.1, 12.75],
+      [16, 12.85],
+      [15.5, 13.35],
+      [14.4, 13.2],
+      [13.9, 12.3],
+    ],
+    stoneFace,
+  )
+  paintVolume(hd, 14.6, 12.2, 0.85, 0.7, stoneKey, night)
+  paintContour(
+    hd,
+    [
+      [15.4, 12.25],
+      [16.75, 12.2],
+      [17, 12.5],
+      [16.65, 12.75],
+      [15.6, 12.8],
+    ],
+    () => hdMix(stoneKey, stoneShade, 0.16),
+  )
+  paintContour(
+    hd,
+    [
+      [15.1, 12.9],
+      [17.1, 12.85],
+      [16.8, 13.2],
+      [15.5, 13.35],
+    ],
+    () => stoneShade,
+  )
+  hd.stroke(16.15, 12.9, 17.1, 12.9, line * 0.75, hdMix(shade, stoneShade, 0.2))
+  paintVolume(hd, 14, 10.35, 0.42, 0.45, stoneKey, night)
+  hd.stroke(14.9, 11.25, 15.7, 11.38, line * 0.8, stoneShade)
+  hd.blob(X(15.38), Y(11.65), X(0.24), Y(0.1), shade)
+  paintContour(
+    hd,
+    [
+      [16.65, 12.13],
+      [17.1, 12.18],
+      [17, 12.43],
+      [16.7, 12.4],
+    ],
+    () => hdMix(stoneShade, shade, 0.25),
+  )
+  hd.stroke(15.6, 12.65, 16.45, 12.7, line * 0.4, stoneShade)
 
   // The fountain shares the parabolic path of the text fallback: a soft outer
   // plume, a bright core, airborne spray, and a pulsing splash with ripples.

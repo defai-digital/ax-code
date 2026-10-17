@@ -70,6 +70,27 @@ export function chooseCinemaMove(random: () => number = Math.random): CinemaMove
   return Object.freeze({ kind, zoom, ease, focusX, focusY })
 }
 
+/** Respect authored framing: overlay-heavy scenes must never lose their edges. */
+export function sceneCinemaMove(style: string | undefined, move: CinemaMove): CinemaMove {
+  if (
+    style === "racing-day" ||
+    style === "racing-night" ||
+    style === "mahjong-match" ||
+    style === "mahjong-ending" ||
+    style === "sanguozhi-muster" ||
+    style === "sanguozhi-dusk"
+  )
+    return CINEMA_STILL
+  if (
+    style === "singapore-day" ||
+    style === "singapore-night" ||
+    style === "dinosaur-day" ||
+    style === "dinosaur-night"
+  )
+    return { ...move, zoom: Math.min(move.zoom, 1.035), focusX: 0, focusY: 0.3 }
+  return move
+}
+
 export type CinemaShot = Readonly<{
   /** Visible fraction of the source is 1 / zoom. Always >= 1. */
   zoom: number
@@ -246,6 +267,7 @@ export function applyCinema(src: Buffer, width: number, height: number, shot: Ci
   if (exposure === 0) return out
 
   const zoom = Math.max(1, shot.zoom)
+  const direct = zoom === 1 && shot.centerX === w / 2 && shot.centerY === h / 2
   const span = 1 / zoom
   const left = shot.centerX - (w * span) / 2
   const top = shot.centerY - (h * span) / 2
@@ -306,9 +328,13 @@ export function applyCinema(src: Buffer, width: number, height: number, shot: Ci
       const wx = fx[x]!
       const ix = 256 - wx
       const iy = 256 - fy
-      let r = ((src[a]! * ix + src[b]! * wx) * iy + (src[c]! * ix + src[d]! * wx) * fy) >> 16
-      let g = ((src[a + 1]! * ix + src[b + 1]! * wx) * iy + (src[c + 1]! * ix + src[d + 1]! * wx) * fy) >> 16
-      let bl = ((src[a + 2]! * ix + src[b + 2]! * wx) * iy + (src[c + 2]! * ix + src[d + 2]! * wx) * fy) >> 16
+      let r = direct ? src[o]! : ((src[a]! * ix + src[b]! * wx) * iy + (src[c]! * ix + src[d]! * wx) * fy) >> 16
+      let g = direct
+        ? src[o + 1]!
+        : ((src[a + 1]! * ix + src[b + 1]! * wx) * iy + (src[c + 1]! * ix + src[d + 1]! * wx) * fy) >> 16
+      let bl = direct
+        ? src[o + 2]!
+        : ((src[a + 2]! * ix + src[b + 2]! * wx) * iy + (src[c + 2]! * ix + src[d + 2]! * wx) * fy) >> 16
 
       if (bloomRow) {
         const ga = grow0 + gx0[x]!

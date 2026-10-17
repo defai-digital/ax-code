@@ -29,10 +29,12 @@ test.each(["singapore-day", "singapore-night"] as const)(
     expect(renderSingaporePixels(WIDTH, HEIGHT, style, -1).equals(first)).toBe(true)
     expect(renderTextScenePixels(WIDTH, HEIGHT, style, 1000).equals(moving)).toBe(true)
     // Foreground lion face, tower facade/shaded side, and green roof stay anchored.
-    expect(pixel(first, 151, 248)).toEqual(rgb(colors.stone))
+    // Lit carved stone remains distinct from the skyline after directional shading.
+    expect(Math.min(...pixel(first, 140, 330))).toBeGreaterThan(120)
+    expect(pixel(first, 140, 330)).not.toEqual(pixel(first, 120, 248))
     expect(pixel(first, 343, 175)).not.toEqual(pixel(first, 369, 175))
     expect(pixel(first, 310, 127)).toEqual(rgb(colors.green))
-    expect(pixel(first, 151, 248)).toEqual(pixel(moving, 151, 248))
+    expect(pixel(first, 140, 330)).toEqual(pixel(moving, 140, 330))
     // Boat moves, leaving a freshly painted water surface behind it.
     expect(pixel(first, 465, 425)).not.toEqual(pixel(moving, 465, 425))
   },

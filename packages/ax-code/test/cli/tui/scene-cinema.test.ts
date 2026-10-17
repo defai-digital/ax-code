@@ -9,6 +9,7 @@ import {
   applyCinema,
   chooseCinemaMove,
   cinemaShot,
+  sceneCinemaMove,
   type CinemaMove,
   type CinemaMoveKind,
 } from "../../../src/cli/tui/component/scene-cinema"
@@ -230,12 +231,9 @@ describe("scene raster budget", () => {
     expect(size.height % 2).toBe(0)
   })
 
-  test("starts a 1920x1080 window at the 1600x900 raster ceiling", () => {
-    // Benchmarked compromise: a 1920x1080 starting raster measured well over
-    // the 30ms frame budget on every scene, so the ceiling stays at 1600x900
-    // and the adaptive quality steering handles slower machines from there.
-    expect(SCENE_PIXEL_BUDGET).toBe(1600 * 900)
-    expect(sceneRasterSize(1920, 1080, sceneQualityCeiling(1920, 1080))).toEqual({ width: 1600, height: 900 })
+  test("starts a 1920x1080 window at a bounded 720p raster", () => {
+    expect(SCENE_PIXEL_BUDGET).toBe(1280 * 720)
+    expect(sceneRasterSize(1920, 1080, sceneQualityCeiling(1920, 1080))).toEqual({ width: 1280, height: 720 })
     // Smaller windows keep their native size; the budget never upscales.
     expect(sceneRasterSize(1280, 720, sceneQualityCeiling(1280, 720))).toEqual({ width: 1280, height: 720 })
   })
@@ -261,7 +259,7 @@ describe("scene raster budget", () => {
     })
     const input = { width: 640, height: 360, columns: 80, rows: 24, direction: "down" as const }
     const sizes: number[] = []
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       player.draw({ ...input, style: "castle-day", elapsedMs: 1000 + i * 50, durationMs: 3000 })
       const header = /a=T,f=24,o=z,s=(\d+),v=(\d+),/.exec(writes.at(-1)!)!
       sizes.push(Number(header[1]))
@@ -297,4 +295,111 @@ describe("scene raster budget", () => {
     expect(mid.some((v) => v > 60)).toBe(true)
     player.dispose()
   })
+})
+
+test("framed scenes preserve their full image for every camera draw", () => {
+  for (const style of [
+    "racing-day",
+    "racing-night",
+    "mahjong-match",
+    "mahjong-ending",
+    "sanguozhi-muster",
+    "sanguozhi-dusk",
+  ])
+    for (const kind of KINDS) {
+      const move = sceneCinemaMove(style, { ...PUSH, kind })
+      for (const elapsedMs of [0, 500, 1500, 2800]) {
+        const shot = cinemaShot({ width: 960, height: 540, elapsedMs, durationMs: 3000, move })
+        expect(shot.zoom).toBe(1)
+        expect(shot.centerX).toBe(480)
+        expect(shot.centerY).toBe(270)
+      }
+    }
+  expect(sceneCinemaMove("fuji-day", PUSH)).toBe(PUSH)
+  expect(sceneCinemaMove("singapore-night", PUSH).zoom).toBeLessThanOrEqual(1.035)
+})
+
+test("the raster stops breathing after the fade but still responds to sustained severe stalls", () => {
+  let clock = 0,
+    spent = 0
+  const widths: number[] = []
+  const player = digitalCodePixelPlayer(
+    (data) => {
+      const match = /s=(\d+),v=(\d+)/.exec(data)
+      if (match) widths.push(Number(match[1]))
+      clock += spent
+    },
+    { now: () => clock, move: CINEMA_STILL },
+  )
+  const draw = (elapsedMs: number, cost: number) => {
+    spent = cost
+    player.draw({
+      width: 320,
+      height: 180,
+      columns: 80,
+      rows: 24,
+      direction: "down",
+      style: "castle-day",
+      elapsedMs,
+      durationMs: 3000,
+    })
+  }
+  draw(0, 0)
+  draw(50, 60)
+  draw(100, 30)
+  draw(150, 30)
+  const settled = widths.at(-1)!
+  for (const [t, cost] of [
+    [700, 1],
+    [900, 65],
+    [1100, 1],
+    [1300, 65],
+  ])
+    draw(t!, cost!)
+  expect(widths.slice(4)).toEqual([settled, settled, settled, settled])
+  draw(1500, 150)
+  draw(1700, 150)
+  draw(1900, 150)
+  draw(2100, 30)
+  expect(widths.at(-1)!).toBeLessThan(settled)
+  player.draw({
+    width: 400,
+    height: 200,
+    columns: 100,
+    rows: 25,
+    direction: "down",
+    style: "castle-day",
+    elapsedMs: 2200,
+  })
+  expect(widths.at(-1)).toBe(400)
+  player.dispose()
+})
+
+test("one expensive frame does not permanently lower scene detail", () => {
+  let clock = 0,
+    spent = 0
+  const widths: number[] = []
+  const player = digitalCodePixelPlayer(
+    (data) => {
+      const match = /s=(\d+),v=(\d+)/.exec(data)
+      if (match) widths.push(Number(match[1]))
+      clock += spent
+    },
+    { now: () => clock, move: CINEMA_STILL },
+  )
+  for (const [frame, cost] of [0, 160, 25, 25, 25, 25].entries()) {
+    spent = cost
+    player.draw({
+      width: 320,
+      height: 180,
+      columns: 80,
+      rows: 24,
+      direction: "down",
+      style: "castle-day",
+      elapsedMs: frame * 50,
+      durationMs: 3000,
+    })
+  }
+  expect(widths).toEqual([320, 320, 320, 320, 320, 320])
+  player.dispose()
 })
