@@ -290,7 +290,7 @@ export function Autocomplete(props: {
     const input = props.input()
     const currentCursorOffset = input.cursorOffset
 
-    const charAfterCursor = props.value.at(currentCursorOffset)
+    const charAfterCursor = props.value.at(stringIndexFromDisplayOffset(props.value, currentCursorOffset))
     const needsSpace = charAfterCursor !== " "
     const append = "@" + text + (needsSpace ? " " : "")
 
@@ -357,7 +357,10 @@ export function Autocomplete(props: {
   }
 
   const [files] = createResource(
-    () => search(),
+    // Opening `@` with an empty query must fetch the file list even though
+    // `search()` stays ""; include visibility in the source so `false` -> "@"
+    // triggers a load.
+    () => (store.visible === "@" ? search() : false),
     createAbortableResourceFetcher(async (query: string, signal) => {
       if (!store.visible || store.visible === "/") return []
 
@@ -587,10 +590,19 @@ export function Autocomplete(props: {
     if (store.visible !== "@") return []
     const width = anchorMetrics().width - 4
     const insertPrefix = (prefix: string) => () => {
-      const cursor = props.input().logicalCursor
-      props.input().deleteRange(0, 0, cursor.row, cursor.col)
-      props.input().insertText(prefix)
-      props.input().cursorOffset = stringWidth(prefix)
+      const input = props.input()
+      const currentCursorOffset = input.cursorOffset
+
+      // `@` may be triggered mid-line, so replace only the token between the
+      // trigger and the cursor — not everything from the buffer start.
+      input.cursorOffset = store.index
+      const startCursor = input.logicalCursor
+      input.cursorOffset = currentCursorOffset
+      const endCursor = input.logicalCursor
+
+      input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
+      input.insertText(prefix)
+      input.cursorOffset = store.index + stringWidth(prefix)
     }
     const options: AutocompleteOption[] = [
       {

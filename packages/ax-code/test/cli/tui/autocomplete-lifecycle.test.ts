@@ -23,16 +23,24 @@ vi.mock("solid-js/store", async () => {
     else delete require.cache[runtimePath]
   }
 })
-const mocked = vi.hoisted(() => ({ dimensions: () => ({ width: 120, height: 40 }) }))
+const mocked = vi.hoisted(() => ({
+  dimensions: () => ({ width: 120, height: 40 }),
+  files: async () => ({ data: [] as string[] }),
+  agents: [] as { name: string; tier?: string }[],
+}))
 vi.mock("ax-tui/solid", () => ({ useTerminalDimensions: () => () => mocked.dimensions() }))
 vi.mock("@tui/context/language", () => ({ useLanguage: () => ({ t: (key: string) => key }) }))
 vi.mock("@tui/context/theme", () => ({ useTheme: () => ({ theme: {} }) }))
 vi.mock("@tui/context/kv", () => ({ useKV: () => ({ get: () => false }) }))
 vi.mock("@tui/context/sdk", () => ({
-  useSDK: () => ({ client: { find: { files: async () => ({ data: [] }) } } }),
+  useSDK: () => ({ client: { find: { files: (...args: Parameters<typeof mocked.files>) => mocked.files(...args) } } }),
 }))
 vi.mock("@tui/context/sync", () => ({
-  useSync: () => ({ data: { agent: [], command: [], mcp_resource: {}, path: { directory: "/project" } } }),
+  useSync: () => ({
+    get data() {
+      return { agent: mocked.agents, command: [], mcp_resource: {}, path: { directory: "/project" } }
+    },
+  }),
 }))
 vi.mock("@tui/component/dialog-command", () => ({
   useCommandDialog: () => ({ slashes: () => [], keybinds: () => {} }),
@@ -46,6 +54,8 @@ beforeEach(() => {
   // Run the component's real client memos and lifecycle without terminal layout.
   vi.stubGlobal("React", { createElement: () => undefined })
   vi.spyOn(Locale, "truncateMiddle")
+  mocked.files = async () => ({ data: [] })
+  mocked.agents = []
 })
 afterEach(() => {
   for (const dispose of disposals.splice(0).reverse()) dispose()
@@ -56,23 +66,36 @@ afterEach(() => {
 function mount() {
   let anchor: BoxRenderable
   let ref: AutocompleteRef
+  let buffer = ""
+  let cursor = 1
   const input = {
-    cursorOffset: 1,
-    logicalCursor: { row: 0, col: 1 },
-    getTextRange: () => "",
+    get cursorOffset() {
+      return cursor
+    },
+    set cursorOffset(value: number) {
+      cursor = value
+    },
+    get logicalCursor() {
+      return { row: 0, col: cursor }
+    },
+    getTextRange: (start: number, end: number) => buffer.slice(start, end),
     deleteRange: vi.fn(),
     insertText: vi.fn(),
+    extmarks: { create: vi.fn(() => 1) },
   }
   const readAnchor = vi.fn(() => anchor)
   const [dimensions, setDimensions] = createSignal({ width: 120, height: 40 })
+  const [value, setValue] = createSignal("")
   mocked.dimensions = dimensions
   createRoot((dispose) => {
     disposals.push(dispose)
     Autocomplete({
-      value: "",
+      get value() {
+        return value()
+      },
       anchor: readAnchor,
       input: () => input as unknown as TextareaRenderable,
-      ref: (value) => (ref = value),
+      ref: (created) => (ref = created),
       setPrompt: () => {},
       clearPrompt: () => {},
       setExtmark: () => {},
@@ -87,6 +110,12 @@ function mount() {
     ref: () => ref,
     attachAnchor: () => {
       anchor = { x: 0, y: 20, width: 80, height: 3 } as BoxRenderable
+    },
+    type: (text: string, cursorOffset = text.length) => {
+      buffer = text
+      setValue(text)
+      input.cursorOffset = cursorOffset
+      ref.onInput(text)
     },
     move: (name: "up" | "down") => ref.onKeyDown({ name, preventDefault: vi.fn() } as unknown as KeyEvent),
     resize: () => {
@@ -128,5 +157,34 @@ describe("autocomplete anchor lifecycle", () => {
     fixture.ref().onInput("/")
     expect(fixture.ref().visible).toBe("/")
     expect(Locale.truncateMiddle).not.toHaveBeenCalled()
+  })
+
+  test("replaces only the reference token when @ is triggered mid-prompt", () => {
+    const fixture = mount()
+    fixture.attachAnchor()
+    fixture.type("see @dif", 8)
+    expect(fixture.ref().visible).toBe("@")
+    fixture.ref().onKeyDown({ name: "return", preventDefault: vi.fn() } as unknown as KeyEvent)
+    expect(fixture.input.deleteRange).toHaveBeenCalledWith(0, 4, 0, 8)
+    expect(fixture.input.insertText).toHaveBeenCalledWith("@diff ")
+    expect(fixture.input.cursorOffset).toBe(10)
+  })
+
+  test("loads files when @ opens with an empty query", async () => {
+    const fixture = mount()
+    fixture.attachAnchor()
+    mocked.files = async () => ({ data: ["src/index.ts"] })
+    fixture.type("@", 1)
+    await vi.waitFor(() => expect(Locale.truncateMiddle).toHaveBeenCalledWith("src/index.ts", 76))
+  })
+
+  test("uses display offsets when checking the character after the cursor", () => {
+    mocked.agents = [{ name: "helper", tier: "subagent" }]
+    const fixture = mount()
+    fixture.attachAnchor()
+    fixture.type("字 @ x", 4)
+    expect(fixture.ref().visible).toBe("@")
+    fixture.ref().onKeyDown({ name: "return", preventDefault: vi.fn() } as unknown as KeyEvent)
+    expect(fixture.input.insertText).toHaveBeenCalledWith("@helper")
   })
 })
