@@ -89,7 +89,7 @@ export type HttpNetworkApi = {
   setGlobalProxyFromEnv?: (env?: ProxyEnv) => (() => void) | undefined
 }
 export type TlsNetworkApi = {
-  getCACertificates?: (kind: "system" | "bundled" | "extra") => string[] | undefined
+  getCACertificates?: (kind: "default" | "system" | "bundled" | "extra") => string[] | undefined
   setDefaultCACertificates?: (certs: string[]) => void
 }
 export type NetworkLogger = {
@@ -130,29 +130,34 @@ try {
 /** Upper bound for a request waiting on the OS trust store; past it the bundled roots are used. */
 export const SYSTEM_CA_WAIT_MS = 10_000
 
-export function loadSystemCertificatesInWorker(): Promise<string[] | undefined> {
+export function loadSystemCertificatesInWorker(timeoutMs = SYSTEM_CA_WAIT_MS): Promise<string[] | undefined> {
   return new Promise((resolve) => {
     let settled = false
+    let worker: import("node:worker_threads").Worker | undefined
+    const timer = setTimeout(() => finish(undefined), timeoutMs)
+    timer.unref()
     const finish = (value: string[] | undefined) => {
       if (settled) return
       settled = true
+      clearTimeout(timer)
       resolve(value)
+      if (worker)
+        void worker.terminate().catch((error) => Log.Default.debug("network: CA worker termination failed", { error }))
     }
     try {
       const { Worker } = nodeRequire("node:worker_threads") as typeof import("node:worker_threads")
-      const worker = new Worker(SYSTEM_CA_WORKER_SOURCE, { eval: true })
-      // Never keep the process alive for a certificate read.
-      worker.unref()
+      worker = new Worker(SYSTEM_CA_WORKER_SOURCE, { eval: true })
       worker.once("message", (message: { certs?: unknown }) => {
         finish(
           Array.isArray(message?.certs) && message.certs.every((cert) => typeof cert === "string")
             ? message.certs
             : undefined,
         )
-        void worker.terminate()
       })
       worker.once("error", () => finish(undefined))
       worker.once("exit", () => finish(undefined))
+      // Registering message listeners refs the port; unref only after all listeners are installed.
+      worker.unref()
     } catch {
       finish(undefined)
     }
@@ -161,6 +166,7 @@ export function loadSystemCertificatesInWorker(): Promise<string[] | undefined> 
 
 // Module-level guard: the first effective call wins; later calls are no-ops.
 // Tests reset it through `__resetNetworkEnvForTest`.
+let generation = 0
 let applied: NetworkEnvState | undefined
 let systemCaPending: Promise<void> | undefined
 
@@ -175,7 +181,7 @@ export async function awaitSystemCa(timeoutMs = SYSTEM_CA_WAIT_MS, signal?: Abor
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, timeoutMs)
-    timer.unref?.()
+    // An active request must keep the process alive until its bounded wait settles.
   })
   let onAbort: (() => void) | undefined
   const aborted = new Promise<never>((_, reject) => {
@@ -227,6 +233,7 @@ export function initNetworkEnv(input: InitNetworkEnvInput = {}): NetworkEnvState
   if (applied) return applied
 
   const state: NetworkEnvState = { proxyApplied: false, systemCaApplied: false }
+  const currentGeneration = generation
 
   if (hasProxyEnv(env)) {
     // Rebuild the env passed to Node so we can append the local-bypass hosts
@@ -260,6 +267,7 @@ export function initNetworkEnv(input: InitNetworkEnvInput = {}): NetworkEnvState
 
   if (!env.AX_CODE_DISABLE_SYSTEM_CA) {
     const mergeAndInstall = (system: string[] | undefined) => {
+      if (currentGeneration !== generation) return
       try {
         if (typeof tls.getCACertificates !== "function" || typeof tls.setDefaultCACertificates !== "function") return
         const bundled = tls.getCACertificates("bundled") ?? []
@@ -268,7 +276,8 @@ export function initNetworkEnv(input: InitNetworkEnvInput = {}): NetworkEnvState
           // cannot strip Node's own trust anchors. The setter replaces the entire default
           // list, so explicitly retain NODE_EXTRA_CA_CERTS as well.
           const extra = tls.getCACertificates("extra") ?? []
-          tls.setDefaultCACertificates([...new Set([...bundled, ...extra, ...system])])
+          const defaults = tls.getCACertificates("default") ?? []
+          tls.setDefaultCACertificates([...new Set([...bundled, ...extra, ...defaults, ...system])])
           state.systemCaApplied = true
           log.debug("network: system CA certificates added", {
             bundled: bundled.length,
@@ -313,6 +322,7 @@ export function initNetworkEnv(input: InitNetworkEnvInput = {}): NetworkEnvState
 
 /** Test-only: clear the idempotency guard so a test can re-run init. */
 export function __resetNetworkEnvForTest(): void {
+  generation++
   applied = undefined
   systemCaPending = undefined
 }
