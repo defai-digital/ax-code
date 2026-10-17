@@ -95,6 +95,7 @@ For standalone questions about selected files through AX Trust caching, see
 - [Local Evidence Cache](guides/evidence-cache.md) — optional SQLite and RocksDB evidence reuse, qualification, and rollback.
 - [Lifecycle Hooks](guides/hooks.md) — hook events and bundled policy packs.
 - [Herdr State Reporting](guides/herdr.md) — map lifecycle hooks to herdr idle/working/blocked state.
+- [Project Auto-Accept](guides/project-auto-accept.md) — opt-in approval mode and exactly what it can and cannot approve.
 - [Run Report](guides/run-report.md) — workspace usage, activity, model/tool breakdowns, and per-session reports.
 
 ## Providers

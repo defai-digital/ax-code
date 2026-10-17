@@ -134,6 +134,10 @@
       "page": "guides/herdr"
     },
     {
+      "source": "docs/guides/project-auto-accept.md",
+      "page": "guides/project-auto-accept"
+    },
+    {
       "source": "docs/guides/hooks.md",
       "page": "guides/hooks"
     },

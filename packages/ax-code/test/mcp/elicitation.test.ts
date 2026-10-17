@@ -229,20 +229,25 @@ test("decide declines in autonomous mode without asking", async () => {
   expect(ask).not.toHaveBeenCalled()
 })
 
-test("decide declines url-mode elicitation and requests without an in-flight call", async () => {
+test("decide declines requests without an in-flight call and url mode asks then opens", async () => {
   const ask = vi.fn()
-  const url = await McpElicitation.decide({
+  const noCall = await McpElicitation.decide({ params: formParams(), call: undefined, autonomous: false, ask })
+  expect(noCall.action).toBe("decline")
+  expect(ask).not.toHaveBeenCalled()
+
+  // URL mode is now handled: https URL with an in-flight call asks the user
+  // and opens the URL on accept. The Open answer is the first option label.
+  const openUrl = vi.fn(async () => undefined)
+  ask.mockResolvedValueOnce([["Open"]])
+  const accepted = await McpElicitation.decide({
     params: { mode: "url", message: "Continue", url: "https://example.com", elicitationId: "1" },
     call: callContext(),
     autonomous: false,
     ask,
+    openUrl,
   })
-  expect(url.action).toBe("decline")
-  expect(ask).not.toHaveBeenCalled()
-
-  const noCall = await McpElicitation.decide({ params: formParams(), call: undefined, autonomous: false, ask })
-  expect(noCall.action).toBe("decline")
-  expect(ask).not.toHaveBeenCalled()
+  expect(accepted.action).toBe("accept")
+  expect(openUrl).toHaveBeenCalledWith("https://example.com/")
 })
 
 test("decide declines unsupported schemas without asking", async () => {
@@ -414,4 +419,113 @@ test("elicitation/create surfaces as a session question and returns coerced cont
       }
     },
   })
+})
+
+// -------------------------------------------------------------------------
+// URL mode (ADR-252)
+// -------------------------------------------------------------------------
+
+test("planUrl accepts https and loopback http and declines plain http", () => {
+  const https = McpElicitation.planUrl({ mode: "url", message: "open me", url: "https://example.com/path" })
+  expect(https).toMatchObject({ ok: true })
+  if (https.ok) expect(https.url).toBe("https://example.com/path")
+
+  const loopback = McpElicitation.planUrl({ url: "http://localhost:3000/cb" })
+  expect(loopback).toMatchObject({ ok: true })
+
+  const loopbackIP = McpElicitation.planUrl({ url: "http://127.0.0.1:9000/" })
+  expect(loopbackIP).toMatchObject({ ok: true })
+
+  expect(McpElicitation.planUrl({ url: "http://example.com/" })).toMatchObject({ ok: false })
+  expect(McpElicitation.planUrl({ url: "ftp://example.com/" })).toMatchObject({ ok: false })
+  expect(McpElicitation.planUrl({ url: "not a url" })).toMatchObject({ ok: false })
+  expect(McpElicitation.planUrl({ url: "" })).toMatchObject({ ok: false })
+})
+
+test("planUrl sanitizes and caps the untrusted message", () => {
+  const plan = McpElicitation.planUrl({
+    mode: "url",
+    message: `evil\u0000injection\t${"x".repeat(2000)}`,
+    url: "https://example.com",
+  })
+  expect(plan).toMatchObject({ ok: true })
+  if (!plan.ok) return
+  expect(plan.message).not.toMatch(/[\u0000-\u001f]/)
+  expect([...plan.message].length).toBeLessThanOrEqual(500 + 3)
+})
+
+test("decide url mode declines non-https non-loopback without asking", async () => {
+  const ask = vi.fn()
+  const decision = await McpElicitation.decide({
+    params: { mode: "url", message: "open", url: "http://example.com/" },
+    call: callContext(),
+    autonomous: false,
+    ask,
+  })
+  expect(decision.action).toBe("decline")
+  expect(ask).not.toHaveBeenCalled()
+})
+
+test("decide url mode always declines in autonomous mode", async () => {
+  const ask = vi.fn()
+  const decision = await McpElicitation.decide({
+    params: { mode: "url", message: "open", url: "https://example.com/" },
+    call: callContext(),
+    autonomous: true,
+    ask,
+  })
+  expect(decision.action).toBe("decline")
+  expect(ask).not.toHaveBeenCalled()
+})
+
+test("decide url mode declines when the user picks Decline", async () => {
+  const ask = vi.fn(async () => [["Decline"]])
+  const openUrl = vi.fn()
+  const decision = await McpElicitation.decide({
+    params: { mode: "url", message: "open", url: "https://example.com/" },
+    call: callContext(),
+    autonomous: false,
+    ask,
+    openUrl,
+  })
+  expect(decision.action).toBe("decline")
+  expect(openUrl).not.toHaveBeenCalled()
+})
+
+test("decide url mode calls openUrl exactly once on accept", async () => {
+  const openUrl = vi.fn(async () => undefined)
+  const ask = vi.fn(async () => [["Open"]])
+  const decision = await McpElicitation.decide({
+    params: { mode: "url", message: "open", url: "https://example.com/" },
+    call: callContext(),
+    autonomous: false,
+    ask,
+    openUrl,
+  })
+  expect(decision.action).toBe("accept")
+  expect(openUrl).toHaveBeenCalledTimes(1)
+  expect(openUrl).toHaveBeenCalledWith("https://example.com/")
+})
+
+test("decide url mode declines when openUrl throws", async () => {
+  const ask = vi.fn(async () => [["Open"]])
+  const openUrl = vi.fn(async () => {
+    throw new Error("no browser")
+  })
+  const decision = await McpElicitation.decide({
+    params: { mode: "url", message: "open", url: "https://example.com/" },
+    call: callContext(),
+    autonomous: false,
+    ask,
+    openUrl,
+  })
+  expect(decision.action).toBe("decline")
+  if (decision.action === "decline") {
+    expect(decision.reason).toContain("failed to open the URL")
+  }
+})
+
+test("clientCapabilities advertises both form and url mode", () => {
+  const caps = McpElicitation.clientCapabilities()
+  expect(caps.elicitation).toEqual({ form: {}, url: {} })
 })

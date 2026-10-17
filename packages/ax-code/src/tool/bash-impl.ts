@@ -15,6 +15,7 @@ import fs from "fs/promises"
 
 import { Filesystem } from "@/util/filesystem"
 import { Env } from "@/util/env"
+import { MAX_AUTO_ACCEPT_COMMAND } from "../permission/bash-auto-accept"
 import { toErrorMessage } from "@/util/error-message"
 import { TOAST_DURATION_LONG_MS } from "@/constants/server"
 import { createRequire } from "module"
@@ -1610,7 +1611,16 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           permission: "bash",
           patterns: Array.from(patterns),
           always: Array.from(always),
-          metadata: {},
+          // Include parsed redirect/write targets for the auto-accept protected-path gate.
+          metadata: {
+            paths: [...new Set([...resolvedPathsList, ...redirectWritePaths])],
+            command: Env.redactForRecord(params.command),
+            // Never publish raw credentials or approve a truncated/redacted approximation.
+            ...(params.command.length <= MAX_AUTO_ACCEPT_COMMAND &&
+            Env.redactForRecord(params.command) === params.command
+              ? { bashCommand: params.command, bashCwd: cwd }
+              : {}),
+          },
         })
       }
 

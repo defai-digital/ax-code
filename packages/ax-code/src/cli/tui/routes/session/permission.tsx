@@ -38,6 +38,13 @@ import {
   type PermissionSubmitLatch,
 } from "../../util/permission-submit-latch"
 
+import {
+  approvalInput,
+  permissionCommandView,
+  permissionRewriteView,
+  permissionSearchView,
+} from "./permission-command-view-model"
+
 const log = Log.create({ service: "tui.permission" })
 
 type PermissionStage = "permission" | "always" | "reject" | "webmcp-allowlist"
@@ -280,14 +287,14 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
   const input = createMemo(() => {
     const tool = props.request.tool
-    if (!tool) return {}
+    if (!tool) return approvalInput(props.request.metadata ?? {}, {})
     const parts = sync.data.part[tool.messageID] ?? []
     for (const part of parts) {
       if (part.type === "tool" && part.callID === tool.callID && part.state.status !== "pending") {
-        return part.state.input ?? {}
+        return approvalInput(props.request.metadata ?? {}, part.state.input ?? {})
       }
     }
-    return {}
+    return approvalInput(props.request.metadata ?? {}, {})
   })
 
   const { theme } = useTheme()
@@ -423,32 +430,15 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       }
     }
 
-    if (permission === "glob") {
+    if (permission === "glob" || permission === "grep") {
       const pattern = typeof data.pattern === "string" ? data.pattern : ""
       return {
         icon: "✱",
-        title: `Glob "${pattern}"`,
+        title: `${permission === "glob" ? "Glob" : "Grep"} "${pattern}"`,
         body: (
-          <Show when={pattern}>
-            <box paddingLeft={1}>
-              <text fg={theme.textMuted}>{"Pattern: " + pattern}</text>
-            </box>
-          </Show>
-        ),
-      }
-    }
-
-    if (permission === "grep") {
-      const pattern = typeof data.pattern === "string" ? data.pattern : ""
-      return {
-        icon: "✱",
-        title: `Grep "${pattern}"`,
-        body: (
-          <Show when={pattern}>
-            <box paddingLeft={1}>
-              <text fg={theme.textMuted}>{"Pattern: " + pattern}</text>
-            </box>
-          </Show>
+          <box paddingLeft={1} flexDirection="column">
+            <For each={permissionSearchView(data)}>{(line) => <text fg={theme.textMuted}>{line}</text>}</For>
+          </box>
         ),
       }
     }
@@ -471,13 +461,16 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
     if (permission === "bash") {
       const title = typeof data.description === "string" && data.description ? data.description : t("permission.shell")
-      const command = typeof data.command === "string" ? data.command : ""
+      const { command } = permissionCommandView(props.request.metadata ?? {}, data)
       return {
         icon: "#",
         title,
         body: (
           <Show when={command}>
             <box paddingLeft={1}>
+              <Show when={typeof data.workdir === "string" && data.workdir}>
+                <text fg={theme.textMuted}>{"in " + normalizePath(data.workdir as string)}</text>
+              </Show>
               <text fg={theme.text}>{"$ " + command}</text>
             </box>
           </Show>
@@ -657,6 +650,8 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     }
   })
 
+  const rewriteView = createMemo(() => permissionRewriteView(props.request.metadata ?? {}))
+
   return (
     <Switch>
       <Match when={store.stage === "webmcp-allowlist"}>
@@ -775,7 +770,19 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
               </Show>
             </box>
           }
-          body={permissionInfo().body}
+          body={
+            <box flexDirection="column" gap={1}>
+              {permissionInfo().body}
+              <Show when={rewriteView()}>
+                {(rewrite) => (
+                  <box paddingLeft={1} flexDirection="column">
+                    <text fg={theme.textMuted}>{"Rewritten by hook: " + rewrite().changedFields.join(", ")}</text>
+                    <For each={rewrite().values}>{(line) => <text fg={theme.text}>{line}</text>}</For>
+                  </box>
+                )}
+              </Show>
+            </box>
+          }
           options={baseOptions()}
           dangerOption="allowlist"
           escapeKey="reject"

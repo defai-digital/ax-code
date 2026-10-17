@@ -3,6 +3,7 @@ import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
 import { cmd } from "./cmd"
+import { staleRuntimeNotice } from "../runtime-upgrade-notice"
 
 export type UpgradeCheckReport = {
   current: string
@@ -185,6 +186,11 @@ export const UpgradeCommand = {
         prompts.log.warn(formatMissingLauncherWarning(target, method))
       }
     }
+
+    // ADR-251: persistent runtime servers keep running the old version until
+    // restarted. List them with the exact restart command; never restart one.
+    const staleLines = await staleRuntimeNotice(target).catch(() => [] as string[])
+    for (const line of staleLines) prompts.log.warn(line)
 
     prompts.outro("Done")
   },

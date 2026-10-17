@@ -1263,6 +1263,9 @@ export namespace SessionProcessor {
                         status: "error",
                         input: toolInput,
                         error: annotatedError,
+                        ...(match.state.metadata?.hookRewrite
+                          ? { metadata: { hookRewrite: match.state.metadata.hookRewrite } }
+                          : {}),
                         time: {
                           start: match.state.time.start,
                           end: toolErrorEnd,

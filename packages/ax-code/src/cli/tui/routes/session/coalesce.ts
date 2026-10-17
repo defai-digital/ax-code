@@ -1,3 +1,4 @@
+import { hasHookRewrite } from "./tool-rendering"
 import type { Part, ToolPart } from "@ax-code/sdk/v2"
 
 // Read-only, low-info-per-row tools that are safe to visually fold into
@@ -21,6 +22,7 @@ function isCoalesceable(part: Part): part is ToolPart {
   // "Coalescing hides errors". Cheaper to check per-part here than to
   // post-process.
   if (tool.state.status === "error") return false
+  if (tool.state.status !== "pending" && hasHookRewrite(tool.state.metadata)) return false
   return true
 }
 

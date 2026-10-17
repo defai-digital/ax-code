@@ -85,6 +85,10 @@ const builtinSkills = await (async () => {
 })()
 console.log(`Loaded ${builtinSkills.length} built-in skills`)
 
+// Release notes (ADR-242): embed the repository CHANGELOG.md so `ax-code
+// release-notes` works in the compiled runtime. Absent in an unpublished tree.
+const changelog = await readText(path.join(dir, "..", "..", "CHANGELOG.md")).catch(() => "")
+
 const skillIssues = await SkillLint.check(skillsDir)
 if (skillIssues.length > 0) {
   console.error("Built-in skill validation failed:")
@@ -135,6 +139,7 @@ const result = await esbuild.build({
     AX_CODE_CHANNEL: JSON.stringify(buildChannel),
     AX_CODE_MIGRATIONS: JSON.stringify(migrations),
     AX_CODE_BUILTIN_SKILLS: JSON.stringify(builtinSkills),
+    AX_CODE_CHANGELOG: JSON.stringify(changelog),
     AX_CODE_LIBC: '""',
   },
   // ESM output: some CJS deps call require()/__dirname. Bun.build injected these

@@ -1,3 +1,4 @@
+import { autoAcceptEnabled, autoAcceptTargets, shouldAutoAccept } from "./auto-accept"
 import { INTERACTIVE_ONLY_PERMISSIONS, isInteractivePermission } from "./interaction"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
@@ -100,7 +101,22 @@ export namespace Permission {
   export const Reply = z.enum(["once", "always", "reject"])
   export type Reply = z.infer<typeof Reply>
 
+  export const AutoAcceptState = z.object({
+    enabled: z.boolean(),
+    managedDisabled: z.boolean(),
+    directory: z.string(),
+  })
+
   export const Event = {
+    AutoAcceptChanged: BusEvent.define("permission.auto_accept.changed", AutoAcceptState),
+    AutoAccepted: BusEvent.define(
+      "permission.auto_accepted",
+      z.object({
+        sessionID: SessionID.zod,
+        permission: z.string(),
+        patterns: z.array(z.string()),
+      }),
+    ),
     Asked: BusEvent.define("permission.asked", Request),
     Replied: BusEvent.define(
       "permission.replied",
@@ -214,6 +230,7 @@ export namespace Permission {
     // Per-instance mutex for "always" replies. Module-level storage would
     // needlessly serialize concurrent project instances (e.g. worktrees).
     alwaysReplyQueue: Promise<void>
+    autoAcceptOverride?: boolean
   }
 
   const state = Instance.state(
@@ -253,6 +270,30 @@ export namespace Permission {
       state.pending.clear()
     },
   )
+
+  export async function autoAcceptStatus() {
+    const config = await Config.get()
+    const managedDisabled = await Config.autoAcceptManagedDisabled()
+    return {
+      enabled: autoAcceptEnabled({
+        configured: config.permission?.auto_accept,
+        override: (await state()).autoAcceptOverride,
+        managedDisabled,
+      }),
+      managedDisabled,
+      directory: Instance.directory,
+    }
+  }
+
+  /** Called only by the authenticated user control route; never by a model tool. */
+  export async function setAutoAccept(enabled: boolean) {
+    const s = await state()
+    const managedDisabled = await Config.autoAcceptManagedDisabled()
+    s.autoAcceptOverride = managedDisabled ? false : enabled
+    const status = await autoAcceptStatus()
+    Bus.publishDetached(Event.AutoAcceptChanged, status)
+    return status
+  }
 
   // Permissions that always reach a per-call decision instead of wildcard
   // approval. The server may answer once after the mode-driven countdown;
@@ -460,7 +501,20 @@ export namespace Permission {
   async function askPromise(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }): Promise<void> {
     const s = await state()
     const { approved, pending } = s
-    const { ruleset, webmcpAllowlist: _untrustedSummary, ...request } = input
+    let { ruleset, webmcpAllowlist: _untrustedSummary, ...request } = input
+    if (request.permission === "mcp_sampling") {
+      const layers = (await Config.permissionLayers()).map(fromConfig)
+      const current = fromConfig((await Config.get()).permission ?? {})
+      // Sampling is interactive-only in autonomous mode, even with an Always grant.
+      if (
+        ScopedFlag.autonomous() ||
+        request.patterns.some((pattern) =>
+          [...layers, current, ruleset].some((layer) => evaluate(request.permission, pattern, layer).action === "deny"),
+        )
+      )
+        throw new DeniedError({ ruleset: merge(...layers, current, ruleset), agent: input.agent })
+      ruleset = merge(current, ruleset)
+    }
     let needsAsk = false
     enforceSafetyPolicy(request, input.agent)
 
@@ -637,6 +691,84 @@ export namespace Permission {
 
     const signal = options?.signal
     if (signal?.aborted) throw abortError(signal)
+
+    const config = await Config.get()
+    const autoAccept = await autoAcceptStatus()
+    const managedRules = (await Config.managedPermissions()).flatMap(fromConfig)
+    const managedRule = request.patterns.some((pattern) =>
+      managedRules.some(
+        (rule) => Wildcard.match(request.permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
+      ),
+    )
+    const paths = Array.isArray(request.metadata.paths)
+      ? request.metadata.paths.filter((value): value is string => typeof value === "string")
+      : request.permission === "bash"
+        ? []
+        : request.patterns
+    const targets =
+      autoAcceptTargets({
+        permission: request.permission,
+        patterns: request.patterns,
+        paths,
+        metadata: request.metadata,
+      }) ?? []
+    const resolvedTargets = targets.map((value) =>
+      Isolation.resolveAutoAcceptPath(path.resolve(Instance.directory, value), Instance.directory),
+    )
+    const canonicalPaths = resolvedTargets.filter((value): value is string => value !== undefined)
+    const safety = SafetyPolicy.decide({
+      mode: ScopedFlag.autonomous() ? "autonomous" : "normal",
+      permission: request.permission,
+      paths: [...request.patterns, ...paths, ...canonicalPaths],
+    })
+    if (
+      resolvedTargets.every((value) => value !== undefined) &&
+      shouldAutoAccept({
+        enabled: autoAccept.enabled,
+        managedDisabled: autoAccept.managedDisabled,
+        managedRule,
+        permission: request.permission,
+        patterns: request.patterns,
+        paths: [...paths, ...canonicalPaths],
+        directory: Instance.directory,
+        protectedPaths: [
+          ...(config.isolation?.protected ?? []),
+          ...(config.autonomy?.budget?.changes?.blocked_paths ?? []),
+          ...(config.experimental?.autonomous_caps?.blockedPaths ?? []),
+        ],
+        interactiveOnly: request.interactiveOnly === true || isInteractiveOnly(request.permission, request.metadata),
+        metadata: request.metadata,
+        riskClass:
+          request.riskClass === "unknown"
+            ? "unknown"
+            : classifyRisk(
+                ["write", "apply_patch", "multiedit"].includes(request.permission) ? "edit" : request.permission,
+              ),
+        risk: safety.risk,
+        decide: (decision) => SafetyPolicy.decide(decision),
+      })
+    ) {
+      if (signal?.aborted) throw abortError(signal)
+      // Config invalidation while awaiting must fail closed; never use a stale ceiling.
+      if (
+        Config.peek() === config &&
+        autoAcceptEnabled({
+          configured: config.permission?.auto_accept,
+          override: s.autoAcceptOverride,
+          managedDisabled: autoAccept.managedDisabled,
+        })
+      ) {
+        const patterns = request.patterns.map((pattern) => Env.redactForRecord(pattern))
+        for (const pattern of patterns)
+          log.info("permission auto-accepted", { permission: request.permission, pattern })
+        Bus.publishDetached(Event.AutoAccepted, {
+          sessionID: request.sessionID,
+          permission: request.permission,
+          patterns,
+        })
+        return
+      }
+    }
 
     const id = request.id ?? PermissionID.ascending()
     const info: Request = {
@@ -917,6 +1049,7 @@ export namespace Permission {
       ruleset.push(parsed.data)
     }
     for (const [key, value] of Object.entries(permission)) {
+      if (key === "auto_accept" || typeof value === "boolean") continue
       if (typeof value === "string") {
         pushValidated({ permission: key, action: value, pattern: "*" })
         continue

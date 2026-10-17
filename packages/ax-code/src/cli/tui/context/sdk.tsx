@@ -5,6 +5,7 @@ import { batch, createSignal, onCleanup, onMount } from "solid-js"
 import { runResilientStream, type StreamConnectionStatus } from "../util/resilient-stream"
 import { NotificationEvent } from "@/notification/events"
 import type { z } from "zod"
+import type { Permission } from "@/permission"
 
 import { Log } from "@/util/log"
 import { toErrorMessage } from "@/util/error-message"
@@ -15,6 +16,14 @@ const log = Log.create({ service: "tui.sdk" })
 
 export type TuiRuntimeEvent =
   | Event
+  | {
+      type: "permission.auto_accept.changed"
+      properties: z.infer<typeof Permission.AutoAcceptState>
+    }
+  | {
+      type: "permission.auto_accepted"
+      properties: z.infer<typeof Permission.Event.AutoAccepted.properties>
+    }
   | {
       type: typeof NotificationEvent.ToastShow.type
       properties: z.infer<typeof NotificationEvent.ToastShow.properties>

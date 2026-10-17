@@ -5,8 +5,17 @@
  */
 
 import z from "zod"
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/client/validators/ajv"
+import {
+  hookRewriteApproval,
+  rewriteRecordValue,
+  type HookRewriteApproval,
+  type HookRewriteRecord,
+} from "../../hooks/input-rewrite"
+export { effectiveInputForApproval } from "../../hooks/input-rewrite"
 import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
 import { Log } from "../../util/log"
+import { Env } from "../../util/env"
 import { Agent } from "../../agent/agent"
 import { Provider } from "../../provider/provider"
 import { ModelID } from "../../provider/schema"
@@ -257,7 +266,12 @@ export async function runToolLifecycle<T>(input: {
   ask?: Tool.Context["ask"]
   /** Receives bounded PostToolUse hook feedback for inclusion in the tool result. */
   onFeedback?: (feedback: string) => void
-  execute(): Promise<T>
+  /** Only registry and MCP calls opt in; composite workflows retain their bound plans. */
+  validateRewrite?: (args: Record<string, unknown>) => unknown | Promise<unknown>
+  onRewrite?: (record: HookRewriteRecord) => void | Promise<void>
+  /** Installed synchronously after validation and before any approval or execution. */
+  onValidatedRewrite?: (approval: HookRewriteApproval) => void
+  execute(args: unknown): Promise<T>
 }): Promise<T> {
   await Plugin.trigger(
     "tool.execute.before",
@@ -269,11 +283,15 @@ export async function runToolLifecycle<T>(input: {
     { args: input.args },
   )
 
+  let effectiveArgs = input.args
+  let rewriteApproval: HookRewriteApproval | undefined
+  let rewrite: { updatedInput: Record<string, unknown>; hooks: string[] } | undefined
   let askReason: string | undefined
   try {
     const { LifecycleHooks } = await import("@/hooks/lifecycle")
     const pre = await LifecycleHooks.runForWorkspace({
       event: "PreToolUse",
+      allowInputRewrite: input.validateRewrite !== undefined,
       sessionID: input.sessionID,
       tool: input.toolID,
       args: input.args,
@@ -288,6 +306,7 @@ export async function runToolLifecycle<T>(input: {
           .join("\n")
       throw new Error(`PreToolUse hook blocked tool ${input.toolID}: ${detail || "hook failed"}`)
     }
+    rewrite = pre.rewrite
     if (pre.ask) {
       if (!input.ask) throw new Error(`PreToolUse hook blocked tool ${input.toolID}: ${pre.ask.reason}`)
       askReason = pre.ask.reason
@@ -297,6 +316,27 @@ export async function runToolLifecycle<T>(input: {
     // Hook load/run failures must not brick the agent loop.
   }
 
+  // Keep validation outside the fail-open hook runner boundary.
+  if (rewrite && input.validateRewrite) {
+    await input.onRewrite?.({
+      hooks: rewrite.hooks.map((name) => Env.redactForRecord(name)),
+      before: rewriteRecordValue(input.args),
+      after: rewriteRecordValue(rewrite.updatedInput),
+    })
+    try {
+      effectiveArgs = await input.validateRewrite(rewrite.updatedInput)
+      rewriteApproval = hookRewriteApproval(input.args, effectiveArgs)
+      input.onValidatedRewrite?.(rewriteApproval)
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        Env.redactForRecord(
+          `PreToolUse hook ${rewrite.hooks.join(", ")} produced invalid input for ${input.toolID}: ${detail}`,
+        ),
+      )
+    }
+  }
+
   if (askReason !== undefined && input.ask) {
     // Outside the try above so a user rejection propagates as the ordinary
     // Permission.RejectedError the processor already understands.
@@ -304,13 +344,13 @@ export async function runToolLifecycle<T>(input: {
       permission: HOOK_CONFIRMATION_PERMISSION,
       patterns: [input.toolID],
       always: [],
-      metadata: { requireInteractive: true, tool: input.toolID, reason: askReason },
+      metadata: { requireInteractive: true, tool: input.toolID, reason: askReason, ...rewriteApproval },
     })
   }
 
   let result: T
   try {
-    result = await input.execute()
+    result = await input.execute(effectiveArgs)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     void import("@/hooks/lifecycle")
@@ -319,7 +359,7 @@ export async function runToolLifecycle<T>(input: {
           event: "PostToolUseFailure",
           sessionID: input.sessionID,
           tool: input.toolID,
-          args: { args: input.args, error: message.slice(0, 4_000) },
+          args: { args: effectiveArgs, error: message.slice(0, 4_000) },
           cwd: input.cwd,
         }),
       )
@@ -333,7 +373,7 @@ export async function runToolLifecycle<T>(input: {
       tool: input.toolID,
       sessionID: input.sessionID,
       callID: input.callID,
-      args: input.args,
+      args: effectiveArgs,
     },
     result,
   )
@@ -344,7 +384,7 @@ export async function runToolLifecycle<T>(input: {
       event: "PostToolUse",
       sessionID: input.sessionID,
       tool: input.toolID,
-      args: input.args,
+      args: effectiveArgs,
       cwd: input.cwd,
     })
     if (post.feedback && input.onFeedback) input.onFeedback(post.feedback)
@@ -476,6 +516,13 @@ export async function resolveTools(input: ResolveToolsInput) {
   const schemaCacheKey = (toolId: string) => `${toolId}:${modelSchemaIdentity}`
   const isDisabledByConfig = (toolID: string) => input.tools?.[toolID] === false
   let registryDispatcher: Tool.Dispatcher | undefined
+  const rewriteRecords = new Map<string, HookRewriteRecord>()
+  const rewriteApprovals = new Map<string, HookRewriteApproval>()
+  const { LifecycleHooks } = await import("@/hooks/lifecycle")
+  const rewritesEnabled = (await Config.get()).hooks?.allow_input_rewrite !== false
+  const rewriteHooks = rewritesEnabled ? await LifecycleHooks.resolveHooks({ directory: Instance.directory }) : []
+  const canRewrite = (toolID: string) =>
+    LifecycleHooks.selectHooks(rewriteHooks, "PreToolUse", toolID).some((hook) => hook.protocol === "claude-code")
 
   type InvocationOptions = Pick<ToolCallOptions, "toolCallId" | "abortSignal">
   const context = (
@@ -510,11 +557,20 @@ export async function resolveTools(input: ResolveToolsInput) {
     metadata: async (val: { title?: string; metadata?: any }) => {
       const match = input.processor.partFromToolCall(options.toolCallId)
       if (match && match.state.status === "running") {
+        const hookRewrite = rewriteRecords.get(options.toolCallId)
+        // The processor's terminal error transition reads its in-memory part,
+        // not the last database progress update. Retain the audit there too.
+        if (hookRewrite) match.state.metadata = { ...match.state.metadata, hookRewrite }
         await Session.updatePart({
           ...match,
           state: {
             title: val.title,
-            metadata: val.metadata,
+            metadata: {
+              ...val.metadata,
+              ...(rewriteRecords.has(options.toolCallId)
+                ? { hookRewrite: rewriteRecords.get(options.toolCallId) }
+                : {}),
+            },
             status: "running",
             // Progress updates retain the processor's canonical, redacted
             // input; execution args may still contain credentials.
@@ -530,6 +586,12 @@ export async function resolveTools(input: ResolveToolsInput) {
       await Permission.ask(
         {
           ...req,
+          // Pass the caller's metadata object through untouched unless the call was rewritten: runtime-bound
+          // WebMCP auto-approval is keyed on that object's identity (a WeakMap), so an unconditional copy would
+          // silently strip it and turn an Auto approval into a prompt.
+          ...(rewriteApprovals.has(options.toolCallId)
+            ? { metadata: { ...req.metadata, ...rewriteApprovals.get(options.toolCallId) } }
+            : {}),
           sessionID: input.session.id,
           tool: { messageID: input.processor.message.id, callID: options.toolCallId },
           ruleset,
@@ -582,11 +644,13 @@ export async function resolveTools(input: ResolveToolsInput) {
       isolationPolicy === "escalate"
         ? await ToolWriteGate.acquire(
             ctx.sessionID,
-            toolGateMode({
-              toolID: item.id,
-              args,
-              childSafe: (call) => registryDispatcher?.concurrencySafe?.(call) === true,
-            }),
+            canRewrite(item.id)
+              ? "exclusive"
+              : toolGateMode({
+                  toolID: item.id,
+                  args,
+                  childSafe: (call) => registryDispatcher?.concurrencySafe?.(call) === true,
+                }),
             ctx.abort,
           )
         : undefined
@@ -621,7 +685,20 @@ export async function resolveTools(input: ResolveToolsInput) {
       onFeedback: (feedback) => {
         hookFeedback = feedback
       },
-      execute: async () => {
+      validateRewrite: (updated) => {
+        // A hook added after lane classification must not turn a shared call
+        // (or a parallel Batch child) into a mutating call. Retry next turn.
+        if (!canRewrite(item.id)) throw new Error("Hook configuration changed during this turn; retry on the next turn")
+        return item.parameters.parse(updated)
+      },
+      onValidatedRewrite: (approval) => {
+        rewriteApprovals.set(options.toolCallId, approval)
+      },
+      onRewrite: async (record) => {
+        rewriteRecords.set(options.toolCallId, record)
+        await ctx.metadata({ metadata: { hookRewrite: record } })
+      },
+      execute: async (args) => {
         let result: Awaited<ReturnType<typeof item.execute>> | undefined
         if (isolationPolicy === "fail-closed") {
           // Batch calls run concurrently. Never open interactive escalation
@@ -691,6 +768,10 @@ export async function resolveTools(input: ResolveToolsInput) {
 
         return {
           ...result,
+          metadata: {
+            ...result.metadata,
+            ...(rewriteRecords.has(options.toolCallId) ? { hookRewrite: rewriteRecords.get(options.toolCallId) } : {}),
+          },
           attachments: result.attachments?.map((attachment) => ({
             ...attachment,
             id: PartID.ascending(),
@@ -707,6 +788,7 @@ export async function resolveTools(input: ResolveToolsInput) {
   registryDispatcher = {
     ids: [...batchableRegistryTools.keys()],
     concurrencySafe(dispatch) {
+      if (canRewrite(dispatch.tool)) return false
       const item = batchableRegistryTools.get(dispatch.tool)
       if (!item?.concurrencySafe) return false
       try {
@@ -783,6 +865,7 @@ export async function resolveTools(input: ResolveToolsInput) {
     // producing malformed input for the LLM. Clone to a fresh object so
     // the transformation is idempotent across iterations.
     const mcpTool = { ...item }
+    const rewriteSchema = await Promise.resolve(asSchema(item.inputSchema).jsonSchema)
     const mcpCacheKey = schemaCacheKey(`mcp:${key}`)
     const transformed = await transformMcpInputSchema({
       cacheKey: mcpCacheKey,
@@ -799,6 +882,8 @@ export async function resolveTools(input: ResolveToolsInput) {
       // client's elicitation handler resolves it to surface server-initiated
       // prompts in the session that is waiting on this call.
       McpElicitation.bindCallContext(opts, {
+        ruleset,
+        agent: input.agent.name,
         sessionID: ctx.sessionID,
         signal: ctx.abort,
         tool: ctx.callID ? { messageID: ctx.messageID, callID: ctx.callID } : undefined,
@@ -818,7 +903,21 @@ export async function resolveTools(input: ResolveToolsInput) {
         onFeedback: (feedback) => {
           hookFeedback = feedback
         },
-        execute: async () => {
+        validateRewrite: (updated) => {
+          const checked = new AjvJsonSchemaValidator().getValidator(
+            rewriteSchema as Parameters<AjvJsonSchemaValidator["getValidator"]>[0],
+          )(updated)
+          if (!checked.valid) throw new Error(checked.errorMessage)
+          return updated
+        },
+        onValidatedRewrite: (approval) => {
+          rewriteApprovals.set(opts.toolCallId, approval)
+        },
+        onRewrite: async (record) => {
+          rewriteRecords.set(opts.toolCallId, record)
+          await ctx.metadata({ metadata: { hookRewrite: record } })
+        },
+        execute: async (args) => {
           const policy = item.webmcp
           // ADR-168: a navigation to a well-formed but unallowlisted origin is
           // caught here (call time) or after dispatch (a redirect target the
@@ -1224,7 +1323,10 @@ export async function resolveTools(input: ResolveToolsInput) {
           ? boundMcpResultText(outputText)
           : `${boundMcpResultText(outputText)}${boundMcpHookFeedback(hookFeedback)}`
       const truncated = await Truncate.output(combined, {}, input.agent)
-      const metadata = mcpResultPartMetadata(result, truncated)
+      const metadata = {
+        ...mcpResultPartMetadata(result, truncated),
+        ...(rewriteRecords.has(opts.toolCallId) ? { hookRewrite: rewriteRecords.get(opts.toolCallId) } : {}),
+      }
 
       return {
         title: "",
@@ -1269,6 +1371,7 @@ export async function resolveTools(input: ResolveToolsInput) {
           args,
           cwd: Instance.directory,
           ask: (request) => ctx.ask(request),
+          // A workflow executes a bound multi-step plan; only its individual MCP calls may be rewritten.
           execute: () =>
             BrowserWorkflow.execute(BrowserWorkflow.Parameters.parse(args), {
               context: ctx,
@@ -1367,6 +1470,7 @@ export async function resolveTools(input: ResolveToolsInput) {
           args,
           cwd: Instance.directory,
           ask: (req) => ctx.ask(req),
+          // Discovery changes tool visibility, so only concrete tool execution accepts rewrites.
           execute: async () => {
             ctx.abort.throwIfAborted()
             await ctx.ask({ permission: "tool_search", patterns: [args.query], always: ["*"], metadata: {} })

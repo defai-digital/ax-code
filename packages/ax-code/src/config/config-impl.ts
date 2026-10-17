@@ -155,6 +155,9 @@ export namespace Config {
   }
 
   function restrictUntrustedConfig(copy: Record<string, unknown>) {
+    delete copy.mcp_sampling
+    // Granting a plugin session administration is a user decision, never a repository one.
+    delete copy.plugin_trust
     // These fields can execute a repository-selected binary, import a package,
     // redirect provider credentials, or read arbitrary files from the user's
     // home directory. Project config may use them only after the explicit
@@ -550,15 +553,55 @@ export namespace Config {
       return { ...source, isolation }
     }
 
+    let managedRewriteDisabled = false
+    let managedAutoAcceptDisabled = false
+    const managedPermissions: Permission[] = []
+    const permissionLayers: Permission[] = []
+    let samplingDisabled = false
+    let samplingTokenCeiling = Infinity
+
     function mergeFromSource(source: McpSource, config: Info) {
       recordMcpSources(config, source)
+      if (source.kind === "managed" && config.permission) managedPermissions.push(config.permission)
       let scoped = source.kind === "managed" ? config : withoutWebmcpRequirement(source, config)
+      if (scoped.mcp_sampling && !source.trustedByDefault && ["project", "config_directory"].includes(source.kind)) {
+        // Project trust authorizes local configuration, not additional model spending.
+        const ceiling = result.mcp_sampling
+        scoped = {
+          ...scoped,
+          mcp_sampling: {
+            enabled: ceiling?.enabled === true && scoped.mcp_sampling.enabled !== false,
+            max_tokens: Math.min(ceiling?.max_tokens ?? 2000, scoped.mcp_sampling.max_tokens ?? Infinity),
+          },
+        }
+        samplingDisabled ||= scoped.mcp_sampling!.enabled === false
+        samplingTokenCeiling = Math.min(samplingTokenCeiling, scoped.mcp_sampling!.max_tokens!)
+      }
+      if (source.kind === "managed" && scoped.mcp_sampling) {
+        samplingDisabled ||= scoped.mcp_sampling.enabled === false
+        samplingTokenCeiling = Math.min(samplingTokenCeiling, scoped.mcp_sampling.max_tokens ?? Infinity)
+      }
       // Repository/remote settings and managed ceilings may restrict user grants,
       // but cannot turn a connected provider into an automatic recovery target.
       if (scoped.llm_routing && !["global", "custom", "inline"].includes(source.kind)) {
         scoped = { ...scoped, llm_routing: RoutePolicy.narrow(result.llm_routing, scoped.llm_routing) }
       }
+      // Only user config and trusted project-local sources may enable auto-accept.
+      if (config.permission?.auto_accept !== undefined) {
+        if (source.kind === "managed" && config.permission.auto_accept === false) managedAutoAcceptDisabled = true
+        const mayEnable =
+          ["global", "custom", "project", "config_directory"].includes(source.kind) && sourceTrustedForFloor(source)
+        if (!mayEnable) {
+          const permission = { ...scoped.permission }
+          delete permission.auto_accept
+          scoped = { ...scoped, permission }
+        }
+      }
+      // Managed false is a ceiling even across multiple managed files.
+      if (source.kind === "managed" && config.hooks?.allow_input_rewrite === false) managedRewriteDisabled = true
+      if (managedRewriteDisabled) scoped = { ...scoped, hooks: { ...scoped.hooks, allow_input_rewrite: false } }
       if (!sourceTrustedForFloor(source)) scoped = tightenIsolationFloor(result, scoped)
+      if (scoped.permission) permissionLayers.push(scoped.permission)
       result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(scoped))
     }
 
@@ -909,7 +952,9 @@ export namespace Config {
     if (Flag.AX_CODE_PERMISSION) {
       const parsed = parsePermissionEnv(Flag.AX_CODE_PERMISSION)
       if (parsed.ok) {
-        result.permission = mergeDeep(result.permission ?? {}, parsed.permission)
+        const { auto_accept: _ignoredAutoAccept, ...rules } = parsed.permission
+        permissionLayers.push(rules)
+        result.permission = mergeDeep(result.permission ?? {}, rules)
       } else if (parsed.reason === "schema") {
         log.warn("AX_CODE_PERMISSION does not match permission schema, ignoring", {
           value: Flag.AX_CODE_PERMISSION,
@@ -919,6 +964,10 @@ export namespace Config {
         log.warn("invalid AX_CODE_PERMISSION JSON, ignoring", { value: Flag.AX_CODE_PERMISSION })
       }
     }
+
+    // The permission environment override is a ruleset source, not an opt-in.
+    // Preserve the source-scoped switch and the managed ceiling after it merges.
+    if (managedAutoAcceptDisabled) result.permission = { ...result.permission, auto_accept: false }
 
     // Backwards compatibility: legacy top-level `tools` config
     if (result.tools) {
@@ -981,12 +1030,36 @@ export namespace Config {
       result.mcp = { ...result.mcp, webmcp: productDefaultWebMcpEntry() }
     }
 
+    if (result.mcp_sampling) {
+      result.mcp_sampling = {
+        ...result.mcp_sampling,
+        ...(samplingDisabled ? { enabled: false } : {}),
+        max_tokens: Math.min(result.mcp_sampling.max_tokens ?? 2000, samplingTokenCeiling),
+      }
+    }
+
     return {
       config: result,
+      managedAutoAcceptDisabled,
+      managedPermissions,
+      permissionLayers,
       directories,
       deps,
       mcpSources,
     }
+  }
+
+  export async function managedPermissions(): Promise<Permission[]> {
+    return (await state()).managedPermissions
+  }
+
+  /** Preserve source boundaries so sampling grants cannot shadow another layer's denial. */
+  export async function permissionLayers(): Promise<Permission[]> {
+    return (await state()).permissionLayers
+  }
+
+  export async function autoAcceptManagedDisabled(): Promise<boolean> {
+    return (await state()).managedAutoAcceptDisabled
   }
 
   export async function waitForDependencies() {

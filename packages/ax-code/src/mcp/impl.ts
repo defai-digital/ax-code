@@ -60,6 +60,7 @@ import {
   mergeRemoteMcpHeaders,
 } from "./connect-error"
 import { McpElicitation } from "./elicitation"
+import { McpSampling } from "./sampling"
 import { OsvCheck } from "./osv-check"
 import { SessionHealth } from "./session-health"
 
@@ -602,6 +603,11 @@ export namespace MCP {
   }
 
   function createClient(serverName: string) {
+    // Reading config here, not at the connect site, keeps the capability
+    // decision synchronous with client construction. A later config change
+    // is picked up on the next reconnect.
+    const samplingEnabled = (Config.peek()?.mcp_sampling?.enabled ?? false) === true
+    const samplingMaxTokens = Config.peek()?.mcp_sampling?.max_tokens
     const client = new Client(
       {
         name: "ax-code",
@@ -612,13 +618,22 @@ export namespace MCP {
         // walk by the same page budget the prompt/resource catalog uses instead of
         // the SDK's default of 64.
         listMaxPages: MAX_CATALOG_PAGES,
-        // Advertise form-mode elicitation only (never URL mode); the handler
-        // maps elicitation/create onto the in-flight session's Question prompt
-        // and declines when no session call can surface it.
-        capabilities: McpElicitation.clientCapabilities(),
+        // Form + URL elicitation (ADR-204, ADR-252); opt-in sampling (ADR-240).
+        // The sampling capability is omitted from the wire when disabled, so a
+        // server that checks the capability will not even send
+        // sampling/createMessage.
+        capabilities: {
+          ...McpElicitation.clientCapabilities(),
+          ...McpSampling.clientCapabilities(samplingEnabled),
+        },
       },
     )
-    McpElicitation.registerHandler(client, serverName)
+    McpElicitation.registerHandler(client, serverName, { openUrl: (url) => open(url) })
+    if (samplingEnabled) {
+      McpSampling.registerHandler(client, serverName, {
+        ...(typeof samplingMaxTokens === "number" ? { maxTokens: samplingMaxTokens } : {}),
+      })
+    }
     return client
   }
 

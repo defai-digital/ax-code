@@ -28,6 +28,7 @@ import { MemoryCommand } from "./cmd/memory"
 import { WikiCommand } from "./cmd/wiki"
 import { ModelsCommand } from "./cmd/models"
 import { ReleaseCommand } from "./cmd/release"
+import { ReleaseNotesCommand } from "./cmd/release-notes"
 import { ProvidersCommand } from "./cmd/providers"
 import { RunCommand } from "./cmd/run"
 import {
@@ -107,6 +108,7 @@ const cmds = [
   UpgradeCommand,
   UninstallCommand,
   ReleaseCommand,
+  ReleaseNotesCommand,
   WatchCommand,
   // Hidden / internal commands (registered, never listed)
   TuiBackendCommand,

@@ -148,6 +148,7 @@ export namespace LifecycleHooks {
       // — that turned a `deny` into an allow (fail-open). Coerce an individual
       // field to undefined on a type mismatch instead of failing the object.
       permissionDecision: z.enum(["allow", "deny", "ask"]).optional().catch(undefined),
+      updatedInput: z.record(z.string(), z.unknown()).optional().catch(undefined),
       reason: z.string().optional().catch(undefined),
       decision: z.enum(["approve", "block"]).optional().catch(undefined),
       hookSpecificOutput: z
@@ -155,6 +156,7 @@ export namespace LifecycleHooks {
           permissionDecision: z.enum(["allow", "deny", "ask"]).optional().catch(undefined),
           permissionDecisionReason: z.string().optional().catch(undefined),
           additionalContext: z.string().optional().catch(undefined),
+          updatedInput: z.record(z.string(), z.unknown()).optional().catch(undefined),
         })
         .partial()
         .optional()
@@ -187,9 +189,10 @@ export namespace LifecycleHooks {
    * with its reason and `ask` requests interactive confirmation, which the
    * caller must either route to a permission channel or treat as a block.
    */
-  function decodeClaudeCodeDecision(output: RunResult["outputs"][number]): {
+  export function decodeClaudeCodeDecision(output: RunResult["outputs"][number]): {
     block: boolean
     ask?: boolean
+    updatedInput?: Record<string, unknown>
     reason?: string
   } {
     const stderr = output.stderr.trim()
@@ -206,11 +209,12 @@ export namespace LifecycleHooks {
       return { block: true, reason: reason ?? (stderr || undefined) }
     }
     const decision = permissionDecisionOf(structured)
-    if (decision === undefined || decision === "allow") return { block: false }
+    const updatedInput = structured.updatedInput ?? structured.hookSpecificOutput?.updatedInput
+    if (decision === undefined || decision === "allow") return { block: false, updatedInput }
     if (decision === "deny") {
       return { block: true, reason: reason ?? (stderr || undefined) }
     }
-    return { block: false, ask: true, reason: reason ?? "hook requested user confirmation" }
+    return { block: false, ask: true, updatedInput, reason: reason ?? "hook requested user confirmation" }
   }
 
   function boundFeedback(text: string, limit: number) {
@@ -277,7 +281,7 @@ export namespace LifecycleHooks {
           pack: z.string().optional(),
           exit: z.number().int(),
           durationMs: z.number().nonnegative(),
-          outcome: z.enum(["ok", "failed", "blocked", "ask"]),
+          outcome: z.enum(["ok", "failed", "blocked", "ask", "rewritten"]),
           reason: z.string().optional(),
         })
         .meta({ ref: "HookCompleted" }),
@@ -336,6 +340,8 @@ export namespace LifecycleHooks {
     tool?: string
     args?: unknown
     cwd?: string
+    /** Runtime/config ceiling; false disables collecting rewrites. */
+    allowInputRewrite?: boolean
   }
 
   export type RunResult = {
@@ -354,6 +360,7 @@ export namespace LifecycleHooks {
      * hook order. Undefined when no hook produced feedback.
      */
     feedback?: string
+    rewrite?: { updatedInput: Record<string, unknown>; hooks: string[] }
     outputs: Array<{ command: string; exit: number; stdout: string; stderr: string }>
   }
 
@@ -573,13 +580,13 @@ export namespace LifecycleHooks {
         ...(input.sessionID === undefined ? {} : { sessionID: input.sessionID }),
         event: input.event,
         ...(input.tool === undefined ? {} : { tool: input.tool }),
-        command: hook.command,
+        command: Env.redactForRecord(hook.command),
         source: hookSource(hook),
         ...(hook.pack ? { pack: hook.pack } : {}),
         exit: result.exit,
         durationMs: Math.max(0, Math.round(durationMs)),
         outcome,
-        ...(reason ? { reason: reason.slice(0, MAX_EVENT_REASON_CHARS) } : {}),
+        ...(reason ? { reason: Env.redactForRecord(reason).slice(0, MAX_EVENT_REASON_CHARS) } : {}),
       })
     } catch (error) {
       // Observation only: a publish failure (for example outside an instance)
@@ -721,13 +728,14 @@ export namespace LifecycleHooks {
     let blocked = false
     let blockReason: string | undefined
     let ask: RunResult["ask"]
+    let rewrite: RunResult["rewrite"]
     const feedback: string[] = []
     let feedbackChars = 0
     for (const hook of selected) {
       let result: RunResult["outputs"][number]
       const startedAt = performance.now()
       try {
-        result = await runHook(hook, input)
+        result = await runHook(hook, { ...input, args: rewrite?.updatedInput ?? input.args })
       } catch (error) {
         // A hook that cannot even be spawned (an invalid command string, a
         // missing cwd) must not take the whole gate down: the tool gate
@@ -771,6 +779,19 @@ export namespace LifecycleHooks {
           publishCompleted(hook, input, result, durationMs, "blocked", decoded.reason)
           break
         }
+        let rewritten = false
+        if (input.event === "PreToolUse" && input.allowInputRewrite !== false && decoded.updatedInput !== undefined) {
+          if ((rewrite?.hooks.length ?? 0) >= 3) {
+            log.info("lifecycle hook rewrite limit reached", { event: input.event, tool: input.tool })
+          } else {
+            // Only the executable basename, never shell arguments, enters the audit.
+            const executable = hook.command.trim().match(/^(?:"([^"]+)"|'([^']+)'|([^\s]+))/)
+            const token = executable?.[1] ?? executable?.[2] ?? executable?.[3] ?? "hook"
+            const name = /[=;&|<>$`(){}\r\n]/.test(token) ? "hook" : path.basename(token)
+            rewrite = { updatedInput: decoded.updatedInput, hooks: [...(rewrite?.hooks ?? []), name] }
+            rewritten = true
+          }
+        }
         if (decoded.ask) {
           // Only PreToolUse has an interactive permission channel where the
           // caller can honour `ask`; every other blockable event
@@ -787,13 +808,20 @@ export namespace LifecycleHooks {
           if (result.exit !== 0) {
             log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
           }
-          publishCompleted(hook, input, result, durationMs, "ask", decoded.reason ?? "hook requested user confirmation")
+          publishCompleted(
+            hook,
+            input,
+            result,
+            durationMs,
+            rewritten ? "rewritten" : "ask",
+            decoded.reason ?? "hook requested user confirmation",
+          )
           continue
         }
         if (result.exit !== 0) {
           log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
         }
-        publishCompleted(hook, input, result, durationMs, result.exit === 0 ? "ok" : "failed")
+        publishCompleted(hook, input, result, durationMs, rewritten ? "rewritten" : result.exit === 0 ? "ok" : "failed")
         continue
       }
       if (result.exit !== 0) {
@@ -811,6 +839,7 @@ export namespace LifecycleHooks {
       blocked,
       ...(blockReason === undefined ? {} : { blockReason }),
       ...(blocked || ask === undefined ? {} : { ask }),
+      ...(blocked || rewrite === undefined ? {} : { rewrite }),
       ...(feedback.length === 0 ? {} : { feedback: feedback.join("\n\n") }),
       outputs,
     }
@@ -819,7 +848,14 @@ export namespace LifecycleHooks {
   export async function runForWorkspace(input: RunInput & { packNames?: string[] }): Promise<RunResult> {
     const directory = input.cwd ?? Instance.directory
     const hooks = await resolveHooks({ directory, packNames: input.packNames })
-    return runHooks(hooks, { ...input, cwd: directory })
+    // Only PreToolUse can rewrite input, so only that event consults the config ceiling. Reading config for
+    // observation events would change when configuration is first loaded for callers that never needed it.
+    let allowInputRewrite = input.allowInputRewrite !== false
+    if (allowInputRewrite && input.event === "PreToolUse") {
+      const { Config } = await import("@/config/config")
+      allowInputRewrite = (await Config.get()).hooks?.allow_input_rewrite !== false
+    }
+    return runHooks(hooks, { ...input, cwd: directory, allowInputRewrite })
   }
 
   export function packCatalogMarkdown(): string {

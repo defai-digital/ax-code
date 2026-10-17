@@ -96,3 +96,10 @@ export const TOOL_TITLE_GLYPH_GUTTER = 2
 export function toolTitleText(title: string): string {
   return title.replace(/^# /, "")
 }
+
+/** Rewritten calls must remain visible even when ordinary tool details are folded. */
+export function hasHookRewrite(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object" || !("hookRewrite" in metadata)) return false
+  const record = metadata.hookRewrite
+  return !!record && typeof record === "object" && "hooks" in record && Array.isArray(record.hooks)
+}

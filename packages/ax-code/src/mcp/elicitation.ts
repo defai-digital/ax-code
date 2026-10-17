@@ -304,6 +304,8 @@ export namespace McpElicitation {
    */
   export type CallContext = {
     sessionID: SessionID
+    ruleset?: import("../permission").Permission.Ruleset
+    agent?: string
     signal?: AbortSignal
     tool?: { messageID: MessageID; callID: string }
   }
@@ -383,22 +385,79 @@ export namespace McpElicitation {
     call: CallContext | undefined
     autonomous: boolean
     ask: AskFn
+    /** ADR-252: opens the URL on URL-mode accept. Defaults to a no-op
+     *  in unit tests; production wires the `open` package. */
+    openUrl?: (url: string) => Promise<unknown>
   }): Promise<Decision> {
     if (input.autonomous) return { action: "decline", reason: "autonomous mode never blocks on user input" }
-    if (!isRecord(input.params) || input.params.mode === "url") {
-      return { action: "decline", reason: "only form-mode elicitation is supported" }
+    if (!isRecord(input.params)) {
+      return { action: "decline", reason: "params is missing or malformed" }
     }
+    if (input.params.mode === "url") {
+      return await decideUrl({ params: input.params, call: input.call, ask: input.ask, openUrl: input.openUrl })
+    }
+    if (input.params.mode === "form" || input.params.mode === undefined) {
+      return decideForm({ params: input.params, call: input.call, ask: input.ask })
+    }
+    return { action: "decline", reason: `unsupported elicitation mode: ${String(input.params.mode)}` }
+  }
+
+  // ---------------------------------------------------------------------
+  // URL-mode (ADR-252)
+  // ---------------------------------------------------------------------
+
+  /** Hard caps for URL-mode text fields. Server text is untrusted. */
+  export const MAX_URL_LENGTH = 2_048
+
+  export type UrlPlan = { ok: true; message: string; url: string } | { ok: false; reason: string }
+
+  /**
+   * Validate a URL-mode payload: only `https:` and the loopback `http://`
+   * origin (`localhost` / `127.0.0.1`) are accepted (ADR-252). The
+   * server-supplied `message` is sanitized and length-capped.
+   */
+  export function planUrl(params: unknown): UrlPlan {
+    if (!isRecord(params)) return { ok: false, reason: "params is missing or malformed" }
+    const url = typeof params.url === "string" ? params.url : ""
+    const message = sanitizeText(params.message, MAX_MESSAGE_CHARS) ?? ""
+    if (!url) return { ok: false, reason: "url-mode request is missing the url" }
+    if (url.length > MAX_URL_LENGTH) return { ok: false, reason: "url is too long" }
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      return { ok: false, reason: "url is not a valid URL" }
+    }
+    const loopback = parsed.protocol === "http:" && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
+    if (parsed.protocol !== "https:" && !loopback) {
+      return { ok: false, reason: "url must use https (loopback http is allowed)" }
+    }
+    return { ok: true, message, url: parsed.toString() }
+  }
+
+  async function decideUrl(input: {
+    params: unknown
+    call: CallContext | undefined
+    ask: AskFn
+    openUrl?: (url: string) => Promise<unknown>
+  }): Promise<Decision> {
     if (!input.call) {
       return { action: "decline", reason: "no in-flight session call is available to surface the prompt in" }
     }
-    const plan = planForm(input.params)
+    const plan = planUrl(input.params)
     if (!plan.ok) return { action: "decline", reason: plan.reason }
     let answers: Question.Answer[]
     try {
-      answers = await input.ask(
-        plan.fields.map((field) => field.question),
-        input.call,
-      )
+      const question: Question.Info = {
+        question: `${plan.message ? `${plan.message}\n\n` : ""}Open this URL in your browser?\n${plan.url}`,
+        header: "Open URL",
+        options: [
+          { label: "Open", description: "Open the URL in your default browser" },
+          { label: "Decline", description: "Decline the request without opening" },
+        ],
+        custom: false,
+      }
+      answers = await input.ask([question], input.call)
     } catch (error) {
       if (error instanceof Question.RejectedError) {
         return input.call.signal?.aborted
@@ -407,14 +466,58 @@ export namespace McpElicitation {
       }
       return { action: "decline", reason: `asking failed: ${toErrorMessage(error)}` }
     }
-    const coerced = coerceAnswers(plan.fields, answers)
-    if (!coerced.ok) return { action: "decline", reason: coerced.reason }
-    return { action: "accept", content: coerced.content }
+    const pick = (Array.isArray(answers[0]) ? answers[0][0] : "").trim()
+    if (pick !== "Open") return { action: "decline", reason: "the user declined the URL" }
+    if (input.openUrl) {
+      try {
+        await input.openUrl(plan.url)
+      } catch (error) {
+        return { action: "decline", reason: `failed to open the URL: ${toErrorMessage(error)}` }
+      }
+    }
+    return { action: "accept" }
   }
 
-  /** The client capability advertised on every MCP client: form mode only. */
+  function decideForm(input: {
+    params: unknown
+    call: CallContext | undefined
+    ask: AskFn
+  }): Decision | Promise<Decision> {
+    const call = input.call
+    if (!call) {
+      return { action: "decline", reason: "no in-flight session call is available to surface the prompt in" }
+    }
+    const plan = planForm(input.params)
+    if (!plan.ok) return { action: "decline", reason: plan.reason }
+    return (async () => {
+      let answers: Question.Answer[]
+      try {
+        answers = await input.ask(
+          plan.fields.map((field) => field.question),
+          call,
+        )
+      } catch (error) {
+        if (error instanceof Question.RejectedError) {
+          return call.signal?.aborted
+            ? { action: "cancel", reason: "the tool call was aborted while the prompt was open" }
+            : { action: "decline", reason: "the user dismissed the prompt" }
+        }
+        return { action: "decline", reason: `asking failed: ${toErrorMessage(error)}` }
+      }
+      const coerced = coerceAnswers(plan.fields, answers)
+      if (!coerced.ok) return { action: "decline", reason: coerced.reason }
+      return { action: "accept", content: coerced.content }
+    })()
+  }
+
+  /**
+   * The client capability advertised on every MCP client: form and URL mode
+   * (ADR-204, ADR-252). URL mode is only handled when the runtime wires
+   * an opener; the capability itself is unconditional so a server that
+   * checks it can rely on the answer.
+   */
   export function clientCapabilities(): Pick<ClientCapabilities, "elicitation"> {
-    return { elicitation: { form: {} } }
+    return { elicitation: { form: {}, url: {} } }
   }
 
   /**
@@ -423,7 +526,12 @@ export namespace McpElicitation {
    * session prompt and the autonomous flag resolve against the same project
    * directory for the client's whole lifetime.
    */
-  export function registerHandler(client: Client, serverName: string): void {
+  export function registerHandler(
+    client: Client,
+    serverName: string,
+    options: { openUrl?: (url: string) => Promise<unknown> } = {},
+  ): void {
+    const openUrl = options.openUrl
     client.setRequestHandler(
       "elicitation/create",
       Instance.bind(
@@ -444,6 +552,7 @@ export namespace McpElicitation {
                 tool: call.tool,
                 signal: call.signal,
               }),
+            openUrl,
           })
           const { reason, ...result } = decision
           // Reasons are diagnostic strings built here (field names, counts);

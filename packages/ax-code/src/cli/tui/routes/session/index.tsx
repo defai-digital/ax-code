@@ -99,6 +99,8 @@ import {
   subagentPanelRows,
 } from "./last-input-view-model"
 import { RevertNotice } from "./revert-notice"
+import { TurnChangedFilesRow } from "./turn-changed-files-row"
+import { turnRowForAssistant } from "./turn-changed-files-view-model"
 import { WorkModeNotice } from "@tui/component/work-mode-notice"
 import { IdleRecap } from "./idle-recap"
 import { revertState, hiddenMessageIDs, visibleParts } from "./revert"
@@ -1766,6 +1768,16 @@ export function Session() {
                             message={message as AssistantMessageInfo}
                             parts={sync.data.part[message.id] ?? []}
                           />
+                          <Show when={tuiConfig.timeline?.changed_files !== false}>
+                            <Show when={turnRowForAssistant(messages(), message.id)}>
+                              {(row) => (
+                                <TurnChangedFilesRow
+                                  row={row()}
+                                  onOpen={() => dialog.replace(() => <DialogDiffViewer sessionID={route.sessionID} />)}
+                                />
+                              )}
+                            </Show>
+                          </Show>
                         </Show>
                       </Match>
                     </Switch>

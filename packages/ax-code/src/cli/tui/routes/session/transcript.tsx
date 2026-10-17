@@ -39,7 +39,8 @@ import {
   userMessageMetadataDensity,
 } from "./view-model"
 import { SessionCodeRenderer } from "./render-adapter"
-import { coalescedToolLabel, hidesCompletedToolWhenDetailsOff } from "./tool-rendering"
+import { coalescedToolLabel, hasHookRewrite, hidesCompletedToolWhenDetailsOff } from "./tool-rendering"
+import { hookRewriteSummary } from "./permission-command-view-model"
 import { toolRendererComponent } from "./tool-renderers"
 import { followUpLabel, followUpStatus, type DurableFollowUp } from "../../component/prompt/durable-follow-up"
 import { useSessionRouteContext as use } from "./context"
@@ -720,6 +721,7 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   const shouldHide = createMemo(() => {
     if (ctx.showDetails()) return false
     if (props.part.state.status !== "completed") return false
+    if (hasHookRewrite(props.part.state.metadata)) return false
     if (!hidesCompletedToolWhenDetailsOff(props.part.tool)) return false
     return true
   })
@@ -759,6 +761,12 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
           </box>
         }
       >
+        <Show when={hasHookRewrite(toolprops.metadata)}>
+          <text paddingLeft={3} fg={theme.textMuted}>
+            {uiText("ui.toolRewrittenByHook")}
+            {": " + hookRewriteSummary(toolprops.metadata)}
+          </text>
+        </Show>
         <Dynamic component={toolRendererComponent(props.part.tool)} {...toolprops} />
       </ErrorBoundary>
     </Show>

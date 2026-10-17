@@ -94,6 +94,50 @@ export namespace Isolation {
     }
   }
 
+  /** Auto-approval must never infer safety from a failed realpath of a symlink. */
+  export function resolveAutoAcceptPath(filepath: string, projectRoot: string): string | undefined {
+    // Preserve the lexical path until every ancestor has been inspected.
+    const resolved = path.resolve(filepath)
+    const root = path.resolve(projectRoot)
+    if (!Filesystem.contains(root, resolved)) return undefined
+    try {
+      const canonicalRoot = fs.realpathSync(root)
+      let canonical: string | undefined
+      let current = resolved
+      while (Filesystem.contains(root, current)) {
+        let stat: ReturnType<typeof fs.lstatSync> | undefined
+        try {
+          stat = fs.lstatSync(current)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") return undefined
+          // A missing child may be beneath a dangling link. Check every ancestor.
+        }
+        if (stat?.isSymbolicLink()) {
+          const destination = path.resolve(path.dirname(current), fs.readlinkSync(current))
+          // The destination itself must exist; a safe ancestor is insufficient.
+          if (!Filesystem.contains(canonicalRoot, fs.realpathSync(destination))) return undefined
+        }
+        if (stat && canonical === undefined) {
+          canonical = path.join(fs.realpathSync(current), path.relative(current, resolved))
+        }
+        if (current === root) break
+        current = path.dirname(current)
+      }
+      if (!canonical || !Filesystem.contains(canonicalRoot, canonical)) return undefined
+      // An existing target must be a regular file or directory: reading a FIFO, socket or device can block,
+      // consume another process's stream or have side effects.
+      try {
+        const type = fs.statSync(canonical)
+        if (!type.isFile() && !type.isDirectory()) return undefined
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") return undefined
+      }
+      return canonical
+    } catch {
+      return undefined
+    }
+  }
+
   function securityPaths(filepath: string) {
     return uniqueStrings([resolvePath(filepath), resolveClosestExistingPath(filepath)])
   }

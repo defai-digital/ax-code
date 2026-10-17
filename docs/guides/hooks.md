@@ -159,7 +159,7 @@ entries in run order (pack hooks first, then project hooks), and every built-in 
 `AX_CODE_TRUST_PROJECT_CONFIG` is not set, a valid file is reported but none of its hooks are listed as active.
 
 Each executed hook entry also publishes a `hook.completed` event with the event name, tool, command, source, pack,
-exit code, duration and an outcome of `ok`, `failed`, `blocked` or `ask`. A block or ask carries the same bounded
+exit code, duration and an outcome of `ok`, `failed`, `blocked`, `ask` or `rewritten`. A block or ask carries the same bounded
 reason the model sees. Hook stdout, stderr and tool arguments are never included.
 
 ## Relationship to isolation
@@ -171,3 +171,43 @@ Hooks do **not** replace the sandbox. Use:
 3. **Hooks** for policy side-effects and hard blocks like force-push
 
 See [Sandbox Mode](sandbox.md) and [SECURITY.md](../../SECURITY.md).
+
+## Rewriting tool input
+
+A trusted `PreToolUse` hook with `"protocol": "claude-code"` may return an exit-0
+JSON object with `updatedInput`, either at the top level or inside
+`hookSpecificOutput`. The top-level object takes precedence. Other types are
+ignored without discarding a sibling deny or ask decision.
+
+```json
+{ "hookSpecificOutput": { "updatedInput": { "command": "pwd", "description": "Show the working directory" } } }
+```
+
+Each accepted object replaces the complete arguments; it is not a partial merge.
+Hooks run in order and subsequent hooks see the latest accepted arguments. At
+most three rewrites are accepted per call; additional rewrites are ignored and
+logged. Any deny/block discards the rewrites and stops execution. Observation
+events, legacy hooks, and unsuccessful hooks cannot rewrite input. An `ask`
+still requires interactive hook confirmation, even when it also rewrites input.
+
+Native and MCP tools validate the final replacement before execution. Validation
+failure names the hook and fails the call without falling back to the original
+arguments. Permissions, WebMCP bindings, and isolation operate on the replacement.
+Composite `browser_workflow` plans and `tool_search` discovery arguments do not
+accept rewrites; individual MCP calls within a workflow use the ordinary tool
+boundary. Calls that may be rewritten use conservative concurrency classification.
+
+Project hooks still require the existing project-config trust opt-in. Set
+`hooks.allow_input_rewrite` to `false` to disable rewriting. A managed config can
+force this off; user/project settings and later managed files cannot re-enable it.
+The default permits rewrites from hooks already admitted by the trust policy.
+
+The tool part stores `hookRewrite: { hooks, before, after }`. `hooks` contains
+command basenames only; `before` and `after` are redacted JSON text, each capped at
+4 KiB with a truncation marker. The tool card shows "rewritten by hook" and stays
+visible with tool details hidden. A hook that supplies an accepted replacement
+publishes `hook.completed` with outcome `rewritten`; a later deny may still stop
+the call. Events never include argument values.
+
+See [Project auto-accept](project-auto-accept.md) for the separate opt-in approval mode.
+Hook confirmations remain interactive even when that mode is enabled.

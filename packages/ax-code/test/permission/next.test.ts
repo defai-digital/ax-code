@@ -920,7 +920,8 @@ test("ask - returns pending promise when action is ask", async () => {
       })
       // Promise should be pending, not resolved
       expect(promise).toBeInstanceOf(Promise)
-      // Don't await - just verify it returns a promise
+      // Admission awaits config and policy; wait for registration before replying.
+      expect(await waitForPending(1)).toHaveLength(1)
       await rejectAll()
       await promise.catch(() => {})
     },
@@ -945,7 +946,7 @@ test("ask - adds request to pending list", async () => {
         ruleset: [],
       })
 
-      const list = await Permission.list()
+      const list = await waitForPending(1)
       expect(list).toHaveLength(1)
       expect(list[0]).toMatchObject({
         sessionID: SessionID.make("session_test"),
@@ -988,7 +989,7 @@ test("ask - publishes asked event", async () => {
         ruleset: [],
       })
 
-      expect(await Permission.list()).toHaveLength(1)
+      expect(await waitForPending(1)).toHaveLength(1)
       expect(seen).toBeDefined()
       expect(seen).toMatchObject({
         sessionID: SessionID.make("session_test"),

@@ -124,6 +124,9 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "context_recover",
   "read_recipe",
   "tool_search",
+  // MCP sampling (ADR-240): the server asks the runtime to spend the user's
+  // model budget on its behalf. Per-call approval, never autonomous.
+  "mcp_sampling",
 ])
 
 export function classify(permission: string): RiskClass {

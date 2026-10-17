@@ -10,6 +10,39 @@ import { PERMISSION_REQUEST_ID_PARAM, withPermissionRequestID } from "./route-pa
 
 export const PermissionRoutes = lazy(() =>
   new Hono()
+    .get(
+      "/auto-accept",
+      describeRoute({
+        summary: "Read project auto-accept state",
+        operationId: "permission.autoAcceptStatus",
+        responses: {
+          200: {
+            description: "Current state",
+            content: { "application/json": { schema: resolver(Permission.AutoAcceptState) } },
+          },
+        },
+      }),
+      async (c) => c.json(await Permission.autoAcceptStatus()),
+    )
+    .put(
+      "/auto-accept",
+      describeRoute({
+        summary: "Set project auto-accept for the running instance",
+        operationId: "permission.setAutoAccept",
+        responses: {
+          200: {
+            description: "Effective state",
+            content: { "application/json": { schema: resolver(Permission.AutoAcceptState) } },
+          },
+        },
+      }),
+      validator("json", z.object({ enabled: z.boolean() }).strict()),
+      async (c) => {
+        const unauthorized = ServerRuntimeAuth.require(c)
+        if (unauthorized) return unauthorized
+        return c.json(await Permission.setAutoAccept(c.req.valid("json").enabled))
+      },
+    )
     .post(
       "/:requestID/webmcp-allowlist",
       describeRoute({

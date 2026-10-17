@@ -197,6 +197,10 @@ if (skillIssues.length > 0) {
 }
 console.log(`Loaded ${builtinSkills.length} built-in skills`)
 
+// Release notes (ADR-242): embed the repository CHANGELOG.md so `ax-code
+// release-notes` and TUI /release-notes work in the compiled runtime.
+const changelog = await readText(path.join(dir, "..", "..", "CHANGELOG.md")).catch(() => "")
+
 await fs.promises.rm(outRoot, { recursive: true, force: true })
 await fs.promises.mkdir(outBin, { recursive: true })
 await fs.promises.mkdir(outLib, { recursive: true })
@@ -248,6 +252,7 @@ const result = await esbuild.build({
     AX_CODE_CHANNEL: JSON.stringify(buildChannel),
     AX_CODE_MIGRATIONS: JSON.stringify(migrations),
     AX_CODE_BUILTIN_SKILLS: JSON.stringify(builtinSkills),
+    AX_CODE_CHANGELOG: JSON.stringify(changelog),
     AX_CODE_LIBC: '""',
   },
   banner: {

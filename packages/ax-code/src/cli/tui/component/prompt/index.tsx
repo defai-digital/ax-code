@@ -1,3 +1,4 @@
+import { useProjectAutoAccept } from "./auto-accept"
 import { FooterStatusRow } from "./footer-status-row"
 import { useLanguage } from "../../context/language"
 import { usePromptRef } from "@tui/context/prompt"
@@ -130,6 +131,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   const history = usePromptHistory()
   const stash = usePromptStash()
   const command = useCommandDialog()
+  const autoAccept = useProjectAutoAccept(() => props.sessionID)
   const renderer = useRenderer()
   const { theme, syntax } = useTheme()
   const kv = useKV()
@@ -1506,6 +1508,11 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
               <text fg={theme.textMuted}>{line()}</text>
             </box>
           )}
+        </Show>
+        <Show when={autoAccept.enabled()}>
+          <text fg={theme.warning} onMouseUp={() => void autoAccept.toggle()}>
+            {uiText("ui.autoAcceptOn")}
+          </text>
         </Show>
         <box
           flexDirection={footerLayout().stacked ? "column" : "row"}

@@ -14,6 +14,8 @@ import {
   showWorktreeListDialog,
 } from "../dialog-worktree"
 import type { CommandOption } from "../dialog-command"
+import { DialogAlert } from "../../ui/dialog-alert"
+import { loadChangelogText, resolveReleaseNotes } from "@/util/changelog"
 import { endDisplayOffset, expandPromptTextParts, relocatePromptPartsAfterEditor } from "./prompt-helpers"
 import type { PromptInfo } from "./history"
 import type { StashEntry } from "./stash-util"
@@ -259,6 +261,35 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
           }
         }
         void run()
+      },
+    },
+    {
+      // Release notes (ADR-242): /release-notes [version] shows the CHANGELOG
+      // section for the running version (or the given one) in a read-only
+      // dialog. Uses the same pure parser as `ax-code release-notes`.
+      title: uiText("ui.releaseNotes"),
+      value: "session.releaseNotes",
+      category: uiText("common.session"),
+      slash: { name: "release-notes", arguments: true },
+      onSelect: (dialog) => {
+        toast.show({ message: uiText("ui.releaseNotesUsageHint"), variant: "info", duration: 6000 })
+        dialog.clear()
+      },
+      onSlashArguments: (args, dialog) => {
+        const show = () => {
+          void (async () => {
+            const changelog = await loadChangelogText()
+            const outcome = resolveReleaseNotes({ changelog, version: args.trim() || undefined })
+            const message =
+              outcome.status === "ok"
+                ? outcome.text
+                : outcome.status === "unavailable"
+                  ? uiText("ui.releaseNotesUnavailable")
+                  : uiText("ui.releaseNotesNotFound", { version: outcome.requested })
+            await DialogAlert.show(dialog, uiText("ui.releaseNotes"), message)
+          })()
+        }
+        show()
       },
     },
     {

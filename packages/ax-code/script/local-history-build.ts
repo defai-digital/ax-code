@@ -71,6 +71,9 @@ const builtinSkills = await Promise.all(
       return { location, content: await readText(location) }
     }),
 )
+// Release notes (ADR-242): embed the repository CHANGELOG.md in the bundle.
+const changelog = await readText(path.join(dir, "..", "..", "CHANGELOG.md")).catch(() => "")
+
 const skillIssues = await SkillLint.check(skillsDir)
 if (skillIssues.length > 0) {
   console.error("Built-in skill validation failed:")
@@ -127,6 +130,7 @@ await esbuild.build({
     AX_CODE_CHANNEL: JSON.stringify(buildChannel),
     AX_CODE_MIGRATIONS: JSON.stringify(migrations),
     AX_CODE_BUILTIN_SKILLS: JSON.stringify(builtinSkills),
+    AX_CODE_CHANGELOG: JSON.stringify(changelog),
     AX_CODE_LIBC: '""',
   },
   banner: {

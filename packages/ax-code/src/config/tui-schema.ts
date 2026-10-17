@@ -87,6 +87,17 @@ export const TuiOptions = z.object({
     .optional()
     .describe("Idle recap settings"),
   notifications: TuiNotifications.optional().describe("Terminal notification settings"),
+  timeline: z
+    .object({
+      changed_files: z
+        .boolean()
+        .optional()
+        .describe(
+          "Show a compact row of the files each completed assistant turn changed, with added and removed line counts (default true)",
+        ),
+    })
+    .optional()
+    .describe("Timeline row settings"),
   status_line: z
     .object({
       command: z
