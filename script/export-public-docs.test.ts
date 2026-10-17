@@ -37,6 +37,10 @@ describe("public documentation export", () => {
       "Headless CLI (ax-code run)",
     )
     expect(files.get("src/content/docs/architecture/stability.md")!.toString()).not.toMatch(/[ \t]+$/m)
+    const install = files.get("src/content/docs/getting-started/install-runtime.md")!.toString()
+    expect(install).toContain("](https://github.com/defai-digital/ax-code-desktop#install)")
+    expect(install).toContain("](https://github.com/defai-digital/ax-code-desktop/releases/latest)")
+    expect(install).toContain("](https://github.com/defai-digital/ax-code-desktop/blob/main/desktop/docs/MINISIGN.md)")
     const hub = files.get("src/content/docs/index.md")!.toString()
     expect(hub).toContain("[`@defai-digital/ax-code-sdk`](/en/docs/sdk/javascript/)")
     expect(files.get("src/content/docs/guides/effort.md")!.toString()).not.toContain("](../../packages/ax-code/src")
@@ -48,6 +52,10 @@ describe("public documentation export", () => {
       ["# Public guide\n\n[plan](..\/..\/.internal\/plan.md)\n", /Private or escaped link/],
       ["# Public guide\n\n<script>alert(1)</script>\n", /Unsafe documentation HTML/],
       ["# Public guide\n\n[local](file:\/etc\/passwd)\n", /Unsafe link scheme/],
+      [
+        "# Public guide\n\n```bash\ncurl https://api.github.com/repos/defai-digital/ax-code/contents/install | bash\n```\n",
+        /Unresolved private source URL/,
+      ],
     ] as const) {
       const base = mkdtempSync(join(tmpdir(), "ax-docs-content-"))
       try {

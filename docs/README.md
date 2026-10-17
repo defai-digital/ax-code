@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-10-09
+Last reviewed: 2026-10-17
 Owner: AX Code maintainers
 
 AX Code is a coding-agent runtime for reviewable, reversible work: every session is recorded as a
@@ -10,8 +10,9 @@ structured event log with file snapshots, candidate implementations can be verif
 checks, and nothing merges automatically. [Why AX Code](why-ax-code.md) explains what that optimizes for, who it is
 for, and what it deliberately does not claim.
 
-The root [README](../README.md) is the shortest path to install and launch AX Code. Use this hub when you need to
-configure a workflow, understand a runtime boundary, or integrate AX Code with another system.
+Start with the [installation guide](getting-started/install-runtime.md): the Desktop app is recommended for a graphical workspace; choose the independent CLI/TUI for terminal, SSH, or CI work. Both use signed public installers and need no source checkout.
+
+Use this hub to configure a workflow, understand a runtime boundary, or integrate AX Code with another system.
 
 Internal process records (PRDs, ADRs, specifications, roadmaps, implementation plans, competitive reviews, and audit
 working files) live under `.internal/`, not in this public tree — see "Documentation boundaries" below. The public

@@ -2,10 +2,10 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-16
+Last reviewed: 2026-10-17
 Owner: ax-code runtime
 
-If the root [README](../../README.md) is the fastest way to install AX Code, this page is the fastest way to understand it.
+Use this page to choose your workflow, install AX Code, and review your first change.
 
 ## Editions and availability
 
@@ -18,14 +18,13 @@ execution evidence remain core capabilities.
 Trust and business workflows through AutomatosX. Using Standard at work does not itself
 require a Business license. See [Standard and Business](editions.md) for details.
 
-Signed installers and runtime archives are available anonymously from
-`download.ax-code.com`. Read the [installation guide](install-runtime.md) and
-[upgrade and recovery guide](upgrade.md). Public technical documentation is hosted
-at [ax-code.app/en/docs/](https://ax-code.app/en/docs/), independently of source access.
-Already installed? Open a terminal in your project, run
-`ax-code`, then use `/connect` inside the TUI to choose a provider. Begin with a question
-about the project, request a small change, and review the diff and project checks before
-committing. Use `ax-code doctor` if the installed runtime needs diagnosis.
+Start with the **Desktop app** for a graphical project workspace. It includes a pinned runtime; a separate CLI or Node.js installation is not required. Add a project folder, configure a model provider in the app, and start a session.
+
+Choose **CLI-only** for the terminal UI, SSH, or scripts. After installing, open a terminal in your project and run `ax-code`. Use `/connect` to choose a provider, then ask a question about the project. Use `ax-code doctor` to diagnose that CLI installation.
+
+Follow the [installation guide](install-runtime.md) for both README-based install methods, supported platforms, and signature verification. Already installed? Read [upgrade and recovery](upgrade.md). Public installers do not require private GitHub credentials.
+
+For either interface, request one small change, run your project checks, and review the diff before committing. Desktop and the standalone CLI have independent update channels.
 
 ## What AX Code Is
 
@@ -69,14 +68,8 @@ The rest of the documentation maps onto those layers.
 
 ### I want to try it quickly
 
-- Start with the [root README](../../README.md) for install and first launch.
-- Supported install paths use the compiled runtime:
-  - Bash release installer for macOS Apple Silicon and Linux: `curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash`
-  - Homebrew alternative for macOS CLI:
-    `brew tap defai-digital/tap && brew trust defai-digital/tap && brew install defai-digital/tap/ax-code`
-  - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code/install.ps1 | iex"`
-- The Bash installer is not the canonical Windows setup path.
-- npm packages are no longer supported install or upgrade channels. See [Installation and Runtime Channels](install-runtime.md) for platform policy, runtime labels, and the local launcher matrix.
+- Install the [Desktop app](install-runtime.md#desktop-installation) for the recommended graphical workspace.
+- Install [CLI-only](install-runtime.md#recommended-path) when you want the terminal UI, SSH, or CI. Choose the native installer for your operating system; npm is not a supported installation channel.
 - Use `/connect` or `ax-code providers login` to set a model. See [Supported Providers and Models](../providers/supported-providers.md) for Cloud API providers, CLI providers, AX Engine, and model IDs. For a no-cost evaluation path, use the [Free-Tier API Quickstart](../providers/free-tier-apis.md).
 - Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
 - If you want tighter safety boundaries, enable [Sandbox Mode](../guides/sandbox.md) before broader edits.

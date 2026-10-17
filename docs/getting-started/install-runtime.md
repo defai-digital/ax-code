@@ -2,10 +2,10 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-09
+Last reviewed: 2026-10-17
 Owner: ax-code runtime
 
-The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and public upgrade behavior.
+Choose the Desktop app for a graphical workspace, or CLI-only for terminal, SSH, and CI workflows. The commands below follow the Desktop and CLI READMEs. Later sections cover CLI runtime labels from `ax-code doctor`, manual verification, upgrades, and contributor launchers.
 
 ## Public availability
 
@@ -34,9 +34,43 @@ see a Draft for the new tag; it is not public Latest.
 
 For existing installations, follow [Upgrade and recovery](upgrade.md).
 
-## Recommended Path
+## Desktop installation
 
-Use a supported packaged installer unless you are developing from a checkout. The release installer is the primary CLI path on macOS and Linux; use the native PowerShell installer on Windows.
+The **Desktop app is the recommended setup** for a graphical workspace. It includes a pinned AX Code runtime; you do not need to install the CLI or Node.js separately. Close AX Code before running the installer. macOS and Ubuntu may ask for an administrator password.
+
+### Desktop on macOS
+
+Use macOS 13 or newer on Apple Silicon. Open AX Code from Applications after installation.
+
+```bash
+curl -fsSL https://download.automatosx.com/ax-code-desktop/install | bash
+```
+
+### Desktop on Windows
+
+Use Windows AMD64 (x64) and PowerShell 5.1 or newer. Confirm the installer publisher is **DEFAI Private Limited**, then open AX Code from the Start Menu.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code-desktop/install.ps1 | iex"
+```
+
+### Desktop on Ubuntu
+
+Use Ubuntu Desktop 24.04 or newer on amd64 or arm64. Open AX Code from the app menu after installation.
+
+```bash
+curl -fsSL https://download.automatosx.com/ax-code-desktop/install | bash
+```
+
+Add a project folder, configure a model provider in the app, and start or select a session. Review the diff and project checks before committing. See the [Desktop README](https://github.com/defai-digital/ax-code-desktop#install) for manual packages and [Minisign verification](https://github.com/defai-digital/ax-code-desktop/blob/main/desktop/docs/MINISIGN.md).
+
+Desktop and the standalone CLI update independently. Updating the CLI does not replace the app's bundled runtime. See [upgrade and recovery](upgrade.md#desktop-app).
+
+<span id="recommended-path"></span>
+
+## CLI-only installation
+
+The following commands install **CLI-only**, including the terminal UI. This is an independent option for terminal, SSH, or CI work; it is not a prerequisite for Desktop. The standalone installer supplies a verified Node runtime. Use Bash on macOS or Ubuntu and native PowerShell on Windows.
 
 ### macOS (Apple Silicon)
 
@@ -56,7 +90,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.aut
 curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
-If `download.automatosx.com` does not resolve ("host not found"), a resolver that looked the name up before it existed is still caching the failure, usually for up to 30 minutes. The original host serves identical signed files, so use it meanwhile:
+If `download.automatosx.com` does not resolve, check your network and DNS settings. For CLI-only installation, the original host serves the same signed files:
 
 ```bash
 curl -fsSL https://download.ax-code.com/install | bash
@@ -149,9 +183,7 @@ ax-code doctor
 
 Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on macOS, Windows, and Linux (glibc).
 
-These installers distribute the CLI/TUI runtime. Desktop release ownership is in
-AX Coder, and new Desktop releases are currently frozen. This guide does not
-provide a Desktop installation or upgrade channel.
+The CLI commands above install the standalone CLI/TUI. For the app and its bundled runtime, use the separate [Desktop installation](#desktop-installation).
 
 ## Channel Matrix
 
@@ -178,14 +210,14 @@ provide a Desktop installation or upgrade channel.
 
 ## Platform Policy
 
-- macOS: use the bash release installer as the primary documented CLI path. It installs under `~/.ax-code`, bootstraps pinned Minisign when needed, verifies the release archive, and does not require Homebrew. The darwin-arm64 archive includes a self-contained AX Engine sidecar for local inference. Contributor builds use `pnpm run setup:cli`.
+- macOS: use the bash release installer as the primary documented CLI path. It installs under `~/.ax-code`, bootstraps pinned Minisign when needed, verifies the release archive, and does not require Homebrew. Local inference is optional; install AX Engine separately when needed. Contributor builds use `pnpm run setup:cli`.
 - The supported Homebrew path explicitly taps and trusts `defai-digital/tap` before using fully qualified install
   commands. Whole-tap trust includes all current and future formulae, casks, and external commands in the shared tap;
   use the bash release installer when that trust scope is not acceptable.
 - Linux CLI: use the bash installer for Ubuntu Desktop/Server **24.04 LTS** and newer on **amd64** and **arm64** (glibc). Release builds produce `ax-code-linux-x64.tar.gz` and `ax-code-linux-arm64.tar.gz` on Ubuntu 24.04 runners so the glibc baseline stays compatible with 24.04+. Musl (Alpine) is not supported by current release archives.
 - macOS CLI archives: release builds publish `darwin-arm64` only (Apple Silicon). Intel macOS is not a supported install target for current CLI/Desktop packages.
 - Windows CLI: use the native PowerShell installer on AMD64 (x64) hosts. Starting with v7.24.6, Windows ARM64 is not supported; the installer rejects ARM hosts before downloading or changing an existing installation. Historical ARM64 release archives remain available at their original version URLs. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. It verifies the downloaded ZIP with the pinned public key before extraction and fails closed unless `AX_CODE_SKIP_MINISIGN_VERIFY=1` is set intentionally. If `minisign` is missing, the installer downloads the pinned minisign 0.12 archive from `download.ax-code.com` into `%LOCALAPPDATA%\ax-code\tools\minisign` and checks the extracted executable before caching it. A `minisign` binary already on PATH is used as-is. Use `-Uninstall` to remove the user-local install and PATH entry.
-- Windows Desktop: use the signed Electron installer from GitHub Releases, named `AX-Code-<version>-win-x64.exe` or `AX-Code-<version>-win-arm64.exe`. The expected Authenticode publisher is `DEFAI Private Limited`. Do not describe `install.ps1` as a Desktop installer. Silent install: `.\AX-Code-<version>-win-x64.exe /S` (NSIS).
+- Windows Desktop: AMD64 (x64) only. Use the Desktop PowerShell command above, which downloads the signed app installer. The CLI PowerShell command installs the standalone CLI/TUI. For manual installation, use `AX-Code-<version>-win-x64.exe` from [Desktop releases](https://github.com/defai-digital/ax-code-desktop/releases/latest). The expected Authenticode publisher is `DEFAI Private Limited`. Silent install: `.\AX-Code-<version>-win-x64.exe /S` (NSIS).
 - Winget: package manifests are generated with `pnpm exec tsx tools/winget/generate-manifests.ts --version <ver>` and submitted to `microsoft/winget-pkgs` (see `tools/winget/README.md`). Until published upstream, GitHub Releases remain the Windows install source of truth.
 - npm: not a supported install or upgrade channel.
 
@@ -197,7 +229,7 @@ One-line remote execution is a convenience path, not the only path. Keep an insp
 
 ```powershell
 # Pin version in CI/images
-$env:AX_CODE_VERSION = "7.9.4"
+$env:AX_CODE_VERSION = "<release>"
 irm https://download.ax-code.com/releases/download/v$env:AX_CODE_VERSION/install.ps1 -OutFile install.ps1
 # Optional: verify install.ps1.minisig first (see SECURITY.md)
 .\install.ps1 -Version $env:AX_CODE_VERSION -NoModifyPath
@@ -220,7 +252,7 @@ brew trust defai-digital/tap
 brew install defai-digital/tap/ax-code
 ```
 
-For MDM-packaged DMG installs, use the notarized `AX-Code-*-mac-arm64.dmg` from GitHub Releases and verify the detached `.minisig` when policy requires supply-chain checks.
+For managed Desktop installs, use the notarized `AX-Code-*-mac-arm64.dmg` from [Desktop releases](https://github.com/defai-digital/ax-code-desktop/releases/latest) and verify the detached `.minisig` before installation.
 
 ### Winget availability
 

@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-08-21
+Last reviewed: 2026-10-17
 Owner: AX Code release engineering
 
 [`ax-minisign.pub`](ax-minisign.pub) is the canonical public key for AX Code release signatures. Installers, release
@@ -50,7 +50,7 @@ If a published stable release must be withdrawn, follow the
 ## Release notes
 
 CLI/TUI releases are documented here and in the repository [changelog](../../CHANGELOG.md). Desktop application
-changes are owned by the separate AX Coder project.
+changes and signed packages are published separately in [AX Code Desktop releases](https://github.com/defai-digital/ax-code-desktop/releases).
 
 - [AX Code v7.7.6](notes-v7.7.6.md)
 - [AX Code v7.2.0](notes-v7.2.0.md)

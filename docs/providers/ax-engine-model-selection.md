@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-11
+Last reviewed: 2026-10-17
 Owner: ax-code runtime
 
 AX Code offers only the models in the [AX Code collection](https://huggingface.co/collections/AutomatosX/ax-code) through **AX Engine (Local)** on eligible Apple Silicon Macs. Tiel Coder is the default. The shipped list is `packages/ax-code/src/provider/ax-engine/collection.json`; a model added to the collection appears in a release after it is listed there and given a pinned definition.
@@ -27,7 +27,7 @@ ax-code providers ax-engine models --refresh --json
 
 Refreshing reads Hugging Face metadata without downloading weights or starting a model. The bundled metadata works offline and supplements the selected repository if it is missing from an older cache. Present revisions are not silently replaced with a different bundled revision. Selection still requires valid source metadata; the repository restriction does not establish native capability.
 
-`GET /provider/ax-engine/models` returns the running CLI's catalog, including each model's exact ID, repository, quantization, local state, memory/disk estimates, and verification status. An external GUI uses this runtime API. If it shows an older list, check the CLI it launches and its version. AX Coder development can select a source runtime with `AX_CODE_BINARY` or `settings.axCodeBinary`.
+`GET /provider/ax-engine/models` returns the running CLI's catalog, including each model's exact ID, repository, quantization, local state, memory/disk estimates, and verification status. An external GUI uses this runtime API. If it shows an older list, check the CLI it launches and its version. AX Code desktop development can select a source runtime with `AX_CODE_BINARY` or `settings.axCodeBinary`.
 
 ## Prepare the selected model
 
