@@ -369,7 +369,9 @@ export async function extractOfficeText(filePath: string): Promise<OfficeExtract
   let truncated = false
   let output = body
   if (Buffer.byteLength(output, "utf8") > MAX_OUTPUT_BYTES) {
-    output = output.slice(0, MAX_OUTPUT_BYTES)
+    // Slice UTF-8 bytes, not UTF-16 code units, so multibyte text stays
+    // within the advertised cap (a code-unit slice keeps ~3x the cap for CJK).
+    output = Buffer.from(output, "utf8").subarray(0, MAX_OUTPUT_BYTES).toString("utf8")
     truncated = true
   }
 

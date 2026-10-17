@@ -398,6 +398,31 @@ describe("extractOfficeText - safety", () => {
     expect(Buffer.byteLength(body, "utf8")).toBeLessThanOrEqual(200 * 1024)
   })
 
+  test("caps extraction output to 200 KB for multibyte text", async () => {
+    await using tmp = await tmpdir()
+    const filePath = path.join(tmp.path, "huge-cjk.docx")
+    // 70k CJK characters: 70_000 UTF-16 code units (below the cap) but
+    // 210_000 UTF-8 bytes (above it). A code-unit slice would keep everything
+    // while still reporting truncated.
+    const para = "字".repeat(175)
+    const xml = `<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>${Array.from({ length: 400 }, () => `<w:p><w:r><w:t>${para}</w:t></w:r></w:p>`).join("")}</w:body>
+</w:document>`
+    const buf = buildZip([{ name: "word/document.xml", data: Buffer.from(xml) }])
+    await writeFile(filePath, buf)
+    const result = await extractOfficeText(filePath)
+    expect(result.truncated).toBe(true)
+    const body = result.text
+      .replace(/^<extracted_text[^>]*>\n(?:\[truncated to 200 KB\]\n)?/, "")
+      .replace(/\n<\/extracted_text>$/, "")
+    // A mid-character byte cut decodes as one U+FFFD (3 bytes), so allow the
+    // cap plus that single replacement character.
+    expect(Buffer.byteLength(body, "utf8")).toBeLessThanOrEqual(200 * 1024 + 3)
+    // The content really was shortened: 70k source characters cannot fit whole.
+    expect(body.length).toBeLessThan(70_000)
+  })
+
   test("encrypted entries are rejected with a short reason", async () => {
     await using tmp = await tmpdir()
     const filePath = path.join(tmp.path, "encrypted.docx")
