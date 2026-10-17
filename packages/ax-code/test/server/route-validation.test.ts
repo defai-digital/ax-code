@@ -963,6 +963,19 @@ describe("server route validation", () => {
     })
   })
 
+  test("mcp oauth start returns 404 for an unknown server", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const res = await Server.Default().request("/mcp/no-such-server/auth", {
+          method: "POST",
+          headers: { "content-type": "application/json", ...ServerRuntimeAuth.headers() },
+        })
+        expect(res.status).toBe(404)
+      },
+    })
+  })
+
   test("mcp add rejects local configs without an executable", async () => {
     await Instance.provide({
       directory: root,

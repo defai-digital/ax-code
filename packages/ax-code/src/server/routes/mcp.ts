@@ -29,6 +29,10 @@ function withMcpName(handler: (name: string, c: any) => unknown) {
 
 async function oauthNotSupportedResponse(c: any, name: string) {
   if (await MCP.supportsOAuth(name)) return undefined
+  // supportsOAuth is false for a missing server too; the routes declare 404
+  // for that case, so distinguish it from a configured server without OAuth.
+  const entry = await Config.mcpEntry(name)
+  if (!entry?.config) return notFound(c, { message: `MCP server not found: ${name}`, resource: "mcpServer" })
   return invalidRequest(c, {
     message: "MCP server does not support OAuth",
     details: { resource: "mcpServer" },
