@@ -35745,6 +35745,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
           }
         },
         "x-codeSamples": [
@@ -47714,14 +47724,23 @@
             ]
           },
           "review": {
+            "$ref": "#/components/schemas/MCPTrustReview"
+          }
+        },
+        "required": [
+          "status",
+          "fingerprint",
+          "source"
+        ]
+      },
+      "MCPTrustReview": {
+        "oneOf": [
+          {
             "type": "object",
             "properties": {
               "transport": {
                 "type": "string",
-                "enum": [
-                  "local",
-                  "remote"
-                ]
+                "const": "local"
               },
               "command": {
                 "type": "array",
@@ -47735,8 +47754,64 @@
                   "type": "string"
                 }
               },
+              "webmcp": {
+                "type": "object",
+                "properties": {
+                  "allowedOrigins": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "executablePath": {
+                    "type": "string"
+                  },
+                  "persistentProfile": {
+                    "type": "boolean"
+                  },
+                  "vendored": {
+                    "type": "boolean"
+                  },
+                  "headless": {
+                    "type": "boolean"
+                  },
+                  "read": {
+                    "type": "boolean"
+                  },
+                  "interact": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "allowedOrigins"
+                ]
+              },
+              "redacted": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "transport"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "transport": {
+                "type": "string",
+                "const": "remote"
+              },
               "url": {
                 "type": "string"
+              },
+              "hasCredentials": {
+                "type": "boolean"
+              },
+              "queryKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               },
               "headerKeys": {
                 "type": "array",
@@ -47749,11 +47824,6 @@
               "transport"
             ]
           }
-        },
-        "required": [
-          "status",
-          "fingerprint",
-          "source"
         ]
       },
       "McpElicitationResolved": {
@@ -47763,10 +47833,12 @@
             "type": "string"
           },
           "sessionID": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^ses_.*"
           },
           "callID": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 200
           },
           "mode": {
             "type": "string",
@@ -47806,13 +47878,16 @@
             "maximum": 9007199254740991
           },
           "fieldNames": {
+            "maxItems": 8,
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 64
             }
           },
           "urlHost": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 255
           }
         },
         "required": [

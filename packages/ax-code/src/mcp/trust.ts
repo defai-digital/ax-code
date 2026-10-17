@@ -165,7 +165,7 @@ export namespace McpTrust {
     return { trusted: true, fingerprint: fp, source }
   }
 
-  export async function untrust(name: string, config: Config.Mcp): Promise<Decision> {
+  export async function untrust(name: string, config: Config.Mcp): Promise<Decision & { removed: boolean }> {
     const entry = await Config.mcpEntry(name)
     const source = entry?.source ?? Config.trustedMcpSource("runtime")
     const fp = fingerprint(name, config)
@@ -173,8 +173,13 @@ export namespace McpTrust {
     using _lock = await Lock.write(filepath)
     using _fileLock = await FileLock.acquire(filepath)
     const store = await read()
-    delete store.records[key({ name, scope: currentScope, fingerprint: fp })]
-    await write(store)
-    return { trusted: false, fingerprint: fp, source }
+    const recordKey = key({ name, scope: currentScope, fingerprint: fp })
+    // ADR-255: report whether a record existed, so callers announce only a real revocation.
+    const removed = recordKey in store.records
+    if (removed) {
+      delete store.records[recordKey]
+      await write(store)
+    }
+    return { trusted: false, fingerprint: fp, source, removed }
   }
 }

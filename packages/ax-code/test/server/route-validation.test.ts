@@ -1110,6 +1110,22 @@ describe("server route validation", () => {
           expect(trusted.status).toBe(200)
           expect(await trusted.json()).toEqual({ local: { status: "connected" } })
           expect(trustSpy).toHaveBeenLastCalledWith("local", "abc")
+
+          const untrustSpy = vi.spyOn(MCP, "untrustReviewed")
+          try {
+            const noToken = await Server.Default().request("/mcp/local/untrust", { method: "POST" })
+            expect(noToken.status).toBe(403)
+            untrustSpy.mockResolvedValueOnce({ ok: false, reason: "not_found" })
+            expect((await Server.Default().request("/mcp/local/untrust", { method: "POST", headers })).status).toBe(404)
+            untrustSpy.mockResolvedValueOnce({ ok: false, reason: "trusted_by_source" })
+            const bySource = await Server.Default().request("/mcp/local/untrust", { method: "POST", headers })
+            expect(bySource.status).toBe(409)
+            expect(await bySource.json()).toMatchObject({ details: { reason: "trusted_by_source" } })
+            untrustSpy.mockResolvedValueOnce({ ok: true, status: { local: { status: "disconnected" } } as never })
+            expect((await Server.Default().request("/mcp/local/untrust", { method: "POST", headers })).status).toBe(200)
+          } finally {
+            untrustSpy.mockRestore()
+          }
         } finally {
           trustSpy.mockRestore()
         }

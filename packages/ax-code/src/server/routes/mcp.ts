@@ -432,16 +432,22 @@ export const McpRoutes = lazy(() =>
               },
             },
           },
-          ...errors(404),
+          ...errors(404, 409),
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
       withMcpName(async (name, c) => {
-        const entry = await Config.mcpEntry(name)
-        if (!entry?.config || !MCP.isConfigured(entry.config)) {
+        const outcome = await MCP.untrustReviewed(name)
+        if (outcome.ok) return c.json(outcome.status)
+        if (outcome.reason === "not_found") {
           return notFound(c, { message: `MCP server not found: ${name}`, resource: "mcpServer" })
         }
-        return c.json(await MCP.untrust(name))
+        return appErrorResponse(c, {
+          name: "ConflictError",
+          message: "This MCP server is trusted by its configuration source; there is no trust to revoke",
+          status: 409,
+          details: { reason: outcome.reason },
+        })
       }),
     )
     .post(

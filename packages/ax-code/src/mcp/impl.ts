@@ -251,6 +251,41 @@ export namespace MCP {
 
   type MCPClient = Client
 
+  /**
+   * ADR-255: what trusting a needs_trust server would run. Argument values that
+   * look like credentials, URL userinfo and query values, and environment and
+   * header values are never included; `redacted` says something was hidden.
+   */
+  export const TrustReview = z
+    .discriminatedUnion("transport", [
+      z.object({
+        transport: z.literal("local"),
+        command: z.string().array().optional(),
+        environmentKeys: z.string().array().optional(),
+        webmcp: z
+          .object({
+            allowedOrigins: z.string().array(),
+            executablePath: z.string().optional(),
+            persistentProfile: z.boolean().optional(),
+            vendored: z.boolean().optional(),
+            headless: z.boolean().optional(),
+            read: z.boolean().optional(),
+            interact: z.boolean().optional(),
+          })
+          .optional(),
+        redacted: z.boolean().optional(),
+      }),
+      z.object({
+        transport: z.literal("remote"),
+        url: z.string().optional(),
+        hasCredentials: z.boolean().optional(),
+        queryKeys: z.string().array().optional(),
+        headerKeys: z.string().array().optional(),
+      }),
+    ])
+    .meta({ ref: "MCPTrustReview" })
+  export type TrustReview = z.infer<typeof TrustReview>
+
   export const Status = z
     .discriminatedUnion("status", [
       z
@@ -303,15 +338,7 @@ export namespace MCP {
           // ADR-255: what trusting this exact fingerprint would run, built by the
           // runtime so a client never parses config. Values of environment
           // variables and headers are never included.
-          review: z
-            .object({
-              transport: z.enum(["local", "remote"]),
-              command: z.string().array().optional(),
-              environmentKeys: z.string().array().optional(),
-              url: z.string().optional(),
-              headerKeys: z.string().array().optional(),
-            })
-            .optional(),
+          review: TrustReview.optional(),
         })
         .meta({
           ref: "MCPStatusNeedsTrust",
@@ -702,25 +729,134 @@ export namespace MCP {
     })
   }
 
-  /** ADR-255: the review a client shows before trusting; argv and keys only, never env or header values. */
-  export function trustReview(mcp: Config.Mcp) {
+  const SENSITIVE_ARG_NAME =
+    /token|secret|passw|pwd|api[-_]?key|apikey|auth|credential|bearer|cookie|session|private[-_]?key|dsn/i
+  const REDACTED = "[redacted]"
+
+  function looksLikeCredential(value: string): boolean {
+    return WebMcpProfile.CREDENTIAL_VALUE.some((pattern) => pattern.test(value)) || WebMcpProfile.JWT_SHAPE.test(value)
+  }
+
+  /** A URL-shaped argument without userinfo or query values; null when the argument is not a URL. */
+  function redactUrlArgument(value: string): { text: string; changed: boolean } | null {
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return null
+    try {
+      const parsed = new URL(value)
+      const hadSecrets = Boolean(parsed.username || parsed.password || parsed.search || parsed.hash)
+      const keys = [...new Set([...parsed.searchParams.keys()])]
+      const query = keys.length > 0 ? `?${keys.map((key) => `${key}=${REDACTED}`).join("&")}` : ""
+      const auth = parsed.username || parsed.password ? `${REDACTED}@` : ""
+      return { text: `${parsed.protocol}//${auth}${parsed.host}${parsed.pathname}${query}`, changed: hadSecrets }
+    } catch {
+      return { text: REDACTED, changed: true }
+    }
+  }
+
+  /**
+   * Argv for review: flag values whose name looks secret, credential-shaped
+   * values and URL userinfo or query values are replaced. The fingerprint
+   * still binds the real argv, so trust covers exactly what will run.
+   */
+  export function redactArgv(argv: readonly string[]): { argv: string[]; redacted: boolean } {
+    const out: string[] = []
+    let redacted = false
+    let hideNext = false
+    for (const arg of argv) {
+      if (hideNext) {
+        hideNext = false
+        out.push(REDACTED)
+        redacted = true
+        continue
+      }
+      const eq = arg.indexOf("=")
+      if (arg.startsWith("-") && eq > 0) {
+        const name = arg.slice(0, eq)
+        const value = arg.slice(eq + 1)
+        if (SENSITIVE_ARG_NAME.test(name) || looksLikeCredential(value)) {
+          out.push(`${name}=${REDACTED}`)
+          redacted = true
+          continue
+        }
+        const url = redactUrlArgument(value)
+        if (url) {
+          out.push(`${name}=${url.text}`)
+          redacted ||= url.changed
+          continue
+        }
+        out.push(arg)
+        continue
+      }
+      if (arg.startsWith("-") && SENSITIVE_ARG_NAME.test(arg)) {
+        out.push(arg)
+        hideNext = true
+        continue
+      }
+      if (looksLikeCredential(arg)) {
+        out.push(REDACTED)
+        redacted = true
+        continue
+      }
+      const url = redactUrlArgument(arg)
+      if (url) {
+        out.push(url.text)
+        redacted ||= url.changed
+        continue
+      }
+      out.push(arg)
+    }
+    return { argv: out, redacted }
+  }
+
+  /** ADR-255: the review a client shows before trusting. */
+  export function trustReview(mcp: Config.Mcp): TrustReview {
     if (mcp.type === "remote") {
-      let url = mcp.url
       try {
         const parsed = new URL(mcp.url)
-        url = `${parsed.origin}${parsed.pathname}`
+        const queryKeys = [...new Set([...parsed.searchParams.keys()])].sort()
+        const headerKeys = Object.keys(mcp.headers ?? {}).sort()
+        return {
+          transport: "remote",
+          url: `${parsed.origin}${parsed.pathname}`,
+          ...(parsed.username || parsed.password ? { hasCredentials: true } : {}),
+          ...(queryKeys.length > 0 ? { queryKeys } : {}),
+          ...(headerKeys.length > 0 ? { headerKeys } : {}),
+        }
       } catch {
-        // The config schema already rejects malformed URLs; keep the raw value if parsing ever fails.
+        // Never fall back to the raw value: it may carry credentials.
+        return { transport: "remote" }
       }
-      const headerKeys = Object.keys(mcp.headers ?? {}).sort()
-      return { transport: "remote" as const, url, ...(headerKeys.length > 0 ? { headerKeys } : {}) }
     }
     const environmentKeys = Object.keys(mcp.environment ?? {}).sort()
-    return {
-      transport: "local" as const,
-      command: [...mcp.command],
-      ...(environmentKeys.length > 0 ? { environmentKeys } : {}),
+    const env = environmentKeys.length > 0 ? { environmentKeys } : {}
+    if (mcp.webmcp) {
+      // ADR-173: a WebMCP entry's stored command is never executed; the argv is
+      // regenerated from the profile, so the review shows the profile and that argv.
+      const profile = mcp.webmcp
+      let argv: string[] | undefined
+      try {
+        argv = WebMcpProfile.command(profile, profile)
+      } catch {
+        argv = undefined
+      }
+      const shown = argv ? redactArgv(argv) : undefined
+      return {
+        transport: "local",
+        ...(shown ? { command: shown.argv } : {}),
+        ...env,
+        webmcp: {
+          allowedOrigins: [...(profile.allowedOrigins ?? [])],
+          ...(profile.executablePath ? { executablePath: profile.executablePath } : {}),
+          ...(profile.persistentProfile !== undefined ? { persistentProfile: profile.persistentProfile } : {}),
+          ...(profile.vendored !== undefined ? { vendored: profile.vendored } : {}),
+          ...(profile.headless !== undefined ? { headless: profile.headless } : {}),
+          ...(profile.read !== undefined ? { read: profile.read } : {}),
+          ...(profile.interact !== undefined ? { interact: profile.interact } : {}),
+        },
+        ...(shown?.redacted ? { redacted: true } : {}),
+      }
     }
+    const shown = redactArgv(mcp.command)
+    return { transport: "local", command: shown.argv, ...env, ...(shown.redacted ? { redacted: true } : {}) }
   }
 
   function needsTrustStatus(decision: McpTrust.Decision, mcp: Config.Mcp, error?: string): Status {
@@ -1835,24 +1971,58 @@ export namespace MCP {
     | { ok: false; reason: "fingerprint_mismatch"; fingerprint: string }
 
   /**
-   * ADR-255: trust exactly the config the user reviewed. The fingerprint the
-   * client showed must still be the current one; a changed config, a server
-   * that is already trusted or trusted by its source, or an unknown name is
-   * refused and nothing is recorded.
+   * ADR-255: trust exactly the config the user reviewed. Under the server's
+   * connect lock, the server must still report needs_trust with the reviewed
+   * fingerprint and the recomputed decision must agree; otherwise nothing is
+   * recorded. A disabled server never reports needs_trust, so it is refused.
+   * A connect failure after trust is reported through the returned status.
    */
   export async function trustReviewed(name: string, fingerprint: string): Promise<TrustReviewedOutcome> {
+    const outcome = await withConnectLock(
+      name,
+      "MCP trust failed",
+      async (s): Promise<Exclude<TrustReviewedOutcome, { ok: true }> | { ok: true }> => {
+        const entry = await Config.mcpEntry(name)
+        const mcp = entry?.config
+        if (!entry || !mcp || !isConfigured(mcp)) return { ok: false, reason: "not_found" }
+        const shown = s.status[name]
+        const current = await trustDecision(name, mcp)
+        if (shown?.status !== "needs_trust" || current.trusted || current.source.trustedByDefault) {
+          return { ok: false, reason: "not_pending" }
+        }
+        if (current.fingerprint !== fingerprint || shown.fingerprint !== fingerprint) {
+          return { ok: false, reason: "fingerprint_mismatch", fingerprint: current.fingerprint }
+        }
+        const decision = await McpTrust.trust(name, mcp, entry.source)
+        publishTrustChanged(name, decision, "trust")
+        return { ok: true }
+      },
+    )
+    if (!outcome.ok) return outcome
+    try {
+      await connect(name)
+    } catch (error) {
+      // The trust decision stands; the status map shows why the server did not start.
+      log.warn("MCP connect after trust failed", { name, error: toErrorMessage(error) })
+    }
+    return { ok: true, status: await status() }
+  }
+
+  export type UntrustReviewedOutcome =
+    | { ok: true; status: Record<string, Status> }
+    | { ok: false; reason: "not_found" }
+    | { ok: false; reason: "trusted_by_source" }
+
+  /**
+   * ADR-255: revoke trust for the current fingerprint. A server trusted by its
+   * config source (global or managed) has nothing to revoke and is refused.
+   */
+  export async function untrustReviewed(name: string): Promise<UntrustReviewedOutcome> {
     const entry = await Config.mcpEntry(name)
     const mcp = entry?.config
-    if (!mcp || !isConfigured(mcp)) return { ok: false, reason: "not_found" }
-    const current = await trustDecision(name, mcp)
-    if (current.trusted || current.source.trustedByDefault) return { ok: false, reason: "not_pending" }
-    if (current.fingerprint !== fingerprint) {
-      return { ok: false, reason: "fingerprint_mismatch", fingerprint: current.fingerprint }
-    }
-    const decision = await McpTrust.trust(name, mcp, entry.source)
-    publishTrustChanged(name, decision, "trust")
-    await connect(name)
-    return { ok: true, status: await status() }
+    if (!entry || !mcp || !isConfigured(mcp)) return { ok: false, reason: "not_found" }
+    if (entry.source.trustedByDefault) return { ok: false, reason: "trusted_by_source" }
+    return { ok: true, status: await untrust(name) }
   }
 
   export async function untrust(name: string): Promise<Record<string, Status>> {
@@ -1861,9 +2031,9 @@ export namespace MCP {
     if (!mcp || !isConfigured(mcp)) {
       throw new Error(`MCP server not found: ${name}`)
     }
-    const decision = await McpTrust.untrust(name, mcp)
-    publishTrustChanged(name, decision, "untrust")
     await withConnectLock(name, "MCP untrust failed", async (s) => {
+      const decision = await McpTrust.untrust(name, mcp)
+      if (decision.removed) publishTrustChanged(name, decision, "untrust")
       invalidateTools(s)
       const client = s.clients[name]
       if (client) {

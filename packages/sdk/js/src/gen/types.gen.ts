@@ -3200,14 +3200,33 @@ export type McpStatusNeedsTrust = {
     path?: string
     url?: string
   }
-  review?: {
-    transport: "local" | "remote"
-    command?: Array<string>
-    environmentKeys?: Array<string>
-    url?: string
-    headerKeys?: Array<string>
-  }
+  review?: McpTrustReview
 }
+
+/** AX Code API schema `McpTrustReview` (auto-generated from the OpenAPI contract). */
+export type McpTrustReview =
+  | {
+      transport: "local"
+      command?: Array<string>
+      environmentKeys?: Array<string>
+      webmcp?: {
+        allowedOrigins: Array<string>
+        executablePath?: string
+        persistentProfile?: boolean
+        vendored?: boolean
+        headless?: boolean
+        read?: boolean
+        interact?: boolean
+      }
+      redacted?: boolean
+    }
+  | {
+      transport: "remote"
+      url?: string
+      hasCredentials?: boolean
+      queryKeys?: Array<string>
+      headerKeys?: Array<string>
+    }
 
 /** AX Code API schema `McpElicitationResolved` (auto-generated from the OpenAPI contract). */
 export type McpElicitationResolved = {
@@ -17225,6 +17244,10 @@ export type McpUntrustErrors = {
    * Not found
    */
   404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 /** Error response payload for `POST /mcp/{name}/untrust` — Remove trust for a project-configured MCP server's current configuration and disconnect it. */

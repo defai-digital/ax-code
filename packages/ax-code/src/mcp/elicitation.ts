@@ -402,14 +402,14 @@ export namespace McpElicitation {
       z
         .object({
           server: z.string(),
-          sessionID: z.string().optional(),
-          callID: z.string().optional(),
+          sessionID: SessionID.zod.optional(),
+          callID: z.string().max(200).optional(),
           mode: z.enum(["form", "url", "unknown"]),
           action: z.enum(["accept", "decline", "cancel"]),
           category: Category,
           fieldCount: z.number().int().nonnegative(),
-          fieldNames: z.string().array(),
-          urlHost: z.string().optional(),
+          fieldNames: z.string().max(MAX_EVENT_NAME_CHARS).array().max(MAX_EVENT_FIELD_NAMES),
+          urlHost: z.string().max(255).optional(),
         })
         .meta({ ref: "McpElicitationResolved" }),
     ),
@@ -426,7 +426,8 @@ export namespace McpElicitation {
     if (params.mode === "url") {
       let urlHost: string | undefined
       try {
-        urlHost = typeof params.url === "string" ? new URL(params.url).host || undefined : undefined
+        const host = typeof params.url === "string" ? new URL(params.url).host : ""
+        urlHost = host && host.length <= 255 ? host : undefined
       } catch {
         urlHost = undefined
       }
@@ -438,7 +439,10 @@ export namespace McpElicitation {
     return {
       mode: "form",
       fieldCount: names.length,
-      fieldNames: names.slice(0, MAX_EVENT_FIELD_NAMES).map((name) => name.slice(0, MAX_EVENT_NAME_CHARS)),
+      // Truncate by code point so a cut never leaves a lone surrogate.
+      fieldNames: names
+        .slice(0, MAX_EVENT_FIELD_NAMES)
+        .map((name) => [...name].slice(0, MAX_EVENT_NAME_CHARS).join("")),
     }
   }
 

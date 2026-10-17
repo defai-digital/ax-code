@@ -627,3 +627,58 @@ test("summarizeRequest keeps names, counts and the URL host only", () => {
   })
   expect(McpElicitation.summarizeRequest(null)).toEqual({ mode: "unknown", fieldCount: 0, fieldNames: [] })
 })
+
+test("the remaining categories come from dismissal, abort, bad answers and a failed open", async () => {
+  const call = { sessionID: SessionID.make("ses_category_more") }
+  const form = {
+    mode: "form",
+    requestedSchema: { type: "object", properties: { n: { type: "integer" } }, required: ["n"] },
+  }
+  const dismissed = vi.fn(async () => {
+    throw new Question.RejectedError()
+  })
+  expect((await McpElicitation.decide({ params: form, call, autonomous: false, ask: dismissed })).category).toBe(
+    "user_declined",
+  )
+  const controller = new AbortController()
+  controller.abort()
+  expect(
+    (
+      await McpElicitation.decide({
+        params: form,
+        call: { ...call, signal: controller.signal },
+        autonomous: false,
+        ask: dismissed,
+      })
+    ).category,
+  ).toBe("aborted")
+  const nonsense = vi.fn(async () => [["not a number"]])
+  expect((await McpElicitation.decide({ params: form, call, autonomous: false, ask: nonsense })).category).toBe(
+    "invalid_answer",
+  )
+  const openPick = vi.fn(async () => [["Open"]])
+  const failingOpen = vi.fn(async () => {
+    throw new Error("no browser")
+  })
+  expect(
+    (
+      await McpElicitation.decide({
+        params: { mode: "url", url: "https://example.com/auth" },
+        call,
+        autonomous: false,
+        ask: openPick,
+        openUrl: failingOpen,
+      })
+    ).category,
+  ).toBe("open_failed")
+})
+
+test("summarizeRequest truncates field names by code point", () => {
+  const name = `${"a".repeat(63)}\u{1F600}tail`
+  const summary = McpElicitation.summarizeRequest({
+    mode: "form",
+    requestedSchema: { type: "object", properties: { [name]: { type: "string" } } },
+  })
+  expect([...summary.fieldNames[0]!]).toHaveLength(64)
+  expect(summary.fieldNames[0]!.endsWith("\u{1F600}")).toBe(true)
+})
