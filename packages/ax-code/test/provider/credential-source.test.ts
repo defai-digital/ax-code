@@ -73,17 +73,25 @@ test("gcloud_adc writes project + location to the options bag", async () => {
   expect(process.env["GOOGLE_APPLICATION_CREDENTIALS"]).toBeUndefined()
 })
 
-test("azure_cli is a no-op (reference is stored but SDK not wired)", async () => {
+test("azure_cli installs a placeholder key and a bearer-token fetch wrapper", async () => {
   captureEnv()
   const all = authWith([
     ["azure-openai", { type: "credential_source", source: { kind: "azure_cli", tenant: "t", subscription: "s" } }],
   ])
-  const options: Record<string, unknown> = {}
+  const seen: Array<Headers> = []
+  const options: Record<string, unknown> = {
+    fetch: async (_input: unknown, init?: RequestInit) => {
+      seen.push(new Headers(init?.headers))
+      return new Response("{}")
+    },
+  }
   await Provider.resolveCredentialSource({ providerID: "azure-openai" }, options, {
     readAuth: async () => all,
   })
-  // Nothing is set anywhere.
-  expect(options).toEqual({})
+  expect(options["apiKey"]).toBe("azure-cli-managed")
+  expect(typeof options["fetch"]).toBe("function")
+  // The wrapper is not invoked here: it would call the real `az`. Request-time behavior is covered in azure-token.test.ts.
+  expect(seen).toEqual([])
   expect(process.env["AWS_PROFILE"]).toBeUndefined()
 })
 

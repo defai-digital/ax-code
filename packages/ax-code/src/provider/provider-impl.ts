@@ -241,9 +241,9 @@ export namespace Provider {
   //   - gcloud_adc (Vertex): passes project + location to the factory and
   //     leaves GOOGLE_APPLICATION_CREDENTIALS to the environment (the
   //     standard ADC path).
-  //   - azure_cli: not wired (the AI SDK does not accept a credential
-  //     provider in the same shape; the reference is still surfaced by
-  //     the doctor row).
+  //   - azure_cli: a placeholder API key plus a fetch wrapper that sends a
+  //     bearer token from `az account get-access-token` on each request
+  //     (see azure-token.ts); the token is cached in memory only.
   // The function is async only because the auth store read is async; the
   // actual mutation is synchronous.
   async function applyCredentialSource(
@@ -295,13 +295,17 @@ export namespace Provider {
         return
       }
       if (source.kind === "azure_cli") {
-        // No SDK passthrough today. The reference is still surfaced by the
-        // doctor row; the user must install an SDK that supports
-        // DefaultAzureCredential (e.g. @azure/identity) and wire it via a
-        // custom provider.
-        log.info("azure_cli credential source stored but not wired in this revision", {
-          providerID: model.providerID,
+        // The Azure SDK only takes an API key. Supply a placeholder so it constructs, and replace the
+        // api-key header with a short-lived bearer token from `az` on each request.
+        const { AzureToken } = await import("./azure-token")
+        const tokens = AzureToken.create({
+          tenant: typeof source.tenant === "string" ? source.tenant : undefined,
+          subscription: typeof source.subscription === "string" ? source.subscription : undefined,
         })
+        const base = typeof options["fetch"] === "function" ? (options["fetch"] as typeof fetch) : fetch
+        options["apiKey"] = AzureToken.PLACEHOLDER_KEY
+        options["fetch"] = AzureToken.wrapFetch(base, tokens)
+        log.info("resolved azure_cli credential source", { providerID: model.providerID })
         return
       }
     } catch (error) {
@@ -1244,9 +1248,7 @@ export namespace Provider {
         // ADR-246: resolve a `credential_source` reference for this provider, if
         // one is stored in auth.json. We never read the secret — we only set
         // the reference shape the SDK / CLI expects (env vars for Bedrock,
-        // factory options for Vertex). Azure is intentionally a no-op here
-        // (the AI SDK does not accept a credential provider; the reference is
-        // still surfaced by `ax-code doctor credential-sources`).
+        // factory options for Vertex, a bearer-token fetch wrapper for Azure).
         await applyCredentialSource(model, options)
 
         const bundledFn = BUNDLED_PROVIDERS[model.api.npm]

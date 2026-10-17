@@ -77,11 +77,8 @@ export namespace CredentialSource {
   export const SUPPORTED_NPM_KINDS: Readonly<Record<string, ReadonlyArray<Source["kind"]>>> = {
     "@ai-sdk/amazon-bedrock": ["aws_profile"],
     "@ai-sdk/google-vertex": ["gcloud_adc"],
-    // The @ai-sdk/azure SDK does not accept a credential provider in the same
-    // shape as Bedrock / Vertex. We still store the reference so the doctor
-    // row can verify `az` is logged in, but the SDK call is not implemented
-    // in this revision — see the final report.
-    "@ai-sdk/azure": [],
+    // The Azure SDK only takes an API key, so request-time bearer tokens come from `az` (azure-token.ts).
+    "@ai-sdk/azure": ["azure_cli"],
   }
 
   export function supportedKindsFor(npm: string | undefined): ReadonlyArray<Source["kind"]> {
