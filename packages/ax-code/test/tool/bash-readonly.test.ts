@@ -375,10 +375,11 @@ describe("bash tool plan-agent enforcement (ADR-208)", () => {
       fn: async () => {
         const bash = await BashTool.init()
         const result = await bash.execute(
-          { command: "echo hi > out.txt && sed -i '' 's/a/b/' out.txt", description: "Build agent write" },
+          { command: "echo hi > out.txt && sed -i.bak 's/hi/bye/' out.txt", description: "Build agent write" },
           ctx,
         )
-        expect(result.metadata.exit).toBe(0)
+        expect(result.metadata.exit, result.output).toBe(0)
+        expect(await fs.readFile(path.join(tmp.path, "out.txt"), "utf8")).toBe("bye\n")
       },
     })
   })
