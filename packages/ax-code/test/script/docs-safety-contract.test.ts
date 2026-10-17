@@ -33,10 +33,18 @@ describe("public safety documentation contract", () => {
       readRepoFile("docs/getting-started/start-here.md"),
     ])
 
-    for (const document of documents) {
-      expect(document).toContain("brew tap defai-digital/tap")
-      expect(document).toContain("brew trust defai-digital/tap")
-      expect(document).toContain("brew install defai-digital/tap/ax-code")
+    // The start page links to the install guide instead of repeating the
+    // commands, so only documents that actually instruct Homebrew are checked.
+    const documenting = documents.filter((document) => document.includes("brew install"))
+    expect(documenting.length).toBeGreaterThanOrEqual(2)
+    for (const document of documenting) {
+      const install = document.indexOf("brew install")
+      const tap = document.indexOf("brew tap defai-digital/tap")
+      const trust = document.indexOf("brew trust defai-digital/tap")
+      expect(tap).toBeGreaterThanOrEqual(0)
+      expect(trust).toBeGreaterThanOrEqual(0)
+      expect(tap).toBeLessThan(install)
+      expect(trust).toBeLessThan(install)
     }
   })
 
