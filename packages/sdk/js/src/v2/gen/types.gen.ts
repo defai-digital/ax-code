@@ -205,6 +205,7 @@ export type Auth =
       key: string
       token: string
     }
+  | CredentialSource
 
 /** AX Code API schema `AutonomousLimitExceededError` (auto-generated from the OpenAPI contract). */
 export type AutonomousLimitExceededError = {
@@ -663,6 +664,22 @@ export type Config = {
          */
         pacing_grace_minutes?: number
       }
+  code_mode?: {
+    /**
+     * Opt in to the bounded Code Mode execute tool (default false)
+     */
+    enabled?: boolean
+    max_duration_ms?: number
+    max_tool_calls?: number
+    max_steps?: number
+    max_result_bytes?: number
+    max_ast_depth?: number
+    max_call_depth?: number
+    max_collection_size?: number
+    max_string_bytes?: number
+    max_source_bytes?: number
+    max_heap_units?: number
+  }
   hooks?: {
     /**
      * Allow trusted PreToolUse hooks to rewrite tool input
@@ -1165,6 +1182,15 @@ export type ContextOverflowError = {
   data: {
     message: string
     responseBody?: string
+  }
+}
+
+/** AX Code API schema `CredentialSource` (auto-generated from the OpenAPI contract). */
+export type CredentialSource = {
+  type: "credential_source"
+  source: {
+    kind: string
+    [key: string]: unknown
   }
 }
 
@@ -3608,6 +3634,19 @@ export type ProviderConfig = {
      * Tool surface: "coding" focuses on coding, delegation and verification; "full" exposes every enabled tool (cloud default). AX Engine defaults to the smaller "core" profile.
      */
     toolProfile?: "core" | "coding" | "full"
+    /**
+     * Per-provider compatibility settings (ADR-247).
+     */
+    compatibility?: {
+      /**
+       * Anthropic cache_control placement: "auto" uses the default heuristic, "breakpoints" forces breakpoints, "none" disables cache_control entirely. Default: "auto".
+       */
+      cache_format?: "auto" | "breakpoints" | "none"
+      /**
+       * Request body encoding: "json" sends a plain JSON body, "gzip" gzips the JSON body and adds content-encoding: gzip. Default: "json".
+       */
+      body_encoding?: "json" | "gzip"
+    }
     [key: string]: unknown
   }
   models?: {

@@ -38905,6 +38905,9 @@
               "key",
               "token"
             ]
+          },
+          {
+            "$ref": "#/components/schemas/CredentialSource"
           }
         ]
       },
@@ -39953,6 +39956,65 @@
               }
             ]
           },
+          "code_mode": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "Opt in to the bounded Code Mode execute tool (default false)",
+                "type": "boolean"
+              },
+              "max_duration_ms": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 30000
+              },
+              "max_tool_calls": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 200
+              },
+              "max_steps": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 1000000
+              },
+              "max_result_bytes": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 1048576
+              },
+              "max_ast_depth": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              },
+              "max_call_depth": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 64
+              },
+              "max_collection_size": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 100000
+              },
+              "max_string_bytes": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 1048576
+              },
+              "max_source_bytes": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 1048576
+              },
+              "max_heap_units": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 4000000
+              }
+            }
+          },
           "hooks": {
             "type": "object",
             "properties": {
@@ -40687,6 +40749,31 @@
         "required": [
           "name",
           "data"
+        ]
+      },
+      "CredentialSource": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "credential_source"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "type",
+          "source"
         ]
       },
       "DesktopWebMcpBoundRequest": {
@@ -48727,6 +48814,29 @@
                   "coding",
                   "full"
                 ]
+              },
+              "compatibility": {
+                "description": "Per-provider compatibility settings (ADR-247).",
+                "type": "object",
+                "properties": {
+                  "cache_format": {
+                    "description": "Anthropic cache_control placement: \"auto\" uses the default heuristic, \"breakpoints\" forces breakpoints, \"none\" disables cache_control entirely. Default: \"auto\".",
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "breakpoints",
+                      "none"
+                    ]
+                  },
+                  "body_encoding": {
+                    "description": "Request body encoding: \"json\" sends a plain JSON body, \"gzip\" gzips the JSON body and adds content-encoding: gzip. Default: \"json\".",
+                    "type": "string",
+                    "enum": [
+                      "json",
+                      "gzip"
+                    ]
+                  }
+                }
               }
             },
             "additionalProperties": {}
