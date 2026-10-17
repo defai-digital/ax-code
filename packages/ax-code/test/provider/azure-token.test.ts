@@ -125,3 +125,82 @@ test("a token failure fails the request without calling the network", async () =
   await expect(wrapped("https://example.invalid/", {})).rejects.toThrow("az login")
   expect(called).toBe(false)
 })
+
+test("a response without an expiry stays cached past the refresh margin", async () => {
+  let now = 0
+  let calls = 0
+  const source = AzureToken.create(
+    {},
+    {
+      now: () => now,
+      exec: async () => {
+        calls++
+        return { code: 0, stdout: JSON.stringify({ accessToken: "fallback" }) }
+      },
+    },
+  )
+  expect(await source.get()).toBe("fallback")
+  now += 60_000
+  expect(await source.get()).toBe("fallback")
+  expect(calls).toBe(1)
+})
+
+test("accepts a string epoch in expires_on", async () => {
+  let now = 0
+  let calls = 0
+  const source = AzureToken.create(
+    {},
+    {
+      now: () => now,
+      exec: async () => {
+        calls++
+        return { code: 0, stdout: JSON.stringify({ accessToken: "string-epoch", expires_on: "7200" }) }
+      },
+    },
+  )
+  expect(await source.get()).toBe("string-epoch")
+  now = 3_600_000
+  expect(await source.get()).toBe("string-epoch")
+  expect(calls).toBe(1)
+})
+
+test("one caller's abort does not fail another caller sharing the lookup", async () => {
+  const controller = new AbortController()
+  let release: (() => void) | undefined
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const source = AzureToken.create(
+    {},
+    {
+      now: () => 0,
+      exec: async () => {
+        await gate
+        return reply("shared", 3_600_000)
+      },
+    },
+  )
+  const aborted = source.get(controller.signal)
+  const abortedResult = aborted.then(
+    () => undefined,
+    (error: Error) => error,
+  )
+  const surviving = source.get()
+  controller.abort()
+  release?.()
+  expect((await abortedResult)?.message).toMatch(/abort/i)
+  await expect(surviving).resolves.toBe("shared")
+})
+
+test("wrapFetch forwards a Request signal to the token source", async () => {
+  const controller = new AbortController()
+  let received: AbortSignal | undefined
+  const wrapped = AzureToken.wrapFetch(async () => new Response("{}"), {
+    get: async (signal) => {
+      received = signal
+      return "token"
+    },
+  })
+  await wrapped(new Request("https://example.invalid/", { signal: controller.signal }))
+  expect(received?.aborted).toBe(false)
+  controller.abort()
+  expect(received?.aborted).toBe(true)
+})

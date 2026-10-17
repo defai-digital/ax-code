@@ -14,7 +14,9 @@ export namespace AzureToken {
   /** Not a secret: it only lets the SDK construct, and is stripped before the request leaves. */
   export const PLACEHOLDER_KEY = "azure-cli-managed"
   const REFRESH_MARGIN_MS = 5 * 60 * 1000
-  const FALLBACK_TTL_MS = 5 * 60 * 1000
+  // Must exceed the refresh margin, otherwise a token without a parsable expiry
+  // is refetched on every request.
+  const FALLBACK_TTL_MS = 10 * 60 * 1000
   const TIMEOUT_MS = 20_000
   // Tenant and subscription come from a stored (possibly imported) reference and become argv
   // entries, so anything that could be read as an option is refused.
@@ -50,12 +52,17 @@ export namespace AzureToken {
     const body = parsed.value as Record<string, unknown>
     const token = body["accessToken"]
     if (typeof token !== "string" || token.length === 0) return undefined
-    const epoch = body["expires_on"]
+    const rawEpoch = body["expires_on"]
+    const epoch = typeof rawEpoch === "string" && rawEpoch.trim() !== "" ? Number(rawEpoch) : rawEpoch
     const expiresOn = body["expiresOn"]
     let expiresAt = now + FALLBACK_TTL_MS
-    if (typeof epoch === "number" && Number.isFinite(epoch)) expiresAt = epoch * 1000
+    if (typeof epoch === "number" && Number.isFinite(epoch) && epoch > 0) expiresAt = epoch * 1000
     else if (typeof expiresOn === "string" && Number.isFinite(Date.parse(expiresOn))) expiresAt = Date.parse(expiresOn)
     return { token, expiresAt }
+  }
+
+  function abortReason(signal: AbortSignal): Error {
+    return signal.reason instanceof Error ? signal.reason : new Error("Aborted")
   }
 
   /** Single-flight cached token source. Failures are not cached so `az login` takes effect at once. */
@@ -65,11 +72,13 @@ export namespace AzureToken {
     let cached: { token: string; expiresAt: number } | undefined
     let pending: Promise<string> | undefined
     const args = command(reference)
-    async function fetchToken(signal?: AbortSignal) {
+    async function fetchToken() {
       if (!args) throw new Error("Azure CLI credential source has an invalid tenant or subscription reference")
       let result: { code: number; stdout: string }
       try {
-        result = await exec(args, signal)
+        // The lookup is shared by concurrent callers, so it must not inherit a
+        // single caller's signal; its own timeout bounds the process.
+        result = await exec(args)
       } catch {
         throw new Error("Azure CLI is unavailable; install it and run `az login`")
       }
@@ -81,10 +90,26 @@ export namespace AzureToken {
     return {
       async get(signal?: AbortSignal): Promise<string> {
         if (cached && cached.expiresAt - now() > REFRESH_MARGIN_MS) return cached.token
-        pending ??= fetchToken(signal).finally(() => {
+        const request = (pending ??= fetchToken().finally(() => {
           pending = undefined
+        }))
+        // One caller's abort must not fail the others waiting on the same lookup.
+        if (!signal) return request
+        if (signal.aborted) throw abortReason(signal)
+        return new Promise<string>((resolve, reject) => {
+          const onAbort = () => reject(abortReason(signal))
+          signal.addEventListener("abort", onAbort, { once: true })
+          request.then(
+            (token) => {
+              signal.removeEventListener("abort", onAbort)
+              resolve(token)
+            },
+            (error) => {
+              signal.removeEventListener("abort", onAbort)
+              reject(error)
+            },
+          )
         })
-        return pending
       },
     }
   }
@@ -95,7 +120,8 @@ export namespace AzureToken {
     source: { get(signal?: AbortSignal): Promise<string> },
   ): typeof fetch {
     return (async (input: string | Request | URL, init?: RequestInit) => {
-      const token = await source.get(init?.signal ?? undefined)
+      const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined)
+      const token = await source.get(signal ?? undefined)
       const headers = new Headers(input instanceof Request ? input.headers : undefined)
       new Headers(init?.headers).forEach((value, name) => headers.set(name, value))
       headers.delete("api-key")
