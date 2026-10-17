@@ -583,7 +583,9 @@ export function Autocomplete(props: {
   // it up on submit. No new search round-trip is needed because the list is
   // small and constant.
   const referenceOptions = createMemo<AutocompleteOption[]>(() => {
-    const width = props.anchor().width - 4
+    // The parent assigns the anchor ref after this component is created.
+    if (store.visible !== "@") return []
+    const width = anchorMetrics().width - 4
     const insertPrefix = (prefix: string) => () => {
       const cursor = props.input().logicalCursor
       props.input().deleteRange(0, 0, cursor.row, cursor.col)
