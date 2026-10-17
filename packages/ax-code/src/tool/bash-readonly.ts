@@ -120,7 +120,13 @@ export function classifyReadOnlyCommand(parts: readonly string[]): string | unde
   if (name === "git") {
     const sub = gitSubcommand(args)
     if (!sub) return "git without a subcommand"
-    if (GIT_READ_SUBCOMMANDS.has(sub.subcommand)) return undefined
+    if (GIT_READ_SUBCOMMANDS.has(sub.subcommand)) {
+      // `git log/show/diff --output=<file>` writes the diff to that file.
+      if (sub.rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) {
+        return `git ${sub.subcommand} --output writes to a file`
+      }
+      return undefined
+    }
     if (sub.subcommand === "branch") {
       // `git branch` and `git branch --list` only list; any operand or
       // non-list flag may create, delete, or rename a branch.
