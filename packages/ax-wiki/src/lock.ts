@@ -280,7 +280,8 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
               // still points at the moved (or deleted) body, never the new file.
               let handle: Awaited<ReturnType<typeof open>> | undefined
               try {
-                handle = await open(lockPath, "r")
+                // Windows requires write access for futimes on the pinned descriptor.
+                handle = await open(lockPath, process.platform === "win32" ? "r+" : "r")
                 const text = await handle.readFile("utf8")
                 const body = parseBody(text)
                 if (typeof body?.token !== "string") {
