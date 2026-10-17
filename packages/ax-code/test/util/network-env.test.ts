@@ -170,13 +170,18 @@ describe("network-env initNetworkEnv", () => {
       log: fakeLogger(),
       tls: {
         getCACertificates: (kind) =>
-          ({ bundled: ["bundled-root"], system: ["system-root"], extra: ["extra-root", "bundled-root"] })[kind],
+          ({
+            bundled: ["bundled-root"],
+            system: ["system-root"],
+            extra: ["extra-root", "bundled-root"],
+            default: ["custom-root"],
+          })[kind],
         setDefaultCACertificates: (certs) => {
           installed = certs
         },
       },
     })
-    expect(installed).toEqual(["bundled-root", "extra-root", "system-root"])
+    expect(installed).toEqual(["bundled-root", "extra-root", "custom-root", "system-root"])
   })
 
   test("skips system CA loading when AX_CODE_DISABLE_SYSTEM_CA is set", () => {
@@ -306,6 +311,31 @@ describe("network-env asynchronous system CA loading", () => {
     })
     await awaitSystemCa()
     expect(called).toBe(0)
+  })
+
+  test("a late loader from a reset initializer cannot replace the current trust store", async () => {
+    const { tls, installs } = tlsFake()
+    let release!: (certs: string[]) => void
+    initNetworkEnv({
+      env: {},
+      http: {},
+      tls,
+      log: fakeLogger(),
+      loadSystemCa: () =>
+        new Promise<string[]>((resolve) => {
+          release = resolve
+        }),
+    })
+    __resetNetworkEnvForTest()
+    initNetworkEnv({ env: {}, http: {}, tls, log: fakeLogger(), loadSystemCa: async () => ["new-root"] })
+    await awaitSystemCa()
+    release(["stale-root"])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(installs).toEqual([["bundled-root", "new-root"]])
+  })
+
+  test("the worker resolves unavailable when its deadline expires", async () => {
+    expect(await loadSystemCertificatesInWorker(0)).toBeUndefined()
   })
 
   test("the real worker returns certificate strings without blocking the event loop", async () => {
