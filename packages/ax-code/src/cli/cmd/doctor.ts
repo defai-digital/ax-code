@@ -24,6 +24,7 @@ import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import { getDoctorProcessRegistryCheck } from "./doctor-processes"
 import { runTerminalDoctorChecks, type TmuxOptionSource } from "./doctor-terminal"
 import path from "path"
+import net from "net"
 import { realpathSync } from "fs"
 import { access } from "fs/promises"
 import { isLoopbackHostname } from "../../util/listen-security"
@@ -317,6 +318,33 @@ async function exists(file: string) {
   }
 }
 
+/**
+ * True when the caller's directory sits inside a git repository. A linked
+ * worktree or submodule keeps `.git` as a pointer file, so probe the entry
+ * itself — the same predicate `doctorProjectContext` uses to find the root.
+ */
+export async function hasGitRepository(project: { projectRoot: string; callerCwd: string }): Promise<boolean> {
+  if (project.projectRoot !== project.callerCwd) return true
+  // @scan-suppress security_scan - Read-only probe of the fixed .git entry under the caller-selected project directory.
+  return exists(path.join(project.callerCwd, ".git"))
+}
+
+export function isLocalPortInUse(port: number): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    const socket = new net.Socket()
+    const finish = (inUse: boolean) => {
+      socket.destroy()
+      resolve(inUse)
+    }
+    // @scan-suppress lifecycle_scan - Socket idle timeout, not a standalone timer; every outcome destroys the socket in finish.
+    socket.setTimeout(1000)
+    socket.once("connect", () => finish(true))
+    socket.once("error", () => finish(false))
+    socket.once("timeout", () => finish(false))
+    socket.connect(port, "127.0.0.1")
+  })
+}
+
 async function findAncestor(start: string, predicate: (dir: string) => Promise<boolean>) {
   let current = path.resolve(start)
   while (true) {
@@ -581,9 +609,7 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
   })
 
   // 8. Git
-  const gitExists =
-    // @scan-suppress security_scan - Read-only probe of fixed .git/HEAD under the caller-selected project directory.
-    project.projectRoot !== project.callerCwd || (await exists(path.join(project.callerCwd, ".git", "HEAD")))
+  const gitExists = await hasGitRepository(project)
   push("git", {
     name: "Git repository",
     status: gitExists ? "ok" : "warn",
@@ -723,23 +749,7 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
       })
     } else {
       // Check if something else owns the port
-      const portBlocked = await new Promise<boolean>((resolve) => {
-        const net = require("net")
-        const socket = new net.Socket()
-        socket.setTimeout(1000)
-        socket.on("connect", () => {
-          socket.end()
-          resolve(true)
-        })
-        socket.on("error", () => {
-          resolve(false)
-        })
-        socket.on("timeout", () => {
-          socket.destroy()
-          resolve(false)
-        })
-        socket.connect(tuiPort, "127.0.0.1")
-      })
+      const portBlocked = await isLocalPortInUse(tuiPort)
 
       push("tui-server", {
         name: "TUI server",

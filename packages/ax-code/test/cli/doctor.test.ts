@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { mkdir, writeFile, readFile } from "fs/promises"
 import path from "path"
+import net from "net"
 import {
   DOCTOR_CHECK_IDS,
   doctorProjectContext,
@@ -15,7 +16,9 @@ import {
   getRuntimeCheck,
   getEvidenceCacheCheck,
   getServerExposureCheck,
+  hasGitRepository,
   isHomebrewManagedPath,
+  isLocalPortInUse,
   renderDoctorHuman,
   toDoctorReport,
   type DoctorCheckEntry,
@@ -137,6 +140,20 @@ describe("cli doctor runtime check", () => {
 })
 
 describe("cli doctor", () => {
+  test("detects an occupied loopback port and its subsequent release", async () => {
+    await using server = net.createServer((socket) => socket.end())
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject)
+      server.listen(0, "127.0.0.1", resolve)
+    })
+    const address = server.address()
+    if (!address || typeof address === "string") throw new Error("Expected a TCP listener")
+
+    await expect(isLocalPortInUse(address.port)).resolves.toBe(true)
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    await expect(isLocalPortInUse(address.port)).resolves.toBe(false)
+  })
+
   test("finds project context when launched from a package subdirectory", async () => {
     await using tmp = await tmpdir()
     const packageDir = path.join(tmp.path, "packages", "ax-code")
@@ -153,6 +170,28 @@ describe("cli doctor", () => {
     expect(context.projectRoot).toBe(tmp.path)
     expect(context.agentsPath).toBe(tmp.path)
     expect(context.configPath).toBe(tmp.path)
+    await expect(hasGitRepository(context)).resolves.toBe(true)
+    await expect(hasGitRepository(await doctorProjectContext(tmp.path))).resolves.toBe(true)
+  })
+
+  test("detects a git worktree root whose .git is a file", async () => {
+    await using tmp = await tmpdir()
+    // A linked worktree keeps .git as a pointer file, not a directory.
+    await writeFile(path.join(tmp.path, ".git"), "gitdir: /elsewhere/worktrees/x\n")
+
+    const context = await doctorProjectContext(tmp.path)
+
+    expect(context.projectRoot).toBe(tmp.path)
+    await expect(hasGitRepository(context)).resolves.toBe(true)
+  })
+
+  test("reports no git repository outside any worktree", async () => {
+    await using tmp = await tmpdir()
+
+    const context = await doctorProjectContext(tmp.path)
+
+    expect(context.projectRoot).toBe(tmp.path)
+    await expect(hasGitRepository(context)).resolves.toBe(false)
   })
 
   test("warns when one worktree has duplicate project identities", async () => {
