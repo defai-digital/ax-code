@@ -190,6 +190,85 @@ describe("tool.webfetch", () => {
     )
   })
 
+  test("decodes an uppercase hex entity", async () => {
+    // `&#X41;` is the uppercase-hex spelling of "A".
+    const html = "<p>&#88; &#X41;</p>"
+    await withFetch(
+      async () => new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "https://93.184.216.34/page.html", format: "text" }, ctx)
+            expect(result.output).toContain("X A")
+            expect(result.output).not.toContain("&#X41;")
+          },
+        })
+      },
+    )
+  })
+
+  test("honors a quoted charset parameter", async () => {
+    // "café" in Latin-1: 0xE9 is é. A quoted charset label used to fail
+    // TextDecoder construction and fall back to UTF-8 (mojibake).
+    const bytes = new Uint8Array([0x63, 0x61, 0x66, 0xe9])
+    await withFetch(
+      async () => new Response(bytes, { status: 200, headers: { "content-type": 'text/plain; charset="iso-8859-1"' } }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "https://93.184.216.34/file.txt", format: "text" }, ctx)
+            expect(result.output).toContain("café")
+          },
+        })
+      },
+    )
+  })
+
+  test("converts HTML for a case-variant content type", async () => {
+    await withFetch(
+      async () =>
+        new Response("<h1>Title</h1>", { status: 200, headers: { "content-type": "TEXT/HTML; CHARSET=UTF-8" } }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "https://93.184.216.34/page.html", format: "markdown" }, ctx)
+            expect(result.output).toContain("# Title")
+          },
+        })
+      },
+    )
+  })
+
+  test("follows a chain of exactly ten redirects", async () => {
+    let calls = 0
+    await withFetch(
+      async () => {
+        calls++
+        if (calls <= 10) {
+          return new Response(null, { status: 302, headers: { location: `https://93.184.216.34/hop-${calls}.txt` } })
+        }
+        return new Response("landed", { status: 200, headers: { "content-type": "text/plain" } })
+      },
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "https://93.184.216.34/start.txt", format: "text" }, ctx)
+            expect(result.output).toContain("landed")
+            expect(calls).toBe(11)
+          },
+        })
+      },
+    )
+  })
+
   test("accepts URL schemes case-insensitively", async () => {
     await withFetch(
       async () =>

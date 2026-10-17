@@ -97,7 +97,9 @@ export const WebFetchTool = Tool.define("webfetch", {
       const MAX_REDIRECTS = 10
       let currentUrl = params.url
       const approvedOrigins = new Set([parsedUrl.origin])
-      for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
+      // Follow at most MAX_REDIRECTS redirects: hop counts requests, so the
+      // bound is MAX_REDIRECTS + 1 requests (initial + one per redirect).
+      for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
         const attemptHeaders = hop === 0 ? headers : { ...headers }
         let res = await pinnedFetch(currentUrl, { signal, headers: attemptHeaders, redirect: "manual" })
 
@@ -177,7 +179,10 @@ export const WebFetchTool = Tool.define("webfetch", {
 
       const contentType = response.headers.get("content-type") || ""
       const mime = contentType.split(";")[0]?.trim().toLowerCase() || ""
-      const charset = contentType.match(/charset=([^;\s]+)/i)?.[1]?.trim()
+      const charset = contentType
+        .match(/charset=([^;\s]+)/i)?.[1]
+        ?.trim()
+        .replace(/^"|"$/g, "")
       const title = `${params.url} (${contentType})`
 
       // Check if response is an image
@@ -212,7 +217,7 @@ export const WebFetchTool = Tool.define("webfetch", {
       // tool inside the ADR-206 untrusted-content envelope.
       switch (params.format) {
         case "markdown":
-          if (contentType.includes("text/html")) {
+          if (mime === "text/html") {
             const markdown = await convertHTMLToMarkdown(content)
             return {
               output: wrapUntrustedContent(markdown, "webfetch"),
@@ -227,7 +232,7 @@ export const WebFetchTool = Tool.define("webfetch", {
           }
 
         case "text":
-          if (contentType.includes("text/html")) {
+          if (mime === "text/html") {
             const text = await extractTextFromHTML(content)
             return {
               output: wrapUntrustedContent(text, "webfetch"),
@@ -287,7 +292,7 @@ function decodeHtmlEntities(input: string): string {
     apos: "'",
     nbsp: " ",
   }
-  return input.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, body: string) => {
+  return input.replace(/&(#[xX]?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, body: string) => {
     if (body[0] === "#") {
       const codePoint = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10)
       // Guard the full Unicode range — `String.fromCodePoint` throws RangeError
