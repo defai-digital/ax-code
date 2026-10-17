@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
+import { Filesystem } from "../../src/util/filesystem"
 import { InstructionPrompt } from "../../src/session/instruction"
 import { Instance } from "../../src/project/instance"
 import { WriteTool } from "../../src/tool/write"
@@ -266,5 +267,39 @@ describe("path rules on write (ADR-219)", () => {
         expect(result.metadata.loaded).toEqual([])
       },
     })
+  })
+})
+
+test("evicts cached rule bodies under file churn without dropping matching rules", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { username: "testuser" },
+    init: async (dir) => {
+      await fs.mkdir(path.join(dir, ".ax-code", "rules"), { recursive: true })
+      await fs.writeFile(
+        path.join(dir, ".ax-code", "rules", "original.md"),
+        '---\npaths: ["src/**"]\n---\nOriginal rule',
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const original = path.join(tmp.path, ".ax-code", "rules", "original.md")
+      const reads = vi.spyOn(Filesystem, "readText")
+      const target = path.join(tmp.path, "src", "file.ts")
+      expect(await InstructionPrompt.matchingPathRules(target)).toHaveLength(1)
+      await Promise.all(
+        Array.from({ length: 512 }, (_, index) =>
+          fs.writeFile(
+            path.join(tmp.path, ".ax-code", "rules", `new-${index}.md`),
+            '---\npaths: ["src/**"]\n---\nNew rule',
+          ),
+        ),
+      )
+      expect(await InstructionPrompt.matchingPathRules(target)).toHaveLength(513)
+      expect(await InstructionPrompt.matchingPathRules(target)).toHaveLength(513)
+      expect(reads.mock.calls.filter(([file]) => file === original).length).toBeGreaterThan(1)
+    },
   })
 })

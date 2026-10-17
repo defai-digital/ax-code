@@ -30,6 +30,8 @@ const RULES_PATTERN = path.join(RULES_DIR, "*.md")
 // an oversized rule is almost certainly the wrong tool (AGENTS.md or a skill
 // fits better), so it is skipped with a warning instead of truncated.
 const RULE_MAX_BYTES = 64 * 1024
+// Bound cached parsed/negative results even when rule files churn during a session.
+const RULE_CACHE_LIMIT = 512
 
 export type PathRule = {
   filepath: string
@@ -94,6 +96,7 @@ async function loadPathRules(): Promise<PathRule[]> {
       return ""
     })
     const rule = raw ? parsePathRule(resolved, raw) : undefined
+    if (!cache.has(resolved) && cache.size >= RULE_CACHE_LIMIT) cache.delete(cache.keys().next().value!)
     cache.set(resolved, { mtimeMs, rule })
     if (rule) rules.push(rule)
   }
