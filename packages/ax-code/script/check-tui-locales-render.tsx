@@ -261,5 +261,7 @@ try {
     `Native locale dialogs passed: ${LOCALES.length} locales, 36/80 columns, live switch, picker, setup language/connect/skip, help/status live switching, listener disposal, and cancel action.`,
   )
 } finally {
-  await fs.rm(state, { recursive: true, force: true })
+  // Preference writes can finish after renderer disposal; do not let transient
+  // ENOTEMPTY errors hide a rendering assertion during temporary-state cleanup.
+  await fs.rm(state, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 }

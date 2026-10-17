@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { createRequire } from "node:module"
 import { readFile, realpath } from "fs/promises"
 import path from "path"
 
@@ -57,6 +58,15 @@ describe("script.workspace-metadata", () => {
     // The ax-tui framework builds in its own repository (ADR-074); this repo
     // must not carry a turbo task for it.
     expect(turbo.tasks?.["ax-tui#build"]).toBeUndefined()
+  })
+
+  test("the application and installed renderer share one Solid client runtime", async () => {
+    const requireApp = createRequire(path.resolve(import.meta.dirname, "../../package.json"))
+    const requireTui = createRequire(requireApp.resolve("ax-tui/solid"))
+    // Separate copies lose reactive ownership when dialogs cross the renderer boundary.
+    const appRuntime = await realpath(requireApp.resolve("solid-js/dist/solid.js"))
+    const tuiRuntime = await realpath(requireTui.resolve("solid-js/dist/solid.js"))
+    expect(appRuntime).toBe(tuiRuntime)
   })
 
   test("Turbo has no in-repository Desktop build tasks", async () => {

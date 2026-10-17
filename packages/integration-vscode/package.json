@@ -9,11 +9,11 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/vscode": "^1.94.0",
-    "@typescript-eslint/eslint-plugin": "^8.71.0",
-    "@typescript-eslint/parser": "^8.71.0",
+    "@typescript-eslint/eslint-plugin": "catalog:",
+    "@typescript-eslint/parser": "catalog:",
     "@typescript/native": "catalog:",
     "@vscode/vsce": "^3.2.1",
-    "esbuild": "^0.28.1",
+    "esbuild": "catalog:",
     "eslint": "^9.25.1",
     "typescript": "catalog:",
     "vitest": "catalog:"

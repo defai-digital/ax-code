@@ -49,7 +49,7 @@
     "@tsconfig/node24": "catalog:",
     "@types/node": "catalog:",
     "jsr": "catalog:",
-    "tsx": "4.22.4",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "@typescript/native": "catalog:"
