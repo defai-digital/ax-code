@@ -107,11 +107,81 @@ export type InitNetworkEnvInput = {
   http?: HttpNetworkApi
   tls?: TlsNetworkApi
   log?: NetworkLogger
+  /**
+   * Loads the OS certificates off the calling thread. Defaults to a worker thread when `tls` is not injected;
+   * an injected `tls` without this keeps the synchronous path (tests).
+   */
+  loadSystemCa?: () => Promise<string[] | undefined>
+}
+
+// Reading the OS trust store is a blocking system call: on macOS it took about 3 s on a cold keychain cache
+// and about 50 ms once warm. It therefore runs in a short-lived worker thread so startup and the event loop
+// never wait on it. Requests that must honor corporate roots call `awaitSystemCa()` first.
+const SYSTEM_CA_WORKER_SOURCE = `
+const { parentPort } = require("node:worker_threads")
+const tls = require("node:tls")
+try {
+  parentPort.postMessage({ certs: tls.getCACertificates("system") })
+} catch (error) {
+  parentPort.postMessage({ error: String(error && error.message ? error.message : error) })
+}
+`
+
+/** Upper bound for a request waiting on the OS trust store; past it the bundled roots are used. */
+export const SYSTEM_CA_WAIT_MS = 10_000
+
+export function loadSystemCertificatesInWorker(): Promise<string[] | undefined> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: string[] | undefined) => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    try {
+      const { Worker } = nodeRequire("node:worker_threads") as typeof import("node:worker_threads")
+      const worker = new Worker(SYSTEM_CA_WORKER_SOURCE, { eval: true })
+      // Never keep the process alive for a certificate read.
+      worker.unref()
+      worker.once("message", (message: { certs?: unknown }) => {
+        finish(
+          Array.isArray(message?.certs) && message.certs.every((cert) => typeof cert === "string")
+            ? message.certs
+            : undefined,
+        )
+        void worker.terminate()
+      })
+      worker.once("error", () => finish(undefined))
+      worker.once("exit", () => finish(undefined))
+    } catch {
+      finish(undefined)
+    }
+  })
 }
 
 // Module-level guard: the first effective call wins; later calls are no-ops.
 // Tests reset it through `__resetNetworkEnvForTest`.
 let applied: NetworkEnvState | undefined
+let systemCaPending: Promise<void> | undefined
+
+/**
+ * Resolves once the system CA certificates are installed (or loading failed, was disabled or timed out).
+ * Resolved immediately when nothing is pending, so it is cheap to call before every request.
+ */
+export async function awaitSystemCa(timeoutMs = SYSTEM_CA_WAIT_MS): Promise<void> {
+  const pending = systemCaPending
+  if (!pending) return
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs)
+    timer.unref?.()
+  })
+  try {
+    await Promise.race([pending, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 /** Snapshot of what init actually applied, for the doctor check and tests. */
 export function networkEnvState(): NetworkEnvState {
@@ -181,16 +251,16 @@ export function initNetworkEnv(input: InitNetworkEnvInput = {}): NetworkEnvState
   }
 
   if (!env.AX_CODE_DISABLE_SYSTEM_CA) {
-    try {
-      if (typeof tls.getCACertificates === "function" && typeof tls.setDefaultCACertificates === "function") {
+    const mergeAndInstall = (system: string[] | undefined) => {
+      try {
+        if (typeof tls.getCACertificates !== "function" || typeof tls.setDefaultCACertificates !== "function") return
         const bundled = tls.getCACertificates("bundled") ?? []
-        const system = tls.getCACertificates("system") ?? []
-        if (system.length > 0) {
+        if (system && system.length > 0) {
           // Always keep the bundled roots first so a broken/empty OS store
           // cannot strip Node's own trust anchors; NODE_EXTRA_CA_CERTS is
           // merged by Node itself and stays in effect.
-          const merged = [...bundled, ...system.filter((cert) => !bundled.includes(cert))]
-          tls.setDefaultCACertificates(merged)
+          const known = new Set(bundled)
+          tls.setDefaultCACertificates([...bundled, ...system.filter((cert) => !known.has(cert))])
           state.systemCaApplied = true
           log.debug("network: system CA certificates added", {
             bundled: bundled.length,
@@ -199,11 +269,33 @@ export function initNetworkEnv(input: InitNetworkEnvInput = {}): NetworkEnvState
         } else {
           log.debug("network: system CA store empty; keeping bundled certificates", { bundled: bundled.length })
         }
+      } catch (error) {
+        log.debug("network: could not load system CA certificates", {
+          error: error instanceof Error ? error.message : String(error),
+        })
       }
-    } catch (error) {
-      log.debug("network: could not load system CA certificates", {
-        error: error instanceof Error ? error.message : String(error),
-      })
+    }
+    const loader = input.loadSystemCa ?? (input.tls ? undefined : loadSystemCertificatesInWorker)
+    if (loader) {
+      const pending: Promise<void> = loader()
+        .then(mergeAndInstall)
+        .catch((error) => {
+          log.debug("network: could not load system CA certificates", {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+        .finally(() => {
+          if (systemCaPending === pending) systemCaPending = undefined
+        })
+      systemCaPending = pending
+    } else {
+      try {
+        mergeAndInstall(tls.getCACertificates?.("system"))
+      } catch (error) {
+        log.debug("network: could not load system CA certificates", {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
     }
   }
 
@@ -214,4 +306,5 @@ export function initNetworkEnv(input: InitNetworkEnvInput = {}): NetworkEnvState
 /** Test-only: clear the idempotency guard so a test can re-run init. */
 export function __resetNetworkEnvForTest(): void {
   applied = undefined
+  systemCaPending = undefined
 }

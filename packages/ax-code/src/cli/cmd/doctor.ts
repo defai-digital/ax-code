@@ -34,7 +34,7 @@ import { toErrorMessage } from "@/util/error-message"
 import type { AxEngineStatus } from "@/provider/ax-engine/status"
 import { whichAll } from "../../util/which"
 import { Process } from "../../util/process"
-import { networkEnvState, proxyEnvSummary } from "../../util/network-env"
+import { awaitSystemCa, networkEnvState, proxyEnvSummary } from "../../util/network-env"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
 
@@ -637,6 +637,8 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
 
   // Network environment: proxy variables (credentials redacted), NO_PROXY, and
   // whether the OS trust store was merged into the default CA list.
+  // The OS store is read on a worker thread; report its final state rather than "still loading".
+  await awaitSystemCa()
   push("network", getNetworkCheck({}))
 
   // 9. Native Rust addons — routed through the central NativeAddon registry

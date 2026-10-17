@@ -2,8 +2,10 @@ import { afterEach, describe, expect, test } from "vitest"
 import {
   LOCAL_NO_PROXY,
   __resetNetworkEnvForTest,
+  awaitSystemCa,
   hasProxyEnv,
   initNetworkEnv,
+  loadSystemCertificatesInWorker,
   mergeNoProxy,
   networkEnvState,
   proxyEnvSummary,
@@ -187,5 +189,89 @@ describe("network-env initNetworkEnv", () => {
     expect(networkEnvState()).toEqual({ proxyApplied: false, systemCaApplied: false })
     initNetworkEnv({ env: proxyEnv, http: { setGlobalProxyFromEnv: () => () => {} }, tls: {}, log: fakeLogger() })
     expect(networkEnvState().proxyApplied).toBe(true)
+  })
+})
+
+describe("network-env asynchronous system CA loading", () => {
+  function tlsFake() {
+    const installs: string[][] = []
+    const tls: TlsNetworkApi = {
+      getCACertificates: () => ["bundled-root"],
+      setDefaultCACertificates: (certs) => void installs.push(certs),
+    }
+    return { tls, installs }
+  }
+
+  test("startup does not wait: certificates are applied when the loader finishes", async () => {
+    const { tls, installs } = tlsFake()
+    let release!: (certs: string[]) => void
+    const loadSystemCa = () => new Promise<string[]>((resolve) => (release = resolve))
+    const state = initNetworkEnv({ env: {}, http: {}, tls, log: fakeLogger(), loadSystemCa })
+    expect(state.systemCaApplied).toBe(false)
+    expect(installs).toEqual([])
+
+    let waited = false
+    const waiting = awaitSystemCa().then(() => (waited = true))
+    await Promise.resolve()
+    expect(waited).toBe(false)
+
+    release(["corp-root", "bundled-root"])
+    await waiting
+    expect(waited).toBe(true)
+    // Bundled roots stay first and duplicates are dropped.
+    expect(installs).toEqual([["bundled-root", "corp-root"]])
+    expect(networkEnvState().systemCaApplied).toBe(true)
+  })
+
+  test("a loader failure or an empty store keeps the bundled roots and never throws", async () => {
+    for (const loadSystemCa of [
+      async () => undefined,
+      async () => [],
+      async () => Promise.reject(new Error("keychain")),
+    ]) {
+      __resetNetworkEnvForTest()
+      const { tls, installs } = tlsFake()
+      initNetworkEnv({ env: {}, http: {}, tls, log: fakeLogger(), loadSystemCa })
+      await awaitSystemCa()
+      expect(installs).toEqual([])
+      expect(networkEnvState().systemCaApplied).toBe(false)
+    }
+  })
+
+  test("awaiting is bounded when the loader never finishes", async () => {
+    const { tls, installs } = tlsFake()
+    initNetworkEnv({ env: {}, http: {}, tls, log: fakeLogger(), loadSystemCa: () => new Promise(() => {}) })
+    const started = Date.now()
+    await awaitSystemCa(30)
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(installs).toEqual([])
+  })
+
+  test("awaiting resolves at once when nothing is pending and the loader is skipped when disabled", async () => {
+    await awaitSystemCa(10_000)
+    let called = 0
+    const { tls } = tlsFake()
+    initNetworkEnv({
+      env: { AX_CODE_DISABLE_SYSTEM_CA: "1" },
+      http: {},
+      tls,
+      log: fakeLogger(),
+      loadSystemCa: async () => (called++, ["x"]),
+    })
+    await awaitSystemCa()
+    expect(called).toBe(0)
+  })
+
+  test("the real worker returns certificate strings without blocking the event loop", async () => {
+    let ticks = 0
+    const timer = setInterval(() => ticks++, 1)
+    const certs = await loadSystemCertificatesInWorker()
+    clearInterval(timer)
+    if (certs !== undefined) {
+      expect(Array.isArray(certs)).toBe(true)
+      for (const cert of certs) expect(typeof cert).toBe("string")
+    }
+    // The main thread kept running while the worker read the OS store.
+    expect(ticks).toBeGreaterThan(0)
   })
 })

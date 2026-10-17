@@ -63,6 +63,7 @@ import { isGenericCliFallbackModel } from "./cli/ids"
 import { latestAnthropicFamilyModels } from "./anthropic-families"
 import { isHiddenDeepseekLegacySku } from "./deepseek-catalog"
 import { ProviderSdkCompat } from "./sdk-compat"
+import { awaitSystemCa } from "../util/network-env"
 import { CustomApiProvider } from "./custom-api-provider"
 import { discoverAxTrustModels } from "./ax-trust-discovery"
 
@@ -1175,6 +1176,8 @@ export namespace Provider {
         delete options["chunkTimeout"]
 
         options["fetch"] = async (input: string | Request | URL, init?: RequestInit) => {
+          // Corporate roots come from a worker-thread read of the OS store; only the first request can wait.
+          await awaitSystemCa()
           // Preserve custom fetch if it exists, wrap it with timeout logic
           const fetchFn = customFetch ?? fetch
           // Shallow copy to avoid mutating caller's init object

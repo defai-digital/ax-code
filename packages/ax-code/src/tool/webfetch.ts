@@ -3,6 +3,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./webfetch.txt"
 import { abortAfterAny } from "../util/abort"
 import { Ssrf } from "../util/ssrf"
+import { awaitSystemCa } from "../util/network-env"
 import {
   WEBFETCH_MAX_RESPONSE_SIZE as MAX_RESPONSE_SIZE,
   WEBFETCH_DEFAULT_TIMEOUT as DEFAULT_TIMEOUT,
@@ -19,7 +20,10 @@ import { wrapUntrustedContent } from "../util/untrusted-content"
 // resolve DNS once and connect to the validated IP directly —
 // prevents DNS rebinding attacks (BUG-15).
 const assertPublicUrl = (url: string) => Ssrf.assertPublicUrl(url, "webfetch")
-const pinnedFetch = (url: string, init?: RequestInit) => Ssrf.pinnedFetch(url, { ...init, label: "webfetch" })
+const pinnedFetch = async (url: string, init?: RequestInit) => {
+  await awaitSystemCa()
+  return Ssrf.pinnedFetch(url, { ...init, label: "webfetch" })
+}
 
 // 304 Not Modified and the other non-redirect 3xx responses carry no Location
 // and are final answers, not hops to follow.
