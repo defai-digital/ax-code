@@ -2032,7 +2032,16 @@ export namespace MCP {
       throw new Error(`MCP server not found: ${name}`)
     }
     await withConnectLock(name, "MCP untrust failed", async (s) => {
-      const decision = await McpTrust.untrust(name, mcp)
+      // Re-read inside the lock: the config may have changed while this call
+      // waited behind an in-flight connect, and revocation must bind to the
+      // fingerprint that is actually current (the same discipline
+      // trustReviewed follows).
+      const current = await Config.mcpEntry(name)
+      const currentMcp = current?.config
+      if (!current || !currentMcp || !isConfigured(currentMcp)) {
+        throw new Error(`MCP server not found: ${name}`)
+      }
+      const decision = await McpTrust.untrust(name, currentMcp)
       if (decision.removed) publishTrustChanged(name, decision, "untrust")
       invalidateTools(s)
       const client = s.clients[name]
@@ -2041,7 +2050,7 @@ export namespace MCP {
         delete s.clients[name]
       }
       await closePendingOAuthTransport(name)
-      s.status[name] = needsTrustStatus(decision, mcp)
+      s.status[name] = needsTrustStatus(decision, currentMcp)
     })
     return status()
   }
@@ -2673,6 +2682,15 @@ export namespace MCP {
 
       if (!isConfigured(mcpConfig)) {
         throw new Error(`MCP server ${mcpName} is disabled or missing configuration`)
+      }
+
+      // The config may have been edited while the OAuth flow was pending:
+      // startAuth gated trust on the old fingerprint, and add() is the
+      // ungated dynamic-add path. Re-check trust against the current config
+      // before connecting, mirroring connectImpl.
+      const trust = await trustDecision(mcpName, mcpConfig)
+      if (!trust.trusted && !webmcpTrustExempt(mcpConfig)) {
+        return needsTrustStatus(trust, mcpConfig, webmcpTrustNote(mcpName, mcpConfig))
       }
 
       // Re-add the MCP server to establish connection

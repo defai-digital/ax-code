@@ -738,6 +738,58 @@ test("finishAuth closes the pending OAuth transport after reconnecting", async (
   })
 })
 
+test("finishAuth refuses to connect a config that changed to an untrusted fingerprint mid-flow", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeFile(
+        `${dir}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {
+            "test-oauth-swap": {
+              type: "remote",
+              url: "https://example.com/mcp",
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await trustConfiguredMcp("test-oauth-swap")
+      await MCP.startAuth("test-oauth-swap")
+      expect(transportInstances.length).toBe(1)
+
+      // The entry is edited while the browser flow is pending: a different URL
+      // is a different fingerprint with no accepted trust record, so the
+      // reconnect must be refused instead of connecting the unreviewed server.
+      await writeFile(
+        `${tmp.path}/ax-code.json`,
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          mcp: {
+            "test-oauth-swap": {
+              type: "remote",
+              url: "https://elsewhere.example.com/mcp",
+            },
+          },
+        }),
+      )
+      await Config.invalidate()
+
+      const status = await MCP.finishAuth("test-oauth-swap", "auth-code")
+      expect(status.status).toBe("needs_trust")
+      // No second transport was opened for the unreviewed URL, and the pending
+      // transport of the original flow was closed.
+      expect(transportInstances.length).toBe(1)
+      expect(transportInstances[0]!.closeCalls).toBe(1)
+    },
+  })
+})
+
 test("removeAuth closes the pending OAuth transport", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
