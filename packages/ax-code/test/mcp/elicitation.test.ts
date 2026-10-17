@@ -682,3 +682,103 @@ test("summarizeRequest truncates field names by code point", () => {
   expect([...summary.fieldNames[0]!]).toHaveLength(64)
   expect(summary.fieldNames[0]!.endsWith("\u{1F600}")).toBe(true)
 })
+
+test.each(["form", "url"] as const)("decide %s cancels before asking for an already-aborted tool", async (mode) => {
+  const controller = new AbortController()
+  controller.abort()
+  const ask = vi.fn(async () => [["Open"]])
+  const openUrl = vi.fn(async () => undefined)
+  const decision = await McpElicitation.decide({
+    params: mode === "url" ? { mode, url: "https://example.invalid/" } : formParams(),
+    call: callContext(controller.signal),
+    autonomous: false,
+    ask,
+    openUrl,
+  })
+  expect(decision).toMatchObject({ action: "cancel", category: "aborted" })
+  expect(decision.content).toBeUndefined()
+  expect(ask).not.toHaveBeenCalled()
+  expect(openUrl).not.toHaveBeenCalled()
+})
+
+test.each(["form", "url"] as const)("decide %s cancels when abort races a resolved answer", async (mode) => {
+  const controller = new AbortController()
+  const ask = vi.fn(async () => {
+    controller.abort()
+    return [[mode === "url" ? "Open" : "sensitive answer"]]
+  })
+  const openUrl = vi.fn(async () => undefined)
+  const decision = await McpElicitation.decide({
+    params:
+      mode === "url"
+        ? { mode, url: "https://example.invalid/" }
+        : formParams({ properties: { name: { type: "string" } }, required: ["name"] }),
+    call: callContext(controller.signal),
+    autonomous: false,
+    ask,
+    openUrl,
+  })
+  expect(decision).toMatchObject({ action: "cancel", category: "aborted" })
+  expect(decision.content).toBeUndefined()
+  expect(openUrl).not.toHaveBeenCalled()
+})
+
+test("URL elicitation declines an empty answer without throwing or opening", async () => {
+  const openUrl = vi.fn(async () => undefined)
+  const decision = await McpElicitation.decide({
+    params: { mode: "url", url: "https://example.invalid/" },
+    call: callContext(),
+    autonomous: false,
+    ask: async () => [[]],
+    openUrl,
+  })
+  expect(decision.action).toBe("decline")
+  expect(openUrl).not.toHaveBeenCalled()
+})
+
+test("URL elicitation reports cancellation while the browser opener settles", async () => {
+  const controller = new AbortController()
+  const decision = await McpElicitation.decide({
+    params: { mode: "url", url: "https://example.invalid/" },
+    call: callContext(controller.signal),
+    autonomous: false,
+    ask: async () => [["Open"]],
+    openUrl: async () => {
+      controller.abort()
+    },
+  })
+  expect(decision).toMatchObject({ action: "cancel", category: "aborted" })
+})
+
+test.each(["form", "url"] as const)(
+  "decide %s preserves cancellation when the prompt rejects with another error",
+  async (mode) => {
+    const controller = new AbortController()
+    const decision = await McpElicitation.decide({
+      params: mode === "url" ? { mode, url: "https://example.invalid/" } : formParams(),
+      call: callContext(controller.signal),
+      autonomous: false,
+      ask: async () => {
+        controller.abort()
+        throw new Error("prompt closed")
+      },
+    })
+    expect(decision).toMatchObject({ action: "cancel", category: "aborted" })
+    expect(decision.content).toBeUndefined()
+  },
+)
+
+test("URL elicitation preserves cancellation when the browser opener rejects", async () => {
+  const controller = new AbortController()
+  const decision = await McpElicitation.decide({
+    params: { mode: "url", url: "https://example.invalid/" },
+    call: callContext(controller.signal),
+    autonomous: false,
+    ask: async () => [["Open"]],
+    openUrl: async () => {
+      controller.abort()
+      throw new Error("opener closed")
+    },
+  })
+  expect(decision).toMatchObject({ action: "cancel", category: "aborted" })
+})

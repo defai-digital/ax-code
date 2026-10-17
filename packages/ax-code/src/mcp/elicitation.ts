@@ -456,6 +456,10 @@ export namespace McpElicitation {
 
   export type AskFn = (questions: Question.Info[], call: CallContext) => Promise<Question.Answer[]>
 
+  function aborted(call: CallContext | undefined): Decision | undefined {
+    if (call?.signal?.aborted) return { action: "cancel", category: "aborted", reason: "the tool call was aborted" }
+  }
+
   /**
    * Resolve one `elicitation/create` request to a protocol action. Every
    * non-accept path declines (or cancels on abort) instead of throwing, so a
@@ -473,6 +477,8 @@ export namespace McpElicitation {
   }): Promise<Decision> {
     if (input.autonomous)
       return { action: "decline", category: "autonomous", reason: "autonomous mode never blocks on user input" }
+    const cancellation = aborted(input.call)
+    if (cancellation) return cancellation
     if (!isRecord(input.params)) {
       return { action: "decline", category: "invalid_request", reason: "params is missing or malformed" }
     }
@@ -550,19 +556,24 @@ export namespace McpElicitation {
       }
       answers = await input.ask([question], input.call)
     } catch (error) {
+      const cancellation = aborted(input.call)
+      if (cancellation) return cancellation
       if (error instanceof Question.RejectedError) {
-        return input.call.signal?.aborted
-          ? { action: "cancel", category: "aborted", reason: "the tool call was aborted while the prompt was open" }
-          : { action: "decline", category: "user_declined", reason: "the user dismissed the prompt" }
+        return { action: "decline", category: "user_declined", reason: "the user dismissed the prompt" }
       }
       return { action: "decline", category: "prompt_failed", reason: `asking failed: ${toErrorMessage(error)}` }
     }
-    const pick = (Array.isArray(answers[0]) ? answers[0][0] : "").trim()
+    const cancellation = aborted(input.call)
+    if (cancellation) return cancellation
+    const raw = Array.isArray(answers) && Array.isArray(answers[0]) ? answers[0][0] : undefined
+    const pick = typeof raw === "string" ? raw.trim() : ""
     if (pick !== "Open") return { action: "decline", category: "user_declined", reason: "the user declined the URL" }
     if (input.openUrl) {
       try {
         await input.openUrl(plan.url)
       } catch (error) {
+        const cancellation = aborted(input.call)
+        if (cancellation) return cancellation
         return {
           action: "decline",
           category: "open_failed",
@@ -570,7 +581,7 @@ export namespace McpElicitation {
         }
       }
     }
-    return { action: "accept", category: "user_accepted" }
+    return aborted(input.call) ?? { action: "accept", category: "user_accepted" }
   }
 
   function decideForm(input: {
@@ -596,13 +607,15 @@ export namespace McpElicitation {
           call,
         )
       } catch (error) {
+        const cancellation = aborted(call)
+        if (cancellation) return cancellation
         if (error instanceof Question.RejectedError) {
-          return call.signal?.aborted
-            ? { action: "cancel", category: "aborted", reason: "the tool call was aborted while the prompt was open" }
-            : { action: "decline", category: "user_declined", reason: "the user dismissed the prompt" }
+          return { action: "decline", category: "user_declined", reason: "the user dismissed the prompt" }
         }
         return { action: "decline", category: "prompt_failed", reason: `asking failed: ${toErrorMessage(error)}` }
       }
+      const cancellation = aborted(call)
+      if (cancellation) return cancellation
       const coerced = coerceAnswers(plan.fields, answers)
       if (!coerced.ok) return { action: "decline", category: "invalid_answer", reason: coerced.reason }
       return { action: "accept", category: "user_accepted", content: coerced.content }
