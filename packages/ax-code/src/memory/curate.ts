@@ -19,7 +19,7 @@ export namespace Curation {
   export const Proposal = z.object({
     id: z.string(),
     target: z.enum(["memory", "skill"]),
-    rule: z.enum(["unused", "duplicate_name"]),
+    rule: z.enum(["unused", "duplicate_name", "superseded"]),
     /** Entry kind for memory proposals; absent for skills. */
     kind: z.string().optional(),
     name: z.string(),
@@ -110,31 +110,85 @@ export namespace Curation {
    * Memory proposals: entries whose last use is older than the threshold,
    * falling back to `savedAt` when the entry was never injected.
    *
-   * A "contradicts a newer entry" rule is deliberately NOT implemented:
-   * entries are keyed by (kind, name) only, so there is no reliable signal
-   * that two entries disagree rather than merely coexist.
+   * "superseded" is the contradiction rule. It is deterministic and conservative: within one scope
+   * and kind, two entries with the same topic key (the name lower-cased, separators ignored and
+   * trailing version, date or old/new words dropped), the same agents and path globs, and different
+   * bodies conflict. The older one is proposed for removal in favour of the newer one. Bodies are
+   * never interpreted, so unrelated entries are never flagged.
    */
+  const TOPIC_NOISE = /^(v?\d+|old|new|legacy|deprecated|draft|final|current|latest|previous|prev|updated|copy)$/
+
+  /** Stable topic key for contradiction matching; undefined when the name carries no topic. */
+  export function topicKey(name: string): string | undefined {
+    const tokens = name
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean)
+    while (tokens.length > 1 && TOPIC_NOISE.test(tokens[tokens.length - 1]!)) tokens.pop()
+    const key = tokens.join("-")
+    return key.length >= 3 ? key : undefined
+  }
+
+  const normalizeBody = (value: string) => value.replace(/\s+/g, " ").trim()
+  const listKey = (values?: string[]) => [...(values ?? [])].sort().join("\u0000")
+
   export async function proposeMemory(opts: Options): Promise<Report> {
     const now = (opts.now ?? (() => new Date()))()
     const scope = opts.scope ?? "project"
     const usage = await UsageRecord.read(opts.projectRoot)
     const applied = new Set((await readApplied(opts.projectRoot)).records.filter((r) => !r.undoneAt).map((r) => r.id))
     const scopes: ("project" | "global")[] = scope === "all" ? ["project", "global"] : [scope]
-    const proposals: Proposal[] = []
+    const proposals = new Map<string, Proposal>()
     let checked = 0
 
     for (const current of scopes) {
       const memory = current === "global" ? await store.loadGlobal() : await store.load(opts.projectRoot)
       if (!memory) continue
       for (const kind of kinds) {
-        for (const entry of memory.sections[kind]?.entries ?? []) {
+        const entries = memory.sections[kind]?.entries ?? []
+        const groups = new Map<string, MemoryEntry[]>()
+        for (const entry of entries) {
+          const key = topicKey(entry.name)
+          if (!key) continue
+          const group = `${key}\u0000${listKey(entry.agents)}\u0000${listKey(entry.pathGlobs)}`
+          groups.set(group, [...(groups.get(group) ?? []), entry])
+        }
+        for (const group of groups.values()) {
+          if (group.length < 2) continue
+          const dated = group
+            .map((entry) => ({ entry, time: Date.parse(entry.savedAt) }))
+            .filter((item) => Number.isFinite(item.time))
+            .sort((a, b) => b.time - a.time)
+          const newest = dated[0]
+          if (!newest) continue
+          for (const older of dated.slice(1)) {
+            if (older.time === newest.time) continue
+            if (normalizeBody(older.entry.body) === normalizeBody(newest.entry.body)) continue
+            const id = memoryId(kind, current, older.entry.name)
+            const usageEntry = usage.entries[UsageRecord.memoryKey(kind, older.entry.name)]
+            proposals.set(id, {
+              id,
+              target: "memory",
+              rule: "superseded",
+              kind,
+              name: older.entry.name,
+              scope: current,
+              reason: `superseded by newer entry "${newest.entry.name}" on the same topic with different content`,
+              last_used_at: usageEntry?.last_used_at ?? null,
+              use_count: usageEntry?.use_count ?? 0,
+              applied: applied.has(id),
+            })
+          }
+        }
+        for (const entry of entries) {
           checked++
           const usageEntry = usage.entries[UsageRecord.memoryKey(kind, entry.name)]
           const last = usageEntry?.last_used_at ?? entry.savedAt
           const age = ageDays(last, now)
           if (age === undefined || age < STALE_DAYS) continue
+          if (proposals.has(memoryId(kind, current, entry.name))) continue
           const source = usageEntry ? `last used ${age} days ago` : `never injected and saved ${age} days ago`
-          proposals.push({
+          proposals.set(memoryId(kind, current, entry.name), {
             id: memoryId(kind, current, entry.name),
             target: "memory",
             rule: "unused",
@@ -154,8 +208,8 @@ export namespace Curation {
       target: "memory",
       thresholdDays: STALE_DAYS,
       checked,
-      proposals,
-      skippedRules: ["contradiction: entries are keyed by (kind, name) only, with no reliable contradiction signal"],
+      proposals: [...proposals.values()],
+      skippedRules: [],
     }
   }
 

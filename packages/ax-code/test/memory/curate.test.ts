@@ -102,8 +102,93 @@ describe("memory.curate proposals", () => {
     expect(report.proposals.map((p) => p.name)).toEqual(["stale"])
     expect(report.proposals[0]?.rule).toBe("unused")
     expect(report.proposals[0]?.kind).toBe("feedback")
-    // The contradiction rule has no reliable signal and must say so.
-    expect(report.skippedRules.join(" ")).toMatch(/contradiction/)
+    expect(report.skippedRules).toEqual([])
+  })
+
+  async function seed(
+    root: string,
+    entries: Array<{ name: string; body: string; daysAgo: number; agents?: string[] }>,
+  ) {
+    for (const entry of entries) await recordEntry(root, "feedback", { name: entry.name, body: entry.body })
+    const memory = await store.load(root)
+    memory!.sections.feedback!.entries = memory!.sections.feedback!.entries.map((stored) => {
+      const spec = entries.find((entry) => entry.name === stored.name)!
+      return {
+        ...stored,
+        savedAt: new Date(now.getTime() - spec.daysAgo * DAY).toISOString(),
+        ...(spec.agents ? { agents: spec.agents } : {}),
+      }
+    })
+    await store.save(root, memory!)
+  }
+
+  test("topicKey ignores separators, case and trailing version, date or old/new words", () => {
+    expect(Curation.topicKey("Test Command")).toBe("test-command")
+    expect(Curation.topicKey("test_command-v2")).toBe("test-command")
+    expect(Curation.topicKey("test-command-old")).toBe("test-command")
+    expect(Curation.topicKey("deploy-2026-10")).toBe("deploy")
+    expect(Curation.topicKey("v2")).toBeUndefined()
+    expect(Curation.topicKey("a")).toBeUndefined()
+  })
+
+  test("proposes the older of two same-topic entries with different content as superseded", async () => {
+    await using tmp = await tmpdir()
+    await seed(tmp.path, [
+      { name: "test-command-old", body: "run npm test", daysAgo: 20 },
+      { name: "test-command", body: "run pnpm test", daysAgo: 2 },
+    ])
+    const report = await Curation.proposeMemory({ projectRoot: tmp.path, now: () => now })
+    expect(report.proposals.map((p) => [p.name, p.rule])).toEqual([["test-command-old", "superseded"]])
+    expect(report.proposals[0]?.reason).toContain("test-command")
+  })
+
+  test("a superseded proposal replaces the unused one for the same entry", async () => {
+    await using tmp = await tmpdir()
+    await seed(tmp.path, [
+      { name: "style-v1", body: "tabs", daysAgo: 200 },
+      { name: "style-v2", body: "spaces", daysAgo: 1 },
+    ])
+    const report = await Curation.proposeMemory({ projectRoot: tmp.path, now: () => now })
+    expect(report.proposals.map((p) => [p.name, p.rule])).toEqual([["style-v1", "superseded"]])
+  })
+
+  test("same content, different agents, same timestamp, or different topics are never superseded", async () => {
+    await using tmp = await tmpdir()
+    await seed(tmp.path, [
+      { name: "alpha-v1", body: "same body", daysAgo: 10 },
+      { name: "alpha-v2", body: "same   body", daysAgo: 1 },
+      { name: "beta-v1", body: "one", daysAgo: 10, agents: ["build"] },
+      { name: "beta-v2", body: "two", daysAgo: 1, agents: ["plan"] },
+      { name: "gamma-v1", body: "one", daysAgo: 5 },
+      { name: "gamma-v2", body: "two", daysAgo: 5 },
+      { name: "delta", body: "one", daysAgo: 10 },
+      { name: "epsilon", body: "two", daysAgo: 1 },
+    ])
+    const report = await Curation.proposeMemory({ projectRoot: tmp.path, now: () => now })
+    expect(report.proposals).toEqual([])
+  })
+
+  test("apply removes only the superseded entry and undo restores it", async () => {
+    await using tmp = await tmpdir()
+    await seed(tmp.path, [
+      { name: "build-old", body: "run make", daysAgo: 20 },
+      { name: "build", body: "run pnpm build", daysAgo: 1 },
+    ])
+    const report = await Curation.proposeMemory({ projectRoot: tmp.path, now: () => now })
+    const proposal = report.proposals[0]!
+    const options = { projectRoot: tmp.path, now: () => now }
+    const record = await Curation.apply(options, {
+      id: proposal.id,
+      kind: proposal.kind!,
+      name: proposal.name,
+      scope: proposal.scope,
+    })
+    expect(record.name).toBe("build-old")
+    store._resetReadCache()
+    expect((await listEntries(tmp.path)).map((entry) => entry.name)).toEqual(["build"])
+    await Curation.undo(options, proposal.id)
+    store._resetReadCache()
+    expect((await listEntries(tmp.path)).map((entry) => entry.name).sort()).toEqual(["build", "build-old"])
   })
 
   test("prefers the usage record over savedAt", async () => {
