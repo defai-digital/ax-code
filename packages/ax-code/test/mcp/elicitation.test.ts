@@ -165,6 +165,66 @@ test("planForm rejects malformed enums instead of degrading them to free text", 
   expect(empty).toMatchObject({ ok: false })
 })
 
+test("planForm sanitizes enum values and property names used as display fallbacks", () => {
+  const ESC = String.fromCharCode(27)
+  const BEL = String.fromCharCode(7)
+  const control = new RegExp(
+    `[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}-${String.fromCharCode(159)}]`,
+  )
+  const plan = McpElicitation.planForm(
+    formParams({
+      properties: {
+        // No title/description: the raw property key becomes the display text.
+        [`bad${ESC}evil`]: { type: "string" },
+        pick: { type: "string", enum: ["ok", `ev${BEL}il\tchoice`] },
+      },
+    }),
+  )
+  expect(plan.ok).toBe(true)
+  if (!plan.ok) return
+  for (const field of plan.fields) {
+    expect(field.question.question).not.toMatch(control)
+    expect(field.question.header).not.toMatch(control)
+    for (const option of field.question.options ?? []) {
+      expect(option.label).not.toMatch(control)
+      expect(option.description).not.toMatch(control)
+    }
+  }
+  // The display label is sanitized while the raw value survives for coercion.
+  expect(plan.fields[1]?.options).toEqual([
+    { label: "ok", value: "ok" },
+    { label: "ev il choice", value: `ev${BEL}il\tchoice` },
+  ])
+})
+
+test("planForm declines duplicate enum labels", () => {
+  const duplicated = McpElicitation.planForm(
+    formParams({ properties: { pick: { type: "string", enum: ["a", "b"], enumNames: ["Same", "Same"] } } }),
+  )
+  expect(duplicated).toMatchObject({ ok: false })
+
+  // Sanitization can collapse distinct raw values onto the same label.
+  const collapsed = McpElicitation.planForm(
+    formParams({ properties: { pick: { type: "string", enum: ["a\tb", "a  b"] } } }),
+  )
+  expect(collapsed).toMatchObject({ ok: false })
+})
+
+test("planForm declines numeric fields with enum constraints", () => {
+  const plan = McpElicitation.planForm(formParams({ properties: { level: { type: "integer", enum: [1, 2, 3] } } }))
+  expect(plan).toMatchObject({ ok: false })
+})
+
+test("coerceAnswers maps a sanitized label back to its raw enum value", () => {
+  const BEL = String.fromCharCode(7)
+  const plan = McpElicitation.planForm(formParams({ properties: { pick: { type: "string", enum: [`ev${BEL}il`] } } }))
+  expect(plan.ok).toBe(true)
+  if (!plan.ok) return
+  expect(plan.fields[0]?.options).toEqual([{ label: "ev il", value: `ev${BEL}il` }])
+  const result = McpElicitation.coerceAnswers(plan.fields, [["ev il"]])
+  expect(result).toEqual({ ok: true, content: { pick: `ev${BEL}il` } })
+})
+
 // -------------------------------------------------------------------------
 // coerceAnswers: answers -> content
 // -------------------------------------------------------------------------

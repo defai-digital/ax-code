@@ -122,8 +122,19 @@ export namespace McpElicitation {
     if (values.length === 0 || values.length > MAX_ENUM_OPTIONS) return undefined
     const options: EnumOption[] = []
     for (const [index, value] of values.entries()) {
-      const label = sanitizeText(labels[index], MAX_TITLE_CHARS) ?? value
+      // The label is display text: falling back to the raw value still needs
+      // sanitizing, because enum values are untrusted server text too.
+      const label =
+        sanitizeText(labels[index], MAX_TITLE_CHARS) ?? sanitizeText(value, MAX_TITLE_CHARS) ?? `Option ${index + 1}`
       options.push({ label, value })
+    }
+    // Ambiguous labels would coerce a later choice back to the first match,
+    // submitting a value the user never picked; decline like other malformed
+    // enums. Sanitization can create collisions the raw values did not have.
+    const seen = new Set<string>()
+    for (const option of options) {
+      if (seen.has(option.label)) return undefined
+      seen.add(option.label)
     }
     return options
   }
@@ -154,7 +165,10 @@ export namespace McpElicitation {
         return { ok: false, reason: `field "${name}" is malformed or has no type` }
       }
       const title =
-        sanitizeText(field.title, MAX_TITLE_CHARS) ?? sanitizeText(field.description, MAX_TITLE_CHARS) ?? name
+        sanitizeText(field.title, MAX_TITLE_CHARS) ??
+        sanitizeText(field.description, MAX_TITLE_CHARS) ??
+        sanitizeText(name, MAX_TITLE_CHARS) ??
+        "Field"
       const isRequired = required.has(name)
       let type: FieldType
       let options: EnumOption[] | undefined
@@ -178,7 +192,14 @@ export namespace McpElicitation {
             // Fixed choices only: a custom typed answer could never be
             // coerced back to a schema value.
             custom = false
-            for (const option of enumOptions) questionOptions.push({ label: option.label, description: option.value })
+            for (const option of enumOptions) {
+              questionOptions.push({
+                label: option.label,
+                // EnumOption keeps the raw value for coercion; the dialog
+                // description only ever renders sanitized text.
+                description: sanitizeText(option.value, MAX_TITLE_CHARS) ?? option.label,
+              })
+            }
           } else {
             type = "string"
             if (
@@ -203,6 +224,12 @@ export namespace McpElicitation {
         }
         case "number":
         case "integer": {
+          if (field.enum !== undefined || field.oneOf !== undefined) {
+            // Numeric schemas carry minimum/maximum only; a numeric enum cannot
+            // be rendered as fixed choices here, so decline rather than collect
+            // an answer the schema forbids.
+            return { ok: false, reason: `field "${name}" has an enum constraint on a numeric type` }
+          }
           type = "number"
           integer = field.type === "integer"
           hint = field.type === "integer" ? " (integer)" : " (number)"
