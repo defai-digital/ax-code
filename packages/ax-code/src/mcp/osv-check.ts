@@ -384,13 +384,14 @@ export namespace OsvCheck {
     const cache = await loadCache()
     const key = cacheKey(pkg)
     const existing = cache.get(key)
-    if (existing && Date.now() - existing.fetchedAt < MCP_OSV_CACHE_TTL_MS) {
+    if (existing && existing.version === pkg.version && Date.now() - existing.fetchedAt < MCP_OSV_CACHE_TTL_MS) {
       return { blockIds: existing.blockIds, warnIds: existing.warnIds }
     }
     const result = await lookupPackage(pkg)
     cache.set(key, freshEntry(pkg, result))
-    // Best-effort persistence; an I/O failure must not block the launch.
-    void persistCache(cache)
+    // Finish best-effort persistence before releasing ownership of this lookup.
+    // persistCache catches I/O failures so they never block the launch.
+    await persistCache(cache)
     return result
   }
 

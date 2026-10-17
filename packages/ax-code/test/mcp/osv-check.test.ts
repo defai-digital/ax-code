@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import os from "os"
 import fs from "fs/promises"
+import { Filesystem } from "../../src/util/filesystem"
 import { OsvCheck } from "../../src/mcp/osv-check"
 
 interface RecordedCall {
@@ -245,9 +246,8 @@ describe("checkLocalLaunch", () => {
     const { fetch, calls } = makeFetch([{ body: JSON.stringify({ vulns: [] }) }])
     OsvCheck._setOsvOverrides({ fetch, cachePath })
     await OsvCheck.checkLocalLaunch(["npx", "foo@1.0.0"], "test")
-    await OsvCheck.checkLocalLaunch(["npx", "foo@2.0.0"], "test")
-    // Both lookups hit the same ecosystem+name key, so the second call
-    // must come from cache and not call fetch again.
+    await OsvCheck.checkLocalLaunch(["npx", "foo@1.0.0"], "test")
+    // Repeated checks for the same package version reuse the cached result.
     expect(calls).toHaveLength(1)
   })
 
@@ -266,8 +266,6 @@ describe("checkLocalLaunch", () => {
     const { fetch } = makeFetch([{ body: JSON.stringify({ vulns: [] }) }])
     OsvCheck._setOsvOverrides({ fetch, cachePath })
     await OsvCheck.checkLocalLaunch(["npx", "foo"], "test")
-    // Wait for the best-effort write to settle.
-    await new Promise((resolve) => setTimeout(resolve, 50))
     const onDisk = await fs.readFile(cachePath, "utf8")
     expect(onDisk).toContain('"foo"')
   })
@@ -278,4 +276,45 @@ describe("checkLocalLaunch", () => {
     await OsvCheck.checkLocalLaunch(["node", "server.js"], "test")
     expect(calls).toHaveLength(0)
   })
+})
+
+test("a version change rechecks advisories instead of reusing an older clean result", async () => {
+  const { fetch, calls } = makeFetch([
+    { body: JSON.stringify({ vulns: [] }) },
+    { body: JSON.stringify({ vulns: [{ id: "MAL-2026-1234" }] }) },
+  ])
+  OsvCheck._setOsvOverrides({ fetch, cachePath })
+  await OsvCheck.checkLocalLaunch(["npx", "foo@1.0.0"], "test")
+  await expect(OsvCheck.checkLocalLaunch(["npx", "foo@2.0.0"], "test")).rejects.toThrow(OsvCheck.McpOSVBlocked)
+  expect(calls).toHaveLength(2)
+})
+
+test("cachedLookup waits for its best-effort persistence to finish", async () => {
+  let release!: () => void
+  let writing!: () => void
+  const started = new Promise<void>((resolve) => {
+    writing = resolve
+  })
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const write = vi.spyOn(Filesystem, "writeJson").mockImplementation(async () => {
+    writing()
+    await blocked
+  })
+  const { fetch } = makeFetch([{ body: JSON.stringify({ vulns: [] }) }])
+  OsvCheck._setOsvOverrides({ fetch, cachePath })
+  let settled = false
+  const lookup = OsvCheck.cachedLookup({ ecosystem: "npm", name: "foo" }).finally(() => {
+    settled = true
+  })
+  try {
+    await started
+    await Promise.resolve()
+    expect(settled).toBe(false)
+  } finally {
+    release()
+    await lookup
+    write.mockRestore()
+  }
 })

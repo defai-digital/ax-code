@@ -13,6 +13,7 @@ changes belong to AX Coder.
 - Honor Azure token cancellation on cache hits and during shared lookup startup, preserve abort reasons, and stop canceled requests before transport dispatch.
 - Match fetch signal and header overrides and snapshot request options before waiting for Azure credentials.
 - Bound cached path-rule bodies under file churn without omitting matching rules.
+- Recheck OSV advisories when an MCP package version changes and finish cache persistence before releasing lookup ownership.
 - Include fixes for prompt reference containment and byte limits, autocomplete initialization and insertion, and Code Mode variable/function scoping.
 
 ### Changed
