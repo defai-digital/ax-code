@@ -90,12 +90,13 @@ export namespace AzureToken {
     return {
       async get(signal?: AbortSignal): Promise<string> {
         if (cached && cached.expiresAt - now() > REFRESH_MARGIN_MS) return cached.token
+        // Do not start an az lookup for a caller that is already gone.
+        if (signal?.aborted) throw abortReason(signal)
         const request = (pending ??= fetchToken().finally(() => {
           pending = undefined
         }))
         // One caller's abort must not fail the others waiting on the same lookup.
         if (!signal) return request
-        if (signal.aborted) throw abortReason(signal)
         return new Promise<string>((resolve, reject) => {
           const onAbort = () => reject(abortReason(signal))
           signal.addEventListener("abort", onAbort, { once: true })

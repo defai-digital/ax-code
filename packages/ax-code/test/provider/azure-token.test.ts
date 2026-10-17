@@ -190,6 +190,23 @@ test("one caller's abort does not fail another caller sharing the lookup", async
   await expect(surviving).resolves.toBe("shared")
 })
 
+test("an already-aborted caller does not start an az lookup", async () => {
+  let calls = 0
+  const source = AzureToken.create(
+    {},
+    {
+      exec: async () => {
+        calls++
+        return reply("unused", 3_600_000)
+      },
+    },
+  )
+  const controller = new AbortController()
+  controller.abort()
+  await expect(source.get(controller.signal)).rejects.toThrow()
+  expect(calls).toBe(0)
+})
+
 test("wrapFetch forwards a Request signal to the token source", async () => {
   const controller = new AbortController()
   let received: AbortSignal | undefined
