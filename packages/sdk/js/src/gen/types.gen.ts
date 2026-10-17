@@ -1317,6 +1317,7 @@ export type Event =
   | EventQuestionAsked
   | EventQuestionReplied
   | EventQuestionRejected
+  | EventMcpElicitationResolved
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventPermissionAutoAcceptChanged
@@ -1517,6 +1518,12 @@ export type EventMcpBrowserOpenFailed = {
     mcpName: string
     url: string
   }
+}
+
+/** Server event payload with `type: "mcp.elicitation.resolved"` (auto-generated). */
+export type EventMcpElicitationResolved = {
+  type: "mcp.elicitation.resolved"
+  properties: McpElicitationResolved
 }
 
 /** Server event payload with `type: "mcp.tools.changed"` (auto-generated). */
@@ -3186,6 +3193,30 @@ export type McpStatusNeedsTrust = {
     path?: string
     url?: string
   }
+}
+
+/** AX Code API schema `McpElicitationResolved` (auto-generated from the OpenAPI contract). */
+export type McpElicitationResolved = {
+  server: string
+  sessionID?: string
+  callID?: string
+  mode: "form" | "url" | "unknown"
+  action: "accept" | "decline" | "cancel"
+  category:
+    | "autonomous"
+    | "no_active_call"
+    | "invalid_request"
+    | "unsupported_form"
+    | "invalid_url"
+    | "user_accepted"
+    | "user_declined"
+    | "aborted"
+    | "invalid_answer"
+    | "prompt_failed"
+    | "open_failed"
+  fieldCount: number
+  fieldNames: Array<string>
+  urlHost?: string
 }
 
 /** AX Code API schema `McpLocalConfig` (auto-generated from the OpenAPI contract). */

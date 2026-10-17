@@ -3,6 +3,7 @@ import type { Client } from "@modelcontextprotocol/client"
 import { Client as RealClient, InMemoryTransport } from "@modelcontextprotocol/client"
 import { Server } from "@modelcontextprotocol/server"
 import { McpElicitation } from "../../src/mcp/elicitation"
+import { Bus } from "../../src/bus"
 import { Question } from "../../src/question"
 import { Instance } from "../../src/project/instance"
 import { SessionID } from "../../src/session/schema"
@@ -272,6 +273,7 @@ test("decide returns accept with coerced content", async () => {
   })
   expect(decision).toEqual({
     action: "accept",
+    category: "user_accepted",
     content: { name: "Ada", plan: "free", tier: "a", verified: false, age: 36 },
   })
 })
@@ -388,6 +390,10 @@ test("elicitation/create surfaces as a session question and returns coerced cont
       )
       McpElicitation.registerHandler(client, "form-server")
       await client.connect(clientTransport)
+      const resolved: Array<Record<string, unknown>> = []
+      const unsubscribe = Bus.subscribe(McpElicitation.Event.Resolved, (event) => {
+        resolved.push(event.properties)
+      })
       try {
         const controller = new AbortController()
         const options: object = {}
@@ -413,7 +419,26 @@ test("elicitation/create surfaces as a session question and returns coerced cont
         const result = await call
         const text = (result.content as Array<{ type: string; text?: string }>)[0]?.text
         expect(text).toBe("action=accept name=Ada age=36")
+
+        // ADR-254: one redacted event with names and counts, never values or the server message.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        expect(resolved).toEqual([
+          {
+            server: "form-server",
+            sessionID: "ses_elicitation",
+            mode: "form",
+            action: "accept",
+            category: "user_accepted",
+            fieldCount: 2,
+            fieldNames: ["name", "age"],
+          },
+        ])
+        const serialized = JSON.stringify(resolved)
+        expect(serialized).not.toContain("Ada")
+        expect(serialized).not.toContain("36")
+        expect(serialized).not.toContain("complete your profile")
       } finally {
+        unsubscribe()
         await client.close().catch(() => {})
         await server.close().catch(() => {})
       }
@@ -528,4 +553,77 @@ test("decide url mode declines when openUrl throws", async () => {
 test("clientCapabilities advertises both form and url mode", () => {
   const caps = McpElicitation.clientCapabilities()
   expect(caps.elicitation).toEqual({ form: {}, url: {} })
+})
+
+// -------------------------------------------------------------------------
+// Resolution categories and the redacted request summary (ADR-254)
+// -------------------------------------------------------------------------
+
+test("every decision carries a closed category", async () => {
+  const ask = vi.fn(async () => [["x"]])
+  const call = { sessionID: SessionID.make("ses_category") }
+  const form = {
+    mode: "form",
+    message: "m",
+    requestedSchema: { type: "object", properties: { a: { type: "string" } } },
+  }
+  expect((await McpElicitation.decide({ params: form, call, autonomous: true, ask })).category).toBe("autonomous")
+  expect((await McpElicitation.decide({ params: form, call: undefined, autonomous: false, ask })).category).toBe(
+    "no_active_call",
+  )
+  expect((await McpElicitation.decide({ params: "nope", call, autonomous: false, ask })).category).toBe(
+    "invalid_request",
+  )
+  expect(
+    (await McpElicitation.decide({ params: { mode: "carrier-pigeon" }, call, autonomous: false, ask })).category,
+  ).toBe("invalid_request")
+  const nested = { mode: "form", requestedSchema: { type: "object", properties: { a: { type: "object" } } } }
+  expect((await McpElicitation.decide({ params: nested, call, autonomous: false, ask })).category).toBe(
+    "unsupported_form",
+  )
+  expect(
+    (
+      await McpElicitation.decide({
+        params: { mode: "url", url: "http://example.com/x" },
+        call,
+        autonomous: false,
+        ask,
+      })
+    ).category,
+  ).toBe("invalid_url")
+  const failing = vi.fn(async () => {
+    throw new Error("boom")
+  })
+  expect((await McpElicitation.decide({ params: form, call, autonomous: false, ask: failing })).category).toBe(
+    "prompt_failed",
+  )
+})
+
+test("summarizeRequest keeps names, counts and the URL host only", () => {
+  const many = Object.fromEntries(
+    Array.from({ length: 10 }, (_, index) => [
+      `field_${index}_${"x".repeat(80)}`,
+      { type: "string", default: "secret-default" },
+    ]),
+  )
+  const form = McpElicitation.summarizeRequest({
+    mode: "form",
+    message: "token=abc",
+    requestedSchema: { type: "object", properties: many },
+  })
+  expect(form.mode).toBe("form")
+  expect(form.fieldCount).toBe(10)
+  expect(form.fieldNames).toHaveLength(McpElicitation.MAX_EVENT_FIELD_NAMES)
+  expect(form.fieldNames.every((name) => name.length <= 64)).toBe(true)
+  expect(JSON.stringify(form)).not.toContain("secret-default")
+  expect(JSON.stringify(form)).not.toContain("token=abc")
+
+  const url = McpElicitation.summarizeRequest({ mode: "url", url: "https://auth.example.com/cb?state=s3cr3t#frag" })
+  expect(url).toEqual({ mode: "url", fieldCount: 0, fieldNames: [], urlHost: "auth.example.com" })
+  expect(McpElicitation.summarizeRequest({ mode: "url", url: "not a url" })).toEqual({
+    mode: "url",
+    fieldCount: 0,
+    fieldNames: [],
+  })
+  expect(McpElicitation.summarizeRequest(null)).toEqual({ mode: "unknown", fieldCount: 0, fieldNames: [] })
 })

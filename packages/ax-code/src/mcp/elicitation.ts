@@ -1,4 +1,5 @@
 import type { Client, ClientCapabilities } from "@modelcontextprotocol/client"
+import z from "zod"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { Instance } from "../project/instance"
@@ -6,6 +7,8 @@ import { Question } from "../question"
 import { ScopedFlag } from "@/flag/scoped"
 import { isRecord } from "@/util/record"
 import { MessageID, SessionID } from "@/session/schema"
+import { Bus } from "@/bus"
+import { BusEvent } from "@/bus/bus-event"
 
 /**
  * Form-mode MCP elicitation.
@@ -365,10 +368,85 @@ export namespace McpElicitation {
   // Decision and client wiring
   // ---------------------------------------------------------------------
 
+  /**
+   * ADR-254: why a request resolved the way it did, as a closed set a client
+   * can count and explain. The free-text `reason` stays a log-only diagnostic.
+   */
+  export const Category = z.enum([
+    "autonomous",
+    "no_active_call",
+    "invalid_request",
+    "unsupported_form",
+    "invalid_url",
+    "user_accepted",
+    "user_declined",
+    "aborted",
+    "invalid_answer",
+    "prompt_failed",
+    "open_failed",
+  ])
+  export type Category = z.infer<typeof Category>
+
+  /** At most this many requested field names travel on the event, each capped at MAX_EVENT_NAME_CHARS. */
+  export const MAX_EVENT_FIELD_NAMES = 8
+  const MAX_EVENT_NAME_CHARS = 64
+
+  /**
+   * ADR-254: one redacted event per resolved request. It never carries field
+   * values or answers, defaults, enum labels, the server message, the raw
+   * schema, a URL path or query, or the diagnostic reason.
+   */
+  export const Event = {
+    Resolved: BusEvent.define(
+      "mcp.elicitation.resolved",
+      z
+        .object({
+          server: z.string(),
+          sessionID: z.string().optional(),
+          callID: z.string().optional(),
+          mode: z.enum(["form", "url", "unknown"]),
+          action: z.enum(["accept", "decline", "cancel"]),
+          category: Category,
+          fieldCount: z.number().int().nonnegative(),
+          fieldNames: z.string().array(),
+          urlHost: z.string().optional(),
+        })
+        .meta({ ref: "McpElicitationResolved" }),
+    ),
+  }
+
+  /** The redacted shape of a request: its mode, how many fields it asked for and their names, or the URL host. */
+  export function summarizeRequest(params: unknown): {
+    mode: "form" | "url" | "unknown"
+    fieldCount: number
+    fieldNames: string[]
+    urlHost?: string
+  } {
+    if (!isRecord(params)) return { mode: "unknown", fieldCount: 0, fieldNames: [] }
+    if (params.mode === "url") {
+      let urlHost: string | undefined
+      try {
+        urlHost = typeof params.url === "string" ? new URL(params.url).host || undefined : undefined
+      } catch {
+        urlHost = undefined
+      }
+      return { mode: "url", fieldCount: 0, fieldNames: [], ...(urlHost ? { urlHost } : {}) }
+    }
+    if (params.mode !== undefined && params.mode !== "form") return { mode: "unknown", fieldCount: 0, fieldNames: [] }
+    const schema = isRecord(params.requestedSchema) ? params.requestedSchema : undefined
+    const names = schema && isRecord(schema.properties) ? Object.keys(schema.properties) : []
+    return {
+      mode: "form",
+      fieldCount: names.length,
+      fieldNames: names.slice(0, MAX_EVENT_FIELD_NAMES).map((name) => name.slice(0, MAX_EVENT_NAME_CHARS)),
+    }
+  }
+
   export type Decision = {
     action: "accept" | "decline" | "cancel"
     content?: Record<string, string | number | boolean>
-    /** Diagnostic only; never part of the wire response. */
+    category: Category
+    /** Diagnostic only; never part of the wire response or the event. */
     reason?: string
   }
 
@@ -389,9 +467,10 @@ export namespace McpElicitation {
      *  in unit tests; production wires the `open` package. */
     openUrl?: (url: string) => Promise<unknown>
   }): Promise<Decision> {
-    if (input.autonomous) return { action: "decline", reason: "autonomous mode never blocks on user input" }
+    if (input.autonomous)
+      return { action: "decline", category: "autonomous", reason: "autonomous mode never blocks on user input" }
     if (!isRecord(input.params)) {
-      return { action: "decline", reason: "params is missing or malformed" }
+      return { action: "decline", category: "invalid_request", reason: "params is missing or malformed" }
     }
     if (input.params.mode === "url") {
       return await decideUrl({ params: input.params, call: input.call, ask: input.ask, openUrl: input.openUrl })
@@ -399,7 +478,11 @@ export namespace McpElicitation {
     if (input.params.mode === "form" || input.params.mode === undefined) {
       return decideForm({ params: input.params, call: input.call, ask: input.ask })
     }
-    return { action: "decline", reason: `unsupported elicitation mode: ${String(input.params.mode)}` }
+    return {
+      action: "decline",
+      category: "invalid_request",
+      reason: `unsupported elicitation mode: ${String(input.params.mode)}`,
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -442,10 +525,14 @@ export namespace McpElicitation {
     openUrl?: (url: string) => Promise<unknown>
   }): Promise<Decision> {
     if (!input.call) {
-      return { action: "decline", reason: "no in-flight session call is available to surface the prompt in" }
+      return {
+        action: "decline",
+        category: "no_active_call",
+        reason: "no in-flight session call is available to surface the prompt in",
+      }
     }
     const plan = planUrl(input.params)
-    if (!plan.ok) return { action: "decline", reason: plan.reason }
+    if (!plan.ok) return { action: "decline", category: "invalid_url", reason: plan.reason }
     let answers: Question.Answer[]
     try {
       const question: Question.Info = {
@@ -461,21 +548,25 @@ export namespace McpElicitation {
     } catch (error) {
       if (error instanceof Question.RejectedError) {
         return input.call.signal?.aborted
-          ? { action: "cancel", reason: "the tool call was aborted while the prompt was open" }
-          : { action: "decline", reason: "the user dismissed the prompt" }
+          ? { action: "cancel", category: "aborted", reason: "the tool call was aborted while the prompt was open" }
+          : { action: "decline", category: "user_declined", reason: "the user dismissed the prompt" }
       }
-      return { action: "decline", reason: `asking failed: ${toErrorMessage(error)}` }
+      return { action: "decline", category: "prompt_failed", reason: `asking failed: ${toErrorMessage(error)}` }
     }
     const pick = (Array.isArray(answers[0]) ? answers[0][0] : "").trim()
-    if (pick !== "Open") return { action: "decline", reason: "the user declined the URL" }
+    if (pick !== "Open") return { action: "decline", category: "user_declined", reason: "the user declined the URL" }
     if (input.openUrl) {
       try {
         await input.openUrl(plan.url)
       } catch (error) {
-        return { action: "decline", reason: `failed to open the URL: ${toErrorMessage(error)}` }
+        return {
+          action: "decline",
+          category: "open_failed",
+          reason: `failed to open the URL: ${toErrorMessage(error)}`,
+        }
       }
     }
-    return { action: "accept" }
+    return { action: "accept", category: "user_accepted" }
   }
 
   function decideForm(input: {
@@ -485,10 +576,14 @@ export namespace McpElicitation {
   }): Decision | Promise<Decision> {
     const call = input.call
     if (!call) {
-      return { action: "decline", reason: "no in-flight session call is available to surface the prompt in" }
+      return {
+        action: "decline",
+        category: "no_active_call",
+        reason: "no in-flight session call is available to surface the prompt in",
+      }
     }
     const plan = planForm(input.params)
-    if (!plan.ok) return { action: "decline", reason: plan.reason }
+    if (!plan.ok) return { action: "decline", category: "unsupported_form", reason: plan.reason }
     return (async () => {
       let answers: Question.Answer[]
       try {
@@ -499,14 +594,14 @@ export namespace McpElicitation {
       } catch (error) {
         if (error instanceof Question.RejectedError) {
           return call.signal?.aborted
-            ? { action: "cancel", reason: "the tool call was aborted while the prompt was open" }
-            : { action: "decline", reason: "the user dismissed the prompt" }
+            ? { action: "cancel", category: "aborted", reason: "the tool call was aborted while the prompt was open" }
+            : { action: "decline", category: "user_declined", reason: "the user dismissed the prompt" }
         }
-        return { action: "decline", reason: `asking failed: ${toErrorMessage(error)}` }
+        return { action: "decline", category: "prompt_failed", reason: `asking failed: ${toErrorMessage(error)}` }
       }
       const coerced = coerceAnswers(plan.fields, answers)
-      if (!coerced.ok) return { action: "decline", reason: coerced.reason }
-      return { action: "accept", content: coerced.content }
+      if (!coerced.ok) return { action: "decline", category: "invalid_answer", reason: coerced.reason }
+      return { action: "accept", category: "user_accepted", content: coerced.content }
     })()
   }
 
@@ -518,6 +613,28 @@ export namespace McpElicitation {
    */
   export function clientCapabilities(): Pick<ClientCapabilities, "elicitation"> {
     return { elicitation: { form: {}, url: {} } }
+  }
+
+  function publishResolved(
+    server: string,
+    call: CallContext | undefined,
+    params: unknown,
+    action: Decision["action"],
+    category: Category,
+  ) {
+    try {
+      Bus.publishDetached(Event.Resolved, {
+        server,
+        ...(call ? { sessionID: call.sessionID } : {}),
+        ...(call?.tool ? { callID: call.tool.callID } : {}),
+        action,
+        category,
+        ...summarizeRequest(params),
+      })
+    } catch (error) {
+      // Observation only: a publish failure must never change the protocol answer.
+      log.warn("mcp.elicitation.resolved publish failed", { server, error: toErrorMessage(error) })
+    }
   }
 
   /**
@@ -541,9 +658,10 @@ export namespace McpElicitation {
           action: "accept" | "decline" | "cancel"
           content?: Record<string, string | number | boolean>
         }> => {
+          const call = currentCall(client)
           const decision = await decide({
             params: request.params,
-            call: currentCall(client),
+            call,
             autonomous: ScopedFlag.autonomous(),
             ask: (questions, call) =>
               Question.ask({
@@ -558,7 +676,9 @@ export namespace McpElicitation {
           // Reasons are diagnostic strings built here (field names, counts);
           // field values never reach the log.
           log.info("mcp elicitation resolved", { server: serverName, action: result.action, reason })
-          return result
+          publishResolved(serverName, call, request.params, result.action, result.category)
+          const { category: _category, ...answer } = result
+          return answer
         },
       ),
     )

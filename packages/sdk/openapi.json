@@ -41251,6 +41251,9 @@
             "$ref": "#/components/schemas/Event.question.rejected"
           },
           {
+            "$ref": "#/components/schemas/Event.mcp.elicitation.resolved"
+          },
+          {
             "$ref": "#/components/schemas/Event.mcp.tools.changed"
           },
           {
@@ -41941,6 +41944,22 @@
               "mcpName",
               "url"
             ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.elicitation.resolved": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.elicitation.resolved"
+          },
+          "properties": {
+            "$ref": "#/components/schemas/McpElicitationResolved"
           }
         },
         "required": [
@@ -47521,6 +47540,74 @@
           "status",
           "fingerprint",
           "source"
+        ]
+      },
+      "McpElicitationResolved": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string"
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "callID": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "form",
+              "url",
+              "unknown"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "accept",
+              "decline",
+              "cancel"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "autonomous",
+              "no_active_call",
+              "invalid_request",
+              "unsupported_form",
+              "invalid_url",
+              "user_accepted",
+              "user_declined",
+              "aborted",
+              "invalid_answer",
+              "prompt_failed",
+              "open_failed"
+            ]
+          },
+          "fieldCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "fieldNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "urlHost": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "server",
+          "mode",
+          "action",
+          "category",
+          "fieldCount",
+          "fieldNames"
         ]
       },
       "McpLocalConfig": {
