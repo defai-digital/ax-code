@@ -221,3 +221,132 @@ test("wrapFetch forwards a Request signal to the token source", async () => {
   controller.abort()
   expect(received?.aborted).toBe(true)
 })
+
+test("cached tokens still honor an already-aborted caller", async () => {
+  const source = AzureToken.create({}, { now: () => 0, exec: async () => reply("cached", 3_600_000) })
+  await source.get()
+  const reason = new Error("cancel cached request")
+  const controller = new AbortController()
+  controller.abort(reason)
+  await expect(source.get(controller.signal)).rejects.toBe(reason)
+})
+
+test("cancellation during shared lookup startup is not missed", async () => {
+  const controller = new AbortController()
+  const reason = new Error("cancel during startup")
+  const source = AzureToken.create(
+    {},
+    {
+      now: () => 0,
+      exec: async () => {
+        controller.abort(reason)
+        return reply("shared", 3_600_000)
+      },
+    },
+  )
+  await expect(source.get(controller.signal)).rejects.toBe(reason)
+  await expect(source.get()).resolves.toBe("shared")
+})
+
+test("wrapFetch respects explicit null signal overriding an aborted Request", async () => {
+  const controller = new AbortController()
+  controller.abort(new Error("original request canceled"))
+  const input = new Request("https://example.invalid/", { signal: controller.signal })
+  expect(new Request(input, { signal: null }).signal.aborted).toBe(false)
+  const source = AzureToken.create({}, { now: () => 0, exec: async () => reply("unused", 3_600_000) })
+  const wrapped = AzureToken.wrapFetch(async () => new Response("ok"), source)
+  await expect(wrapped(input, { signal: null })).resolves.toBeInstanceOf(Response)
+})
+
+test("wrapFetch uses init headers to replace Request headers as native fetch does", async () => {
+  const input = new Request("https://example.invalid/", {
+    headers: { "x-original": "old", "content-type": "text/plain" },
+  })
+  const init = { headers: { "x-current": "new" } }
+  let seen: Headers | undefined
+  const wrapped = AzureToken.wrapFetch(
+    async (_input, request) => {
+      seen = new Headers(request?.headers)
+      return new Response("ok")
+    },
+    { get: async () => "token" },
+  )
+  await wrapped(input, init)
+  const expected = new Headers(new Request(input, init).headers)
+  expected.set("authorization", "Bearer token")
+  expect([...seen!]).toEqual([...expected])
+})
+
+test("wrapFetch does not invoke the transport when canceled during token lookup", async () => {
+  const controller = new AbortController()
+  const reason = new Error("cancel token wait")
+  let called = false
+  const wrapped = AzureToken.wrapFetch(
+    async () => {
+      called = true
+      return new Response("ok")
+    },
+    {
+      get: async () => {
+        controller.abort(reason)
+        return "token"
+      },
+    },
+  )
+  await expect(wrapped("https://example.invalid/", { signal: controller.signal })).rejects.toBe(reason)
+  expect(called).toBe(false)
+})
+
+test("cancellation preserves a non-Error abort reason", async () => {
+  const controller = new AbortController()
+  const reason = { code: "caller-canceled" }
+  controller.abort(reason)
+  const source = AzureToken.create({}, { exec: async () => reply("unused", 3_600_000) })
+  await expect(source.get(controller.signal)).rejects.toBe(reason)
+})
+
+test("wrapFetch snapshots request options before awaiting a token", async () => {
+  let resolveToken!: (token: string) => void
+  const token = new Promise<string>((resolve) => {
+    resolveToken = resolve
+  })
+  const headers = new Headers({ "x-original": "before" })
+  const init: RequestInit = { method: "POST", headers, body: "payload" }
+  const expected = new Request("https://example.invalid/", init)
+  let received: Request | undefined
+  const wrapped = AzureToken.wrapFetch(
+    async (input, options) => {
+      received = new Request(input, options)
+      return new Response("ok")
+    },
+    { get: () => token },
+  )
+  const pending = wrapped("https://example.invalid/", init)
+  headers.set("x-original", "after")
+  init.method = "PUT"
+  resolveToken("token")
+  await pending
+  expect(received!.method).toBe(expected.method)
+  expect(received!.headers.get("x-original")).toBe(expected.headers.get("x-original"))
+})
+
+test("wrapFetch snapshots inherited Request headers before awaiting a token", async () => {
+  let resolveToken!: (token: string) => void
+  const token = new Promise<string>((resolve) => {
+    resolveToken = resolve
+  })
+  const input = new Request("https://example.invalid/", { headers: { "x-original": "before" } })
+  let received: Headers | undefined
+  const wrapped = AzureToken.wrapFetch(
+    async (_input, init) => {
+      received = new Headers(init?.headers)
+      return new Response("ok")
+    },
+    { get: () => token },
+  )
+  const pending = wrapped(input)
+  input.headers.set("x-original", "after")
+  resolveToken("token")
+  await pending
+  expect(received!.get("x-original")).toBe("before")
+})

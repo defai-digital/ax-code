@@ -61,8 +61,8 @@ export namespace AzureToken {
     return { token, expiresAt }
   }
 
-  function abortReason(signal: AbortSignal): Error {
-    return signal.reason instanceof Error ? signal.reason : new Error("Aborted")
+  function abortReason(signal: AbortSignal): unknown {
+    return signal.reason
   }
 
   /** Single-flight cached token source. Failures are not cached so `az login` takes effect at once. */
@@ -89,16 +89,19 @@ export namespace AzureToken {
     }
     return {
       async get(signal?: AbortSignal): Promise<string> {
-        if (cached && cached.expiresAt - now() > REFRESH_MARGIN_MS) return cached.token
-        // Do not start an az lookup for a caller that is already gone.
+        // Cancellation applies to cache hits as well as shared lookups.
         if (signal?.aborted) throw abortReason(signal)
+        if (cached && cached.expiresAt - now() > REFRESH_MARGIN_MS) return cached.token
         const request = (pending ??= fetchToken().finally(() => {
           pending = undefined
         }))
         // One caller's abort must not fail the others waiting on the same lookup.
         if (!signal) return request
         return new Promise<string>((resolve, reject) => {
-          const onAbort = () => reject(abortReason(signal))
+          const onAbort = () => {
+            signal.removeEventListener("abort", onAbort)
+            reject(abortReason(signal))
+          }
           signal.addEventListener("abort", onAbort, { once: true })
           request.then(
             (token) => {
@@ -110,6 +113,9 @@ export namespace AzureToken {
               reject(error)
             },
           )
+          // Starting the shared lookup can synchronously cancel this caller.
+          // Keep the request handlers attached so its rejection is observed.
+          if (signal.aborted) onAbort()
         })
       },
     }
@@ -121,13 +127,19 @@ export namespace AzureToken {
     source: { get(signal?: AbortSignal): Promise<string> },
   ): typeof fetch {
     return (async (input: string | Request | URL, init?: RequestInit) => {
-      const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined)
+      // Explicit null removes the Request signal, while undefined inherits it.
+      const signal = init?.signal === undefined ? (input instanceof Request ? input.signal : undefined) : init.signal
+      // Fetch replaces Request headers when init supplies them; it does not merge.
+      const headers = new Headers(
+        init?.headers === undefined && input instanceof Request ? input.headers : init?.headers,
+      )
+      // Snapshot caller-owned options before the asynchronous token lookup.
+      const requestInit = { ...init, headers }
       const token = await source.get(signal ?? undefined)
-      const headers = new Headers(input instanceof Request ? input.headers : undefined)
-      new Headers(init?.headers).forEach((value, name) => headers.set(name, value))
+      if (signal?.aborted) throw abortReason(signal)
       headers.delete("api-key")
       headers.set("authorization", `Bearer ${token}`)
-      return fetchFn(input, { ...init, headers })
+      return fetchFn(input, requestInit)
     }) as typeof fetch
   }
 }
