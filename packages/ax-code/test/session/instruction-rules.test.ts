@@ -303,3 +303,42 @@ test("evicts cached rule bodies under file churn without dropping matching rules
     },
   })
 })
+
+test("ignores a rules directory symlink that escapes the worktree", async () => {
+  await using tmp = await tmpdir({ git: true, config: { username: "testuser" } })
+  await using outside = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const outsideRules = path.join(outside.path, "rules")
+      await fs.mkdir(outsideRules, { recursive: true })
+      await fs.writeFile(path.join(outsideRules, "leak.md"), '---\npaths: ["src/**"]\n---\nEscaped rule')
+      await fs.mkdir(path.join(tmp.path, ".ax-code"), { recursive: true })
+      await fs.symlink(
+        outsideRules,
+        path.join(tmp.path, ".ax-code", "rules"),
+        process.platform === "win32" ? "junction" : "dir",
+      )
+      const target = path.join(tmp.path, "src", "file.ts")
+      expect(await InstructionPrompt.matchingPathRules(target)).toEqual([])
+    },
+  })
+})
+
+test("matches rules for a worktree file whose name starts with two dots", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { username: "testuser" },
+    init: async (dir) => {
+      await fs.mkdir(path.join(dir, ".ax-code", "rules"), { recursive: true })
+      await fs.writeFile(path.join(dir, ".ax-code", "rules", "dotty.md"), '---\npaths: ["**"]\n---\nDot rule')
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const target = path.join(tmp.path, "..notes.md")
+      expect(await InstructionPrompt.matchingPathRules(target)).toHaveLength(1)
+    },
+  })
+})

@@ -230,6 +230,10 @@ export namespace OsvCheck {
   /** In-memory copy of the disk cache. Lazy-loaded on first lookup. */
   let memoryCache: Map<string, CacheEntry> | undefined
   let memoryCacheLoadedAt = 0
+  /** Single-flight reload so concurrent lookups share one map. */
+  let memoryCacheLoading: Promise<Map<string, CacheEntry>> | undefined
+  /** Serialized writes so an older snapshot cannot win the last-write race. */
+  let persistChain: Promise<void> = Promise.resolve()
   /** Tests override the global fetch to inject canned responses. */
   let fetchOverride: typeof globalThis.fetch | undefined
   /** Tests override the on-disk path to keep artifacts inside tmpdir. */
@@ -240,8 +244,7 @@ export namespace OsvCheck {
     return path.join(Global.Path.data, OSV_CACHE_PATH)
   }
 
-  async function loadCache(): Promise<Map<string, CacheEntry>> {
-    if (memoryCache && Date.now() - memoryCacheLoadedAt < 60_000) return memoryCache
+  async function readCacheFile(): Promise<Map<string, CacheEntry>> {
     const map = new Map<string, CacheEntry>()
     const raw = await Filesystem.readJson<unknown>(getCachePath()).catch((error) => {
       if (Filesystem.isEnoent(error)) return undefined
@@ -263,15 +266,29 @@ export namespace OsvCheck {
     return map
   }
 
-  async function persistCache(map: Map<string, CacheEntry>): Promise<void> {
+  async function loadCache(): Promise<Map<string, CacheEntry>> {
+    if (memoryCache && Date.now() - memoryCacheLoadedAt < 60_000) return memoryCache
+    const loading = (memoryCacheLoading ??= readCacheFile())
+    try {
+      return await loading
+    } finally {
+      if (memoryCacheLoading === loading) memoryCacheLoading = undefined
+    }
+  }
+
+  function persistCache(map: Map<string, CacheEntry>): Promise<void> {
+    const filepath = getCachePath()
     const entries: Record<string, CacheEntry> = {}
     for (const [key, entry] of map.entries()) entries[key] = entry
     const file: CacheFile = { version: OSV_CACHE_VERSION, entries }
-    try {
-      await Filesystem.writeJson(getCachePath(), file, 0o600)
-    } catch (error) {
-      log.debug("osv cache write failed; continuing", { error: String(error) })
-    }
+    persistChain = persistChain.then(async () => {
+      try {
+        await Filesystem.writeJson(filepath, file, 0o600)
+      } catch (error) {
+        log.debug("osv cache write failed; continuing", { error: String(error) })
+      }
+    })
+    return persistChain
   }
 
   function getFetch(): typeof globalThis.fetch {
@@ -380,14 +397,17 @@ export namespace OsvCheck {
    * failure or a missing package fail open: the result is the same `[]`/warn
    * set `lookupPackage` would have returned without a cache.
    */
-  export async function cachedLookup(pkg: ParsedPackage): Promise<LookupResult> {
+  export async function cachedLookup(pkg: ParsedPackage, signal?: AbortSignal): Promise<LookupResult> {
+    if (signal?.aborted) return { blockIds: [], warnIds: [] }
     const cache = await loadCache()
     const key = cacheKey(pkg)
     const existing = cache.get(key)
     if (existing && existing.version === pkg.version && Date.now() - existing.fetchedAt < MCP_OSV_CACHE_TTL_MS) {
       return { blockIds: existing.blockIds, warnIds: existing.warnIds }
     }
-    const result = await lookupPackage(pkg)
+    const result = await lookupPackage(pkg, signal)
+    // A canceled lookup fails open, but its empty result must not be cached.
+    if (signal?.aborted) return result
     cache.set(key, freshEntry(pkg, result))
     // Finish best-effort persistence before releasing ownership of this lookup.
     // persistCache catches I/O failures so they never block the launch.
@@ -408,7 +428,7 @@ export namespace OsvCheck {
   ): Promise<void> {
     const parsed = parseLocalLaunch(command)
     if (!parsed) return
-    const result = await cachedLookup(parsed)
+    const result = await cachedLookup(parsed, signal)
     if (result.blockIds.length > 0) {
       log.error("osv MAL- advisories block MCP launch", {
         server: serverName,

@@ -318,3 +318,35 @@ test("cachedLookup waits for its best-effort persistence to finish", async () =>
     write.mockRestore()
   }
 })
+
+test("concurrent lookups keep both entries in the persisted cache", async () => {
+  let started = 0
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const fetch = (async () => {
+    started++
+    if (started === 2) release()
+    await gate
+    return new Response(JSON.stringify({ vulns: [] }), { status: 200 })
+  }) as unknown as typeof globalThis.fetch
+  OsvCheck._setOsvOverrides({ fetch, cachePath })
+  await Promise.all([
+    OsvCheck.cachedLookup({ ecosystem: "npm", name: "alpha" }),
+    OsvCheck.cachedLookup({ ecosystem: "npm", name: "beta" }),
+  ])
+  const onDisk = JSON.parse(await fs.readFile(cachePath, "utf8")) as { entries: Record<string, unknown> }
+  expect(Object.keys(onDisk.entries).sort()).toEqual(["npm:alpha", "npm:beta"])
+})
+
+test("an aborted caller skips the network and does not cache an empty result", async () => {
+  const { fetch, calls } = makeFetch([{ body: JSON.stringify({ vulns: [] }) }])
+  OsvCheck._setOsvOverrides({ fetch, cachePath })
+  const controller = new AbortController()
+  controller.abort()
+  await expect(OsvCheck.checkLocalLaunch(["npx", "foo"], "test", controller.signal)).resolves.toBeUndefined()
+  expect(calls).toHaveLength(0)
+  await OsvCheck.checkLocalLaunch(["npx", "foo"], "test")
+  expect(calls).toHaveLength(1)
+})

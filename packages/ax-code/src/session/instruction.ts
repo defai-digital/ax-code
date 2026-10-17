@@ -79,10 +79,13 @@ async function loadPathRules(): Promise<PathRule[]> {
     () => [] as string[],
   )
   const cache = ruleCache()
+  // Compare realpaths: the rules directory (or a rule file) can be a symlink
+  // that points outside the worktree.
+  const root = await realpathOrResolved(Instance.worktree)
   const rules: PathRule[] = []
   for (const file of files) {
-    const resolved = path.resolve(file)
-    if (!Filesystem.contains(Instance.worktree, resolved)) continue
+    const resolved = await fs.realpath(path.resolve(file)).catch(() => undefined)
+    if (!resolved || !Filesystem.contains(root, resolved)) continue
     const stat = await fs.stat(resolved).catch(() => undefined)
     if (!stat) continue
     const mtimeMs = stat.mtimeMs
@@ -110,7 +113,7 @@ async function matchingPathRulesImpl(target: string): Promise<PathRule[]> {
   const relative = path.relative(path.resolve(Instance.worktree), path.resolve(target))
   // Rules apply to worktree files only; paths outside the worktree have no
   // project-relative form to match against.
-  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return []
+  if (!relative || Filesystem.isOutsideRelative(relative)) return []
   return rules.filter((rule) => rule.paths.some((pattern) => Glob.match(pattern, relative)))
 }
 
