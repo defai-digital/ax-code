@@ -497,6 +497,9 @@ fn search_one_file(
     limit: usize,
     context_lines: usize,
 ) -> Vec<SearchMatch> {
+    if cancelled.load(Ordering::Relaxed) || limit == 0 {
+        return Vec::new();
+    }
     let mut results: Vec<SearchMatch> = Vec::new();
     let mut searcher = SearcherBuilder::new()
         .line_number(true)
@@ -617,16 +620,18 @@ fn search_content_impl(
             break;
         }
 
+        let remaining = limit - results.len();
         let per_file: Vec<Vec<SearchMatch>> = in_search_pool(|| {
             batch
                 .par_iter()
-                .map(|full| search_one_file(full, &matcher, cancelled, limit, context_lines))
+                .map(|full| search_one_file(full, &matcher, cancelled, remaining, context_lines))
                 .collect()
         });
         scan::check(cancelled)?;
 
-        for mut matches in per_file {
-            results.append(&mut matches);
+        for matches in per_file {
+            let remaining = limit - results.len();
+            results.extend(matches.into_iter().take(remaining));
             if results.len() >= limit {
                 break 'batches;
             }
