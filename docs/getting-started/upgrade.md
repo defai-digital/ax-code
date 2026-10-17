@@ -2,11 +2,16 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-15
+Last reviewed: 2026-10-17
 Owner: AX Code maintainers
 
-Downloads and updates use the public `download.ax-code.com` origin. No private
-GitHub token is required. Use the same installation channel you already use.
+Desktop and CLI installations have independent update channels. Use the channel that owns the installation you want to update; no private GitHub token is required.
+
+## Desktop app
+
+In the app, choose **AX Code → Check for Updates**. On Windows and Linux, this item is in the AX Code menu. Follow the app's prompts, or close AX Code and rerun the [Desktop installer](install-runtime.md#desktop-installation). The installer keeps existing user data and credentials.
+
+The app includes its own pinned runtime. Updating a separate CLI installation does not update that bundled runtime. The remaining CLI commands on this page apply to the standalone CLI/TUI.
 
 ## Check and update from the TUI
 

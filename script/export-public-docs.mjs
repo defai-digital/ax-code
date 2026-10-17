@@ -78,12 +78,12 @@ export function exportSnapshot(base = root) {
     ["CONTRIBUTING.md", "/en/docs/getting-started/source-access/"],
     ["CHANGELOG.md", `${downloadOrigin}/releases.json`],
   ])
+  const isPrivateRepositoryUrl = (target) => /^https:\/\/github\.com\/defai-digital\/ax-code(?:[\/#]|$)/.test(target)
   const publicLink = (source, target) => {
     target = target.replace(`${websiteOrigin}/`, "/")
-    if (/^(?:https?:|mailto:|#|\/)/.test(target) && !target.startsWith("https://github.com/defai-digital/ax-code"))
-      return target
+    if (/^(?:https?:|mailto:|#|\/)/.test(target) && !isPrivateRepositoryUrl(target)) return target
     let name = target
-    if (target.startsWith("https://github.com/defai-digital/ax-code")) {
+    if (isPrivateRepositoryUrl(target)) {
       const rest = target.slice("https://github.com/defai-digital/ax-code".length)
       if (!rest || rest.startsWith("#")) return "/en/docs/"
       if (rest.startsWith("/releases/download/")) return `${downloadOrigin}${rest}`
@@ -138,7 +138,7 @@ export function exportSnapshot(base = root) {
         (url) => publicLink(entry.source, url) ?? "the authorized source checkout",
       )
       if (
-        /github\.com\/defai-digital\/ax-code(?:[\/#\s]|$)|raw\.githubusercontent\.com\/defai-digital\/ax-code\//.test(
+        /github\.com\/defai-digital\/ax-code(?:[\/#\s]|$)|raw\.githubusercontent\.com\/defai-digital\/ax-code\/|api\.github\.com\/repos\/defai-digital\/ax-code(?:[\/?#]|$)/.test(
           text,
         )
       )
