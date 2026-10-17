@@ -166,3 +166,49 @@ test("subdirectory captures keep external edits, deletions and ignore changes vi
     },
   })
 })
+
+const excludeLookups = (git: { mock: { calls: unknown[][] } }) =>
+  git.mock.calls.filter(([args]) => (args as string[]).includes("info/exclude")).length
+
+test("the exclude file path is resolved with git once per worktree, not on every capture", async () => {
+  await using tmp = await tmpdir({ git: true, init: (dir) => fs.writeFile(path.join(dir, "sample.txt"), "Stable\n") })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const git = vi.spyOn(Git, "git")
+      const baseline = await Snapshot.track()
+      expect(await Snapshot.track()).toBe(baseline)
+      expect((await Snapshot.patch(baseline!)).files).toEqual([])
+      await fs.writeFile(path.join(tmp.path, "sample.txt"), "Changed\n")
+      const next = await Snapshot.track()
+      expect(next).not.toBe(baseline)
+      expect((await Snapshot.patch(baseline!)).files).toEqual([
+        path.join(tmp.path, "sample.txt").split(path.sep).join("/"),
+      ])
+      expect(excludeLookups(git)).toBe(1)
+    },
+  })
+})
+
+test("a failed exclude lookup is retried instead of being remembered", async () => {
+  await using tmp = await tmpdir({ git: true, init: (dir) => fs.writeFile(path.join(dir, "sample.txt"), "Stable\n") })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const runGit = Git.git
+      let failures = 1
+      const git = vi.spyOn(Git, "git").mockImplementation(async (args, options) => {
+        if (args.includes("info/exclude") && failures-- > 0)
+          return { exitCode: 128, text: () => "", stdout: Buffer.alloc(0), stderr: Buffer.from("Injected failure") }
+        return runGit(args, options)
+      })
+      // The first capture has no baseline and never syncs excludes; captures 2 and 3 look the path up
+      // (2 fails, 3 succeeds and is remembered), capture 4 reuses it.
+      const baseline = await Snapshot.track()
+      expect(await Snapshot.track()).toBe(baseline)
+      expect(await Snapshot.track()).toBe(baseline)
+      expect(await Snapshot.track()).toBe(baseline)
+      expect(excludeLookups(git)).toBe(2)
+    },
+  })
+})

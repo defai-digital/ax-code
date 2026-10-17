@@ -127,6 +127,8 @@ export namespace Snapshot {
     disposed?: boolean
     warnedWindowsPaths?: string
     warnedOversized?: string
+    /** Absolute path of the worktree's info/exclude; constant per worktree, so resolved with git once. */
+    excludePath?: string
   }
 
   function maxStageBytes() {
@@ -362,10 +364,16 @@ export namespace Snapshot {
 
   async function excludes(current: State) {
     if (current.vcs !== "git") return
-    const result = await runGit(["rev-parse", "--path-format=absolute", "--git-path", "info/exclude"], {
-      cwd: current.worktree,
-    })
-    const file = result.text.trim()
+    // Every capture and patch syncs the exclude file; the path itself never changes for a worktree,
+    // so only a successful lookup is remembered (a failed one is retried on the next call).
+    let file = current.excludePath
+    if (!file) {
+      const result = await runGit(["rev-parse", "--path-format=absolute", "--git-path", "info/exclude"], {
+        cwd: current.worktree,
+      })
+      file = result.code === 0 ? result.text.trim() : ""
+      if (file) current.excludePath = file
+    }
     if (!file) return
     if (!(await exists(file))) return
     return file

@@ -96,14 +96,25 @@ export namespace CodeIntelligence {
     return "partial"
   }
 
+  // One query maps many rows to symbols and most rows share a file, so the file lookup is remembered for the
+  // current query only. Queries are synchronous and ids are unique, so a newer id simply replaces the memo.
+  let explainMemo: { queryId: string; files: Map<string, Explain> } | undefined
+
   function buildExplain(file: string, projectID: ProjectID, queryId: string): Explain {
+    if (explainMemo?.queryId !== queryId) explainMemo = { queryId, files: new Map() }
+    const key = `${projectID}\0${file}`
+    // Each row gets its own object so a caller annotating one symbol cannot change its siblings.
+    const cached = explainMemo.files.get(key)
+    if (cached) return { ...cached }
     const fileRow = CodeGraphQuery.getFile(projectID, file)
-    return {
+    const explain: Explain = {
       source: "code-graph",
       indexedAt: fileRow?.indexed_at ?? 0,
       completeness: normalizeCompleteness(fileRow?.completeness),
       queryId,
     }
+    explainMemo.files.set(key, explain)
+    return { ...explain }
   }
 
   function normalizeResultLimit(limit: number | undefined): number | undefined {

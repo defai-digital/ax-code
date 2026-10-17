@@ -1124,6 +1124,123 @@ describe("session.prompt flow", () => {
     }
   })
 
+  function toolThenTextStream() {
+    let call = 0
+    return vi.spyOn(LLM, "stream").mockImplementation(async () => {
+      call++
+      if (call === 1) {
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "tool-input-start", id: "call_1", toolName: "read" }
+            yield { type: "tool-call", toolCallId: "call_1", toolName: "read", input: { file: "src/file.ts" } }
+            yield {
+              type: "tool-result",
+              toolCallId: "call_1",
+              input: { file: "src/file.ts" },
+              output: { output: "file body", title: "Read src/file.ts", metadata: {}, attachments: [] },
+            }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 20, outputTokens: 8, totalTokens: 28 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      }
+      return {
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_1" }
+          yield { type: "text-delta", id: "text_1", text: "done" }
+          yield { type: "text-end", id: "text_1" }
+          yield {
+            type: "finish-step",
+            finishReason: "stop",
+            usage: { inputTokens: 12, outputTokens: 4, totalTokens: 16 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any
+    })
+  }
+
+  test("skips the redundant patch when the post-tool snapshot equals the step baseline", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    trackSpy = vi.spyOn(Snapshot, "track").mockResolvedValue("snap-same")
+    // Non-empty, so a patch that is NOT skipped would leave a patch part on the tool step.
+    patchSpy = vi.spyOn(Snapshot, "patch").mockImplementation(async (hash) => ({
+      hash,
+      files: [path.join(tmp.path, "src/file.ts")],
+    }))
+    streamSpy = toolThenTextStream()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Unchanged Tool Step" })
+        await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
+          sessionID: session.id,
+          agent: "build",
+          parts: [{ type: "text", text: "inspect file" }],
+        })
+        const stored = await Session.messages({ sessionID: session.id })
+        const toolStep = stored.find((message) =>
+          message.parts.some((part) => part.type === "tool" && part.state.status === "completed"),
+        )
+        expect(toolStep).toBeDefined()
+        // The tool step's baseline and post-tool snapshot are the same tree: nothing to ledger.
+        expect(toolStep?.parts.some((part) => part.type === "patch")).toBe(false)
+        expect(toolStep?.parts.some((part) => part.type === "step-finish" && part.snapshot === "snap-same")).toBe(true)
+        // The tool step issues no patch call. The text-only step and the final snapshot still do.
+        expect(patchSpy).toHaveBeenCalledTimes(2)
+      },
+    })
+  })
+
+  test("still patches the step baseline when the post-tool track fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    trackSpy = vi
+      .spyOn(Snapshot, "track")
+      .mockResolvedValueOnce("snap-before")
+      .mockRejectedValueOnce(new Error("track failed after tools"))
+      .mockResolvedValue("snap-before")
+    patchSpy = vi.spyOn(Snapshot, "patch").mockImplementation(async (hash) => ({
+      hash,
+      files: hash === "snap-before" ? [path.join(tmp.path, "src/file.ts")] : [],
+    }))
+    streamSpy = toolThenTextStream()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Failed Post Track" })
+        await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
+          sessionID: session.id,
+          agent: "build",
+          parts: [{ type: "text", text: "inspect file" }],
+        })
+        const stored = await Session.messages({ sessionID: session.id })
+        const toolStep = stored.find((message) =>
+          message.parts.some((part) => part.type === "tool" && part.state.status === "completed"),
+        )
+        // The unchanged shortcut needs a successful track that returned the baseline; a failure keeps patching.
+        expect(toolStep?.parts.some((part) => part.type === "patch" && part.hash === "snap-before")).toBe(true)
+      },
+    })
+  })
+
   test("persists tool and patch parts for a tool-using step", async () => {
     await using tmp = await tmpdir({ git: true })
 

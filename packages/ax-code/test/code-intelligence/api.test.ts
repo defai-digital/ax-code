@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import path from "node:path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -260,6 +260,39 @@ describe("CodeIntelligence.symbolsInFile", () => {
         const xs = CodeIntelligence.symbolsInFile(projectID, "/tmp/x.ts")
         expect(xs.length).toBe(2)
         expect(xs.map((s) => s.name).sort()).toEqual(["a", "b"])
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("looks the file up once per query, not once per symbol", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        for (const name of ["a", "b", "c", "d", "e"]) seedSymbol(projectID, { name, file: "/tmp/x.ts" })
+        seedSymbol(projectID, { name: "z", file: "/tmp/y.ts" })
+
+        const getFile = vi.spyOn(CodeGraphQuery, "getFile")
+        try {
+          const xs = CodeIntelligence.symbolsInFile(projectID, "/tmp/x.ts")
+          expect(xs).toHaveLength(5)
+          expect(getFile).toHaveBeenCalledTimes(1)
+          // Symbols of one query carry equal but separate explain objects, so one cannot be mutated through another.
+          expect(new Set(xs.map((symbol) => symbol.explain)).size).toBe(5)
+          expect(new Set(xs.map((symbol) => JSON.stringify(symbol.explain))).size).toBe(1)
+          const original = xs[1]!.explain.completeness
+          xs[0]!.explain.completeness = original === "full" ? "partial" : "full"
+          expect(xs[1]!.explain.completeness).toBe(original)
+          const again = CodeIntelligence.symbolsInFile(projectID, "/tmp/x.ts")
+          expect(getFile).toHaveBeenCalledTimes(2)
+          expect(again[0]!.explain.queryId).not.toBe(xs[0]!.explain.queryId)
+        } finally {
+          getFile.mockRestore()
+        }
 
         CodeIntelligence.__clearProject(projectID)
       },
