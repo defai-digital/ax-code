@@ -24,6 +24,11 @@ describe("parseReferenceToken", () => {
       adr236: true,
     },
     {
+      name: "file:C:\\repo\\foo.ts:10-25",
+      token: { kind: "file-range", path: "C:\\repo\\foo.ts", start: 10, end: 25 },
+      adr236: true,
+    },
+    {
       name: "src/foo.ts:42",
       token: { kind: "file-range", path: "src/foo.ts", start: 42 },
       adr236: true,
@@ -41,6 +46,7 @@ describe("parseReferenceToken", () => {
     { name: "src/foo.ts:0", token: undefined, adr236: false }, // zero start
     { name: "src/foo.ts:25-10", token: undefined, adr236: false }, // end < start
     { name: "file::10-25", token: undefined, adr236: false }, // empty path
+    { name: "file:file:foo.ts:10", token: undefined, adr236: false }, // nested file: prefix
   ]
 
   for (const c of cases) {

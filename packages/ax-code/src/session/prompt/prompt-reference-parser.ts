@@ -98,8 +98,9 @@ function parseFileRange(
   if (!range) return undefined
   const path = rest.slice(0, range.sepIndex)
   if (!path) return undefined
-  // Reject path-only forms that already include "file:" — handled in caller.
-  if (prefixFile && path.includes(":")) return undefined
+  // A colon is legitimate in a path (Windows drive letters, POSIX filenames);
+  // only a nested "file:" prefix is malformed.
+  if (prefixFile && path.toLowerCase().startsWith("file:")) return undefined
   const trimmed = path.trim()
   if (!trimmed) return undefined
   return {

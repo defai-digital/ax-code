@@ -43,7 +43,9 @@ export const defaultReferenceRunners: ReferenceRunners = {
 
 function truncateExpansion(body: string, label: string): string {
   if (Buffer.byteLength(body, "utf8") <= MAX_EXPANSION_BYTES) return body
-  const capped = body.slice(0, MAX_EXPANSION_BYTES)
+  // Slice UTF-8 bytes, not UTF-16 code units, so multibyte content stays
+  // within the advertised cap.
+  const capped = Buffer.from(body, "utf8").subarray(0, MAX_EXPANSION_BYTES).toString("utf8")
   return `${capped}\n[truncated: ${label} exceeded ${MAX_EXPANSION_BYTES} bytes]`
 }
 
@@ -55,13 +57,7 @@ async function expandGitDiff(args: string[], label: string, runners: ReferenceRu
   try {
     const text = truncateExpansion(await runners.runGit(args), label)
     if (!text) return [inlineNote(`[${label} is empty]`)]
-
-    const lines: string[] = []
-    if (text.length > MAX_EXPANSION_BYTES) {
-      lines.push(`[${label} truncated to ${MAX_EXPANSION_BYTES} bytes]`)
-    }
-    lines.push(text)
-    return [{ type: "text", text: lines.join("\n") }]
+    return [{ type: "text", text }]
   } catch (err) {
     return [inlineNote(`[${label} failed: ${(err as Error).message}]`)]
   }
@@ -80,13 +76,23 @@ async function expandGitLog(count: number, runners: ReferenceRunners): Promise<a
   }
 }
 
-async function expandFileRange(path: string, start: number, end: number | undefined): Promise<any[]> {
+async function expandFileRange(name: string, start: number, end: number | undefined): Promise<any[]> {
+  const label = `@file:${name}:${start}${end ? `-${end}` : ""}`
   try {
-    const checked = await fs.realpath(path).catch(() => undefined)
-    if (!checked) return [inlineNote(`[@file:${path}:${start}${end ? `-${end}` : ""} not found]`)]
+    // Resolve like a plain @path: only `~/` leaves the worktree.
+    const filepath = name.startsWith("~/")
+      ? path.resolve(os.homedir(), name.slice(2))
+      : path.resolve(Instance.worktree, name)
+    const checked = await fs.realpath(filepath).catch(() => undefined)
+    if (!checked) return [inlineNote(`[${label} not found]`)]
+
+    const allowed = name.startsWith("~/")
+      ? Filesystem.contains(os.homedir(), checked)
+      : Filesystem.contains(Instance.worktree, checked)
+    if (!allowed) return [inlineNote(`[${label} is outside the workspace]`)]
 
     const stats = await fs.stat(checked).catch(() => undefined)
-    if (!stats?.isFile()) return [inlineNote(`[@file:${path}:${start} is not a file]`)]
+    if (!stats?.isFile()) return [inlineNote(`[${label} is not a file]`)]
 
     const content = await fs.readFile(checked, "utf8")
     const lines = content.split(/\r?\n/)
@@ -94,14 +100,14 @@ async function expandFileRange(path: string, start: number, end: number | undefi
     const startIdx = Math.max(0, Math.min(total, start - 1))
     const endIdx = end !== undefined ? Math.min(total, end) : total
     if (startIdx >= endIdx) {
-      return [inlineNote(`[@file:${path}:${start}${end ? `-${end}` : ""} is out of range (file has ${total} lines)]`)]
+      return [inlineNote(`[${label} is out of range (file has ${total} lines)]`)]
     }
     const selected = lines.slice(startIdx, endIdx)
-    const header = `<file_range path="${path}" start="${start}"${end !== undefined ? ` end="${end}"` : ""}>`
-    const body = truncateExpansion(selected.join("\n"), `@file:${path}:${start}`)
+    const header = `<file_range path="${name}" start="${start}"${end !== undefined ? ` end="${end}"` : ""}>`
+    const body = truncateExpansion(selected.join("\n"), label)
     return [{ type: "text", text: `${header}\n${body}\n</file_range>` }]
   } catch (err) {
-    return [inlineNote(`[@file:${path}:${start} failed: ${(err as Error).message}]`)]
+    return [inlineNote(`[${label} failed: ${(err as Error).message}]`)]
   }
 }
 

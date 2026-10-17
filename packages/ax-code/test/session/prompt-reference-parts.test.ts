@@ -110,6 +110,34 @@ describe("resolvePromptParts ADR-236 forms", () => {
     })
   })
 
+  test("@file:range resolves relative paths against the worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await writeFile(path.join(tmp.path, "rel.txt"), "one\ntwo")
+        const parts = await resolvePromptParts(`@file:rel.txt:2`)
+        expect(parts[1].text).toContain("two")
+      },
+    })
+  })
+
+  test("@file:range refuses a file outside the workspace", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const secret = path.join(outside.path, "secret.txt")
+        await writeFile(secret, "top secret")
+        const parts = await resolvePromptParts(`@file:${secret}:1`)
+        expect(parts[1].type).toBe("text")
+        expect(parts[1].text).toMatch(/outside the workspace/)
+        expect(parts[1].text).not.toContain("top secret")
+      },
+    })
+  })
+
   test("@url fetches through the injected fetcher and wraps as untrusted", async () => {
     const fetchUrl = vi.fn(async (href: string) => {
       expect(href).toBe("https://example.com/api")
@@ -155,6 +183,15 @@ describe("resolvePromptParts ADR-236 forms", () => {
     // `\n[truncated: …` so the byte count up to the `[` is at most
     // 30 KB + 1 for the newline.
     const idx = parts[1].text.indexOf("[truncated:")
+    expect(Buffer.byteLength(parts[1].text.slice(0, idx), "utf8")).toBeLessThanOrEqual(30 * 1024 + 1)
+  })
+
+  test("multibyte expansions are capped by bytes, not code units", async () => {
+    const big = "字".repeat(20 * 1024)
+    const runners = makeRunners({ runGit: vi.fn(async () => big) })
+    const parts = await resolvePromptParts(`@git:1`, { runners })
+    const idx = parts[1].text.indexOf("[truncated:")
+    expect(idx).toBeGreaterThan(0)
     expect(Buffer.byteLength(parts[1].text.slice(0, idx), "utf8")).toBeLessThanOrEqual(30 * 1024 + 1)
   })
 
