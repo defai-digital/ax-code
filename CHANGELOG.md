@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.26.4] - 2026-10-17
+
+### Fixed
+
+- Honor Azure token cancellation on cache hits and during shared lookup startup, preserve abort reasons, and stop canceled requests before transport dispatch.
+- Match fetch signal and header overrides and snapshot request options before waiting for Azure credentials.
+- Bound cached path-rule bodies under file churn without omitting matching rules.
+- Include fixes for prompt reference containment and byte limits, autocomplete initialization and insertion, and Code Mode variable/function scoping.
+
+### Changed
+
+- Publish SDK 2.6.26 with the accumulated server routes, configuration fields, and permission and question contracts.
+- Include the committed Code Mode interpreter, cloud credential references, hook and MCP interoperability, path-scoped rules, session compaction and worktree improvements.
+- Refresh reviewed static-scan findings and recognize the host mount probe in dependency checks.
+
 ## [7.26.3] - 2026-10-16
 
 ### Fixed
