@@ -31,6 +31,26 @@ test("caller cancellation reaches native work and cannot publish its late result
 
 // Explicit native qualification must not silently succeed using mocks or old binaries.
 describe.runIf(process.env.AX_TEST_SCAN_NATIVE === "1")("native async scan qualification", () => {
+  test("rebuilt sync and async search preserve overlapping context at the result limit", async () => {
+    const native = NativeAddon.fs()!
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "context.txt")
+    await fs.writeFile(file, "before\nneedle one\nneedle two\nafter\nlast\n")
+    const expected = JSON.stringify([
+      {
+        path: file,
+        line: 2,
+        column: 1,
+        matchText: "needle one",
+        contextBefore: ["before"],
+        contextAfter: ["needle two", "after"],
+      },
+    ])
+    const options = JSON.stringify({ limit: 1, contextLines: 2 })
+    expect(native.searchContent(tmp.path, "needle", options)).toBe(expected)
+    expect(await native.searchContentAsync(tmp.path, "needle", options, new native.ScanCancellation())).toBe(expected)
+  })
+
   test("walk/search parity, cancellation and recovery using the rebuilt addon", async () => {
     const native = NativeAddon.fs()!
     expect(native?.searchContentAsync).toBeTypeOf("function")

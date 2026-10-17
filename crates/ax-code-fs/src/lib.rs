@@ -340,9 +340,33 @@ struct ContentSink<'a> {
     limit: usize,
     before_buf: VecDeque<String>,
     context_lines: usize,
-    // Track pending match that needs after-context
-    pending: Option<SearchMatch>,
-    after_remaining: usize,
+    // Several adjacent matches can still need after-context at the same time.
+    pending: VecDeque<SearchMatch>,
+}
+
+impl ContentSink<'_> {
+    fn observe(&mut self, line: &str) {
+        for pending in &mut self.pending {
+            pending.context_after.push(line.to_owned());
+        }
+        while self
+            .pending
+            .front()
+            .is_some_and(|p| p.context_after.len() >= self.context_lines)
+        {
+            self.results.push(self.pending.pop_front().unwrap());
+        }
+    }
+
+    fn remember(&mut self, line: String) {
+        if self.context_lines == 0 {
+            return;
+        }
+        self.before_buf.push_back(line);
+        while self.before_buf.len() > self.context_lines {
+            self.before_buf.pop_front();
+        }
+    }
 }
 
 impl<'a> Sink for ContentSink<'a> {
@@ -356,54 +380,37 @@ impl<'a> Sink for ContentSink<'a> {
         if self.cancelled.load(Ordering::Relaxed) {
             return Ok(false);
         }
-        // Flush any pending match (it got all its after-context)
-        if let Some(pending) = self.pending.take() {
-            self.results.push(pending);
-            if self.results.len() >= self.limit {
-                return Ok(false);
-            }
-        }
-
         let line_bytes = mat.bytes();
         let line_str = String::from_utf8_lossy(line_bytes);
-        let line_trimmed = line_str.trim_end_matches('\n').trim_end_matches('\r');
-
-        let line_num = mat.line_number().unwrap_or(0);
-
-        // The column locates the match; `match_text` is the whole line because the
-        // TS grep tool renders it as the line text (the ripgrep fallback reports
-        // the full line too).
-        let col = self
-            .matcher
-            .find(line_bytes)
-            .ok()
-            .flatten()
-            .map_or(1, |m| m.start() as u64 + 1);
-        let match_text = cap_line(line_trimmed);
-
-        let entry = SearchMatch {
-            path: self.path.clone(),
-            line: line_num,
-            column: col,
-            match_text,
-            context_before: self.before_buf.drain(..).collect(),
-            context_after: Vec::new(),
-        };
-
-        if self.context_lines > 0 {
-            self.pending = Some(entry);
-            self.after_remaining = self.context_lines;
-        } else {
-            self.results.push(entry);
-            if self.results.len() >= self.limit {
-                return Ok(false);
+        let line = cap_line(line_str.trim_end_matches('\n').trim_end_matches('\r'));
+        // A matching line is also context for its neighboring matches.
+        self.observe(&line);
+        if self.results.len() >= self.limit {
+            return Ok(false);
+        }
+        if self.results.len() + self.pending.len() < self.limit {
+            let col = self
+                .matcher
+                .find(line_bytes)
+                .ok()
+                .flatten()
+                .map_or(1, |m| m.start() as u64 + 1);
+            let entry = SearchMatch {
+                path: self.path.clone(),
+                line: mat.line_number().unwrap_or(0),
+                column: col,
+                match_text: line.clone(),
+                context_before: self.before_buf.iter().cloned().collect(),
+                context_after: Vec::new(),
+            };
+            if self.context_lines > 0 {
+                self.pending.push_back(entry);
+            } else {
+                self.results.push(entry);
             }
         }
-
-        // Reset before buffer for next match
-        self.before_buf.clear();
-
-        Ok(true)
+        self.remember(line);
+        Ok(self.results.len() < self.limit)
     }
 
     fn context(
@@ -411,38 +418,19 @@ impl<'a> Sink for ContentSink<'a> {
         _searcher: &grep_searcher::Searcher,
         ctx: &SinkContext<'_>,
     ) -> Result<bool, Self::Error> {
-        let line = String::from_utf8_lossy(ctx.bytes());
-        let trimmed = line
-            .trim_end_matches('\n')
-            .trim_end_matches('\r')
-            .to_string();
-
-        match ctx.kind() {
-            SinkContextKind::Before => {
-                self.before_buf.push_back(trimmed);
-                // Keep only the last N context lines
-                // BUG-284: Use pop_front instead of remove(0) to avoid O(n) shift
-                while self.before_buf.len() > self.context_lines {
-                    self.before_buf.pop_front();
-                }
-            }
-            SinkContextKind::After => {
-                if let Some(ref mut pending) = self.pending {
-                    pending.context_after.push(trimmed);
-                    self.after_remaining = self.after_remaining.saturating_sub(1);
-                    if self.after_remaining == 0 {
-                        // Flush the pending match
-                        let done = self.pending.take().unwrap();
-                        self.results.push(done);
-                        if self.results.len() >= self.limit {
-                            return Ok(false);
-                        }
-                    }
-                }
-            }
-            SinkContextKind::Other => {}
+        if self.cancelled.load(Ordering::Relaxed) {
+            return Ok(false);
         }
+        let line = String::from_utf8_lossy(ctx.bytes());
+        let line = cap_line(line.trim_end_matches('\n').trim_end_matches('\r'));
+        self.observe(&line);
+        self.remember(line);
+        Ok(self.results.len() < self.limit)
+    }
 
+    fn context_break(&mut self, _: &grep_searcher::Searcher) -> Result<bool, Self::Error> {
+        // The searcher skipped lines between disjoint context groups.
+        self.before_buf.clear();
         Ok(true)
     }
 
@@ -451,10 +439,7 @@ impl<'a> Sink for ContentSink<'a> {
         _searcher: &grep_searcher::Searcher,
         _: &grep_searcher::SinkFinish,
     ) -> Result<(), Self::Error> {
-        // Flush any remaining pending match
-        if let Some(pending) = self.pending.take() {
-            self.results.push(pending);
-        }
+        self.results.extend(self.pending.drain(..));
         Ok(())
     }
 }
@@ -531,8 +516,7 @@ fn search_one_file(
         limit,
         before_buf: VecDeque::new(),
         context_lines,
-        pending: None,
-        after_remaining: 0,
+        pending: VecDeque::new(),
     };
 
     // Ignore errors on individual files (binary files, permission errors, etc.)
@@ -1859,6 +1843,90 @@ mod tests {
     }
 
     // ── ordered parallel search ──────────────────────────────────────────────
+
+    #[test]
+    fn search_context_preserves_overlapping_match_windows() {
+        let dir = make_tmp_dir("search_context_overlap");
+        fs::write(
+            dir.join("file.txt"),
+            "before\nneedle one\nneedle two\nafter\nlast\n",
+        )
+        .unwrap();
+        let rows = search_rows(&dir, "{\"contextLines\":2}");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["contextBefore"], serde_json::json!(["before"]));
+        assert_eq!(
+            rows[0]["contextAfter"],
+            serde_json::json!(["needle two", "after"])
+        );
+        assert_eq!(
+            rows[1]["contextBefore"],
+            serde_json::json!(["before", "needle one"])
+        );
+        assert_eq!(
+            rows[1]["contextAfter"],
+            serde_json::json!(["after", "last"])
+        );
+        let limited = search_rows(&dir, "{\"contextLines\":2,\"limit\":1}");
+        assert_eq!(limited, rows[..1]);
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn search_context_caps_each_reported_line() {
+        let dir = make_tmp_dir("search_context_cap");
+        let huge = "é".repeat(MAX_REPORTED_LINE_BYTES);
+        fs::write(dir.join("file.txt"), format!("{huge}\nneedle\n{huge}\n")).unwrap();
+        let rows = search_rows(&dir, "{\"contextLines\":1}");
+        for side in ["contextBefore", "contextAfter"] {
+            let line = rows[0][side][0].as_str().unwrap();
+            assert_eq!(line.len(), MAX_REPORTED_LINE_BYTES);
+        }
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn search_context_matches_independent_line_windows() {
+        let dir = make_tmp_dir("search_context_windows");
+        for body in [
+            "needle\nneedle\nneedle\n",
+            "start\nneedle\none\nneedle\ntwo\nthree\nfour\nfive\nneedle\nend",
+            "first\r\nneedle\r\n\r\nneedle\r\nlast\r\n",
+            "before\nneedle",
+        ] {
+            fs::write(dir.join("file.txt"), body).unwrap();
+            let lines: Vec<_> = body.lines().collect();
+            for context in [0usize, 1, 2, 4] {
+                for limit in [1usize, 2, 10] {
+                    let rows = search_rows(
+                        &dir,
+                        &format!("{{\"contextLines\":{context},\"limit\":{limit}}}"),
+                    );
+                    let expected: Vec<_> = lines
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, line)| line.contains("needle"))
+                        .take(limit)
+                        .collect();
+                    assert_eq!(rows.len(), expected.len());
+                    for (row, (index, line)) in rows.iter().zip(expected) {
+                        assert_eq!(row["matchText"], *line);
+                        assert_eq!(
+                            row["contextBefore"],
+                            serde_json::json!(&lines[index.saturating_sub(context)..index])
+                        );
+                        assert_eq!(
+                            row["contextAfter"],
+                            serde_json::json!(
+                                &lines[index + 1..(index + context + 1).min(lines.len())]
+                            )
+                        );
+                    }
+                }
+            }
+        }
+        cleanup(&dir);
+    }
 
     fn search_rows(dir: &Path, options: &str) -> Vec<serde_json::Value> {
         let json = search_content(
