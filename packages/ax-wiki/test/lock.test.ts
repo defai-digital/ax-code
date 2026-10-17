@@ -182,13 +182,28 @@ describe("createWikiBuildLock hardening", () => {
     // moment before restoring it; the heartbeat must not die on the first
     // ENOENT, or the live holder's lock would go stale and be re-stolen.
     await rm(lockPath)
-    await new Promise((resolve) => setTimeout(resolve, 40)) // ~1-2 ticks of absence
+    await new Promise((resolve) => setTimeout(resolve, 125)) // Several ticks can pass during a brief I/O gap.
     await writeFile(lockPath, body)
     const before = (await stat(lockPath)).mtimeMs
-    await new Promise((resolve) => setTimeout(resolve, 150))
-    const after = (await stat(lockPath)).mtimeMs
-    expect(after).toBeGreaterThan(before)
+    await expect.poll(async () => (await stat(lockPath)).mtimeMs, { timeout: 2_000 }).toBeGreaterThan(before)
     await handle.release()
+  })
+
+  test("the heartbeat survives a temporarily incomplete restored lock body", async () => {
+    const root = await tmp()
+    const lockPath = path.join(root, "ax-wiki/.build-lock")
+    const lock = createWikiBuildLock(root, "ax-wiki", { heartbeatMs: 25 })
+    const handle = await lock.acquire()
+    try {
+      const body = await readFile(lockPath, "utf8")
+      await writeFile(lockPath, "")
+      await new Promise((resolve) => setTimeout(resolve, 125))
+      await writeFile(lockPath, body)
+      const before = (await stat(lockPath)).mtimeMs
+      await expect.poll(async () => (await stat(lockPath)).mtimeMs, { timeout: 2_000 }).toBeGreaterThan(before)
+    } finally {
+      await handle.release()
+    }
   })
 
   test("a lock owned by a dead same-host process is stale immediately", async () => {

@@ -261,11 +261,17 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
           // lock was stolen after we went stale, a bare touch would keep
           // refreshing the NEW holder's mtime and make a wedged successor's
           // lock immortal, so the interval clears itself once the token is
-          // gone. ENOENT is tolerated for a few ticks: a steal or a successor
-          // release momentarily displaces the path before restoring it, and
-          // stopping on the first gap would silence a live holder's heartbeat
-          // for good. A read failure other than ENOENT just skips this tick.
-          let missingTicks = 0
+          // gone. A missing or incomplete body gets a bounded grace period:
+          // restoring a displaced path can briefly expose an empty file, and
+          // stopping on that gap would silence the live holder permanently.
+          // Never touch an unverifiable body or a successor's valid token.
+          let missingSince: number | undefined
+          const tolerateGap = () => {
+            missingSince ??= performance.now()
+            if (performance.now() - missingSince >= Math.max(3 * heartbeatMs, UNPARSEABLE_GRACE_MS)) {
+              clearInterval(heartbeat)
+            }
+          }
           const heartbeat = setInterval(() => {
             void (async () => {
               // One descriptor pins the inode for the whole check-and-touch:
@@ -275,16 +281,21 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
               let handle: Awaited<ReturnType<typeof open>> | undefined
               try {
                 handle = await open(lockPath, "r")
-                missingTicks = 0
                 const text = await handle.readFile("utf8")
-                if (parseBody(text)?.token !== token) {
+                const body = parseBody(text)
+                if (typeof body?.token !== "string") {
+                  tolerateGap()
+                  return
+                }
+                if (body.token !== token) {
                   clearInterval(heartbeat)
                   return
                 }
+                missingSince = undefined
                 const stamp = new Date()
                 await handle.utimes(stamp, stamp).catch(() => {})
               } catch (error) {
-                if (errorCode(error) === "ENOENT" && ++missingTicks >= 3) clearInterval(heartbeat)
+                if (errorCode(error) === "ENOENT") tolerateGap()
               } finally {
                 await handle?.close().catch(() => {})
               }
