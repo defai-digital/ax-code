@@ -24,6 +24,66 @@ export type NativePerfSnapshot = {
     outBytes: number
   }
   rows: Row[]
+  operations?: OperationRow[]
+}
+
+type Phase = "admit" | "encode" | "queue" | "native" | "decode" | "format" | "fallback" | "total"
+type Timing = { calls: number; fails: number; totalMs: number; maxMs: number; samples: number[] }
+type TimingRow = Omit<Timing, "samples"> & { p50Ms: number; p95Ms: number; sampleCount: number }
+type OperationRow = { name: string; phases: Partial<Record<Phase, TimingRow>> }
+const operations = new Map<string, Partial<Record<Phase, Timing>>>()
+const SAMPLE_LIMIT = 256
+
+/** Numeric-only phase timing; never inspects or retains application payloads. */
+export type NativeSpan = {
+  start(phase: Phase): (failed?: boolean) => void
+  run<T>(phase: Phase, fn: () => T): T
+  runAsync<T>(phase: Phase, fn: () => Promise<T>): Promise<T>
+}
+function span(name: string): NativeSpan {
+  const start = (phase: Phase) => {
+    const began = performance.now()
+    let ended = false
+    return (failed = false) => {
+      if (ended) return
+      ended = true
+      const elapsed = performance.now() - began
+      const phases = operations.get(name) ?? {}
+      const stat = phases[phase] ?? { calls: 0, fails: 0, totalMs: 0, maxMs: 0, samples: [] }
+      stat.samples[stat.calls % SAMPLE_LIMIT] = elapsed
+      stat.calls++
+      stat.fails += Number(failed)
+      stat.totalMs += elapsed
+      stat.maxMs = Math.max(stat.maxMs, elapsed)
+      phases[phase] = stat
+      operations.set(name, phases)
+    }
+  }
+  return {
+    start,
+    run(phase, fn) {
+      const end = start(phase)
+      try {
+        const value = fn()
+        end()
+        return value
+      } catch (error) {
+        end(true)
+        throw error
+      }
+    },
+    async runAsync(phase, fn) {
+      const end = start(phase)
+      try {
+        const value = await fn()
+        end()
+        return value
+      } catch (error) {
+        end(true)
+        throw error
+      }
+    },
+  }
 }
 
 const stats = new Map<string, Stat>()
@@ -109,7 +169,15 @@ export namespace NativePerf {
     }
   }
 
-  export function snapshot(): NativePerfSnapshot {
+  // Separate from legacy bridge rows: nested phases must not inflate their totals.
+  // Native phase means addon roundtrip (including libuv wait and marshalling), not CPU time.
+  export async function operation<T>(name: string, fn: (span: NativeSpan | undefined) => Promise<T>): Promise<T> {
+    if (!enabled()) return fn(undefined)
+    const trace = span(name)
+    return trace.runAsync("total", () => fn(trace))
+  }
+
+  export function snapshot(): NativePerfSnapshot & { operations: OperationRow[] } {
     const rows = [...stats.entries()]
       .map(([name, item]) => ({
         name,
@@ -136,12 +204,30 @@ export namespace NativePerf {
         },
       ),
       rows,
+      operations: [...operations].map(([name, phases]) => ({
+        name,
+        phases: Object.fromEntries(
+          Object.entries(phases).map(([phase, stat]) => {
+            const sorted = [...stat.samples].sort((a, b) => a - b)
+            const { samples, ...totals } = stat
+            return [
+              phase,
+              {
+                ...totals,
+                sampleCount: samples.length,
+                p50Ms: sorted[Math.ceil(sorted.length * 0.5) - 1] ?? 0,
+                p95Ms: sorted[Math.ceil(sorted.length * 0.95) - 1] ?? 0,
+              },
+            ]
+          }),
+        ),
+      })),
     }
   }
 
-  export function render(value = NativePerf.snapshot()) {
+  export function render(value: NativePerfSnapshot = NativePerf.snapshot()) {
     if (!enabled()) return ""
-    if (value.total.calls === 0) return ""
+    if (value.total.calls === 0 && (value.operations?.length ?? 0) === 0) return ""
 
     const head = [
       "native bridge profile",
@@ -157,7 +243,13 @@ export namespace NativePerf {
         `  ${item.name} calls=${item.calls} fails=${item.fails} total_ms=${formatMs(item.totalMs)} avg_ms=${formatMs(item.avgMs)} max_ms=${formatMs(item.maxMs)} in_bytes=${item.inBytes} out_bytes=${item.outBytes}`,
     )
 
-    return [head, ...rows].join("\n")
+    const phases = (value.operations ?? []).flatMap((operation) =>
+      Object.entries(operation.phases).map(
+        ([phase, stat]) =>
+          `  operation=${operation.name} phase=${phase} calls=${stat.calls} fails=${stat.fails} total_ms=${formatMs(stat.totalMs)} max_ms=${formatMs(stat.maxMs)} recent_p50_ms=${formatMs(stat.p50Ms)} recent_p95_ms=${formatMs(stat.p95Ms)} samples=${stat.sampleCount}`,
+      ),
+    )
+    return [head, ...rows, ...phases].join("\n")
   }
 
   export function flush(write = (text: string) => process.stderr.write(text)) {
@@ -181,5 +273,6 @@ export namespace NativePerf {
 
   export function reset() {
     stats.clear()
+    operations.clear()
   }
 }

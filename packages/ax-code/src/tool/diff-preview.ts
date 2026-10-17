@@ -96,58 +96,78 @@ export async function diffPreview(
   signal?: AbortSignal,
   normalize = false,
 ) {
-  signal?.throwIfAborted()
-  admit(before, after)
-  const expensive = before.length + after.length >= DIFF_WORKER_THRESHOLD
-  return queue.run(async (workSignal) => {
-    const native = NativeAddon.diff()
-    if (
-      expensive &&
-      native?.diffPreviewAsync &&
-      native.DiffCancellation &&
-      before.isWellFormed() &&
-      after.isWellFormed()
-    ) {
-      const cancellation = new native.DiffCancellation()
-      const cancel = () => cancellation.cancel()
-      workSignal.addEventListener("abort", cancel, { once: true })
-      try {
-        workSignal.throwIfAborted()
-        const json = await NativePerf.runAsync(
-          "diff.preview",
-          { oldUnits: before.length, newUnits: after.length },
-          () => native.diffPreviewAsync!(before, after, normalize, cancellation),
-        )
-        workSignal.throwIfAborted()
-        if (Buffer.byteLength(json) > MAX_OUTPUT) throw limit()
-        const result = parseNativeJson(json, NativePreview, "Invalid native diff preview")
-        return finish(file, result.hunks, result)
-      } finally {
-        workSignal.removeEventListener("abort", cancel)
-      }
-    }
+  return NativePerf.operation("diff.preview", async (trace) => {
+    signal?.throwIfAborted()
+    if (trace) trace.run("admit", () => admit(before, after))
+    else admit(before, after)
+    const expensive = before.length + after.length >= DIFF_WORKER_THRESHOLD
+    const endWait = trace?.start("queue")
+    let started = false
+    try {
+      return await queue.run(async (workSignal) => {
+        started = true
+        endWait?.()
+        const native = NativeAddon.diff()
+        if (
+          expensive &&
+          native?.diffPreviewAsync &&
+          native.DiffCancellation &&
+          before.isWellFormed() &&
+          after.isWellFormed()
+        ) {
+          const cancellation = new native.DiffCancellation()
+          const cancel = () => cancellation.cancel()
+          workSignal.addEventListener("abort", cancel, { once: true })
+          try {
+            workSignal.throwIfAborted()
+            const run = () =>
+              NativePerf.runAsync("diff.preview", { oldUnits: before.length, newUnits: after.length }, () =>
+                native.diffPreviewAsync!(before, after, normalize, cancellation),
+              )
+            const json = await (trace ? trace.runAsync("native", run) : run())
+            workSignal.throwIfAborted()
+            const decode = () => {
+              if (Buffer.byteLength(json) > MAX_OUTPUT) throw limit()
+              return parseNativeJson(json, NativePreview, "Invalid native diff preview")
+            }
+            const result = trace ? trace.run("decode", decode) : decode()
+            const format = () => finish(file, result.hunks, result)
+            return trace ? trace.run("format", format) : format()
+          } finally {
+            workSignal.removeEventListener("abort", cancel)
+          }
+        }
 
-    const oldText = normalize ? normalizeLineEndings(before) : before
-    const newText = normalize ? normalizeLineEndings(after) : after
-    // jsdiff's callback mode yields between edit lengths. Keep its work bounded
-    // and retain this queue slot until its callback settles, even after abort.
-    const patch = expensive
-      ? await new Promise<StructuredPatch | undefined>((resolve) => {
-          structuredPatch(file, file, oldText, newText, undefined, undefined, { ...options, callback: resolve })
-        })
-      : structuredPatch(file, file, oldText, newText, undefined, undefined, options)
-    workSignal.throwIfAborted()
-    if (!patch) throw limit()
-    let counts = hunkCounts(patch.hunks)
-    if (oldText !== before || newText !== after) {
-      const changes = expensive
-        ? await new Promise<Change[] | undefined>((resolve) => {
-            diffLines(before, after, { ...options, callback: resolve })
-          })
-        : diffLines(before, after, options)
-      workSignal.throwIfAborted()
-      counts = changeCounts(changes)
+        const fallback = async () => {
+          const oldText = normalize ? normalizeLineEndings(before) : before
+          const newText = normalize ? normalizeLineEndings(after) : after
+          // Callback mode yields between edit lengths; retain the work slot
+          // until the callback settles, including after caller cancellation.
+          const patch = expensive
+            ? await new Promise<StructuredPatch | undefined>((resolve) => {
+                structuredPatch(file, file, oldText, newText, undefined, undefined, { ...options, callback: resolve })
+              })
+            : structuredPatch(file, file, oldText, newText, undefined, undefined, options)
+          workSignal.throwIfAborted()
+          if (!patch) throw limit()
+          let counts = hunkCounts(patch.hunks)
+          if (oldText !== before || newText !== after) {
+            const changes = expensive
+              ? await new Promise<Change[] | undefined>((resolve) => {
+                  diffLines(before, after, { ...options, callback: resolve })
+                })
+              : diffLines(before, after, options)
+            workSignal.throwIfAborted()
+            counts = changeCounts(changes)
+          }
+          return { patch, counts }
+        }
+        const { patch, counts } = await (trace ? trace.runAsync("fallback", fallback) : fallback())
+        const format = () => finish(file, patch.hunks, counts)
+        return trace ? trace.run("format", format) : format()
+      }, signal)
+    } finally {
+      if (!started) endWait?.(true)
     }
-    return finish(file, patch.hunks, counts)
-  }, signal)
+  })
 }

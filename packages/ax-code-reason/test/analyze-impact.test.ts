@@ -109,7 +109,7 @@ describe("analyzeImpactImpl", () => {
     const port = testHost.graph.port
     const findCallers = port.findCallers.bind(port)
     // A faithful walk over the same fake edges, as the native index provides it.
-    const walkCallers = vi.fn((projectID: string, seeds: string[], opts: { depth: number; budget: number }) => {
+    const walkCallers = vi.fn(async (projectID: string, seeds: string[], opts: { depth: number; budget: number }) => {
       const visited = new Set(seeds)
       const queue = seeds.map((id) => ({ id, distance: 0 }))
       const nodes: Array<{
@@ -135,7 +135,7 @@ describe("analyzeImpactImpl", () => {
       }
       return { nodes, truncated }
     })
-    port.walkCallers = walkCallers
+    port.walkCallersAsync = walkCallers
     const loopCalls = vi.spyOn(port, "findCallers")
     const walked = summarize(await analyzeImpactImpl("test-project", input))
     expect(walkCallers).toHaveBeenCalledTimes(1)
@@ -149,18 +149,62 @@ describe("analyzeImpactImpl", () => {
 
     // Without the budget bite the walk and the loop still agree on the whole graph.
     const wide = { ...input, maxVisited: 100 }
-    port.walkCallers = undefined
+    port.walkCallersAsync = undefined
     const wideLoop = summarize(await analyzeImpactImpl("test-project", wide))
-    port.walkCallers = walkCallers
+    port.walkCallersAsync = walkCallers
     const wideWalk = summarize(await analyzeImpactImpl("test-project", wide))
     expect(wideWalk).toEqual(wideLoop)
     expect(wideWalk.affected.map((entry) => entry[0]).sort()).toEqual(["a", "x", ...extra, "b", "d", "y"].sort())
     expect(wideWalk.truncated).toBe(false)
 
     // A host that offers the walk but cannot serve it hands the loop back.
-    port.walkCallers = vi.fn(() => undefined)
+    port.walkCallersAsync = vi.fn(async () => undefined)
     expect(summarize(await analyzeImpactImpl("test-project", input))).toEqual(loop)
     expect(loopCalls).toHaveBeenCalled()
+  })
+
+  test("pre-abort, native errors and running cancellation never become fallback success", async () => {
+    testHost.graph.addSymbol({ id: "s" })
+    const port = testHost.graph.port
+    const fallback = vi.spyOn(port, "findCallers")
+    const syncWalk = vi.fn(() => {
+      throw new Error("sync walk must not run")
+    })
+    port.walkCallers = syncWalk
+    const input = { changes: [{ kind: "symbol" as const, id: "s" }] }
+    const controller = new AbortController()
+    const failure = new Error("cancelled by caller")
+    controller.abort(failure)
+    await expect(analyzeImpactImpl("test-project", input, controller.signal)).rejects.toBe(failure)
+    port.walkCallersAsync = vi.fn(async () => {
+      throw new Error("native failure")
+    })
+    await expect(analyzeImpactImpl("test-project", input)).rejects.toThrow("native failure")
+    const running = new AbortController()
+    port.walkCallersAsync = vi.fn(async (_p, _s, _o, signal) => {
+      expect(signal).toBe(running.signal)
+      running.abort(failure)
+      return { nodes: [], truncated: false }
+    })
+    await expect(analyzeImpactImpl("test-project", input, running.signal)).rejects.toBe(failure)
+    expect(fallback).not.toHaveBeenCalled()
+    expect(syncWalk).not.toHaveBeenCalled()
+  })
+
+  test("missing async capability yields to cancellation instead of invoking the sync walk", async () => {
+    testHost.graph.addSymbol({ id: "s" })
+    testHost.graph.port.walkCallers = vi.fn(() => {
+      throw new Error("legacy whole walk")
+    })
+    const fallback = vi.spyOn(testHost.graph.port, "findCallers")
+    const controller = new AbortController()
+    const failure = new Error("fallback cancelled")
+    setImmediate(() => controller.abort(failure))
+    await expect(
+      analyzeImpactImpl("test-project", { changes: [{ kind: "symbol", id: "s" }] }, controller.signal),
+    ).rejects.toBe(failure)
+    expect(fallback).not.toHaveBeenCalled()
+    expect(testHost.graph.port.walkCallers).not.toHaveBeenCalled()
   })
 
   test("caps traversal at the requested depth without marking truncation", async () => {

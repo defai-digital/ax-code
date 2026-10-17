@@ -43,7 +43,12 @@ type DiffWorkers =
   | "DiffCancellation"
 type DiffBinding = Omit<DiffExports, DiffWorkers> & Partial<Pick<DiffExports, DiffWorkers>>
 type IndexExports = typeof import("@ax-code/index-core")
-type IndexWorkers = "callNeighborsAsync" | "ingestFileAsync" | "optimizeIndexAsync" | "IndexCancellation"
+type IndexWorkers =
+  | "walkCallGraphAsync"
+  | "callNeighborsAsync"
+  | "ingestFileAsync"
+  | "optimizeIndexAsync"
+  | "IndexCancellation"
 type IndexBinding = Omit<IndexExports, IndexWorkers> & Partial<Pick<IndexExports, IndexWorkers>>
 type ParserExports = typeof import("@ax-code/parser")
 type ParserWorkers = "extractInventoryAsync" | "parseBatchAsync" | "ParserCancellation"

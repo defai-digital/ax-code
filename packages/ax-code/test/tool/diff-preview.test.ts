@@ -1,13 +1,18 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { createTwoFilesPatch, diffLines, formatPatch } from "diff"
 import type { StructuredPatch } from "diff"
+import { NativePerf } from "../../src/perf/native"
 import { NativeAddon } from "../../src/native/addon"
 import { diffPreview, diffPreviewSync } from "../../src/tool/diff-preview"
 import { parseJsonStrict } from "@ax-code/util/json-value"
 
 const native = NativeAddon.diff()
 const enabled = !!native?.diffPreviewAsync && !!native.DiffCancellation
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
+  NativePerf.reset()
+})
 
 function expected(before: string, after: string, normalize = false, file = "a file😀.ts") {
   let additions = 0,
@@ -78,9 +83,18 @@ describe.skipIf(!enabled)("native canonical diff preview", () => {
   })
 
   test("actual large host dispatch preserves normalized preview and raw statistics", async () => {
+    vi.stubEnv("AX_CODE_PROFILE_NATIVE", "1")
     const before = "head\r\n" + "unchanged\r\n".repeat(10_000) + "old"
     const after = before.replace("head\r\n", "head\n").replace(/old$/, "new\n")
     expect(await diffPreview("a file😀.ts", before, after, undefined, true)).toEqual(expected(before, after, true))
+    expect(NativePerf.snapshot().operations.find((row) => row.name === "diff.preview")?.phases).toMatchObject({
+      admit: { calls: 1 },
+      queue: { calls: 1 },
+      native: { calls: 1 },
+      decode: { calls: 1 },
+      format: { calls: 1 },
+      total: { calls: 1 },
+    })
   })
 
   test("pre-cancelled and running native computations reject, never publish partial hunks", async () => {

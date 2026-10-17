@@ -2,7 +2,7 @@ import { admitCallQuery, decodeCallNeighbors, decodeCallWalk } from "./call-neig
 import { mkdirSync } from "node:fs"
 import { Log } from "../util/log"
 import { Global } from "../global"
-import { NativePerf } from "../perf/native"
+import { type NativeSpan, NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { parseJsonPayload } from "../util/json-value"
 import { toErrorMessage } from "../util/error-message"
@@ -64,6 +64,7 @@ function worker<T>(
   run: (cancellation: { cancel(): void }) => Promise<T>,
   callerSignal?: AbortSignal,
   queue = workerQueue,
+  trace?: NativeSpan,
 ): Promise<T> {
   callerSignal?.throwIfAborted()
   if (storeClosed) return Promise.reject(new Error("Native index store is closed"))
@@ -72,13 +73,17 @@ function worker<T>(
   workerControllers.add(controller)
   const abort = () => controller.abort(callerSignal?.reason)
   callerSignal?.addEventListener("abort", abort, { once: true })
+  const endWait = trace?.start("queue")
+  let started = false
   const promise = queue.run(async (signal) => {
+    started = true
+    endWait?.()
     const cancellation = new native.IndexCancellation!()
     const cancel = () => cancellation.cancel()
     signal.addEventListener("abort", cancel, { once: true })
     if (signal.aborted) cancel()
     try {
-      return await run(cancellation)
+      return await (trace ? trace.runAsync("native", () => run(cancellation)) : run(cancellation))
     } catch (error) {
       signal.throwIfAborted()
       throw error
@@ -89,6 +94,7 @@ function worker<T>(
   pendingWorkers.add(promise)
   void promise
     .finally(() => {
+      if (!started) endWait?.(true)
       pendingWorkers.delete(promise)
       workerControllers.delete(controller)
       callerSignal?.removeEventListener("abort", abort)
@@ -193,6 +199,56 @@ export namespace NativeStore {
       ),
       project,
     )
+  }
+
+  export async function walkCallGraphAsync(project: ProjectID, options: WalkOptions, signal?: AbortSignal) {
+    signal?.throwIfAborted()
+    if (storeClosed) throw new Error("Native index store is closed")
+    const native = NativeAddon.index()
+    if (!native?.walkCallGraphAsync || !native.IndexCancellation) return undefined
+    if (!store()) throw new Error("Native index store could not be initialized")
+    const deadline = performance.now() + 30_000
+    return NativePerf.operation("index.walkCallGraph", async (trace) => {
+      const encode = () => {
+        if (options.seeds.length > 10_000 || (options.roots?.length ?? 0) > 128 || project.length > 16 * 1024)
+          throw new RangeError("Graph query input limit exceeded")
+        let units = 0
+        for (const value of [...options.seeds, ...(options.roots ?? [])]) {
+          if (value.length > 16 * 1024 || (units += value.length) > 2 * 1024 * 1024)
+            throw new RangeError("Graph query input limit exceeded")
+        }
+        for (const seed of options.seeds) admitCallQuery(project, seed)
+        const json = JSON.stringify(options)
+        if (Buffer.byteLength(json) > 2 * 1024 * 1024) throw new RangeError("Graph query input limit exceeded")
+        return json
+      }
+      const optionsJson = trace ? trace.run("encode", encode) : encode()
+      let json: string
+      try {
+        json = await worker(
+          (cancel) => {
+            const remaining = Math.ceil(deadline - performance.now())
+            if (remaining <= 0) throw new DOMException("Graph walk deadline exceeded", "TimeoutError")
+            return native.walkCallGraphAsync!(getDbPath(), project, optionsJson, cancel, remaining)
+          },
+          signal,
+          readerQueue,
+          trace,
+        )
+      } catch (error) {
+        if (signal?.aborted || storeClosed) throw error
+        // The native wall budget can expire before the application queue's
+        // timer (encoding precedes enqueue). Keep one public timeout category.
+        if (performance.now() >= deadline) throw new DOMException("Graph walk deadline exceeded", "TimeoutError")
+        throw error
+      }
+      signal?.throwIfAborted()
+      const result = trace ? trace.run("decode", () => decodeCallWalk(json, project)) : decodeCallWalk(json, project)
+      signal?.throwIfAborted()
+      if (storeClosed) throw new Error("Native index store is closed")
+      if (performance.now() >= deadline) throw new DOMException("Graph walk deadline exceeded", "TimeoutError")
+      return result
+    })
   }
 
   /** Undefined means an old binding; real query/validation failures propagate. */
@@ -411,16 +467,25 @@ export namespace NativeStore {
     const native = NativeAddon.index()
     if (!native?.ingestFileAsync || !native.IndexCancellation)
       return ingestFile(projectID, filePath, nodes, edges, fileMeta)
-    const nodeJson = encodeNodes(nodes)
-    const edgeJson = JSON.stringify(edges)
-    const metaJson = JSON.stringify(fileMeta)
-    if (Buffer.byteLength(nodeJson) + Buffer.byteLength(edgeJson) + Buffer.byteLength(metaJson) > 32 * 1024 * 1024)
-      throw new RangeError("Graph ingest input limit exceeded")
-    await NativePerf.runAsync("index.ingestFile", { nodes: nodes.length, edges: edges.length }, () =>
-      worker((cancel) =>
-        native.ingestFileAsync!(getDbPath(), projectID, filePath, nodeJson, edgeJson, metaJson, cancel),
-      ),
-    )
+    await NativePerf.operation("index.ingestFile", async (trace) => {
+      const encode = () => {
+        const nodeJson = encodeNodes(nodes)
+        const edgeJson = JSON.stringify(edges)
+        const metaJson = JSON.stringify(fileMeta)
+        if (Buffer.byteLength(nodeJson) + Buffer.byteLength(edgeJson) + Buffer.byteLength(metaJson) > 32 * 1024 * 1024)
+          throw new RangeError("Graph ingest input limit exceeded")
+        return { nodeJson, edgeJson, metaJson }
+      }
+      const { nodeJson, edgeJson, metaJson } = trace ? trace.run("encode", encode) : encode()
+      await NativePerf.runAsync("index.ingestFile", { nodes: nodes.length, edges: edges.length }, () =>
+        worker(
+          (cancel) => native.ingestFileAsync!(getDbPath(), projectID, filePath, nodeJson, edgeJson, metaJson, cancel),
+          undefined,
+          workerQueue,
+          trace,
+        ),
+      )
+    })
   }
 
   // ─── IntervalTree ─���───────────────────────────────────────────────

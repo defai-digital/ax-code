@@ -143,3 +143,11 @@ export declare function ingestFileAsync(
 ): Promise<void>
 
 export declare function optimizeIndexAsync(dbPath: string, cancellation: IndexCancellation): Promise<void>
+
+export declare function walkCallGraphAsync(
+  dbPath: string,
+  project: string,
+  optionsJson: string,
+  cancellation: IndexCancellation,
+  timeoutMs?: number | undefined | null,
+): Promise<string>

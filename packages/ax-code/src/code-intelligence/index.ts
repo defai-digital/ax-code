@@ -305,6 +305,37 @@ export namespace CodeIntelligence {
       budget: opts.budget,
       roots: scope === "worktree" ? scopeRoots() : undefined,
     })
+    return projectCallWalk(projectID, walk, scope)
+  }
+
+  export async function walkCallersAsync(
+    projectID: ProjectID,
+    seeds: CodeNodeID[],
+    opts: { scope?: Scope; depth: number; budget: number },
+    signal?: AbortSignal,
+  ): Promise<WalkResult | undefined> {
+    signal?.throwIfAborted()
+    const scope = opts.scope ?? "none"
+    const walk = await CodeGraphQuery.walkCallGraphAsync(
+      projectID,
+      {
+        seeds,
+        callers: true,
+        depth: opts.depth,
+        budget: opts.budget,
+        roots: scope === "worktree" ? scopeRoots() : undefined,
+      },
+      signal,
+    )
+    signal?.throwIfAborted()
+    return projectCallWalk(projectID, walk, scope)
+  }
+
+  function projectCallWalk(
+    projectID: ProjectID,
+    walk: ReturnType<typeof CodeGraphQuery.walkCallGraph>,
+    scope: Scope,
+  ): WalkResult | undefined {
     if (!walk) return undefined
     // The native scope filter is a resolved-prefix check. Re-verify every
     // node with the host rule and let the loop decide if they ever disagree.

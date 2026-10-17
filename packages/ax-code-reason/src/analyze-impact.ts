@@ -164,17 +164,18 @@ function resolveSeeds(
 // reconstruct the chain from any affected symbol back to the nearest
 // seed. Parent tracking uses the first arrival per node (BFS guarantees
 // this is the shortest path).
-function bfsUpstream(
+async function bfsUpstream(
   projectID: ProjectID,
   seeds: CodeNodeID[],
   depth: number,
   budget: number,
   scope: "worktree" | "none",
   ciExplains: Graph.Explain[],
-): {
+  signal: AbortSignal,
+): Promise<{
   visited: Map<string, { symbol: Graph.Symbol; distance: number; parent: string | null }>
   truncated: boolean
-} {
+}> {
   const visited = new Map<string, { symbol: Graph.Symbol; distance: number; parent: string | null }>()
   // Seeds live at distance 0. They count toward the budget.
   const queue: { id: CodeNodeID; distance: number }[] = []
@@ -190,7 +191,14 @@ function bfsUpstream(
 
   // One native walk when the host offers it. It reproduces the loop below
   // exactly, with every node projected once instead of once per caller edge.
-  const walk = codeReasonHost().graph.walkCallers?.(projectID, [...visited.keys()], { scope, depth, budget })
+  signal.throwIfAborted()
+  const walk = await codeReasonHost().graph.walkCallersAsync?.(
+    projectID,
+    [...visited.keys()],
+    { scope, depth, budget },
+    signal,
+  )
+  signal.throwIfAborted()
   if (walk) {
     for (const node of walk.nodes) {
       visited.set(node.symbol.id, { symbol: node.symbol, distance: node.distance, parent: node.parent })
@@ -206,16 +214,35 @@ function bfsUpstream(
   // visited map and its insertion order, parent links, distances, the
   // truncation flag, and ciExplains order are all unchanged.
   let head = 0
+  let edges = 0
+  const deadline = performance.now() + 30_000
+  const check = () => {
+    signal.throwIfAborted()
+    if (performance.now() >= deadline) throw new Error("Graph walk deadline exceeded")
+  }
   while (head < queue.length) {
+    // Old addons retain bounded per-anchor queries, but must not run a whole
+    // synchronous walk. Yield between anchors so cancellation and I/O can run.
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    check()
     const { id, distance } = queue[head++]
     if (distance >= depth) continue
 
-    const callers = codeReasonHost().graph.findCallers(projectID, id, { scope })
+    const graph = codeReasonHost().graph
+    const callers = graph.findCallersAsync
+      ? await graph.findCallersAsync(projectID, id, { scope }, signal)
+      : graph.findCallers(projectID, id, { scope })
+    check()
     // Note: findReferences returns Reference objects (source locations),
     // not resolved symbols — they can't feed into the BFS visited set.
     // When import edges land (Phase 2), use findDependents here instead.
 
     for (const caller of callers) {
+      if (++edges > 2_000_000) throw new Error("Graph walk work limit exceeded")
+      if (edges % 1024 === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        check()
+      }
       const nextSym = caller.symbol
       if (visited.has(nextSym.id)) continue
       visited.set(nextSym.id, { symbol: nextSym, distance: distance + 1, parent: id })
@@ -287,7 +314,9 @@ function isPublicSymbol(sym: Graph.Symbol): boolean {
 export async function analyzeImpactImpl(
   projectID: ProjectID,
   input: AnalyzeImpactInput,
+  signal = codeReasonHost().abort(),
 ): Promise<DebugEngine.ImpactReport> {
+  signal.throwIfAborted()
   const scope: "worktree" | "none" = input.scope ?? "worktree"
   const depth = Math.min(Math.max(1, input.depth ?? DEFAULT_DEPTH), MAX_DEPTH)
   const budget = Math.min(Math.max(10, input.maxVisited ?? DEFAULT_VISIT_BUDGET), MAX_VISIT_BUDGET)
@@ -297,7 +326,8 @@ export async function analyzeImpactImpl(
   const { seeds } = resolveSeeds(projectID, input.changes, scope, ciExplains)
   heuristics.push(`seeds=${seeds.length}`)
 
-  const { visited, truncated } = bfsUpstream(projectID, seeds, depth, budget, scope, ciExplains)
+  const { visited, truncated } = await bfsUpstream(projectID, seeds, depth, budget, scope, ciExplains, signal)
+  signal.throwIfAborted()
   if (truncated) heuristics.push("budget-exhausted")
 
   // Build the affected set, excluding seeds themselves (distance 0 is

@@ -188,6 +188,14 @@ describe.skipIf(!enabled)("native call neighbor projections", () => {
       ]
       for (const [seeds, depth, budget, roots] of cases) {
         expect(walk(seeds, depth, budget, roots)).toEqual(loop(seeds, depth, budget, roots))
+        expect(
+          await native!.walkCallGraphAsync!(
+            path.join(tmp.path, "graph.db"),
+            project,
+            JSON.stringify({ seeds, depth, budget, roots }),
+            new native!.IndexCancellation!(),
+          ),
+        ).toBe(store.walkCallGraph(project, JSON.stringify({ seeds, depth, budget, roots })))
       }
       expect(walk(["s"], 6, 100).nodes.map((n) => n.id)).toEqual(["a", "x", "b", "d", "y"])
       expect(walk(["s"], 6, 100, ["/in"]).nodes.map((n) => n.id)).toEqual(["a", "b", "d"])
@@ -205,6 +213,40 @@ describe.skipIf(!enabled)("native call neighbor projections", () => {
     }
   })
 
+  test("an admitted walk lets JS read the synchronous connection and cancel the worker", async () => {
+    await using tmp = await tmpdir({})
+    const dbPath = path.join(tmp.path, "walk.db")
+    const store = new native!.IndexStore(dbPath)
+    const db = new DatabaseSync(dbPath)
+    try {
+      db.exec(`WITH RECURSIVE n(i) AS (VALUES(0) UNION ALL SELECT i+1 FROM n WHERE i<5999)
+        INSERT INTO code_node(id,project_id,kind,name,qualified_name,file,range_start_line,range_start_char,range_end_line,range_end_char)
+        SELECT 'n'||i,'neighbors-project','function','n'||i,'n'||i,'/a.ts',0,0,1,0 FROM n`)
+      // Use the same project constant as the wrapper fixture.
+      db.prepare("UPDATE code_node SET project_id=?").run(project)
+      db.exec(`WITH RECURSIVE e(i) AS (VALUES(0) UNION ALL SELECT i+1 FROM e WHERE i<239999)
+        INSERT INTO code_edge(id,project_id,kind,from_node,to_node,file)
+        SELECT 'e'||i,(SELECT project_id FROM code_node LIMIT 1),'calls','n'||((i/40*7+i%40+1)%6000),'n'||(i/40),'/a.ts' FROM e`)
+      store.analyze()
+      const token = new native!.IndexCancellation!()
+      const pending = native!.walkCallGraphAsync!(
+        dbPath,
+        project,
+        JSON.stringify({ seeds: ["n0"], depth: 6, budget: 10000 }),
+        token,
+      )
+      const rejection = expect(pending).rejects.toThrow("cancelled")
+      await new Promise<void>((resolve) => setTimeout(resolve, 1))
+      expect(store.countNodes(project)).toBe(6000)
+      token.cancel()
+      await rejection
+      expect(store.countEdges(project)).toBe(240000)
+    } finally {
+      db.close()
+      store.close()
+    }
+  })
+
   test("async readers observe committed WAL snapshots and never create a missing DB", async () => {
     await using tmp = await tmpdir({})
     const dbPath = path.join(tmp.path, "graph.db")
@@ -216,11 +258,28 @@ describe.skipIf(!enabled)("native call neighbor projections", () => {
       writer.exec("BEGIN IMMEDIATE; UPDATE code_node SET name='uncommitted' WHERE id='a'")
       const read = () => native!.callNeighborsAsync!(dbPath, project, "root", true, new native!.IndexCancellation!())
       expect(JSON.parse(await read())[0].name).toBe("a")
+      const walk = () =>
+        native!.walkCallGraphAsync!(
+          dbPath,
+          project,
+          JSON.stringify({ seeds: ["root"], depth: 6, budget: 100 }),
+          new native!.IndexCancellation!(),
+        )
+      expect(JSON.parse(await walk()).nodes[0].name).toBe("a")
       writer.exec("COMMIT")
       expect(JSON.parse(await read())[0].name).toBe("uncommitted")
+      expect(JSON.parse(await walk()).nodes[0].name).toBe("uncommitted")
       const missing = path.join(tmp.path, "absent.db")
       await expect(
         native!.callNeighborsAsync!(missing, project, "root", true, new native!.IndexCancellation!()),
+      ).rejects.toThrow()
+      await expect(
+        native!.walkCallGraphAsync!(
+          missing,
+          project,
+          JSON.stringify({ seeds: [], depth: 6, budget: 100 }),
+          new native!.IndexCancellation!(),
+        ),
       ).rejects.toThrow()
       expect(existsSync(missing)).toBe(false)
     } finally {
@@ -238,6 +297,21 @@ describe.skipIf(!enabled)("native call neighbor projections", () => {
       store.insertNodes(JSON.stringify([node("root"), node("a")]))
       const token = new native!.IndexCancellation!()
       token.cancel()
+      await expect(
+        native!.walkCallGraphAsync!(
+          dbPath,
+          project,
+          JSON.stringify({ seeds: ["root"], depth: 6, budget: 100 }),
+          new native!.IndexCancellation!(),
+          0,
+        ),
+      ).rejects.toThrow("deadline")
+      await expect(
+        native!.walkCallGraphAsync!(dbPath, project, JSON.stringify({ seeds: ["root"], depth: 6, budget: 100 }), token),
+      ).rejects.toThrow("cancelled")
+      await expect(
+        native!.walkCallGraphAsync!(dbPath, project, "x".repeat(2 * 1024 * 1024 + 1), new native!.IndexCancellation!()),
+      ).rejects.toThrow("input limit")
       await expect(native!.callNeighborsAsync!(dbPath, project, "root", true, token)).rejects.toThrow("cancelled")
       await expect(
         native!.callNeighborsAsync!(dbPath, "x".repeat(16385), "root", true, new native!.IndexCancellation!()),

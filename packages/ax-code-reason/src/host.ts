@@ -118,6 +118,21 @@ export type GraphPort = {
     seeds: string[],
     opts: Graph.QueryOpts & { depth: number; budget: number },
   ): { nodes: Array<{ symbol: Graph.Symbol; distance: number; parent: string }>; truncated: boolean } | undefined
+  /** Async capability; unavailable bindings must return undefined, never run the sync walk. */
+  walkCallersAsync?(
+    projectID: string,
+    seeds: string[],
+    opts: Graph.QueryOpts & { depth: number; budget: number },
+    signal?: AbortSignal,
+  ): Promise<
+    { nodes: Array<{ symbol: Graph.Symbol; distance: number; parent: string }>; truncated: boolean } | undefined
+  >
+  findCallersAsync?(
+    projectID: string,
+    symbolId: string,
+    opts?: Graph.QueryOpts,
+    signal?: AbortSignal,
+  ): Promise<Graph.CallChainNode[]>
   findReferences(projectID: string, symbolId: string, opts?: Graph.QueryOpts): Graph.Reference[]
   findDependents(projectID: string, file: string, opts?: Graph.QueryOpts): string[]
   status(projectID: string): Graph.Status

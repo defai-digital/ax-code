@@ -8,6 +8,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
+use std::time::{Duration, Instant};
 
 const MAX_ROWS: usize = 50_000;
 const MAX_OUTPUT: usize = 16 * 1024 * 1024;
@@ -216,7 +217,11 @@ fn normalize_path(path: &str) -> String {
         }
     }
     let joined = parts.join("/");
-    if absolute { format!("/{joined}") } else { joined }
+    if absolute {
+        format!("/{joined}")
+    } else {
+        joined
+    }
 }
 
 fn in_roots(file: &str, roots: &[String]) -> bool {
@@ -248,16 +253,45 @@ fn read_neighbor(row: &rusqlite::Row<'_>) -> rusqlite::Result<Neighbor> {
     })
 }
 
+struct WalkLimits {
+    steps: usize,
+    edges: usize,
+    duration: Duration,
+}
+impl Default for WalkLimits {
+    fn default() -> Self {
+        Self {
+            steps: 200_000_000,
+            edges: 2_000_000,
+            duration: Duration::from_secs(30),
+        }
+    }
+}
+
 fn walk(
     conn: &Connection,
     project: &str,
     options: &WalkOptions,
     cancel: Arc<AtomicBool>,
 ) -> Result<String> {
+    walk_bounded(conn, project, options, cancel, WalkLimits::default())
+}
+
+fn walk_bounded(
+    conn: &Connection,
+    project: &str,
+    options: &WalkOptions,
+    cancel: Arc<AtomicBool>,
+    limits: WalkLimits,
+) -> Result<String> {
+    let deadline = Instant::now() + limits.duration;
     check(&cancel)?;
     if options.seeds.len() > MAX_WALK_SEEDS
         || options.budget > MAX_WALK_BUDGET
         || options.depth > MAX_WALK_DEPTH
+        || options.roots.as_ref().is_some_and(|roots| {
+            roots.len() > 128 || roots.iter().any(|root| root.len() > 16 * 1024)
+        })
         || options
             .seeds
             .iter()
@@ -273,12 +307,16 @@ fn walk(
     // every dequeued node, so one pathological anchor still fails the walk the
     // way it failed the single query.
     let steps = Arc::new(AtomicUsize::new(0));
+    let total_steps = Arc::new(AtomicUsize::new(0));
+    let progress_total = total_steps.clone();
     let progress_steps = steps.clone();
     let progress_cancel = cancel.clone();
     let _ = conn.progress_handler(
         1000,
         Some(move || {
             progress_cancel.load(Ordering::Relaxed)
+                || Instant::now() >= deadline
+                || progress_total.fetch_add(1000, Ordering::Relaxed) >= limits.steps
                 || progress_steps.fetch_add(1000, Ordering::Relaxed) >= MAX_STEPS
         }),
     );
@@ -303,8 +341,13 @@ fn walk(
         let mut output = String::from("{\"nodes\":[");
         let mut emitted = 0usize;
         let mut truncated = false;
+        let mut total_edges = 0usize;
         let mut head = 0usize;
         'walk: while head < queue.len() {
+            check(&cancel)?;
+            if Instant::now() >= deadline {
+                return Err(napi::Error::from_reason("Graph walk deadline exceeded"));
+            }
             let (id, distance) = {
                 let entry = &queue[head];
                 (entry.0.clone(), entry.1)
@@ -323,6 +366,13 @@ fn walk(
                 .map_err(|e| napi::Error::from_reason(e.to_string()))?
             {
                 check(&cancel)?;
+                if Instant::now() >= deadline {
+                    return Err(napi::Error::from_reason("Graph walk deadline exceeded"));
+                }
+                total_edges += 1;
+                if total_edges > limits.edges {
+                    return Err(napi::Error::from_reason("Graph walk work limit exceeded"));
+                }
                 row_count += 1;
                 if row_count > MAX_ROWS {
                     return Err(napi::Error::from_reason("Graph query row limit exceeded"));
@@ -333,16 +383,15 @@ fn walk(
                 if visited.contains(&next_id) || rejected.contains(&next_id) {
                     continue;
                 }
-                let data = match node_stmt
-                    .query_row(params![project, next_id.as_str()], read_neighbor)
-                {
-                    Ok(data) => data,
-                    Err(rusqlite::Error::QueryReturnedNoRows) => {
-                        rejected.insert(next_id);
-                        continue;
-                    }
-                    Err(e) => return Err(napi::Error::from_reason(e.to_string())),
-                };
+                let data =
+                    match node_stmt.query_row(params![project, next_id.as_str()], read_neighbor) {
+                        Ok(data) => data,
+                        Err(rusqlite::Error::QueryReturnedNoRows) => {
+                            rejected.insert(next_id);
+                            continue;
+                        }
+                        Err(e) => return Err(napi::Error::from_reason(e.to_string())),
+                    };
                 if let Some(roots) = &roots
                     && !in_roots(&data.file, roots)
                 {
@@ -383,6 +432,15 @@ fn walk(
     })();
     let _ = conn.progress_handler(0, None::<fn() -> bool>);
     check(&cancel)?;
+    if Instant::now() >= deadline {
+        return Err(napi::Error::from_reason("Graph walk deadline exceeded"));
+    }
+    if total_steps.load(Ordering::Relaxed) >= limits.steps {
+        return Err(napi::Error::from_reason("Graph walk work limit exceeded"));
+    }
+    if steps.load(Ordering::Relaxed) >= MAX_STEPS {
+        return Err(napi::Error::from_reason("Graph query work limit exceeded"));
+    }
     result
 }
 
@@ -470,6 +528,83 @@ pub fn call_neighbors_async(
         cancel: cancellation.cancelled.clone(),
     })
 }
+// A worker owns its read connection and one snapshot for the entire BFS.
+// It never holds the synchronous IndexStore mutex while JS is running.
+pub struct WalkTask {
+    path: String,
+    project: String,
+    options_json: String,
+    cancel: Arc<AtomicBool>,
+    deadline: Instant,
+}
+impl Task for WalkTask {
+    type Output = String;
+    type JsValue = String;
+    fn compute(&mut self) -> Result<String> {
+        check(&self.cancel)?;
+        if Instant::now() >= self.deadline {
+            return Err(napi::Error::from_reason("Graph walk deadline exceeded"));
+        }
+        if self.path.len() + self.project.len() > 16 * 1024
+            || self.options_json.len() > 2 * 1024 * 1024
+        {
+            return Err(napi::Error::from_reason("Graph query input limit exceeded"));
+        }
+        let options: WalkOptions = serde_json::from_str(&self.options_json)
+            .map_err(|e| napi::Error::from_reason(format!("invalid walk options: {e}")))?;
+        let conn = Connection::open_with_flags(
+            &self.path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        conn.busy_timeout(
+            self.deadline
+                .saturating_duration_since(Instant::now())
+                .min(Duration::from_secs(1)),
+        )
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        walk_bounded(
+            &tx,
+            &self.project,
+            &options,
+            self.cancel.clone(),
+            WalkLimits {
+                duration: self.deadline.saturating_duration_since(Instant::now()),
+                ..WalkLimits::default()
+            },
+        )
+    }
+    fn resolve(&mut self, _: Env, output: String) -> Result<String> {
+        check(&self.cancel)?;
+        if Instant::now() >= self.deadline {
+            return Err(napi::Error::from_reason("Graph walk deadline exceeded"));
+        }
+        Ok(output)
+    }
+}
+#[napi(ts_return_type = "Promise<string>")]
+pub fn walk_call_graph_async(
+    db_path: String,
+    project: String,
+    options_json: String,
+    cancellation: &IndexCancellation,
+    timeout_ms: Option<u32>,
+) -> AsyncTask<WalkTask> {
+    AsyncTask::new(WalkTask {
+        path: db_path,
+        project,
+        options_json,
+        cancel: cancellation.cancelled.clone(),
+        // Starts at native dispatch, before libuv admission, so pool contention
+        // consumes the caller's remaining wall budget too.
+        deadline: Instant::now()
+            + Duration::from_millis(timeout_ms.unwrap_or(30_000).min(30_000) as u64),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -496,6 +631,63 @@ mod tests {
             .contains("cancelled")
         );
     }
+    #[test]
+    fn whole_walk_limits_and_cancellation_do_not_reset_at_each_anchor() {
+        let store = IndexStore::new(":memory:".into()).unwrap();
+        store.with_conn(|conn| conn.execute_batch("INSERT INTO code_node(id,project_id,kind,name,qualified_name,file,range_start_line,range_start_char,range_end_line,range_end_char) VALUES ('a','p','function','a','a','/a',0,0,1,0),('b','p','function','b','b','/b',0,0,1,0),('c','p','function','c','c','/c',0,0,1,0); INSERT INTO code_edge(id,project_id,kind,from_node,to_node,file) VALUES ('e1','p','calls','b','a','/b'),('e2','p','calls','c','b','/c');")).unwrap();
+        let options: WalkOptions =
+            serde_json::from_str(r#"{"seeds":["a"],"depth":6,"budget":100}"#).unwrap();
+        let guard = store.conn.lock().unwrap();
+        let conn = guard.as_ref().unwrap();
+        let run = |limits, cancelled| {
+            walk_bounded(
+                conn,
+                "p",
+                &options,
+                Arc::new(AtomicBool::new(cancelled)),
+                limits,
+            )
+        };
+        // Each anchor has only one edge. A per-anchor reset would incorrectly succeed.
+        assert!(
+            run(
+                WalkLimits {
+                    edges: 1,
+                    ..WalkLimits::default()
+                },
+                false
+            )
+            .unwrap_err()
+            .reason
+            .contains("work limit")
+        );
+        assert!(
+            run(
+                WalkLimits {
+                    duration: Duration::ZERO,
+                    ..WalkLimits::default()
+                },
+                false
+            )
+            .unwrap_err()
+            .reason
+            .contains("deadline")
+        );
+        assert!(
+            run(WalkLimits::default(), true)
+                .unwrap_err()
+                .reason
+                .contains("cancelled")
+        );
+        assert!(run(WalkLimits::default(), false).is_ok());
+        // Every failed walk removed its progress handler from the shared sync connection.
+        assert_eq!(
+            conn.query_row("SELECT 1", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
+
     fn walk_ids(json: &str) -> (Vec<(String, u64, String)>, bool) {
         let value: serde_json::Value = serde_json::from_str(json).unwrap();
         let nodes = value["nodes"]
@@ -516,7 +708,8 @@ mod tests {
     fn walk_matches_the_host_loop_order_scope_budget_and_depth() {
         let store = IndexStore::new(":memory:".into()).unwrap();
         store.with_conn(|conn| conn.execute_batch("INSERT INTO code_node(id,project_id,kind,name,qualified_name,file,range_start_line,range_start_char,range_end_line,range_end_char) VALUES ('s','p','function','s','s','/in/s.ts',0,0,1,0),('a','p','function','a','a','/in/a.ts',0,0,1,0),('b','p','function','b','b','/in/b.ts',0,0,1,0),('d','p','function','d','d','/in/d.ts',0,0,1,0),('x','p','function','x','x','/outside/x.ts',0,0,1,0),('y','p','function','y','y','/in/y.ts',0,0,1,0),('foreign','q','function','foreign','foreign','/in/f.ts',0,0,1,0); INSERT INTO code_edge(id,project_id,kind,from_node,to_node,file) VALUES ('e1','p','calls','a','s','/in/a.ts'),('e2','p','calls','x','s','/outside/x.ts'),('e3','p','calls','b','a','/in/b.ts'),('e4','p','calls','d','a','/in/d.ts'),('e5','p','calls','a','d','/in/a.ts'),('e6','p','calls','y','x','/in/y.ts'),('e7','p','calls','a','s','/in/a.ts'),('e8','p','calls','missing','s','/in/s.ts'),('e9','p','calls','foreign','s','/in/f.ts'),('e10','p','references','b','s','/in/b.ts');")).unwrap();
-        let run = |options: &str| walk_ids(&store.walk_call_graph("p".into(), options.into()).unwrap());
+        let run =
+            |options: &str| walk_ids(&store.walk_call_graph("p".into(), options.into()).unwrap());
         let s = |v: &str| v.to_string();
         // Rowid order per anchor, first-arrival parents, duplicates and the
         // cycle d <-> a visited once, dangling and cross-project edges dropped.
@@ -542,20 +735,32 @@ mod tests {
         // Budget counts the seed and truncates right after the insertion
         // that reaches it, mid-level.
         let (nodes, truncated) = run(r#"{"seeds":["s"],"depth":6,"budget":3}"#);
-        assert_eq!(nodes.iter().map(|n| n.0.as_str()).collect::<Vec<_>>(), vec!["a", "x"]);
+        assert_eq!(
+            nodes.iter().map(|n| n.0.as_str()).collect::<Vec<_>>(),
+            vec!["a", "x"]
+        );
         assert!(truncated);
         // Depth: nodes at `depth` are emitted but not expanded.
         let (nodes, truncated) = run(r#"{"seeds":["s"],"depth":1,"budget":100}"#);
-        assert_eq!(nodes.iter().map(|n| n.0.as_str()).collect::<Vec<_>>(), vec!["a", "x"]);
+        assert_eq!(
+            nodes.iter().map(|n| n.0.as_str()).collect::<Vec<_>>(),
+            vec!["a", "x"]
+        );
         assert!(!truncated);
         // Callees direction and a seed with no edges.
         let (nodes, _) = run(r#"{"seeds":["b"],"callers":false,"depth":6,"budget":100}"#);
-        assert_eq!(nodes.iter().map(|n| n.0.as_str()).collect::<Vec<_>>(), vec!["a", "s", "d"]);
+        assert_eq!(
+            nodes.iter().map(|n| n.0.as_str()).collect::<Vec<_>>(),
+            vec!["a", "s", "d"]
+        );
         let (nodes, _) = run(r#"{"seeds":["y"],"callers":true,"depth":6,"budget":100}"#);
         assert!(nodes.is_empty());
         assert!(
             store
-                .walk_call_graph("p".into(), r#"{"seeds":["s"],"depth":65,"budget":100}"#.into())
+                .walk_call_graph(
+                    "p".into(),
+                    r#"{"seeds":["s"],"depth":65,"budget":100}"#.into()
+                )
                 .unwrap_err()
                 .reason
                 .contains("input limit")

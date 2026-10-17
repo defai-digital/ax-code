@@ -208,6 +208,12 @@ export namespace CodeGraphQuery {
     return NativeStore.walkCallGraph(project, options)
   }
 
+  export async function walkCallGraphAsync(project: ProjectID, options: NativeStore.WalkOptions, signal?: AbortSignal) {
+    signal?.throwIfAborted()
+    if (!useNative) return undefined
+    return NativeStore.walkCallGraphAsync(project, options, signal)
+  }
+
   export function callNeighbors(project: ProjectID, symbol: CodeNodeID, callers: boolean): CallNeighborRow[] {
     admitCallQuery(project, symbol)
     if (useNative) {

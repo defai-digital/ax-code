@@ -420,9 +420,13 @@ export namespace DebugEngine {
     return planRefactorImpl(projectID, input)
   }
 
-  export async function analyzeImpact(projectID: ProjectID, input: AnalyzeImpactInput): Promise<ImpactReport> {
+  export async function analyzeImpact(
+    projectID: ProjectID,
+    input: AnalyzeImpactInput,
+    signal?: AbortSignal,
+  ): Promise<ImpactReport> {
     log.info("analyzeImpact", { projectID, changes: input.changes.length })
-    return analyzeImpactImpl(projectID, input)
+    return analyzeImpactImpl(projectID, input, signal)
   }
 
   export async function detectHardcodes(projectID: ProjectID, input: DetectHardcodesInput): Promise<HardcodeReport> {

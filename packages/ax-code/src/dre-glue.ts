@@ -76,6 +76,10 @@ const graph: GraphPort = {
     CodeIntelligence.findCallers(projectID as ProjectID, symbolId as CodeNodeID, opts),
   walkCallers: (projectID, seeds, opts) =>
     CodeIntelligence.walkCallers(projectID as ProjectID, seeds as CodeNodeID[], opts),
+  walkCallersAsync: (projectID, seeds, opts, signal) =>
+    CodeIntelligence.walkCallersAsync(projectID as ProjectID, seeds as CodeNodeID[], opts, signal),
+  findCallersAsync: (projectID, symbolId, opts, signal) =>
+    CodeIntelligence.findCallersAsync(projectID as ProjectID, symbolId as CodeNodeID, opts, signal),
   findReferences: (projectID, symbolId, opts) =>
     CodeIntelligence.findReferences(projectID as ProjectID, symbolId as CodeNodeID, opts),
   findDependents: (projectID, file, opts) => CodeIntelligence.findDependents(projectID as ProjectID, file, opts),

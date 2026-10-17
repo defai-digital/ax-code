@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest"
 import path from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { tmpdir } from "../fixture/fixture"
+import { NativePerf } from "../../src/perf/native"
 import { NativeAddon } from "../../src/native/addon"
 import type { ProjectID } from "../../src/project/schema"
 
@@ -141,7 +142,22 @@ describe.skipIf(!enabled)("native graph worker", () => {
         ...node,
         metadata: { source: "tree-sitter", precision: "syntactic" },
       }))
-      await NativeStore.ingestFileAsync(project as ProjectID, "/a.ts", nodes, fixture.edges, fixture.meta)
+      const prior = process.env.AX_CODE_PROFILE_NATIVE
+      process.env.AX_CODE_PROFILE_NATIVE = "1"
+      NativePerf.reset()
+      try {
+        await NativeStore.ingestFileAsync(project as ProjectID, "/a.ts", nodes, fixture.edges, fixture.meta)
+        expect(NativePerf.snapshot().operations.find((row) => row.name === "index.ingestFile")?.phases).toMatchObject({
+          encode: { calls: 1 },
+          queue: { calls: 1 },
+          native: { calls: 1 },
+          total: { calls: 1 },
+        })
+      } finally {
+        if (prior === undefined) delete process.env.AX_CODE_PROFILE_NATIVE
+        else process.env.AX_CODE_PROFILE_NATIVE = prior
+        NativePerf.reset()
+      }
       expect(NativeStore.nodesInFile(project as ProjectID, "/a.ts")[0].metadata).toEqual(nodes[0].metadata)
     } finally {
       NativeStore.clearProject(project as ProjectID)

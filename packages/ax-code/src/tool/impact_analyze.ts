@@ -52,12 +52,17 @@ export const ImpactAnalyzeTool = Tool.define("impact_analyze", {
       return { kind: "diff" as const, patch: c.patch }
     })
 
-    const report = await DebugEngine.analyzeImpact(projectID, {
-      changes,
-      depth: args.depth,
-      maxVisited: args.maxVisited,
-      scope: "worktree",
-    })
+    const report = await DebugEngine.analyzeImpact(
+      projectID,
+      {
+        changes,
+        depth: args.depth,
+        maxVisited: args.maxVisited,
+        scope: "worktree",
+      },
+      ctx.abort,
+    )
+    ctx.abort.throwIfAborted()
 
     // Auto-record a caveat note + relevance signal (ADR-056 Phase 2).
     // Fail-open; only when exactly one seed resolved (else ambiguous anchor).
