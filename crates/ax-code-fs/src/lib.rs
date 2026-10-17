@@ -1800,8 +1800,8 @@ mod tests {
         let mut files = walk_files(dir.to_str().unwrap().into(), "{}".into()).unwrap();
         files.sort();
         assert_eq!(
-            files,
-            vec!["pkg/keep.ts".to_string(), "src/ok.ts".to_string()]
+            files.iter().map(PathBuf::from).collect::<Vec<_>>(),
+            vec![PathBuf::from("pkg/keep.ts"), PathBuf::from("src/ok.ts")]
         );
 
         cleanup(&dir);
@@ -1816,7 +1816,10 @@ mod tests {
 
         let mut files = walk_files(root.to_str().unwrap().into(), "{}".into()).unwrap();
         files.sort();
-        assert_eq!(files, vec!["lib/a.ts".to_string()]);
+        assert_eq!(
+            files.iter().map(PathBuf::from).collect::<Vec<_>>(),
+            vec![PathBuf::from("lib/a.ts")]
+        );
 
         cleanup(&parent);
     }
@@ -1842,7 +1845,10 @@ mod tests {
         let json = glob_files(dir.to_str().unwrap().into(), "**/*.rs".into(), 50).unwrap();
         let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
         let paths: Vec<&str> = rows.iter().map(|r| r["path"].as_str().unwrap()).collect();
-        assert_eq!(paths, vec!["src/a.rs"]);
+        assert_eq!(
+            paths.iter().map(PathBuf::from).collect::<Vec<_>>(),
+            vec![PathBuf::from("src/a.rs")]
+        );
 
         cleanup(&dir);
     }
