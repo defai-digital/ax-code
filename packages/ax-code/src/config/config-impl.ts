@@ -155,6 +155,7 @@ export namespace Config {
   }
 
   function restrictUntrustedConfig(copy: Record<string, unknown>) {
+    delete copy.code_mode
     delete copy.mcp_sampling
     // Granting a plugin session administration is a user decision, never a repository one.
     delete copy.plugin_trust
@@ -553,6 +554,7 @@ export namespace Config {
       return { ...source, isolation }
     }
 
+    let managedCodeModeDisabled = false
     let managedRewriteDisabled = false
     let managedAutoAcceptDisabled = false
     const managedPermissions: Permission[] = []
@@ -597,6 +599,9 @@ export namespace Config {
           scoped = { ...scoped, permission }
         }
       }
+      // Code Mode is an explicit trusted opt-in. Managed false is sticky.
+      if (source.kind === "managed" && config.code_mode?.enabled === false) managedCodeModeDisabled = true
+      if (managedCodeModeDisabled) scoped = { ...scoped, code_mode: { ...scoped.code_mode, enabled: false } }
       // Managed false is a ceiling even across multiple managed files.
       if (source.kind === "managed" && config.hooks?.allow_input_rewrite === false) managedRewriteDisabled = true
       if (managedRewriteDisabled) scoped = { ...scoped, hooks: { ...scoped.hooks, allow_input_rewrite: false } }

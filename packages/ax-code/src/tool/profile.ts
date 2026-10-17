@@ -50,6 +50,7 @@ export namespace ToolProfile {
     "review_complete",
     "lsp",
     "batch",
+    "execute",
     "context_status",
     "context_recover",
     "read_recipe",

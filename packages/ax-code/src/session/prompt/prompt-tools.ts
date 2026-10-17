@@ -24,6 +24,8 @@ import { Session } from ".."
 import { MessageV2 } from "../message-v2"
 import { PartID } from "../schema"
 import { ToolRegistry } from "../../tool/registry"
+import { codeModeToolIDs } from "../../tool/execute"
+import { nestedToolPart } from "../../tool/nested-dispatch"
 import { Tool } from "../../tool/tool"
 import { MCP } from "../../mcp"
 import { ToolDiscovery } from "../tool-discovery"
@@ -219,6 +221,7 @@ export function toolGateMode(input: {
   args: unknown
   childSafe?: (call: { tool: string; parameters: unknown }) => boolean
 }): "shared" | "exclusive" {
+  if (input.toolID === "execute") return "exclusive"
   if (EXCLUSIVE_TOOL_IDS.has(input.toolID)) return "exclusive"
   if (input.toolID === "batch") {
     // A batch is only as safe as its least safe child.
@@ -516,6 +519,7 @@ export async function resolveTools(input: ResolveToolsInput) {
   const schemaCacheKey = (toolId: string) => `${toolId}:${modelSchemaIdentity}`
   const isDisabledByConfig = (toolID: string) => input.tools?.[toolID] === false
   let registryDispatcher: Tool.Dispatcher | undefined
+  let codeModeDispatcher: Tool.Dispatcher | undefined
   const rewriteRecords = new Map<string, HookRewriteRecord>()
   const rewriteApprovals = new Map<string, HookRewriteApproval>()
   const { LifecycleHooks } = await import("@/hooks/lifecycle")
@@ -529,7 +533,7 @@ export async function resolveTools(input: ResolveToolsInput) {
     args: any,
     options: InvocationOptions,
     isolationOverride?: Isolation.State,
-    exposeDispatcher = false,
+    exposeDispatcher: boolean | "code-mode" = false,
   ): Tool.Context => ({
     sessionID: input.session.id,
     goalBinding: boundGoal,
@@ -550,12 +554,14 @@ export async function resolveTools(input: ResolveToolsInput) {
       model: input.model,
       bypassAgentCheck: input.bypassAgentCheck,
       isolation: isolationOverride ?? isolation,
-      ...(exposeDispatcher ? { toolDispatcher: registryDispatcher } : {}),
+      ...(exposeDispatcher
+        ? { toolDispatcher: exposeDispatcher === "code-mode" ? codeModeDispatcher : registryDispatcher }
+        : {}),
     },
     agent: input.agent.name,
     messages: input.messages,
     metadata: async (val: { title?: string; metadata?: any }) => {
-      const match = input.processor.partFromToolCall(options.toolCallId)
+      const match = input.processor.partFromToolCall(options.toolCallId) ?? nestedToolPart(options.toolCallId)
       if (match && match.state.status === "running") {
         const hookRewrite = rewriteRecords.get(options.toolCallId)
         // The processor's terminal error transition reads its in-memory part,
@@ -618,11 +624,20 @@ export async function resolveTools(input: ResolveToolsInput) {
     for (const id of ["webfetch", "websearch", "codesearch"]) isolationDisabled.add(id)
   }
   const enabledRegistryTools = registryTools.filter(
-    (item) => !isDisabledByConfig(item.id) && !disabledRegistryTools.has(item.id) && !isolationDisabled.has(item.id),
+    (item) =>
+      !isDisabledByConfig(item.id) &&
+      !disabledRegistryTools.has(item.id) &&
+      !isolationDisabled.has(item.id) &&
+      (item.id !== "execute" ||
+        !input.session.parentID ||
+        input.tools?.execute === true ||
+        input.agent.permission.some(
+          (rule) => rule.permission === "execute" && rule.pattern === "*" && rule.action !== "deny",
+        )),
   )
   const batchableRegistryTools = new Map(
     enabledRegistryTools
-      .filter((item) => item.id !== "batch" && item.id !== "task" && item.id !== "read_recipe")
+      .filter((item) => item.id !== "batch" && item.id !== "task" && item.id !== "read_recipe" && item.id !== "execute")
       .map((item) => [item.id, item]),
   )
 
@@ -633,7 +648,10 @@ export async function resolveTools(input: ResolveToolsInput) {
     isolationPolicy: "escalate" | "fail-closed"
   }): Promise<Tool.InvocationResult> {
     const { item, args, options, isolationPolicy } = inputTool
-    const exposeDispatcher = (item.id === "batch" || item.id === "read_recipe") && isolationPolicy === "escalate"
+    const exposeDispatcher =
+      item.id === "execute" && isolationPolicy === "escalate"
+        ? "code-mode"
+        : (item.id === "batch" || item.id === "read_recipe") && isolationPolicy === "escalate"
     const ctx = context(args, options, undefined, exposeDispatcher)
 
     // Direct model calls in one step run concurrently in the AI SDK; the
@@ -671,7 +689,10 @@ export async function resolveTools(input: ResolveToolsInput) {
     ctx: Tool.Context,
   ): Promise<Tool.InvocationResult> {
     const { item, args, options, isolationPolicy } = inputTool
-    const exposeDispatcher = (item.id === "batch" || item.id === "read_recipe") && isolationPolicy === "escalate"
+    const exposeDispatcher =
+      item.id === "execute" && isolationPolicy === "escalate"
+        ? "code-mode"
+        : (item.id === "batch" || item.id === "read_recipe") && isolationPolicy === "escalate"
     let hookFeedback: string | undefined
     const lifecycle = await runToolLifecycle({
       toolID: item.id,
@@ -850,6 +871,7 @@ export async function resolveTools(input: ResolveToolsInput) {
   // Private invocation identity: nested workflow calls retain this session's
   // permission/lifecycle wrappers while reusing the workflow's exclusive lane.
   const browserCalls = new WeakMap<object, { result?: unknown }>()
+  const codeModeCalls = new WeakSet<object>()
   const mcpTools = await MCP.tools()
   const discoveryCatalog: ToolDiscovery.Entry[] = []
   const disabledMcpTools = Permission.disabled(Object.keys(mcpTools), ruleset)
@@ -891,7 +913,10 @@ export async function resolveTools(input: ResolveToolsInput) {
       let hookFeedback: string | undefined
       // @scan-suppress race_scan - This invocation-local token is installed synchronously by the workflow while it holds the exclusive session lane; only that nested call can reuse the lane.
       const nestedBrowser = browserCalls.get(opts)
-      const releaseLane = nestedBrowser ? () => {} : await ToolWriteGate.acquire(ctx.sessionID, "exclusive", ctx.abort)
+      const releaseLane =
+        nestedBrowser || codeModeCalls.has(opts)
+          ? () => {}
+          : await ToolWriteGate.acquire(ctx.sessionID, "exclusive", ctx.abort)
       using _lane = defer(releaseLane)
       const result = await runToolLifecycle({
         toolID: key,
@@ -1485,6 +1510,67 @@ export async function resolveTools(input: ResolveToolsInput) {
         })
       },
     })
+  }
+  if (tools.execute) {
+    // Resolve only after MCP discovery has removed invisible entries. This is
+    // exactly the current model-visible set, with orchestration tools removed.
+    const ids = codeModeToolIDs(Object.keys(tools))
+    const registry = new Map(enabledRegistryTools.map((item) => [item.id, item]))
+    codeModeDispatcher = {
+      ids,
+      concurrencySafe: (call) => registryDispatcher?.concurrencySafe?.(call) === true,
+      async execute(call) {
+        if (!ids.includes(call.tool)) throw new Error("Tool is unavailable to Code Mode")
+        call.abort.throwIfAborted()
+        const item = registry.get(call.tool)
+        if (item) {
+          const args = item.parameters.parse(call.parameters)
+          const options = { toolCallId: call.callID, abortSignal: call.abort }
+          // execute holds the exclusive session lane; its shared Batch barrier
+          // orders children. Keep interactive approval and isolation escalation.
+          return invokeRegistryToolLifecycle(
+            { item, args, options, isolationPolicy: "escalate" },
+            context(args, options),
+          )
+        }
+        const wrapped = tools[call.tool]
+        if (!wrapped?.execute) throw new Error("Tool has no executor")
+        const options = { toolCallId: call.callID, abortSignal: call.abort, messages: [] }
+        codeModeCalls.add(options)
+        try {
+          const result = await wrapped.execute(call.parameters, options)
+          if (!isRecord(result) || typeof result.output !== "string")
+            throw new Error("Tool returned an unsupported result")
+          return result as Tool.InvocationResult
+        } finally {
+          codeModeCalls.delete(options)
+        }
+      },
+    }
+    const perToolBudget = Math.max(40, Math.floor(6000 / Math.max(1, ids.length)))
+    const summaries = await Promise.all(
+      ids.map(async (id) => {
+        const schema = registry.get(id)?.parameters
+        const json = schema
+          ? z.toJSONSchema(schema)
+          : await Promise.resolve(asSchema(tools[id]!.inputSchema).jsonSchema)
+        const properties = isRecord(json) && isRecord(json.properties) ? json.properties : {}
+        const required = isRecord(json) && Array.isArray(json.required) ? json.required : []
+        const summary = JSON.stringify(
+          Object.fromEntries(
+            Object.entries(properties).map(([name, property]) => [
+              name,
+              isRecord(property)
+                ? `${property.type ?? "value"}${required.includes(name) ? " (required)" : ""}`
+                : "value",
+            ]),
+          ),
+        )
+        return `${id}: ${summary.length <= perToolBudget ? summary : summary.slice(0, perToolBudget) + "..."}`
+      }),
+    )
+    tools.execute.description +=
+      "\nAvailable tools (argument schema summaries; consult normal schemas for details):\n" + summaries.join("\n")
   }
   return tools
 }

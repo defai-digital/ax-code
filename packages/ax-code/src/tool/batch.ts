@@ -1,12 +1,11 @@
 import z from "zod"
 import { Tool } from "./tool"
 import DESCRIPTION from "./batch.txt"
-import { toError, toErrorMessage } from "@/util/error-message"
-import { Log } from "@/util/log"
+import { toError } from "@/util/error-message"
+import { createToolBarrier, dispatchToolPart } from "./nested-dispatch"
 
-const DISALLOWED = new Set(["batch", "task", "read_recipe"])
+const DISALLOWED = new Set(["batch", "task", "read_recipe", "execute"])
 const FILTERED_FROM_SUGGESTIONS = new Set(["invalid", "patch", ...DISALLOWED])
-const log = Log.create({ service: "tool.batch" })
 const TOOL_TIMEOUT = 60_000
 
 function asError(reason: unknown, fallback: string) {
@@ -120,147 +119,40 @@ export const BatchTool = Tool.define("batch", async () => {
       // pins the ordering to the input order.
       const partIDs = toolCalls.map(() => PartID.ascending())
 
-      const executeCall = async (call: (typeof toolCalls)[0], idx: number) => {
-        const callStartTime = Date.now()
-        const partID = partIDs[idx]
-
-        try {
-          if (DISALLOWED.has(call.tool)) {
-            throw new Error(
-              `Tool '${call.tool}' is not allowed in batch. Disallowed tools: ${Array.from(DISALLOWED).join(", ")}`,
-            )
-          }
-
-          if (!availableTools.has(call.tool)) {
-            const availableToolsList = [...availableTools].filter((name) => !FILTERED_FROM_SUGGESTIONS.has(name))
-            throw new Error(
-              `Tool '${call.tool}' not in registry. External tools (MCP, environment) cannot be batched - call them directly. Available tools: ${availableToolsList.join(", ")}`,
-            )
-          }
-
-          await Session.updatePart({
-            id: partID,
-            messageID: ctx.messageID,
-            sessionID: ctx.sessionID,
-            type: "tool",
-            tool: call.tool,
-            callID: partID,
-            state: {
-              status: "running",
-              input: call.parameters,
-              time: {
-                start: callStartTime,
-              },
-            },
-          })
-
-          const result = await withToolTimeout({
-            tool: call.tool,
-            parent: ctx.abort,
-            timeoutMs: TOOL_TIMEOUT,
-            run: (abort) =>
-              dispatcher.execute({
+      const schedule = createToolBarrier({
+        concurrencySafe: (call) =>
+          !DISALLOWED.has(call.tool) && availableTools.has(call.tool) && dispatcher.concurrencySafe?.(call) === true,
+      })
+      const results = await Promise.all(
+        toolCalls.map((call, idx) =>
+          schedule(call, async () => {
+            try {
+              const result = await dispatchToolPart({
+                ctx,
                 tool: call.tool,
                 parameters: call.parameters,
-                callID: partID,
-                abort,
-              }),
-          })
-          await Session.updatePart({
-            id: partID,
-            messageID: ctx.messageID,
-            sessionID: ctx.sessionID,
-            type: "tool",
-            tool: call.tool,
-            callID: partID,
-            state: {
-              status: "completed",
-              input: call.parameters,
-              output: result.output,
-              title: result.title,
-              metadata: result.metadata,
-              attachments: result.attachments,
-              time: {
-                start: callStartTime,
-                end: Date.now(),
-              },
-            },
-          })
-
-          return { success: true as const, tool: call.tool, result }
-        } catch (error) {
-          await Session.updatePart({
-            id: partID,
-            messageID: ctx.messageID,
-            sessionID: ctx.sessionID,
-            type: "tool",
-            tool: call.tool,
-            callID: partID,
-            state: {
-              status: "error",
-              input: call.parameters,
-              error: toErrorMessage(error),
-              time: {
-                start: callStartTime,
-                end: Date.now(),
-              },
-            },
-          }).catch((cause) => {
-            log.warn("failed to record batch tool error", { tool: call.tool, error: cause })
-          })
-
-          return { success: false as const, tool: call.tool, error }
-        }
-      }
-
-      // Per-call concurrency classification (D7): only calls whose tool
-      // declares `concurrencySafe(args) === true` may share the parallel
-      // pool. Undeclared or unsafe tools act as ordering barriers — they run
-      // serially after all prior pooled work settles and before any later
-      // work starts. Unknown/disallowed tools classify as unsafe; a throwing
-      // predicate fails closed to unsafe as well.
-      const isConcurrencySafe = (call: (typeof toolCalls)[0]) => {
-        if (DISALLOWED.has(call.tool) || !availableTools.has(call.tool)) return false
-        try {
-          return dispatcher.concurrencySafe?.({ tool: call.tool, parameters: call.parameters }) === true
-        } catch {
-          return false
-        }
-      }
-
-      type SettledCall = Awaited<ReturnType<typeof executeCall>>
-      const results: SettledCall[] = new Array(toolCalls.length)
-      const runPooled = async (indexes: number[]) => {
-        const settled = await Promise.allSettled(indexes.map((idx) => executeCall(toolCalls[idx], idx)))
-        settled.forEach((r, i) => {
-          const idx = indexes[i]
-          results[idx] =
-            r.status === "fulfilled"
-              ? r.value
-              : {
-                  success: false as const,
-                  tool: toolCalls[idx].tool,
-                  error: toError(r.reason),
-                }
-        })
-      }
-
-      let pool: number[] = []
-      const flushPool = async () => {
-        if (pool.length === 0) return
-        const pending = pool
-        pool = []
-        await runPooled(pending)
-      }
-      for (let idx = 0; idx < toolCalls.length; idx++) {
-        if (isConcurrencySafe(toolCalls[idx])) {
-          pool.push(idx)
-          continue
-        }
-        await flushPool()
-        await runPooled([idx])
-      }
-      await flushPool()
+                partID: partIDs[idx],
+                async run(callID) {
+                  if (DISALLOWED.has(call.tool)) throw new Error(`Tool '${call.tool}' is not allowed in batch`)
+                  if (!availableTools.has(call.tool))
+                    throw new Error(
+                      `Tool '${call.tool}' not in registry. External tools (MCP, environment) cannot be batched - call them directly. Available tools: ${[...availableTools].filter((name) => !FILTERED_FROM_SUGGESTIONS.has(name)).join(", ")}`,
+                    )
+                  return withToolTimeout({
+                    tool: call.tool,
+                    parent: ctx.abort,
+                    timeoutMs: TOOL_TIMEOUT,
+                    run: (abort) => dispatcher.execute({ ...call, callID, abort }),
+                  })
+                },
+              })
+              return { success: true as const, tool: call.tool, result }
+            } catch (error) {
+              return { success: false as const, tool: call.tool, error: toError(error) }
+            }
+          }),
+        ),
+      )
 
       // Add discarded calls as errors
       const now = Date.now()

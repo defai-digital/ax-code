@@ -157,3 +157,35 @@ test("opt-in harness tools materialize provider JSON schemas through the real re
     },
   })
 })
+
+test("Code Mode is opt-in across profiles, invalidates cache, and requires explicit subagent admission", async () => {
+  await using tmp = await tmpdir()
+  let enabled = false
+  vi.spyOn(Config, "get").mockImplementation(async () => ({
+    code_mode: { enabled },
+    provider: { test: { options: { toolProfile: "coding" } } },
+  }))
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const model = { providerID: ProviderID.make("test"), modelID: ModelID.make("test") }
+      expect((await ToolRegistry.tools(model)).map((tool) => tool.id)).not.toContain("execute")
+      enabled = true
+      expect((await ToolRegistry.tools(model)).map((tool) => tool.id)).toContain("execute")
+      expect(
+        (await ToolRegistry.tools({ ...model, providerID: ProviderID.make("ax-engine") })).map((tool) => tool.id),
+      ).toContain("execute")
+      const agent = {
+        name: "child",
+        mode: "subagent" as const,
+        options: {},
+        permission: [{ permission: "*", pattern: "*", action: "allow" as const }],
+      }
+      expect((await ToolRegistry.tools(model, agent)).map((tool) => tool.id)).not.toContain("execute")
+      agent.permission.push({ permission: "execute", pattern: "*", action: "allow" })
+      expect((await ToolRegistry.tools(model, agent)).map((tool) => tool.id)).toContain("execute")
+      enabled = false
+      expect((await ToolRegistry.tools(model, agent)).map((tool) => tool.id)).not.toContain("execute")
+    },
+  })
+})

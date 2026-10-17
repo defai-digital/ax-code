@@ -178,6 +178,7 @@ export namespace SessionProcessor {
    */
   export function redactPersistedToolInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
     const redact = Env.redactForRecord
+    if (tool === "execute" && typeof input["code"] === "string") return { ...input, code: redact(input["code"]) }
     if (tool === "bash") {
       const command =
         typeof input["command"] === "string" && input["command"].trim() !== "" ? input["command"] : undefined

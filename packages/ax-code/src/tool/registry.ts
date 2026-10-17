@@ -13,6 +13,7 @@ import { GlobTool } from "./glob"
 import { GrepTool } from "./grep"
 import { ListTool } from "./ls"
 import { BatchTool } from "./batch"
+import { ExecuteTool } from "./execute"
 import { ContextStatusTool } from "./context_status"
 import { ReadRecipeTool } from "./read_recipe"
 import { ContextRecoverTool } from "./context_recover"
@@ -239,6 +240,7 @@ export namespace ToolRegistry {
           // computer tools are config-gated; a config change must not reuse a
           // cached definition list from before the change
           input.cfg.computer ?? null,
+          input.cfg.code_mode ?? null,
           // Include the whole map so future experimental tool flags cannot silently
           // reuse an entry produced before a config change.
           input.cfg.experimental ?? {},
@@ -260,6 +262,7 @@ export namespace ToolRegistry {
       // AX Engine deployments.
       return [
         InvalidTool,
+        ...(cfg.code_mode?.enabled === true ? [ExecuteTool] : []),
         ...(DesktopBrowser.enabled() ? [DesktopWebMcpTool] : []),
         ...(question ? [QuestionTool] : []),
         ...planExit,
@@ -346,6 +349,7 @@ export namespace ToolRegistry {
       ...(Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool, SymbolNoteTool] : []),
       ...(debugEngineEnabled ? [...DEBUG_ENGINE_TOOLS] : []),
+      ...(cfg.code_mode?.enabled === true ? [ExecuteTool] : []),
       ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(cfg.experimental?.context_tools === true ? [ContextStatusTool] : []),
       ...(cfg.experimental?.context_recovery === true ? [ContextRecoverTool] : []),
@@ -455,6 +459,14 @@ export namespace ToolRegistry {
       const raw = await Promise.all(
         allTools
           .filter((tool) => {
+            if (
+              tool.id === "execute" &&
+              agent?.mode === "subagent" &&
+              !agent.permission.some(
+                (rule) => rule.permission === "execute" && rule.pattern === "*" && rule.action !== "deny",
+              )
+            )
+              return false
             // Enable websearch/codesearch for zen users OR via enable flag
             if (tool.id === "codesearch" || tool.id === "websearch") {
               return model.providerID === ProviderID.axCode || Flag.AX_CODE_ENABLE_EXA

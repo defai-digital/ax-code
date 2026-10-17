@@ -713,6 +713,28 @@ export const Provider = ModelsDev.Provider.partial()
           .describe(
             'Tool surface: "coding" focuses on coding, delegation and verification; "full" exposes every enabled tool (cloud default). AX Engine defaults to the smaller "core" profile.',
           ),
+        // ADR-247: per-provider compatibility knobs. Both fields are optional
+        // and default to today's behavior. Unknown values fail config
+        // validation because the inner enum is closed; empty / non-string
+        // values are coerced to undefined so the field is silently omitted
+        // rather than reported as an error.
+        compatibility: z
+          .object({
+            cache_format: z
+              .enum(["auto", "breakpoints", "none"])
+              .optional()
+              .describe(
+                'Anthropic cache_control placement: "auto" uses the default heuristic, "breakpoints" forces breakpoints, "none" disables cache_control entirely. Default: "auto".',
+              ),
+            body_encoding: z
+              .enum(["json", "gzip"])
+              .optional()
+              .describe(
+                'Request body encoding: "json" sends a plain JSON body, "gzip" gzips the JSON body and adds content-encoding: gzip. Default: "json".',
+              ),
+          })
+          .optional()
+          .describe("Per-provider compatibility settings (ADR-247)."),
       })
       .catchall(z.any())
       .optional(),
@@ -1099,6 +1121,21 @@ export const Info = z
         "Enable Super-Long supervised long-run mode (default: on for models with a 64k+ context window, " +
           "thinking, and prompt caching — e.g. Qwen 3.7 Max/Plus; off otherwise)",
       ),
+    code_mode: z
+      .object({
+        enabled: z.boolean().optional().describe("Opt in to the bounded Code Mode execute tool (default false)"),
+        max_duration_ms: PositiveInteger.max(30000).optional(),
+        max_tool_calls: PositiveInteger.max(200).optional(),
+        max_steps: PositiveInteger.max(1000000).optional(),
+        max_result_bytes: PositiveInteger.max(1048576).optional(),
+        max_ast_depth: PositiveInteger.max(100).optional(),
+        max_call_depth: PositiveInteger.max(64).optional(),
+        max_collection_size: PositiveInteger.max(100000).optional(),
+        max_string_bytes: PositiveInteger.max(1048576).optional(),
+        max_source_bytes: PositiveInteger.max(1048576).optional(),
+        max_heap_units: PositiveInteger.max(4000000).optional(),
+      })
+      .optional(),
     hooks: z
       .object({
         allow_input_rewrite: z.boolean().optional().describe("Allow trusted PreToolUse hooks to rewrite tool input"),

@@ -54,6 +54,9 @@ catalogs:
     '@vitest/coverage-v8':
       specifier: 4.1.11
       version: 4.1.11
+    acorn:
+      specifier: 8.16.0
+      version: 8.16.0
     ai:
       specifier: 6.0.146
       version: 6.0.146
@@ -381,6 +384,9 @@ importers:
       '@zip.js/zip.js':
         specifier: 2.7.62
         version: 2.7.62
+      acorn:
+        specifier: 'catalog:'
+        version: 8.16.0
       ai:
         specifier: 'catalog:'
         version: 6.0.146(zod@4.3.6)
