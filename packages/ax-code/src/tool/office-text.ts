@@ -213,7 +213,7 @@ function extractDocxText(xml: string): string {
       const tag = tokenMatch[0]
       if (tag[3] === "t" && tag[4] === "a") {
         parts.push("\t")
-      } else if (tag[3] === "t" && tag[4] === "r") {
+      } else if (tag[3] === "b" && tag[4] === "r") {
         parts.push("\n")
       } else {
         parts.push(decodeXmlEntities(tokenMatch[1]))

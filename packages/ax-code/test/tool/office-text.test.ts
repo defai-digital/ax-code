@@ -167,6 +167,22 @@ describe("extractOfficeText - docx", () => {
     expect(result.text).toMatch(/cell one\tcell two/)
   })
 
+  test("renders line breaks inside a paragraph", async () => {
+    await using tmp = await tmpdir()
+    const xml = `<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>line one</w:t></w:r><w:r><w:br/></w:r><w:r><w:t>line two</w:t></w:r></w:p>
+  </w:body>
+</w:document>`
+    const filePath = path.join(tmp.path, "break.docx")
+    await writeFile(filePath, buildZip([{ name: "word/document.xml", data: Buffer.from(xml) }]))
+
+    const result = await extractOfficeText(filePath)
+    expect(result.reason).toBeUndefined()
+    expect(result.text).toContain("line one\nline two")
+  })
+
   test("returns a short reason when document.xml is missing", async () => {
     await using tmp = await tmpdir()
     const filePath = path.join(tmp.path, "empty.docx")
