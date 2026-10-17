@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.26.6] - 2026-10-17
+
+### Fixed
+
+- Preserve complete before/after context for adjacent and overlapping native text-search matches, including searches stopped at a result limit.
+- Cap every returned search context line at 16 KiB on a UTF-8 boundary, matching the existing matching-line bound.
+- Keep Wiki build-lock heartbeats alive across briefly missing or incomplete restored files without touching successor tokens.
+- Open Windows heartbeat descriptors with write access so file timestamps refresh instead of failing with EPERM.
+
+### Changed
+
+- Prune ignored directories before traversal and search candidate files in bounded parallel batches while preserving result order.
+- Refresh the reviewed upstream model snapshot.
+- Publish companion SDK 2.6.28 with unchanged server API contracts.
+
 ## [7.26.5] - 2026-10-17
 
 ### Fixed
