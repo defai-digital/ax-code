@@ -134,7 +134,9 @@ export function createWikiIdleController(input: {
           } else {
             input.onError?.(error)
             failures++
-            retryAt = Date.now() + Math.min(retryMs * 2 ** Math.min(failures - 1, 4), 900_000)
+            // An explicit request latched during the flight reruns immediately:
+            // the user asked after this failure began, so its backoff does not apply.
+            retryAt = explicit ? 0 : Date.now() + Math.min(retryMs * 2 ** Math.min(failures - 1, 4), 900_000)
             publish({ phase: "failed", reason: "failed" })
           }
         })
@@ -167,7 +169,10 @@ export function createWikiIdleController(input: {
   return {
     status: () => ({ ...status }),
     request() {
-      if (flight) return
+      // A build in flight settles through finally → schedule(pollMs), so the
+      // flags must be latched even then: a request dropped here would leave the
+      // follow-up check non-explicit, where the failure cooldown the user just
+      // asked to bypass suppresses the rebuild entirely.
       explicit = true
       dirty = true
       failures = 0

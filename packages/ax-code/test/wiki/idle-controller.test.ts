@@ -123,6 +123,28 @@ describe("default idle Wiki maintenance", () => {
     expect(s.build).toHaveBeenCalledTimes(4)
     await s.controller.dispose()
   })
+  test("an explicit request during a failing build still reruns after it settles", async () => {
+    const s = setup({ idleMs: 0, pollMs: 100, retryMs: 60_000 })
+    let reject!: (error: Error) => void
+    s.build.mockImplementationOnce(
+      () =>
+        new Promise<void>((_, rej) => {
+          reject = rej
+        }),
+    )
+    s.controller.request()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(s.build).toHaveBeenCalledTimes(1)
+    // The user asks again while the first build is still in flight. Dropping
+    // the request here would leave the follow-up check non-explicit, so the
+    // fresh failure backoff (retryMs) would suppress the requested rebuild.
+    s.controller.request()
+    reject(new Error("deterministic failure"))
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(100)
+    expect(s.build).toHaveBeenCalledTimes(2)
+    await s.controller.dispose()
+  })
   test("a stuck job ends at the configured deadline", async () => {
     const s = setup({ idleMs: 0, deadlineMs: 1000 })
     s.build.mockImplementation(
