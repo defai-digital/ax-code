@@ -25,6 +25,7 @@ import { ListBackgroundTasksTool } from "./list_background_tasks"
 import { MessageBackgroundTaskTool } from "./message_background_task"
 import { CouncilTool } from "./council"
 import { ArenaTool } from "./arena"
+import { WorktreeCreateTool, WorktreeListTool, WorktreeRemoveTool } from "./worktree"
 import { TodoWriteTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
@@ -307,6 +308,9 @@ export namespace ToolRegistry {
       MessageBackgroundTaskTool,
       CouncilTool,
       ArenaTool,
+      WorktreeCreateTool,
+      WorktreeListTool,
+      WorktreeRemoveTool,
       WebFetchTool,
       TodoWriteTool,
       WebSearchTool,

@@ -210,6 +210,11 @@ export namespace Agent {
               [path.join(".ax-code", "plans", "*.md")]: "allow",
               [planDataGlob]: "allow",
             },
+            // Plan agent can list worktrees to inform plans but must not
+            // create or remove them. `worktree_create` and `worktree_remove`
+            // fall through to the global plan-agent deny on `edit` and
+            // remain rejected.
+            worktree_list: "allow",
           }),
           user,
         ),

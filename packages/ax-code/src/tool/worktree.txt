@@ -1,0 +1,9 @@
+Tools for managing git worktrees inside the current project.
+
+- `worktree_list` returns every worktree git knows about for the project (name, directory, branch).
+- `worktree_create` makes a new worktree on a fresh `ax-code/<name>` branch. The worktree lives under the per-project data directory, NOT inside the repository working copy.
+- `worktree_remove` deletes a worktree by its directory path. The directory must be one git currently reports (`worktree list`); arbitrary paths and the main worktree are refused.
+
+The current session is NOT moved by these tools. Use the `/worktree` command for that.
+
+Non-git projects return the standard "Worktrees are only supported for git projects" message — the call does not fail.

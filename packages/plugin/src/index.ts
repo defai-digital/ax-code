@@ -44,6 +44,51 @@ export type PluginInput = {
   $: BunShell
   /** Supplied by current hosts. Optional for compatibility with older hosts. */
   lifecycle?: PluginLifecycle
+  /**
+   * Optional host capability for permission assertion, session administration,
+   * and dialog selection. Hosts that do not supply it leave the field
+   * undefined; plugins must check before calling.
+   *
+   * Every call is subject to the host's plugin callback deadline (15s) and
+   * must not throw into the host — failures return `{ ok: false, error }`.
+   * Inputs are detached from runtime state via the host's plain-data draft
+   * helper before being handed to plugin code.
+   */
+  permission?: PluginPermissionAPI
+  session?: PluginSessionAPI
+}
+
+export type PluginPermissionAskResult = { ok: true; status: "allow" | "deny" } | { ok: false; error: string }
+
+export type PluginPermissionAPI = {
+  /**
+   * Ask the host to evaluate a permission request. The host runs the same
+   * ruleset + interactive flow a tool would, and returns the final decision.
+   * Plugins must check the result; a `deny` here blocks the host's own
+   * tool call but does not undo side effects the plugin has already taken.
+   */
+  ask(input: {
+    permission: string
+    patterns: string[]
+    metadata?: Record<string, unknown>
+  }): Promise<PluginPermissionAskResult>
+}
+
+export type PluginSessionCreateResult = { ok: true; sessionID: string } | { ok: false; error: string }
+
+export type PluginSessionTargetResult = { ok: true } | { ok: false; error: string }
+
+export type PluginSessionAPI = {
+  /**
+   * Create a new session in the host project. The returned sessionID is
+   * owned by the calling plugin and the host records that ownership so the
+   * compact/remove calls below are scoped to it.
+   */
+  create(input: { parentID?: string; title?: string }): Promise<PluginSessionCreateResult>
+  /** Compact the named session. Refused for sessions the plugin does not own. */
+  compact(sessionID: string): Promise<PluginSessionTargetResult>
+  /** Remove the named session. Refused for sessions the plugin does not own. */
+  remove(sessionID: string): Promise<PluginSessionTargetResult>
 }
 
 export type Plugin = (input: PluginInput) => Promise<Hooks>

@@ -1,6 +1,14 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.autoAccepted": "принято автоматически",
+  "ui.autoAcceptOn": "Автопринятие включено",
+  "ui.autoAcceptOff": "Автопринятие выключено",
+  "ui.autoAcceptToggle": "Переключить автопринятие для проекта",
+  "ui.autoAcceptManagedOff": "Автопринятие отключено управляемой политикой",
+  "ui.autoAcceptFailed": "Не удалось изменить автопринятие",
+  "help.keybind.project_auto_accept": "Переключить автопринятие для проекта",
+  "ui.toolRewrittenByHook": "переписано хуком",
   "ui.wikiQueued": "\u043e\u0436\u0438\u0434\u0430\u043d\u0438\u0435 \u043f\u0440\u043e\u0441\u0442\u043e\u044f",
   "ui.wikiRunning": "\u0441\u043e\u0437\u0434\u0430\u043d\u0438\u0435",
   "ui.wikiReady": "\u0433\u043e\u0442\u043e\u0432\u043e",
@@ -134,6 +142,8 @@ export const messages = {
     "\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044c \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435",
   "rollback.redoMessage":
     "\u0412\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043e\u0442\u043c\u0435\u043d\u0451\u043d\u043d\u044b\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f?",
+  "turn.changedFiles.one": "Изменён 1 файл, +{additions} -{deletions}",
+  "turn.changedFiles.many": "Изменено файлов: {count}, +{additions} -{deletions}",
   "rollback.one":
     "\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u043e \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439: {count}",
   "rollback.many":
@@ -856,6 +866,10 @@ export const messages = {
   "ui.worktreeLoading": "Загрузка рабочих деревьев...",
   "ui.worktreeCreated": "Рабочее дерево готово: {directory}",
   "ui.worktreeRemoved": "Рабочее дерево удалено.",
+  "ui.releaseNotes": "Примечания к выпуску",
+  "ui.releaseNotesUsageHint": "Использование: /release-notes [версия]",
+  "ui.releaseNotesUnavailable": "Примечания к выпуску не включены в эту сборку.",
+  "ui.releaseNotesNotFound": "Примечания к выпуску для версии {version} не найдены.",
   "ui.worktreeNotFound": "Рабочее дерево не найдено: {name}",
   "ui.worktreeFailed": "Не удалось обновить рабочее дерево.",
   "ui.searchMessages": "\u041f\u043e\u0438\u0441\u043a \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439",

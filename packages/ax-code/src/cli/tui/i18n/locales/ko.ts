@@ -1,6 +1,14 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.autoAccepted": "자동 승인됨",
+  "ui.autoAcceptOn": "자동 승인 켜짐",
+  "ui.autoAcceptOff": "자동 승인 꺼짐",
+  "ui.autoAcceptToggle": "프로젝트 자동 승인 전환",
+  "ui.autoAcceptManagedOff": "관리 정책에 의해 자동 승인이 비활성화되었습니다",
+  "ui.autoAcceptFailed": "자동 승인을 변경할 수 없습니다",
+  "help.keybind.project_auto_accept": "프로젝트 자동 승인 전환",
+  "ui.toolRewrittenByHook": "훅이 다시 작성함",
   "ui.wikiQueued": "\uc720\ud734 \uc0c1\ud0dc \ub300\uae30",
   "ui.wikiRunning": "\uc0dd\uc131 \uc911",
   "ui.wikiReady": "\uc900\ube44 \uc644\ub8cc",
@@ -103,6 +111,8 @@ export const messages = {
   "rollback.redoTitle": "Redo \ud655\uc778",
   "rollback.redoMessage":
     "\ub418\ub3cc\ub9b0 \uba54\uc2dc\uc9c0\ub97c \ubcf5\uc6d0\ud558\uc2dc\uaca0\uc2b5\ub2c8\uae4c?",
+  "turn.changedFiles.one": "파일 1개 변경, +{additions} -{deletions}",
+  "turn.changedFiles.many": "파일 {count}개 변경, +{additions} -{deletions}",
   "rollback.one": "\uba54\uc2dc\uc9c0 {count}\uac1c\ub97c \ub418\ub3cc\ub838\uc2b5\ub2c8\ub2e4",
   "rollback.many": "\uba54\uc2dc\uc9c0 {count}\uac1c\ub97c \ub418\ub3cc\ub838\uc2b5\ub2c8\ub2e4",
   "rollback.restore": "\ub610\ub294 /redo\ub85c \ubcf5\uc6d0",
@@ -628,6 +638,10 @@ export const messages = {
   "ui.worktreeLoading": "워크트리 불러오는 중...",
   "ui.worktreeCreated": "워크트리 준비 완료: {directory}",
   "ui.worktreeRemoved": "워크트리를 제거했습니다.",
+  "ui.releaseNotes": "릴리스 노트",
+  "ui.releaseNotesUsageHint": "사용법: /release-notes [버전]",
+  "ui.releaseNotesUnavailable": "이 빌드에는 릴리스 노트가 포함되어 있지 않습니다.",
+  "ui.releaseNotesNotFound": "버전 {version}의 릴리스 노트를 찾을 수 없습니다.",
   "ui.worktreeNotFound": "워크트리를 찾을 수 없음: {name}",
   "ui.worktreeFailed": "워크트리를 업데이트할 수 없습니다.",
   "ui.searchMessages": "\uba54\uc2dc\uc9c0 \uac80\uc0c9",

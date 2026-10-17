@@ -54,6 +54,9 @@ export namespace ToolProfile {
     "context_recover",
     "read_recipe",
     "plan_exit",
+    "worktree_create",
+    "worktree_list",
+    "worktree_remove",
   ])
 
   export function includesCodingTool(id: string) {

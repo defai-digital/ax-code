@@ -1,10 +1,19 @@
-import type { Hooks, PluginHookContext, PluginInput, Plugin as PluginInstance } from "@ax-code/plugin"
+import type {
+  Hooks,
+  PluginHookContext,
+  PluginInput,
+  PluginPermissionAPI,
+  PluginSessionAPI,
+  Plugin as PluginInstance,
+} from "@ax-code/plugin"
 import { PRIVATE_GPU_AUTH_PLUGINS } from "../provider/private-gpu/auth-plugin"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
 import { BunProc } from "../bun"
 import { Session } from "../session"
+import type { Permission } from "../permission"
+import { PermissionID } from "../permission/schema"
 import { Env } from "@/util/env"
 import { fileURLToPath, pathToFileURL } from "url"
 import { setMaxListeners } from "node:events"
@@ -15,6 +24,8 @@ import { RuntimeLocalClient } from "@/runtime/local-client"
 import { PluginLifetime } from "./lifetime"
 import { PluginData } from "./data"
 import { isFileUrl } from "../util/file-url"
+import { toErrorMessage } from "@/util/error-message"
+import { SessionID, type SessionID as SessionIDType } from "@/session/schema"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -52,6 +63,199 @@ export namespace Plugin {
     return result
   }
 
+  // ADR-244: build the per-plugin `permission.ask` and
+  // `session.{create,compact,remove}` API. The plugin name bakes into the
+  // session ownership marker so compact/remove can refuse cross-plugin
+  // access. Internal plugins (no name) get the API but with an empty
+  // identity — they are part of the host and are not name-restricted.
+  async function checkSessionOwnership(
+    sessionID: string,
+    pluginName: string | undefined,
+  ): Promise<{ ok: true; info: Session.Info } | { ok: false; error: string }> {
+    if (!pluginName) {
+      // Internal plugins are part of the host and may administer any
+      // session in the active project. The project boundary is still
+      // enforced (the session must belong to `Instance.project`).
+      const info = await Session.get(sessionID as SessionID).catch((error: unknown) => {
+        return toErrorMessage(error)
+      })
+      if (typeof info === "string") return { ok: false, error: info }
+      if (!info) return { ok: false, error: `Session not found: ${sessionID}` }
+      if (info.projectID !== Instance.project.id) {
+        return { ok: false, error: "Session does not belong to the active project" }
+      }
+      return { ok: true, info }
+    }
+    const info = await Session.get(sessionID as SessionID).catch((error: unknown) => {
+      return toErrorMessage(error)
+    })
+    if (typeof info === "string") return { ok: false, error: info }
+    if (!info) return { ok: false, error: `Session not found: ${sessionID}` }
+    if (info.projectID !== Instance.project.id) {
+      return { ok: false, error: "Session does not belong to the active project" }
+    }
+    const cfg = await Config.get()
+    const trusted = cfg.plugin_trust?.session_admin?.includes(pluginName) === true
+    if (trusted) return { ok: true, info }
+    const owner =
+      info.metadata && typeof info.metadata === "object"
+        ? (info.metadata as Record<string, unknown>).createdByPlugin
+        : undefined
+    if (owner === pluginName) return { ok: true, info }
+    return {
+      ok: false,
+      error: "Session is not owned by this plugin and the plugin is not in plugin_trust.session_admin",
+    }
+  }
+
+  function createPluginCapabilityAPI(
+    owner: PluginLifetime.Handle,
+    pluginName: string | undefined,
+  ): { permission: PluginPermissionAPI; session: PluginSessionAPI } {
+    const permission: PluginPermissionAPI = {
+      async ask(input) {
+        try {
+          // Lazy: a static import would load permission/ and session/ in a cycle.
+          const { Permission: PermissionRuntime } = await import("../permission")
+          const config = await Config.get()
+          // A plugin may only ask in its own namespace. Letting it name a core
+          // permission ("bash", "edit", ...) together with "always" would let it
+          // plant persistent grants for the host's permissions.
+          const permissionName = input.permission.startsWith("plugin:")
+            ? input.permission
+            : `plugin:${input.permission}`
+          // Detach the patterns + metadata so plugin code cannot mutate host
+          // state by accident. The effective configured rules (user, trusted
+          // project, managed) are evaluated first, so a configured deny or a
+          // managed deny wins over any prompt or earlier grant.
+          const draft = {
+            sessionID: SessionID.descending(),
+            permission: permissionName,
+            patterns: [...input.patterns],
+            metadata: { ...(input.metadata ?? {}), plugin: pluginName },
+            always: [] as string[],
+            ruleset: PermissionRuntime.fromConfig(config.permission ?? {}) as Permission.Ruleset,
+            agent: undefined as string | undefined,
+          }
+          await owner.run(() => PermissionRuntime.ask(draft))
+          return { ok: true, status: "allow" as const }
+        } catch (error) {
+          // The runtime's permission pipeline throws `DeniedError` /
+          // `RejectedError` for negative outcomes; both map to `deny`.
+          // Anything else is an infrastructure failure and reports
+          // `ok: false` so the plugin can react.
+          const name = error && typeof error === "object" ? (error as { name?: unknown }).name : undefined
+          if (name === "PermissionDeniedError" || name === "PermissionRejectedError") {
+            return { ok: true, status: "deny" as const }
+          }
+          return { ok: false, error: toErrorMessage(error) }
+        }
+      },
+    }
+
+    const session: PluginSessionAPI = {
+      async create(input) {
+        try {
+          // A parent must be a session this plugin may administer: otherwise a
+          // plugin could hang a child under someone else's session and later
+          // have it deleted or compacted with that session.
+          if (input.parentID) {
+            const parent = await checkSessionOwnership(input.parentID, pluginName)
+            if (!parent.ok) return parent
+          }
+          // Tag the session with the plugin's name. `Session.create` does
+          // not accept metadata today, so we create then update. The
+          // window between the two writes is owned by the runtime, not
+          // user code, and is not exposed via any list API before the
+          // update lands.
+          const created = await owner.run(() =>
+            Session.create({
+              ...(input.parentID ? { parentID: input.parentID as SessionID } : {}),
+              ...(input.title ? { title: input.title } : {}),
+            }),
+          )
+          if (pluginName) {
+            await owner.run(() =>
+              Session.setMetadata({
+                sessionID: created.id,
+                metadata: { createdByPlugin: pluginName },
+              }),
+            )
+          }
+          return { ok: true, sessionID: created.id }
+        } catch (error) {
+          return { ok: false, error: toErrorMessage(error) }
+        }
+      },
+      async compact(sessionID) {
+        const check = await checkSessionOwnership(sessionID, pluginName)
+        if (!check.ok) return check
+        try {
+          // Use the project default model and the build agent (the
+          // default primary agent) so the compaction is consistent with
+          // what the runtime would do for a normal session.
+          // Lazy for the same reason as the permission import above.
+          const { Provider } = await import("../provider/provider")
+          const { SessionCompaction } = await import("../session/compaction")
+          const model = await owner.run(() => Provider.defaultModel())
+          await owner.run(() =>
+            SessionCompaction.create({
+              sessionID: check.info.id,
+              agent: "build",
+              model,
+              auto: false,
+              triggerReason: "manual",
+            }),
+          )
+          return { ok: true }
+        } catch (error) {
+          return { ok: false, error: toErrorMessage(error) }
+        }
+      },
+      async remove(sessionID) {
+        const check = await checkSessionOwnership(sessionID, pluginName)
+        if (!check.ok) return check
+        try {
+          // Session.remove deletes the whole subtree, so every descendant must
+          // be administrable too, not just the root. Bounded walk; anything
+          // foreign (or an oversized tree) refuses the whole removal.
+          const queue: string[] = [check.info.id]
+          for (let visited = 0; queue.length > 0; visited++) {
+            if (visited >= 500)
+              return { ok: false, error: "Session tree is too large to remove through the plugin API" }
+            const children = await owner.run(() => Session.children(queue.shift() as SessionID))
+            for (const child of children) {
+              const childCheck = await checkSessionOwnership(child.id, pluginName)
+              if (!childCheck.ok) {
+                return { ok: false, error: "Session tree contains a session this plugin does not own" }
+              }
+              queue.push(child.id)
+            }
+          }
+          const cfg = await Config.get()
+          const trusted = !pluginName || cfg.plugin_trust?.session_admin?.includes(pluginName) === true
+          await owner.run(() =>
+            Session.remove(
+              check.info.id,
+              (subtree) =>
+                subtree.length <= 500 &&
+                subtree.every(
+                  (session) =>
+                    session.projectID === Instance.project.id &&
+                    (trusted || session.metadata?.createdByPlugin === pluginName),
+                ),
+            ),
+          )
+          return { ok: true }
+        } catch (error) {
+          return { ok: false, error: toErrorMessage(error) }
+        }
+      },
+    }
+
+    return { permission, session }
+  }
+
   async function load(current: Store) {
     const signal = current.controller.signal
     const ctx = Instance.current
@@ -69,7 +273,7 @@ export namespace Plugin {
       $: Bun.$.env(Env.sanitize(process.env)) as unknown as PluginInput["$"],
     }
 
-    async function initialize(factory: PluginInstance) {
+    async function initialize(factory: PluginInstance, pluginName?: string) {
       signal.throwIfAborted()
       const owner = lifetime(current)
       try {
@@ -79,6 +283,14 @@ export namespace Plugin {
           Object.getOwnPropertyDescriptors(input),
         )
         pluginInput.lifecycle = { signal: owner.signal, onDispose: owner.onDispose }
+        // ADR-244: hand the plugin its permission / session API with the
+        // plugin's identity baked in. Plugins that ignore the new API
+        // are unaffected — the fields are optional in the type.
+        if (pluginName !== undefined) {
+          const api = createPluginCapabilityAPI(owner, pluginName)
+          pluginInput.permission = api.permission
+          pluginInput.session = api.session
+        }
         const hooks = await owner.run(() => factory(pluginInput))
         signal.throwIfAborted()
         if (!hooks || typeof hooks !== "object") throw new Error("Plugin factory did not return hooks")
@@ -98,6 +310,10 @@ export namespace Plugin {
     for (let plugin of plugins) {
       signal.throwIfAborted()
       if (DEPRECATED_PLUGIN_PACKAGES.some((pkg) => plugin.includes(pkg))) continue
+      // Capture the original spec so the plugin name (used by ADR-244's
+      // session ownership marker and the trust-list config) matches what
+      // the user wrote in `cfg.plugin`, not the resolved install path.
+      const pluginName = plugin
       const loader = lifetime(current)
       try {
         if (!isFileUrl(plugin)) {
@@ -122,7 +338,7 @@ export namespace Plugin {
         for (const fn of Object.values(mod)) {
           if (typeof fn !== "function" || seen.has(fn)) continue
           seen.add(fn)
-          await initialize(fn as PluginInstance)
+          await initialize(fn as PluginInstance, pluginName)
         }
       } catch (error) {
         signal.throwIfAborted()

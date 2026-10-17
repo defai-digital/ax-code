@@ -137,14 +137,16 @@ const permissionPreprocess = (val: unknown) => {
   return val
 }
 
-const permissionTransform = (x: unknown): Record<string, PermissionRule> => {
+type PermissionSettings = Record<string, PermissionRule | boolean> & { auto_accept?: boolean }
+
+const permissionTransform = (x: unknown): PermissionSettings => {
   if (typeof x === "string") return { "*": x as PermissionAction }
   const obj = x as { __originalKeys?: string[] } & Record<string, unknown>
   const { __originalKeys, ...rest } = obj
-  if (!__originalKeys) return rest as Record<string, PermissionRule>
-  const result: Record<string, PermissionRule> = {}
+  if (!__originalKeys) return rest as PermissionSettings
+  const result: PermissionSettings = {}
   for (const key of __originalKeys) {
-    if (key in rest) result[key] = rest[key] as PermissionRule
+    if (key in rest) result[key] = rest[key] as PermissionRule | boolean
   }
   return result
 }
@@ -217,6 +219,7 @@ export const Permission = z
     z
       .object({
         __originalKeys: z.string().array().optional(),
+        auto_accept: z.boolean().optional().describe("Opt in to project auto-accept for ordinary local edits and bash"),
         read: PermissionRule.optional(),
         edit: PermissionRule.optional(),
         glob: PermissionRule.optional(),
@@ -477,6 +480,7 @@ export const Keybinds = z
     model_provider_list: z.string().optional().default("ctrl+a").describe("Open provider list from model dialog"),
     model_favorite_toggle: z.string().optional().default("ctrl+f").describe("Toggle model favorite status"),
     session_interrupt: z.string().optional().default("escape").describe("Interrupt current session"),
+    project_auto_accept: z.string().optional().default("none").describe("Toggle auto-accept for this project"),
     session_compact: z.string().optional().default("<leader>c").describe("Compact the session"),
     session_pin_toggle: z.string().optional().default("ctrl+f").describe("Pin or unpin session in the session list"),
     session_diff_view: z.string().optional().default("<leader>d").describe("View session diff"),
@@ -750,6 +754,21 @@ export const Info = z
       .optional()
       .describe("Controls the startup guard against launching ax-code in an overly broad directory."),
     plugin: z.string().array().optional(),
+    // ADR-244: when a plugin name is listed under `session_admin`, the
+    // host grants that plugin's `session.create / compact / remove` API
+    // permission to act on sessions outside the plugin's own created set.
+    // Without an entry, the API is restricted to sessions whose
+    // `metadata.createdByPlugin` matches the caller.
+    plugin_trust: z
+      .object({
+        session_admin: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Plugin names (matching the entry used in `plugin`) that may use the host session admin API on sessions other than their own.",
+          ),
+      })
+      .optional(),
     snapshot: z
       .boolean()
       .optional()
@@ -1080,6 +1099,11 @@ export const Info = z
         "Enable Super-Long supervised long-run mode (default: on for models with a 64k+ context window, " +
           "thinking, and prompt caching — e.g. Qwen 3.7 Max/Plus; off otherwise)",
       ),
+    hooks: z
+      .object({
+        allow_input_rewrite: z.boolean().optional().describe("Allow trusted PreToolUse hooks to rewrite tool input"),
+      })
+      .optional(),
     isolation: Isolation.optional().describe("Execution isolation configuration"),
     webmcp: WebMcpProfile.Requirement.optional().describe(
       "Enterprise WebMCP requirement for the experimental chrome-devtools bridge. Managed config only — " +
@@ -1103,6 +1127,23 @@ export const Info = z
       .describe(
         "MCP server launch security checks. All fields default to off and only send data off-machine when enabled.",
       ),
+    mcp_sampling: z
+      .object({
+        enabled: z
+          .boolean()
+          .optional()
+          .describe(
+            "ADR-240: opt in to MCP sampling (sampling/createMessage) on every client. Off by default; each " +
+              "request still asks the user for permission through the 'mcp_sampling' permission name. Server " +
+              "messages and system prompts are untrusted text (hidden Unicode is stripped, ADR-206).",
+          ),
+        max_tokens: PositiveInteger.optional().describe(
+          "ADR-240: default output cap (tokens) for an approved sampling call when the request omits one or " +
+            "asks for more. Defaults to 2000; each call is bounded to min(request, max_tokens).",
+        ),
+      })
+      .optional()
+      .describe("MCP sampling (server-initiated LLM calls) configuration. All fields default to off."),
     session: z
       .object({
         ttl_days: SafeInteger.min(1).optional().describe("Auto-prune sessions older than this many days (default: 30)"),

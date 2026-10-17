@@ -1,6 +1,14 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.autoAccepted": "自動承認済み",
+  "ui.autoAcceptOn": "自動承認: オン",
+  "ui.autoAcceptOff": "自動承認: オフ",
+  "ui.autoAcceptToggle": "プロジェクトの自動承認を切り替え",
+  "ui.autoAcceptManagedOff": "管理ポリシーにより自動承認は無効です",
+  "ui.autoAcceptFailed": "自動承認を変更できませんでした",
+  "help.keybind.project_auto_accept": "プロジェクトの自動承認を切り替え",
+  "ui.toolRewrittenByHook": "フックにより書き換え",
   "ui.wikiQueued": "\u5f85\u6a5f\u4e2d",
   "ui.wikiRunning": "\u751f\u6210\u4e2d",
   "ui.wikiReady": "\u6e96\u5099\u5b8c\u4e86",
@@ -111,6 +119,8 @@ export const messages = {
   "rollback.redoTitle": "Redo \u306e\u78ba\u8a8d",
   "rollback.redoMessage":
     "\u53d6\u308a\u6d88\u3057\u305f\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u5fa9\u5143\u3057\u307e\u3059\u304b\uff1f",
+  "turn.changedFiles.one": "1 ファイルを変更、+{additions} -{deletions}",
+  "turn.changedFiles.many": "{count} ファイルを変更、+{additions} -{deletions}",
   "rollback.one": "{count} \u4ef6\u306e\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u53d6\u308a\u6d88\u3057\u307e\u3057\u305f",
   "rollback.many": "{count} \u4ef6\u306e\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u53d6\u308a\u6d88\u3057\u307e\u3057\u305f",
   "rollback.restore": "\u307e\u305f\u306f /redo \u3067\u5fa9\u5143",
@@ -663,6 +673,10 @@ export const messages = {
   "ui.worktreeLoading": "ワークツリーを読み込み中...",
   "ui.worktreeCreated": "ワークツリーの準備完了: {directory}",
   "ui.worktreeRemoved": "ワークツリーを削除しました。",
+  "ui.releaseNotes": "リリースノート",
+  "ui.releaseNotesUsageHint": "使い方: /release-notes [バージョン]",
+  "ui.releaseNotesUnavailable": "このビルドにはリリースノートが含まれていません。",
+  "ui.releaseNotesNotFound": "バージョン {version} のリリースノートが見つかりません。",
   "ui.worktreeNotFound": "ワークツリーが見つかりません: {name}",
   "ui.worktreeFailed": "ワークツリーを更新できませんでした。",
   "ui.searchMessages": "\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u691c\u7d22",

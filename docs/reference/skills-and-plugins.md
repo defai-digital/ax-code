@@ -130,6 +130,56 @@ Arrays and plain objects are detached from runtime state. Schemas, functions, an
 must be treated as read-only. Plugins remain trusted JavaScript running in the runtime process: cancellation is
 cooperative and cannot stop synchronous infinite loops or undo external effects.
 
+### Permission and session APIs (ADR-244)
+
+Plugin factories also receive an optional `permission` and `session` API. Both are opt-in: a plugin that does not touch
+either field loads exactly as before.
+
+```ts
+import type { PluginInput } from "@ax-code/plugin"
+
+export default async (input: PluginInput) => {
+  // Ask the host to evaluate a permission the same way a tool would.
+  const verdict = await input.permission?.ask({
+    permission: "edit",
+    patterns: ["docs/**"],
+    metadata: { reason: "doc refresh" },
+  })
+  if (verdict?.ok === true && verdict.status === "allow") {
+    // ...
+  }
+
+  // Create a session owned by this plugin. The host records the owner
+  // in the session's metadata so compact/remove below can scope to it.
+  const created = await input.session?.create({ title: "doc follow-up" })
+  if (created?.ok) {
+    await input.session?.compact(created.sessionID)
+    await input.session?.remove(created.sessionID)
+  }
+}
+```
+
+- Every call runs under the same 15-second deadline as the existing hooks; a slow call is timed out and retired.
+- Failures return `{ ok: false, error }` and never throw into the host.
+- Inputs are detached from runtime state the same way transform-hook inputs are.
+- `session.create` writes `metadata.createdByPlugin = <plugin name>` so the caller's identity is recorded without
+  any extra argument.
+- `session.compact` and `session.remove` are restricted to sessions the plugin created. They are also restricted to
+  the plugin's own project. The session must belong to the same project the host is currently serving.
+- To let a plugin act on sessions it did not create, list it under `plugin_trust.session_admin` in `ax-code.json`:
+
+  ```json
+  {
+    "plugin": ["file:///path/to/plugin.js"],
+    "plugin_trust": {
+      "session_admin": ["file:///path/to/plugin.js"]
+    }
+  }
+  ```
+
+  Without the entry, `session.remove` and `session.compact` return `{ ok: false, error: "Session is not owned by this
+plugin and the plugin is not in plugin_trust.session_admin" }`.
+
 ## Hooks packs
 
 See [Hooks](../guides/hooks.md) for the five official lifecycle packs (`format-after-edit`, `block-force-push`, `require-tests-on-stop`, `protect-env-files`, `log-bash-commands`).

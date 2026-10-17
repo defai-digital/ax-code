@@ -1034,7 +1034,14 @@ export namespace Session {
     return result
   })
 
-  async function removeInternal(sessionID: SessionID, options: { updatedBefore?: number } = {}): Promise<number> {
+  export type RemovalSession = Pick<Info, "id" | "projectID" | "metadata">
+  export type RemovalGuard = (subtree: readonly RemovalSession[]) => boolean
+  export const RemovalGuardError = NamedError.create("SessionRemovalGuardError", z.object({ sessionID: SessionID.zod }))
+
+  async function removeInternal(
+    sessionID: SessionID,
+    options: { updatedBefore?: number; guard?: RemovalGuard } = {},
+  ): Promise<number> {
     const session = await get(sessionID)
     // Collect descendants and delete them inside the same transaction to
     // avoid a TOCTOU window where a new child session created between
@@ -1045,7 +1052,7 @@ export namespace Session {
     let rootMissing = false
     Database.transaction((db) => {
       const root = db
-        .select({ timeUpdated: SessionTable.time_updated })
+        .select()
         .from(SessionTable)
         .where(and(eq(SessionTable.id, sessionID), eq(SessionTable.project_id, session.projectID)))
         .get()
@@ -1053,11 +1060,15 @@ export namespace Session {
         rootMissing = true
         return
       }
-      if (options.updatedBefore !== undefined && root.timeUpdated >= options.updatedBefore) {
+      if (options.updatedBefore !== undefined && root.time_updated >= options.updatedBefore) {
         protectedByRecentSession = true
         return
       }
 
+      // Use raw rows so an unrecoverable descendant cannot disappear from the guard.
+      const subtree: RemovalSession[] = [
+        { id: root.id, projectID: root.project_id, metadata: root.metadata ?? undefined },
+      ]
       const ids = [sessionID]
       while (ids.length > 0) {
         const parentID = ids.pop()!
@@ -1069,6 +1080,7 @@ export namespace Session {
         for (const row of rows) {
           if (allDescendantIDs.has(row.id)) continue
           allDescendantIDs.add(row.id)
+          subtree.push({ id: row.id, projectID: row.project_id, metadata: row.metadata ?? undefined })
           // Automatic retention must treat a recent descendant as protection
           // for its whole ancestor chain. Otherwise pruning an expired parent
           // calls the normal cascading remove path and deletes an active child.
@@ -1086,6 +1098,9 @@ export namespace Session {
         }
       }
       if (protectedByRecentSession) return
+      // This synchronous guard and the deletes share the collection transaction.
+      // Refusal throws before any registry, shard, cache or event mutation.
+      if (options.guard && options.guard(subtree) !== true) throw new RemovalGuardError({ sessionID })
       for (const id of allDescendantIDs) {
         db.delete(SessionTable).where(eq(SessionTable.id, id)).run()
       }
@@ -1173,9 +1188,9 @@ export namespace Session {
     return allDescendantIDs.size + 1
   }
 
-  export const remove = fn(SessionID.zod, async (sessionID) => {
-    await removeInternal(sessionID)
-  })
+  export async function remove(sessionID: SessionID, guard?: RemovalGuard): Promise<void> {
+    await removeInternal(SessionID.zod.parse(sessionID), { guard })
+  }
 
   /**
    * Prune sessions older than `ttlDays`. Returns the count of pruned
