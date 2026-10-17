@@ -5,6 +5,8 @@ import type { Argv } from "yargs"
 import type { Skill } from "../../skill"
 import type { SkillDoctorReport, SkillTriggerReport, SkillValidationReport } from "../../skill/authoring"
 import { cmd } from "./cmd"
+import { formatCurationReport } from "./memory"
+import { Curation } from "../../memory/curate"
 
 // skill/authoring reaches skill/index, permission and MCP; only the handlers
 // need it, so `--help` never evaluates that graph.
@@ -215,6 +217,78 @@ const SkillTestTriggerCommand = cmd({
   },
 })
 
+const SkillCurateCommand = cmd({
+  command: "curate",
+  describe: "propose unused or duplicated skills (read-only unless --apply)",
+  builder: (yargs: Argv) =>
+    yargs
+      .option("json", {
+        type: "boolean",
+        describe: "output machine-readable JSON",
+      })
+      .option("apply", {
+        type: "string",
+        describe: "apply exactly one proposal by id: archives the skill directory, reversibly (requires --yes)",
+      })
+      .option("yes", {
+        type: "boolean",
+        describe: "confirm the --apply change; without it nothing is modified",
+        default: false,
+      })
+      .option("undo", {
+        type: "string",
+        describe: "restore a skill archived by --apply, by proposal id",
+      }),
+  async handler(args) {
+    const { Skill, bootstrapReadonly } = await loadSkill()
+    await bootstrapReadonly(process.cwd(), async () => {
+      const projectRoot = process.cwd()
+
+      if (args.undo) {
+        const record = await Curation.undo({ projectRoot }, String(args.undo))
+        process.stdout.write(`Restored skill ${record.name} (${record.id})${EOL}`)
+        return
+      }
+
+      const report = await Curation.proposeSkills({
+        projectRoot,
+        skills: await Skill.all(),
+        duplicateNames: await Skill.duplicateNames(),
+      })
+
+      if (args.apply) {
+        const proposal = report.proposals.find((item) => item.id === args.apply)
+        if (!proposal) {
+          console.error(`No proposal with id: ${args.apply}`)
+          process.exitCode = 1
+          return
+        }
+        if (!args.yes) {
+          console.error(`Refusing to modify state without --yes. Proposal ${proposal.id}: ${proposal.reason}`)
+          process.exitCode = 1
+          return
+        }
+        const record = await Curation.apply(
+          { projectRoot },
+          { id: proposal.id, kind: "", name: proposal.name, scope: proposal.scope, location: proposal.location },
+        )
+        process.stdout.write(
+          args.json
+            ? JSON.stringify(record, null, 2) + EOL
+            : `Archived skill ${record.name} (moved out of the project, nothing deleted). Undo: ax-code skill curate --undo ${record.id}${EOL}`,
+        )
+        return
+      }
+
+      if (args.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + EOL)
+        return
+      }
+      process.stdout.write(formatCurationReport(report))
+    })
+  },
+})
+
 export const SkillCommand = cmd({
   command: "skill",
   describe: "manage and validate Agent Skills",
@@ -226,6 +300,7 @@ export const SkillCommand = cmd({
       .command(SkillValidateCommand)
       .command(SkillDoctorCommand)
       .command(SkillTestTriggerCommand)
+      .command(SkillCurateCommand)
       .demandCommand(),
   async handler() {},
 })

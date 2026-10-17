@@ -11,6 +11,7 @@ import type { MemoryDoctorReport } from "../../memory/doctor"
 import { evaluate as evaluateMemory } from "../../memory/evaluation"
 import type { MemoryEvaluationReport } from "../../memory/evaluation"
 import type { MemoryEntryKind } from "../../memory/types"
+import { Curation as MemoryCuration } from "../../memory/curate"
 
 const KIND_BY_FLAG: Record<string, MemoryEntryKind> = {
   user: "userPrefs",
@@ -58,6 +59,7 @@ export const MemoryCommand = cmd({
       .command(MemoryRecallCommand)
       .command(MemoryDoctorCommand)
       .command(MemoryEvalCommand)
+      .command(MemoryCurateCommand)
       .demandCommand(),
   async handler() {},
 })
@@ -504,6 +506,104 @@ export const MemoryDoctorCommand = cmd({
       prompts.log.info(`  ${issue.message}`)
     }
     prompts.outro(`${report.issues.length} issue${report.issues.length === 1 ? "" : "s"}`)
+  },
+})
+
+export function formatCurationReport(report: MemoryCuration.Report): string {
+  const lines = [
+    `Curation proposals: ${report.proposals.length} (checked ${report.checked}, threshold ${report.thresholdDays} days)`,
+  ]
+  for (const proposal of report.proposals) {
+    const kind = proposal.kind ? `${proposal.kind}/` : ""
+    lines.push(`  ${proposal.id}  ${proposal.rule.padEnd(14)}  ${proposal.scope.padEnd(7)}  ${kind}${proposal.name}`)
+    lines.push(`    ${proposal.reason}`)
+    if (proposal.applied) lines.push("    already applied")
+  }
+  for (const skipped of report.skippedRules) lines.push(`  skipped: ${skipped}`)
+  return lines.join("\n")
+}
+
+export const MemoryCurateCommand = cmd({
+  command: "curate",
+  describe: "propose stale memory entries to remove (read-only unless --apply)",
+  builder: (yargs) =>
+    yargs
+      .option("scope", {
+        describe: 'which store to inspect: "project", "global", or "all"',
+        choices: ["project", "global", "all"] as const,
+        default: "project" as const,
+      })
+      .option("json", {
+        describe: "emit machine-readable JSON",
+        type: "boolean",
+        default: false,
+      })
+      .option("apply", {
+        describe: "apply exactly one proposal by id (requires --yes)",
+        type: "string",
+      })
+      .option("yes", {
+        describe: "confirm the --apply change; without it nothing is modified",
+        type: "boolean",
+        default: false,
+      })
+      .option("undo", {
+        describe: "restore a previously applied proposal by id",
+        type: "string",
+      }),
+  async handler(args) {
+    const projectRoot = process.cwd()
+
+    if (args.undo) {
+      const record = await MemoryCuration.undo({ projectRoot }, args.undo)
+      console.log(`Restored ${record.target} ${record.kind ?? ""}${record.name} (${record.id})`)
+      return
+    }
+
+    const report = await MemoryCuration.proposeMemory({ projectRoot, scope: args.scope })
+
+    if (args.apply) {
+      const proposal = report.proposals.find((item) => item.id === args.apply)
+      if (!proposal) {
+        console.error(`No proposal with id: ${args.apply}`)
+        process.exitCode = 1
+        return
+      }
+      if (!args.yes) {
+        console.error(`Refusing to modify memory without --yes. Proposal ${proposal.id}: ${proposal.reason}`)
+        process.exitCode = 1
+        return
+      }
+      const record = await MemoryCuration.apply(
+        { projectRoot },
+        {
+          id: proposal.id,
+          kind: proposal.kind ?? "",
+          name: proposal.name,
+          scope: proposal.scope,
+        },
+      )
+      console.log(
+        args.json
+          ? JSON.stringify(record, null, 2)
+          : `Removed memory ${record.kind}/${record.name}. Undo with: ax-code memory curate --undo ${record.id}`,
+      )
+      return
+    }
+
+    if (args.json) {
+      console.log(JSON.stringify(report, null, 2))
+      return
+    }
+    UI.empty()
+    prompts.intro("Memory Curate")
+    if (report.proposals.length === 0) {
+      prompts.log.success("No stale memory entries")
+    } else {
+      prompts.log.info(formatCurationReport(report))
+      prompts.log.warn("Read-only. Apply one proposal with --apply <id> --yes")
+    }
+    prompts.outro("Done")
   },
 })
 

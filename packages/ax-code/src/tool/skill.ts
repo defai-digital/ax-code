@@ -10,6 +10,8 @@ import { Recorder } from "../replay/recorder"
 import { Agent } from "../agent/agent"
 import { SkillCatalog } from "../skill/catalog"
 import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine/constants"
+import { UsageRecord } from "../memory/usage"
+import { Instance } from "../project/instance"
 
 function escapeXmlAttribute(value: string) {
   return value
@@ -138,6 +140,10 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
         always: [name],
         metadata: {},
       })
+
+      // ADR-249: count the invocation only after approval, and never let usage
+      // tracking affect the tool result.
+      UsageRecord.record(Instance.directory, [UsageRecord.skillKey(name)])
 
       const dir = path.dirname(skill.location)
       const base = skill.builtin ? `builtin://${encodeURIComponent(skill.name)}/` : pathToFileURL(dir).href

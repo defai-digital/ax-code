@@ -11,6 +11,7 @@ import { Log } from "../util/log"
 import { TokenEstimate } from "@/provider/token-estimate"
 import path from "node:path"
 import { realpath } from "node:fs/promises"
+import { UsageRecord } from "./usage"
 
 const log = Log.create({ service: "memory.injector" })
 
@@ -148,12 +149,27 @@ function pushEntries(
   parts: string[],
   title: string,
   section: EntrySection | undefined,
-  opts: { agent?: string; paths?: string[]; projectRoot: string },
+  opts: { agent?: string; paths?: string[]; projectRoot: string; kind?: string },
   budget: Budget,
 ) {
   if (!section || section.entries.length === 0) return
   const applicable = orderEntriesForPrompt(section.entries.filter((e) => entryApplies(e, opts) && injectable(e)))
-  const rendered = applicable.map(renderEntry).filter((text) => budget.take(text))
+  const rendered: string[] = []
+  const used: string[] = []
+  for (const entry of applicable) {
+    const text = renderEntry(entry)
+    if (!budget.take(text)) continue
+    rendered.push(text)
+    used.push(entry.name)
+  }
+  // ADR-249: only entries that actually reached the prompt count as used.
+  // Best effort and non-blocking; usage never affects injection output.
+  if (used.length > 0) {
+    UsageRecord.record(
+      opts.projectRoot,
+      used.map((name) => UsageRecord.memoryKey(opts.kind ?? title, name)),
+    )
+  }
   if (rendered.length === 0) return
   parts.push(`## ${title}`)
   parts.push(...rendered)
@@ -226,12 +242,21 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
       for (const kind of ["feedback", "userPrefs", "decisions", "reference"] as const) {
         const section = global.sections[kind]
         if (!section) continue
+        const used: string[] = []
         for (const entry of orderEntriesForPrompt(section.entries)) {
           if (entryApplies(entry, { agent, paths, projectRoot: memory.projectRoot }) && injectable(entry)) {
             const text = renderEntry(entry)
-            if (scoped.take(text)) rendered.push(text)
+            if (scoped.take(text)) {
+              rendered.push(text)
+              used.push(entry.name)
+            }
           }
         }
+        if (used.length > 0)
+          UsageRecord.record(
+            memory.projectRoot,
+            used.map((name) => UsageRecord.memoryKey(kind, name)),
+          )
       }
       return rendered
     })
@@ -248,10 +273,10 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
   // Keep its global precedence, without repeating the same curated entries.
   // Equal content from distinct stores must retain its separate scope.
   if (global !== memory) {
-    pushEntries(parts, "Feedback Rules", memory.sections.feedback, entryOpts, budget)
-    pushEntries(parts, "User Preferences", memory.sections.userPrefs, entryOpts, budget)
-    pushEntries(parts, "Project Decisions", memory.sections.decisions, entryOpts, budget)
-    pushEntries(parts, "References", memory.sections.reference, entryOpts, budget)
+    pushEntries(parts, "Feedback Rules", memory.sections.feedback, { ...entryOpts, kind: "feedback" }, budget)
+    pushEntries(parts, "User Preferences", memory.sections.userPrefs, { ...entryOpts, kind: "userPrefs" }, budget)
+    pushEntries(parts, "Project Decisions", memory.sections.decisions, { ...entryOpts, kind: "decisions" }, budget)
+    pushEntries(parts, "References", memory.sections.reference, { ...entryOpts, kind: "reference" }, budget)
   }
 
   const patternsContent = memory.sections.patterns?.content && budget.takeLines(memory.sections.patterns.content)
@@ -328,6 +353,9 @@ export async function getContext(projectRoot: string, opts: Omit<BuildContextOpt
   ])
 
   if (!memory && !global) return ""
+  // ADR-249: one usage flush per injection keeps the record current without
+  // paying a write per prompt. Best effort; failures never block injection.
+  const flush = () => void UsageRecord.flush(projectRoot).catch(() => {})
   if (!memory && global) {
     // Only global memory — synthesize a minimal project memory wrapper.
     const shell: ProjectMemory = {
@@ -340,9 +368,13 @@ export async function getContext(projectRoot: string, opts: Omit<BuildContextOpt
       sections: {},
       totalTokens: 0,
     }
-    return buildContext(shell, { ...opts, global })
+    const context = buildContext(shell, { ...opts, global })
+    flush()
+    return context
   }
-  return buildContext(memory!, { ...opts, global: sharedSource ? memory : global })
+  const context = buildContext(memory!, { ...opts, global: sharedSource ? memory : global })
+  flush()
+  return context
 }
 
 /**
