@@ -248,7 +248,28 @@ export namespace Auth {
   })
   export type WellKnown = z.infer<typeof WellKnown>
 
-  const InfoSchema = z.discriminatedUnion("type", [Oauth, Api, WellKnown]).meta({ ref: "Auth" })
+  // ADR-246: a non-secret credential-source reference. Stored next to the
+  // other auth entries so `ax-code auth export/import` can round-trip the
+  // reference exactly. No encryption is applied — the type is structurally
+  // non-secret, and the only field that could grow sensitive is `kind` (we
+  // reject additions that don't pass a re-review of this invariant).
+  export const CredentialSource = z
+    .object({
+      type: z.literal("credential_source"),
+      // Shape only; the source schema lives in src/provider/credential-source.ts
+      // and is validated on read in `all()`. We keep the on-disk shape
+      // permissive here so the auth store can survive a bump in
+      // CredentialSource.Source without forcing a migration.
+      source: z
+        .object({
+          kind: z.string(),
+        })
+        .catchall(z.unknown()),
+    })
+    .meta({ ref: "CredentialSource" })
+  export type CredentialSource = z.infer<typeof CredentialSource>
+
+  const InfoSchema = z.discriminatedUnion("type", [Oauth, Api, WellKnown, CredentialSource]).meta({ ref: "Auth" })
   export const Info = Object.assign(InfoSchema, { zod: InfoSchema })
   export type Info = z.infer<typeof InfoSchema>
 
@@ -462,5 +483,134 @@ export namespace Auth {
     }
     allPending = undefined
     await invalidateProviderCacheAfterAuthChange()
+  }
+
+  // ADR-246: a non-secret, shareable view of the auth store for
+  // `ax-code auth export`. Only the structural fields of an entry are kept:
+  //   - credential_source entries keep `source.kind` and every public
+  //     reference field
+  //   - api / oauth / wellknown entries are summarized to the provider id
+  //     and a placeholder that names the type — no key, token, refresh,
+  //     access, or accountId field is ever copied into the export.
+  export type ExportEntry =
+    | {
+        type: "credential_source"
+        source: Record<string, unknown>
+      }
+    | {
+        type: "summary"
+        summary: string
+      }
+
+  export type ExportEnvelope = {
+    version: 1
+    exportedAt: string
+    providers: Record<string, ExportEntry>
+  }
+
+  function summarizeSecretEntry(info: Info): ExportEntry {
+    if (info.type === "credential_source") {
+      return { type: "credential_source", source: info.source as Record<string, unknown> }
+    }
+    // The remaining types are secret-bearing. The export never carries
+    // encrypted material; it carries a placeholder that names the shape so
+    // `auth import` can know an entry existed without recreating a secret.
+    if (info.type === "api") return { type: "summary", summary: "api" }
+    if (info.type === "oauth") return { type: "summary", summary: "oauth" }
+    if (info.type === "wellknown") return { type: "summary", summary: "wellknown" }
+    return { type: "summary", summary: "unknown" }
+  }
+
+  /**
+   * Build a shareable export envelope. Only structural / reference data is
+   * included; no key, refresh, access, or token is ever copied into the
+   * result. The function never throws on missing fields — an entry that
+   * somehow fails to summarize is dropped and reported in the returned
+   * `skipped` list so callers (and tests) can assert on it.
+   */
+  export async function exportEnvelope(input?: { read?: () => Promise<Record<string, Info>> }): Promise<{
+    envelope: ExportEnvelope
+    skipped: string[]
+  }> {
+    const entries: Record<string, Info> = input?.read ? await input.read() : await all()
+    const providers: Record<string, ExportEntry> = {}
+    const skipped: string[] = []
+    for (const [providerID, info] of Object.entries(entries)) {
+      try {
+        providers[providerID] = summarizeSecretEntry(info)
+      } catch {
+        skipped.push(providerID)
+      }
+    }
+    return {
+      envelope: {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        providers,
+      },
+      skipped,
+    }
+  }
+
+  export type ImportPlan = {
+    willCreate: string[]
+    willSkip: { providerID: string; reason: string }[]
+  }
+
+  /**
+   * Plan a re-import of a previously exported envelope. Default mode is
+   * dry-run: no write happens, the returned `willCreate` describes what WOULD
+   * be created. `--write` callers must invoke `applyImport(plan, ...)` only
+   * when they want the side effect.
+   */
+  export async function planImport(
+    envelope: ExportEnvelope,
+    input?: { existing?: Record<string, Info> },
+  ): Promise<ImportPlan> {
+    const existing = input?.existing ?? (await all())
+    const willCreate: string[] = []
+    const willSkip: { providerID: string; reason: string }[] = []
+    for (const [providerID, entry] of Object.entries(envelope.providers ?? {})) {
+      // Never overwrite an existing connection — the user has to re-login.
+      if (existing[providerID]) {
+        willSkip.push({ providerID, reason: "exists" })
+        continue
+      }
+      // Only reference-style entries are re-creatable. Summary placeholders
+      // for an existing api/oauth/wellknown require the user to re-enter
+      // their secret.
+      if (entry.type !== "credential_source") {
+        willSkip.push({ providerID, reason: "secret entry requires re-authentication" })
+        continue
+      }
+      willCreate.push(providerID)
+    }
+    return { willCreate, willSkip }
+  }
+
+  /**
+   * Apply a previously-computed import plan. Only `willCreate` providers
+   * whose auth entry is a `credential_source` are written. Existing entries
+   * are never overwritten, matching the dry-run plan.
+   */
+  export async function applyImport(
+    envelope: ExportEnvelope,
+    plan: ImportPlan,
+  ): Promise<{ created: string[]; skipped: { providerID: string; reason: string }[] }> {
+    const created: string[] = []
+    const skipped = [...plan.willSkip]
+    for (const providerID of plan.willCreate) {
+      const entry = envelope.providers[providerID]
+      if (!entry || entry.type !== "credential_source") {
+        skipped.push({ providerID, reason: "missing or unsupported entry" })
+        continue
+      }
+      await set(providerID, {
+        type: "credential_source",
+        source: entry.source as { kind: string } & Record<string, unknown>,
+      } as unknown as Info)
+      created.push(providerID)
+    }
+    return { created, skipped }
   }
 }

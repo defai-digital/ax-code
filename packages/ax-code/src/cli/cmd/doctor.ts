@@ -436,6 +436,7 @@ export const DOCTOR_CHECK_IDS = [
   "feature-flags",
   "db-integrity",
   "child-processes",
+  "credential-sources",
 ] as const
 
 export type DoctorCheckId = (typeof DOCTOR_CHECK_IDS)[number]
@@ -804,6 +805,22 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
   // 15. Database integrity — PRAGMA quick_check + pre-migration backup listing
   // (skips with a note when the database is absent or over the size cap).
   push("db-integrity", await getDoctorDatabaseIntegrityCheck({ databasePath: Database.Path }))
+
+  // 16. ADR-246: for every `credential_source` reference in auth.json, ask the
+  // underlying client whether the reference currently resolves (profile
+  // exists, ADC file present, `az` logged in). Never reads the secret.
+  if (!skip.has("credential-sources")) {
+    try {
+      const { getCredentialSourcesCheck } = await import("./doctor-credential-sources")
+      push("credential-sources", await getCredentialSourcesCheck())
+    } catch (error) {
+      push("credential-sources", {
+        name: "Credential sources",
+        status: "warn",
+        detail: `Could not inspect credential references: ${toErrorMessage(error)}`,
+      })
+    }
+  }
 
   return checks
 }

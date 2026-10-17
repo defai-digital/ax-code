@@ -414,6 +414,13 @@ export namespace ProviderTransform {
   }
 
   function shouldApplyCaching(model: Provider.Model, options: Record<string, unknown>, msgs?: ModelMessage[]): boolean {
+    // ADR-247: explicit compatibility.cache_format on the provider config.
+    // Only one value is an early-out here: "none" disables cache_control
+    // regardless of every other signal. "breakpoints" is the default-heuristic
+    // path (it routes through the same `applyCaching` below); "auto" and
+    // missing are byte-identical to today.
+    const cacheFormat = readCacheFormat(options)
+    if (cacheFormat === "none") return false
     // An explicit model policy owns stable-block annotations in the session
     // layer. Never add positional markers to dynamic messages or rescue an
     // unknown/off mode when that layer intentionally emitted no markers.
@@ -429,6 +436,12 @@ export namespace ProviderTransform {
     // marked cacheable when the system prompt is collapsed.
     if (msgs?.some((m) => m.role === "system" && hasExplicitCacheControl(m))) return false
     if (PromptCachePolicy.honorsExplicitCache(model.providerID)) return true
+    if (cacheFormat === "breakpoints") {
+      // Force breakpoint placement even on models the default heuristic would
+      // skip. We still avoid the early-out cases above (model promptCacheMode,
+      // gateway, automatic anthropic caching).
+      return true
+    }
     return (
       model.providerID === "anthropic" ||
       model.providerID === "google-vertex-anthropic" ||
@@ -439,6 +452,19 @@ export namespace ProviderTransform {
       model.api.npm === "@ai-sdk/anthropic" ||
       model.api.npm === "@ai-sdk/alibaba"
     )
+  }
+
+  // ADR-247: read compatibility.cache_format from the merged provider options
+  // blob. The options object is a Record<string, unknown> in this layer so we
+  // accept any nesting shape; invalid values are coerced to undefined (the
+  // config layer already rejects unknowns, so a stray string can only arrive
+  // from a programmatic caller that bypassed zod).
+  function readCacheFormat(options: Record<string, unknown>): "auto" | "breakpoints" | "none" | undefined {
+    const compatibility = options["compatibility"]
+    if (!compatibility || typeof compatibility !== "object") return undefined
+    const value = (compatibility as { cache_format?: unknown }).cache_format
+    if (value === "auto" || value === "breakpoints" || value === "none") return value
+    return undefined
   }
 
   export function isKimiFamily(model: {

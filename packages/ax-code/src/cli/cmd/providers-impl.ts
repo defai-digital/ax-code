@@ -14,6 +14,7 @@ import { Filesystem } from "@/util/filesystem"
 import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
 import { isRetiredProviderID } from "@/provider/retired-providers"
 import { AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine/constants"
+import { ProvidersAuthCommand } from "./providers-auth"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -241,6 +242,7 @@ export const ProvidersCommand = cmd({
       .command(ProvidersDisableCommand)
       .command(ProvidersEnableCommand)
       .command(ProvidersAxEngineCommand)
+      .command(ProvidersAuthCommand)
       .demandCommand(),
   async handler() {},
 })

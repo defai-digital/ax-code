@@ -196,6 +196,130 @@ export namespace Provider {
     )
   }
 
+  // ADR-247: read compatibility.body_encoding from the merged provider
+  // options. The options object is a Record<string, unknown> at this layer;
+  // invalid values are coerced to undefined so a stray string from a
+  // programmatic caller that bypassed zod cannot poison the request path.
+  function readBodyEncoding(options: Record<string, unknown>): "json" | "gzip" | undefined {
+    const compatibility = options["compatibility"]
+    if (!compatibility || typeof compatibility !== "object") return undefined
+    const value = (compatibility as { body_encoding?: unknown }).body_encoding
+    if (value === "json" || value === "gzip") return value
+    return undefined
+  }
+
+  /**
+   * ADR-247: apply request-body gzip to a `RequestInit`-like bag when the
+   * provider config opts in via `compatibility.body_encoding = "gzip"`. The
+   * function is pure / synchronous (apart from the lazy `node:zlib` import)
+   * and only fires on a string body. Returns `true` when the bag was
+   * mutated. Exported so the test suite can exercise the wrapping directly
+   * without booting the full provider pipeline.
+   */
+  export function applyBodyEncoding(
+    options: Record<string, unknown>,
+    init: { body?: unknown; headers?: unknown },
+  ): boolean {
+    if (readBodyEncoding(options) !== "gzip") return false
+    if (typeof init.body !== "string") return false
+    // Lazy require to keep cold-start cost on the default path zero.
+    const { gzipSync } = require("node:zlib") as typeof import("node:zlib")
+    const gzipped = gzipSync(Buffer.from(init.body, "utf8"))
+    init.body = gzipped
+    const existing = (init.headers as Record<string, string> | undefined) ?? {}
+    init.headers = { ...existing, "content-encoding": "gzip" }
+    return true
+  }
+
+  // ADR-246: best-effort resolution of a `credential_source` reference for the
+  // provider being constructed. Reads the auth store (no decryption cost —
+  // the entry is stored unencrypted) and translates the reference into the
+  // shape the underlying SDK / CLI expects:
+  //   - aws_profile (Bedrock): sets AWS_PROFILE / AWS_REGION env so the
+  //     @ai-sdk/amazon-bedrock default credential chain picks up the
+  //     named profile. We never read the secret.
+  //   - gcloud_adc (Vertex): passes project + location to the factory and
+  //     leaves GOOGLE_APPLICATION_CREDENTIALS to the environment (the
+  //     standard ADC path).
+  //   - azure_cli: not wired (the AI SDK does not accept a credential
+  //     provider in the same shape; the reference is still surfaced by
+  //     the doctor row).
+  // The function is async only because the auth store read is async; the
+  // actual mutation is synchronous.
+  async function applyCredentialSource(
+    model: { providerID: string },
+    options: Record<string, unknown>,
+    input?: { readAuth?: () => Promise<unknown> },
+  ): Promise<void> {
+    try {
+      let entry: unknown
+      if (input?.readAuth) {
+        const all = (await input.readAuth()) as Record<string, { type?: string; source?: unknown }>
+        entry = all?.[model.providerID]
+      } else {
+        const { Auth } = await import("../auth")
+        entry = await Auth.get(model.providerID as Parameters<typeof Auth.get>[0])
+      }
+      if (!entry || typeof entry !== "object" || (entry as { type?: string }).type !== "credential_source") return
+      const source = (entry as { source?: { kind?: unknown; [k: string]: unknown } }).source
+      if (!source || typeof source !== "object") return
+      if (source.kind === "aws_profile") {
+        // Bedrock reads AWS_PROFILE / AWS_REGION. Set them in process.env
+        // (not on the options bag) so the SDK chain picks them up.
+        if (typeof source.profile === "string" && source.profile.length > 0) {
+          process.env["AWS_PROFILE"] = source.profile
+        }
+        if (typeof source.region === "string" && source.region.length > 0) {
+          process.env["AWS_REGION"] = source.region
+          // Some SDKs read AWS_DEFAULT_REGION; set both to be safe.
+          process.env["AWS_DEFAULT_REGION"] = source.region
+        }
+        log.info("resolved aws_profile credential source", {
+          providerID: model.providerID,
+          profile: source.profile,
+        })
+        return
+      }
+      if (source.kind === "gcloud_adc") {
+        if (typeof source.project === "string" && source.project.length > 0) {
+          options["project"] = source.project
+        }
+        if (typeof source.location === "string" && source.location.length > 0) {
+          options["location"] = source.location
+        }
+        log.info("resolved gcloud_adc credential source", {
+          providerID: model.providerID,
+          project: source.project,
+          location: source.location,
+        })
+        return
+      }
+      if (source.kind === "azure_cli") {
+        // No SDK passthrough today. The reference is still surfaced by the
+        // doctor row; the user must install an SDK that supports
+        // DefaultAzureCredential (e.g. @azure/identity) and wire it via a
+        // custom provider.
+        log.info("azure_cli credential source stored but not wired in this revision", {
+          providerID: model.providerID,
+        })
+        return
+      }
+    } catch (error) {
+      // Auth store read is best-effort. A missing entry or read error must
+      // not block the provider from constructing; the user will see a
+      // regular auth error on the first call.
+      log.debug("credential_source resolution skipped", { error })
+    }
+  }
+
+  /**
+   * Test-friendly re-export of `applyCredentialSource`. Reads from an
+   * injectable auth record so the test suite can exercise the resolution
+   * without booting the full provider pipeline. The production call site
+   * uses the no-arg form, which goes through the real `Auth.get`.
+   */
+  export const resolveCredentialSource = applyCredentialSource
+
   function redactCacheKeyValue(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(redactCacheKeyValue)
     if (!value || typeof value !== "object") return value
@@ -1097,6 +1221,12 @@ export namespace Provider {
             if (dispatcher) opts.dispatcher = dispatcher
           }
 
+          // ADR-247: optional request-body gzip. The helper is the same one
+          // the test suite calls — kept in one place to avoid drift. The
+          // function returns false when nothing was changed, so the
+          // happy-path fetch stays byte-identical to today.
+          applyBodyEncoding(options, opts)
+
           let res: Response
           try {
             res = await fetchFn(input, opts)
@@ -1110,6 +1240,14 @@ export namespace Provider {
           if (!chunkAbortCtl) return res
           return wrapSSE(res, chunkTimeout, chunkAbortCtl, (opts.signal as AbortSignal) ?? undefined)
         }
+
+        // ADR-246: resolve a `credential_source` reference for this provider, if
+        // one is stored in auth.json. We never read the secret — we only set
+        // the reference shape the SDK / CLI expects (env vars for Bedrock,
+        // factory options for Vertex). Azure is intentionally a no-op here
+        // (the AI SDK does not accept a credential provider; the reference is
+        // still surfaced by `ax-code doctor credential-sources`).
+        await applyCredentialSource(model, options)
 
         const bundledFn = BUNDLED_PROVIDERS[model.api.npm]
         if (bundledFn) {

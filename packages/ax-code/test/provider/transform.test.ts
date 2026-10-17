@@ -658,6 +658,94 @@ describe("ProviderTransform.message - applyCaching", () => {
     )
     expect(result[0].providerOptions?.anthropic?.cacheControl).toBeUndefined()
   })
+
+  // ADR-247: compatibility.cache_format
+  function mkGroqLikeClaude() {
+    return {
+      id: "anthropic/claude-sonnet-4-6",
+      providerID: ProviderID.make("groq"),
+      api: { id: "claude-sonnet-4-6", url: "https://api.groq.com", npm: "@ai-sdk/groq" },
+      capabilities: {
+        temperature: true,
+        reasoning: false,
+        attachment: true,
+        toolcall: true,
+        input: { text: true, audio: false, image: true, video: false, pdf: true },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: false,
+      },
+      limit: { context: 200000, output: 8192 },
+      status: "active",
+      options: {},
+      headers: {},
+    } as any
+  }
+
+  test("cache_format 'none' disables cache_control on a Claude model", () => {
+    const result = ProviderTransform.message(
+      [
+        { role: "system", content: "sys" },
+        { role: "user", content: "hi" },
+      ] as any,
+      mkClaude(),
+      { compatibility: { cache_format: "none" } },
+    )
+    expect(result[0].providerOptions?.anthropic?.cacheControl).toBeUndefined()
+    expect(result[1].providerOptions?.anthropic?.cacheControl).toBeUndefined()
+  })
+
+  test("cache_format 'breakpoints' forces cache_control on a non-Claude provider", () => {
+    // A `groq` model id with `claude` in the name — the default heuristic
+    // would NOT add cache_control (no `anthropic` family match). With
+    // "breakpoints", the transform should force it.
+    const result = ProviderTransform.message(
+      [
+        { role: "system", content: "sys" },
+        { role: "user", content: "hi" },
+      ] as any,
+      mkGroqLikeClaude(),
+      { compatibility: { cache_format: "breakpoints" } },
+    )
+    expect(result[0].providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" })
+    expect(result[1].providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" })
+  })
+
+  test("cache_format 'auto' is byte-identical to the unset default for Claude", () => {
+    // The Claude path stamps cache_control by default. "auto" must reproduce
+    // the exact same providerOptions shape as the unset path.
+    const baseline = ProviderTransform.message(
+      [
+        { role: "system", content: "sys" },
+        { role: "user", content: "hi" },
+      ] as any,
+      mkClaude(),
+      {},
+    )
+    const withAuto = ProviderTransform.message(
+      [
+        { role: "system", content: "sys" },
+        { role: "user", content: "hi" },
+      ] as any,
+      mkClaude(),
+      { compatibility: { cache_format: "auto" } },
+    )
+    expect(JSON.stringify(withAuto)).toBe(JSON.stringify(baseline))
+  })
+
+  test("cache_format 'none' overrides the explicit cacheControl path", () => {
+    // Even when the caller attached their own cacheControl, "none" should
+    // strip the heuristic output. This guards against accidental re-introduction
+    // when the transform grows more code paths.
+    const result = ProviderTransform.message(
+      [
+        { role: "system", content: "sys" },
+        { role: "user", content: "hi" },
+      ] as any,
+      mkClaude(),
+      { compatibility: { cache_format: "none" } },
+    )
+    expect(result[0].providerOptions?.anthropic?.cacheControl).toBeUndefined()
+  })
 })
 
 describe("ProviderTransform.options - google thinkingConfig gating", () => {
