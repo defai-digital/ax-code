@@ -168,7 +168,8 @@ let systemCaPending: Promise<void> | undefined
  * Resolves once the system CA certificates are installed (or loading failed, was disabled or timed out).
  * Resolved immediately when nothing is pending, so it is cheap to call before every request.
  */
-export async function awaitSystemCa(timeoutMs = SYSTEM_CA_WAIT_MS): Promise<void> {
+export async function awaitSystemCa(timeoutMs = SYSTEM_CA_WAIT_MS, signal?: AbortSignal | null): Promise<void> {
+  signal?.throwIfAborted()
   const pending = systemCaPending
   if (!pending) return
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -176,10 +177,17 @@ export async function awaitSystemCa(timeoutMs = SYSTEM_CA_WAIT_MS): Promise<void
     timer = setTimeout(resolve, timeoutMs)
     timer.unref?.()
   })
+  let onAbort: (() => void) | undefined
+  const aborted = new Promise<never>((_, reject) => {
+    if (!signal) return
+    onAbort = () => reject(signal.reason)
+    signal.addEventListener("abort", onAbort, { once: true })
+  })
   try {
-    await Promise.race([pending, timeout])
+    await Promise.race([pending, timeout, aborted])
   } finally {
     clearTimeout(timer)
+    if (onAbort) signal?.removeEventListener("abort", onAbort)
   }
 }
 
@@ -257,10 +265,10 @@ export function initNetworkEnv(input: InitNetworkEnvInput = {}): NetworkEnvState
         const bundled = tls.getCACertificates("bundled") ?? []
         if (system && system.length > 0) {
           // Always keep the bundled roots first so a broken/empty OS store
-          // cannot strip Node's own trust anchors; NODE_EXTRA_CA_CERTS is
-          // merged by Node itself and stays in effect.
-          const known = new Set(bundled)
-          tls.setDefaultCACertificates([...bundled, ...system.filter((cert) => !known.has(cert))])
+          // cannot strip Node's own trust anchors. The setter replaces the entire default
+          // list, so explicitly retain NODE_EXTRA_CA_CERTS as well.
+          const extra = tls.getCACertificates("extra") ?? []
+          tls.setDefaultCACertificates([...new Set([...bundled, ...extra, ...system])])
           state.systemCaApplied = true
           log.debug("network: system CA certificates added", {
             bundled: bundled.length,

@@ -21,7 +21,7 @@ import { wrapUntrustedContent } from "../util/untrusted-content"
 // prevents DNS rebinding attacks (BUG-15).
 const assertPublicUrl = (url: string) => Ssrf.assertPublicUrl(url, "webfetch")
 const pinnedFetch = async (url: string, init?: RequestInit) => {
-  await awaitSystemCa()
+  await awaitSystemCa(undefined, init?.signal)
   return Ssrf.pinnedFetch(url, { ...init, label: "webfetch" })
 }
 

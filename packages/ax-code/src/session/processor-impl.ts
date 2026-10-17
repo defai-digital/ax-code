@@ -487,9 +487,6 @@ export namespace SessionProcessor {
       sessionID: input.assistantMessage.sessionID,
     })
     let snapshot: string | undefined
-    // True only while `snapshot` is a tree track() captured after this step's tools finished. The final
-    // patch() would re-verify that same tree against the worktree a few milliseconds later, so it is skipped.
-    let snapshotFreshAfterTools = false
     let blocked = false
     let attempt = 0
     let replayUnsafe = false
@@ -646,9 +643,6 @@ export namespace SessionProcessor {
               signal: input.abort,
             })
             let usedTools = false
-            // A retry begins a new attempt: a fresh post-tool snapshot from the failed one proves nothing about
-            // what happens between now and the final patch.
-            snapshotFreshAfterTools = false
             let receivedFinish = false
             const requestStartedAt = Date.now()
             let stepStartTime = 0
@@ -1327,7 +1321,6 @@ export namespace SessionProcessor {
 
                 case "start-step":
                   usedTools = false
-                  snapshotFreshAfterTools = false
                   receivedFinish = false
                   // Do NOT reset `snapshot` here — it must carry forward from
                   // the previous step-finish (or the initial track before the
@@ -1495,14 +1488,9 @@ export namespace SessionProcessor {
                   // successful tool turn look unchanged, so revert has no
                   // file ledger to restore.
                   const stepBaseline = snapshot
-                  // Set only when track() just verified the worktree is identical to the baseline, which is exactly
-                  // what patch() would verify again (a few git processes) before returning an empty file list.
-                  let trackedUnchanged = false
                   if (usedTools) {
                     try {
                       snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
-                      trackedUnchanged = snapshot !== undefined && snapshot === stepBaseline
-                      snapshotFreshAfterTools = snapshot !== undefined
                     } catch (error) {
                       if (Snapshot.UnsupportedPathError.isInstance(error)) throw error
                       log.warn("snapshot track failed after tools; continuing without undo coverage", { error })
@@ -1514,7 +1502,7 @@ export namespace SessionProcessor {
                   // pre-tool hash needed for revert.
                   const stepSnapshot = snapshot
                   let patchData: { hash: string; files: string[] } | undefined
-                  if (stepBaseline && !trackedUnchanged) {
+                  if (stepBaseline) {
                     try {
                       const patch = await NativePerf.runAsync("session.snapshot.patch", undefined, () =>
                         Snapshot.patch(stepBaseline),
@@ -2043,7 +2031,7 @@ export namespace SessionProcessor {
           }
           // Resolve async snapshot before batching final DB writes
           let finalPatch: { hash: string; files: string[] } | undefined
-          if (snapshot && !snapshotFreshAfterTools) {
+          if (snapshot) {
             const finalSnapshot = snapshot
             try {
               const patch = await NativePerf.runAsync("session.snapshot.patch", undefined, () =>
@@ -2053,9 +2041,8 @@ export namespace SessionProcessor {
             } catch (err) {
               log.warn("snapshot patch failed", { error: err })
             }
+            snapshot = undefined
           }
-          snapshot = undefined
-          snapshotFreshAfterTools = false
           // Finalize in-flight text/reasoning parts in memory before the
           // transaction so all DB writes happen in a single batch (BUG-5).
           const finalizeOverwrite = { overwriteEndTime: streamErrored }

@@ -162,6 +162,23 @@ describe("network-env initNetworkEnv", () => {
     expect(installed).toEqual(["bundled-root", "sys-root"])
   })
 
+  test("preserves explicit extra roots when installing system certificates", () => {
+    let installed: string[] | undefined
+    initNetworkEnv({
+      env: {},
+      http: {},
+      log: fakeLogger(),
+      tls: {
+        getCACertificates: (kind) =>
+          ({ bundled: ["bundled-root"], system: ["system-root"], extra: ["extra-root", "bundled-root"] })[kind],
+        setDefaultCACertificates: (certs) => {
+          installed = certs
+        },
+      },
+    })
+    expect(installed).toEqual(["bundled-root", "extra-root", "system-root"])
+  })
+
   test("skips system CA loading when AX_CODE_DISABLE_SYSTEM_CA is set", () => {
     let called = 0
     const tls: TlsNetworkApi = {
@@ -236,6 +253,35 @@ describe("network-env asynchronous system CA loading", () => {
       expect(installs).toEqual([])
       expect(networkEnvState().systemCaApplied).toBe(false)
     }
+  })
+
+  test("cancels a pending wait without cancelling another caller's certificate load", async () => {
+    const { tls, installs } = tlsFake()
+    let release!: (certs: string[]) => void
+    initNetworkEnv({
+      env: {},
+      http: {},
+      tls,
+      log: fakeLogger(),
+      loadSystemCa: () =>
+        new Promise<string[]>((resolve) => {
+          release = resolve
+        }),
+    })
+    const controller = new AbortController()
+    const reason = new Error("cancelled")
+    const waiting = awaitSystemCa(10_000, controller.signal)
+    controller.abort(reason)
+    await expect(waiting).rejects.toBe(reason)
+    expect(installs).toEqual([])
+    release(["corp-root"])
+    await awaitSystemCa()
+    expect(installs).toEqual([["bundled-root", "corp-root"]])
+  })
+
+  test("rejects an already cancelled wait even when there is no pending load", async () => {
+    const reason = new Error("already cancelled")
+    await expect(awaitSystemCa(10_000, AbortSignal.abort(reason))).rejects.toBe(reason)
   })
 
   test("awaiting is bounded when the loader never finishes", async () => {

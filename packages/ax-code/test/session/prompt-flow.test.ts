@@ -1168,13 +1168,13 @@ describe("session.prompt flow", () => {
     })
   }
 
-  test("skips the redundant patch when the post-tool snapshot equals the step baseline", async () => {
+  test("keeps the patch ledger when post-tool tracking falls back to the previous snapshot", async () => {
     await using tmp = await tmpdir({ git: true })
 
     modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
     summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
     trackSpy = vi.spyOn(Snapshot, "track").mockResolvedValue("snap-same")
-    // Non-empty, so a patch that is NOT skipped would leave a patch part on the tool step.
+    // A staging failure may return the previous hash even though the worktree changed.
     patchSpy = vi.spyOn(Snapshot, "patch").mockImplementation(async (hash) => ({
       hash,
       files: [path.join(tmp.path, "src/file.ts")],
@@ -1196,11 +1196,11 @@ describe("session.prompt flow", () => {
           message.parts.some((part) => part.type === "tool" && part.state.status === "completed"),
         )
         expect(toolStep).toBeDefined()
-        // The tool step's baseline and post-tool snapshot are the same tree: nothing to ledger.
-        expect(toolStep?.parts.some((part) => part.type === "patch")).toBe(false)
+        // Equal hashes do not prove a successful capture; patch must retain changed files.
+        expect(toolStep?.parts.some((part) => part.type === "patch")).toBe(true)
         expect(toolStep?.parts.some((part) => part.type === "step-finish" && part.snapshot === "snap-same")).toBe(true)
-        // The tool step issues no patch call. The text-only step and the final snapshot still do.
-        expect(patchSpy).toHaveBeenCalledTimes(2)
+        // Both steps check their baseline and perform the final worktree check.
+        expect(patchSpy).toHaveBeenCalledTimes(4)
       },
     })
   })
@@ -1235,7 +1235,7 @@ describe("session.prompt flow", () => {
         const toolStep = stored.find((message) =>
           message.parts.some((part) => part.type === "tool" && part.state.status === "completed"),
         )
-        // The unchanged shortcut needs a successful track that returned the baseline; a failure keeps patching.
+        // A thrown capture failure also keeps the pre-tool patch ledger.
         expect(toolStep?.parts.some((part) => part.type === "patch" && part.hash === "snap-before")).toBe(true)
       },
     })

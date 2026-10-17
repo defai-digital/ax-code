@@ -1177,7 +1177,7 @@ export namespace Provider {
 
         options["fetch"] = async (input: string | Request | URL, init?: RequestInit) => {
           // Corporate roots come from a worker-thread read of the OS store; only the first request can wait.
-          await awaitSystemCa()
+          await awaitSystemCa(undefined, init?.signal ?? (input instanceof Request ? input.signal : undefined))
           // Preserve custom fetch if it exists, wrap it with timeout logic
           const fetchFn = customFetch ?? fetch
           // Shallow copy to avoid mutating caller's init object
