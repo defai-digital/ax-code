@@ -6,7 +6,7 @@ const run = async (source: string) => (await execute(source, { tools: [], dispat
 test.each([
   ["({}).constructor", "Forbidden property: constructor"],
   ["(()=>1).constructor", "Forbidden property: constructor"],
-  ["JSON.parse('{\"__proto__\":{\"x\":1}}')", "Forbidden property: __proto__"],
+  ['JSON.parse(\'{"__proto__":{"x":1}}\')', "Forbidden property: __proto__"],
   ["const o = JSON.parse('{\"__proto__\":1}'); ({...o})", "Forbidden property: __proto__"],
 ])("forbidden keys are rejected with a controlled diagnostic: %s", async (source, message) => {
   const result = JSON.parse(await run(source)) as { error: string; message: string }
@@ -14,19 +14,13 @@ test.each([
   expect(result.message).toBe(message)
 })
 
-test.each([
-  "[].map",
-  "[[].map]",
-  "({f:[].map})",
-  "Math",
-  "JSON",
-  "Object",
-  "[Math.max, 1]",
-  "JSON.stringify(()=>1)",
-])("host builtins and closures never cross the result boundary: %s", async (source) => {
-  const result = JSON.parse(await run(source)) as { error: string }
-  expect(result.error).toBe("RuntimeError")
-})
+test.each(["[].map", "[[].map]", "({f:[].map})", "Math", "JSON", "Object", "[Math.max, 1]", "JSON.stringify(()=>1)"])(
+  "host builtins and closures never cross the result boundary: %s",
+  async (source) => {
+    const result = JSON.parse(await run(source)) as { error: string }
+    expect(result.error).toBe("RuntimeError")
+  },
+)
 
 test.each(["new Foo()", "new Object()", "new Array(3)", "new Promise(r=>r(1))", "new Function('return 1')"])(
   "unsupported constructors are rejected: %s",

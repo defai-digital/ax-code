@@ -13,6 +13,9 @@ export const CODE_MODE_EXCLUDED = new Set([
   "council",
   "arena",
   "browser_workflow",
+  // Interactive or agent-switching tools wait on the user, which the program's wall-clock budget would abort.
+  "question",
+  "plan_exit",
   "invalid",
 ])
 export function codeModeToolIDs(ids: readonly string[]) {

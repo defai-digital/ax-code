@@ -105,7 +105,10 @@ test("execute reuses the Batch barrier, records parts, and blocks orchestrators"
   expect(parts.mock.calls.filter(([part]) => part.type === "tool" && part.state.status === "running")).toHaveLength(5)
   expect(parts.mock.calls.filter(([part]) => part.type === "tool" && part.state.status === "completed")).toHaveLength(5)
   expect(codeModeToolIDs(dispatcher.ids)).toEqual(["read", "write"])
-  for (const name of ["execute", "task", "task_parallel", "council", "arena", "batch"]) {
+  expect(
+    codeModeToolIDs(["read", "question", "plan_exit", "browser_workflow", "read_recipe", "invalid", "write"]),
+  ).toEqual(["read", "write"])
+  for (const name of ["execute", "task", "task_parallel", "council", "arena", "batch", "question", "plan_exit"]) {
     expect((await tool.execute({ code: `typeof tools.${name}` }, ctx(dispatcher))).output).toBe('"undefined"')
   }
 })
