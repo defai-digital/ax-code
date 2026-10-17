@@ -51,7 +51,51 @@ const GIT_READ_SUBCOMMANDS: ReadonlySet<string> = new Set(["status", "log", "dif
 /** `find` flags that hand matched paths to a command or write a listing file. */
 const FIND_MUTATING_FLAG = /^-(?:exec|execdir|ok|okdir|delete|fls|fprint0?|fprintf)$/
 
+/** `sort -o`/`-T` write files; `--compress-program` executes a program. */
+const SORT_WRITING_FLAG = /^-[^-]*[oT]/
+const UNIQ_VALUE_OPTIONS = new Set(["-f", "--skip-fields", "-s", "--skip-chars", "-w", "--check-chars"])
+
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
+
+function sortWrites(args: readonly string[]): boolean {
+  return args.some(
+    (arg) =>
+      SORT_WRITING_FLAG.test(arg) ||
+      arg === "--output" ||
+      arg.startsWith("--output=") ||
+      arg === "--temporary-directory" ||
+      arg.startsWith("--temporary-directory=") ||
+      arg === "--compress-program" ||
+      arg.startsWith("--compress-program="),
+  )
+}
+
+/** A second positional operand makes `uniq` write its output to that file. */
+function uniqWrites(args: readonly string[]): boolean {
+  let operands = 0
+  let optionsEnded = false
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!
+    if (!optionsEnded && arg === "--") {
+      optionsEnded = true
+      continue
+    }
+    if (!optionsEnded && arg !== "-" && arg.startsWith("-")) {
+      if (UNIQ_VALUE_OPTIONS.has(arg)) index++
+      continue
+    }
+    operands++
+  }
+  return operands > 1
+}
+
+function treeWrites(args: readonly string[]): boolean {
+  return args.some((arg) => /^-[^-]*o/.test(arg) || arg === "--output" || arg.startsWith("--output="))
+}
+
+function rgExecutes(args: readonly string[]): boolean {
+  return args.some((arg) => arg === "--pre" || arg.startsWith("--pre=") || arg.startsWith("--pre-glob"))
+}
 
 const DISCARD_TARGET = "/dev/null"
 
@@ -92,6 +136,12 @@ export function classifyReadOnlyCommand(parts: readonly string[]): string | unde
     }
     return undefined
   }
+
+  // These allowlisted readers can still write or execute through their arguments.
+  if (name === "sort" && sortWrites(args)) return "sort with an output or temporary directory writes to disk"
+  if (name === "uniq" && uniqWrites(args)) return "uniq with a second operand writes its output to a file"
+  if (name === "tree" && treeWrites(args)) return "tree -o writes its output to a file"
+  if (name === "rg" && rgExecutes(args)) return "rg --pre runs an external program"
 
   if (READ_COMMANDS.has(name)) return undefined
 

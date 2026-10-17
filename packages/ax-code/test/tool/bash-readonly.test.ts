@@ -46,6 +46,7 @@ describe("classifyReadOnlyCommand", () => {
       ["tree", "-L", "2"],
       ["sort", "file.txt"],
       ["uniq", "-c", "file.txt"],
+      ["uniq", "-f", "2", "file.txt"],
       ["cut", "-d", ":", "-f1", "file.txt"],
       ["echo", "hello world"],
       ["/bin/ls"],
@@ -93,6 +94,13 @@ describe("classifyReadOnlyCommand", () => {
       [["dd", "if=input", "of=output"], /dd/],
       [["rm", "file.txt"], /rm/],
       [["mv", "a", "b"], /mv/],
+      [["sort", "-o", "out.txt", "file.txt"], /sort/],
+      [["sort", "--output=out.txt", "file.txt"], /sort/],
+      [["sort", "--compress-program=evil", "file.txt"], /sort/],
+      [["sort", "-T", "/tmp", "file.txt"], /sort/],
+      [["uniq", "in.txt", "out.txt"], /uniq/],
+      [["tree", "-o", "out.txt"], /tree/],
+      [["rg", "--pre=evil", "pattern"], /rg --pre/],
     ]
     for (const [parts, pattern] of cases) {
       const reason = classifyReadOnlyCommand(parts)
