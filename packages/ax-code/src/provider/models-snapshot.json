@@ -15574,6 +15574,164 @@
         "reasoning": true,
         "release_date": "2026-10-15",
         "tool_call": false
+      },
+      "elorian/glimpse": {
+        "attachment": true,
+        "id": "elorian/glimpse",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Elorian Glimpse",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "tool_call": true
+      },
+      "heabsy/qwen3.8-27b-uncensored-fast": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "heabsy/qwen3.8-27b-uncensored-fast",
+        "limit": {
+          "context": 524288,
+          "input": 524288,
+          "output": 235929
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.8 27B Uncensored Fast by Heabsy",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "tool_call": true
+      },
+      "meta/muse-spark-open": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-spark-open",
+        "family": "muse",
+        "id": "meta/muse-spark-open",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Spark Open",
+        "reasoning": true,
+        "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "moondream/moondream3-preview": {
+        "attachment": true,
+        "id": "moondream/moondream3-preview",
+        "limit": {
+          "context": 32000,
+          "input": 32000,
+          "output": 4096
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Moondream 3 Preview",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "tool_call": false
+      },
+      "moondream/moondream3.1-9b-a2b": {
+        "attachment": true,
+        "id": "moondream/moondream3.1-9b-a2b",
+        "limit": {
+          "context": 32000,
+          "input": 32000,
+          "output": 4096
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Moondream 3.1 9B A2B",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "tool_call": false
+      },
+      "reflection/beam-1.0": {
+        "attachment": false,
+        "family": "beam",
+        "id": "reflection/beam-1.0",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam 1.0 501B A23B",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "tool_call": true
+      },
+      "TheDrummer/orion-26b-a4b-v1.1": {
+        "attachment": false,
+        "id": "TheDrummer/orion-26b-a4b-v1.1",
+        "limit": {
+          "context": 65536,
+          "input": 65536,
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Orion 26B A4B v1.1",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "tool_call": false
       }
     }
   },
@@ -16743,16 +16901,14 @@
         "id": "glm-5.3-flash",
         "name": "GLM5.3 Flash",
         "family": "glm-flash",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-08-26",
         "modalities": {
           "input": [
-            "text",
-            "image",
-            "video"
+            "text"
           ],
           "output": [
             "text"
@@ -43396,6 +43552,32 @@
         "status": "beta",
         "temperature": true,
         "tool_call": true
+      },
+      "deepseek-v4.1-flash": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4.1-flash",
+        "interleaved": true,
+        "limit": {
+          "context": 256000,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "status": "beta",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -51419,6 +51601,34 @@
         "release_date": "2026-08-24",
         "temperature": true,
         "tool_call": true
+      },
+      "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4": {
+        "attachment": true,
+        "canonical_model_id": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+        "family": "nemotron",
+        "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 262144,
+          "output": 4096
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Nemotron 3.5 Super VL 120B A12B",
+        "reasoning": true,
+        "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -57822,6 +58032,29 @@
         "reasoning": true,
         "release_date": "2026-10-15",
         "temperature": true,
+        "tool_call": true
+      },
+      "step-5-preview": {
+        "attachment": true,
+        "canonical_model_id": "stepfun/step-5-preview",
+        "id": "step-5-preview",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Step 5 Preview",
+        "reasoning": true,
+        "release_date": "2026-09-16",
         "tool_call": true
       }
     }
@@ -70243,27 +70476,6 @@
           "output": 4096
         }
       },
-      "quiverai/arrow-1.1": {
-        "id": "quiverai/arrow-1.1",
-        "name": "Arrow 1.1",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-04-16",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "image"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "output": 131072
-        }
-      },
       "bytedance/seedance-2.0-mini": {
         "id": "bytedance/seedance-2.0-mini",
         "name": "Seedance 2.0 Mini",
@@ -75115,6 +75327,69 @@
         "reasoning": true,
         "release_date": "2026-10-15",
         "tool_call": true
+      },
+      "elorian/glimpse": {
+        "attachment": true,
+        "id": "elorian/glimpse",
+        "limit": {
+          "context": 220000,
+          "output": 4096
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Glimpse",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "tool_call": false
+      },
+      "reflection/beam": {
+        "attachment": false,
+        "family": "beam",
+        "id": "reflection/beam",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam 1.0",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "tool_call": true
+      },
+      "reflection/beam-free": {
+        "attachment": false,
+        "family": "beam",
+        "id": "reflection/beam-free",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam 1.0 (Free)",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "tool_call": true
       }
     }
   },
@@ -75794,6 +76069,51 @@
         "name": "Nemotron 3.5 Super VL",
         "reasoning": true,
         "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "reflection/Beam-1.0-501B-A23B": {
+        "attachment": false,
+        "family": "beam",
+        "id": "reflection/Beam-1.0-501B-A23B",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam 1.0",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "temperature": true,
+        "tool_call": true
+      },
+      "zai-org/GLM-5.3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "zai-org/GLM-5.3",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM 5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
         "temperature": true,
         "tool_call": true
       }
@@ -85944,6 +86264,32 @@
         "reasoning": true,
         "release_date": "2026-10-13",
         "temperature": false,
+        "tool_call": true
+      },
+      "reflection-ai/beam-1.0-501b-a23b": {
+        "attachment": false,
+        "canonical_model_id": "reflection/beam-1.0-501b-a23b",
+        "family": "beam",
+        "id": "reflection-ai/beam-1.0-501b-a23b",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam 1.0 501B A23B",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -98858,8 +99204,8 @@
           ]
         },
         "limit": {
-          "context": 128000,
-          "output": 16000
+          "context": 163840,
+          "output": 16384
         },
         "canonical_model_id": "deepseek/deepseek-chat"
       },
@@ -98904,8 +99250,8 @@
           ]
         },
         "limit": {
-          "context": 163840,
-          "output": 147456
+          "context": 131072,
+          "output": 65536
         },
         "canonical_model_id": "deepseek/deepseek-v3.2"
       },
@@ -99568,8 +99914,8 @@
           ]
         },
         "limit": {
-          "context": 131072,
-          "output": 117964
+          "context": 327680,
+          "output": 16384
         }
       },
       "meta-llama/llama-3.1-70b-instruct": {
@@ -99614,7 +99960,7 @@
         },
         "limit": {
           "context": 131072,
-          "output": 32768
+          "output": 16384
         },
         "canonical_model_id": "meta/llama-3.3-70b-instruct"
       },
@@ -101943,7 +102289,7 @@
         "id": "deepseek/deepseek-v4.1-flash",
         "limit": {
           "context": 1048576,
-          "output": 943718
+          "output": 393216
         },
         "modalities": {
           "input": [
@@ -102128,7 +102474,7 @@
         "id": "~deepseek/deepseek-pro-latest",
         "limit": {
           "context": 1048576,
-          "output": 943718
+          "output": 393216
         },
         "modalities": {
           "input": [
@@ -103142,6 +103488,95 @@
         "name": "NVIDIA: Nemotron 3.5 Super VL (free)",
         "reasoning": true,
         "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "elorian/glimpse": {
+        "attachment": true,
+        "id": "elorian/glimpse",
+        "limit": {
+          "context": 262144,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Elorian: Glimpse",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "reflection/beam-1.0-501b-a23b": {
+        "attachment": false,
+        "family": "beam",
+        "id": "reflection/beam-1.0-501b-a23b",
+        "limit": {
+          "context": 1048576,
+          "output": 943718
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Reflection: Beam 1.0 501B A23B",
+        "reasoning": true,
+        "release_date": "2026-10-16",
+        "temperature": true,
+        "tool_call": true
+      },
+      "reflection/beam-free": {
+        "attachment": false,
+        "family": "beam",
+        "id": "reflection/beam-free",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Reflection: Beam 1.0 (free)",
+        "reasoning": true,
+        "release_date": "2025-08-26",
+        "temperature": true,
+        "tool_call": true
+      },
+      "xingchen-agi/xing4.0-29b-a4b:free": {
+        "attachment": false,
+        "family": "agi",
+        "id": "xingchen-agi/xing4.0-29b-a4b:free",
+        "limit": {
+          "context": 262144,
+          "output": 235929
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "XingChen: Xing4.0 29B A4B (free)",
+        "reasoning": true,
+        "release_date": "2026-10-16",
         "temperature": true,
         "tool_call": true
       }
@@ -110179,7 +110614,7 @@
         },
         "limit": {
           "context": 1000000,
-          "output": 262000
+          "output": 384000
         },
         "canonical_model_id": "deepseek/deepseek-v4-pro"
       },
@@ -110189,7 +110624,7 @@
         "family": "deepseek",
         "attachment": false,
         "reasoning": true,
-        "tool_call": true,
+        "tool_call": false,
         "temperature": true,
         "release_date": "2025-08-21",
         "modalities": {
@@ -110201,8 +110636,8 @@
           ]
         },
         "limit": {
-          "context": 164000,
-          "output": 41000
+          "context": 131072,
+          "output": 32768
         },
         "canonical_model_id": "deepseek/deepseek-v3.1"
       },
@@ -113987,7 +114422,7 @@
       "OPENCODE_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible",
-    "api": "https://opencode.ai/inference/v1",
+    "api": "https://opencode.ai/inference/openai/v1",
     "name": "OpenCode",
     "doc": "https://opencode.ai/v2/docs/console/models/",
     "models": {
@@ -114016,7 +114451,8 @@
           "output": 64000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "nemotron-3-ultra-free": {
@@ -114043,7 +114479,10 @@
           "context": 1000000,
           "output": 128000
         },
-        "canonical_model_id": "nvidia/nemotron-3-ultra-550b-a55b"
+        "canonical_model_id": "nvidia/nemotron-3-ultra-550b-a55b",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gpt-5-nano": {
         "id": "gpt-5-nano",
@@ -114069,7 +114508,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "hy3-preview-free": {
@@ -114093,7 +114533,10 @@
           "context": 256000,
           "output": 64000
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "muse-spark-1.3": {
         "id": "muse-spark-1.3",
@@ -114121,7 +114564,8 @@
           "output": 131072
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "canonical_model_id": "meta/muse-spark-1.3"
       },
@@ -114151,8 +114595,10 @@
           "output": 131072
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
-        }
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
+        },
+        "status": "deprecated"
       },
       "gpt-5-codex": {
         "id": "gpt-5-codex",
@@ -114178,7 +114624,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "north-mini-code-free": {
@@ -114206,7 +114653,10 @@
           "output": 64000
         },
         "status": "deprecated",
-        "canonical_model_id": "cohere/north-mini-code-1-0"
+        "canonical_model_id": "cohere/north-mini-code-1-0",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "minimax-m2.1": {
         "id": "minimax-m2.1",
@@ -114232,7 +114682,10 @@
           "context": 204800,
           "output": 131072
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "minimax-m2.1-free": {
         "id": "minimax-m2.1-free",
@@ -114257,7 +114710,8 @@
         },
         "status": "deprecated",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "gpt-5.1-codex-mini": {
@@ -114284,7 +114738,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "qwen3.6-plus": {
@@ -114311,7 +114766,8 @@
           "output": 65536
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "gpt-5.1-codex": {
@@ -114338,7 +114794,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "gpt-5.6-sol": {
@@ -114366,7 +114823,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "canonical_model_id": "openai/gpt-5.6-sol"
       },
@@ -114394,7 +114852,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "canonical_model_id": "anthropic/claude-opus-5"
       },
@@ -114421,6 +114880,9 @@
         "limit": {
           "context": 204800,
           "output": 131072
+        },
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "longcat-2.0-free": {
@@ -114448,7 +114910,10 @@
           "output": 131072
         },
         "status": "deprecated",
-        "canonical_model_id": "meituan/longcat-2.0"
+        "canonical_model_id": "meituan/longcat-2.0",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gpt-6-astra": {
         "id": "gpt-6-astra",
@@ -114475,7 +114940,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "canonical_model_id": "openai/gpt-6-astra"
       },
@@ -114503,7 +114969,8 @@
           "output": 64000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "deepseek-v4-flash-free": {
@@ -114531,7 +114998,10 @@
           "output": 128000
         },
         "status": "deprecated",
-        "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "minimax-m3": {
         "id": "minimax-m3",
@@ -114559,7 +115029,10 @@
           "context": 512000,
           "output": 128000
         },
-        "canonical_model_id": "minimax/MiniMax-M3"
+        "canonical_model_id": "minimax/MiniMax-M3",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "laguna-s-2.1-free": {
         "id": "laguna-s-2.1-free",
@@ -114583,7 +115056,10 @@
           "output": 32000
         },
         "status": "deprecated",
-        "canonical_model_id": "poolside/laguna-s-2.1"
+        "canonical_model_id": "poolside/laguna-s-2.1",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "kimi-k2.7-code": {
         "id": "kimi-k2.7-code",
@@ -114611,7 +115087,10 @@
           "context": 262144,
           "output": 262144
         },
-        "canonical_model_id": "moonshotai/kimi-k2.7-code"
+        "canonical_model_id": "moonshotai/kimi-k2.7-code",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gpt-5.3-codex-spark": {
         "id": "gpt-5.3-codex-spark",
@@ -114636,7 +115115,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "grok-4.5": {
@@ -114662,7 +115142,8 @@
           "output": 500000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "canonical_model_id": "xai/grok-4.5"
       },
@@ -114691,7 +115172,8 @@
         },
         "status": "deprecated",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "gpt-5.4": {
@@ -114719,7 +115201,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "canonical_model_id": "openai/gpt-5.4"
       },
@@ -114744,7 +115227,10 @@
           "context": 262144,
           "output": 65536
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "claude-fable-5-1": {
         "id": "claude-fable-5-1",
@@ -114770,7 +115256,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "canonical_model_id": "anthropic/claude-fable-5-1"
       },
@@ -114798,7 +115285,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "gpt-5.1-codex-max": {
@@ -114825,7 +115313,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "claude-opus-4-6": {
@@ -114852,7 +115341,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "canonical_model_id": "anthropic/claude-opus-4-6"
       },
@@ -114881,7 +115371,10 @@
           "context": 1000000,
           "output": 131072
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gpt-5.6-luna": {
         "id": "gpt-5.6-luna",
@@ -114908,7 +115401,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "canonical_model_id": "openai/gpt-5.6-luna"
       },
@@ -114936,7 +115430,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "ling-2.6-flash-free": {
@@ -114960,7 +115455,10 @@
           "context": 262100,
           "output": 32800
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "nemotron-3.5-lightning-free": {
         "id": "nemotron-3.5-lightning-free",
@@ -114986,7 +115484,10 @@
           "context": 262144,
           "output": 262144
         },
-        "canonical_model_id": "nvidia/nemotron-3.5-lightning"
+        "canonical_model_id": "nvidia/nemotron-3.5-lightning",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "hy3-free": {
         "id": "hy3-free",
@@ -115014,7 +115515,10 @@
           "output": 64000
         },
         "status": "deprecated",
-        "canonical_model_id": "tencent/hy3"
+        "canonical_model_id": "tencent/hy3",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gpt-5.3-codex": {
         "id": "gpt-5.3-codex",
@@ -115041,7 +115545,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "glm-5.3-flash": {
@@ -115071,7 +115576,10 @@
           "context": 1000000,
           "output": 131072
         },
-        "canonical_model_id": "zhipuai/glm-5.3-flash"
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "ring-2.6-1t-free": {
         "id": "ring-2.6-1t-free",
@@ -115097,7 +115605,10 @@
           "context": 262000,
           "output": 66000
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "claude-fable-5": {
         "id": "claude-fable-5",
@@ -115123,7 +115634,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "canonical_model_id": "anthropic/claude-fable-5"
       },
@@ -115154,7 +115666,10 @@
           "context": 200000,
           "output": 32000
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "claude-3-5-haiku": {
         "id": "claude-3-5-haiku",
@@ -115181,7 +115696,8 @@
         },
         "status": "deprecated",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "nemotron-3-super-free": {
@@ -115209,7 +115725,10 @@
           "output": 128000
         },
         "status": "deprecated",
-        "canonical_model_id": "nvidia/nemotron-3-super-120b-a12b"
+        "canonical_model_id": "nvidia/nemotron-3-super-120b-a12b",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gpt-5.4-nano": {
         "id": "gpt-5.4-nano",
@@ -115236,7 +115755,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "big-pickle": {
@@ -115263,6 +115783,9 @@
           "context": 200000,
           "input": 160000,
           "output": 32000
+        },
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "gpt-5.4-mini": {
@@ -115290,7 +115813,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "ling-3.0-flash-fin-free": {
@@ -115315,7 +115839,10 @@
           "output": 32768
         },
         "canonical_model_id": "inclusionai/ling-3.0-flash-fin",
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "grok-4.6": {
         "id": "grok-4.6",
@@ -115340,7 +115867,8 @@
           "output": 500000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "canonical_model_id": "xai/grok-4.6"
       },
@@ -115368,7 +115896,8 @@
           "output": 64000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "claude-sonnet-4-5": {
@@ -115396,7 +115925,8 @@
           "output": 64000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "glm-5": {
@@ -115422,6 +115952,9 @@
         "limit": {
           "context": 204800,
           "output": 131072
+        },
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "claude-opus-4-1": {
@@ -115449,7 +115982,8 @@
         },
         "status": "deprecated",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "ling-3.0-flash-free": {
@@ -115473,7 +116007,10 @@
           "context": 262144,
           "output": 32768
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "trinity-large-preview-free": {
         "id": "trinity-large-preview-free",
@@ -115497,7 +116034,10 @@
           "output": 131072
         },
         "status": "deprecated",
-        "canonical_model_id": "arcee-ai/trinity-large-preview"
+        "canonical_model_id": "arcee-ai/trinity-large-preview",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gemini-3.8-flash": {
         "id": "gemini-3.8-flash",
@@ -115525,7 +116065,8 @@
           "output": 65536
         },
         "provider": {
-          "npm": "@ai-sdk/google"
+          "npm": "@ai-sdk/google",
+          "api": "https://opencode.ai/inference/google/v1beta"
         },
         "canonical_model_id": "google/gemini-3.8-flash"
       },
@@ -115553,7 +116094,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "canonical_model_id": "anthropic/claude-opus-4-8"
       },
@@ -115581,7 +116123,10 @@
           "context": 1000000,
           "output": 384000
         },
-        "canonical_model_id": "deepseek/deepseek-v4-pro"
+        "canonical_model_id": "deepseek/deepseek-v4-pro",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gpt-5.4-pro": {
         "id": "gpt-5.4-pro",
@@ -115608,7 +116153,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "glm-5-free": {
@@ -115635,7 +116181,10 @@
           "context": 204800,
           "output": 131072
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gpt-5.6-terra": {
         "id": "gpt-5.6-terra",
@@ -115662,7 +116211,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "canonical_model_id": "openai/gpt-5.6-terra"
       },
@@ -115690,7 +116240,10 @@
           "context": 1000000,
           "output": 131072
         },
-        "canonical_model_id": "zhipuai/glm-5.3"
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "mimo-v2-flash-free": {
         "id": "mimo-v2-flash-free",
@@ -115716,7 +116269,10 @@
           "context": 262144,
           "output": 65536
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gpt-5": {
         "id": "gpt-5",
@@ -115742,7 +116298,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "claude-sonnet-4": {
@@ -115769,7 +116326,8 @@
           "output": 64000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "claude-sonnet-5": {
@@ -115796,7 +116354,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "canonical_model_id": "anthropic/claude-sonnet-5"
       },
@@ -115823,7 +116382,8 @@
         },
         "status": "deprecated",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "mimo-v2-omni-free": {
@@ -115853,7 +116413,10 @@
           "context": 262144,
           "output": 64000
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "mimo-v2-pro-free": {
         "id": "mimo-v2-pro-free",
@@ -115879,7 +116442,10 @@
           "context": 1048576,
           "output": 64000
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "qwen3.6-plus-free": {
         "id": "qwen3.6-plus-free",
@@ -115906,7 +116472,8 @@
         },
         "status": "deprecated",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "qwen3.5-plus": {
@@ -115933,7 +116500,8 @@
           "output": 65536
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         }
       },
       "ling-3.0-tiny-free": {
@@ -115957,7 +116525,10 @@
           "context": 262144,
           "output": 32768
         },
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "deepseek-v4.1-flash": {
         "attachment": true,
@@ -115984,7 +116555,10 @@
         "release_date": "2026-09-10",
         "temperature": true,
         "tool_call": true,
-        "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "qwen3.8-flash": {
         "attachment": true,
@@ -116006,7 +116580,8 @@
         },
         "name": "Qwen3.8 Flash",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "reasoning": true,
         "release_date": "2026-08-26",
@@ -116034,7 +116609,8 @@
         },
         "name": "Claude Opus 5.5",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "reasoning": true,
         "release_date": "2026-09-22",
@@ -116063,7 +116639,8 @@
         },
         "name": "GPT-6 Luna",
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "reasoning": true,
         "release_date": "2026-09-22",
@@ -116092,7 +116669,8 @@
         },
         "name": "GPT-6 Sol",
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "reasoning": true,
         "release_date": "2026-09-22",
@@ -116127,7 +116705,10 @@
         "release_date": "2026-09-22",
         "temperature": true,
         "tool_call": true,
-        "canonical_model_id": "xiaomi/mimo-v2.6-flash"
+        "canonical_model_id": "xiaomi/mimo-v2.6-flash",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "qwen3.8-max": {
         "attachment": true,
@@ -116151,7 +116732,10 @@
         "release_date": "2026-08-03",
         "temperature": true,
         "tool_call": true,
-        "canonical_model_id": "alibaba/qwen3.8-max"
+        "canonical_model_id": "alibaba/qwen3.8-max",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "space-bunny-free": {
         "attachment": true,
@@ -116177,7 +116761,10 @@
         "name": "Space Bunny Free",
         "reasoning": true,
         "release_date": "2026-09-23",
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "claude-sonnet-5-5": {
         "attachment": true,
@@ -116200,7 +116787,8 @@
         },
         "name": "Claude Sonnet 5.5",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "reasoning": true,
         "release_date": "2026-09-28",
@@ -116229,7 +116817,8 @@
         },
         "name": "GPT-6.1 Sol",
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/openai/v1"
         },
         "reasoning": true,
         "release_date": "2026-09-29",
@@ -116261,7 +116850,10 @@
         "reasoning": true,
         "release_date": "2026-09-25",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "fledge-alpha-free": {
         "attachment": true,
@@ -116284,7 +116876,10 @@
         "release_date": "2026-10-01",
         "temperature": true,
         "tool_call": true,
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "ling-3.1-flash-free": {
         "attachment": false,
@@ -116308,7 +116903,10 @@
         "release_date": "2026-09-29",
         "temperature": true,
         "tool_call": true,
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "exo-free": {
         "attachment": true,
@@ -116331,7 +116929,10 @@
         "release_date": "2026-10-06",
         "temperature": false,
         "tool_call": true,
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "mistral-large-4": {
         "attachment": true,
@@ -116357,7 +116958,8 @@
         "temperature": true,
         "tool_call": true,
         "provider": {
-          "npm": "@ai-sdk/mistral"
+          "npm": "@ai-sdk/mistral",
+          "api": "https://opencode.ai/inference/openai/v1"
         }
       },
       "claude-haiku-5-5": {
@@ -116381,7 +116983,8 @@
         },
         "name": "Claude Haiku 5.5",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/anthropic/v1"
         },
         "reasoning": true,
         "release_date": "2026-10-07",
@@ -116414,7 +117017,10 @@
         "reasoning": true,
         "release_date": "2026-09-16",
         "tool_call": true,
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "cat-jam-free": {
         "attachment": false,
@@ -116438,7 +117044,11 @@
         "reasoning": true,
         "release_date": "2026-10-12",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        },
+        "status": "deprecated"
       },
       "deepseek-v4.1-flash-free": {
         "attachment": true,
@@ -116465,7 +117075,10 @@
         "reasoning": true,
         "release_date": "2026-09-10",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "gemini-4-argon": {
         "attachment": true,
@@ -116490,7 +117103,8 @@
         },
         "name": "Gemini 4 Argon",
         "provider": {
-          "npm": "@ai-sdk/google"
+          "npm": "@ai-sdk/google",
+          "api": "https://opencode.ai/inference/google/v1beta"
         },
         "reasoning": true,
         "release_date": "2026-10-13",
@@ -116524,7 +117138,10 @@
         "reasoning": true,
         "release_date": "2026-08-26",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
       },
       "ll-alpha-free": {
         "attachment": false,
@@ -116548,7 +117165,11 @@
         "reasoning": true,
         "release_date": "2026-10-15",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        },
+        "status": "deprecated"
       },
       "nemotron-3.5-super-vl-free": {
         "attachment": true,
@@ -116575,6 +117196,38 @@
         "name": "Nemotron 3.5 Super VL Free",
         "reasoning": true,
         "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        }
+      },
+      "beam-free": {
+        "attachment": false,
+        "canonical_model_id": "reflection/beam-1.0-501b-a23b",
+        "family": "beam",
+        "id": "beam-free",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam Free",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        },
+        "reasoning": true,
+        "release_date": "2026-10-05",
         "temperature": true,
         "tool_call": true
       }
@@ -137091,29 +137744,6 @@
         },
         "canonical_model_id": "mistral/codestral-2508"
       },
-      "llama-3.1-8b-instruct": {
-        "id": "llama-3.1-8b-instruct",
-        "name": "Llama-3.1-8B-Instruct",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": false,
-        "release_date": "2024-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 128000,
-          "output": 128000
-        },
-        "canonical_model_id": "meta/llama-3.1-8b-instruct"
-      },
       "deepseek-v4-pro-0813": {
         "id": "deepseek-v4-pro-0813",
         "name": "DeepSeek V4 Pro 0813",
@@ -140978,7 +141608,7 @@
       "OPENCODE_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible",
-    "api": "https://opencode.ai/inference/go/v1",
+    "api": "https://opencode.ai/inference/go/openai/v1",
     "name": "OpenCode Go",
     "doc": "https://opencode.ai/v2/docs/console/go/",
     "models": {
@@ -141006,7 +141636,10 @@
           "context": 1000000,
           "output": 131072
         },
-        "canonical_model_id": "meituan/longcat-2.0"
+        "canonical_model_id": "meituan/longcat-2.0",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "minimax-m2.7": {
         "id": "minimax-m2.7",
@@ -141030,7 +141663,8 @@
           "output": 131072
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/go/anthropic/v1"
         },
         "status": "deprecated"
       },
@@ -141058,7 +141692,8 @@
           "output": 131072
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/go/anthropic/v1"
         }
       },
       "kimi-k2.7-code": {
@@ -141087,7 +141722,10 @@
           "context": 262144,
           "output": 262144
         },
-        "canonical_model_id": "moonshotai/kimi-k2.7-code"
+        "canonical_model_id": "moonshotai/kimi-k2.7-code",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "hy3": {
         "id": "hy3",
@@ -141111,7 +141749,10 @@
           "input": 192000,
           "output": 128000
         },
-        "canonical_model_id": "tencent/hy3"
+        "canonical_model_id": "tencent/hy3",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "hy4-preview": {
         "id": "hy4-preview",
@@ -141134,7 +141775,10 @@
           "context": 1024000,
           "output": 64000
         },
-        "canonical_model_id": "tencent/hy4-preview"
+        "canonical_model_id": "tencent/hy4-preview",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "gpt-5.6-luna": {
         "id": "gpt-5.6-luna",
@@ -141161,7 +141805,8 @@
           "output": 128000
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/go/openai/v1"
         },
         "canonical_model_id": "openai/gpt-5.6-luna"
       },
@@ -141192,7 +141837,10 @@
           "context": 1000000,
           "output": 131072
         },
-        "canonical_model_id": "zhipuai/glm-5.3-flash"
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "muse-spark-1.3-contributor": {
         "id": "muse-spark-1.3-contributor",
@@ -141220,7 +141868,8 @@
           "output": 131072
         },
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/go/openai/v1"
         }
       },
       "qwen3.8-flash": {
@@ -141247,7 +141896,8 @@
           "output": 131072
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/go/anthropic/v1"
         },
         "canonical_model_id": "alibaba/qwen3.8-flash"
       },
@@ -141276,7 +141926,8 @@
         },
         "canonical_model_id": "alibaba/qwen3.8-max",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/go/anthropic/v1"
         }
       },
       "qwen3.7-plus": {
@@ -141303,7 +141954,8 @@
           "output": 65536
         },
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/go/anthropic/v1"
         }
       },
       "deepseek-v4-pro": {
@@ -141329,6 +141981,9 @@
         "limit": {
           "context": 1000000,
           "output": 384000
+        },
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
         }
       },
       "glm-5.3": {
@@ -141355,7 +142010,10 @@
           "context": 1000000,
           "output": 131072
         },
-        "canonical_model_id": "zhipuai/glm-5.3"
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "mimo-v2.5": {
         "id": "mimo-v2.5",
@@ -141383,6 +142041,9 @@
         "limit": {
           "context": 1000000,
           "output": 128000
+        },
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
         }
       },
       "mimo-v2.5-pro": {
@@ -141408,6 +142069,9 @@
         "limit": {
           "context": 1048576,
           "output": 128000
+        },
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
         }
       },
       "deepseek-v4.1-flash": {
@@ -141435,7 +142099,10 @@
         "release_date": "2026-09-10",
         "temperature": true,
         "tool_call": true,
-        "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "gpt-6-luna": {
         "attachment": true,
@@ -141458,7 +142125,8 @@
         },
         "name": "GPT-6 Luna",
         "provider": {
-          "npm": "@ai-sdk/openai"
+          "npm": "@ai-sdk/openai",
+          "api": "https://opencode.ai/inference/go/openai/v1"
         },
         "reasoning": true,
         "release_date": "2026-09-22",
@@ -141493,7 +142161,10 @@
         "release_date": "2026-09-22",
         "temperature": true,
         "tool_call": true,
-        "canonical_model_id": "xiaomi/mimo-v2.6-flash"
+        "canonical_model_id": "xiaomi/mimo-v2.6-flash",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "mimo-v2.6-pro": {
         "attachment": true,
@@ -141522,7 +142193,10 @@
         "release_date": "2026-09-22",
         "temperature": true,
         "tool_call": true,
-        "canonical_model_id": "xiaomi/mimo-v2.6-pro"
+        "canonical_model_id": "xiaomi/mimo-v2.6-pro",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "longcat-2.5-preview-free": {
         "attachment": true,
@@ -141549,7 +142223,10 @@
         "reasoning": true,
         "release_date": "2026-09-25",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "space-bunny": {
         "attachment": true,
@@ -141575,7 +142252,10 @@
         "name": "Space Bunny",
         "reasoning": true,
         "release_date": "2026-09-23",
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "claude-haiku-5-5": {
         "attachment": true,
@@ -141598,7 +142278,8 @@
         },
         "name": "Claude Haiku 5.5",
         "provider": {
-          "npm": "@ai-sdk/anthropic"
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://opencode.ai/inference/go/anthropic/v1"
         },
         "reasoning": true,
         "release_date": "2026-10-07",
@@ -141631,7 +142312,10 @@
         "reasoning": true,
         "release_date": "2026-09-16",
         "tool_call": true,
-        "status": "deprecated"
+        "status": "deprecated",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
       },
       "cat-jam-free": {
         "attachment": false,
@@ -141655,7 +142339,11 @@
         "reasoning": true,
         "release_date": "2026-10-12",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        },
+        "status": "deprecated"
       },
       "gemini-4-argon-contributor": {
         "attachment": true,
@@ -141680,7 +142368,8 @@
         },
         "name": "Gemini 4 Argon Contributor",
         "provider": {
-          "npm": "@ai-sdk/google"
+          "npm": "@ai-sdk/google",
+          "api": "https://opencode.ai/inference/go/google/v1beta"
         },
         "reasoning": true,
         "release_date": "2026-10-13",
@@ -141712,6 +142401,38 @@
         "name": "Step 5 Preview",
         "reasoning": true,
         "release_date": "2026-09-16",
+        "tool_call": true,
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        }
+      },
+      "beam-free": {
+        "attachment": false,
+        "canonical_model_id": "reflection/beam-1.0-501b-a23b",
+        "family": "beam",
+        "id": "beam-free",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam Free",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        },
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -147920,7 +148641,7 @@
         "family": "qwen",
         "id": "amazon/qwen.qwen3-coder-next",
         "limit": {
-          "context": 262144,
+          "context": 256000,
           "output": 65536
         },
         "modalities": {
@@ -156621,7 +157342,7 @@
         "id": "meta-llama/llama-3.3-70b-instruct",
         "limit": {
           "context": 131072,
-          "output": 32768
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -158169,6 +158890,1458 @@
       }
     },
     "name": "SambaNova",
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  "commandcode": {
+    "api": "https://api.commandcode.ai/provider/v1",
+    "doc": "https://commandcode.ai/docs/provider",
+    "env": [
+      "CMD_API_KEY"
+    ],
+    "id": "commandcode",
+    "models": {
+      "claude-fable-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5",
+        "family": "claude-fable",
+        "id": "claude-fable-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-06-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-fable-5-1": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-1",
+        "family": "claude-fable",
+        "id": "claude-fable-5-1",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.1",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-01",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-haiku-4-5-20251001": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-4-5-20251001",
+        "family": "claude-haiku",
+        "id": "claude-haiku-4-5-20251001",
+        "limit": {
+          "context": 200000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 4.5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2025-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-opus-4-7": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-4-7",
+        "family": "claude-opus",
+        "id": "claude-opus-4-7",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 4.7",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-04-16",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-opus-4-8": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-4-8",
+        "family": "claude-opus",
+        "id": "claude-opus-4-8",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 4.8",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-05-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-opus-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5",
+        "family": "claude-opus",
+        "id": "claude-opus-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-07-24",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-opus-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5-5",
+        "family": "claude-opus",
+        "id": "claude-opus-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5.5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-sonnet-4-6": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-4-6",
+        "family": "claude-sonnet",
+        "id": "claude-sonnet-4-6",
+        "limit": {
+          "context": 1000000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 4.6",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-02-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "claude-sonnet-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5",
+        "family": "claude-sonnet",
+        "id": "claude-sonnet-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-06-30",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-sonnet-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5-5",
+        "family": "claude-sonnet",
+        "id": "claude-sonnet-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5.5",
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4-flash-fast": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4-flash-fast",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash Fast",
+        "reasoning": true,
+        "release_date": "2026-04-24",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4-pro": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-pro",
+        "family": "deepseek-thinking",
+        "id": "deepseek/deepseek-v4-pro",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Pro",
+        "reasoning": true,
+        "release_date": "2026-04-24",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-fast": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash-fast",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash Fast",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "google/gemini-3.8-flash": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-3.8-flash",
+        "family": "gemini-flash",
+        "id": "google/gemini-3.8-flash",
+        "limit": {
+          "context": 1000000,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 3.8 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "google/gemini-4-argon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-argon",
+        "family": "gemini",
+        "id": "google/gemini-4-argon",
+        "limit": {
+          "context": 1000000,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Argon",
+        "reasoning": true,
+        "release_date": "2026-10-13",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-5.3-codex": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.3-codex",
+        "family": "gpt-codex",
+        "id": "gpt-5.3-codex",
+        "limit": {
+          "context": 400000,
+          "input": 272000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.3 Codex",
+        "reasoning": true,
+        "release_date": "2026-02-05",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gpt-5.4": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.4",
+        "family": "gpt",
+        "id": "gpt-5.4",
+        "limit": {
+          "context": 400000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.4",
+        "reasoning": true,
+        "release_date": "2026-03-05",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gpt-5.4-mini": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.4-mini",
+        "family": "gpt-mini",
+        "id": "gpt-5.4-mini",
+        "limit": {
+          "context": 400000,
+          "input": 272000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.4 mini",
+        "reasoning": true,
+        "release_date": "2026-03-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gpt-5.6-luna": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.6-luna",
+        "family": "gpt-luna",
+        "id": "gpt-5.6-luna",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.6 Luna",
+        "reasoning": true,
+        "release_date": "2026-07-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-5.6-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.6-sol",
+        "family": "gpt-sol",
+        "id": "gpt-5.6-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.6 Sol",
+        "reasoning": true,
+        "release_date": "2026-07-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-5.6-terra": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.6-terra",
+        "family": "gpt-terra",
+        "id": "gpt-5.6-terra",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.6 Terra",
+        "reasoning": true,
+        "release_date": "2026-07-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-6-astra": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6-astra",
+        "family": "gpt-astra",
+        "id": "gpt-6-astra",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6 Astra",
+        "reasoning": true,
+        "release_date": "2026-09-04",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-6-luna": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6-luna",
+        "family": "gpt-luna",
+        "id": "gpt-6-luna",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6 Luna",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-6-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6-sol",
+        "family": "gpt-sol",
+        "id": "gpt-6-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6 Sol",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-6.1-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.1-sol",
+        "family": "gpt-sol",
+        "id": "gpt-6.1-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.1 Sol",
+        "reasoning": true,
+        "release_date": "2026-09-29",
+        "temperature": false,
+        "tool_call": true
+      },
+      "inclusionai/ling-3.1-flash:free": {
+        "attachment": false,
+        "canonical_model_id": "inclusionai/ling-3.1-flash",
+        "family": "ling",
+        "id": "inclusionai/ling-3.1-flash:free",
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Ling 3.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-29",
+        "tool_call": true
+      },
+      "meta/muse-spark-1.3": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-spark-1.3",
+        "family": "muse",
+        "id": "meta/muse-spark-1.3",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Spark 1.3",
+        "reasoning": true,
+        "release_date": "2026-09-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "meta/muse-spark-1.3-contributor": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-spark-1.3",
+        "family": "muse",
+        "id": "meta/muse-spark-1.3-contributor",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Spark 1.3 (Contributor)",
+        "reasoning": true,
+        "release_date": "2026-09-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "meta/muse-wonder-1.0": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-wonder-1.0",
+        "family": "muse",
+        "id": "meta/muse-wonder-1.0",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Wonder",
+        "reasoning": true,
+        "release_date": "2026-10-12",
+        "temperature": true,
+        "tool_call": true
+      },
+      "MiniMaxAI/MiniMax-M2.7": {
+        "attachment": false,
+        "canonical_model_id": "minimax/MiniMax-M2.7",
+        "family": "minimax",
+        "id": "MiniMaxAI/MiniMax-M2.7",
+        "limit": {
+          "context": 200000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiniMax-M2.7",
+        "reasoning": true,
+        "release_date": "2026-03-18",
+        "temperature": true,
+        "tool_call": true
+      },
+      "MiniMaxAI/MiniMax-M3": {
+        "attachment": true,
+        "canonical_model_id": "minimax/MiniMax-M3",
+        "family": "minimax",
+        "id": "MiniMaxAI/MiniMax-M3",
+        "limit": {
+          "context": 1000000,
+          "output": 512000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiniMax-M3",
+        "reasoning": true,
+        "release_date": "2026-06-01",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mistral/mistral-large-4": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistral/mistral-large-4",
+        "limit": {
+          "context": 524288,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "reasoning": true,
+        "release_date": "2026-10-06",
+        "temperature": true,
+        "tool_call": true
+      },
+      "moonshotai/Kimi-K2.7-Code": {
+        "attachment": true,
+        "canonical_model_id": "moonshotai/kimi-k2.7-code",
+        "family": "kimi-k2",
+        "id": "moonshotai/Kimi-K2.7-Code",
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Kimi K2.7 Code",
+        "reasoning": true,
+        "release_date": "2026-06-12",
+        "temperature": false,
+        "tool_call": true
+      },
+      "nvidia/nemotron-3-ultra-550b-a55b": {
+        "attachment": false,
+        "canonical_model_id": "nvidia/nemotron-3-ultra-550b-a55b",
+        "family": "nemotron",
+        "id": "nvidia/nemotron-3-ultra-550b-a55b",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Nemotron 3 Ultra 550B A55B",
+        "reasoning": true,
+        "release_date": "2026-06-04",
+        "temperature": true,
+        "tool_call": true
+      },
+      "Qwen/Qwen3.8-27B": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-27b",
+        "family": "qwen",
+        "id": "Qwen/Qwen3.8-27B",
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 27B",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "Qwen/Qwen3.8-Flash": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-flash",
+        "family": "qwen",
+        "id": "Qwen/Qwen3.8-Flash",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Flash",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "tool_call": true
+      },
+      "Qwen/Qwen3.8-Max": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-max",
+        "family": "qwen",
+        "id": "Qwen/Qwen3.8-Max",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Max",
+        "reasoning": true,
+        "release_date": "2026-08-03",
+        "temperature": true,
+        "tool_call": true
+      },
+      "Qwen/Qwen3.8-Max-0902": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-max-0902",
+        "family": "qwen",
+        "id": "Qwen/Qwen3.8-Max-0902",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Max 0902",
+        "reasoning": true,
+        "release_date": "2026-09-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "Qwen/Qwen3.8-Omni-Flash": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-omni-flash",
+        "family": "qwen",
+        "id": "Qwen/Qwen3.8-Omni-Flash",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Omni Flash",
+        "reasoning": true,
+        "release_date": "2026-09-17",
+        "tool_call": true
+      },
+      "sakana/fugu-ultra": {
+        "attachment": true,
+        "canonical_model_id": "sakana/fugu-ultra",
+        "family": "fugu",
+        "id": "sakana/fugu-ultra",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Fugu Ultra",
+        "reasoning": true,
+        "release_date": "2026-06-15",
+        "temperature": false,
+        "tool_call": true
+      },
+      "stepfun/Step-3.5-Flash": {
+        "attachment": false,
+        "canonical_model_id": "stepfun/step-3.5-flash",
+        "id": "stepfun/Step-3.5-Flash",
+        "limit": {
+          "context": 256000,
+          "input": 256000,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Step 3.5 Flash",
+        "reasoning": true,
+        "release_date": "2026-01-29",
+        "temperature": true,
+        "tool_call": true
+      },
+      "stepfun/Step-3.7-Flash": {
+        "attachment": true,
+        "canonical_model_id": "stepfun/step-3.7-flash",
+        "id": "stepfun/Step-3.7-Flash",
+        "limit": {
+          "context": 256000,
+          "input": 256000,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Step 3.7 Flash",
+        "reasoning": true,
+        "release_date": "2026-05-29",
+        "temperature": true,
+        "tool_call": true
+      },
+      "stepfun/Step-5-Preview": {
+        "attachment": true,
+        "canonical_model_id": "stepfun/step-5-preview",
+        "id": "stepfun/Step-5-Preview",
+        "limit": {
+          "context": 1000000,
+          "input": 1000000,
+          "output": 1000000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Step 5 Preview",
+        "reasoning": true,
+        "release_date": "2026-09-16",
+        "tool_call": true
+      },
+      "tencent/hy3-paid": {
+        "attachment": false,
+        "canonical_model_id": "tencent/hy3",
+        "family": "Hy",
+        "id": "tencent/hy3-paid",
+        "limit": {
+          "context": 256000,
+          "input": 192000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Hy3",
+        "reasoning": true,
+        "release_date": "2026-07-06",
+        "temperature": true,
+        "tool_call": true
+      },
+      "tencent/hy4-preview": {
+        "attachment": false,
+        "canonical_model_id": "tencent/hy4-preview",
+        "family": "Hy",
+        "id": "tencent/hy4-preview",
+        "limit": {
+          "context": 1024000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Hy4 preview",
+        "reasoning": true,
+        "release_date": "2026-08-28",
+        "temperature": true,
+        "tool_call": true
+      },
+      "thinkingmachines/inkling": {
+        "attachment": true,
+        "canonical_model_id": "thinkingmachines/inkling",
+        "family": "ling",
+        "id": "thinkingmachines/inkling",
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Inkling",
+        "reasoning": true,
+        "release_date": "2026-07-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "thinkingmachines/inkling-small": {
+        "attachment": true,
+        "canonical_model_id": "thinkingmachines/inkling-small",
+        "family": "ling",
+        "id": "thinkingmachines/inkling-small",
+        "limit": {
+          "context": 1000000,
+          "output": 1000000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Inkling Small",
+        "reasoning": true,
+        "release_date": "2026-07-30",
+        "temperature": true,
+        "tool_call": true
+      },
+      "xai/grok-4.5": {
+        "attachment": true,
+        "canonical_model_id": "xai/grok-4.5",
+        "family": "grok",
+        "id": "xai/grok-4.5",
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Grok 4.5",
+        "reasoning": true,
+        "release_date": "2026-07-08",
+        "temperature": true,
+        "tool_call": true
+      },
+      "xai/grok-4.6": {
+        "attachment": true,
+        "canonical_model_id": "xai/grok-4.6",
+        "family": "grok",
+        "id": "xai/grok-4.6",
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Grok 4.6",
+        "reasoning": true,
+        "release_date": "2026-08-12",
+        "temperature": true,
+        "tool_call": true
+      },
+      "z-ai/glm-5.3-flash": {
+        "attachment": true,
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "family": "glm-flash",
+        "id": "z-ai/glm-5.3-flash",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3-Flash",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "temperature": true,
+        "tool_call": true
+      },
+      "z-ai/glm-5.3-flashx": {
+        "attachment": true,
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "family": "glm-flash",
+        "id": "z-ai/glm-5.3-flashx",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3-FlashX",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "temperature": true,
+        "tool_call": true
+      },
+      "zai-org/GLM-5.2-Fast": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.2",
+        "family": "glm",
+        "id": "zai-org/GLM-5.2-Fast",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.2-Fast",
+        "reasoning": true,
+        "release_date": "2026-06-13",
+        "temperature": true,
+        "tool_call": true
+      },
+      "zai-org/GLM-5.3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "zai-org/GLM-5.3",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      }
+    },
+    "name": "CommandCode",
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  "reflection": {
+    "api": "https://api.reflection.ai/openai/v1",
+    "doc": "https://developers.reflection.ai/models",
+    "env": [
+      "REFLECTION_API_KEY"
+    ],
+    "id": "reflection",
+    "models": {
+      "Beam-1.0-501B-A23B": {
+        "attachment": false,
+        "canonical_model_id": "reflection/beam-1.0-501b-a23b",
+        "family": "beam",
+        "id": "Beam-1.0-501B-A23B",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam 1.0 501B A23B",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "temperature": true,
+        "tool_call": true
+      }
+    },
+    "name": "Reflection",
     "npm": "@ai-sdk/openai-compatible"
   }
 }
