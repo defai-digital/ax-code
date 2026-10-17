@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.27.0] - 2026-10-17
+
+### Fixed
+
+- Preserve undo patch records when snapshot staging falls back to the previous tree, and recheck changes at turn finalization.
+- Retain extra and existing TLS trust roots when system certificates load asynchronously.
+- Cancel certificate waits promptly with provider and webfetch requests, bound worker lifetime, and keep active requests alive until their wait settles.
+- Ignore stale certificate loaders after initializer reset.
+
+### Changed
+
+- Load system certificates off the startup thread and retain snapshot-path and code-index lookup caches.
+- Publish the matching SDK 2.6.29.
+
 ## [7.26.6] - 2026-10-17
 
 ### Fixed
