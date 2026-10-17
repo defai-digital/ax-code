@@ -1,11 +1,19 @@
 import { spawn } from "node:child_process"
-import { mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { buildAxWiki } from "../src/build.js"
 import { createWikiBuildLock } from "../src/lock.js"
 import type { WikiBuildLock, WikiPageGenerator } from "../src/types.js"
+
+// Passthrough spy: release() must not rename a foreign live lock aside, because
+// the empty-path window lets a waiting tryCreate claim the lock and the
+// link-back EEXIST branch then deletes the live holder's body.
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("node:fs/promises")>()
+  return { ...mod, rename: vi.fn(mod.rename) }
+})
 
 const roots: string[] = []
 
@@ -159,6 +167,25 @@ describe("createWikiBuildLock hardening", () => {
     const second = await lock.acquire()
     await first.release()
     // The stale holder's release must not remove the new holder's lock.
+    await expect(readFile(path.join(root, "ax-wiki/.build-lock"), "utf8")).resolves.toContain('"pid"')
+    await second.release()
+    await expect(readFile(path.join(root, "ax-wiki/.build-lock"), "utf8")).rejects.toThrow()
+  })
+
+  test("release of a stolen lock leaves the successor's body in place, never renamed aside", async () => {
+    const root = await tmp()
+    let clock = 1_000
+    const lock = createWikiBuildLock(root, "ax-wiki", { now: () => clock, staleMs: 100 })
+    const first = await lock.acquire()
+    clock += 1_000 // go stale; the successor steals and re-acquires
+    const second = await lock.acquire()
+    const renameSpy = vi.mocked(rename)
+    renameSpy.mockClear()
+    await first.release()
+    // Renaming the live body aside would open an empty-path window a waiting
+    // tryCreate can claim; the link-back EEXIST branch then deletes the live
+    // holder's body. The stale holder's release must be a pure no-op instead.
+    expect(renameSpy).not.toHaveBeenCalled()
     await expect(readFile(path.join(root, "ax-wiki/.build-lock"), "utf8")).resolves.toContain('"pid"')
     await second.release()
     await expect(readFile(path.join(root, "ax-wiki/.build-lock"), "utf8")).rejects.toThrow()

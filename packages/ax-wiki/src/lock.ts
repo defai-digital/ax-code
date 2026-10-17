@@ -308,6 +308,21 @@ export function createWikiBuildLock(root: string, wikiDir: string, options: Wiki
               if (released) return
               released = true
               clearInterval(heartbeat)
+              // Ownership fast path: when our lock was stolen while we were
+              // stale, the path carries the successor's live body. Renaming it
+              // aside would open an empty-path window a waiting tryCreate can
+              // claim before the verify below links the body back — and the
+              // EEXIST branch would then delete the live holder's lock. A
+              // foreign token means nothing at the path is ours, so leave it
+              // untouched. An unreadable body falls through to the rename path,
+              // which surfaces the failure.
+              let observed: { text: string; mtimeMs: number } | undefined
+              try {
+                observed = await readLock()
+              } catch {
+                observed = undefined
+              }
+              if (observed !== undefined && parseBody(observed.text)?.token !== token) return
               // Ownership is verified on the moved body, not on the path. A
               // read-then-rm races with a waiter stealing the lock in between:
               // the rm could land on a successor's freshly created lockfile.
