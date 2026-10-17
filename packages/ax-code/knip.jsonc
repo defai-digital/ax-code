@@ -10,7 +10,7 @@
   // file only when this package is the workspace root, and `pnpm run knip` is not.
   "exclude": ["duplicates", "catalogReferences"],
   // Host tools invoked from tests and platform helpers. They are not npm packages.
-  "ignoreBinaries": ["scutil", "sqlite3", "setsid", "pbpaste", "mkfifo", "wget"],
+  "ignoreBinaries": ["scutil", "sqlite3", "setsid", "pbpaste", "mkfifo", "wget", "mount"],
   "ignoreDependencies": [
     "@ax-code/script",
     // Optional platform packages selected by @parcel/watcher at runtime.
