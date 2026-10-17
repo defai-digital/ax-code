@@ -127,6 +127,7 @@ import type {
   PartUpdateErrors,
   PartUpdateResponses,
   PathGetResponses,
+  PermissionAutoAcceptStatusResponses,
   PermissionListResponses,
   PermissionReplyErrors,
   PermissionReplyResponses,
@@ -135,6 +136,7 @@ import type {
   PermissionRuleset,
   PermissionSaveWebMcpApprovalErrors,
   PermissionSaveWebMcpApprovalResponses,
+  PermissionSetAutoAcceptResponses,
   ProjectCurrentResponses,
   ProjectInitGitResponses,
   ProjectListResponses,
@@ -5671,6 +5673,56 @@ export class Permission extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<PermissionRespondResponses, PermissionRespondErrors, ThrowOnError>({
       url: "/session/{sessionID}/permissions/{permissionID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read project auto-accept state
+   */
+  public autoAcceptStatus<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<PermissionAutoAcceptStatusResponses, unknown, ThrowOnError>({
+      url: "/permission/auto-accept",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Set project auto-accept for the running instance
+   */
+  public setAutoAccept<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      enabled: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "enabled" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<PermissionSetAutoAcceptResponses, unknown, ThrowOnError>({
+      url: "/permission/auto-accept",
       ...options,
       ...params,
       headers: {

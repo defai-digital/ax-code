@@ -327,6 +327,12 @@ export type Config = {
     extraDenylist?: Array<string>
   }
   plugin?: Array<string>
+  plugin_trust?: {
+    /**
+     * Plugin names (matching the entry used in `plugin`) that may use the host session admin API on sessions other than their own.
+     */
+    session_admin?: Array<string>
+  }
   /**
    * Enable or disable snapshot tracking. When false, filesystem snapshots are not recorded and undoing or reverting will not undo/redo file changes. Defaults to true.
    */
@@ -657,6 +663,12 @@ export type Config = {
          */
         pacing_grace_minutes?: number
       }
+  hooks?: {
+    /**
+     * Allow trusted PreToolUse hooks to rewrite tool input
+     */
+    allow_input_rewrite?: boolean
+  }
   isolation?: IsolationConfig
   webmcp?: WebMcpRequirementConfig
   /**
@@ -673,6 +685,19 @@ export type Config = {
      * ADR-230: query api.osv.dev for the npx/uvx/pnpm-dlx/bunx/pipx-run package before launching a local MCP server. When set, the package name and version are sent to api.osv.dev. Advisories whose id starts with MAL- block the launch; other advisories are logged. Network errors fail open. Default: false (opt-in).
      */
     osv_check?: boolean
+  }
+  /**
+   * MCP sampling (server-initiated LLM calls) configuration. All fields default to off.
+   */
+  mcp_sampling?: {
+    /**
+     * ADR-240: opt in to MCP sampling (sampling/createMessage) on every client. Off by default; each request still asks the user for permission through the 'mcp_sampling' permission name. Server messages and system prompts are untrusted text (hidden Unicode is stripped, ADR-206).
+     */
+    enabled?: boolean
+    /**
+     * ADR-240: default output cap (tokens) for an approved sampling call when the request omits one or asks for more. Defaults to 2000; each call is bounded to min(request, max_tokens).
+     */
+    max_tokens?: number
   }
   /**
    * Session lifecycle management
@@ -1268,6 +1293,8 @@ export type Event =
   | EventQuestionRejected
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
+  | EventPermissionAutoAcceptChanged
+  | EventPermissionAutoAccepted
   | EventPermissionAsked
   | EventPermissionReplied
   | EventCommandExecuted
@@ -1560,6 +1587,26 @@ export type EventNotificationToastShow = {
 export type EventPermissionAsked = {
   type: "permission.asked"
   properties: PermissionRequest
+}
+
+/** Server event payload with `type: "permission.auto_accept.changed"` (auto-generated). */
+export type EventPermissionAutoAcceptChanged = {
+  type: "permission.auto_accept.changed"
+  properties: {
+    enabled: boolean
+    managedDisabled: boolean
+    directory: string
+  }
+}
+
+/** Server event payload with `type: "permission.auto_accepted"` (auto-generated). */
+export type EventPermissionAutoAccepted = {
+  type: "permission.auto_accepted"
+  properties: {
+    sessionID: string
+    permission: string
+    patterns: Array<string>
+  }
 }
 
 /** Server event payload with `type: "permission.replied"` (auto-generated). */
@@ -2936,7 +2983,7 @@ export type HookCompleted = {
   pack?: string
   exit: number
   durationMs: number
-  outcome: "ok" | "failed" | "blocked" | "ask"
+  outcome: "ok" | "failed" | "blocked" | "ask" | "rewritten"
   reason?: string
 }
 
@@ -3370,6 +3417,10 @@ export type PermissionActionConfig = "ask" | "allow" | "deny"
 export type PermissionConfig =
   | {
       __originalKeys?: Array<string>
+      /**
+       * Opt in to project auto-accept for ordinary local edits and bash
+       */
+      auto_accept?: boolean
       read?: PermissionRuleConfig
       edit?: PermissionRuleConfig
       glob?: PermissionRuleConfig
@@ -3387,7 +3438,7 @@ export type PermissionConfig =
       lsp?: PermissionRuleConfig
       doom_loop?: PermissionActionConfig
       skill?: PermissionRuleConfig
-      [key: string]: PermissionRuleConfig | Array<string> | PermissionActionConfig | undefined
+      [key: string]: PermissionRuleConfig | Array<string> | boolean | PermissionActionConfig | undefined
     }
   | PermissionActionConfig
 
@@ -14962,6 +15013,59 @@ export type PermissionRespondResponses = {
 
 /** Successful response payload for `POST /session/{sessionID}/permissions/{permissionID}` — Respond to permission */
 export type PermissionRespondResponse = PermissionRespondResponses[keyof PermissionRespondResponses]
+
+/** Request payload shape for `GET /permission/auto-accept` — Read project auto-accept state */
+export type PermissionAutoAcceptStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/auto-accept"
+}
+
+/** Success response payloads for `GET /permission/auto-accept` — Read project auto-accept state */
+export type PermissionAutoAcceptStatusResponses = {
+  /**
+   * Current state
+   */
+  200: {
+    enabled: boolean
+    managedDisabled: boolean
+    directory: string
+  }
+}
+
+/** Successful response payload for `GET /permission/auto-accept` — Read project auto-accept state */
+export type PermissionAutoAcceptStatusResponse =
+  PermissionAutoAcceptStatusResponses[keyof PermissionAutoAcceptStatusResponses]
+
+/** Request payload shape for `PUT /permission/auto-accept` — Set project auto-accept for the running instance */
+export type PermissionSetAutoAcceptData = {
+  body?: {
+    enabled: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/permission/auto-accept"
+}
+
+/** Success response payloads for `PUT /permission/auto-accept` — Set project auto-accept for the running instance */
+export type PermissionSetAutoAcceptResponses = {
+  /**
+   * Effective state
+   */
+  200: {
+    enabled: boolean
+    managedDisabled: boolean
+    directory: string
+  }
+}
+
+/** Successful response payload for `PUT /permission/auto-accept` — Set project auto-accept for the running instance */
+export type PermissionSetAutoAcceptResponse = PermissionSetAutoAcceptResponses[keyof PermissionSetAutoAcceptResponses]
 
 /** Request payload shape for `POST /permission/{requestID}/webmcp-allowlist` — Save a WebMCP approval and allow the pending operation */
 export type PermissionSaveWebMcpApprovalData = {

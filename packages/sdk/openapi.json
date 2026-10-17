@@ -30981,6 +30981,120 @@
         ]
       }
     },
+    "/permission/auto-accept": {
+      "get": {
+        "operationId": "permission.autoAcceptStatus",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Read project auto-accept state",
+        "responses": {
+          "200": {
+            "description": "Current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "managedDisabled": {
+                      "type": "boolean"
+                    },
+                    "directory": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "managedDisabled",
+                    "directory"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.permission.autoAcceptStatus({\n  ...\n})"
+          }
+        ]
+      },
+      "put": {
+        "operationId": "permission.setAutoAccept",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Set project auto-accept for the running instance",
+        "responses": {
+          "200": {
+            "description": "Effective state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "managedDisabled": {
+                      "type": "boolean"
+                    },
+                    "directory": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "managedDisabled",
+                    "directory"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.permission.setAutoAccept({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/permission/{requestID}/webmcp-allowlist": {
       "post": {
         "operationId": "permission.saveWebMcpApproval",
@@ -39188,6 +39302,18 @@
               "type": "string"
             }
           },
+          "plugin_trust": {
+            "type": "object",
+            "properties": {
+              "session_admin": {
+                "description": "Plugin names (matching the entry used in `plugin`) that may use the host session admin API on sessions other than their own.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "snapshot": {
             "description": "Enable or disable snapshot tracking. When false, filesystem snapshots are not recorded and undoing or reverting will not undo/redo file changes. Defaults to true.",
             "type": "boolean"
@@ -39827,6 +39953,15 @@
               }
             ]
           },
+          "hooks": {
+            "type": "object",
+            "properties": {
+              "allow_input_rewrite": {
+                "description": "Allow trusted PreToolUse hooks to rewrite tool input",
+                "type": "boolean"
+              }
+            }
+          },
           "isolation": {
             "$ref": "#/components/schemas/IsolationConfig"
           },
@@ -39850,6 +39985,22 @@
               "osv_check": {
                 "description": "ADR-230: query api.osv.dev for the npx/uvx/pnpm-dlx/bunx/pipx-run package before launching a local MCP server. When set, the package name and version are sent to api.osv.dev. Advisories whose id starts with MAL- block the launch; other advisories are logged. Network errors fail open. Default: false (opt-in).",
                 "type": "boolean"
+              }
+            }
+          },
+          "mcp_sampling": {
+            "description": "MCP sampling (server-initiated LLM calls) configuration. All fields default to off.",
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "ADR-240: opt in to MCP sampling (sampling/createMessage) on every client. Off by default; each request still asks the user for permission through the 'mcp_sampling' permission name. Server messages and system prompts are untrusted text (hidden Unicode is stripped, ADR-206).",
+                "type": "boolean"
+              },
+              "max_tokens": {
+                "description": "ADR-240: default output cap (tokens) for an approved sampling call when the request omits one or asks for more. Defaults to 2000; each call is bounded to min(request, max_tokens).",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
               }
             }
           },
@@ -41019,6 +41170,12 @@
             "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
           },
           {
+            "$ref": "#/components/schemas/Event.permission.auto_accept.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.permission.auto_accepted"
+          },
+          {
             "$ref": "#/components/schemas/Event.permission.asked"
           },
           {
@@ -42008,6 +42165,74 @@
           },
           "properties": {
             "$ref": "#/components/schemas/PermissionRequest"
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.permission.auto_accept.changed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "permission.auto_accept.changed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "managedDisabled": {
+                "type": "boolean"
+              },
+              "directory": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "enabled",
+              "managedDisabled",
+              "directory"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.permission.auto_accepted": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "permission.auto_accepted"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses_.*"
+              },
+              "permission": {
+                "type": "string"
+              },
+              "patterns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "sessionID",
+              "permission",
+              "patterns"
+            ]
           }
         },
         "required": [
@@ -46763,7 +46988,8 @@
               "ok",
               "failed",
               "blocked",
-              "ask"
+              "ask",
+              "rewritten"
             ]
           },
           "reason": {
@@ -47892,6 +48118,10 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "auto_accept": {
+                "description": "Opt in to project auto-accept for ordinary local edits and bash",
+                "type": "boolean"
               },
               "read": {
                 "$ref": "#/components/schemas/PermissionRuleConfig"
