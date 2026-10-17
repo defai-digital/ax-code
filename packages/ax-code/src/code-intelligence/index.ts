@@ -113,6 +113,8 @@ export namespace CodeIntelligence {
       completeness: normalizeCompleteness(fileRow?.completeness),
       queryId,
     }
+    // A query may span an entire repository; retain at most 256 file explanations.
+    if (explainMemo.files.size >= 256) explainMemo.files.clear()
     explainMemo.files.set(key, explain)
     return { ...explain }
   }

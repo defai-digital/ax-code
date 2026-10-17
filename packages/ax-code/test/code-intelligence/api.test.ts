@@ -266,6 +266,27 @@ describe("CodeIntelligence.symbolsInFile", () => {
     })
   })
 
+  test("returns complete explanations when a query exceeds the file memo capacity", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        for (let index = 0; index < 270; index++) {
+          seedSymbol(projectID, { name: "wideQuery", file: `/tmp/file-${index}.ts` })
+        }
+        const symbols = CodeIntelligence.findSymbol(projectID, "wideQuery", { limit: 300 })
+        expect(symbols).toHaveLength(270)
+        expect(new Set(symbols.map((symbol) => symbol.file)).size).toBe(270)
+        expect(
+          symbols.every((symbol) => symbol.explain.indexedAt > 0 && symbol.explain.completeness === "lsp-only"),
+        ).toBe(true)
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
   test("looks the file up once per query, not once per symbol", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

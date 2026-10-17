@@ -10,6 +10,7 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Bound per-query file explanation caching without dropping results from large repository queries.
 - Preserve undo patch records when snapshot staging falls back to the previous tree, and recheck changes at turn finalization.
 - Retain extra and existing TLS trust roots when system certificates load asynchronously.
 - Cancel certificate waits promptly with provider and webfetch requests, bound worker lifetime, and keep active requests alive until their wait settles.
