@@ -113,6 +113,20 @@ static IGNORE_PATTERNS: LazyLock<IgnorePatternsFile> = LazyLock::new(|| {
 pub(crate) static IGNORE_FOLDERS: LazyLock<HashSet<String>> =
     LazyLock::new(|| IGNORE_PATTERNS.folders.iter().cloned().collect());
 
+/// Whether the walker should yield (and descend into) `entry`. Dropping `.git`, and optionally the
+/// hardcoded ignore folders, before descent is equivalent to filtering on the relative path
+/// components afterwards, but never reads the pruned subtrees. The root itself is always kept.
+pub(crate) fn walk_keeps(entry: &ignore::DirEntry, prune_ignore_folders: bool) -> bool {
+    if entry.depth() == 0 {
+        return true;
+    }
+    let name = entry.file_name();
+    if name == ".git" {
+        return false;
+    }
+    !(prune_ignore_folders && name.to_str().is_some_and(|n| IGNORE_FOLDERS.contains(n)))
+}
+
 /// Precompiled matchers for hardcoded ignore file patterns. Rebuilding these
 /// on every `is_ignored` call was a measurable CPU cost during directory walks
 /// (PERF-07 / NAT-03). Extra patterns passed by the caller are still compiled
@@ -166,6 +180,7 @@ fn walk_files_impl(
     builder.git_ignore(true);
     builder.git_global(true);
     builder.git_exclude(true);
+    builder.filter_entry(|entry| walk_keeps(entry, true));
 
     if let Some(depth) = opts.max_depth {
         builder.max_depth(Some(depth));
@@ -264,7 +279,8 @@ pub(crate) fn glob_files_impl(
         .hidden(false)
         .git_ignore(true)
         .git_global(true)
-        .git_exclude(true);
+        .git_exclude(true)
+        .filter_entry(|entry| walk_keeps(entry, false));
     // The worst retained entry is at the root. Encounter order breaks mtime
     // ties exactly like the legacy stable sort; never stop after K matches.
     let mut entries = BinaryHeap::new();
@@ -463,6 +479,74 @@ fn cap_line(line: &str) -> String {
     line[..end].to_owned()
 }
 
+const SEARCH_FIRST_BATCH: usize = 8;
+const SEARCH_MAX_BATCH: usize = 64;
+const SEARCH_MAX_THREADS: usize = 4;
+
+/// A small dedicated pool: a search should finish sooner on a multi-core machine without taking
+/// every core away from the TUI and the model stream. `None` falls back to rayon's global pool.
+static SEARCH_POOL: LazyLock<Option<rayon::ThreadPool>> = LazyLock::new(|| {
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| n.get())
+        .min(SEARCH_MAX_THREADS);
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .thread_name(|index| format!("ax-search-{index}"))
+        .build()
+        .ok()
+});
+
+fn in_search_pool<R: Send>(work: impl FnOnce() -> R + Send) -> R {
+    match SEARCH_POOL.as_ref() {
+        Some(pool) => pool.install(work),
+        None => work(),
+    }
+}
+
+/// Search one file and return its matches (at most `limit`). The caller merges files in walk order
+/// and applies the overall limit, so this matches what the sequential loop produced for the file.
+fn search_one_file(
+    full: &Path,
+    matcher: &grep_regex::RegexMatcher,
+    cancelled: &AtomicBool,
+    limit: usize,
+    context_lines: usize,
+) -> Vec<SearchMatch> {
+    let mut results: Vec<SearchMatch> = Vec::new();
+    let mut searcher = SearcherBuilder::new()
+        .line_number(true)
+        .before_context(context_lines)
+        .after_context(context_lines)
+        .build();
+
+    // Report absolute paths. The TS caller filters matches against
+    // `Instance.directory` (absolute) via `Filesystem.contains`, which only
+    // works when the reported path is absolute — returning a relative string
+    // silently dropped every match when `searchPath != Instance.directory`.
+    let mut sink = ContentSink {
+        cancelled,
+        path: full.to_string_lossy().into_owned(),
+        matcher,
+        results: &mut results,
+        limit,
+        before_buf: VecDeque::new(),
+        context_lines,
+        pending: None,
+        after_remaining: 0,
+    };
+
+    // Ignore errors on individual files (binary files, permission errors, etc.)
+    if let Ok(file) = std::fs::File::open(full) {
+        let reader = scan::CancellableReader {
+            inner: file,
+            cancelled,
+        };
+        let _ = searcher.search_reader(matcher, reader, &mut sink);
+    }
+    results.truncate(limit);
+    results
+}
+
 fn search_content_impl(
     cwd: &str,
     pattern: &str,
@@ -499,85 +583,71 @@ fn search_content_impl(
     builder.git_ignore(true);
     builder.git_global(true);
     builder.git_exclude(true);
+    builder.filter_entry(|entry| walk_keeps(entry, true));
 
     let mut results: Vec<SearchMatch> = Vec::new();
+    let mut walker = builder.build().flatten();
 
-    for entry in builder.build().flatten() {
-        scan::check(cancelled)?;
-        if results.len() >= limit {
-            break;
-        }
+    // Candidate files come from the serial walker in growing batches. Each batch is searched in
+    // parallel and merged in walk order, so the output is exactly what a one-file-at-a-time search
+    // would return, and a query with early matches only ever pays for a small first batch.
+    let mut batch_size = SEARCH_FIRST_BATCH;
+    let mut exhausted = false;
+    'batches: while limit > 0 && !exhausted {
+        let mut batch: Vec<PathBuf> = Vec::with_capacity(batch_size);
+        while batch.len() < batch_size {
+            scan::check(cancelled)?;
+            let Some(entry) = walker.next() else {
+                exhausted = true;
+                break;
+            };
 
-        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
-            continue;
-        }
-
-        let full = entry.path().to_path_buf();
-        let rel = match full.strip_prefix(&root) {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-
-        let rel_str = match rel.to_str() {
-            Some(s) => s,
-            None => continue,
-        };
-
-        // Skip .git directory
-        if rel.components().any(|c| c.as_os_str() == ".git") {
-            continue;
-        }
-
-        // Skip hardcoded ignore folders (node_modules, dist, build, etc.)
-        if rel.components().any(|c| {
-            let name = c.as_os_str().to_str().unwrap_or("");
-            IGNORE_FOLDERS.contains(name)
-        }) {
-            continue;
-        }
-
-        // Apply glob filter
-        if let Some(ref gm) = glob_matcher {
-            if !gm.is_match(rel_str) {
+            if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                 continue;
             }
-        }
 
-        let mut searcher = SearcherBuilder::new()
-            .line_number(true)
-            .before_context(context_lines)
-            .after_context(context_lines)
-            .build();
-
-        // Report absolute paths. The TS caller filters matches against
-        // `Instance.directory` (absolute) via `Filesystem.contains`, which only
-        // works when the reported path is absolute — returning a relative string
-        // silently dropped every match when `searchPath != Instance.directory`.
-        let mut sink = ContentSink {
-            cancelled,
-            path: full.to_string_lossy().into_owned(),
-            matcher: &matcher,
-            results: &mut results,
-            limit,
-            before_buf: VecDeque::new(),
-            context_lines,
-            pending: None,
-            after_remaining: 0,
-        };
-
-        // Ignore errors on individual files (binary files, permission errors, etc.)
-        if let Ok(file) = std::fs::File::open(&full) {
-            let reader = scan::CancellableReader {
-                inner: file,
-                cancelled,
+            let full = entry.path().to_path_buf();
+            let rel = match full.strip_prefix(&root) {
+                Ok(p) => p,
+                Err(_) => continue,
             };
-            let _ = searcher.search_reader(&matcher, reader, &mut sink);
-        }
-        scan::check(cancelled)?;
 
-        if results.len() >= limit {
+            let rel_str = match rel.to_str() {
+                Some(s) => s,
+                None => continue,
+            };
+
+            // `.git` and the hardcoded ignore folders (node_modules, dist, build, etc.) are pruned
+            // by the walker before descent, see `walk_keeps`.
+
+            // Apply glob filter
+            if let Some(ref gm) = glob_matcher {
+                if !gm.is_match(rel_str) {
+                    continue;
+                }
+            }
+
+            batch.push(full);
+        }
+        if batch.is_empty() {
             break;
         }
+
+        let per_file: Vec<Vec<SearchMatch>> = in_search_pool(|| {
+            batch
+                .par_iter()
+                .map(|full| search_one_file(full, &matcher, cancelled, limit, context_lines))
+                .collect()
+        });
+        scan::check(cancelled)?;
+
+        for mut matches in per_file {
+            results.append(&mut matches);
+            if results.len() >= limit {
+                break 'batches;
+            }
+        }
+        batch_size = (batch_size * 2).min(SEARCH_MAX_BATCH);
     }
 
     // Truncate to limit in case finish() pushed one more
@@ -834,6 +904,7 @@ pub fn scan_files(cwd: String, config_json: String) -> napi::Result<String> {
     builder.git_ignore(true);
     builder.git_global(true);
     builder.git_exclude(true);
+    builder.filter_entry(|entry| walk_keeps(entry, true));
 
     let mut files: Vec<(String, PathBuf)> = Vec::new();
     for entry in builder.build().flatten() {
@@ -1006,6 +1077,7 @@ impl FileTreeInner {
         builder.git_ignore(true);
         builder.git_global(true);
         builder.git_exclude(true);
+        builder.filter_entry(|entry| walk_keeps(entry, false));
 
         for entry in builder.build().flatten() {
             let ft = match entry.file_type() {
@@ -1712,6 +1784,178 @@ mod tests {
         assert_eq!(count("needle"), 1);
         assert_eq!(count("Needle"), 1);
         assert_eq!(count("(?i)needle"), 2);
+
+        cleanup(&dir);
+    }
+    // ── pruning before descent ───────────────────────────────────────────────
+
+    fn write(dir: &Path, rel: &str, body: &str) {
+        let path = dir.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, body).unwrap();
+    }
+
+    #[test]
+    fn walk_prunes_git_and_ignore_folders_at_any_depth() {
+        let dir = make_tmp_dir("walk_prune");
+        write(&dir, "src/ok.ts", "x");
+        write(&dir, "pkg/keep.ts", "x");
+        write(&dir, "node_modules/a/b.js", "x");
+        write(&dir, "pkg/node_modules/y.js", "x");
+        write(&dir, "dist/x.js", "x");
+        write(&dir, ".git/HEAD", "x");
+        write(&dir, "deep/a/b/target/z.rs", "x");
+        // A plain file named like an ignored folder was excluded by the old path-component filter too.
+        write(&dir, "src/build", "x");
+
+        let mut files = walk_files(dir.to_str().unwrap().into(), "{}".into()).unwrap();
+        files.sort();
+        assert_eq!(
+            files,
+            vec!["pkg/keep.ts".to_string(), "src/ok.ts".to_string()]
+        );
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn walk_keeps_a_root_that_is_named_like_an_ignored_folder() {
+        let parent = make_tmp_dir("walk_root_named");
+        let root = parent.join("node_modules");
+        write(&root, "lib/a.ts", "x");
+        write(&root, "node_modules/inner.ts", "x");
+
+        let mut files = walk_files(root.to_str().unwrap().into(), "{}".into()).unwrap();
+        files.sort();
+        assert_eq!(files, vec!["lib/a.ts".to_string()]);
+
+        cleanup(&parent);
+    }
+
+    #[test]
+    fn walk_skips_a_gitfile_like_a_git_directory() {
+        let dir = make_tmp_dir("walk_gitfile");
+        write(&dir, ".git", "gitdir: ../elsewhere\n");
+        write(&dir, "a.txt", "x");
+
+        let files = walk_files(dir.to_str().unwrap().into(), "{}".into()).unwrap();
+        assert_eq!(files, vec!["a.txt".to_string()]);
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn glob_files_never_reports_git_contents() {
+        let dir = make_tmp_dir("glob_git");
+        write(&dir, ".git/hooks/pre-commit.rs", "x");
+        write(&dir, "src/a.rs", "x");
+
+        let json = glob_files(dir.to_str().unwrap().into(), "**/*.rs".into(), 50).unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        let paths: Vec<&str> = rows.iter().map(|r| r["path"].as_str().unwrap()).collect();
+        assert_eq!(paths, vec!["src/a.rs"]);
+
+        cleanup(&dir);
+    }
+
+    // ── ordered parallel search ──────────────────────────────────────────────
+
+    fn search_rows(dir: &Path, options: &str) -> Vec<serde_json::Value> {
+        let json = search_content(
+            dir.to_str().unwrap().into(),
+            "needle".into(),
+            options.into(),
+        )
+        .unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
+
+    fn seed_search_tree(dir: &Path) {
+        for d in 0..12 {
+            for f in 0..14 {
+                let mut body = String::new();
+                for line in 0..9 {
+                    if (d + f + line) % 3 == 0 {
+                        body.push_str(&format!("needle d{d} f{f} l{line}\n"));
+                    } else {
+                        body.push_str(&format!("filler {line}\n"));
+                    }
+                }
+                write(dir, &format!("d{d}/f{f}.txt"), &body);
+            }
+        }
+        write(dir, "node_modules/skip.txt", "needle\n");
+    }
+
+    #[test]
+    fn parallel_search_matches_a_sequential_reference_in_walk_order() {
+        let dir = make_tmp_dir("search_order");
+        seed_search_tree(&dir);
+
+        // Independent reference: walk order from `walk_files`, plain string scanning per file.
+        let mut expected: Vec<(String, u64)> = Vec::new();
+        for rel in walk_files(dir.to_str().unwrap().into(), "{}".into()).unwrap() {
+            let full = dir.join(&rel);
+            let text = fs::read_to_string(&full).unwrap();
+            for (index, line) in text.lines().enumerate() {
+                if line.contains("needle") {
+                    expected.push((full.to_string_lossy().into_owned(), index as u64 + 1));
+                }
+            }
+        }
+        assert!(
+            expected.len() > 200,
+            "fixture should exceed the default limit"
+        );
+
+        for limit in [1usize, 7, 8, 9, 24, 63, 64, 65, 137, 250, 100_000] {
+            let rows = search_rows(&dir, &format!("{{\"limit\":{limit}}}"));
+            let got: Vec<(String, u64)> = rows
+                .iter()
+                .map(|r| {
+                    (
+                        r["path"].as_str().unwrap().to_owned(),
+                        r["line"].as_u64().unwrap(),
+                    )
+                })
+                .collect();
+            let want: Vec<(String, u64)> = expected.iter().take(limit).cloned().collect();
+            assert_eq!(got, want, "limit {limit}");
+        }
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn parallel_search_with_context_returns_a_prefix_of_the_unbounded_result() {
+        let dir = make_tmp_dir("search_context_prefix");
+        seed_search_tree(&dir);
+
+        let full = search_rows(&dir, "{\"limit\":100000,\"contextLines\":2}");
+        assert!(full.len() > 200);
+        for limit in [1usize, 8, 65, 250] {
+            let rows = search_rows(&dir, &format!("{{\"limit\":{limit},\"contextLines\":2}}"));
+            assert_eq!(rows, full[..limit].to_vec(), "limit {limit}");
+        }
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn parallel_search_honours_zero_limit_glob_and_cancellation() {
+        let dir = make_tmp_dir("search_misc");
+        seed_search_tree(&dir);
+        write(&dir, "d0/only.md", "needle in markdown\n");
+
+        assert!(search_rows(&dir, "{\"limit\":0}").is_empty());
+
+        let rows = search_rows(&dir, "{\"limit\":100000,\"glob\":\"**/*.md\"}");
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0]["path"].as_str().unwrap().ends_with("only.md"));
+
+        let cancelled = AtomicBool::new(true);
+        let err = search_content_impl(dir.to_str().unwrap(), "needle", "{}", &cancelled);
+        assert!(err.is_err());
 
         cleanup(&dir);
     }
