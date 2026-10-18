@@ -305,6 +305,37 @@ describe("tool.write", () => {
         },
       })
     })
+
+    test("does not write when the turn aborts during approval", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "existing.txt")
+      await fs.writeFile(filepath, "original", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { FileTime } = await import("../../src/file/time")
+          await FileTime.read(ctx.sessionID, filepath)
+
+          const controller = new AbortController()
+          const write = await WriteTool.init()
+          await expect(
+            write.execute(
+              { filePath: filepath, content: "replacement" },
+              {
+                ...ctx,
+                abort: controller.signal,
+                ask: async () => {
+                  controller.abort()
+                },
+              },
+            ),
+          ).rejects.toThrow()
+
+          expect(await fs.readFile(filepath, "utf-8")).toBe("original")
+        },
+      })
+    })
   })
 
   describe("file permissions", () => {

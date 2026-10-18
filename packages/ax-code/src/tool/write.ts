@@ -1,12 +1,12 @@
 import z from "zod"
 import * as fs from "fs"
 import { Tool } from "./tool"
-import { createTwoFilesPatch, diffLines } from "diff"
 import DESCRIPTION from "./write.txt"
 import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { trimDiff } from "./edit"
+import { diffPreview } from "./diff-preview"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { appendPostEditDependentsNotice } from "./post-edit-dependents"
@@ -88,7 +88,11 @@ export const WriteTool = Tool.define("write", {
       const contentOld = exists ? await Filesystem.readText(filepath) : ""
       if (exists) await FileTime.assert(ctx.sessionID, filepath)
 
-      const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, params.content))
+      // Bounded Myers with admit caps, a worker queue, and abort support —
+      // the same guard edit.ts uses. Raw createTwoFilesPatch + diffLines ran
+      // the quadratic path synchronously while holding the per-path lock.
+      const preview = await diffPreview(filepath, contentOld, params.content, ctx.abort)
+      const diff = trimDiff(preview.diff)
       await ctx.ask({
         permission: "edit",
         patterns: [relativePath],
@@ -98,6 +102,7 @@ export const WriteTool = Tool.define("write", {
           diff,
         },
       })
+      ctx.abort.throwIfAborted()
 
       // The in-process lock does not stop an editor or another process from
       // changing the path while the approval UI is open. Revalidate the
@@ -110,6 +115,7 @@ export const WriteTool = Tool.define("write", {
       if (existsAfterApproval && (await Filesystem.readText(filepath)) !== contentOld) {
         throw new Error(`File ${filepath} changed while write approval was pending. Read it again and retry.`)
       }
+      ctx.abort.throwIfAborted()
 
       await Filesystem.write(filepath, params.content)
       await notifyFileEdited(filepath, exists ? "change" : "add")
@@ -118,14 +124,8 @@ export const WriteTool = Tool.define("write", {
       // (additions + deletions), not raw line counts. Summing old + new
       // line counts double-charged unchanged lines and inflated the cap
       // by up to 2x for full overwrites of mostly-identical content
-      // (BUG-119).
-      let additions = 0
-      let deletions = 0
-      for (const change of diffLines(contentOld, params.content)) {
-        if (change.added) additions += change.count || 0
-        else if (change.removed) deletions += change.count || 0
-      }
-      await BlastRadius.recordWriteAndAssert(ctx.sessionID, filepath, additions + deletions)
+      // (BUG-119). The preview already counted both from the same pair.
+      await BlastRadius.recordWriteAndAssert(ctx.sessionID, filepath, preview.additions + preview.deletions)
     })
 
     const { diagnostics, output: diagOutput } = await collectDiagnostics([filepath], {
