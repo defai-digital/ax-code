@@ -801,13 +801,27 @@ export namespace Config {
         const configFiles = isConfigDir ? ["ax-code.json", "ax-code.jsonc"] : []
         const projectCodeTrusted = trusted || ProjectConfigTrust.enabled()
         const [loadedConfigs, command, agent, mode, pluginFiles] = await Promise.all([
-          Promise.all(
+          Promise.allSettled(
             configFiles.map(async (file) => {
               log.debug(`loading config from ${path.join(dir, file)}`)
               return loadFile(path.join(dir, file), {
                 trusted,
                 projectTrust: inWorktree && !isUserConfigDir,
               })
+            }),
+          ).then((results) =>
+            results.map((result, index) => {
+              if (result.status === "fulfilled") return result.value
+              // A malformed directory config (possibly committed by anyone)
+              // must degrade like a malformed root project config: warn and
+              // skip, never abort the whole config load.
+              log.warn("failed to load config file", {
+                command: "config.load",
+                status: "error",
+                path: path.join(dir, configFiles[index]!),
+                error: result.reason,
+              })
+              return {} as Info
             }),
           ),
           loadCommand(dir, inWorktree && !isUserConfigDir ? "project" : "config", projectCodeTrusted),

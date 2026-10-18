@@ -825,6 +825,41 @@ Test agent prompt`,
   })
 })
 
+test("skips a malformed .ax-code config file without failing the whole load", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const opencodeDir = path.join(dir, ".ax-code")
+      const agentDir = path.join(opencodeDir, "agent")
+      await fs.mkdir(agentDir, { recursive: true })
+      // A committed, malformed directory config must degrade like a malformed
+      // root project config: warn and skip, not abort every Config.get().
+      await Filesystem.write(path.join(opencodeDir, "ax-code.json"), "{ not json")
+      await Filesystem.write(
+        path.join(agentDir, "test.md"),
+        `---
+model: test/model
+---
+Test agent prompt`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.agent?.["test"]).toEqual(
+        expect.objectContaining({
+          name: "test",
+          model: "test/model",
+          prompt: "Test agent prompt",
+        }),
+      )
+    },
+  })
+})
+
 test("loads agents from .ax-code/agents (plural)", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
