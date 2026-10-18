@@ -172,6 +172,15 @@ export async function applySafeRefactorImpl(
     explain: DebugEngine.buildExplain("apply-safe-refactor", [], heuristics),
   })
 
+  // Status alone cannot see content edits inside an already-modified file
+  // (a `lint --fix` appending to a patched file keeps the same ` M` line),
+  // so fingerprint untracked entries plus the full tracked diff text.
+  const shadowFingerprint = (cwd: string) =>
+    Promise.all([
+      git(["status", "--porcelain"], { cwd }).then((r) => r.text()),
+      git(["diff", "--no-color", "HEAD"], { cwd }).then((r) => r.text()),
+    ]).then(([status, diff]) => status + "\0" + diff)
+
   // Hard failures (a check ran and failed, or a patch couldn't apply) write
   // the plan to `aborted` so the caller can retry via `aborted → pending`.
   // Soft paths (no-patch pre-flight, stale, not-git) keep their own status.
@@ -256,6 +265,8 @@ export async function applySafeRefactorImpl(
   }
 
   try {
+    let postPatchStatus: string | undefined
+
     // Step 3.5: symlink node_modules from the real worktree into the
     // shadow so typecheck/lint/test commands can resolve dependencies.
     // .gitignore'd directories aren't present in git worktrees.
@@ -290,6 +301,11 @@ export async function applySafeRefactorImpl(
         return hardAbort("patch-apply-failed")
       }
       heuristics.push("patch-applied-in-shadow")
+      // Baseline for the post-verification mutation guard below: checks run
+      // against exactly this state, so anything that changes it afterwards
+      // (a `lint --fix` style command) means the real worktree would receive
+      // a state that was never verified.
+      postPatchStatus = await shadowFingerprint(shadowHandle.path)
     } else {
       heuristics.push("no-patch-supplied")
     }
@@ -304,11 +320,16 @@ export async function applySafeRefactorImpl(
     )
 
     // Phase 2 P2.4: propagate the caller's AbortSignal — when omitted,
-    // runCheck/runTests each resolve to `host.abort()` themselves.
-    const checkOptions = { signal: input.signal }
+    // runCheck/runTests each resolve to `host.abort()` themselves. Resolve
+    // the effective signal once here too: skipped checks (no command
+    // configured) never consult it inside the runner, so the gate below and
+    // the pre-apply check are the only guards for that path.
+    const effectiveSignal = input.signal ?? codeReasonHost().abort()
+    const checkOptions = { signal: effectiveSignal }
+    if (effectiveSignal.aborted) return abort("aborted")
 
     const typecheckCheck = await runCheck("typecheck", commands.typecheck, shadowHandle.path, checkOptions)
-    if (input.signal?.aborted) return abort("aborted")
+    if (effectiveSignal.aborted) return abort("aborted")
     if (!typecheckCheck.ok) {
       return hardAbort("typecheck-failed", {
         typecheck: legacyCheck(typecheckCheck),
@@ -321,7 +342,7 @@ export async function applySafeRefactorImpl(
       mode === "aggressive" && input.skipLint
         ? { ok: true, errors: [], skipped: true }
         : await runCheck("lint", commands.lint, shadowHandle.path, checkOptions)
-    if (input.signal?.aborted) return abort("aborted")
+    if (effectiveSignal.aborted) return abort("aborted")
     if (!lintCheck.ok) {
       return hardAbort("lint-failed", {
         typecheck: legacyCheck(typecheckCheck),
@@ -368,6 +389,26 @@ export async function applySafeRefactorImpl(
         filesChanged: [],
         abortReason: "no-patch-supplied",
         explain: DebugEngine.buildExplain("apply-safe-refactor", [], heuristics),
+      }
+    }
+
+    // A cancellation that raced the shadow checks must not reach the real
+    // worktree — skipped checks never consulted the signal inside the
+    // runner, so this is the last guard.
+    if (effectiveSignal.aborted) return abort("aborted")
+
+    // Verification commands must not have modified the shadow: the real
+    // worktree only receives the original patch, so any extra change means
+    // the state that passed the checks is not the state being applied.
+    if (postPatchStatus !== undefined) {
+      const postCheckStatus = await shadowFingerprint(shadowHandle.path)
+      if (postCheckStatus !== postPatchStatus) {
+        heuristics.push("verification-mutated-shadow")
+        return hardAbort("verification-mutated-shadow", {
+          typecheck: legacyCheck(typecheckCheck),
+          lint: legacyCheck(lintCheck),
+          tests: legacyTests(testResult),
+        })
       }
     }
 

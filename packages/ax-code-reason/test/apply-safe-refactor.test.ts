@@ -110,3 +110,94 @@ describe("applySafeRefactor precondition drift", () => {
     expect(DebugEngineQuery.getPlan("test-project", RefactorPlanID.make("rpl_clean"))?.status).toBe("pending")
   })
 })
+
+// A git patch against the seed commit: target.txt "original" -> "updated".
+const PATCH = `diff --git a/target.txt b/target.txt
+index 4b48dee..519c15e 100644
+--- a/target.txt
++++ b/target.txt
+@@ -1 +1 @@
+-original
++updated
+`
+
+describe("applySafeRefactor cancellation and shadow mutation guards", () => {
+  let base: string
+  let repo: string
+  const git = (args: string[]) =>
+    fs
+      .readdir(repo)
+      .then(() =>
+        import("node:child_process").then(({ execFileSync }) =>
+          execFileSync("git", args, { cwd: repo, stdio: "pipe" }),
+        ),
+      )
+
+  beforeEach(async () => {
+    base = await fs.mkdtemp(path.join(os.tmpdir(), "ax-reason-apply-"))
+    repo = path.join(base, "repo")
+    await fs.mkdir(repo, { recursive: true })
+    const { execFileSync } = await import("node:child_process")
+    const run = (args: string[]) => execFileSync("git", args, { cwd: repo, stdio: "pipe" })
+    run(["init"])
+    run(["config", "user.email", "test@example.com"])
+    run(["config", "user.name", "Test"])
+    run(["config", "commit.gpgsign", "false"])
+    await fs.writeFile(path.join(repo, "target.txt"), "original\n")
+    run(["add", "."])
+    run(["commit", "-m", "init"])
+  })
+
+  afterEach(async () => {
+    await fs.rm(base, { recursive: true, force: true }).catch(() => undefined)
+  })
+
+  function seedPending(id: string) {
+    DebugEngineQuery.insertPlan({
+      id: RefactorPlanID.make(id),
+      project_id: "test-project",
+      kind: "other",
+      summary: `plan ${id}`,
+      edits: [],
+      affected_files: [],
+      affected_symbols: [],
+      risk: "low",
+      status: "pending",
+      graph_cursor_at_creation: null,
+      preconditions: null,
+      edit_groups: [],
+      verification_plan: [],
+      time_created: 1000,
+    })
+  }
+
+  test("an aborted host signal with skipped checks never applies the patch", async () => {
+    installTestHost({ worktreeRoot: repo, projectRoot: repo, vcs: "git", signal: AbortSignal.abort() })
+    seedPending("rpl_cancel")
+
+    const result = await applySafeRefactorImpl("test-project", {
+      planId: RefactorPlanID.make("rpl_cancel"),
+      patch: PATCH,
+    })
+
+    expect(result.applied).toBe(false)
+    expect(result.abortReason).toBe("aborted")
+    await expect(fs.readFile(path.join(repo, "target.txt"), "utf8")).resolves.toBe("original\n")
+  })
+
+  test("a verification command that mutates the shadow aborts the real apply", async () => {
+    installTestHost({ worktreeRoot: repo, projectRoot: repo, vcs: "git" })
+    seedPending("rpl_mutate")
+
+    const result = await applySafeRefactorImpl("test-project", {
+      planId: RefactorPlanID.make("rpl_mutate"),
+      patch: PATCH,
+      // A passing "check" that edits tracked state, like `lint --fix` would.
+      commands: { typecheck: "printf mutated >> target.txt", lint: null, test: null },
+    })
+
+    expect(result.applied).toBe(false)
+    expect(result.abortReason).toBe("verification-mutated-shadow")
+    await expect(fs.readFile(path.join(repo, "target.txt"), "utf8")).resolves.toBe("original\n")
+  })
+})
