@@ -11,6 +11,7 @@ import { Bus } from "../../src/bus"
 import { CustomApiProvider } from "../../src/provider/custom-api-provider"
 import { exactCatalogFallbackModels, FIRST_PARTY_CATALOG_IDS } from "../../src/provider/ax-trust-discovery"
 import { modelDisplayInfo } from "../../src/cli/tui/component/model-vision-label"
+import { ModelsDev } from "../../src/provider/models"
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -323,14 +324,15 @@ test.each([undefined, false] as const)(
           await Provider.ready()
           const model = await Provider.getModel(ProviderID.make(id), ModelID.make("deepseek-flash"))
           if (attachment === undefined) {
-            expect(model.name).toBe("DeepSeek V4.1 Flash")
-            expect(model.limit).toEqual({ context: 1_000_000, output: 393_216 })
+            const catalogModel = (await ModelsDev.get()).deepseek.models["deepseek-flash"]
+            expect(model.name).toBe(catalogModel.name)
+            expect(model.limit).toEqual({ context: catalogModel.limit.context, output: catalogModel.limit.output })
             expect(model.capabilities).toMatchObject({
               reasoning: true,
               toolcall: true,
               interleaved: { field: "reasoning_content" },
             })
-            expect(modelDisplayInfo(model.id, model).label).toBe("DeepSeek V4.1 Flash 👀")
+            expect(modelDisplayInfo(model.id, model).label).toBe(`${catalogModel.name} 👀`)
           } else {
             expect(model.name).toBe("Restricted Flash")
             expect(model.limit).toEqual({ context: 32000, output: 2000 })
