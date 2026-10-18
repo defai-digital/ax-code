@@ -1323,7 +1323,9 @@ export const RunCommand = cmd({
                   UI.empty()
                   const agentName = await resolveRunAgentDisplayName({
                     agentName: event.properties.info.agent,
-                    attached: Boolean(args.attach),
+                    // --runtime talks to the managed runtime: display names
+                    // come from its agent list, not the local Instance.
+                    attached: Boolean(args.attach || runtimeAttach),
                     listLocalAgents: () => Agent.list(),
                     listAttachedAgents: () =>
                       sdk.app
@@ -1504,15 +1506,18 @@ export const RunCommand = cmd({
           const agent = await (async () => {
             if (!args.agent) return undefined
 
-            // When attaching, validate against the running server instead of local Instance state.
-            if (args.attach) {
+            // When attaching (explicit --attach or the managed --runtime),
+            // validate against the running server instead of local Instance state.
+            if (args.attach || runtimeAttach) {
               const modes = await sdk.app
                 .agents(undefined, { throwOnError: true })
                 .then((x) => x.data ?? [])
                 .catch(() => undefined)
 
               if (!modes) {
-                warn(`failed to list agents from ${args.attach}. Falling back to default agent`)
+                warn(
+                  `failed to list agents from ${args.attach ?? runtimeAttach?.baseUrl}. Falling back to default agent`,
+                )
                 return undefined
               }
 
@@ -1593,8 +1598,8 @@ export const RunCommand = cmd({
                     // Keep discovery off the fast path for models already present
                     // in the snapshot. Only a miss waits for the complete local or
                     // attached-server list, then validates once more.
-                    if (!args.attach) await Provider.ready()
-                    const refreshed = await listProviders(Boolean(args.attach))
+                    if (!args.attach && !runtimeAttach) await Provider.ready()
+                    const refreshed = await listProviders(Boolean(args.attach || runtimeAttach))
                     connected = refreshed?.connected
                     return refreshed?.all
                   },

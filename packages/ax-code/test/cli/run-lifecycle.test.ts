@@ -286,7 +286,7 @@ test("run command validates an explicit model before creating a session", async 
   expect(validate).toBeGreaterThan(refresh)
   expect(create).toBeGreaterThan(validate)
   expect(src).toContain("const initialProviders = await listProviders()")
-  expect(src).toContain("if (!args.attach) await Provider.ready()")
+  expect(src).toContain("if (!args.attach && !runtimeAttach) await Provider.ready()")
   expect(src).toContain("[Provider.DISCOVERY_WAIT_HEADER]")
 })
 
@@ -404,6 +404,18 @@ test("run command scopes the local SDK client to the runtime directory", async (
   )
   expect(src).not.toContain("createOpencodeClient")
   expect(src).not.toContain("OpencodeClient")
+})
+
+test("run command treats the managed runtime like an attach for agent and provider lookups", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const normalized = src.replace(/\s+/g, " ")
+
+  // --runtime talks to a remote server: agent validation, display-name
+  // lookup, and provider refresh must use that server, not local state.
+  expect(src).toContain("if (args.attach || runtimeAttach) {")
+  expect(src).toContain("attached: Boolean(args.attach || runtimeAttach)")
+  expect(normalized).toContain("if (!args.attach && !runtimeAttach) await Provider.ready()")
+  expect(normalized).toContain("listProviders(Boolean(args.attach || runtimeAttach))")
 })
 
 test("run command logs tool renderer fallback errors", async () => {
