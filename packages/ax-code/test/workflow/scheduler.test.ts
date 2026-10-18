@@ -733,6 +733,37 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("start on a paused run resumes it instead of leaving paused children", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage),
+          })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
+          const paused = await WorkflowScheduler.pause(run.id)
+          expect(paused.status).toBe("paused")
+          expect(paused.children.every((child) => child.status === "paused")).toBe(true)
+
+          // start() on a paused run used to set it running and return at the
+          // existing-children guard, leaving every child paused forever.
+          const resumed = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+
+          expect(resumed.status).toBe("running")
+          expect(resumed.phases[0]?.status).toBe("running")
+          expect(resumed.children.some((child) => child.status === "paused")).toBe(false)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("queues worktree-required child agents in dedicated worktrees", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

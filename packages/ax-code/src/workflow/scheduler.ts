@@ -67,6 +67,10 @@ export namespace WorkflowScheduler {
     }
     const timedOut = await stopIfWallTimeExceeded(runID, initial)
     if (timedOut) return timedOut
+    // A paused run must go through resume(): startUnlocked would flip it to
+    // running and then return at the existing-children guard, leaving paused
+    // children with no execution carrier (zombie "running" run).
+    if (initial.status === "paused") return resume(runID)
     assertExecutableMergeStrategies(initial.spec)
 
     const plan = planWorkflowDryRun({
