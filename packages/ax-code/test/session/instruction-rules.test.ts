@@ -125,6 +125,25 @@ describe("path rules frontmatter and matching (ADR-219)", () => {
     })
   })
 
+  test("a rule over the size cap is skipped without reading the file body", async () => {
+    await using tmp = await projectWithRules(async (dir) => {
+      await fs.writeFile(
+        path.join(dir, ".ax-code", "rules", "huge.md"),
+        `---\npaths: ["**/*.test.ts"]\n---\n${"x".repeat(65 * 1024)}`,
+      )
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const reads = vi.spyOn(Filesystem, "readText")
+        const rules = await InstructionPrompt.matchingPathRules(path.join(tmp.path, "src", "foo.test.ts"))
+        expect(rules.map((rule) => path.basename(rule.filepath))).toEqual(["ts-tests.md"])
+        const huge = path.join(tmp.path, ".ax-code", "rules", "huge.md")
+        expect(reads.mock.calls.filter(([file]) => file === huge)).toEqual([])
+      },
+    })
+  })
+
   test("targets outside the worktree never match", async () => {
     await using tmp = await projectWithRules()
     await using outside = await tmpdir()

@@ -25,7 +25,10 @@ const FILES = ["AGENTS.md", "CLAUDE.md"]
 // reads or edits matches — through the same claim/dedupe mechanism as nested
 // AGENTS.md. A rule without `paths` is ignored here (use AGENTS.md).
 const RULES_DIR = path.join(".ax-code", "rules")
-const RULES_PATTERN = path.join(RULES_DIR, "*.md")
+// fast-glob patterns always use forward slashes; building this with
+// path.join would emit backslashes on Windows, which fast-glob reads as
+// escape characters, so the pattern would never match.
+const RULES_PATTERN = ".ax-code/rules/*.md"
 // Size cap per rule file. A rule is context injected on matching file access;
 // an oversized rule is almost certainly the wrong tool (AGENTS.md or a skill
 // fits better), so it is skipped with a warning instead of truncated.
@@ -94,11 +97,20 @@ async function loadPathRules(): Promise<PathRule[]> {
       if (cached.rule) rules.push(cached.rule)
       continue
     }
-    const raw = await Filesystem.readText(resolved).catch((err) => {
-      log.warn("path rule read failed", { path: resolved, err })
-      return ""
-    })
-    const rule = raw ? parsePathRule(resolved, raw) : undefined
+    let rule: PathRule | undefined
+    if (stat.size > RULE_MAX_BYTES) {
+      // Skip the read entirely for oversized files; parsePathRule's
+      // post-read cap stays as the guard against growth between stat and
+      // read. The negative cache entry keeps every read/edit from
+      // re-stat'ing the file.
+      log.warn("path rule exceeds size cap; skipping", { path: resolved, bytes: stat.size, cap: RULE_MAX_BYTES })
+    } else {
+      const raw = await Filesystem.readText(resolved).catch((err) => {
+        log.warn("path rule read failed", { path: resolved, err })
+        return ""
+      })
+      rule = raw ? parsePathRule(resolved, raw) : undefined
+    }
     if (!cache.has(resolved) && cache.size >= RULE_CACHE_LIMIT) cache.delete(cache.keys().next().value!)
     cache.set(resolved, { mtimeMs, rule })
     if (rule) rules.push(rule)
@@ -114,7 +126,10 @@ async function matchingPathRulesImpl(target: string): Promise<PathRule[]> {
   // Rules apply to worktree files only; paths outside the worktree have no
   // project-relative form to match against.
   if (!relative || Filesystem.isOutsideRelative(relative)) return []
-  return rules.filter((rule) => rule.paths.some((pattern) => Glob.match(pattern, relative)))
+  // minimatch globs are forward-slash; on Windows path.relative emits
+  // backslashes that would never match a rule's `paths` patterns.
+  const normalized = path.sep === "/" ? relative : relative.split(path.sep).join("/")
+  return rules.filter((rule) => rule.paths.some((pattern) => Glob.match(pattern, normalized)))
 }
 
 async function realpathOrResolved(input: string) {
@@ -358,12 +373,16 @@ export namespace InstructionPrompt {
         .then(async (res) => {
           if (!res.ok) {
             log.warn("instruction URL returned non-ok", { url, status: res.status })
+            // Cancel the unread body so the socket can be reused instead of
+            // lingering until the server closes it.
+            await res.body?.cancel().catch(() => {})
             return ""
           }
           const contentLength = res.headers.get("content-length")
           const contentLengthBytes = parseContentLengthHeader(contentLength)
           if (contentLengthBytes !== undefined && contentLengthBytes > INSTRUCTION_MAX_BYTES) {
             log.warn("instruction URL response too large", { url, contentLength })
+            await res.body?.cancel().catch(() => {})
             return ""
           }
           if (!res.body) return res.text()
@@ -428,18 +447,27 @@ export namespace InstructionPrompt {
     const target = path.resolve(filepath)
     let current = path.dirname(target)
     const root = path.resolve(Instance.directory)
+    // A nested AGENTS.md/CLAUDE.md can be a symlink pointing outside the
+    // instance root; compare realpaths so it cannot inject arbitrary file
+    // contents into the prompt.
+    const realRoot = await realpathOrResolved(root)
 
     while (Filesystem.contains(root, current) && current !== root) {
       const found = await find(current)
 
       if (found && found !== target && !system.has(found) && !already.has(found) && !isClaimed(messageID, found)) {
-        claim(messageID, found)
-        const content = await Filesystem.readText(found)
-        if (content) {
-          const hidden = detectHiddenUnicode(content)
-          if (hidden > 0)
-            log.warn("instruction file contains hidden Unicode characters", { path: found, count: hidden })
-          results.push({ filepath: found, content: "Instructions from: " + found + "\n" + content })
+        const real = await realpathOrResolved(found)
+        if (!Filesystem.contains(realRoot, real)) {
+          log.warn("instruction file symlink escapes instance root", { path: found, real })
+        } else {
+          claim(messageID, found)
+          const content = await Filesystem.readText(found)
+          if (content) {
+            const hidden = detectHiddenUnicode(content)
+            if (hidden > 0)
+              log.warn("instruction file contains hidden Unicode characters", { path: found, count: hidden })
+            results.push({ filepath: found, content: "Instructions from: " + found + "\n" + content })
+          }
         }
       }
       current = path.dirname(current)

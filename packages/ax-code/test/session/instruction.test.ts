@@ -191,6 +191,31 @@ describe("InstructionPrompt.resolve", () => {
       count: 2,
     })
   })
+
+  test.skipIf(process.platform === "win32")(
+    "skips nested instruction symlinks that escape the instance root",
+    async () => {
+      await using tmp = await tmpdir()
+      await using outside = await tmpdir({
+        init: async (dir) => fs.writeFile(path.join(dir, "SECRET.md"), "outside secret"),
+      })
+      await fs.mkdir(path.join(tmp.path, "sub"), { recursive: true })
+      await fs.symlink(path.join(outside.path, "SECRET.md"), path.join(tmp.path, "sub", "AGENTS.md"))
+      await fs.writeFile(path.join(tmp.path, "sub", "file.ts"), "const x = 1")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const results = await InstructionPrompt.resolve(
+            [],
+            path.join(tmp.path, "sub", "file.ts"),
+            "test-message-symlink-escape",
+          )
+          expect(results).toEqual([])
+        },
+      })
+    },
+  )
 })
 
 describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
@@ -534,6 +559,64 @@ describe("InstructionPrompt.system remote instructions", () => {
           const prompts = await InstructionPrompt.system()
 
           expect(prompts).toContain("Instructions from: https://example.com/AGENTS.md\n# Remote Instructions")
+        },
+      })
+    } finally {
+      assertSpy.mockRestore()
+      fetchSpy.mockRestore()
+    }
+  })
+
+  test("cancels the unread body when a remote instruction URL returns non-ok", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        instructions: ["https://example.com/AGENTS.md"],
+      },
+    })
+    const response = new Response("secret body", { status: 500 })
+    const cancel = vi.spyOn(response.body!, "cancel")
+    const assertSpy = vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    const fetchSpy = vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue(response as never)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const prompts = await InstructionPrompt.system()
+          expect(prompts.some((p) => p.includes("example.com"))).toBe(false)
+          expect(cancel).toHaveBeenCalled()
+        },
+      })
+    } finally {
+      assertSpy.mockRestore()
+      fetchSpy.mockRestore()
+    }
+  })
+
+  test("cancels the unread body when a remote instruction exceeds the content-length cap", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        instructions: ["https://example.com/AGENTS.md"],
+      },
+    })
+    const response = new Response("x".repeat(16), {
+      headers: { "content-length": String(2 * 1024 * 1024) },
+    })
+    const cancel = vi.spyOn(response.body!, "cancel")
+    const assertSpy = vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    const fetchSpy = vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue(response as never)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const prompts = await InstructionPrompt.system()
+          expect(prompts.some((p) => p.includes("example.com"))).toBe(false)
+          expect(cancel).toHaveBeenCalled()
         },
       })
     } finally {
