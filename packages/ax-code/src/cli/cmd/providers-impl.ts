@@ -670,6 +670,7 @@ export const ProvidersLoginCommand = cmd({
       prompts.log.error(`Provider "${requestedProvider}" has been retired and is no longer supported.`)
       prompts.log.info(`Remove any saved credential with \`ax-code providers logout ${requestedProvider}\`.`)
       prompts.outro("Done")
+      process.exitCode = 1
       return
     }
 
@@ -682,6 +683,7 @@ export const ProvidersLoginCommand = cmd({
       prompts.log.error(
         "Login requires an interactive terminal; cannot prompt for credentials in non-interactive mode.",
       )
+      process.exitCode = 1
       return
     }
 
@@ -731,11 +733,13 @@ export const ProvidersLoginCommand = cmd({
           } catch (err) {
             prompts.log.error(`Failed to reach ${url}: ${toErrorMessage(err)}`)
             prompts.outro("Done")
+            process.exitCode = 1
             return
           }
           if (!res.ok) {
             prompts.log.error(`Failed to fetch well-known config: HTTP ${res.status}`)
             prompts.outro("Done")
+            process.exitCode = 1
             return
           }
           let wellknown: Record<string, any>
@@ -744,11 +748,13 @@ export const ProvidersLoginCommand = cmd({
           } catch {
             prompts.log.error("Well-known config returned invalid JSON")
             prompts.outro("Done")
+            process.exitCode = 1
             return
           }
           if (typeof wellknown.auth?.env !== "string" || !/^[A-Z][A-Z0-9_]*$/.test(wellknown.auth.env)) {
             prompts.log.error("Well-known config has missing or invalid auth.env (expected uppercase env var name)")
             prompts.outro("Done")
+            process.exitCode = 1
             return
           }
           const token = await prompts.password({
@@ -959,6 +965,7 @@ export const ProvidersLogoutCommand = cmd({
     prompts.intro("Remove credential")
     if (credentials.length === 0 && undecryptable.length === 0 && managedOrphans.length === 0) {
       prompts.log.error("No credentials found")
+      process.exitCode = 1
       return
     }
     const database = await ModelsDev.get()
@@ -968,6 +975,7 @@ export const ProvidersLogoutCommand = cmd({
       const match = credentials.find(([key]) => key === requestedProvider)
       if (!match && !undecryptable.includes(requestedProvider) && !managedOrphans.includes(requestedProvider)) {
         prompts.log.error(`No credential found for ${requestedProvider}`)
+        process.exitCode = 1
         return
       }
       providerID = match?.[0] ?? requestedProvider
@@ -976,6 +984,7 @@ export const ProvidersLogoutCommand = cmd({
         prompts.log.error(
           "Provider is required in non-interactive mode. Use `ax-code providers logout --provider <id>`.",
         )
+        process.exitCode = 1
         return
       }
       const selected = await prompts.select({
@@ -1026,6 +1035,7 @@ export const ProvidersDisableCommand = cmd({
     if (args.provider && isRetiredProviderID(args.provider)) {
       prompts.log.error(`Provider "${args.provider}" has been retired and cannot be disabled.`)
       prompts.outro("Done")
+      process.exitCode = 1
       return
     }
     await Instance.provide({
@@ -1043,10 +1053,12 @@ export const ProvidersDisableCommand = cmd({
         if (!providerID) {
           if (!process.stdin.isTTY) {
             prompts.log.error("Provider is required in non-interactive mode. Use `ax-code providers disable <id>`.")
+            process.exitCode = 1
             return
           }
           if (candidates.length === 0) {
             prompts.log.error("No connected or configured providers to disable")
+            process.exitCode = 1
             return
           }
           const database = await ModelsDev.get()
@@ -1096,6 +1108,7 @@ export const ProvidersEnableCommand = cmd({
       prompts.log.error(`Provider "${args.provider}" has been retired and cannot be enabled.`)
       prompts.log.info(`Remove any saved credential with \`ax-code providers logout ${args.provider}\`.`)
       prompts.outro("Done")
+      process.exitCode = 1
       return
     }
     await Instance.provide({
@@ -1109,6 +1122,7 @@ export const ProvidersEnableCommand = cmd({
         if (!providerID) {
           if (!process.stdin.isTTY) {
             prompts.log.error("Provider is required in non-interactive mode. Use `ax-code providers enable <id>`.")
+            process.exitCode = 1
             return
           }
           if (supportedDisabled.length === 0) {

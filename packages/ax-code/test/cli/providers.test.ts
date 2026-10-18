@@ -233,9 +233,14 @@ describe("providers command", () => {
     const passwordSpy = vi.spyOn(prompts, "password")
     const confirmSpy = vi.spyOn(prompts, "confirm")
 
+    const previousExitCode = process.exitCode
     try {
+      process.exitCode = 0
       await ProvidersLoginCommand.handler({ url: "gemini-cli" } as any)
+      expect(process.exitCode).toBe(1)
+      process.exitCode = 0
       await ProvidersLoginCommand.handler({ url: "GEMINI-CLI" } as any)
+      expect(process.exitCode).toBe(1)
 
       expect(errorSpy).toHaveBeenCalledWith('Provider "gemini-cli" has been retired and is no longer supported.')
       expect(errorSpy).toHaveBeenCalledWith('Provider "GEMINI-CLI" has been retired and is no longer supported.')
@@ -251,6 +256,7 @@ describe("providers command", () => {
       infoSpy.mockRestore()
       passwordSpy.mockRestore()
       confirmSpy.mockRestore()
+      process.exitCode = previousExitCode
     }
   })
 
@@ -318,13 +324,17 @@ describe("providers command", () => {
     const passwordSpy = vi.spyOn(prompts, "password")
     const autocompleteSpy = vi.spyOn(prompts, "autocomplete")
 
+    const previousExitCode = process.exitCode
     try {
       // Piped stdin: prompts would never settle and the process would die
       // with "unsettled top-level await" (#393) — the handler must bail out
       // before reaching any prompt, even when --provider skips the pickers.
       stdin.isTTY = false
+      process.exitCode = 0
       await ProvidersLoginCommand.handler({ provider: "google" } as any)
 
+      // A failed login must fail the process too, not just print.
+      expect(process.exitCode).toBe(1)
       expect(errorSpy).toHaveBeenCalledWith(
         "Login requires an interactive terminal; cannot prompt for credentials in non-interactive mode.",
       )
@@ -336,6 +346,7 @@ describe("providers command", () => {
       errorSpy.mockRestore()
       passwordSpy.mockRestore()
       autocompleteSpy.mockRestore()
+      process.exitCode = previousExitCode
     }
   })
 
@@ -380,11 +391,14 @@ describe("providers command", () => {
     const stdin = process.stdin as typeof process.stdin & { isTTY?: boolean }
     const originalIsTTY = stdin.isTTY
 
+    const previousExitCode = process.exitCode
     try {
       stdin.isTTY = false
+      process.exitCode = 0
       await Auth.set("claude-code", { type: "api", key: "cli" })
       await ProvidersLogoutCommand.handler({} as any)
 
+      expect(process.exitCode).toBe(1)
       expect(selectSpy).not.toHaveBeenCalled()
       expect(errorSpy).toHaveBeenCalledWith(
         "Provider is required in non-interactive mode. Use `ax-code providers logout --provider <id>`.",
@@ -394,6 +408,7 @@ describe("providers command", () => {
       introSpy.mockRestore()
       errorSpy.mockRestore()
       selectSpy.mockRestore()
+      process.exitCode = previousExitCode
     }
   })
 
@@ -447,11 +462,16 @@ describe("providers command", () => {
     const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
     const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
 
+    const previousExitCode = process.exitCode
     try {
       await Config.updateGlobal({ disabled_providers: ["gemini-cli"] })
 
+      process.exitCode = 0
       await ProvidersDisableCommand.handler({ provider: "gemini-cli" } as any)
+      expect(process.exitCode).toBe(1)
+      process.exitCode = 0
       await ProvidersEnableCommand.handler({ provider: "gemini-cli" } as any)
+      expect(process.exitCode).toBe(1)
 
       expect(errorSpy).toHaveBeenCalledWith('Provider "gemini-cli" has been retired and cannot be disabled.')
       expect(errorSpy).toHaveBeenCalledWith('Provider "gemini-cli" has been retired and cannot be enabled.')
@@ -459,6 +479,7 @@ describe("providers command", () => {
       expect(outroSpy).toHaveBeenCalledWith("Done")
     } finally {
       await Config.updateGlobal({ disabled_providers: [] }).catch(() => undefined)
+      process.exitCode = previousExitCode
       introSpy.mockRestore()
       outroSpy.mockRestore()
       errorSpy.mockRestore()
