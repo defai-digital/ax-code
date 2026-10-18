@@ -64,6 +64,13 @@ async function readFileIfExists(filePath: string): Promise<string | undefined> {
   })
 }
 
+async function fileMode(filePath: string): Promise<number | undefined> {
+  return fs
+    .stat(filePath)
+    .then((stats) => stats.mode & 0o777)
+    .catch(() => undefined)
+}
+
 const PatchParams = z.object({
   patchText: z
     .string()
@@ -109,6 +116,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       moveOldContent?: string
       existed: boolean
       moveExisted?: boolean
+      /** Source/destination modes captured at verification for move/rollback. */
+      sourceMode?: number
+      moveMode?: number
       /** Source and destination resolve to the same file (case-only rename). */
       moveSameFile?: boolean
       diff: string
@@ -191,6 +201,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             if (Filesystem.errnoCode(error) === "EISDIR") throw new Error(`Path is a directory: ${filePath}`)
             throw new Error(`apply_patch verification failed: Failed to read file to update: ${filePath}`)
           }
+          const sourceMode = await fileMode(filePath)
           let newContent: string
 
           // Apply the update chunks to get new content
@@ -209,10 +220,14 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           const movePath = hunk.move_path ? resolvePatchPath(hunk.move_path) : undefined
           await assertExternalDirectory(ctx, movePath)
           if (movePath) await assertSymlinkInsideProject(movePath)
+          let moveMode: number | undefined
           const moveExisted = movePath
             ? await fs
                 .stat(movePath)
-                .then((stats) => !stats.isDirectory())
+                .then((stats) => {
+                  moveMode = stats.mode & 0o777
+                  return !stats.isDirectory()
+                })
                 .catch((error: unknown) => {
                   const code = Filesystem.errnoCode(error)
                   if (code === "ENOENT") return false
@@ -247,6 +262,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             existed: true,
             moveExisted,
             moveSameFile,
+            sourceMode,
+            moveMode,
             diff,
             additions,
             deletions,
@@ -269,6 +286,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
           })
           const deleteDiff = trimDiff((await diffPreview(filePath, contentToDelete, "", ctx.abort)).diff)
+          const sourceMode = await fileMode(filePath)
 
           // Count actual lines, not `split("\n").length`. For content
           // "hello\nworld\n", split yields ["hello", "world", ""]
@@ -288,6 +306,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             newContent: "",
             type: "delete",
             existed: true,
+            sourceMode,
             diff: deleteDiff,
             additions: 0,
             deletions,
@@ -356,10 +375,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             if (first === second) {
               await FileTime.withLock(first, async () => {
                 await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-                await fs.writeFile(change.filePath, change.oldContent, "utf-8")
+                await Filesystem.write(change.filePath, change.oldContent, change.sourceMode)
                 if (change.moveExisted) {
                   await fs.mkdir(path.dirname(dest), { recursive: true })
-                  await fs.writeFile(dest, change.moveOldContent ?? "", "utf-8")
+                  await Filesystem.write(dest, change.moveOldContent ?? "", change.moveMode)
                   return
                 }
                 await fs.unlink(dest).catch(() => undefined)
@@ -368,10 +387,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               await FileTime.withLock(first, async () => {
                 await FileTime.withLock(second, async () => {
                   await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-                  await fs.writeFile(change.filePath, change.oldContent, "utf-8")
+                  await Filesystem.write(change.filePath, change.oldContent, change.sourceMode)
                   if (change.moveExisted) {
                     await fs.mkdir(path.dirname(dest), { recursive: true })
-                    await fs.writeFile(dest, change.moveOldContent ?? "", "utf-8")
+                    await Filesystem.write(dest, change.moveOldContent ?? "", change.moveMode)
                     return
                   }
                   await fs.unlink(dest).catch(() => undefined)
@@ -386,7 +405,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               return
             }
             await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-            await fs.writeFile(change.filePath, change.oldContent, "utf-8")
+            await Filesystem.write(change.filePath, change.oldContent, change.sourceMode)
           })
           if (change.type === "delete") {
             await FileTime.read(ctx.sessionID, change.filePath)
@@ -459,7 +478,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                     )
                   }
                   activeDirty = true
-                  await Filesystem.write(dest, change.newContent)
+                  await Filesystem.write(dest, change.newContent, change.sourceMode)
                   await finishMove(change.filePath, dest)
                 })
               } else {
@@ -482,7 +501,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                       throw new Error(`apply_patch conflict: ${dest} was modified between verification and write`)
                     }
                     activeDirty = true
-                    await Filesystem.write(dest, change.newContent)
+                    await Filesystem.write(dest, change.newContent, change.sourceMode)
                     await finishMove(change.filePath, dest)
                   })
                 })

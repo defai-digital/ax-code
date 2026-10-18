@@ -412,6 +412,30 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test.skipIf(process.platform === "win32")("preserves the source mode when moving", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const original = path.join(fixture.path, "old", "run.sh")
+        await fs.mkdir(path.dirname(original), { recursive: true })
+        await writeAndTrack(original, "#!/bin/sh\necho old\n")
+        await fs.chmod(original, 0o755)
+        await FileTime.read(SESSION, original)
+
+        const patchText =
+          "*** Begin Patch\n*** Update File: old/run.sh\n*** Move to: renamed/run.sh\n@@\n-echo old\n+echo new\n*** End Patch"
+
+        await execute({ patchText }, ctx)
+
+        const moved = path.join(fixture.path, "renamed", "run.sh")
+        expect((await fs.stat(moved)).mode & 0o777).toBe(0o755)
+      },
+    })
+  })
+
   test("moves file overwriting existing destination", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
