@@ -277,6 +277,11 @@ export async function executeShellCommand(
   }
 
   function abortTimeoutHandler() {
+    // The timeout path arms this directly while the abort listener stays
+    // registered; without clearing the prior timer, an abort inside the
+    // grace window orphans it, keeping the event loop alive until its
+    // post-settlement no-op reject fires.
+    if (abortTimer) clearTimeout(abortTimer)
     abortTimer = setTimeout(() => {
       if (!exited) {
         rejectPromise?.(new Error(SHELL_ABORT_TIMEOUT))
