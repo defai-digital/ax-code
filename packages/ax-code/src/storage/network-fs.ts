@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { statfsSync } from "node:fs"
+import { realpathSync, statfsSync } from "node:fs"
 import path from "node:path"
 
 // ADR-210: WAL relies on a shared-memory `-shm` file that is unsafe over NFS
@@ -76,14 +76,41 @@ function isNetworkDarwin(target: string, deps: NetworkFilesystemDeps): boolean {
   const readMountTable = deps.readMountTable ?? readMountTableDefault
   const entries = parseDarwinMounts(readMountTable())
   const resolved = path.resolve(target)
+  // The mount table lists real paths, so a symlinked data directory (for
+  // example ~/ax-code -> /Volumes/share/ax-code) only matches after
+  // realpath-ing. Over-detecting a network filesystem is safe (it selects
+  // the rollback journal); missing one risks WAL corruption, so both
+  // spellings get a vote.
+  return [resolved, realpathExisting(resolved)]
+    .filter(Boolean)
+    .some((candidate) => darwinMountIsNetwork(candidate as string, entries))
+}
+
+function darwinMountIsNetwork(candidate: string, entries: { mountPoint: string; network: boolean }[]): boolean {
   // Longest matching mount point wins (a nested smbfs mount under a local
   // volume must not be answered by the local `/` entry).
   let match: { mountPoint: string; network: boolean } | undefined
   for (const entry of entries) {
-    if (!isMountPointPrefix(resolved, entry.mountPoint)) continue
+    if (!isMountPointPrefix(candidate, entry.mountPoint)) continue
     if (!match || entry.mountPoint.length > match.mountPoint.length) match = entry
   }
   return match?.network ?? false
+}
+
+// realpath the target, or its deepest existing ancestor when the database
+// file does not exist yet (a fresh install).
+function realpathExisting(target: string): string | undefined {
+  let current = target
+  for (let depth = 0; depth < STATFS_MAX_ANCESTORS; depth++) {
+    try {
+      return realpathSync(current)
+    } catch {
+      const parent = path.dirname(current)
+      if (parent === current) return undefined
+      current = parent
+    }
+  }
+  return undefined
 }
 
 function readMountTableDefault(): string {

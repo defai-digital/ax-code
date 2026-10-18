@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { isNetworkFilesystem } from "../../src/storage/network-fs"
+import { tmpdir } from "../fixture/fixture"
 import {
   describeDurableStoragePolicy,
   resolveSqliteJournalMode,
@@ -112,6 +115,23 @@ describe("isNetworkFilesystem (darwin)", () => {
     expect(
       isNetworkFilesystem("/Users/me/ax-code/ax-code.db", { platform: "darwin", readMountTable: () => table }),
     ).toBe(false)
+  })
+
+  test("follows a symlinked data directory onto a network mount", async () => {
+    await using tmp = await tmpdir()
+    const share = path.join(tmp.path, "volumes", "share")
+    await fs.mkdir(share, { recursive: true })
+    await fs.symlink(share, path.join(tmp.path, "ax-data"))
+    const mount = `//user@fileserver/share on ${share} (smbfs, nodev, noowners, nosuid, mounted by user)`
+
+    // The lexical path sits on the local root; only the realpath lands on the
+    // smbfs entry. Missing it would select WAL on a network volume.
+    expect(
+      isNetworkFilesystem(path.join(tmp.path, "ax-data", "ax-code.db"), {
+        platform: "darwin",
+        readMountTable: () => [DARWIN_LOCAL_ROOT, mount].join("\n"),
+      }),
+    ).toBe(true)
   })
 
   test("does not treat a sibling directory with a longer name as a match", () => {
