@@ -78,6 +78,25 @@ describe("classifyReadOnlyCommand", () => {
     }
   })
 
+  test("denies a time wrapper whose output flag writes a file", () => {
+    const denied: string[][] = [
+      ["command", "time", "-o", "/tmp/x", "ls"],
+      ["env", "time", "-o", "/tmp/x", "ls"],
+      ["time", "--output", "/tmp/x", "cat", "f"],
+      ["time", "--output=/tmp/x", "ls"],
+      ["command", "time", "-po", "/tmp/x", "ls"],
+    ]
+    for (const parts of denied) {
+      expect(classifyReadOnlyCommand(parts), parts.join(" ")).toContain("time")
+    }
+  })
+
+  test("allows a time wrapper without an output flag", () => {
+    expect(classifyReadOnlyCommand(["command", "time", "-p", "ls"])).toBeUndefined()
+    // A value-taking flag's argument is never mistaken for the output flag.
+    expect(classifyReadOnlyCommand(["time", "-f", "-o", "ls"])).toBeUndefined()
+  })
+
   test("denies write commands with specific reasons", () => {
     const cases: Array<[string[], RegExp]> = [
       [["sed", "-i", "", "s/a/b/", "file.txt"], /sed -i/],

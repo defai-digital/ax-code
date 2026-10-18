@@ -168,6 +168,63 @@ export function findWrappedCommand(parts: string[]): { name: string; args: strin
   return undefined
 }
 
+/**
+ * Walk the wrapper chain exactly like findWrappedCommand and report whether a
+ * `time` wrapper carries its output flag. GNU time -o/--output creates or
+ * truncates that file; resolving past the wrapper hides the write from the
+ * plan agent's read-only classifier because skipWrapperArguments discards the
+ * flag as a wrapper value.
+ */
+export function timeWrapperWritesFile(parts: string[]): boolean {
+  let commandParts = parts
+  let index = 0
+  while (index < commandParts.length) {
+    const part = commandParts[index]
+    if (part === undefined) return false
+    const name = baseCommandName(part)
+    if (name === "env") {
+      const expanded = expandEnvSplitString(commandParts, index + 1)
+      if (expanded) {
+        commandParts = expanded
+        continue
+      }
+    }
+    const wrapper = COMMAND_WRAPPERS.get(name)
+    if (!wrapper) return false
+    if (name === "time" && timeArgsWriteFile(commandParts, index + 1, wrapper)) return true
+    index = skipWrapperArguments(commandParts, index + 1, wrapper)
+    if (index < 0) return false
+  }
+  return false
+}
+
+// Scans one `time` wrapper's own flags for -o/--output. A flag that follows
+// a value-taking flag belongs to that flag's value (`-f -o`), so the scan
+// stops at the first value flag and consumption stays in lockstep with
+// parseWrapperOption.
+function timeArgsWriteFile(parts: string[], start: number, wrapper: WrapperSpec): boolean {
+  let index = start
+  while (index < parts.length) {
+    const candidate = parts[index]
+    if (candidate === undefined || candidate === "--" || !candidate.startsWith("-") || candidate === "-") {
+      return false
+    }
+    if (candidate.startsWith("--")) {
+      if (candidate === "--output" || candidate.startsWith("--output=")) return true
+    } else {
+      for (let offset = 1; offset < candidate.length; offset += 1) {
+        const flag = `-${candidate[offset]}`
+        if (flag === "-o") return true
+        if (wrapper.valueFlags.has(flag)) break
+      }
+    }
+    const option = parseWrapperOption(candidate, wrapper)
+    if (option.nonExecuting) return false
+    index += option.consumesNext ? 2 : 1
+  }
+  return false
+}
+
 function expandEnvSplitString(parts: string[], start: number): string[] | undefined {
   const wrapper = COMMAND_WRAPPERS.get("env")!
   let index = start

@@ -1,6 +1,11 @@
 import { evaluate } from "@/permission/evaluate"
 import { Wildcard } from "@/util/wildcard"
-import { classifyDestructiveCommand, findWrappedCommand, gitSubcommand } from "./bash-destructive"
+import {
+  classifyDestructiveCommand,
+  findWrappedCommand,
+  gitSubcommand,
+  timeWrapperWritesFile,
+} from "./bash-destructive"
 import { stripShellQuotes } from "./bash-helpers"
 
 /**
@@ -113,7 +118,12 @@ export function classifyReadOnlyCommand(parts: readonly string[]): string | unde
 
   let assignmentIndex = 0
   while (assignmentIndex < parts.length && ENV_ASSIGNMENT.test(parts[assignmentIndex] ?? "")) assignmentIndex++
-  const resolved = findWrappedCommand(parts.slice(assignmentIndex))
+  const command = parts.slice(assignmentIndex)
+  // GNU time -o/--output creates or truncates its output file. Wrapper
+  // resolution discards wrapper flags, so `command time -o /tmp/x ls` would
+  // otherwise resolve to `ls` and be allowlisted.
+  if (timeWrapperWritesFile(command)) return "time -o/--output writes its timing report to a file"
+  const resolved = findWrappedCommand(command)
   if (!resolved) return "the command could not be classified"
   const { name, args } = resolved
 
