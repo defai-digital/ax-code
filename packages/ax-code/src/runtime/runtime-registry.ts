@@ -120,7 +120,11 @@ export namespace RuntimeRegistry {
   }
 
   function processExists(record: Record) {
-    if (record.host !== os.hostname()) return true
+    // On a different host the recorded PID cannot be verified with kill(0):
+    // pretending the process exists wedges start/stop forever on a dead
+    // record (hostname rename, copied state directory). Treat the PID as
+    // unverifiable — the probe above is the only liveness authority.
+    if (record.host !== os.hostname()) return false
     try {
       process.kill(record.pid, 0)
       return true
