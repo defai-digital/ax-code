@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.27.4] - 2026-10-18
+
+### Changed
+
+- Upgrade ax-tui to 2.1.2 for terminal input, native resource cleanup, and rendering fixes.
+- Publish SDK 2.6.35 with the matching release metadata.
+
+### Fixed
+
+- Bound clipboard image helper execution and reject failed or non-PNG output before falling back to another backend or text.
+
 ## [7.27.3] - 2026-10-18
 
 ### Changed
