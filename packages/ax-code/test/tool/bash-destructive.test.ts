@@ -231,4 +231,61 @@ describe("classifyDestructiveCommand", () => {
       classifyDestructiveCommand(["curl", "-X", "POST", "http://169.254.169.254/latest/api/token"]),
     ).toBeUndefined()
   })
+
+  test("flags recursive rm targeting $HOME in any spelling", () => {
+    expect(classifyDestructiveCommand(["rm", "-r", "$HOME"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["rm", "-r", "${HOME}"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["rm", "-r", "${HOME}/"])).toBeTruthy()
+  })
+
+  test("flags git push refspec deletion and --mirror", () => {
+    expect(classifyDestructiveCommand(["git", "push", "origin", ":main"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["git", "push", "--mirror", "origin"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["git", "push", "origin", "refs/heads/main"])).toBeUndefined()
+  })
+
+  test("flags quoted identifiers in DROP/TRUNCATE and mongosh drops", () => {
+    expect(classifyDestructiveCommand(["psql", "-c", 'TRUNCATE "AuditLog"'])).toBeTruthy()
+    expect(classifyDestructiveCommand(["mysql", "-e", "DROP TABLE `users`"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["mongosh", "--eval", "db.users.drop()"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["mongosh", "--eval", "db.dropDatabase()"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["mongosh", "--eval", "db.users.find()"])).toBeUndefined()
+  })
+
+  test("flags systemctl halt subcommands but not status", () => {
+    expect(classifyDestructiveCommand(["systemctl", "poweroff"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["systemctl", "reboot"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["systemctl", "--machine", "dev", "halt"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["systemctl", "status", "sshd"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["systemctl", "restart", "sshd"])).toBeUndefined()
+  })
+
+  test("flags aws s3 sync --delete only", () => {
+    expect(classifyDestructiveCommand(["aws", "s3", "sync", "s3://bucket", "./local", "--delete"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["aws", "s3", "sync", "s3://bucket", "./local"])).toBeUndefined()
+  })
+
+  test("flags a bare commit hiding next to an excluded ssh phrase", () => {
+    expect(classifyDestructiveCommand(["ssh", "router", "configure; commit check; commit"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["ssh", "router", "commit", "now"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["ssh", "router", "commit confirmed 5"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["ssh", "router", "commit check"])).toBeUndefined()
+  })
+
+  test("flags curl data-flag variants and clustered -X against cloud hosts", () => {
+    expect(classifyDestructiveCommand(["curl", "--data-urlencode", "q=x", "https://api.cloudflare.com/x"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["curl", "--data-binary", "@f", "https://api.digitalocean.com/x"])).toBeTruthy()
+    expect(
+      classifyDestructiveCommand(["curl", "-sX", "DELETE", "https://api.digitalocean.com/v2/droplets/1"]),
+    ).toBeTruthy()
+    expect(
+      classifyDestructiveCommand(["curl", "-sXDELETE", "https://api.cloudflare.com/client/v4/zones/1"]),
+    ).toBeTruthy()
+    // Every URL in the argv is checked: a benign trailing URL must not hide a
+    // mutating request to a control-plane host.
+    expect(
+      classifyDestructiveCommand(["curl", "-X", "DELETE", "https://api.cloudflare.com/x", "https://example.com"]),
+    ).toBeTruthy()
+    expect(classifyDestructiveCommand(["curl", "--data-urlencode", "q=x", "https://example.com"])).toBeUndefined()
+  })
 })

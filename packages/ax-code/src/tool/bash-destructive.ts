@@ -119,7 +119,25 @@ const SQL_CLIENTS: ReadonlySet<string> = new Set([
 
 const SYSTEM_HALT_COMMANDS: ReadonlySet<string> = new Set(["shutdown", "reboot", "halt", "poweroff"])
 
-const DESTRUCTIVE_SQL_PATTERN = /\bdrop\s+(table|database|schema|index)\b|\btruncate\s+(table\b|[a-z_])/i
+// `systemctl poweroff|halt|reboot` is the canonical systemd spelling of the
+// halt operations above; gate it the same way.
+const SYSTEMCTL_HALT_SUBCOMMANDS: ReadonlySet<string> = new Set(["poweroff", "halt", "reboot"])
+const SYSTEMCTL_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  "-H",
+  "-M",
+  "-t",
+  "--host",
+  "--machine",
+  "--type",
+  "--state",
+  "--signal",
+])
+
+const DESTRUCTIVE_SQL_PATTERN = /\bdrop\s+(table|database|schema|index)\b|\btruncate\s+(?:table\b|["'`\[]?[a-z0-9_])/i
+
+// mongosh speaks JavaScript, not SQL: the destructive entry points are method
+// calls, which DESTRUCTIVE_SQL_PATTERN can never match.
+const MONGOSH_DROP_PATTERN = /\.(?:drop|dropDatabase|dropUser)\s*\(/
 
 function baseCommandName(raw: string): string {
   const stripped = raw.replace(/["']/g, "")
@@ -137,7 +155,15 @@ function hasLongFlag(args: string[], flag: string): boolean {
 
 function isRootishTarget(arg: string): boolean {
   const stripped = arg.replace(/["']/g, "")
-  return stripped === "/" || stripped === "/*" || stripped === "~" || stripped === "~/" || stripped === "$HOME"
+  return (
+    stripped === "/" ||
+    stripped === "/*" ||
+    stripped === "~" ||
+    stripped === "~/" ||
+    stripped === "$HOME" ||
+    stripped === "${HOME}" ||
+    stripped === "${HOME}/"
+  )
 }
 
 // Locates the first argv entry that is a real command, looking through
@@ -368,6 +394,15 @@ function classifyGit(args: string[]): string | undefined {
     if (rest.some((arg) => /^\+\S/.test(arg))) {
       return "git push with a +refspec force-updates the remote ref"
     }
+    // An empty-source refspec deletes the remote ref; --mirror force-updates
+    // every remote ref and deletes those absent locally. Both rewrite the
+    // remote exactly like the flagged forms above.
+    if (rest.some((arg) => /^:\S/.test(arg))) {
+      return "git push with a :refspec deletes the remote ref"
+    }
+    if (hasLongFlag(rest, "--mirror")) {
+      return "git push --mirror force-updates all remote refs"
+    }
     return undefined
   }
   if (subcommand === "reset" && hasLongFlag(rest, "--hard")) {
@@ -465,6 +500,11 @@ function classifyAws(args: string[]): string | undefined {
   if (service === "s3" && (verb === "rm" || verb === "rb")) {
     return `aws s3 ${verb} deletes objects or buckets`
   }
+  // sync --delete removes destination objects — the same destruction class as
+  // the flagged `s3 rm`.
+  if (service === "s3" && verb === "sync" && hasLongFlag(args, "--delete")) {
+    return "aws s3 sync --delete deletes destination objects"
+  }
   return undefined
 }
 
@@ -527,25 +567,49 @@ function classifyWrangler(args: string[]): string | undefined {
 }
 
 const SSH_COMMIT_PATTERN = /\bcommit\b/i
-const SSH_COMMIT_EXCLUSIONS = [/\bconfirmed\b/i, /\bcommit\s+check\b/i, /\bgit\s+commit\b/i]
+// Exclusions consume the whole safe phrase (including the word "commit"): the
+// caller strips them before testing, so an exclusion that removes only
+// "confirmed" would leave a bare "commit" behind and flag the safe form.
+const SSH_COMMIT_EXCLUSIONS = [/\bcommit\s+confirmed\b/i, /\bcommit\s+check\b/i, /\bgit\s+commit\b/i]
 
 function classifySsh(args: string[]): string | undefined {
-  // Choice: rather than modeling ssh's option grammar, we check the LAST
-  // non-flag argv token as the remote command string. Flag values (e.g. the
-  // `22` in `-p 22`) are ignored because they precede the remote command;
-  // remote commands with their own flags (`commit check`) are usually a
-  // single quoted argv token, and the exclusions still catch the rest.
-  // A bare `user@host` (or host) is the destination, not a remote command;
-  // a username such as `commit@…` must not read as a device commit.
-  const remoteCommand = [...args].reverse().find((arg) => !arg.startsWith("-") && !/^[^\s@]+@[^\s@]+$/.test(arg))
-  if (!remoteCommand) return undefined
-  if (!SSH_COMMIT_PATTERN.test(remoteCommand)) return undefined
-  if (SSH_COMMIT_EXCLUSIONS.some((pattern) => pattern.test(remoteCommand))) return undefined
-  return "ssh running a remote device 'commit' without commit-confirm"
+  // Choice: rather than modeling ssh's option grammar, check every non-flag
+  // argv token that is not a `user@host` destination. Flag values (e.g. the
+  // `22` in `-p 22`) are harmless here — none contain a word-bounded
+  // "commit". ssh joins ALL operands after the destination into one remote
+  // command, so examining only the last token lets `ssh router commit now`
+  // (Junos: an immediate unconfirmed commit) slip through unquoted.
+  const candidates = args.filter((arg) => !arg.startsWith("-") && !/^[^\s@]+@[^\s@]+$/.test(arg))
+  for (const candidate of candidates) {
+    // Exclusions are substrings, so strip them before testing: one benign
+    // phrase must not exempt a real bare `commit` elsewhere in the command
+    // ("configure; commit check; commit").
+    const stripped = SSH_COMMIT_EXCLUSIONS.reduce((text, pattern) => text.replace(pattern, ""), candidate)
+    if (SSH_COMMIT_PATTERN.test(stripped)) {
+      return "ssh running a remote device 'commit' without commit-confirm"
+    }
+  }
+  return undefined
 }
 
-const CURL_DATA_FLAGS: ReadonlySet<string> = new Set(["-d", "--data", "-F", "--form", "-T", "--upload-file"])
+const CURL_DATA_FLAGS: ReadonlySet<string> = new Set([
+  "-d",
+  "--data",
+  "--data-raw",
+  "--data-binary",
+  "--data-urlencode",
+  "--data-ascii",
+  "-F",
+  "--form",
+  "--form-string",
+  "-T",
+  "--upload-file",
+])
 const CURL_MUTATING_METHODS: ReadonlySet<string> = new Set(["POST", "PUT", "DELETE", "PATCH"])
+// curl short flags that take no value, so a cluster like `-sX DELETE` can be
+// walked letter by letter. Any other letter may take a value (`-d`, `-o`,
+// `-u`, ...), so the walk stops there to avoid reading a value as a flag.
+const CURL_BOOLEAN_SHORT_FLAGS: ReadonlySet<string> = new Set([..."svqSikILlnNG"])
 // Hosts of cloud control planes (plus instance-metadata endpoints). The
 // trailing `$` keeps the match on hostnames only: an IP literal such as
 // 169.254.169.254 never matches, so metadata-token fetches against a
@@ -558,17 +622,32 @@ function classifyCurl(args: string[]): string | undefined {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (arg === undefined) break
-    if (arg === "-X" || arg === "--request") {
+    if (arg === "--request") {
       method = args[index + 1]
       index += 1
       continue
     }
-    if (arg.startsWith("-X") && arg.length > 2) {
-      method = arg.slice(2)
-      continue
-    }
     if (arg.startsWith("--request=")) {
       method = arg.slice("--request=".length)
+      continue
+    }
+    if (arg.startsWith("--") || !arg.startsWith("-") || arg === "-") continue
+    // Short-option cluster: curl allows `-sX DELETE`. Walk known boolean
+    // letters until `X` (its value is the rest of the cluster, or the next
+    // token when empty) or a possibly value-taking letter (stop there).
+    for (let offset = 1; offset < arg.length; offset += 1) {
+      const letter = arg[offset]
+      if (letter === "X") {
+        const remainder = arg.slice(offset + 1)
+        if (remainder) {
+          method = remainder
+        } else {
+          method = args[index + 1]
+          index += 1
+        }
+        break
+      }
+      if (!CURL_BOOLEAN_SHORT_FLAGS.has(letter)) break
     }
   }
   if (!method) {
@@ -583,16 +662,20 @@ function classifyCurl(args: string[]): string | undefined {
   }
   const methodName = method.toUpperCase()
   if (!CURL_MUTATING_METHODS.has(methodName)) return undefined
-  const url = [...args].reverse().find((arg) => /^https?:\/\//i.test(arg))
-  if (!url) return undefined
-  let host: string
-  try {
-    host = new URL(url).hostname
-  } catch {
-    return undefined
-  }
-  if (CURL_CLOUD_HOST_PATTERN.test(host)) {
-    return `curl ${methodName} against a cloud control-plane host mutates remote resources`
+  // A single invocation can carry several URLs (curl fetches them in order);
+  // checking only the last one lets a benign trailing URL hide a mutating
+  // request to a control-plane host earlier in the argv.
+  for (const arg of args) {
+    if (!/^https?:\/\//i.test(arg)) continue
+    let host: string
+    try {
+      host = new URL(arg).hostname
+    } catch {
+      continue
+    }
+    if (CURL_CLOUD_HOST_PATTERN.test(host)) {
+      return `curl ${methodName} against a cloud control-plane host mutates remote resources`
+    }
   }
   return undefined
 }
@@ -632,9 +715,19 @@ export function classifyDestructiveCommand(parts: string[]): string | undefined 
     return "dd writing directly to a block device"
   }
   if (SYSTEM_HALT_COMMANDS.has(name)) return `${name} halts or restarts the machine`
+  if (name === "systemctl") {
+    const positionals = skipValueFlagArgs(args, SYSTEMCTL_VALUE_FLAGS)
+    const sub = positionals[0]?.toLowerCase()
+    if (sub !== undefined && SYSTEMCTL_HALT_SUBCOMMANDS.has(sub)) {
+      return `systemctl ${sub} halts or restarts the machine`
+    }
+  }
 
   if (SQL_CLIENTS.has(name) && args.some((arg) => DESTRUCTIVE_SQL_PATTERN.test(arg))) {
     return "database client executing DROP/TRUNCATE"
+  }
+  if (name === "mongosh" && args.some((arg) => MONGOSH_DROP_PATTERN.test(arg))) {
+    return "mongosh dropping a collection or database"
   }
 
   if (name === "terraform") {
