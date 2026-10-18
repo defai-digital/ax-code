@@ -30,7 +30,14 @@ export function createPromptRunState() {
     async (current) => {
       for (const [sessionID, item] of Object.entries(current)) {
         SessionSteering.finish(sessionID as SessionID)
+        // Mirror cancel(): queued callers must be rejected, not left pending
+        // forever when the instance goes away without an explicit cancel.
+        const callbacks = item.callbacks.slice()
+        item.callbacks.length = 0
         item.abort.abort()
+        for (const cb of callbacks) {
+          cb.reject(new Error("Session ended"))
+        }
       }
     },
   )
