@@ -182,12 +182,15 @@ async function writeViaProcessStdin(proc: ProcWithStdin, text: string) {
   await waitForExit(proc)
 }
 
+function isPng(buffer: Uint8Array): boolean {
+  return buffer.length >= PNG_SIGNATURE.length && PNG_SIGNATURE.every((byte, index) => buffer[index] === byte)
+}
+
 export function decodePngClipboardBase64(value: string): Buffer | undefined {
   const normalized = value.replace(/\s+/g, "")
   if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return undefined
   const imageBuffer = Buffer.from(normalized, "base64")
-  if (imageBuffer.length < PNG_SIGNATURE.length) return undefined
-  if (!PNG_SIGNATURE.every((byte, index) => imageBuffer[index] === byte)) return undefined
+  if (!isPng(imageBuffer)) return undefined
   return imageBuffer
 }
 
@@ -206,7 +209,7 @@ export namespace Clipboard {
       // shared path and mix each other's clipboard contents.
       const tmpfile = path.join(tmpdir(), `ax-code-clipboard-${process.pid}-${randomBytes(4).toString("hex")}.png`)
       try {
-        await Process.run(
+        const image = await Process.run(
           [
             "osascript",
             "-e",
@@ -220,10 +223,12 @@ export namespace Clipboard {
             "-e",
             "close access fileRef",
           ],
-          { nothrow: true },
+          { nothrow: true, timeout: CLIPBOARD_PROC_TIMEOUT_MS },
         )
-        const buffer = await Filesystem.readBytes(tmpfile)
-        return { data: buffer.toString("base64"), mime: "image/png" }
+        if (image.code === 0) {
+          const buffer = await Filesystem.readBytes(tmpfile)
+          if (isPng(buffer)) return { data: buffer.toString("base64"), mime: "image/png" }
+        }
       } catch (error) {
         log.debug("macOS clipboard image read failed", { error })
       } finally {
@@ -238,22 +243,27 @@ export namespace Clipboard {
         "Add-Type -AssemblyName System.Windows.Forms; $img = [System.Windows.Forms.Clipboard]::GetImage(); if ($img) { $ms = New-Object System.IO.MemoryStream; $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); [System.Convert]::ToBase64String($ms.ToArray()) }"
       const base64 = await Process.text(["powershell.exe", "-NonInteractive", "-NoProfile", "-command", script], {
         nothrow: true,
+        timeout: CLIPBOARD_PROC_TIMEOUT_MS,
       })
-      if (base64.text) {
+      if (base64.code === 0 && base64.text) {
         const imageBuffer = decodePngClipboardBase64(base64.text)
         if (imageBuffer) return { data: imageBuffer.toString("base64"), mime: "image/png" }
       }
     }
 
     if (os === "linux") {
-      const wayland = await Process.run(["wl-paste", "-t", "image/png"], { nothrow: true })
-      if (wayland.stdout.byteLength > 0) {
+      const wayland = await Process.run(["wl-paste", "-t", "image/png"], {
+        nothrow: true,
+        timeout: CLIPBOARD_PROC_TIMEOUT_MS,
+      })
+      if (wayland.code === 0 && isPng(wayland.stdout)) {
         return { data: Buffer.from(wayland.stdout).toString("base64"), mime: "image/png" }
       }
       const x11 = await Process.run(["xclip", "-selection", "clipboard", "-t", "image/png", "-o"], {
         nothrow: true,
+        timeout: CLIPBOARD_PROC_TIMEOUT_MS,
       })
-      if (x11.stdout.byteLength > 0) {
+      if (x11.code === 0 && isPng(x11.stdout)) {
         return { data: Buffer.from(x11.stdout).toString("base64"), mime: "image/png" }
       }
     }
