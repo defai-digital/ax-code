@@ -3,6 +3,12 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { createStructuredOutputTool, createStructuredOutputTurn } from "../../src/session/prompt/prompt-helpers"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
+import { LLM } from "../../src/session/llm"
+import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
+import { ModelID, ProviderID } from "../../src/provider/schema"
+import { tmpdir } from "../fixture/fixture"
 
 describe("structured-output.OutputFormat", () => {
   test("parses text format", () => {
@@ -456,5 +462,107 @@ describe("structured-output.createStructuredOutputTurn", () => {
     } finally {
       update.mockRestore()
     }
+  })
+})
+
+describe("structured-output.loop retry", () => {
+  function fixtureModel(): Provider.Model {
+    return {
+      id: ModelID.make("structured-fixture"),
+      providerID: ProviderID.make("structured-gateway"),
+      name: "Structured fixture",
+      family: "structured-fixture",
+      api: { id: "structured-fixture", url: "http://127.0.0.1:1/v1", npm: "@ai-sdk/openai-compatible" },
+      capabilities: {
+        temperature: true,
+        reasoning: false,
+        attachment: false,
+        toolcall: true,
+        input: { text: true, audio: false, image: false, video: false, pdf: false },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: false,
+      },
+      limit: { context: 65536, output: 8192 },
+      status: "active",
+      options: {},
+      headers: {},
+      release_date: "2026-09-19",
+    }
+  }
+
+  test("retries a turn that ends without calling StructuredOutput", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = fixtureModel()
+        vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+        const requests: LLM.StreamInput[] = []
+        vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+          requests.push(input)
+          const first = requests.length === 1
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              if (first) {
+                yield { type: "text-start", id: "text_1" }
+                yield { type: "text-delta", id: "text_1", text: "plain answer" }
+                yield { type: "text-end", id: "text_1" }
+                yield {
+                  type: "finish-step",
+                  finishReason: "stop",
+                  usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+                }
+              } else {
+                const toolInput = { answer: 4 }
+                const structured = input.tools["StructuredOutput"]
+                if (!structured) throw new Error("StructuredOutput tool missing from the request")
+                const output = await structured.execute!(toolInput, {
+                  toolCallId: "call_1",
+                  messages: input.messages,
+                })
+                yield { type: "tool-input-start", id: "call_1", toolName: "StructuredOutput" }
+                yield { type: "tool-call", toolCallId: "call_1", toolName: "StructuredOutput", input: toolInput }
+                yield { type: "tool-result", toolCallId: "call_1", input: toolInput, output }
+                yield {
+                  type: "finish-step",
+                  finishReason: "tool-calls",
+                  usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+                }
+              }
+              yield { type: "finish" }
+            })(),
+          } as unknown as LLM.StreamOutput
+        })
+
+        const session = await Session.create({ title: "Structured retry regression" })
+        const result = await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          model: { providerID: model.providerID, modelID: model.id },
+          parts: [{ type: "text", text: "What is 2 + 2?" }],
+          format: {
+            type: "json_schema",
+            schema: { type: "object", properties: { answer: { type: "number" } }, required: ["answer"] },
+            retryCount: 2,
+          },
+        })
+
+        // First turn missed the tool; the loop nudged once and captured it.
+        expect(requests.length).toBe(2)
+        expect(result.info.role).toBe("assistant")
+        if (result.info.role === "assistant") {
+          expect(result.info.structured).toEqual({ answer: 4 })
+          expect(result.info.error).toBeUndefined()
+        }
+        const messages = await Session.messages({ sessionID: session.id })
+        expect(
+          messages.some((message) =>
+            message.parts.some((part) => part.type === "text" && part.text.includes("Structured output recovery")),
+          ),
+        ).toBe(true)
+      },
+    })
   })
 })

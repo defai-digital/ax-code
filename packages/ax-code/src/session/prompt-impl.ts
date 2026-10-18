@@ -62,7 +62,7 @@ import { handlePromptLoopGlobalStepLimit } from "./prompt/prompt-loop-step-limit
 import { handlePromptLoopTotalStepLimit } from "./prompt/prompt-loop-total-step-limit"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt/prompt-request-build"
 import type { MediaProjection } from "./media-projection"
-import { createStructuredOutputTurn } from "./prompt/prompt-structured-output"
+import { createStructuredOutputTurn, STRUCTURED_OUTPUT_RECOVERY } from "./prompt/prompt-structured-output"
 import { publishPromptFailure, createSyntheticFailureAssistant } from "./prompt/prompt-loop-failure"
 import { executeSubtask } from "./prompt/prompt-subtask"
 import { resolveTools, shouldBypassAgentCheck } from "./prompt/prompt-tools"
@@ -524,7 +524,12 @@ export namespace SessionPrompt {
       emptyTurn: 0,
       truncatedTurn: 0,
       unexecutableToolText: 0,
+      structuredOutput: 0,
     }
+    // OutputFormat.retryCount (default 2) promises server-side retries when
+    // the model ends a turn without calling StructuredOutput. The format is
+    // read from the prepared request because loop() joins by sessionID.
+    let structuredOutputRetryBudget: number | undefined
     let previousTruncatedModelOutputPrefix: string | undefined
     // Consecutive no-progress tool-calling turns (repeated read-only
     // signatures). Incremented only when the turn is inspection-only and
@@ -1398,6 +1403,7 @@ export namespace SessionPrompt {
       using _ = defer(() => clearPromptProcessorInstructions(processor))
 
       const structuredOutput = createStructuredOutputTurn(request.format)
+      structuredOutputRetryBudget ??= request.format.type === "json_schema" ? request.format.retryCount : 0
 
       // Consume the one-shot forced-text-only turn (see the
       // toolOnlyFinalCheckpointHits/forceTextOnlyTurn declarations above) —
@@ -1657,7 +1663,7 @@ export namespace SessionPrompt {
       if (budgetWrapUpRequest) {
         const missingStructuredOutput =
           !structuredOutputCaptured && modelFinished && !processor.message.error
-            ? await structuredOutput.failIfMissing(processor.message)
+            ? await structuredOutput.failIfMissing(processor.message, retries.structuredOutput)
             : false
         if (missingStructuredOutput || processor.message.error) {
           reason = "error"
@@ -1710,8 +1716,23 @@ export namespace SessionPrompt {
         reason = "completed"
         break
       }
-      if (modelFinished && !processor.message.error) {
-        if (await structuredOutput.failIfMissing(processor.message)) {
+      if (modelFinished && !processor.message.error && structuredOutput.isMissing()) {
+        // Nudge the model toward StructuredOutput while the configured
+        // retry budget lasts; fail with the consumed count only after it is
+        // exhausted.
+        if (retries.structuredOutput < (structuredOutputRetryBudget ?? 0)) {
+          retries.structuredOutput += 1
+          log.warn("structured output recovery", {
+            command: "session.prompt.loop",
+            status: "retry",
+            sessionID,
+            messageID: processor.message.id,
+            attempt: retries.structuredOutput,
+          })
+          await createAutonomousTextContinuation({ sessionID, messages: msgs, text: STRUCTURED_OUTPUT_RECOVERY })
+          continue
+        }
+        if (await structuredOutput.failIfMissing(processor.message, retries.structuredOutput)) {
           reason = "error"
           break
         }

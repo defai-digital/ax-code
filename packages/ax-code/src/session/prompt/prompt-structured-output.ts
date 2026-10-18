@@ -37,11 +37,17 @@ export function createStructuredOutputTool(input: {
   })
 }
 
+export const STRUCTURED_OUTPUT_RECOVERY =
+  "Structured output recovery: the previous turn ended without calling the StructuredOutput tool. " +
+  "Call StructuredOutput exactly once now with the final result as JSON matching the required schema. " +
+  "Plain text or markup is not a substitute for the tool call."
+
 export function createStructuredOutputTurn(format: MessageV2.OutputFormat): {
   toolChoice?: "required"
   attachTool(tools: Record<string, AITool>): void
   saveCaptured(assistant: MessageV2.Assistant): Promise<boolean>
-  failIfMissing(assistant: MessageV2.Assistant): Promise<boolean>
+  isMissing(): boolean
+  failIfMissing(assistant: MessageV2.Assistant, retriesUsed?: number): Promise<boolean>
 } {
   let captured: unknown
   const required = format.type === "json_schema"
@@ -63,11 +69,14 @@ export function createStructuredOutputTurn(format: MessageV2.OutputFormat): {
       await Session.updateMessage(assistant)
       return true
     },
-    async failIfMissing(assistant) {
+    isMissing() {
+      return required && captured === undefined
+    },
+    async failIfMissing(assistant, retriesUsed = 0) {
       if (!required) return false
       assistant.error = new MessageV2.StructuredOutputError({
         message: "Model did not produce structured output",
-        retries: 0,
+        retries: retriesUsed,
       }).toObject()
       await Session.updateMessage(assistant)
       return true
