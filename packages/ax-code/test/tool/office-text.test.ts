@@ -161,7 +161,7 @@ describe("Office ZIP streaming and comments", () => {
     expect(result.text).toContain("Streamed content")
   })
 
-  test("ignores an EOCD signature embedded in a valid archive comment", async () => {
+  test.each([false, true])("ignores a fake EOCD in an archive comment (self-consistent: %s)", async (complete) => {
     await using tmp = await tmpdir()
     const file = path.join(tmp.path, "comment.docx")
     const archive = buildZip([
@@ -170,7 +170,7 @@ describe("Office ZIP streaming and comments", () => {
         data: Buffer.from("<w:document><w:p><w:r><w:t>Commented content</w:t></w:r></w:p></w:document>"),
       },
     ])
-    const comment = Buffer.alloc(30, 65)
+    const comment = Buffer.alloc(complete ? 22 : 30, complete ? 0 : 65)
     comment.writeUInt32LE(0x06054b50, 0)
     archive.writeUInt16LE(comment.length, archive.length - 2)
     await writeFile(file, Buffer.concat([archive, comment]))

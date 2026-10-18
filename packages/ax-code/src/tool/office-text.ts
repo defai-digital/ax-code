@@ -72,7 +72,10 @@ function findEocd(buf: Buffer): number {
   const max = Math.min(buf.length, 0xffff + 22)
   for (let i = buf.length - 22; i >= buf.length - max; i--) {
     if (i < 0) break
-    if (readU32(buf, i) === SIG_EOCD && i + 22 + readU16(buf, i + 20) === buf.length) return i
+    if (readU32(buf, i) !== SIG_EOCD || i + 22 + readU16(buf, i + 20) !== buf.length) continue
+    // A comment can contain a complete-looking EOCD too. Its directory must
+    // actually end at this record, not at the earlier real record.
+    if (readU32(buf, i + 16) + readU32(buf, i + 12) === i) return i
   }
   return -1
 }
