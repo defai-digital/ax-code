@@ -911,6 +911,8 @@ export namespace Snapshot {
   }
 
   export async function track() {
+    // A disabled snapshot must not create even the operation-lock directory.
+    if (!(await enabled())) return
     const current = await state()
     return withOperationLock(current, async () => {
       if (!(await enabled())) return
