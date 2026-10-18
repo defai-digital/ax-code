@@ -123,6 +123,9 @@ function isMountPointPrefix(target: string, mountPoint: string): boolean {
 function isUncPath(target: string): boolean {
   const normalized = target.replace(/\//g, "\\")
   if (normalized.startsWith("\\\\?\\UNC\\")) return true
+  // Other \\?\ forms are local: a drive-letter or Volume-GUID long path is
+  // on the same disk as its bare spelling, and \\.\ is the device namespace.
+  if (normalized.startsWith("\\\\?\\")) return false
   if (!normalized.startsWith("\\\\")) return false
   const rest = normalized.slice(2)
   if (rest.startsWith(".")) return false // \\.\ device namespace is local
