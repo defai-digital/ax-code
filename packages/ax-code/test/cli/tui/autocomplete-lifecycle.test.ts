@@ -127,8 +127,8 @@ function mount(options: { nativeEditor?: boolean } = {}) {
     type: (text: string, cursorOffset = text.length) => {
       buffer = text
       mocked.editor = { text, cursor: cursorOffset }
-      setValue(text)
       input.cursorOffset = cursorOffset
+      setValue(text)
       ref.onInput(text)
     },
     move: (name: "up" | "down") => ref.onKeyDown({ name, preventDefault: vi.fn() } as unknown as KeyEvent),
@@ -190,6 +190,23 @@ describe("autocomplete anchor lifecycle", () => {
     mocked.files = async () => ({ data: ["src/index.ts"] })
     fixture.type("@", 1)
     await vi.waitFor(() => expect(Locale.truncateMiddle).toHaveBeenCalledWith("src/index.ts", 76))
+  })
+
+  test("resets selection when asynchronous file results replace a longer list", async () => {
+    mocked.files = async () => ({ data: ["src/one.ts", "src/two.ts", "src/three.ts"] })
+    const fixture = mount({ nativeEditor: true })
+    fixture.attachAnchor()
+    fixture.type("@src")
+    await vi.waitFor(() => expect(Locale.truncateMiddle).toHaveBeenCalledWith("src/three.ts", 76))
+    const pending = Promise.withResolvers<{ data: string[] }>()
+    mocked.files = () => pending.promise
+    fixture.type("@src/")
+    fixture.move("down")
+    fixture.move("down")
+    pending.resolve({ data: ["src/fresh.ts"] })
+    await vi.waitFor(() => expect(Locale.truncateMiddle).toHaveBeenCalledWith("src/fresh.ts", 76))
+    fixture.ref().onKeyDown({ name: "return", preventDefault: vi.fn() } as unknown as KeyEvent)
+    expect(axTui.applyEditorAutocomplete).toHaveBeenCalledTimes(1)
   })
 
   test("uses display offsets when checking the character after the cursor", () => {

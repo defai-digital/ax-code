@@ -438,6 +438,64 @@ try {
   pickedCompletion.resolve()
   dialog.clear()
   await setup.flush()
+  for (const length of [4, 120]) {
+    let boundaryPicked = -1
+    const boundaryOptions = Array.from({ length }, (_, value) => ({
+      value,
+      title: `Boundary ${value}`,
+      disabled: value === 0 || value === length - 1,
+    }))
+    dialog.replace(() => (
+      <DialogSelect
+        title="Disabled boundary picker"
+        options={boundaryOptions}
+        onSelect={(option) => {
+          boundaryPicked = option.value
+        }}
+      />
+    ))
+    await setup.flush()
+    setup.mockInput.pressKey("END")
+    await setup.flush()
+    setup.mockInput.pressKey("RETURN")
+    await setup.flush()
+    assert.equal(boundaryPicked, length - 2, `End must select the last enabled option in a ${length}-row picker`)
+    setup.mockInput.pressKey("HOME")
+    await setup.flush()
+    setup.mockInput.pressKey("RETURN")
+    await setup.flush()
+    assert.equal(boundaryPicked, 1, "Home must select the first enabled option")
+    dialog.clear()
+    await setup.flush()
+  }
+  const [delayedOptions, setDelayedOptions] = createSignal<{ title: string; value: number }[]>([])
+  let delayedPicked = -1
+  dialog.replace(() => (
+    <DialogSelect
+      title="Delayed current value"
+      current={2}
+      options={delayedOptions()}
+      onSelect={(option) => {
+        delayedPicked = option.value
+      }}
+    />
+  ))
+  await setup.flush()
+  setDelayedOptions(Array.from({ length: 4 }, (_, value) => ({ title: `Loaded ${value}`, value })))
+  await setup.flush()
+  await new Promise((resolve) => setTimeout(resolve, 160))
+  setup.mockInput.pressKey("RETURN")
+  await setup.flush()
+  assert.equal(delayedPicked, 2, "options loaded after mount must select the current value")
+  setup.mockInput.pressKey("ARROW_DOWN")
+  await setup.flush()
+  setDelayedOptions((options) => options.map((option) => ({ ...option, title: `${option.title}!` })))
+  await setup.flush()
+  setup.mockInput.pressKey("RETURN")
+  await setup.flush()
+  assert.equal(delayedPicked, 3, "unrelated option updates must preserve manual navigation")
+  dialog.clear()
+  await setup.flush()
   const options = Array.from({ length: 5000 }, (_, index) => ({
     value: `entry-${index}`,
     title: `Entry ${String(index).padStart(5, "0")}`,
