@@ -3,7 +3,7 @@ import { setTimeout as delay } from "node:timers/promises"
 import { BrowserScenario } from "./scenario"
 import { WebMcpProfile } from "../mcp/webmcp-profile"
 import { isRecord } from "../util/record"
-import { parseJsonPayload } from "../util/json-value"
+import { parseJsonPayload, parseJsonResult } from "../util/json-value"
 
 export namespace BrowserRunner {
   const issued = new WeakMap<object, string>()
@@ -83,12 +83,23 @@ export namespace BrowserRunner {
       typeof value.structuredContent.message === "string" ? value.structuredContent.message : undefined,
     )
     if (!isRecord(completion) || completion.status !== "Completed") return undefined
-    return typeof completion.output === "string"
-      ? (parseJsonPayload(completion.output) ?? completion.output)
-      : completion.output
+    if (typeof completion.output !== "string") return completion.output
+    // A successful parse of "null" must stay null; the discriminated result
+    // keeps it distinct from a parse failure falling back to the raw string.
+    const parsed = parseJsonResult(completion.output)
+    return parsed.ok ? parsed.value : completion.output
   }
   export function at(value: unknown, path: string[]): unknown {
     for (const key of path) {
+      // Arrays are valid path containers alongside records: a contract may
+      // select items[0].id from a JSON array. Own-property/index presence
+      // still gates every hop.
+      if (Array.isArray(value)) {
+        const index = Number(key)
+        if (!Number.isInteger(index) || index < 0 || index >= value.length) return undefined
+        value = value[index]
+        continue
+      }
       if (!isRecord(value) || !Object.hasOwn(value, key)) return undefined
       value = value[key]
     }

@@ -480,3 +480,26 @@ describe("frozen browser scenarios", () => {
     expect(port.calls).toContain("stop")
   })
 })
+
+describe("BrowserRunner output extraction", () => {
+  test("keeps a parsed JSON null instead of the literal string", () => {
+    const value = {
+      structuredContent: { message: JSON.stringify({ status: "Completed", output: "null" }) },
+    }
+    expect(BrowserRunner.output(value)).toBeNull()
+  })
+
+  test("falls back to the raw string when the output is not JSON", () => {
+    const value = {
+      structuredContent: { message: JSON.stringify({ status: "Completed", output: "plain text" }) },
+    }
+    expect(BrowserRunner.output(value)).toBe("plain text")
+  })
+
+  test("traverses array entries in result paths", () => {
+    const payload = { items: [{ id: 1 }] }
+    expect(BrowserRunner.at(payload, ["items", "0", "id"])).toBe(1)
+    expect(BrowserRunner.at(payload, ["items", "5", "id"])).toBeUndefined()
+    expect(BrowserRunner.at(payload, ["items", "x", "id"])).toBeUndefined()
+  })
+})
