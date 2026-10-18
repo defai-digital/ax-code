@@ -42,7 +42,7 @@ export namespace QualityReentryRemediation {
   const decode = QualityStorageKey.decode
 
   function key(source: string, contextID: string, remediationID: string) {
-    return ["quality_model_reentry_remediation", encode(source), contextID, remediationID]
+    return ["quality_model_reentry_remediation", encode(source), encode(contextID), encode(remediationID)]
   }
 
   function sort(remediations: RemediationArtifact[]) {
@@ -109,7 +109,7 @@ export namespace QualityReentryRemediation {
 
     const prefix = input?.source
       ? input.contextID
-        ? ["quality_model_reentry_remediation", encode(input.source), input.contextID]
+        ? ["quality_model_reentry_remediation", encode(input.source), encode(input.contextID)]
         : ["quality_model_reentry_remediation", encode(input.source)]
       : ["quality_model_reentry_remediation"]
 
@@ -117,11 +117,13 @@ export namespace QualityReentryRemediation {
     const keys = await Storage.list(prefix)
     for (const parts of keys) {
       const encodedSource = parts[parts.length - 3]
-      const contextID = parts[parts.length - 2]
-      const remediationID = parts[parts.length - 1]
-      if (!encodedSource || !contextID || !remediationID) continue
+      const encodedContextID = parts[parts.length - 2]
+      const encodedRemediationID = parts[parts.length - 1]
+      if (!encodedSource || !encodedContextID || !encodedRemediationID) continue
       const source = decode(encodedSource)
-      if (!source) continue
+      const contextID = decode(encodedContextID)
+      const remediationID = decode(encodedRemediationID)
+      if (!source || !contextID || !remediationID) continue
       const record = await get({ source, contextID, remediationID })
       remediations.push(record.remediation)
     }

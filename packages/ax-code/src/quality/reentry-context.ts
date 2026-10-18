@@ -86,7 +86,7 @@ export namespace QualityReentryContext {
   const decode = QualityStorageKey.decode
 
   function key(source: string, contextID: string) {
-    return ["quality_model_reentry_context", encode(source), contextID]
+    return ["quality_model_reentry_context", encode(source), encode(contextID)]
   }
 
   function sort(contexts: ContextArtifact[]) {
@@ -156,10 +156,11 @@ export namespace QualityReentryContext {
       const keys = await Storage.list(prefix)
       for (const parts of keys) {
         const encodedSource = parts[parts.length - 2]
-        const contextID = parts[parts.length - 1]
-        if (!encodedSource || !contextID) continue
+        const encodedContextID = parts[parts.length - 1]
+        if (!encodedSource || !encodedContextID) continue
         const source = decode(encodedSource)
-        if (!source) continue
+        const contextID = decode(encodedContextID)
+        if (!source || !contextID) continue
         const record = await get({ source, contextID })
         contexts.push(record.context)
       }
