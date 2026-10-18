@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createRoot, createSignal } from "solid-js"
+import * as axTui from "ax-tui"
 import type { BoxRenderable, KeyEvent, TextareaRenderable } from "ax-tui"
 import { Autocomplete, type AutocompleteRef } from "../../../src/cli/tui/component/prompt/autocomplete"
 import { Locale } from "../../../src/util/locale"
@@ -27,8 +28,17 @@ const mocked = vi.hoisted(() => ({
   dimensions: () => ({ width: 120, height: 40 }),
   files: async () => ({ data: [] as string[] }),
   agents: [] as { name: string; tier?: string }[],
+  editor: { text: "", cursor: 0 },
 }))
 vi.mock("ax-tui/solid", () => ({ useTerminalDimensions: () => () => mocked.dimensions() }))
+vi.mock("ax-tui", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ax-tui")>()
+  return {
+    ...actual,
+    getEditorAutocompleteRequest: () => ({ text: mocked.editor.text, cursor: mocked.editor.cursor }),
+    applyEditorAutocomplete: vi.fn(() => true),
+  }
+})
 vi.mock("@tui/context/language", () => ({ useLanguage: () => ({ t: (key: string) => key }) }))
 vi.mock("@tui/context/theme", () => ({ useTheme: () => ({ theme: {} }) }))
 vi.mock("@tui/context/kv", () => ({ useKV: () => ({ get: () => false }) }))
@@ -56,6 +66,8 @@ beforeEach(() => {
   vi.spyOn(Locale, "truncateMiddle")
   mocked.files = async () => ({ data: [] })
   mocked.agents = []
+  mocked.editor = { text: "", cursor: 0 }
+  vi.mocked(axTui.applyEditorAutocomplete).mockClear()
 })
 afterEach(() => {
   for (const dispose of disposals.splice(0).reverse()) dispose()
@@ -63,7 +75,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount() {
+function mount(options: { nativeEditor?: boolean } = {}) {
   let anchor: BoxRenderable
   let ref: AutocompleteRef
   let buffer = ""
@@ -83,6 +95,7 @@ function mount() {
     insertText: vi.fn(),
     extmarks: { create: vi.fn(() => 1) },
   }
+  if (options.nativeEditor) Object.setPrototypeOf(input, axTui.TextareaRenderable.prototype)
   const readAnchor = vi.fn(() => anchor)
   const [dimensions, setDimensions] = createSignal({ width: 120, height: 40 })
   const [value, setValue] = createSignal("")
@@ -113,6 +126,7 @@ function mount() {
     },
     type: (text: string, cursorOffset = text.length) => {
       buffer = text
+      mocked.editor = { text, cursor: cursorOffset }
       setValue(text)
       input.cursorOffset = cursorOffset
       ref.onInput(text)
@@ -186,5 +200,17 @@ describe("autocomplete anchor lifecycle", () => {
     expect(fixture.ref().visible).toBe("@")
     fixture.ref().onKeyDown({ name: "return", preventDefault: vi.fn() } as unknown as KeyEvent)
     expect(fixture.input.insertText).toHaveBeenCalledWith("@helper")
+  })
+
+  test("uses the native completion adapter when the editor is a TextareaRenderable", async () => {
+    mocked.files = async () => ({ data: ["src/index.ts"] })
+    const fixture = mount({ nativeEditor: true })
+    fixture.attachAnchor()
+    fixture.type("@", 1)
+    await vi.waitFor(() => expect(Locale.truncateMiddle).toHaveBeenCalledWith("src/index.ts", 76))
+    fixture.ref().onKeyDown({ name: "return", preventDefault: vi.fn() } as unknown as KeyEvent)
+    expect(axTui.applyEditorAutocomplete).toHaveBeenCalledTimes(1)
+    expect(fixture.input.deleteRange).not.toHaveBeenCalled()
+    expect(fixture.input.insertText).not.toHaveBeenCalled()
   })
 })

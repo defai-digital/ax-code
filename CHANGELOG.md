@@ -13,6 +13,10 @@ changes belong to AX Coder.
 - Do not report a stray `.git` directory or unrelated file as a Git repository in `doctor`.
 - Treat `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` as a failed Git inventory in Wiki discovery instead of walking gitignored files.
 
+### Changed
+
+- Upgrade ax-tui to 1.1.0, apply prompt mentions through its undo-preserving completion adapter, and render the context menu as a positioned non-capturing overlay.
+
 ## [7.27.0] - 2026-10-17
 
 ### Fixed

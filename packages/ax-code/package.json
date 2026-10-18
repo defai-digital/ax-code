@@ -27,6 +27,7 @@
     "check:webmcp-allowlist": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-webmcp-allowlist-render.tsx",
     "check:tui-layering": "tsx script/check-tui-layering.ts",
     "check:fixed-context-dialog": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-fixed-context-dialog.tsx",
+    "check:context-menu": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-context-menu-overlay.tsx",
     "check:prompt-footer": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-prompt-footer-render.tsx",
     "check:transcript-code-render": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-transcript-code-render.tsx",
     "check:transcript-frame-time": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-transcript-frame-time.tsx",

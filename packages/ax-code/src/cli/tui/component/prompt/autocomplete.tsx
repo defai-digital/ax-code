@@ -1,5 +1,12 @@
 import { useLanguage } from "@tui/context/language"
-import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable } from "ax-tui"
+import {
+  TextareaRenderable,
+  applyEditorAutocomplete,
+  getEditorAutocompleteRequest,
+  type BoxRenderable,
+  type KeyEvent,
+  type ScrollBoxRenderable,
+} from "ax-tui"
 import { pathToFileURL } from "url"
 import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
@@ -290,17 +297,40 @@ export function Autocomplete(props: {
     const input = props.input()
     const currentCursorOffset = input.cursorOffset
 
-    const charAfterCursor = props.value.at(stringIndexFromDisplayOffset(props.value, currentCursorOffset))
+    // The native adapter replaces the completion token as one undoable edit
+    // using AX's own Unicode width rules. Test doubles and any non-native
+    // editor keep the manual range edit below.
+    const request = input instanceof TextareaRenderable ? getEditorAutocompleteRequest(input) : undefined
+    const charAfterCursor = request
+      ? request.text.at(request.cursor)
+      : props.value.at(stringIndexFromDisplayOffset(props.value, currentCursorOffset))
     const needsSpace = charAfterCursor !== " "
     const append = "@" + text + (needsSpace ? " " : "")
 
-    input.cursorOffset = store.index
-    const startCursor = input.logicalCursor
-    input.cursorOffset = currentCursorOffset
-    const endCursor = input.logicalCursor
+    const item = { label: text, insertText: append }
+    if (request !== undefined) {
+      const applied = applyEditorAutocomplete(
+        input,
+        {
+          request,
+          start: stringIndexFromDisplayOffset(request.text, store.index),
+          end: request.cursor,
+          items: [item],
+        },
+        item,
+      )
+      // A selected range or a stale snapshot is declined by the adapter; do
+      // not fall back to a manual edit that would bypass that guard.
+      if (!applied) return
+    } else {
+      input.cursorOffset = store.index
+      const startCursor = input.logicalCursor
+      input.cursorOffset = currentCursorOffset
+      const endCursor = input.logicalCursor
 
-    input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
-    input.insertText(append)
+      input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
+      input.insertText(append)
+    }
 
     const virtualText = "@" + text
     const extmarkStart = store.index
