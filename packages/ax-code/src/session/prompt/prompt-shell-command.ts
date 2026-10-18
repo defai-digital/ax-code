@@ -1,4 +1,5 @@
 import { spawn } from "child_process"
+import type { StringDecoder } from "node:string_decoder"
 import { Env } from "../../util/env"
 import { defer } from "../../util/defer"
 import { Log } from "../../util/log"
@@ -14,7 +15,12 @@ import type { SessionID } from "../schema"
 import { agentInfo } from "./prompt-agent-model-info"
 import { agentModel, lastModel, requestedModel } from "./prompt-command-selection"
 import type { ShellInput } from "./prompt-input"
-import { appendShellOutputChunk, shellArgs, shellOutputMetadata } from "./prompt-shell-runtime"
+import {
+  appendShellOutputChunk,
+  createShellOutputDecoder,
+  shellArgs,
+  shellOutputMetadata,
+} from "./prompt-shell-runtime"
 import { createShellTurnMessages } from "./prompt-shell-turn"
 
 const log = Log.create({ service: "session.prompt" })
@@ -134,8 +140,13 @@ export async function executeShellCommand(
   let flushRunning = false
   let pending = Promise.resolve()
 
-  const appendOutput = (chunk: Buffer | string) => {
-    shellOutput = appendShellOutputChunk(shellOutput, chunk, OUTPUT_HARD_CAP)
+  // stdout and stderr are independent byte streams, so each keeps its own
+  // decoder: sharing one would splice a partial sequence from one stream onto
+  // the other.
+  const stdoutDecoder = createShellOutputDecoder()
+  const stderrDecoder = createShellOutputDecoder()
+  const appendOutput = (chunk: Buffer | string, decoder?: StringDecoder) => {
+    shellOutput = appendShellOutputChunk(shellOutput, chunk, OUTPUT_HARD_CAP, decoder)
   }
 
   const drainFlush = async () => {
@@ -164,7 +175,7 @@ export async function executeShellCommand(
   }
 
   const onStdoutData = (chunk: Buffer | string) => {
-    appendOutput(chunk)
+    appendOutput(chunk, stdoutDecoder)
     flush()
   }
   const onStdoutError = (error: Error) => {
@@ -176,7 +187,7 @@ export async function executeShellCommand(
     })
   }
   const onStderrData = (chunk: Buffer | string) => {
-    appendOutput(chunk)
+    appendOutput(chunk, stderrDecoder)
     flush()
   }
   const onStderrError = (error: Error) => {

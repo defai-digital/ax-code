@@ -18,6 +18,7 @@ import {
   commandTemplateText,
   consecutiveErrorDecision,
   commandUser,
+  createShellOutputDecoder,
   lastModel,
   loopMessages,
   modelInfo,
@@ -179,6 +180,29 @@ describe("session.prompt helpers", () => {
       outputBytes: 6,
       outputTruncated: false,
     })
+  })
+
+  test("rejoins a UTF-8 character split across pipe chunks", () => {
+    // Node hands pipe data over in arbitrary byte slices; a multi-byte
+    // codepoint can straddle two chunks. The shell command threads one decoder
+    // per stream through every chunk, so the split halves must rejoin instead
+    // of landing in the record fed back to the model as U+FFFD.
+    const bytes = new TextEncoder().encode("世界世界世界")
+    const decoder = createShellOutputDecoder()
+    const state = appendShellOutputChunk(
+      appendShellOutputChunk(
+        { output: "", outputBytes: 0, outputTruncated: false },
+        Buffer.from(bytes.subarray(0, 4)),
+        1_000,
+        decoder,
+      ),
+      Buffer.from(bytes.subarray(4)),
+      1_000,
+      decoder,
+    )
+
+    expect(state.output).toBe("世界世界世界")
+    expect(state.output).not.toContain("\uFFFD")
   })
 
   test("truncates shell output without splitting UTF-8 characters", () => {

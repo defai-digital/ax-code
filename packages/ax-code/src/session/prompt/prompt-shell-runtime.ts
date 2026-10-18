@@ -1,4 +1,5 @@
 import path from "path"
+import { StringDecoder } from "node:string_decoder"
 import { safeUtf8PrefixLength } from "@/tool/bash-helpers"
 
 export type ShellOutputState = {
@@ -7,12 +8,22 @@ export type ShellOutputState = {
   outputTruncated: boolean
 }
 
+/**
+ * Pipe data arrives in arbitrary byte slices, so a multi-byte codepoint can
+ * straddle two chunks. Decoding each chunk on its own turns the halves into
+ * U+FFFD; this decoder carries the partial sequence to the next chunk instead.
+ */
+export function createShellOutputDecoder() {
+  return new StringDecoder("utf8")
+}
+
 export function appendShellOutputChunk(
   state: ShellOutputState,
   chunk: Buffer | string,
   hardCap: number,
+  decoder?: StringDecoder,
 ): ShellOutputState {
-  const text = typeof chunk === "string" ? chunk : chunk.toString()
+  const text = typeof chunk === "string" ? chunk : (decoder ?? createShellOutputDecoder()).write(chunk)
   if (!text || state.outputTruncated) return state
 
   const chunkBytes = Buffer.byteLength(text, "utf-8")
