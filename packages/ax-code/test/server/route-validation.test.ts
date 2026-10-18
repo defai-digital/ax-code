@@ -976,6 +976,37 @@ describe("server route validation", () => {
     })
   })
 
+  test("mcp oauth callback returns 404 for an unknown server", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const res = await Server.Default().request("/mcp/no-such-server/auth/callback", {
+          method: "POST",
+          headers: { "content-type": "application/json", ...ServerRuntimeAuth.headers() },
+          body: JSON.stringify({ code: "auth-code" }),
+        })
+        expect(res.status).toBe(404)
+        expect(await res.json()).toMatchObject({
+          name: "NotFoundError",
+          message: "MCP server not found: no-such-server",
+        })
+      },
+    })
+  })
+
+  test("mcp oauth remove returns 404 for an unknown server", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const res = await Server.Default().request("/mcp/no-such-server/auth", {
+          method: "DELETE",
+          headers: { ...ServerRuntimeAuth.headers() },
+        })
+        expect(res.status).toBe(404)
+      },
+    })
+  })
+
   test("mcp add rejects local configs without an executable", async () => {
     await Instance.provide({
       directory: root,

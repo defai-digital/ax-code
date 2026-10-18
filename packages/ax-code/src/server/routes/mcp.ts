@@ -304,6 +304,8 @@ export const McpRoutes = lazy(() =>
         }),
       ),
       withMcpName(async (name, c) => {
+        const unsupported = await oauthNotSupportedResponse(c, name)
+        if (unsupported) return unsupported
         const { code, iss } = c.req.valid("json")
         const status = await MCP.finishAuth(name, code, iss)
         return c.json(status)
@@ -355,6 +357,12 @@ export const McpRoutes = lazy(() =>
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
       withMcpName(async (name, c) => {
+        // The route declares 404: an unknown server must not report a
+        // successful credential removal.
+        const entry = await Config.mcpEntry(name)
+        if (!entry?.config) {
+          return notFound(c, { message: `MCP server not found: ${name}`, resource: "mcpServer" })
+        }
         await MCP.removeAuth(name)
         return c.json({ success: true as const })
       }),
