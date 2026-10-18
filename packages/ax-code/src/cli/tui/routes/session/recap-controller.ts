@@ -72,7 +72,12 @@ export function createRecapController(host: {
    *  requests and a displayed recap survive — the banner clears on the next
    *  turn, not on keystrokes. */
   function pauseAutomatic() {
+    // A pending retry means the window's automatic attempt failed. Cancelling
+    // the retry must also release `attempted`, otherwise clearing the prompt
+    // cannot re-arm the recap for the still-current revision.
+    const retryPending = cancelRetry !== undefined
     cancelTimers()
+    if (retryPending) attempted = false
     if (active && !active.manual) {
       active.abort.abort()
       active = undefined

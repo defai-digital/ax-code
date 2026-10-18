@@ -274,7 +274,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   // transitions (e.g. running -> idle), NOT on every streamed part update.
   // This gates the expensive full-log SQLite loads behind a low-frequency
   // signal while leaving the cheap in-memory derivations fully reactive.
-  const logRefreshKey = createMemo(() => `${messages().length}:${status().type}`)
+  // The session ID is part of the key so the untracked rollback memo below
+  // cannot keep a previous session's points when two sessions happen to share
+  // the same message count and status type.
+  const logRefreshKey = createMemo(() => `${props.sessionID}:${messages().length}:${status().type}`)
 
   // The event-log rows feeding the activity list are fetched behind the coarse
   // key so a full SELECT no longer runs on every message.part.updated. The

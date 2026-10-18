@@ -442,6 +442,21 @@ describe("automatic recap retry", () => {
     t.controller.dispose()
   })
 
+  test("clearing the prompt after typing during the retry window re-arms the recap", async () => {
+    const t = setup()
+    await failFirstAttempt(t)
+    t.update({ input: "next" })
+    t.update({ input: "" })
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(t.request).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    t.pendingAt(1).resolve({ data: { text: "Recovered after typing." } })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Recovered after typing." })
+    t.controller.dispose()
+  })
+
   test("a revision change cancels the retry and arms a fresh attempt", async () => {
     const t = setup()
     await failFirstAttempt(t)

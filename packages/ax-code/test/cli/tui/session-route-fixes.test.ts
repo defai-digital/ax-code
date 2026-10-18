@@ -19,6 +19,8 @@ import { describe, expect, test } from "vitest"
 //   navigations.
 // - coalesceParts wrappers must be identity-cached so <For> doesn't recreate
 //   every row per streamed part, resetting per-row expanded signals.
+// - The sidebar's untracked rollback memo must key on the session ID too, or
+//   switching between same-shaped sessions keeps the previous rollback points.
 // - The quality detail pane must fall back to the workflow's current action
 //   when readiness transitions change the derived action kind.
 
@@ -28,6 +30,7 @@ const FILE_EDITS_SRC = path.join(TUI_ROOT, "routes/session/tool-renderers/file-e
 const DISPLAY_COMMANDS_SRC = path.join(TUI_ROOT, "routes/session/display-commands.ts")
 const DIALOG_WORKFLOW_SRC = path.join(TUI_ROOT, "routes/session/dialog-workflow.tsx")
 const DIALOG_QUALITY_SRC = path.join(TUI_ROOT, "routes/session/dialog-quality.tsx")
+const SIDEBAR_SRC = path.join(TUI_ROOT, "routes/session/sidebar.tsx")
 
 describe("collapsed Edit diff rendering", () => {
   test("never truncates the raw patch string (mid-hunk slices break the diff parser)", async () => {
@@ -148,6 +151,19 @@ describe("streaming tool-output fold stability", () => {
     // callID) so the two kinds cannot collide.
     expect(transcript).toContain("`single:${entry.part.id}`")
     expect(transcript).toContain("`coalesced:${entry.key}`")
+  })
+})
+
+describe("sidebar cross-session refresh", () => {
+  test("the untracked rollback memo refreshes when the session changes", async () => {
+    const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
+
+    // rollback() is untracked and depends only on logRefreshKey. A bare
+    // message-count:status key lets a switch between two sessions with the
+    // same shape keep the previous session's rollback points.
+    expect(sidebar).toContain(
+      "const logRefreshKey = createMemo(() => `${props.sessionID}:${messages().length}:${status().type}`)",
+    )
   })
 })
 
