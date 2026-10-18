@@ -200,6 +200,11 @@ export namespace FileWatcher {
               pollErrorCount = 0
               for (const evt of events) {
                 const file = path.resolve(dir, evt.path)
+                // The native matcher tests root-relative paths, so
+                // absolute-path ignore entries never match inside Rust.
+                // Apply the same JS post-filter the parcel/poll backends
+                // use so every configured entry shape is honored.
+                if (ignored(dir, ignore, file)) continue
                 Bus.publishDetached(Event.Updated, { file, event: evt.eventType })
               }
             } catch (error) {
