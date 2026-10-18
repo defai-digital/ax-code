@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { mkdir, symlink, writeFile, readFile } from "fs/promises"
+import { mkdir, symlink, writeFile, readFile, rm } from "fs/promises"
 import path from "path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { ReadTool } from "../../src/tool/read"
@@ -14,6 +14,7 @@ import { Log } from "../../src/util/log"
 
 const FIXTURES_DIR = path.join(import.meta.dirname, "fixtures")
 const LSP_FILE = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -83,6 +84,64 @@ describe("tool.read external_directory permission", () => {
         const read = await ReadTool.init()
         expect(Instance.worktree).toBe(tmp.path)
         await expect(read.execute({ filePath: link }, ctx)).rejects.toMatchObject({
+          name: "ReadSymlinkEscapeError",
+        })
+      },
+    })
+  })
+
+  test("rejects a directory replaced with an escaping symlink during approval", async () => {
+    await using outerTmp = await tmpdir({
+      init: async (dir) => {
+        await mkdir(path.join(dir, "nested"))
+        await writeFile(path.join(dir, "nested", "secret.txt"), "secret data")
+      },
+    })
+    await using tmp = await tmpdir({ git: true })
+    const directory = path.join(tmp.path, "docs")
+    await mkdir(directory)
+    await writeFile(path.join(directory, "inside.txt"), "inside")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const swapping = {
+          ...ctx,
+          ask: async () => {
+            await rm(directory, { recursive: true, force: true })
+            await symlink(outerTmp.path, directory)
+          },
+        }
+        await expect(read.execute({ filePath: directory }, swapping)).rejects.toMatchObject({
+          name: "ReadSymlinkEscapeError",
+        })
+      },
+    })
+  })
+
+  test("rejects an image replaced with an escaping symlink during approval", async () => {
+    await using outerTmp = await tmpdir({
+      init: async (dir) => {
+        await writeFile(path.join(dir, "secret.png"), Buffer.concat([PNG_SIGNATURE, Buffer.from("secret")]))
+      },
+    })
+    await using tmp = await tmpdir({ git: true })
+    const image = path.join(tmp.path, "photo.png")
+    await writeFile(image, Buffer.concat([PNG_SIGNATURE, Buffer.from("inside")]))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const swapping = {
+          ...ctx,
+          ask: async () => {
+            await rm(image, { force: true })
+            await symlink(path.join(outerTmp.path, "secret.png"), image)
+          },
+        }
+        await expect(read.execute({ filePath: image }, swapping)).rejects.toMatchObject({
           name: "ReadSymlinkEscapeError",
         })
       },

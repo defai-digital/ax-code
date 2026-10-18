@@ -1,5 +1,6 @@
 import z from "zod"
 import * as fs from "fs/promises"
+import type { BigIntStats } from "fs"
 import * as path from "path"
 import { Tool } from "./tool"
 import { LSP } from "@ax-code/ax-code-intel"
@@ -30,6 +31,23 @@ function readError(name: string, message: string, cause?: unknown) {
   const error = cause instanceof Error ? new Error(message, { cause }) : new Error(message)
   error.name = name
   return error
+}
+
+/** The path was re-checked before approval; verify the bytes came from that
+ *  same source and that a replaced path is not an escaping symlink. */
+async function assertReadSourceStable(filepath: string, before: BigIntStats) {
+  const after = await fs.stat(filepath, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR")
+      throw readError("ReadSourceChangedError", "File changed while reading; retry the read", error)
+    throw error
+  })
+  if (!sameReadSource(before, after))
+    throw readError("ReadSourceChangedError", "File changed while reading; retry the read")
+  if (Instance.containsPath(filepath)) {
+    await assertSymlinkInsideProject(filepath).catch((error) => {
+      throw readError("ReadSymlinkEscapeError", toErrorMessage(error), error)
+    })
+  }
 }
 
 function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
@@ -179,7 +197,9 @@ export const ReadTool = Tool.define("read", {
       }
 
       if (stat.isDirectory()) {
+        const before = await fs.stat(filepath, { bigint: true })
         const dirents = await fs.readdir(filepath, { withFileTypes: true })
+        await assertReadSourceStable(filepath, before)
         const entries = await Promise.all(
           dirents.map(async (dirent) => {
             if (dirent.isDirectory()) return dirent.name + "/"
@@ -242,6 +262,15 @@ export const ReadTool = Tool.define("read", {
           )
         }
         const msg = `${isImage ? "Image" : "PDF"} read successfully`
+        const before = await fs.stat(filepath, { bigint: true })
+        if (Number(before.size) > MAX_ATTACHMENT_BYTES) {
+          throw readError(
+            "ReadAttachmentTooLargeError",
+            `File too large to read as attachment: ${Number(before.size)} bytes (max ${MAX_ATTACHMENT_BYTES})`,
+          )
+        }
+        const bytes = await Filesystem.readBytes(filepath)
+        await assertReadSourceStable(filepath, before)
         return {
           title,
           output: msg,
@@ -255,7 +284,7 @@ export const ReadTool = Tool.define("read", {
             {
               type: "file",
               mime,
-              url: `data:${mime};base64,${Buffer.from(await Filesystem.readBytes(filepath)).toString("base64")}`,
+              url: `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`,
             },
           ],
         }
@@ -270,6 +299,7 @@ export const ReadTool = Tool.define("read", {
         if (office) {
           const bigStat = await fs.stat(filepath, { bigint: true })
           const result = await extractOfficeText(filepath)
+          await assertReadSourceStable(filepath, bigStat)
           if (result.reason) {
             throw readError("ReadOfficeExtractionError", result.reason)
           }
