@@ -183,7 +183,10 @@ describe("TaskQueue", () => {
           await TaskQueue.setStatus({ id: created.id, status: "running" })
           await expect(TaskQueue.edit({ id: created.id, title: "Cannot edit running item" })).rejects.toThrow()
 
+          // Deleting a running row must interrupt the work before removing it.
+          const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
           expect(await TaskQueue.remove(created.id)).toBe(true)
+          expect(cancel).toHaveBeenCalledWith(session.id, { interrupt: true })
           expect(await TaskQueue.list({ sessionID: session.id })).toEqual([])
           await new Promise((resolve) => setTimeout(resolve, 0))
 

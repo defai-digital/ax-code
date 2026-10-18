@@ -635,19 +635,30 @@ export namespace ScheduledTask {
   export async function remove(id: ScheduledTaskID): Promise<boolean> {
     const task = await get(id)
     // Deleting must also stop the in-flight run: without an interrupt the
-    // executing queue item would keep running to completion after the task is
+    // executing queue item or workflow would keep running after the task is
     // gone, and its outcome would be discarded against a deleted task.
-    const openQueueID = SessionShard.storeForProject(Instance.project.id).use((db) => {
+    const openRun = SessionShard.storeForProject(Instance.project.id).use((db) => {
       const row = db
-        .select({ queueID: ScheduledTaskRunTable.queue_id })
+        .select({ queueID: ScheduledTaskRunTable.queue_id, workflowRunID: ScheduledTaskRunTable.workflow_run_id })
         .from(ScheduledTaskRunTable)
         .where(and(eq(ScheduledTaskRunTable.task_id, id), eq(ScheduledTaskRunTable.status, "running")))
         .get()
-      return row?.queueID ?? undefined
+      return row
     })
-    if (openQueueID) {
-      await TaskQueue.stop(TaskQueueID.make(openQueueID)).catch((error) => {
+    if (openRun?.queueID) {
+      await TaskQueue.stop(TaskQueueID.make(openRun.queueID)).catch((error) => {
         log.warn("scheduled task in-flight run stop failed during delete", { taskID: id, error: toErrorMessage(error) })
+      })
+    } else if (openRun?.workflowRunID) {
+      // Workflow-backed runs carry no queue id. Without this branch their
+      // workflow (and its children) keeps executing after the task is gone.
+      const { WorkflowScheduler } = await import("@/workflow/scheduler")
+      await WorkflowScheduler.cancel(openRun.workflowRunID as WorkflowRunID).catch((error) => {
+        log.warn("scheduled task in-flight workflow cancel failed during delete", {
+          taskID: id,
+          workflowRunID: openRun.workflowRunID,
+          error: toErrorMessage(error),
+        })
       })
     }
     SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {

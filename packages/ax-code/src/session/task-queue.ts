@@ -355,9 +355,7 @@ export namespace TaskQueue {
         .from(TaskQueueTable)
         .where(and(...conditions))
         .orderBy(
-          parsed.descending
-            ? desc(TaskQueueTable.position)
-            : asc(TaskQueueTable.position),
+          parsed.descending ? desc(TaskQueueTable.position) : asc(TaskQueueTable.position),
           desc(TaskQueueTable.time_created),
           desc(TaskQueueTable.id),
         )
@@ -403,7 +401,7 @@ export namespace TaskQueue {
           and(
             eq(TaskQueueTable.project_id, Instance.project.id),
             eq(TaskQueueTable.kind, "subagent"),
-            inArray(TaskQueueTable.status, ["completed", "failed"]),
+            inArray(TaskQueueTable.status, ["completed", "failed", "cancelled"]),
           ),
         )
         .orderBy(asc(TaskQueueTable.time_completed), asc(TaskQueueTable.id))
@@ -2032,10 +2030,17 @@ export namespace TaskQueue {
 
   export async function remove(id: TaskQueueID): Promise<boolean> {
     const item = await get(id)
+    // Deletion stays allowed for an executing row, but it must interrupt the
+    // work first: deleting the row alone reports success while the executor
+    // keeps running and can no longer record its outcome.
+    if (item.status === "running" || item.status === "blocked_permission" || item.status === "blocked_question") {
+      await stop(id)
+    }
+    const removed = (await get(id).catch(() => item)) ?? item
     SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       db.delete(TaskQueueTable).where(eq(TaskQueueTable.id, id)).run()
     })
-    publishDeleted(item)
+    publishDeleted(removed)
     return true
   }
 

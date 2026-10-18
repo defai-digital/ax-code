@@ -154,6 +154,34 @@ describe("background subagent result delivery", () => {
     })
   })
 
+  test("recovery delivers a cancelled background result", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const task = await createCompletedBackgroundTask(parent.id, tmp.path, "unused result")
+        vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+        const cancelled = await TaskQueue.setStatus({
+          id: task.item.id,
+          status: "cancelled",
+          error: "Stopped by operator.",
+        })
+        expect(cancelled.status).toBe("cancelled")
+
+        const recovered = await recoverBackgroundSubagentHandoffs()
+
+        expect(recovered.delivered).toBe(1)
+        const latest = await TaskQueue.get(task.item.id)
+        expect(latest.payload["deliveryStatus"]).toBe("delivered")
+        const parts = await handoffParts(parent.id)
+        expect(parts).toHaveLength(1)
+        expect(parts[0]?.text).toContain("Stopped by operator.")
+      },
+    })
+  })
+
   test("recovery replaces a waitfor claim whose tool result never reached the session log", async () => {
     await using tmp = await tmpdir({ git: true })
 

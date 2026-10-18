@@ -190,4 +190,25 @@ describe("ScheduledTask workflow outcome recording", () => {
       },
     })
   })
+
+  test("deleting a task cancels its running workflow run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { createRun } = await mockWorkflowDispatch("wfr_delete_cancel")
+        const cancel = vi.spyOn(WorkflowScheduler, "cancel").mockResolvedValue({} as never)
+
+        const task = await createWorkflowTask()
+        await ScheduledTask.runNow(task.id)
+        expect(createRun).toHaveBeenCalledOnce()
+
+        // Workflow-backed runs carry a workflow_run_id, not a queue_id. The
+        // delete path must cancel the workflow or it keeps executing after the
+        // task row is gone.
+        expect(await ScheduledTask.remove(task.id)).toBe(true)
+        expect(cancel).toHaveBeenCalledWith("wfr_delete_cancel")
+      },
+    })
+  })
 })
