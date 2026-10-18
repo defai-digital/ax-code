@@ -22,6 +22,10 @@ import {
 import { SessionID } from "./schema"
 import type { ProjectID } from "../project/schema"
 import { Flag } from "../flag/flag"
+import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
+
+const log = Log.create({ service: "session-shard" })
 
 // Routing for session-scoped tables (message/part, event_log) between the
 // registry DB and per-project shards (Phase 2). Resolution is
@@ -104,12 +108,30 @@ export namespace SessionShard {
     return row.backfill_version < BACKFILL_VERSION
   }
 
+  // Bound every IN list: SQLite caps bound parameters (32,766 in stock
+  // builds), so an unchunked inArray over a long-lived project's sessions or
+  // runs throws "too many SQL variables" — and because the state row is
+  // already "backfilling" by then, every later write retries and bricks the
+  // same way.
+  const ID_CHUNK = 500
+
+  function chunk<T>(items: T[]): T[][] {
+    const out: T[][] = []
+    for (let offset = 0; offset < items.length; offset += ID_CHUNK) out.push(items.slice(offset, offset + ID_CHUNK))
+    return out
+  }
+
   // Copy a project's existing message+part+event_log rows from the global DB
   // into its shard (idempotent via onConflictDoNothing), then flip state to
   // active and stamp the coverage version. Crash-safety: the registry
   // project_shard row carries state; a crash mid-copy leaves state="backfilling"
   // and the next access re-runs the copy (skipping already-copied rows). Global
   // rows are NOT deleted here — that is the later contract step.
+  //
+  // Delta coverage: only tables introduced AFTER the recorded backfill_version
+  // are copied. Tables the shard already covers may have diverged from the
+  // registry in both directions (shard-side deletes leave stale registry
+  // copies); re-copying them would resurrect rows the user deleted.
   function backfill(projectID: ProjectID): void {
     const file = Shard.pathFor(projectID)
     const now = Date.now()
@@ -120,124 +142,124 @@ export namespace SessionShard {
         .onConflictDoUpdate({ target: ProjectShardTable.project_id, set: { state: "backfilling", time_updated: now } })
         .run(),
     )
+    // Read AFTER the upsert: this is the last successfully completed coverage,
+    // which a crashed pass leaves untouched.
+    const fromVersion = shardRow(projectID)?.backfill_version ?? 0
 
     const sessionIDs = Database.use((db) =>
       db.select({ id: SessionTable.id }).from(SessionTable).where(eq(SessionTable.project_id, projectID)).all(),
     ).map((row) => row.id)
 
-    const messages =
-      sessionIDs.length === 0
-        ? []
-        : Database.use((db) => db.select().from(MessageTable).where(inArray(MessageTable.session_id, sessionIDs)).all())
-    const parts =
-      sessionIDs.length === 0
-        ? []
-        : Database.use((db) => db.select().from(PartTable).where(inArray(PartTable.session_id, sessionIDs)).all())
-    const events =
-      sessionIDs.length === 0
-        ? []
-        : Database.use((db) =>
-            db.select().from(EventLogTable).where(inArray(EventLogTable.session_id, sessionIDs)).all(),
-          )
-    const todos =
-      sessionIDs.length === 0
-        ? []
-        : Database.use((db) => db.select().from(TodoTable).where(inArray(TodoTable.session_id, sessionIDs)).all())
-    const goals =
-      sessionIDs.length === 0
-        ? []
-        : Database.use((db) =>
-            db.select().from(SessionGoalTable).where(inArray(SessionGoalTable.session_id, sessionIDs)).all(),
-          )
+    const handle = Shard.handle(projectID)
+    handle.transaction((db) => {
+      // Reads are interleaved with the inserts per chunk so no table is ever
+      // materialized whole.
+      if (fromVersion < 1) {
+        for (const ids of chunk(sessionIDs)) {
+          for (const message of Database.use((r) =>
+            r.select().from(MessageTable).where(inArray(MessageTable.session_id, ids)).all(),
+          )) {
+            db.insert(MessageTable).values(message).onConflictDoNothing().run()
+          }
+          for (const part of Database.use((r) =>
+            r.select().from(PartTable).where(inArray(PartTable.session_id, ids)).all(),
+          )) {
+            db.insert(PartTable).values(part).onConflictDoNothing().run()
+          }
+        }
+      }
 
-    // Slice 4 tables are project-keyed (task_queue/scheduled_task/workflow_run
-    // carry project_id); the workflow detail tables are run-keyed, so backfill
-    // them by the project's run IDs. Insert order below is dependency-ordered to
-    // satisfy the intra-shard FKs (scheduled_task -> task_queue; workflow_*
-    // -> workflow_run/phase/child).
-    const queue = Database.use((db) =>
-      db.select().from(TaskQueueTable).where(eq(TaskQueueTable.project_id, projectID)).all(),
-    )
-    const scheduled = Database.use((db) =>
-      db.select().from(ScheduledTaskTable).where(eq(ScheduledTaskTable.project_id, projectID)).all(),
-    )
-    const runs = Database.use((db) =>
-      db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.project_id, projectID)).all(),
-    )
-    const runIDs = runs.map((row) => row.id)
-    const phases =
-      runIDs.length === 0
-        ? []
-        : Database.use((db) =>
-            db.select().from(WorkflowPhaseTable).where(inArray(WorkflowPhaseTable.run_id, runIDs)).all(),
-          )
-    const children =
-      runIDs.length === 0
-        ? []
-        : Database.use((db) =>
-            db.select().from(WorkflowChildTable).where(inArray(WorkflowChildTable.run_id, runIDs)).all(),
-          )
-    const artifacts =
-      runIDs.length === 0
-        ? []
-        : Database.use((db) =>
-            db.select().from(WorkflowArtifactTable).where(inArray(WorkflowArtifactTable.run_id, runIDs)).all(),
-          )
-    const budgetLedger =
-      runIDs.length === 0
-        ? []
-        : Database.use((db) =>
-            db.select().from(WorkflowBudgetLedgerTable).where(inArray(WorkflowBudgetLedgerTable.run_id, runIDs)).all(),
-          )
+      if (fromVersion < 2) {
+        for (const ids of chunk(sessionIDs)) {
+          for (const event of Database.use((r) =>
+            r.select().from(EventLogTable).where(inArray(EventLogTable.session_id, ids)).all(),
+          )) {
+            db.insert(EventLogTable).values(event).onConflictDoNothing().run()
+          }
+        }
+      }
 
-    // Project-keyed (not session-keyed): the run history must move too, or
-    // enabling sharding drops the audit/overlap/failure-backoff record.
-    const runHistory = Database.use((db) =>
-      db.select().from(ScheduledTaskRunTable).where(eq(ScheduledTaskRunTable.project_id, projectID)).all(),
-    )
+      if (fromVersion < 3) {
+        for (const ids of chunk(sessionIDs)) {
+          for (const todo of Database.use((r) =>
+            r.select().from(TodoTable).where(inArray(TodoTable.session_id, ids)).all(),
+          )) {
+            db.insert(TodoTable).values(todo).onConflictDoNothing().run()
+          }
+          for (const goal of Database.use((r) =>
+            r.select().from(SessionGoalTable).where(inArray(SessionGoalTable.session_id, ids)).all(),
+          )) {
+            db.insert(SessionGoalTable).values(goal).onConflictDoNothing().run()
+          }
+        }
+      }
 
-    Shard.handle(projectID).transaction((db) => {
-      for (const message of messages) {
-        db.insert(MessageTable).values(message).onConflictDoNothing().run()
+      if (fromVersion < 4) {
+        // Slice 4 tables are project-keyed (task_queue/scheduled_task/workflow_run
+        // carry project_id); the workflow detail tables are run-keyed, so backfill
+        // them by the project's run IDs. Insert order below is dependency-ordered to
+        // satisfy the intra-shard FKs (scheduled_task -> task_queue; workflow_*
+        // -> workflow_run/phase/child).
+        for (const row of Database.use((r) =>
+          r.select().from(TaskQueueTable).where(eq(TaskQueueTable.project_id, projectID)).all(),
+        )) {
+          db.insert(TaskQueueTable).values(row).onConflictDoNothing().run()
+        }
+        for (const row of Database.use((r) =>
+          r.select().from(ScheduledTaskTable).where(eq(ScheduledTaskTable.project_id, projectID)).all(),
+        )) {
+          db.insert(ScheduledTaskTable).values(row).onConflictDoNothing().run()
+        }
+        const runs = Database.use((r) =>
+          r.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.project_id, projectID)).all(),
+        )
+        for (const row of runs) {
+          db.insert(WorkflowRunTable).values(row).onConflictDoNothing().run()
+        }
+        const runIDs = runs.map((row) => row.id)
+        for (const ids of chunk(runIDs)) {
+          for (const row of Database.use((r) =>
+            r.select().from(WorkflowPhaseTable).where(inArray(WorkflowPhaseTable.run_id, ids)).all(),
+          )) {
+            db.insert(WorkflowPhaseTable).values(row).onConflictDoNothing().run()
+          }
+          for (const row of Database.use((r) =>
+            r.select().from(WorkflowChildTable).where(inArray(WorkflowChildTable.run_id, ids)).all(),
+          )) {
+            db.insert(WorkflowChildTable).values(row).onConflictDoNothing().run()
+          }
+          for (const row of Database.use((r) =>
+            r.select().from(WorkflowArtifactTable).where(inArray(WorkflowArtifactTable.run_id, ids)).all(),
+          )) {
+            db.insert(WorkflowArtifactTable).values(row).onConflictDoNothing().run()
+          }
+          for (const row of Database.use((r) =>
+            r.select().from(WorkflowBudgetLedgerTable).where(inArray(WorkflowBudgetLedgerTable.run_id, ids)).all(),
+          )) {
+            db.insert(WorkflowBudgetLedgerTable).values(row).onConflictDoNothing().run()
+          }
+        }
       }
-      for (const part of parts) {
-        db.insert(PartTable).values(part).onConflictDoNothing().run()
-      }
-      for (const event of events) {
-        db.insert(EventLogTable).values(event).onConflictDoNothing().run()
-      }
-      for (const todo of todos) {
-        db.insert(TodoTable).values(todo).onConflictDoNothing().run()
-      }
-      for (const goal of goals) {
-        db.insert(SessionGoalTable).values(goal).onConflictDoNothing().run()
-      }
-      for (const row of queue) {
-        db.insert(TaskQueueTable).values(row).onConflictDoNothing().run()
-      }
-      for (const row of scheduled) {
-        db.insert(ScheduledTaskTable).values(row).onConflictDoNothing().run()
-      }
-      // After scheduled_task and task_queue: scheduled_task_run FKs into both.
-      for (const row of runHistory) {
-        db.insert(ScheduledTaskRunTable).values(row).onConflictDoNothing().run()
-      }
-      for (const row of runs) {
-        db.insert(WorkflowRunTable).values(row).onConflictDoNothing().run()
-      }
-      for (const row of phases) {
-        db.insert(WorkflowPhaseTable).values(row).onConflictDoNothing().run()
-      }
-      for (const row of children) {
-        db.insert(WorkflowChildTable).values(row).onConflictDoNothing().run()
-      }
-      for (const row of artifacts) {
-        db.insert(WorkflowArtifactTable).values(row).onConflictDoNothing().run()
-      }
-      for (const row of budgetLedger) {
-        db.insert(WorkflowBudgetLedgerTable).values(row).onConflictDoNothing().run()
+
+      if (fromVersion < 5) {
+        // Project-keyed (not session-keyed): the run history must move too, or
+        // enabling sharding drops the audit/overlap/failure-backoff record.
+        // After task_queue and scheduled_task: scheduled_task_run FKs into both.
+        for (const row of Database.use((r) =>
+          r.select().from(ScheduledTaskRunTable).where(eq(ScheduledTaskRunTable.project_id, projectID)).all(),
+        )) {
+          db.insert(ScheduledTaskRunTable).values(row).onConflictDoNothing().run()
+        }
       }
     })
+
+    // Slice 5: after (re-)backfill, sweep any shard rows whose session no longer
+    // exists in the registry (a Session.remove whose shard cascade was
+    // interrupted). Backfill is a rare per-project-per-version event, so this
+    // bounded reconciler never runs on every boot. The sweep runs BEFORE the
+    // state flip: a sweep failure leaves state="backfilling" so the next write
+    // retries the whole idempotent pass instead of stranding the orphans.
+    sweepOrphans(projectID)
 
     Database.use((db) =>
       db
@@ -246,13 +268,12 @@ export namespace SessionShard {
         .where(eq(ProjectShardTable.project_id, projectID))
         .run(),
     )
-
-    // Slice 5: after (re-)backfill, sweep any shard rows whose session no longer
-    // exists in the registry (a Session.remove whose shard cascade was
-    // interrupted). Backfill is a rare per-project-per-version event, so this
-    // bounded reconciler never runs on every boot.
-    sweepOrphans(projectID)
   }
+
+  // Projects whose shard cascade failed mid-deleteSessions and therefore may
+  // hold orphaned rows. Swept on the next write to that project (in-memory:
+  // a process crash falls back to the sweep wired into the next backfill).
+  const pendingSweep = new Set<string>()
 
   /**
    * Resolve the store for a project (skip the session lookup).
@@ -262,7 +283,23 @@ export namespace SessionShard {
   export function storeForProject(projectID: ProjectID, opts: { write?: boolean } = {}): Store {
     if (!Flag.AX_CODE_SHARD_SESSIONS) return registryStore
     if (opts.write) {
-      if (needsBackfill(projectID)) backfill(projectID)
+      if (needsBackfill(projectID)) {
+        backfill(projectID)
+      } else if (pendingSweep.has(projectID as string)) {
+        // A failed deleteSessions marked this project dirty: reconcile the
+        // leftover shard rows on the next write instead of waiting for the
+        // next BACKFILL_VERSION bump (which may never come). Best-effort — a
+        // failing sweep must not block the write; it stays queued.
+        try {
+          sweepOrphans(projectID)
+          pendingSweep.delete(projectID as string)
+        } catch (error) {
+          log.warn("deferred shard orphan sweep failed; will retry on a later write", {
+            projectID,
+            error: toErrorMessage(error),
+          })
+        }
+      }
       return shardStore(projectID)
     }
     return isCurrent(projectID) ? shardStore(projectID) : registryStore
@@ -332,22 +369,31 @@ export namespace SessionShard {
     if (!Flag.AX_CODE_SHARD_SESSIONS) return
     if (sessionIDs.length === 0) return
     if (!shardRow(projectID)) return
-    Shard.handle(projectID).transaction((db) => {
-      db.delete(PartTable).where(inArray(PartTable.session_id, sessionIDs)).run()
-      db.delete(MessageTable).where(inArray(MessageTable.session_id, sessionIDs)).run()
-      db.delete(TodoTable).where(inArray(TodoTable.session_id, sessionIDs)).run()
-      db.delete(SessionGoalTable).where(inArray(SessionGoalTable.session_id, sessionIDs)).run()
-      db.delete(EventLogTable).where(inArray(EventLogTable.session_id, sessionIDs)).run()
-      db.delete(TaskQueueTable).where(inArray(TaskQueueTable.session_id, sessionIDs)).run()
-      db.update(WorkflowRunTable)
-        .set({ parent_session_id: null })
-        .where(inArray(WorkflowRunTable.parent_session_id, sessionIDs))
-        .run()
-      db.update(WorkflowChildTable)
-        .set({ session_id: null })
-        .where(inArray(WorkflowChildTable.session_id, sessionIDs))
-        .run()
-    })
+    try {
+      Shard.handle(projectID).transaction((db) => {
+        db.delete(PartTable).where(inArray(PartTable.session_id, sessionIDs)).run()
+        db.delete(MessageTable).where(inArray(MessageTable.session_id, sessionIDs)).run()
+        db.delete(TodoTable).where(inArray(TodoTable.session_id, sessionIDs)).run()
+        db.delete(SessionGoalTable).where(inArray(SessionGoalTable.session_id, sessionIDs)).run()
+        db.delete(EventLogTable).where(inArray(EventLogTable.session_id, sessionIDs)).run()
+        db.delete(TaskQueueTable).where(inArray(TaskQueueTable.session_id, sessionIDs)).run()
+        db.update(WorkflowRunTable)
+          .set({ parent_session_id: null })
+          .where(inArray(WorkflowRunTable.parent_session_id, sessionIDs))
+          .run()
+        db.update(WorkflowChildTable)
+          .set({ session_id: null })
+          .where(inArray(WorkflowChildTable.session_id, sessionIDs))
+          .run()
+      })
+    } catch (error) {
+      // Session.remove swallows this failure; without a retry trigger the
+      // orphaned rows would persist until the next BACKFILL_VERSION bump
+      // re-runs the sweep — which may never come. Queue a best-effort sweep
+      // on the next write to this project.
+      pendingSweep.add(projectID as string)
+      throw error
+    }
   }
 
   /**

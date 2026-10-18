@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
+import fs from "node:fs"
 
 const previousShardSessions = process.env.AX_CODE_SHARD_SESSIONS
 beforeAll(() => {
@@ -476,7 +477,7 @@ describe("AX_CODE_SHARD_SESSIONS=1", () => {
     })
   })
 
-  test("a stale backfill_version re-runs the copy and ends version-current", async () => {
+  test("a stale backfill_version re-copies only newly covered tables and stamps the version", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -488,8 +489,20 @@ describe("AX_CODE_SHARD_SESSIONS=1", () => {
         insertGlobalGoal(session.id)
 
         // Simulate a shard that was backfilled under an earlier slice: state is
-        // "active" but the coverage version is stale, so the todo/session_goal
-        // tables added by slice 3 are missing from the shard.
+        // "active" but the coverage version is stale. The tables that slice
+        // already covered (todo/session_goal) were copied back then — the shard
+        // must NOT re-copy them from the registry (shard-side deletes would
+        // resurrect), so seed the shard with the earlier copy.
+        const todos = Database.use((db) =>
+          db.select().from(TodoTable).where(eq(TodoTable.session_id, session.id)).all(),
+        )
+        const goals = Database.use((db) =>
+          db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, session.id)).all(),
+        )
+        Shard.handle(projectID).transaction((db) => {
+          for (const row of todos) db.insert(TodoTable).values(row).run()
+          for (const row of goals) db.insert(SessionGoalTable).values(row).run()
+        })
         Database.use((db) =>
           db
             .insert(ProjectShardTable)
@@ -505,11 +518,12 @@ describe("AX_CODE_SHARD_SESSIONS=1", () => {
         )
         expect(shardVersion(projectID)).toBe(SessionShard.BACKFILL_VERSION - 1)
 
-        // The next write re-runs the (idempotent) copy and stamps the version.
+        // The next write re-runs the (idempotent) delta copy and stamps the version.
         await Session.updateMessage(userMessage(MessageID.ascending(), session.id))
 
         expect(shardState(projectID)).toBe("active")
         expect(shardVersion(projectID)).toBe(SessionShard.BACKFILL_VERSION)
+        // Exactly the earlier copy — not duplicated by a registry re-copy.
         expect(shardTodoCount(projectID, session.id)).toBe(1)
         expect(shardGoalCount(projectID, session.id)).toBe(1)
       },
@@ -597,6 +611,103 @@ describe("AX_CODE_SHARD_SESSIONS=1", () => {
         expect(shardWorkflowChildCount(projectID, runID)).toBe(1)
         expect(shardWorkflowArtifactCount(projectID, runID)).toBe(1)
         expect(shardWorkflowBudgetLedgerCount(projectID, runID)).toBe(1)
+      },
+    })
+  })
+
+  test("a version bump does not resurrect rows deleted shard-side", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const projectID = Instance.project.id
+
+        // Registry and shard both hold the todo (as after a slice-3 backfill)...
+        insertGlobalTodo(session.id, 0)
+        const [todo] = Database.use((db) =>
+          db.select().from(TodoTable).where(eq(TodoTable.session_id, session.id)).all(),
+        )
+        Shard.handle(projectID).transaction((db) => {
+          db.insert(TodoTable).values(todo!).run()
+        })
+        // ...then the shard copy is deleted (Todo.update drops and re-inserts),
+        // while the registry retains its stale copy until the contract step.
+        Shard.handle(projectID).transaction((db) => {
+          db.delete(TodoTable).where(eq(TodoTable.session_id, session.id)).run()
+        })
+        expect(shardTodoCount(projectID, session.id)).toBe(0)
+        expect(globalTodoCount(session.id)).toBe(1)
+
+        // A later release bumps the coverage version: the re-run must copy only
+        // the newly covered tables, not resurrect the deleted todo.
+        Database.use((db) =>
+          db
+            .insert(ProjectShardTable)
+            .values({
+              project_id: projectID,
+              shard_file: Shard.pathFor(projectID),
+              state: "active",
+              backfill_version: SessionShard.BACKFILL_VERSION - 1,
+              time_created: Date.now(),
+              time_updated: Date.now(),
+            })
+            .run(),
+        )
+        await Session.updateMessage(userMessage(MessageID.ascending(), session.id))
+
+        expect(shardState(projectID)).toBe("active")
+        expect(shardVersion(projectID)).toBe(SessionShard.BACKFILL_VERSION)
+        expect(shardTodoCount(projectID, session.id)).toBe(0)
+      },
+    })
+  })
+
+  test("a failed shard cascade is swept on the next write to the project", async (t) => {
+    if (process.platform === "win32") return t.skip()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const projectID = Instance.project.id
+        await Session.updateMessage(userMessage(MessageID.ascending(), session.id))
+        expect(shardState(projectID)).toBe("active")
+
+        // An orphan: a shard todo whose session is gone from the registry.
+        const orphanSession = "ses_orphaned"
+        const now = Date.now()
+        Shard.handle(projectID).transaction((db) => {
+          db.insert(TodoTable)
+            .values({
+              session_id: orphanSession,
+              content: "orphan",
+              status: "pending",
+              priority: "medium",
+              position: 0,
+              time_created: now,
+              time_updated: now,
+            } as never)
+            .run()
+        })
+        expect(shardTodoCount(projectID, orphanSession)).toBe(1)
+
+        // Force the cascade to fail: a read-only shard file rejects the open
+        // (permissions are checked at open(), so the cached handle must be
+        // closed first). deleteSessions must queue a deferred sweep.
+        const file = Shard.pathFor(projectID)
+        Shard.close(projectID)
+        fs.chmodSync(file, 0o444)
+        try {
+          expect(() => SessionShard.deleteSessions(projectID, [session.id])).toThrow()
+        } finally {
+          fs.chmodSync(file, 0o600)
+        }
+        expect(shardTodoCount(projectID, orphanSession)).toBe(1)
+
+        // The next write reconciles the orphans instead of blocking.
+        await Session.updateMessage(userMessage(MessageID.ascending(), session.id))
+        expect(shardTodoCount(projectID, orphanSession)).toBe(0)
       },
     })
   })
