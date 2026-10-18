@@ -72,6 +72,23 @@ describe("tui dialog select view model", () => {
     expect(grouped).toEqual([["", [{ title: "Open Settings", value: "settings", category: undefined }]]])
   })
 
+  test("ranks a title match above a category-only match", () => {
+    // Pins the existing weighting: fuzzysort normalizes a key score to 0..1, so
+    // an exact category hit scores 1.0 exactly like an exact title hit. The
+    // title weighting in `scoreFn` is what keeps the title hits ahead of
+    // "Branch"; dropping it would promote the category-only match to the top.
+    const ranked = dialogSelectGroupedOptions({
+      options: [
+        { title: "Branch", value: "branch", category: "git" },
+        { title: "git commit", value: "commit" },
+        { title: "GitHub", value: "github" },
+      ],
+      query: "git",
+    })
+
+    expect(dialogSelectFlatOptions(ranked).map((option) => option.value)).toEqual(["github", "commit", "branch"])
+  })
+
   test("derives row count, visible height, and wrapped movement", () => {
     const grouped = dialogSelectGroupedOptions({ options, query: "" })
 
