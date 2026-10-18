@@ -61,6 +61,50 @@ describe("DebugCaptureEvidenceTool", () => {
     })
   })
 
+  test("rejects a planId that belongs to a different case", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const caseA = await emitOpenedCase(session.id, tmp.path, "tests time out")
+        const caseB = await emitOpenedCase(session.id, tmp.path, "flaky on ci")
+        const planTool = await DebugPlanInstrumentationTool.init()
+        const plan = await planTool.execute(
+          {
+            caseId: caseB,
+            purpose: "log worker pool slot waits",
+            targets: [{ file: "src/pool.ts", probe: "log", removeInstruction: "undo the log line" } as any],
+          },
+          fakeCtx(session.id),
+        )
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "debug_plan_instrumentation",
+          callID: "call-plan-b",
+          status: "completed",
+          metadata: plan.metadata,
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const tool = await DebugCaptureEvidenceTool.init()
+        await expect(
+          tool.execute(
+            {
+              caseId: caseA,
+              kind: "instrumentation_result",
+              content: "probe output",
+              planId: (plan.metadata as { planId: string }).planId,
+            } as any,
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/belongs to debug case/)
+      },
+    })
+  })
+
   test("same case + kind + content produces the same evidenceId (deterministic dedup)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

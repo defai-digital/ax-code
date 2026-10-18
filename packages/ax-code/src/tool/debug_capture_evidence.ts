@@ -52,11 +52,24 @@ export const DebugCaptureEvidenceTool = Tool.define("debug_capture_evidence", {
     // open/investigating. A terminal case (resolved/unresolved) has no
     // outgoing transitions per CASE_TRANSITIONS, so further evidence is
     // rejected rather than silently attached to a closed investigation.
-    const debugCase = SessionDebug.load(sessionID).cases.find((item) => item.caseId === args.caseId)
-    if (debugCase && CASE_TERMINAL_STATUSES.includes(debugCase.status)) {
+    // Use the rollup's effectiveStatus: a confirmed/refuted hypothesis
+    // makes the case terminal even though the stored case row keeps its
+    // original open/investigating status.
+    const loaded = SessionDebug.load(sessionID)
+    const rolledUp = SessionDebug.rollup(loaded).find((item) => item.caseId === args.caseId)
+    if (rolledUp && CASE_TERMINAL_STATUSES.includes(rolledUp.effectiveStatus)) {
       throw new Error(
-        `debug_capture_evidence: cannot capture evidence for terminal debug case ${args.caseId} (status ${debugCase.status})`,
+        `debug_capture_evidence: cannot capture evidence for terminal debug case ${args.caseId} (status ${rolledUp.effectiveStatus})`,
       )
+    }
+    // An instrumentation plan can only attest evidence for its own case.
+    if (args.planId !== undefined) {
+      const plan = loaded.instrumentationPlans?.find((item) => item.planId === args.planId)
+      if (plan && plan.caseId !== args.caseId) {
+        throw new Error(
+          `debug_capture_evidence: plan ${args.planId} belongs to debug case ${plan.caseId}, not ${args.caseId}`,
+        )
+      }
     }
 
     const evidenceId = computeDebugEvidenceId({

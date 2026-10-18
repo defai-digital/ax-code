@@ -131,6 +131,78 @@ describe("DebugPlanInstrumentationTool", () => {
     })
   })
 
+  test("lifecycle updates keep the original creation timestamp", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const caseId = await emitOpenedCase(session.id, tmp.path, "timestamps drift")
+
+        const tool = await DebugPlanInstrumentationTool.init()
+        const input = { caseId, purpose: "measure queue depth", targets }
+        const planned = await tool.execute(input, fakeCtx(session.id))
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "debug_plan_instrumentation",
+          callID: "call-planned",
+          status: "completed",
+          metadata: planned.metadata,
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        const removed = await tool.execute({ ...input, status: "removed" }, fakeCtx(session.id))
+
+        // Replay keeps only the last record per planId; a fresh createdAt on
+        // lifecycle updates would report removal time as creation time.
+        expect(removed.metadata.debugInstrumentationPlan.createdAt).toBe(
+          planned.metadata.debugInstrumentationPlan.createdAt,
+        )
+      },
+    })
+  })
+
+  test("rejects new instrumentation for an effectively terminal case", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const caseId = await emitOpenedCase(session.id, tmp.path, "resolved by verification")
+        // A confirmed hypothesis makes the case terminal in the rollup even
+        // though the stored case row still says "open".
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id as any,
+          tool: "debug_propose_hypothesis",
+          callID: "call-hyp",
+          status: "completed",
+          metadata: {
+            hypothesisId: "aaaa0000bbbb1111",
+            debugHypothesis: {
+              schemaVersion: 1,
+              hypothesisId: "aaaa0000bbbb1111",
+              caseId,
+              claim: "worker slots leak under cancellation",
+              confidence: 0.8,
+              evidenceRefs: [],
+              status: "confirmed",
+              source: { tool: "debug_propose_hypothesis", version: "0.0.0", runId: session.id },
+            },
+          },
+          durationMs: 1,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 30))
+
+        const tool = await DebugPlanInstrumentationTool.init()
+        await expect(
+          tool.execute({ caseId, purpose: "probe after resolution", targets }, fakeCtx(session.id)),
+        ).rejects.toThrow(/terminal debug case/)
+      },
+    })
+  })
+
   test("rollup planSummary reflects instrumentation plan counts per case", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

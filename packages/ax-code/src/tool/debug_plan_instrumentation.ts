@@ -9,6 +9,7 @@ import {
   DebugInstrumentationTargetSchema,
 } from "@ax-code/ax-code-reason/runtime-debug"
 import {
+  CASE_TERMINAL_STATUSES,
   INSTRUMENTATION_TRANSITIONS,
   INSTRUMENTATION_TERMINAL_STATUSES,
   validateTransition,
@@ -43,6 +44,17 @@ export const DebugPlanInstrumentationTool = Tool.define("debug_plan_instrumentat
     })
     const newStatus = args.status ?? "planned"
 
+    // Phase 3 (D5) terminal-case guard: a case whose effective status (via
+    // confirmed/refuted hypotheses) is resolved/unresolved accepts no NEW
+    // instrumentation, but an existing applied plan may still transition to
+    // `removed` so cleanup is never blocked.
+    const rolledUp = SessionDebug.rollup(SessionDebug.load(sessionID)).find((item) => item.caseId === args.caseId)
+    if (rolledUp && CASE_TERMINAL_STATUSES.includes(rolledUp.effectiveStatus) && newStatus !== "removed") {
+      throw new Error(
+        `debug_plan_instrumentation: cannot plan instrumentation for terminal debug case ${args.caseId} (status ${rolledUp.effectiveStatus})`,
+      )
+    }
+
     // Phase 3 (D5): validate the status move against the instrumentation
     // state machine. A re-emitted plan must transition planned → applied →
     // removed; `removed` is terminal. When no prior plan exists (first
@@ -69,7 +81,10 @@ export const DebugPlanInstrumentationTool = Tool.define("debug_plan_instrumentat
       purpose: args.purpose,
       targets: args.targets,
       status: newStatus,
-      createdAt: new Date().toISOString(),
+      // Lifecycle updates keep the original creation timestamp; replay keeps
+      // only the last record per planId, so a fresh timestamp would erase the
+      // audit trail of when the plan was first made.
+      createdAt: existingPlan?.createdAt ?? new Date().toISOString(),
       source: { tool: "debug_plan_instrumentation", version: Installation.VERSION, runId: ctx.sessionID },
     })
     const action =
