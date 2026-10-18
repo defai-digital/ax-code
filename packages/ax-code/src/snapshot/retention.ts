@@ -32,7 +32,7 @@ export function retainedSnapshotHashes(projectID: ProjectID): Set<string> {
         .where(
           and(
             inArray(PartTable.session_id, ids),
-            sql`json_extract(${PartTable.data}, '$.type') in ('step-start', 'step-finish', 'patch')`,
+            sql`json_extract(${PartTable.data}, '$.type') in ('step-start', 'step-finish', 'patch', 'snapshot')`,
           ),
         )
         .all(),
