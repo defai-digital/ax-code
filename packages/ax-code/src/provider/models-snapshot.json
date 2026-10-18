@@ -5553,8 +5553,8 @@
           ]
         },
         "limit": {
-          "context": 1010000,
-          "input": 1010000,
+          "context": 1048576,
+          "input": 1048576,
           "output": 32768
         }
       },
@@ -5647,8 +5647,8 @@
           ]
         },
         "limit": {
-          "context": 1010000,
-          "input": 1010000,
+          "context": 1048576,
+          "input": 1048576,
           "output": 32768
         }
       },
@@ -9411,22 +9411,23 @@
         "id": "deepseek/deepseek-v4-flash-latest",
         "name": "DeepSeek V4 Flash Latest",
         "family": "deepseek",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "tool_call": true,
         "release_date": "2026-08-02",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 1000000,
-          "input": 1000000,
-          "output": 131072
+          "context": 1048576,
+          "input": 1048576,
+          "output": 393216
         }
       },
       "deepseek/deepseek-v4-flash-0731:thinking": {
@@ -15014,28 +15015,6 @@
         "release_date": "2026-09-26",
         "tool_call": true
       },
-      "unbiased/pareto-26.10-preview": {
-        "attachment": true,
-        "id": "unbiased/pareto-26.10-preview",
-        "limit": {
-          "context": 1048576,
-          "input": 1048576,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Pareto 26.10 Preview",
-        "reasoning": false,
-        "release_date": "2026-10-01",
-        "tool_call": true
-      },
       "mistralai/mistral-large-4": {
         "attachment": true,
         "canonical_model_id": "mistral/mistral-large-4",
@@ -15732,6 +15711,78 @@
         "reasoning": true,
         "release_date": "2026-10-16",
         "tool_call": false
+      },
+      "deepseek/deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-1017:thinking": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash-1017:thinking",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 Thinking",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "unbiased/pareto-26.10": {
+        "attachment": true,
+        "id": "unbiased/pareto-26.10",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Pareto 26.10",
+        "reasoning": false,
+        "release_date": "2026-10-01",
+        "tool_call": true
       }
     }
   },
@@ -17985,7 +18036,7 @@
           ]
         },
         "name": "NVIDIA Nemotron 3.5 Super VL",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-15",
         "temperature": true,
         "tool_call": true
@@ -20734,6 +20785,33 @@
         "name": "Muse Spark Open",
         "reasoning": true,
         "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4.1-flash:1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4.1-flash:1017",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
         "temperature": true,
         "tool_call": true
       }
@@ -30933,6 +31011,52 @@
         "reasoning": true,
         "release_date": "2026-09-30",
         "temperature": false,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "deepseek/deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1050000,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 (DeepSeek)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "inference.net/deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "inference.net/deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 (Inference.net)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -48527,6 +48651,32 @@
         "release_date": "2026-10-15",
         "temperature": true,
         "tool_call": true
+      },
+      "reflection/beam": {
+        "attachment": false,
+        "canonical_model_id": "reflection/beam-1.0-501b-a23b",
+        "family": "beam",
+        "id": "reflection/beam",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam 1.0 501B A23B",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -58055,6 +58205,54 @@
         "name": "Step 5 Preview",
         "reasoning": true,
         "release_date": "2026-09-16",
+        "tool_call": true
+      },
+      "deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4.1-flash-1017@eu": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4.1-flash-1017@eu",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 (EU)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -67661,6 +67859,33 @@
         "release_date": "2026-09-10",
         "temperature": false,
         "tool_call": true
+      },
+      "deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -73846,8 +74071,8 @@
         "family": "deepseek-flash",
         "id": "deepseek/deepseek-v4.1-flash",
         "limit": {
-          "context": 1048576,
-          "output": 32768
+          "context": 1000000,
+          "output": 384000
         },
         "modalities": {
           "input": [
@@ -75390,6 +75615,75 @@
         "reasoning": true,
         "release_date": "2026-10-16",
         "tool_call": true
+      },
+      "bfl/flux-3-image-klein": {
+        "attachment": false,
+        "family": "flux",
+        "id": "bfl/flux-3-image-klein",
+        "limit": {
+          "context": 0,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "name": "FLUX 3 Image Klein",
+        "reasoning": false,
+        "release_date": "2026-10-15",
+        "tool_call": false
+      },
+      "deepseek/deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-1017-fast": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash-1017-fast",
+        "limit": {
+          "context": 1048576,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 Fast",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -76375,6 +76669,989 @@
         "provider": {
           "npm": "@openrouter/ai-sdk-provider"
         }
+      },
+      "anthropic/claude-fable-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-06-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "anthropic/claude-fable-5.1": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-1",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5.1",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.1",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-01",
+        "temperature": false,
+        "tool_call": true
+      },
+      "anthropic/claude-haiku-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "anthropic/claude-haiku-5.5",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "anthropic/claude-opus-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5",
+        "family": "claude-opus",
+        "id": "anthropic/claude-opus-5",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-07-24",
+        "temperature": false,
+        "tool_call": true
+      },
+      "anthropic/claude-opus-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5-5",
+        "family": "claude-opus",
+        "id": "anthropic/claude-opus-5.5",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5.5",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": false,
+        "tool_call": true
+      },
+      "anthropic/claude-sonnet-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5",
+        "family": "claude-sonnet",
+        "id": "anthropic/claude-sonnet-5",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-06-30",
+        "temperature": false,
+        "tool_call": true
+      },
+      "anthropic/claude-sonnet-5.5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5-5",
+        "family": "claude-sonnet",
+        "id": "anthropic/claude-sonnet-5.5",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5.5",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4-flash-0731",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4-pro": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-pro",
+        "family": "deepseek-thinking",
+        "id": "deepseek/deepseek-v4-pro",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Pro",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-04-24",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4-pro-0813": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-pro-0813",
+        "family": "deepseek-thinking",
+        "id": "deepseek/deepseek-v4-pro-0813",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Pro 0813",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-08-12",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "google/gemini-3.8-flash": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-3.8-flash",
+        "family": "gemini-flash",
+        "id": "google/gemini-3.8-flash",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 3.8 Flash",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "minimax/minimax-m3": {
+        "attachment": true,
+        "canonical_model_id": "minimax/MiniMax-M3",
+        "family": "minimax",
+        "id": "minimax/minimax-m3",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiniMax-M3",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-06-01",
+        "temperature": true,
+        "tool_call": true
+      },
+      "mistralai/mistral-large-4-0": {
+        "attachment": true,
+        "canonical_model_id": "mistral/mistral-large-4",
+        "family": "mistral-large",
+        "id": "mistralai/mistral-large-4-0",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Mistral Large 4",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-10-06",
+        "temperature": true,
+        "tool_call": true
+      },
+      "openai/gpt-5.6-luna": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.6-luna",
+        "family": "gpt-luna",
+        "id": "openai/gpt-5.6-luna",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1050000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.6 Luna",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-07-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "openai/gpt-5.6-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.6-sol",
+        "family": "gpt-sol",
+        "id": "openai/gpt-5.6-sol",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1050000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.6 Sol",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-07-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "openai/gpt-5.6-terra": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.6-terra",
+        "family": "gpt-terra",
+        "id": "openai/gpt-5.6-terra",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1050000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.6 Terra",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-07-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "openai/gpt-6-astra": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6-astra",
+        "family": "gpt-astra",
+        "id": "openai/gpt-6-astra",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1050000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6 Astra",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-04",
+        "temperature": false,
+        "tool_call": true
+      },
+      "openai/gpt-6-luna": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6-luna",
+        "family": "gpt-luna",
+        "id": "openai/gpt-6-luna",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1050000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6 Luna",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": false,
+        "tool_call": true
+      },
+      "qwen/qwen3.7-flash": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.7-flash",
+        "family": "qwen",
+        "id": "qwen/qwen3.7-flash",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.7 Flash",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-07-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "qwen/qwen3.7-max": {
+        "attachment": false,
+        "canonical_model_id": "alibaba/qwen3.7-max",
+        "family": "qwen",
+        "id": "qwen/qwen3.7-max",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.7 Max",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-05-21",
+        "temperature": true,
+        "tool_call": true
+      },
+      "qwen/qwen3.7-plus": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.7-plus",
+        "family": "qwen",
+        "id": "qwen/qwen3.7-plus",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.7 Plus",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-06-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "qwen/qwen3.8-27b": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-27b",
+        "family": "qwen",
+        "id": "qwen/qwen3.8-27b",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 27B",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "qwen/qwen3.8-flash": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-flash",
+        "family": "qwen",
+        "id": "qwen/qwen3.8-flash",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Flash",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "tool_call": true
+      },
+      "qwen/qwen3.8-max-0902": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-max-0902",
+        "family": "qwen",
+        "id": "qwen/qwen3.8-max-0902",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Max 0902",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "xiaomi/mimo-v2.5": {
+        "attachment": true,
+        "canonical_model_id": "xiaomi/mimo-v2.5",
+        "family": "mimo",
+        "id": "xiaomi/mimo-v2.5",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiMo-V2.5",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-04-22",
+        "temperature": true,
+        "tool_call": true
+      },
+      "xiaomi/mimo-v2.5-pro": {
+        "attachment": false,
+        "canonical_model_id": "xiaomi/mimo-v2.5-pro",
+        "family": "mimo",
+        "id": "xiaomi/mimo-v2.5-pro",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiMo-V2.5-Pro",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-04-22",
+        "temperature": true,
+        "tool_call": true
+      },
+      "xiaomi/mimo-v2.6-flash": {
+        "attachment": true,
+        "canonical_model_id": "xiaomi/mimo-v2.6-flash",
+        "family": "mimo",
+        "id": "xiaomi/mimo-v2.6-flash",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiMo-V2.6-Flash",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": true,
+        "tool_call": true
+      },
+      "xiaomi/mimo-v2.6-pro": {
+        "attachment": true,
+        "canonical_model_id": "xiaomi/mimo-v2.6-pro",
+        "family": "mimo",
+        "id": "xiaomi/mimo-v2.6-pro",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiMo-V2.6-Pro",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": true,
+        "tool_call": true
+      },
+      "z-ai/glm-5.3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "z-ai/glm-5.3",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "z-ai/glm-5.3-flash": {
+        "attachment": true,
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "family": "glm-flash",
+        "id": "z-ai/glm-5.3-flash",
+        "interleaved": {
+          "field": "reasoning_details"
+        },
+        "limit": {
+          "context": 1000000,
+          "input": 850000,
+          "output": 50000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3-Flash",
+        "provider": {
+          "npm": "@openrouter/ai-sdk-provider"
+        },
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -83766,6 +85043,29 @@
         "release_date": "2026-09-30",
         "temperature": false,
         "tool_call": true
+      },
+      "deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1050000,
+          "output": 1050000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -86289,6 +87589,32 @@
         "name": "Beam 1.0 501B A23B",
         "reasoning": true,
         "release_date": "2026-10-05",
+        "temperature": true,
+        "tool_call": true
+      },
+      "meta/muse-spark-open": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-spark-open",
+        "family": "muse",
+        "id": "meta/muse-spark-open",
+        "limit": {
+          "context": 1040000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Spark Open",
+        "reasoning": true,
+        "release_date": "2026-10-15",
         "temperature": true,
         "tool_call": true
       }
@@ -95570,6 +96896,30 @@
         "reasoning": true,
         "release_date": "2026-09-16",
         "tool_call": true
+      },
+      "deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -95901,8 +97251,8 @@
           ]
         },
         "limit": {
-          "context": 256000,
-          "output": 16384
+          "context": 262144,
+          "output": 235929
         },
         "canonical_model_id": "alibaba/qwen3.5-35b-a3b"
       },
@@ -99135,8 +100485,8 @@
           ]
         },
         "limit": {
-          "context": 1048576,
-          "output": 393216
+          "context": 1024000,
+          "output": 384000
         },
         "canonical_model_id": "deepseek/deepseek-v4-pro-0813"
       },
@@ -101402,7 +102752,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 131072
+          "output": 943718
         }
       },
       "~z-ai/glm-latest": {
@@ -101836,7 +103186,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 131072
+          "output": 943718
         },
         "canonical_model_id": "zhipuai/glm-5.3-flash"
       },
@@ -102289,7 +103639,7 @@
         "id": "deepseek/deepseek-v4.1-flash",
         "limit": {
           "context": 1048576,
-          "output": 393216
+          "output": 943718
         },
         "modalities": {
           "input": [
@@ -103237,7 +104587,7 @@
         "attachment": true,
         "id": "~unbiased/pareto-latest",
         "limit": {
-          "context": 262144,
+          "context": 1048576,
           "output": 131072
         },
         "modalities": {
@@ -103577,6 +104927,52 @@
         "name": "XingChen: Xing4.0 29B A4B (free)",
         "reasoning": true,
         "release_date": "2026-10-16",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "unbiased/pareto-26.10": {
+        "attachment": true,
+        "id": "unbiased/pareto-26.10",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Pareto 26.10",
+        "reasoning": false,
+        "release_date": "2026-10-15",
         "temperature": true,
         "tool_call": true
       }
@@ -112535,6 +113931,30 @@
         "release_date": "2026-10-15",
         "temperature": true,
         "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -112594,12 +114014,12 @@
             "text"
           ]
         },
-        "name": "DeepSeek V4.1 Flash",
+        "name": "DeepSeek V4.1 Flash 1017",
         "reasoning": true,
-        "release_date": "2026-09-10",
+        "release_date": "2026-10-17",
         "temperature": true,
         "tool_call": true,
-        "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017"
       }
     }
   },
@@ -134335,6 +135755,88 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash"
+      },
+      "meta-models/Muse-Spark-Open-816B-A42B": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-spark-open",
+        "family": "muse",
+        "id": "meta-models/Muse-Spark-Open-816B-A42B",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Spark Open",
+        "reasoning": true,
+        "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "nvidia/NVIDIA-Nemotron-3.5-Super-VL": {
+        "attachment": true,
+        "canonical_model_id": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+        "family": "nemotron",
+        "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Nemotron 3.5 Super VL 120B A12B",
+        "reasoning": true,
+        "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "reflection/Beam-1.0-501B-A23B": {
+        "attachment": false,
+        "canonical_model_id": "reflection/beam-1.0-501b-a23b",
+        "family": "beam",
+        "id": "reflection/Beam-1.0-501B-A23B",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Beam 1.0 501B A23B",
+        "reasoning": true,
+        "release_date": "2026-10-05",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -138877,27 +140379,6 @@
           "output": 131000
         }
       },
-      "mistral-7b-instruct-v0.3": {
-        "id": "mistral-7b-instruct-v0.3",
-        "name": "mistral-7b-instruct-v0.3",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": false,
-        "release_date": "2025-05-26",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 127000,
-          "output": 127000
-        }
-      },
       "nova-pro-v1": {
         "id": "nova-pro-v1",
         "name": "Nova Pro 1.0",
@@ -139368,31 +140849,6 @@
         },
         "canonical_model_id": "openai/gpt-5"
       },
-      "claude-sonnet-4": {
-        "id": "claude-sonnet-4",
-        "name": "Claude Sonnet 4 (latest)",
-        "family": "claude-sonnet",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-05-22",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 200000,
-          "output": 65000
-        },
-        "canonical_model_id": "anthropic/claude-sonnet-4-0"
-      },
       "voxtral-small-2507": {
         "id": "voxtral-small-2507",
         "name": "voxtral-small-2507",
@@ -139783,6 +141239,30 @@
         "reasoning": true,
         "release_date": "2026-10-13",
         "temperature": false,
+        "tool_call": true
+      },
+      "deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1048576,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -149675,6 +151155,77 @@
         "release_date": "2026-10-13",
         "temperature": false,
         "tool_call": true
+      },
+      "deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 (Deep Infra)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepinfra/nemotron-3-super-120b-a12b": {
+        "attachment": false,
+        "canonical_model_id": "nvidia/nemotron-3-super-120b-a12b",
+        "family": "nemotron",
+        "id": "deepinfra/nemotron-3-super-120b-a12b",
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Nemotron 3 Super 120B A12B (Deep Infra)",
+        "reasoning": true,
+        "release_date": "2026-03-11",
+        "temperature": true,
+        "tool_call": true
+      },
+      "tensorx/deepseek/deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "tensorx/deepseek/deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 (TensorX)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -152478,6 +154029,34 @@
         "name": "Qwen3.8 27B",
         "reasoning": true,
         "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4.1-flash-1017",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048576,
+          "input": 983040,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
         "temperature": true,
         "tool_call": true
       }
@@ -158290,6 +159869,30 @@
         "name": "Muse Spark Open",
         "reasoning": true,
         "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-1017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash-1017",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
         "temperature": true,
         "tool_call": true
       }
