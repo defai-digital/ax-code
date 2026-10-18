@@ -35,8 +35,8 @@ const DIALOG_OVERLAY_NARROW_TERMINAL_WIDTH = 60
 /** Title, search field, borders, padding, and gaps around the DialogSelect list. */
 export const DIALOG_SELECT_CHROME_HEIGHT = 8
 
-/** Title, borders, padding, and gap around the help body. */
-export const DIALOG_HELP_CHROME_HEIGHT = 5
+/** Title, search field, borders, padding, and gaps around the help body. */
+export const DIALOG_HELP_CHROME_HEIGHT = 7
 
 /**
  * Rows consumed by the Dialog frame itself (paddingTop 1 + top/bottom

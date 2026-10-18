@@ -6,6 +6,14 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- Search keyboard shortcut help by action, category, configured keys, or localized description; Escape clears the query before closing.
+
+### Changed
+
+- Upgrade ax-tui to 2.0.1 and route help navigation through focus-scoped keymaps with automatic cleanup.
+
 ## [7.27.1] - 2026-10-18
 
 ### Changed

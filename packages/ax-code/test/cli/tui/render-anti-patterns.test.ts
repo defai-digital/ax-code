@@ -1435,8 +1435,11 @@ describe("AX Code TUI stability guardrails", () => {
     expect(dialogExport).toContain("dialog.clear()")
     expect(dialogHelp).toContain("<scrollbox")
     expect(dialogHelp).toContain("maxBodyHeight")
-    expect(dialogHelp).toContain('evt.name === "return" || evt.name === "escape"')
-    expect(dialogHelp).toContain('evt.name === "pagedown"')
+    // Native locale checks exercise help navigation and clear-before-close.
+    // Keep Escape under the provider's selection/context-menu policy, and
+    // prevent a return to an unscoped global help keyboard listener.
+    expect(dialogHelp).toContain("dialog.registerEscapeHandler(clearSearch)")
+    expect(dialogHelp).not.toContain("useKeyboard(")
     expect(route).toContain("function parseInitialRoute(")
     expect(toast).toContain("queue: [] as QueuedToast[]")
     expect(toast).toContain("function scheduleNextToast(entry: QueuedToast)")
