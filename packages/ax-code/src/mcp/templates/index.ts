@@ -18,6 +18,10 @@ export interface McpTemplate {
   envRequired?: string[]
   envDescription?: Record<string, string>
   docs?: string
+  headers?: Record<string, string>
+  oauth?: false
+  allowLoopback?: boolean
+  enabled?: boolean
 }
 
 export const TEMPLATES: McpTemplate[] = [
@@ -73,6 +77,24 @@ export const TEMPLATES: McpTemplate[] = [
     args: ["-y", "@sentry/mcp-server"],
     envRequired: ["SENTRY_AUTH_TOKEN"],
     envDescription: { SENTRY_AUTH_TOKEN: "Get from https://sentry.io/settings/auth-tokens/" },
+  },
+
+  // === Analytics ===
+  {
+    name: "ax-bi",
+    description: "AX BI governed datasets, SQL, charts and dashboards (configure a user key before enabling)",
+    category: "Analytics",
+    envRequired: ["AXBI_MCP_API_KEY"],
+    envDescription: {
+      AXBI_MCP_API_KEY: "Set the user-bound AX BI key in the runtime launching environment before enabling",
+    },
+    type: "remote",
+    url: "http://127.0.0.1:31421/mcp",
+    headers: { Authorization: "Bearer {env:AXBI_MCP_API_KEY}" },
+    oauth: false,
+    allowLoopback: true,
+    enabled: false,
+    docs: "https://github.com/defai-digital/ax-bi",
   },
 
   // === Databases ===
@@ -253,8 +275,12 @@ export function toConfig(template: McpTemplate, environment?: Record<string, str
     const env = environment ?? template.env
     if (env && Object.keys(env).length > 0) config.environment = env
   } else {
-    // Remote: only `url` is relevant from the template fields.
+    // Remote credentials remain references; never materialize collected secrets.
     if (template.url) config.url = template.url
+    if (template.headers) config.headers = { ...template.headers }
+    if (template.oauth === false) config.oauth = false
+    if (template.allowLoopback !== undefined) config.allowLoopback = template.allowLoopback
+    if (template.enabled !== undefined) config.enabled = template.enabled
   }
   return config
 }
