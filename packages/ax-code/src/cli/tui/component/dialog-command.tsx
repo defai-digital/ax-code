@@ -1,8 +1,10 @@
+import { createCommandExecutor } from "./command-execution"
 import { useLanguage } from "../context/language"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { DialogSelect, type DialogSelectOption, type DialogSelectRef } from "@tui/ui/dialog-select"
 import {
   createContext,
+  createEffect,
   createMemo,
   createSignal,
   onCleanup,
@@ -10,7 +12,7 @@ import {
   type Accessor,
   type ParentProps,
 } from "solid-js"
-import { useKeyboard } from "ax-tui/solid"
+import { useKeyboard, useRenderer } from "ax-tui/solid"
 import { type KeybindKey, useKeybind } from "@tui/context/keybind"
 import { useToast } from "@tui/ui/toast"
 import { useKV } from "@tui/context/kv"
@@ -55,6 +57,12 @@ function init() {
   const keybind = useKeybind()
   const toast = useToast()
   const kv = useKV()
+  const renderer = useRenderer()
+  let applicationScope = () => ""
+  let alive = true
+  onCleanup(() => {
+    alive = false
+  })
 
   const entries = createMemo(() => {
     const all = registrations().flatMap((x) => x())
@@ -67,10 +75,8 @@ function init() {
   const isEnabled = (option: CommandOption) => option.enabled !== false
   const isVisible = (option: CommandOption) => isEnabled(option) && !option.hidden
 
-  // Wrap each visible option's onSelect so picks made via the dialog UI
-  // (which calls onSelect directly, bypassing runCommandAction) are still
-  // recorded into frecency. Keyboard/keybind paths still go through
-  // runCommandAction and are recorded there.
+  // Picker rows use the same executor as shortcuts and slash invocations,
+  // retaining canonical identity behind recent/suggested display copies.
   const visibleOptions = createMemo(() =>
     entries()
       .filter((option) => isVisible(option))
@@ -79,10 +85,7 @@ function init() {
         if (!original) return option
         return {
           ...option,
-          onSelect: (dialogApi: any) => {
-            recordUsage(option)
-            return original(dialogApi)
-          },
+          onSelect: () => runCommandAction(option, "trigger"),
         }
       }),
   )
@@ -133,21 +136,32 @@ function init() {
     }
   }
 
-  function runCommandAction(option: CommandOption, route: "keybind" | "trigger" | "slash") {
-    if (route === "trigger" || route === "slash") recordUsage(option)
-    void Promise.resolve()
-      .then(() => option.onSelect?.(dialog))
-      .catch((error) => {
-        log.warn("command action failed", {
-          error,
-          route,
-          value: option.value,
-        })
-        toast.show({
-          message: error instanceof Error ? error.message : `Failed to run ${option.title}`,
-          variant: "error",
-        })
+  const executor = createCommandExecutor({
+    renderer,
+    entries,
+    dialog,
+    scope: () => applicationScope(),
+    record: recordUsage,
+  })
+  createEffect(() => executor.sync())
+  onCleanup(() => executor.dispose())
+
+  async function runCommandAction(option: CommandOption, route: "keybind" | "trigger" | "slash", args?: string) {
+    const scope = applicationScope()
+    const result = await executor
+      .execute(option, route, args)
+      .catch((error: unknown) => ({ status: "error" as const, error }))
+    if (!alive || scope !== applicationScope()) return result
+    if (result.status === "error") {
+      log.warn("command action failed", { error: result.error, route, value: option.value })
+      toast.show({
+        message: result.error instanceof Error ? result.error.message : `Failed to run ${option.title}`,
+        variant: "error",
       })
+    } else if (result.status !== "executed") {
+      toast.show({ message: t("mode.unavailable"), variant: "warning" })
+    }
+    return result
   }
 
   useKeyboard((evt) => {
@@ -164,12 +178,17 @@ function init() {
   })
 
   const result = {
+    setScope(scope: () => string) {
+      applicationScope = scope
+      onCleanup(() => {
+        if (applicationScope === scope) applicationScope = () => ""
+      })
+    },
     trigger(name: string) {
       for (const option of entries()) {
         if (option.value === name) {
           if (!isEnabled(option)) return
-          runCommandAction(option, "trigger")
-          return
+          return runCommandAction(option, "trigger")
         }
       }
     },
@@ -205,21 +224,7 @@ function init() {
         if (!option.slash?.arguments || !option.onSlashArguments) continue
         if (!isEnabled(option)) continue
         if (option.slash.name !== name && !option.slash.aliases?.includes(name)) continue
-        recordUsage(option)
-        const handler = option.onSlashArguments
-        void Promise.resolve()
-          .then(() => handler(args, dialog))
-          .catch((error) => {
-            log.warn("command action failed", {
-              error,
-              route: "slash",
-              value: option.value,
-            })
-            toast.show({
-              message: error instanceof Error ? error.message : `Failed to run ${option.title}`,
-              variant: "error",
-            })
-          })
+        void runCommandAction(option, "slash", args)
         return true
       }
       return false

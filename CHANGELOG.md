@@ -8,11 +8,13 @@ changes belong to AX Coder.
 
 ### Added
 
+- Preview session PNG attachments on demand through attachment links or `/images`, with bounded decoding and terminal graphics fallback.
 - Search keyboard shortcut help by action, category, configured keys, or localized description; Escape clears the query before closing.
 
 ### Changed
 
-- Upgrade ax-tui to 2.0.1 and route help navigation through focus-scoped keymaps with automatic cleanup.
+- Upgrade ax-tui to 2.1.0 with matching ABI 3 native libraries. Use modal focus scopes for connection forms and shortcut help, and share command registry execution across pickers, shortcuts, and slash commands.
+- Virtualize large text-based pickers while preserving their layout, keyboard selection, and mouse actions.
 
 ## [7.27.1] - 2026-10-18
 

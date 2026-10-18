@@ -1,3 +1,5 @@
+import { imagePreviewLabel, isImagePreviewCandidate } from "@tui/ui/image-preview-source"
+import { ImagePreviewLink } from "@tui/ui/image-preview-link"
 import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, ErrorBoundary, For, Match, Show, Switch, untrack } from "solid-js"
 import { Dynamic } from "solid-js/web"
@@ -163,10 +165,13 @@ export function UserMessage(props: {
                       return theme.secondary
                     })
                     return (
-                      <text fg={theme.text}>
+                      <ImagePreviewLink fg={theme.text} file={file} onOpen={ctx.previewImage}>
                         <span style={{ bg: bg(), fg: theme.background }}> {MIME_BADGE[file.mime] ?? file.mime} </span>
                         <span style={{ bg: theme.backgroundElement, fg: theme.textMuted }}> {file.filename} </span>
-                      </text>
+                        <Show when={isImagePreviewCandidate(file) && ctx.previewImage}>
+                          <span style={{ fg: theme.accent }}> {uiText("ui.open2")}</span>
+                        </Show>
+                      </ImagePreviewLink>
                     )
                   }}
                 </For>
@@ -721,6 +726,7 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   const shouldHide = createMemo(() => {
     if (ctx.showDetails()) return false
     if (props.part.state.status !== "completed") return false
+    if (props.part.state.attachments?.some(isImagePreviewCandidate)) return false
     if (hasHookRewrite(props.part.state.metadata)) return false
     if (!hidesCompletedToolWhenDetailsOff(props.part.tool)) return false
     return true
@@ -768,6 +774,21 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
           </text>
         </Show>
         <Dynamic component={toolRendererComponent(props.part.tool)} {...toolprops} />
+        <Show when={props.part.state.status === "completed" && ctx.previewImage}>
+          <For
+            each={
+              props.part.state.status === "completed"
+                ? (props.part.state.attachments?.filter(isImagePreviewCandidate) ?? [])
+                : []
+            }
+          >
+            {(file) => (
+              <ImagePreviewLink paddingLeft={3} fg={theme.accent} file={file} onOpen={ctx.previewImage}>
+                {uiText("ui.open2")} {imagePreviewLabel(file.filename ?? file.mime)}
+              </ImagePreviewLink>
+            )}
+          </For>
+        </Show>
       </ErrorBoundary>
     </Show>
   )

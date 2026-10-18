@@ -1,3 +1,4 @@
+import type { FilePart } from "@ax-code/sdk/v2"
 import { createContext, useContext } from "solid-js"
 import type { useSync } from "@tui/context/sync"
 import type { useTuiConfig } from "../../context/tui-config"
@@ -8,6 +9,7 @@ export type SessionRouteContextValue = {
   conceal: () => boolean
   showThinking: () => boolean
   showTimestamps: () => boolean
+  previewImage?: (file: FilePart) => void
   showDetails: () => boolean
   showGenericToolOutput: () => boolean
   userMetadataPreference: () => "auto" | "full" | "compact"

@@ -14,6 +14,7 @@ const mocked = vi.hoisted(() => ({
 vi.mock("ax-tui/solid", async () => {
   const { onCleanup } = await import("solid-js")
   return {
+    VirtualList: "virtual-list",
     useKeyboard: (handler: (event: KeyEvent) => void) => {
       mocked.handlers.push(handler)
       onCleanup(() => {

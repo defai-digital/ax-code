@@ -1,3 +1,4 @@
+import { useSessionImagePreview } from "./image-preview"
 import { useWikiVisualization } from "@tui/context/wiki-visualization"
 import { useLanguage } from "@tui/context/language"
 import { TimelineRail } from "./timeline-rail"
@@ -875,6 +876,11 @@ export function Session() {
     })
   }
 
+  const previewImage = useSessionImagePreview({
+    sessionID: () => route.sessionID,
+    messages,
+    parts: () => sync.data.part,
+  })
   const command = useCommandDialog()
   command.register(() => [
     {
@@ -1574,6 +1580,7 @@ export function Session() {
         conceal,
         showThinking,
         showTimestamps,
+        previewImage,
         showDetails,
         showGenericToolOutput,
         userMetadataPreference: metadataDensity,

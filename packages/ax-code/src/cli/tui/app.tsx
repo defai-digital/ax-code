@@ -310,6 +310,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const kv = useKV()
   const command = useCommandDialog()
   const sdk = useSDK()
+  command.setScope(() =>
+    JSON.stringify([sdk.directory, route.data.type, route.data.type === "session" ? route.data.sessionID : ""]),
+  )
 
   const toast = useToast()
   const { theme, mode, setMode, locked, lock, unlock } = useTheme()

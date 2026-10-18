@@ -1,10 +1,11 @@
 import { useLanguage } from "@tui/context/language"
-import { TextareaRenderable, TextAttributes } from "ax-tui"
+import { TextareaRenderable, TextAttributes, type BoxRenderable } from "ax-tui"
 import { createSignal, onCleanup, onMount } from "solid-js"
 import { useKeyboard } from "ax-tui/solid"
 import { useTheme } from "@tui/context/theme"
 import { useDialog } from "@tui/ui/dialog"
 import { useToast } from "@tui/ui/toast"
+import { useDialogFocus } from "@tui/ui/dialog-focus"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { focusRenderable } from "@tui/util/renderable-safety"
 import { normalizeVendorBaseURL } from "@/provider/private-gpu/endpoint"
@@ -24,6 +25,8 @@ export function DialogPrivateGpuConnect(props: DialogPrivateGpuConnectProps) {
   const toast = useToast()
   const { theme } = useTheme()
   const [active, setActive] = createSignal<"baseURL" | "apiKey">("baseURL")
+  const [panel, setPanel] = createSignal<BoxRenderable>()
+  useDialogFocus(panel)
   let baseURLInput: TextareaRenderable
   let apiKeyInput: TextareaRenderable
   const vendor = props.vendor
@@ -71,12 +74,6 @@ export function DialogPrivateGpuConnect(props: DialogPrivateGpuConnectProps) {
   }
 
   useKeyboard((evt) => {
-    if (evt.name === "tab") {
-      evt.preventDefault()
-      setActive((current) => (current === "baseURL" ? "apiKey" : "baseURL"))
-      scheduleMicrotaskTask(focusActive, { name: `${focusName}-tab` })
-      return
-    }
     if (evt.name === "return") {
       evt.preventDefault()
       evt.stopPropagation()
@@ -102,7 +99,7 @@ export function DialogPrivateGpuConnect(props: DialogPrivateGpuConnectProps) {
   )
 
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+    <box ref={setPanel} paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text attributes={TextAttributes.BOLD} fg={theme.text}>
           {props.title ?? `Connect ${vendor.name}`}
@@ -117,7 +114,12 @@ export function DialogPrivateGpuConnect(props: DialogPrivateGpuConnectProps) {
         <textarea
           height={3}
           keyBindings={[{ name: "return", action: "submit" }]}
-          ref={(val: TextareaRenderable) => (baseURLInput = val)}
+          ref={(val: TextareaRenderable) => {
+            baseURLInput = val
+            const focused = () => setActive("baseURL")
+            val.on("focused", focused)
+            onCleanup(() => val.off("focused", focused))
+          }}
           initialValue={props.defaultBaseURL ?? vendor.defaultApi ?? ""}
           placeholder={vendor.urlPlaceholder}
           textColor={theme.text}
@@ -128,7 +130,12 @@ export function DialogPrivateGpuConnect(props: DialogPrivateGpuConnectProps) {
         <textarea
           height={3}
           keyBindings={[{ name: "return", action: "submit" }]}
-          ref={(val: TextareaRenderable) => (apiKeyInput = val)}
+          ref={(val: TextareaRenderable) => {
+            apiKeyInput = val
+            const focused = () => setActive("apiKey")
+            val.on("focused", focused)
+            onCleanup(() => val.off("focused", focused))
+          }}
           initialValue=""
           placeholder={vendor.tokenPlaceholder}
           textColor={theme.text}

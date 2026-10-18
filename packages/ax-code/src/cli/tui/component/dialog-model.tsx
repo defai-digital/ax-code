@@ -219,6 +219,11 @@ export function DialogModel(props: { providerID?: string }) {
   return (
     <DialogSelect<ReturnType<typeof options>[number]["value"]>
       options={options()}
+      getKey={(option) =>
+        typeof option.value === "string"
+          ? option.value
+          : JSON.stringify([option.value.providerID, option.value.modelID])
+      }
       keybind={[
         {
           keybind: keybind.all.model_provider_list?.[0],

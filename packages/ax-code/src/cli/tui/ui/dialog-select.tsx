@@ -1,9 +1,30 @@
+import { createDialogOptionKey, solidVirtualRow, DIALOG_SELECT_VIRTUAL_THRESHOLD } from "./dialog-select-virtual"
 import { useLanguage } from "@tui/context/language"
-import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes, type BoxRenderable } from "ax-tui"
+import {
+  InputRenderable,
+  RGBA,
+  ScrollBoxRenderable,
+  TextAttributes,
+  VirtualListRenderable,
+  type BoxRenderable,
+} from "ax-tui"
 import { tint, useTheme } from "@tui/context/theme"
-import { batch, createEffect, createMemo, createSignal, For, Show, type JSX, on, onCleanup, untrack } from "solid-js"
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+  type JSX,
+  type Accessor,
+  getOwner,
+  on,
+  onCleanup,
+  untrack,
+} from "solid-js"
 import { createStore } from "solid-js/store"
-import { useKeyboard, useTerminalDimensions } from "ax-tui/solid"
+import { useKeyboard, useTerminalDimensions, VirtualList } from "ax-tui/solid"
 import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
@@ -40,6 +61,8 @@ export interface DialogSelectProps<T> {
   title: string
   placeholder?: string
   options: DialogSelectOption<T>[]
+  /** Stable application identity for object-valued options when their objects are recreated. */
+  getKey?: (option: DialogSelectOption<T>) => string | number
   flat?: boolean
   ref?: (ref: DialogSelectRef<T>) => void
   onMove?: (option: DialogSelectOption<T>) => void
@@ -98,10 +121,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   onCleanup(dialog.registerEscapeHandler(clearSearch))
 
   const flatten = createMemo(() => props.flat && store.filter.length > 0)
+  // JSX getters may build new option objects on every read. Share one snapshot
+  // between grouping and key assignment so both see the same row identities.
+  const options = createMemo(() => props.options)
 
   const grouped = createMemo<[string, DialogSelectOption<T>[]][]>(() => {
     return dialogSelectGroupedOptions({
-      options: props.options,
+      options: options(),
       query: store.filter,
       flat: flatten(),
       skipFilter: props.skipFilter,
@@ -145,6 +171,51 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   })
 
   const rows = createMemo(() => dialogSelectRows(grouped()))
+  const rowOwner = getOwner()
+  const valueKey = createDialogOptionKey()
+  const optionKeys = createMemo(() => {
+    const keys = new Map<DialogSelectOption<T>, string[]>()
+    const counts = new Map<string, number>()
+    for (const option of options()) {
+      const base = JSON.stringify([option.category ?? "", props.getKey?.(option) ?? valueKey(option.value)])
+      const occurrence = counts.get(base) ?? 0
+      counts.set(base, occurrence + 1)
+      const list = keys.get(option) ?? []
+      list.push(`option:${base}:${occurrence}`)
+      keys.set(option, list)
+    }
+    return keys
+  })
+  type VirtualRow = {
+    key: string
+    category: string
+    header: boolean
+    gap: boolean
+    option?: DialogSelectOption<T>
+    index: number
+  }
+  const virtualRows = createMemo(() => {
+    const result: VirtualRow[] = []
+    const seen = new Map<DialogSelectOption<T>, number>()
+    const keys = optionKeys()
+    let index = 0
+    for (const [groupIndex, [category, options]] of grouped().entries()) {
+      if (category) result.push({ key: `header:${category}`, category, header: true, gap: groupIndex > 0, index: -1 })
+      for (const option of options) {
+        const occurrence = seen.get(option) ?? 0
+        seen.set(option, occurrence + 1)
+        result.push({ key: keys.get(option)![occurrence], category, header: false, gap: false, option, index: index++ })
+      }
+    }
+    return result
+  })
+  // Existing JSX footers/gutters can be mounted only once. Keep their ownership
+  // on the ordinary path; primitive rows can be retired and recreated safely.
+  const virtualized = createMemo(
+    () =>
+      rows() > DIALOG_SELECT_VIRTUAL_THRESHOLD &&
+      options().every((option) => !option.gutter && (option.footer == null || typeof option.footer === "string")),
+  )
 
   const dimensions = useTerminalDimensions()
   const height = createMemo(() => dialogSelectVisibleHeight(rows(), dimensions().height))
@@ -209,6 +280,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   }
 
   function moveTo(next: number, center = false) {
+    const previous = store.selected
     setStore("selected", next)
     const option = selected()
     if (option) props.onMove?.(option)
@@ -216,6 +288,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     const target = findRenderableChild<{ id?: string; y: number }>(scroll, (child) => child.id === optionID(next), {
       name: "dialog-select-option-target",
     })
+    if (!target && scroll instanceof VirtualListRenderable) {
+      const index = virtualRows().findIndex((row) => !row.header && row.index === next)
+      if (index >= 0) scroll.scrollToIndex(index, center ? "center" : next > previous ? "end" : "start")
+      return
+    }
     if (!target) return
     const y = target.y - scroll.y
     if (center) {
@@ -248,6 +325,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           (child) => child.id === optionID(store.selected),
           { name: "dialog-select-reveal-target" },
         )
+        if (!target && scroll instanceof VirtualListRenderable) {
+          const index = virtualRows().findIndex((row) => !row.header && row.index === store.selected)
+          if (index >= 0) scroll.scrollToIndex(index, "center")
+          return
+        }
         if (!target) return
         const top = target.y - scroll.viewport.y
         if (top >= 0 && top + target.height <= scroll.viewport.height) return
@@ -401,6 +483,70 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     ),
   )
 
+  function renderOption(option: DialogSelectOption<T>, optionIndex: Accessor<number>, category: Accessor<string>) {
+    const active = createMemo(() => optionIndex() === store.selected)
+    const current = createMemo(() => isDeepEqual(option.value, props.current))
+    return (
+      <box
+        id={optionID(optionIndex())}
+        flexDirection="row"
+        onMouseMove={() => {
+          armConfirm()
+          setStore("input", "mouse")
+        }}
+        onMouseUp={() => {
+          if (option.disabled) return
+          // Route clicks through confirmSelected so the
+          // confirmInFlight latch also guards the mouse path
+          // against double-fires.
+          armConfirm()
+          const row = optionIndex()
+          if (row !== store.selected) moveTo(row)
+          confirmSelected()
+        }}
+        onMouseOver={() => {
+          if (store.input !== "mouse") return
+          armConfirm()
+          moveTo(optionIndex())
+        }}
+        onMouseDown={() => {
+          armConfirm()
+          moveTo(optionIndex())
+        }}
+        backgroundColor={
+          active()
+            ? option.disabled
+              ? theme.backgroundElement
+              : // One accent-tinted panel fill for both theme
+                // modes (a purple selection reads as "chosen",
+                // not "success"); option.bg still overrides.
+                (option.bg ?? tint(theme.backgroundPanel, theme.accent, 0.3))
+            : RGBA.fromInts(0, 0, 0, 0)
+        }
+        paddingLeft={current() || option.gutter ? 1 : 3}
+        // Narrow frames trade the right inset for label room.
+        paddingRight={frameWidth() < DIALOG_SELECT_COMPACT_FRAME_WIDTH ? 1 : 3}
+        gap={1}
+      >
+        {/* Selection marker cell: a "›" on the active row, a
+        space elsewhere, so option text never shifts. */}
+        <text flexShrink={0} fg={theme.secondary}>
+          {active() ? "›" : " "}
+        </text>
+        <Option
+          title={option.title}
+          footer={flatten() ? (option.category ?? option.footer) : option.footer}
+          description={option.description !== category() ? option.description : undefined}
+          descriptionFg={option.descriptionFg}
+          active={active()}
+          current={current()}
+          disabled={option.disabled}
+          gutter={option.gutter}
+        />
+      </box>
+    )
+  }
+
   return (
     <box gap={1} paddingBottom={1}>
       <box paddingLeft={4} paddingRight={4}>
@@ -455,115 +601,103 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           </box>
         }
       >
-        <scrollbox
-          paddingLeft={1}
-          // When the scrollbar is shown, the viewport's paddingRight provides the
-          // content-to-bar gap, so drop the outer paddingRight to avoid stacking
-          // it (which would inset the bar from the edge and shift the content
-          // margin as the bar toggles).
-          paddingRight={overflow() ? 0 : 1}
-          viewportOptions={{
-            paddingRight: overflow() ? 1 : 0,
-          }}
-          verticalScrollbarOptions={{
-            paddingLeft: 1,
-            visible: overflow(),
-            trackOptions: {
-              // Neutral, high-contrast thumb (a chrome affordance, not an
-              // identity/status color); the track stays subtle.
-              backgroundColor: theme.backgroundElement,
-              foregroundColor: theme.borderActive,
-            },
-          }}
-          ref={(r: ScrollBoxRenderable) => (scroll = r)}
-          onSizeChange={revealSelected}
-          maxHeight={height()}
+        <Show
+          when={virtualized()}
+          fallback={
+            <scrollbox
+              paddingLeft={1}
+              // When the scrollbar is shown, the viewport's paddingRight provides the
+              // content-to-bar gap, so drop the outer paddingRight to avoid stacking
+              // it (which would inset the bar from the edge and shift the content
+              // margin as the bar toggles).
+              paddingRight={overflow() ? 0 : 1}
+              viewportOptions={{
+                paddingRight: overflow() ? 1 : 0,
+              }}
+              verticalScrollbarOptions={{
+                paddingLeft: 1,
+                visible: overflow(),
+                trackOptions: {
+                  // Neutral, high-contrast thumb (a chrome affordance, not an
+                  // identity/status color); the track stays subtle.
+                  backgroundColor: theme.backgroundElement,
+                  foregroundColor: theme.borderActive,
+                },
+              }}
+              ref={(r: ScrollBoxRenderable) => (scroll = r)}
+              onSizeChange={revealSelected}
+              maxHeight={height()}
+            >
+              <For each={grouped()}>
+                {([category, options], index) => {
+                  const groupStart = createMemo(() => dialogSelectGroupStartIndex(grouped(), index()))
+                  return (
+                    <>
+                      <Show when={category}>
+                        <box paddingTop={index() > 0 ? 1 : 0} paddingLeft={3}>
+                          <text fg={theme.secondary} attributes={TextAttributes.BOLD}>
+                            {category}
+                          </text>
+                        </box>
+                      </Show>
+                      <For each={options}>
+                        {(option, optionOffset) => {
+                          // Index identity so the same model can appear in Recent and
+                          // again under its provider without both rows highlighting.
+                          const optionIndex = createMemo(() => groupStart() + optionOffset())
+                          return renderOption(option, optionIndex, () => category)
+                        }}
+                      </For>
+                    </>
+                  )
+                }}
+              </For>
+            </scrollbox>
+          }
         >
-          <For each={grouped()}>
-            {([category, options], index) => {
-              const groupStart = createMemo(() => dialogSelectGroupStartIndex(grouped(), index()))
-              return (
-                <>
-                  <Show when={category}>
-                    <box paddingTop={index() > 0 ? 1 : 0} paddingLeft={3}>
+          <VirtualList
+            items={virtualRows()}
+            getKey={(row) => row.key}
+            renderItem={(row) =>
+              solidVirtualRow(rowOwner, () => (
+                <box paddingLeft={1} paddingRight={1}>
+                  {row.header ? (
+                    <box paddingTop={row.gap ? 1 : 0} paddingLeft={3}>
                       <text fg={theme.secondary} attributes={TextAttributes.BOLD}>
-                        {category}
+                        {row.category}
                       </text>
                     </box>
-                  </Show>
-                  <For each={options}>
-                    {(option, optionOffset) => {
-                      // Index identity so the same model can appear in Recent and
-                      // again under its provider without both rows highlighting.
-                      const optionIndex = createMemo(() => groupStart() + optionOffset())
-                      const active = createMemo(() => optionIndex() === store.selected)
-                      const current = createMemo(() => isDeepEqual(option.value, props.current))
-                      return (
-                        <box
-                          id={optionID(optionIndex())}
-                          flexDirection="row"
-                          onMouseMove={() => {
-                            armConfirm()
-                            setStore("input", "mouse")
-                          }}
-                          onMouseUp={() => {
-                            if (option.disabled) return
-                            // Route clicks through confirmSelected so the
-                            // confirmInFlight latch also guards the mouse path
-                            // against double-fires.
-                            armConfirm()
-                            const row = optionIndex()
-                            if (row !== store.selected) moveTo(row)
-                            confirmSelected()
-                          }}
-                          onMouseOver={() => {
-                            if (store.input !== "mouse") return
-                            armConfirm()
-                            moveTo(optionIndex())
-                          }}
-                          onMouseDown={() => {
-                            armConfirm()
-                            moveTo(optionIndex())
-                          }}
-                          backgroundColor={
-                            active()
-                              ? option.disabled
-                                ? theme.backgroundElement
-                                : // One accent-tinted panel fill for both theme
-                                  // modes (a purple selection reads as "chosen",
-                                  // not "success"); option.bg still overrides.
-                                  (option.bg ?? tint(theme.backgroundPanel, theme.accent, 0.3))
-                              : RGBA.fromInts(0, 0, 0, 0)
-                          }
-                          paddingLeft={current() || option.gutter ? 1 : 3}
-                          // Narrow frames trade the right inset for label room.
-                          paddingRight={frameWidth() < DIALOG_SELECT_COMPACT_FRAME_WIDTH ? 1 : 3}
-                          gap={1}
-                        >
-                          {/* Selection marker cell: a "›" on the active row, a
-                              space elsewhere, so option text never shifts. */}
-                          <text flexShrink={0} fg={theme.secondary}>
-                            {active() ? "›" : " "}
-                          </text>
-                          <Option
-                            title={option.title}
-                            footer={flatten() ? (option.category ?? option.footer) : option.footer}
-                            description={option.description !== category ? option.description : undefined}
-                            descriptionFg={option.descriptionFg}
-                            active={active()}
-                            current={current()}
-                            disabled={option.disabled}
-                            gutter={option.gutter}
-                          />
-                        </box>
-                      )
-                    }}
-                  </For>
-                </>
-              )
+                  ) : (
+                    renderOption(
+                      row.option!,
+                      () => row.index,
+                      () => row.category,
+                    )
+                  )}
+                </box>
+              ))
+            }
+            estimateHeight={1}
+            overscan={3}
+            height={height()}
+            paddingLeft={1}
+            paddingRight={overflow() ? 0 : 1}
+            viewportOptions={{ paddingRight: overflow() ? 1 : 0 }}
+            verticalScrollbarOptions={{
+              paddingLeft: 1,
+              visible: overflow(),
+              trackOptions: {
+                backgroundColor: theme.backgroundElement,
+                foregroundColor: theme.borderActive,
+              },
             }}
-          </For>
-        </scrollbox>
+            ref={(value) => {
+              scroll = value
+              revealSelected()
+            }}
+            onSizeChange={revealSelected}
+          />
+        </Show>
       </Show>
       {/* No footer, no placeholder: an empty box would still cost a gap row,
           which short terminals need for options (36x20 setup wizard). */}

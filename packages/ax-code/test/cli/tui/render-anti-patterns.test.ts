@@ -823,7 +823,8 @@ describe("AX Code TUI stability guardrails", () => {
     expect(dialogCommand).toContain('runCommandAction(option, "keybind")')
     expect(dialogCommand).toContain('runCommandAction(option, "trigger")')
     expect(dialogCommand).toContain('runCommandAction(option, "slash")')
-    expect(dialogCommand).toContain("void Promise.resolve()")
+    expect(dialogCommand).toMatch(/await executor\s*\.execute\(option, route, args\)\s*\.catch\(/)
+    expect(dialogCommand).toContain('if (result.status === "error")')
   })
 
   test("waits for provider and model readiness before home prompt auto-submit", async () => {

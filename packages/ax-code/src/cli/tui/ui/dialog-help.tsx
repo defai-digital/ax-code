@@ -2,6 +2,7 @@ import { useLanguage } from "@tui/context/language"
 import { BoxRenderable, InputRenderable, ScrollBoxRenderable, TextAttributes } from "ax-tui"
 import { useTheme } from "@tui/context/theme"
 import { useDialog } from "./dialog"
+import { useDialogFocus } from "./dialog-focus"
 import { useKeymap, useTerminalDimensions } from "ax-tui/solid"
 import { useKeybind } from "@tui/context/keybind"
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from "solid-js"
@@ -24,6 +25,7 @@ export function DialogHelp() {
   const [query, setQuery] = createSignal("")
   const [input, setInput] = createSignal<InputRenderable>()
   const [root, setRoot] = createSignal<BoxRenderable>()
+  useDialogFocus(root)
   const groups = createMemo(() =>
     dialogHelpSearchGroups(dialogHelpGroups(uiText), keybind.print, query(), (key) =>
       (keybind.all[key] ?? []).map((binding) => Keybind.toDisplayString(binding, keybind.all.leader?.[0])),
