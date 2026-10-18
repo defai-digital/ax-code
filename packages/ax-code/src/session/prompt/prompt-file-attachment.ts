@@ -19,6 +19,11 @@ import { Config } from "@/config/config"
 
 const log = Log.create({ service: "session.prompt" })
 
+// Attachments are embedded as base64 data URLs, so bound the file before
+// reading it: loading a multi-GB file just to reject it would exhaust memory
+// before the post-read check runs.
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+
 type Draft<T> = T extends MessageV2.Part ? Omit<T, "id"> & { id?: string } : never
 type DraftTextPart = Draft<MessageV2.TextPart>
 type DraftPart = Draft<MessageV2.Part>
@@ -242,8 +247,11 @@ export async function resolveFileAttachmentPart(input: {
         let dataUrl: string
         let finalMime = part.mime
         {
+          // Reject oversized files from the stat before reading; the
+          // post-read check below still guards growth between stat and read.
+          if (s && s.size > MAX_ATTACHMENT_BYTES) throw new Error(`Attachment too large: ${s.size} bytes`)
           const buffer = await Filesystem.readBytes(filepath)
-          if (buffer.length > 50 * 1024 * 1024) throw new Error(`Attachment too large: ${buffer.length} bytes`)
+          if (buffer.length > MAX_ATTACHMENT_BYTES) throw new Error(`Attachment too large: ${buffer.length} bytes`)
 
           if (MessageV2.isMedia(part.mime) && part.mime.startsWith("image/")) {
             const cfg = await Config.get()
