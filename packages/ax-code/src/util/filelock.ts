@@ -54,7 +54,13 @@ export namespace FileLock {
       await fs.unlink(target).catch(() => undefined)
       throw error
     } finally {
-      await handle.close()
+      // The body is already on disk and names this process, so the lock is
+      // ours even when the descriptor fails to close. Propagating the close
+      // error would reject the acquisition with no Disposable in hand —
+      // orphaning a lock this process can never release.
+      await handle.close().catch((error) => {
+        log.warn("file lock descriptor failed to close after body write", { target, error })
+      })
     }
     return body
   }
@@ -89,8 +95,6 @@ export namespace FileLock {
       // lock at once, so only steal once the file's mtime proves it was
       // abandoned (the body write lands within microseconds of creation, so
       // a short grace — not the caller's full stale window — is enough).
-      // A missing file (deleted between our EEXIST and this read) means the
-      // lock is already free — report it stealable so the caller retries.
       const mtimeMs = await fs
         .stat(target)
         .then((stats) => stats.mtimeMs)
@@ -98,7 +102,14 @@ export namespace FileLock {
           if (err?.code === "ENOENT") return undefined
           throw err
         })
-      if (mtimeMs !== undefined && Date.now() - mtimeMs <= Math.min(staleMs, EMPTY_LOCK_GRACE_MS)) return false
+      if (mtimeMs === undefined) {
+        // The lock vanished between our EEXIST and this stat: the path is
+        // already free. Report stealable so the caller retries — but never
+        // unlink: a fresh lock another process created in that gap must not
+        // be deleted.
+        return true
+      }
+      if (Date.now() - mtimeMs <= Math.min(staleMs, EMPTY_LOCK_GRACE_MS)) return false
       await removeLockFile(target)
       return true
     }
@@ -216,7 +227,7 @@ export namespace FileLock {
       // dispose returns, matching the semantics callers expect.
       [Symbol.dispose]: () => {
         if (disposed) return
-        disposed = true
+        let settled = false
         try {
           const body = readLockBodySync(target)
           // Compare with the body this acquisition wrote, not with the ambient
@@ -229,10 +240,18 @@ export namespace FileLock {
           } else {
             log.warn("skipping file lock release after ownership changed", { target, ownerPid: body?.pid })
           }
+          settled = true
         } catch (err) {
-          if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return
-          log.error("failed to release file lock", { target, err })
+          if ((err as NodeJS.ErrnoException)?.code === "ENOENT") {
+            settled = true
+          } else {
+            // Transient failure (EPERM, EBUSY, EIO): keep the dispose
+            // retryable. Latching `disposed` here would pin the lockfile for
+            // the whole stale window with no later release possible.
+            log.error("failed to release file lock", { target, err })
+          }
         }
+        if (settled) disposed = true
       },
     }
   }

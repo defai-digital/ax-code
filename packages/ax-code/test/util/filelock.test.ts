@@ -240,4 +240,86 @@ describe("util.filelock", () => {
     expect(lock).toBeDefined()
     lock?.[Symbol.dispose]()
   })
+
+  test("a vanished lockfile is retried, not unlinked", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const lockpath = filepath + ".lock"
+    // An empty file another process just created: EEXIST on create, no body,
+    // and the stat probe reports ENOENT (the holder unlinked and recreated
+    // between our two syscalls). The steal path must report the lock free
+    // WITHOUT deleting the fresh file.
+    await fs.writeFile(lockpath, "")
+    const statSpy = vi
+      .spyOn(fs, "stat")
+      .mockRejectedValueOnce(Object.assign(new Error("no such file"), { code: "ENOENT" }))
+    try {
+      await expect(FileLock.acquire(filepath, { timeoutMs: 120 })).rejects.toThrow("timed out waiting for file lock")
+    } finally {
+      statSpy.mockRestore()
+    }
+    expect(await fs.readFile(lockpath, "utf8")).toBe("")
+  })
+
+  test("a descriptor close failure after the body write does not orphan the lock", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const lockpath = filepath + ".lock"
+
+    const openSpy = vi.spyOn(fs, "open").mockImplementationOnce(async (...args: Parameters<typeof fs.open>) => {
+      const handle = await fs.open(...args)
+      const originalClose = handle.close.bind(handle)
+      handle.close = async () => {
+        await originalClose()
+        throw Object.assign(new Error("bad file descriptor"), { code: "EBADF" })
+      }
+      return handle
+    })
+    let lock: Disposable | undefined
+    try {
+      // The body naming this process is already on disk: the acquisition
+      // must succeed so the caller holds the release path.
+      lock = await FileLock.acquire(filepath, { timeoutMs: 200 })
+      expect(JSON.parse(await fs.readFile(lockpath, "utf-8")).pid).toBe(process.pid)
+    } finally {
+      openSpy.mockRestore()
+      lock?.[Symbol.dispose]()
+    }
+    expect(
+      await fs.access(lockpath).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false)
+  })
+
+  // Root bypasses directory permissions, so the EPERM probe needs a real
+  // unprivileged user to be meaningful.
+  test.skipIf(process.platform === "win32" || (process.getuid?.() ?? 0) === 0)(
+    "a transient release failure stays retryable",
+    async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "state.json")
+      const lockpath = filepath + ".lock"
+      const lock = await FileLock.acquire(filepath)
+
+      // A read-only parent makes the release unlink fail with EPERM without
+      // changing the lockfile itself.
+      await fs.chmod(tmp.path, 0o555)
+      try {
+        lock[Symbol.dispose]()
+      } finally {
+        await fs.chmod(tmp.path, 0o755)
+      }
+      // Not released and not latched: the file is still ours to release.
+      expect(await fs.readFile(lockpath, "utf-8")).toContain(String(process.pid))
+      lock[Symbol.dispose]()
+      expect(
+        await fs.access(lockpath).then(
+          () => true,
+          () => false,
+        ),
+      ).toBe(false)
+    },
+  )
 })
