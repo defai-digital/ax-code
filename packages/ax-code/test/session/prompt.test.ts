@@ -915,3 +915,40 @@ describe("session.prompt shell cleanup", () => {
     }
   })
 })
+
+describe("legacy tools edit-family mapping", () => {
+  test("maps the edit family onto the edit permission", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        try {
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
+            noReply: true,
+            // Legacy `write` must deny edit/apply_patch/multiedit too: they
+            // all enforce under the "edit" permission.
+            tools: {
+              write: false,
+              bash: true,
+            },
+            parts: [{ type: "text", text: "legacy write toggle" }],
+          })
+
+          const updated = await Session.get(session.id)
+          expect(updated.permission).toEqual([
+            { permission: "edit", action: "deny", pattern: "*" },
+            { permission: "bash", action: "allow", pattern: "*" },
+          ])
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+})
