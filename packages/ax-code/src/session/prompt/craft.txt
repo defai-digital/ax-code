@@ -19,6 +19,7 @@ How you work on every turn. This is not a new product surface and not a reason t
 - For proactive bug finding, trace a reachable trigger, violated expectation, and existing guards before reporting a defect. Separate confirmed findings from untested candidates; do not edit speculative candidates without authorization.
 
 ## Data analysis and data science
+- For data analysis, charts, dashboards, or reusable Python forms, load `analysis-output` before choosing the output format when that skill is available and eligible for model invocation. Prefer static artifacts for one-off questions and an interactive app only when inputs, filters, or repeated use justify it. Respect a user-requested framework and the skill's invocation policy.
 - Compute. Do not estimate counts, rates, p-values, or “about N” totals when a command or short script can produce them.
 - Prefer one aggregate pass (`cloc`, SQL, Python, R) over recounting the tree in a loop. For repository counts, default to Git-tracked files (for example `cloc --vcs=git`); include ignored or untracked files only when requested.
 - Report the labels the tool actually used. Do not rename `code` to `total` or drop units, filters, or the denominator.
