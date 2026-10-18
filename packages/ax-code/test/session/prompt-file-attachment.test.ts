@@ -56,6 +56,45 @@ describe("prompt file attachment", () => {
     expect(parts).toMatchObject([{ type: "text", text: `Invalid file URL: ${url}` }])
   })
 
+  test("fails closed when resize leaves an image over the configured limit", async () => {
+    await using tmp = await tmpdir({
+      // Every image is over this budget and resize is off, so the resizer
+      // returns its explicit too_large marker instead of a resized buffer.
+      config: { attachment: { image: { auto_resize: false, max_base64_bytes: 1 } } },
+    })
+    const filepath = path.join(tmp.path, "photo.png")
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+      "base64",
+    )
+    await fs.writeFile(filepath, png)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = SessionID.make("session_attachment_too_large")
+        const messageID = MessageID.ascending()
+        const parts = await resolveFileAttachmentPart({
+          sessionID,
+          messageID,
+          agentName: "test",
+          part: {
+            type: "file",
+            mime: "image/png",
+            filename: "photo.png",
+            url: pathToFileURL(filepath).href,
+          },
+          draftSyntheticTextPart: (text) => ({ type: "text", text, sessionID, messageID }),
+          attachDraftContext: (part) => ({ ...part, messageID, sessionID }),
+        })
+
+        // The original bytes must never be embedded past the caller's budget.
+        expect(JSON.stringify(parts)).toContain("Attachment too large")
+        expect(parts.some((part) => part.type === "file")).toBe(false)
+      },
+    })
+  })
+
   test("rejects an oversized attachment from the stat without reading the file", async () => {
     await using tmp = await tmpdir()
     const filepath = path.join(tmp.path, "huge.png")

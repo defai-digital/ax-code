@@ -259,6 +259,11 @@ export async function resolveFileAttachmentPart(input: {
             if (resizeResult.resized) {
               dataUrl = `data:${resizeResult.mime};base64,` + resizeResult.data
               finalMime = resizeResult.mime
+            } else if ("error" in resizeResult && resizeResult.error === "too_large") {
+              // The image is still over the caller's budget (auto_resize off,
+              // no photon, an undecodable file, or every candidate too big).
+              // Embedding the original here would silently defeat the limit.
+              throw new Error(`Attachment too large: ${buffer.toString("base64").length} base64 bytes`)
             } else {
               dataUrl = `data:${part.mime};base64,` + buffer.toString("base64")
             }
