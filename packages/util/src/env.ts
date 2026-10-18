@@ -74,11 +74,14 @@ export namespace Env {
   export function sanitize(env: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
     const out: Record<string, string | undefined> = {}
     for (const [k, v] of Object.entries(env)) {
-      if (SAFE_ALLOWLIST.has(k)) {
+      // Case-normalized like the deny-set lookups below: Windows env names are
+      // case-insensitive, so a mixed-case spelling of an allowlisted name
+      // (e.g. `Xauthority`) is the same variable and must take the same path.
+      const normalized = k.toUpperCase()
+      if (SAFE_ALLOWLIST.has(normalized)) {
         out[k] = v
         continue
       }
-      const normalized = k.toUpperCase()
       if (
         PROCESS_INJECTION_NAMES.has(normalized) ||
         CREDENTIAL_HELPER_NAMES.has(normalized) ||

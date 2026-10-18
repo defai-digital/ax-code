@@ -159,6 +159,20 @@ describe("Env.sanitize", () => {
     expect(sanitized.GIT_CREDENTIAL_HELPER).toBeUndefined()
   })
 
+  test("keeps allowlisted variables under case-insensitive spellings", () => {
+    // Windows env names are case-insensitive, so a mixed-case spelling of an
+    // allowlisted name is the same variable and must survive sanitize.
+    const sanitized = Env.sanitize({
+      xauthority: "/home/user/.Xauthority",
+      Python_Keyring_Backend: "keyring.backends.null",
+      dbus_session_bus_address: "unix:path=/run/user/1000/bus",
+    })
+
+    expect(sanitized.xauthority).toBe("/home/user/.Xauthority")
+    expect(sanitized.Python_Keyring_Backend).toBe("keyring.backends.null")
+    expect(sanitized.dbus_session_bus_address).toBe("unix:path=/run/user/1000/bus")
+  })
+
   test("strips provider API key env vars from general sanitized environments", () => {
     const sanitized = Env.sanitize({
       GEMINI_API_KEY: "gemini-key",
@@ -554,12 +568,8 @@ describe("Env.sanitize", () => {
     // `A(?:KIA|SIA)`; the temporary (ASIA) form must not survive just because
     // AKIA is covered. Assembled at runtime so the literal does not trip the
     // pre-commit scanner.
-    expect(Env.redactForRecord(`aws_access_key_id AKIA${"A".repeat(16)}`)).toBe(
-      "aws_access_key_id [redacted secret]",
-    )
-    expect(Env.redactForRecord(`aws_access_key_id ASIA${"A".repeat(16)}`)).toBe(
-      "aws_access_key_id [redacted secret]",
-    )
+    expect(Env.redactForRecord(`aws_access_key_id AKIA${"A".repeat(16)}`)).toBe("aws_access_key_id [redacted secret]")
+    expect(Env.redactForRecord(`aws_access_key_id ASIA${"A".repeat(16)}`)).toBe("aws_access_key_id [redacted secret]")
     expect(Env.redactForRecord(`curl -H "Auth: ${jwt}" https://api`)).not.toContain(jwt)
     // Assembled at runtime: a literal private-key header trips the pre-commit
     // scanner, and this is a fixture, not a credential.
