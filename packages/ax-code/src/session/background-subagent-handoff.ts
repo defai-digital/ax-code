@@ -72,7 +72,7 @@ export function formatBackgroundTaskHandoff(input: {
     `<task id="${escapeAttr(input.taskID)}" state="${input.state}" empty="${empty ? "true" : "false"}"${
       recoveredResultNeedsReview ? ' needs_review="true"' : ""
     }>`,
-    `<summary>${escapeBody(summary)}</summary>`,
+    `<summary>${escapeSummary(summary)}</summary>`,
     `<${bodyTag}>`,
     escapeBody(body),
     `</${bodyTag}>`,
@@ -127,6 +127,13 @@ function innerMatch(text: string, pattern: RegExp) {
 
 function escapeAttr(value: string) {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")
+}
+
+/** The summary interpolates the user-controlled task title. Escape every `<`
+ *  so a title cannot close the summary or open a `<task_result>` block that
+ *  the parser would read before the real one. `unescapeBody` restores it. */
+function escapeSummary(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 }
 
 function escapeBody(value: string) {
