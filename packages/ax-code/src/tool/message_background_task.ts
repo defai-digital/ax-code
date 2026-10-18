@@ -152,7 +152,12 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
 
     // Terminal tasks are never injected into — report the outcome instead.
     if (TERMINAL_STATUSES.includes(item.status)) {
-      const text = (await childResultText(item)) || item.error || `Task finished with status: ${item.status}.`
+      // Failed/cancelled items report the authoritative error, never a stale
+      // assistant answer left by an earlier run of the same child session.
+      const text =
+        item.status === "completed"
+          ? (await childResultText(item)) || item.error || `Task finished with status: ${item.status}.`
+          : item.error || `Task finished with status: ${item.status}.`
       return controlResult(
         item.title,
         {

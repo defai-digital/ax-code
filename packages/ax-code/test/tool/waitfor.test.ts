@@ -64,6 +64,7 @@ async function enqueueBackgroundSubagent(input: {
   directory: string
   resultText?: string
   status?: TaskQueue.Status
+  error?: string
 }) {
   const child = await Session.create({ parentID: input.parent })
   if (input.resultText !== undefined) {
@@ -82,7 +83,7 @@ async function enqueueBackgroundSubagent(input: {
   })
   const status = input.status ?? "completed"
   if (status !== "queued") {
-    return { child, item: await TaskQueue.setStatus({ id: item.id, status }) }
+    return { child, item: await TaskQueue.setStatus({ id: item.id, status, error: input.error }) }
   }
   return { child, item }
 }
@@ -139,6 +140,31 @@ describe("tool.waitfor", () => {
           await TaskQueue.completeResultDelivery({ id: item.id, claim })
         }
         expect((await TaskQueue.get(item.id)).payload["deliveryStatus"]).toBe("delivered")
+      },
+    })
+  })
+
+  test("a failed target reports the current error instead of a stale earlier answer", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const { item } = await enqueueBackgroundSubagent({
+          parent: parent.id,
+          directory: tmp.path,
+          resultText: "stale answer from an earlier attempt",
+          status: "failed",
+          error: "current attempt failed",
+        })
+
+        const result = await (
+          await WaitForTool.init()
+        ).execute({ task_id: item.id, timeout: 30 }, toolContext(parent.id))
+
+        expect(result.output).toContain("current attempt failed")
+        expect(result.output).not.toContain("stale answer from an earlier attempt")
       },
     })
   })

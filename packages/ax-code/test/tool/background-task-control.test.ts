@@ -54,6 +54,32 @@ async function writeInitialPrompt(sessionID: SessionID, text: string) {
   } as any)
 }
 
+async function writeAssistantResult(sessionID: SessionID, text: string) {
+  const messages = await Session.messages({ sessionID })
+  const user = messages.findLast((message) => message.info.role === "user")
+  if (!user) throw new Error("missing user message for assistant result")
+  const assistant = await Session.updateMessage({
+    id: MessageID.ascending(),
+    parentID: user.info.id,
+    sessionID,
+    role: "assistant",
+    mode: "build",
+    agent: "build",
+    path: { cwd: "/", root: "/" },
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    modelID: "test-model",
+    providerID: "test",
+    time: { created: Date.now(), completed: Date.now() },
+  } as any)
+  await Session.updatePart({
+    id: PartID.ascending(),
+    messageID: assistant.id,
+    sessionID,
+    type: "text",
+    text,
+  } as any)
+}
+
 async function enqueueBackgroundSubagent(input: {
   parent: SessionID
   status?: TaskQueue.Status
@@ -192,6 +218,31 @@ describe("tool.list_background_tasks", () => {
 })
 
 describe("tool.message_background_task", () => {
+  test("reports a failed task's error instead of a stale earlier answer", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const { child, item } = await enqueueBackgroundSubagent({
+          parent: parent.id,
+          status: "running",
+          initialPrompt: "run the task",
+        })
+        await writeAssistantResult(child.id, "stale answer from an earlier attempt")
+        await TaskQueue.setStatus({ id: item.id, status: "failed", error: "current attempt failed" })
+
+        const result = await (
+          await MessageBackgroundTaskTool.init()
+        ).execute({ task_id: item.id, message: "are you done?" }, toolContext(parent.id))
+
+        expect(result.output).toContain("current attempt failed")
+        expect(result.output).not.toContain("stale answer from an earlier attempt")
+      },
+    })
+  })
+
   test("delivers a message to a running child exactly once and nudges its prompt loop", async () => {
     await using tmp = await tmpdir({ git: true })
 

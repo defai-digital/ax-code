@@ -281,8 +281,11 @@ export const WaitForTool = Tool.define("waitfor", async () => {
       // on current state rather than the last polling snapshot.
       const latest = await TaskQueue.get(item.id).catch(() => current)
 
+      // A failed/cancelled execution must report its own error. Reading the
+      // session's last assistant message would surface an earlier successful
+      // run when a retried/resumed item fails before writing a new answer.
       let text = ""
-      if (item.kind === "subagent") {
+      if (item.kind === "subagent" && latest.status === "completed") {
         text = await childResultText(latest)
       }
       // Decide emptiness before the placeholder below replaces an empty child
