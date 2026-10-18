@@ -1,16 +1,17 @@
 import { EOL } from "os"
-import { bootstrap } from "../../bootstrap"
+import { bootstrapReadonly } from "../../bootstrap"
 import { cmd } from "../cmd"
+import { redactConfig } from "./redact-config"
 
 export const ConfigCommand = cmd({
   command: "config",
-  describe: "show resolved configuration",
+  describe: "show resolved configuration with credentials and executable configuration redacted",
   builder: (yargs) => yargs,
   async handler() {
     const { Config } = await import("../../../config/config")
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapReadonly(process.cwd(), async () => {
       const config = await Config.get()
-      process.stdout.write(JSON.stringify(config, null, 2) + EOL)
+      process.stdout.write(JSON.stringify(redactConfig(config), null, 2) + EOL)
     })
   },
 })

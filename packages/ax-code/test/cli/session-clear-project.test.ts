@@ -26,6 +26,41 @@ describe("session clear-project", () => {
     }
   }
 
+  test("--dir backs up and clears only the selected project; relative backup paths use the caller cwd", async () => {
+    await using caller = await tmpdir({ git: true })
+    await using target = await tmpdir({ git: true })
+    const keep = await Instance.provide({ directory: caller.path, fn: () => Session.create({ title: "keep" }) })
+    const remove = await Instance.provide({ directory: target.path, fn: () => Session.create({ title: "remove" }) })
+    await withCwd(caller.path, async () => {
+      await SessionClearProjectCommand.handler({
+        dir: target.path,
+        yes: true,
+        backupDir: "backups",
+        $0: "ax-code",
+        _: ["session", "clear-project"],
+      } as never)
+      expect(process.cwd()).toBe(caller.path)
+    })
+    await Instance.provide({
+      directory: caller.path,
+      fn: async () => {
+        expect([...Session.list()].map((item) => item.id)).toEqual([keep.id])
+      },
+    })
+    await Instance.provide({
+      directory: target.path,
+      fn: async () => {
+        expect([...Session.list()]).toEqual([])
+      },
+    })
+    const backup = path.join(caller.path, "backups")
+    const entries = (await readdir(backup)).filter((name) => name.endsWith(".json"))
+    expect(entries).toHaveLength(1)
+    const archive = JSON.parse(await readFile(path.join(backup, entries[0]!), "utf8"))
+    expect(archive.sessions.map((entry: { info: { id: string } }) => entry.info.id)).toEqual([remove.id])
+    expect(archive.directory).toBe(target.path)
+  })
+
   test("backs up current project sessions without deleting unless confirmed", async () => {
     await using project = await tmpdir({ git: true })
     await using backup = await tmpdir()

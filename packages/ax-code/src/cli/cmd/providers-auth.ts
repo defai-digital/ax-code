@@ -6,7 +6,7 @@
 // The envelope never carries a key, refresh, access, or token.
 //
 // Import reads an envelope, plans the changes, and applies them only with
-// `--write`. The default mode is dry-run: `ax-code providers auth import --file
+// `--write`. The default mode is dry-run: `ax-code providers auth import --input-file
 // path.json` prints the would-be `willCreate` and `willSkip` lists and exits
 // 0 without writing. Existing connections are never overwritten; secret
 // placeholders cannot be re-created (the user must re-login instead).
@@ -37,7 +37,7 @@ export async function runExport(args: { file?: string }) {
 export async function runImport(args: { file?: string; write?: boolean; yes?: boolean }) {
   const file = args.file
   if (!file) {
-    prompts.log.error("Missing --file <path>. `ax-code providers auth import --file path.json`")
+    prompts.log.error("Missing --input-file <path>. `ax-code providers auth import --input-file path.json`")
     process.exitCode = 2
     return
   }
@@ -96,8 +96,13 @@ export const ProvidersAuthCommand = cmd({
         describe: "action to run",
         choices: ["export", "import"] as const,
       })
-      .option("file", {
-        describe: "path to the export file (default: ./ax-code-auth-export.json for export)",
+      .option("input-file", {
+        describe: "provider reference envelope to import",
+        type: "string",
+      })
+      .option("output-file", {
+        alias: "o",
+        describe: "export destination (default: ./ax-code-auth-export.json)",
         type: "string",
       })
       .option("write", {
@@ -112,12 +117,16 @@ export const ProvidersAuthCommand = cmd({
       }),
   async handler(args) {
     const action = args.action
+    if (action === "export" && args["input-file"] !== undefined)
+      throw new Error("--input-file is only valid for import")
+    if (action === "import" && args["output-file"] !== undefined)
+      throw new Error("--output-file is only valid for export")
     if (action === "export") {
-      await runExport({ file: args.file })
+      await runExport({ file: args["output-file"] })
       return
     }
     if (action === "import") {
-      await runImport({ file: args.file, write: args.write, yes: args.yes })
+      await runImport({ file: args["input-file"], write: args.write, yes: args.yes })
       return
     }
   },

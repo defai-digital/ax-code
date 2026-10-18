@@ -26,8 +26,10 @@ const CapabilityListCommand = cmd({
         type: "boolean",
         describe: "output machine-readable JSON",
       })
-      .option("file", {
-        type: "array",
+      .option("path", {
+        type: "string",
+        array: true,
+        nargs: 1,
         describe: "file paths used to mark path-matching skills as recommended",
       }),
   async handler(args) {
@@ -35,7 +37,7 @@ const CapabilityListCommand = cmd({
     await bootstrapReadonly(process.cwd(), async () => {
       const { Capability } = await import("../../capability")
       const capabilities = await Capability.list({
-        filePaths: (args.file as string[] | undefined)?.map(String),
+        filePaths: (args.path as string[] | undefined)?.map(String),
         // One-shot inventory must not spawn MCP children; HTTP /capability keeps the default.
         mcp: false,
       })

@@ -1,3 +1,4 @@
+import { withProjectDirectory as dirOption, projectDirectory } from "../project-directory"
 import { EOL } from "os"
 import type { Argv } from "yargs"
 import { cmd } from "./cmd"
@@ -132,20 +133,13 @@ function sessionFilter<T>(yargs: Argv<T>, describe = RESUMABLE_GOAL_SESSION_DESC
   })
 }
 
-function dirOption<T>(yargs: Argv<T>) {
-  return yargs.option("dir", {
-    describe: "directory of the project (defaults to the current directory)",
-    type: "string",
-  })
-}
-
 const GoalStatusCommand = cmd({
   command: "status",
   describe: "show the current session goal",
   builder: (yargs: Argv) => dirOption(sessionFilter(yargs, ANY_GOAL_SESSION_DESCRIBE)).option("json", jsonOption()),
   async handler(args) {
     const { SessionGoal, bootstrapReadonly } = await loadGoal()
-    await bootstrapReadonly(args.dir ?? process.cwd(), async () => {
+    await bootstrapReadonly(projectDirectory(args), async () => {
       const sessionID = await resolveAnyGoalSession(args.session)
       const goal = await SessionGoal.get(sessionID)
       if (args.json) {
@@ -163,7 +157,7 @@ const GoalPauseCommand = cmd({
   builder: (yargs: Argv) => dirOption(sessionFilter(yargs, ANY_GOAL_SESSION_DESCRIBE)),
   async handler(args) {
     const { SessionGoal, bootstrap } = await loadGoal()
-    await bootstrap(args.dir ?? process.cwd(), async () => {
+    await bootstrap(projectDirectory(args), async () => {
       const sessionID = await resolveAnyGoalSession(args.session)
       const current = await SessionGoal.get(sessionID)
       const refusal = goalPauseRefusal(current)
@@ -194,7 +188,7 @@ const GoalClearCommand = cmd({
   builder: (yargs: Argv) => dirOption(sessionFilter(yargs, ANY_GOAL_SESSION_DESCRIBE)),
   async handler(args) {
     const { SessionGoal, bootstrap } = await loadGoal()
-    await bootstrap(args.dir ?? process.cwd(), async () => {
+    await bootstrap(projectDirectory(args), async () => {
       const sessionID = await resolveAnyGoalSession(args.session)
       await SessionGoal.clear(sessionID)
       process.stdout.write("Goal cleared for this session." + EOL)

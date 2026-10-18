@@ -668,6 +668,7 @@ export const RunCommand = cmd({
       })
       .option("prompt-file", {
         type: "string",
+        nargs: 1,
         describe: "read prompt text from a file (not an attachment; use --file to attach)",
       })
       .option("file", {
@@ -741,7 +742,7 @@ export const RunCommand = cmd({
         "When no positional message or --prompt/--prompt-file is given, piped stdin is used as the prompt. " +
           `The stdin reader waits for a ${DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS} ms quiet window: write your prompt ` +
           "promptly and close stdin; use --prompt-file for large or slowly produced prompts. " +
-          "--prompt-file - reads the prompt from stdin explicitly.",
+          "--prompt-file - waits for stdin EOF; use --timeout or Ctrl+C to cancel an open producer.",
       )
       .example('ax-code run --model qwen -- "Review this"', "put the prompt after --")
       .example('ax-code run --prompt "Review this" --model qwen', "same prompt via --prompt")
@@ -826,6 +827,18 @@ export const RunCommand = cmd({
           UI.error(message)
           throw new UI.CancelledError()
         }
+        if (args.timeout !== undefined && (!Number.isFinite(args.timeout) || args.timeout <= 0)) {
+          exitEarly("--timeout must be a positive number of seconds", "usage")
+        }
+        // Cancellation covers input as well as SDK requests. Scope disposal
+        // removes listeners even when validation or input fails.
+        process.once("SIGINT", onRunSignal)
+        process.once("SIGTERM", onRunSignal)
+        using _runInput = defer(() => {
+          lifecycle.disarm()
+          process.removeListener("SIGINT", onRunSignal)
+          process.removeListener("SIGTERM", onRunSignal)
+        })
         const callerCwd = Filesystem.callerCwd()
         const previousCwd = process.cwd()
         // --quiet keeps stderr to errors only: the header, tool-progress blocks,
@@ -843,19 +856,17 @@ export const RunCommand = cmd({
         // the real implementation once `execute` knows the session.
 
         let promptFileText: string | undefined
-        // `--prompt-file -` reads the prompt from stdin explicitly (like other
-        // headless CLIs). Yargs cannot carry a lone dash as an option value: the
-        // `=` spelling parses to "-", while the spaced spelling parses to an
-        // empty string (the dash token is dropped), so both select stdin. The
-        // implicit "append piped stdin" step further down must not run a second
-        // time, so its consumption is recorded there.
+        // nargs: 1 preserves the lone dash and rejects a missing flag value.
+        // Explicit stdin must not be appended a second time below.
         const promptFileFlag = args["prompt-file"]
         let stdinConsumedByPromptFile = false
-        if (promptFileFlag === "-" || promptFileFlag === "") {
+        if (promptFileFlag === "") exitEarly("--prompt-file must name a file or '-' for stdin")
+        if (promptFileFlag === "-") {
           if (process.stdin.isTTY) {
             exitEarly("--prompt-file - requires the prompt on piped stdin, but stdin is a TTY")
           }
-          promptFileText = await readNonTtyStdin()
+          lifecycle.arm()
+          promptFileText = await readNonTtyStdin({ waitForEof: true, signal: lifecycle.signal })
           stdinConsumedByPromptFile = true
         } else if (promptFileFlag) {
           // @scan-suppress security_scan - The caller explicitly selects this local file; CLI filesystem permissions are the authority.
@@ -980,7 +991,7 @@ export const RunCommand = cmd({
         }
 
         if (!process.stdin.isTTY && !stdinConsumedByPromptFile) {
-          message += "\n" + (await readNonTtyStdin())
+          message += "\n" + (await readNonTtyStdin({ signal: lifecycle.signal }))
         }
 
         if (message.trim().length === 0 && !args.command) {
@@ -1014,9 +1025,6 @@ export const RunCommand = cmd({
           exitEarly("--history-limit must be a positive integer")
         }
 
-        if (args.timeout !== undefined && (!Number.isFinite(args.timeout) || args.timeout <= 0)) {
-          exitEarly("--timeout must be a positive number of seconds", "usage")
-        }
         if (
           args["await-background"] !== undefined &&
           (!Number.isInteger(args["await-background"]) ||
@@ -1096,14 +1104,9 @@ export const RunCommand = cmd({
           isolationPolicy = undefined
         }
 
-        // E2: arm the --timeout bound before the first SDK call. A black-holed
-        // --attach host or a hung bootstrap used to be unbounded because the
-        // timer only fired after the session resolved. The timer, the
-        // pre/post-session branching, the early terminal result, and the
-        // shared abort all live in `lifecycle` now; `using` keeps the disarm
-        // on every exit of this scope (early throws included).
+        // Preserve the existing run budget for implicit input. Explicit EOF
+        // input arms it earlier; arm() never restarts an active deadline.
         lifecycle.arm()
-        using _timeout = defer(() => lifecycle.disarm())
 
         const rules: Permission.Ruleset = [
           {
@@ -2023,12 +2026,6 @@ export const RunCommand = cmd({
           }
         }
 
-        // Register the signal handlers only after every early-exit validation has
-        // passed, so the `finally` below always pairs the registration with its
-        // removal and no early-return path leaks a listener.
-        process.once("SIGINT", onRunSignal)
-        process.once("SIGTERM", onRunSignal)
-
         try {
           if (args.attach) {
             assertLoopbackHttpUrl(args.attach, "--attach URL")
@@ -2075,8 +2072,6 @@ export const RunCommand = cmd({
             })
           })
         } finally {
-          process.removeListener("SIGINT", onRunSignal)
-          process.removeListener("SIGTERM", onRunSignal)
           if (process.cwd() !== previousCwd) {
             try {
               process.chdir(previousCwd)

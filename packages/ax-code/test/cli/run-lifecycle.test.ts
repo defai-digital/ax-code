@@ -28,6 +28,7 @@ import {
 import { UI } from "../../src/cli/ui"
 import { tmpdir } from "../fixture/fixture"
 import { Provider } from "../../src/provider/provider"
+import * as stdinReader from "../../src/cli/stdin"
 
 // `run --runtime` resolves the managed runtime through RuntimeRegistry. Mock the
 // registry so the absent-runtime handler path is exercised without touching the
@@ -55,6 +56,46 @@ async function parseRunArgv(argv: string[]) {
     .parse()
   return parsed ?? {}
 }
+
+test.each(["timeout", "SIGINT", "SIGTERM"])(
+  "explicit stdin is interrupted by %s with one terminal result and no leaked listeners",
+  async (cause) => {
+    const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdin, "isTTY")
+    Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true })
+    const previousExit = process.exitCode
+    const counts = [process.listenerCount("SIGINT"), process.listenerCount("SIGTERM")]
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+    const reader = vi.spyOn(stdinReader, "readNonTtyStdin").mockImplementation((input) => {
+      expect(input?.waitForEof).toBe(true)
+      expect(input?.signal).toBeInstanceOf(AbortSignal)
+      return new Promise((_resolve, reject) => {
+        input!.signal!.addEventListener("abort", () => reject(input!.signal!.reason), { once: true })
+        if (cause !== "timeout") process.emit(cause as "SIGINT" | "SIGTERM")
+      })
+    })
+    try {
+      await RunCommand.handler({
+        "prompt-file": "-",
+        format: "json",
+        timeout: cause === "timeout" ? 0.01 : undefined,
+        message: [],
+        "--": [],
+      } as never)
+      expect(reader).toHaveBeenCalledTimes(1)
+      const events = write.mock.calls.map(([value]) => JSON.parse(String(value)))
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({ type: "result", status: cause === "timeout" ? "timeout" : "cancelled" })
+      expect(process.exitCode).toBe(cause === "timeout" ? 124 : 130)
+      expect([process.listenerCount("SIGINT"), process.listenerCount("SIGTERM")]).toEqual(counts)
+    } finally {
+      reader.mockRestore()
+      write.mockRestore()
+      if (originalIsTTY) Object.defineProperty(process.stdin, "isTTY", originalIsTTY)
+      else Reflect.deleteProperty(process.stdin, "isTTY")
+      process.exitCode = previousExit
+    }
+  },
+)
 
 test("run command fallback tool formatter handles non-json-safe input", () => {
   const input: Record<string, unknown> = { count: 1n }
@@ -426,7 +467,7 @@ test("non-interactive run entry points share bounded pipe input handling", async
   const headless = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
 
   for (const source of [run, headless]) {
-    expect(source).toContain("await readNonTtyStdin()")
+    expect(source).toContain("await readNonTtyStdin(")
     expect(source).not.toContain("for await (const chunk of process.stdin)")
   }
 })
@@ -1562,17 +1603,15 @@ test("run accepts the steering flags as long-only kebab-case options", async () 
   const fileVariant = await parseRunArgv(["--append-system-prompt-file", "./extra.txt", "hello"])
   expect(fileVariant["append-system-prompt-file"]).toBe("./extra.txt")
 
-  // `--prompt-file=-` is the spelling yargs parses to the literal "-"; the
-  // spaced `--prompt-file -` form parses to an empty string (yargs drops the
-  // lone dash token), and the handler treats both as the stdin sentinel.
+  // Both spellings preserve the explicit stdin sentinel.
   const stdinVariant = await parseRunArgv(["--prompt-file=-", "hello"])
   expect(stdinVariant["prompt-file"]).toBe("-")
   const spacedVariant = await parseRunArgv(["--prompt-file", "-", "hello"])
-  expect(spacedVariant["prompt-file"]).toBe("")
+  expect(spacedVariant["prompt-file"]).toBe("-")
   expect(spacedVariant.message).toEqual(["hello"])
 
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
-  expect(src).toContain('if (promptFileFlag === "-" || promptFileFlag === "")')
+  expect(src).toContain('if (promptFileFlag === "-")')
 })
 
 test("run --append-system-prompt and --append-system-prompt-file are mutually exclusive", async () => {

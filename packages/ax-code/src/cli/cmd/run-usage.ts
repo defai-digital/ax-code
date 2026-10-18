@@ -4,6 +4,7 @@ import { isRunEventStreamFormat } from "./run-format"
 const CLI_USAGE_FAILURE_PREFIXES: readonly string[] = [
   "Unknown argument",
   "Not enough non-option arguments",
+  "Not enough arguments following",
   "Invalid values:",
   "Missing required argument",
 ]

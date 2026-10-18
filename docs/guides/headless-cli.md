@@ -32,8 +32,9 @@ printf 'Review this change' | ax-code run --model qwen
 When stdin is not a TTY, its contents are appended to the composed prompt, so it is the whole prompt when nothing else
 is supplied. The stdin reader waits for a 300 ms quiet window before giving up on an open pipe, so write the prompt
 promptly and close stdin — or use `--prompt-file` for large or slowly produced prompts. `--prompt-file -` reads the
-prompt from stdin explicitly (usage error when stdin is a TTY); the implicit piped-stdin append never runs a second
-time for that invocation.
+prompt from stdin explicitly and waits for EOF, including pauses longer than 300 ms. Close the producer, pass
+`--timeout <seconds>`, or interrupt with Ctrl+C/SIGTERM to end the wait. It is a usage error when stdin is a TTY;
+the implicit piped-stdin append never runs a second time for that invocation.
 
 `-f/--file` attaches files to the message and never replaces the prompt; it is repeatable:
 
@@ -288,9 +289,11 @@ ax-code run --model qwen --file docs/spec.md -- "Summarize the attached spec"
 ## Machine-readable commands
 
 `ax-code run --format json` emits a newline-delimited event stream (see [JSON stream](#json-stream---format-json)); it is
-the only `--json` surface that streams. Every other read-only command that carries a `--json` flag follows a stricter
-contract: on success it writes exactly one JSON document to stdout, and on failure stdout stays empty while a single
-`{"error":{"code","message"}}` document goes to stderr and the exit code is 1.
+selected stream format for headless runs. Commands that accept `--json` write one JSON document to stdout on
+success. Parser usage errors (such as an unknown option or missing required argument) also write one document to
+stderr: `{"error":{"code":"usage","message":"..."}}`, with exit code 1 and empty stdout. Handler-level
+failures retain each command's existing output and exit-code contract; check the exit code before consuming a
+success document. `--json=false`, `--no-json`, and text after `--` do not select JSON output.
 
 Commands with `--json`:
 
@@ -314,6 +317,29 @@ Commands with `--json`:
 
 `ax-code runtime status` prints its JSON document unconditionally — the `--json` flag is accepted for consistency but
 the status action always emits JSON on stdout.
+
+## Project selection and inspection
+
+`session list`, `session project-status`, `session backup-project`, `session clear-project`, `session delete`, and
+`session prune` accept `--dir <project>`, as do the goal commands. The selected directory must exist. File arguments
+such as `--backup-dir` remain relative to the caller's working directory; the selector does not change global stores
+or grant new tool permissions. Other session commands retain their current-directory behavior.
+
+```bash
+ax-code session list --dir ../another-project --json
+ax-code release-notes --target-version 7.27.0 --json
+ax-code providers auth export --output-file ./provider-refs.json
+ax-code providers auth import --input-file ./provider-refs.json
+ax-code capability list --path src/index.ts --json
+```
+
+`--version` and `-v` show the installed CLI version. Use `release-notes --target-version` to select a changelog entry.
+Provider auth transfer uses `--input-file` / `--output-file` (or `-o`), and capability matching uses repeatable `--path`;
+`--file` remains an attachment option. Provider reference imports remain dry-run unless `--write` is supplied.
+
+`ax-code debug config` prints a redacted view of the resolved configuration. Credentials, headers, environment maps,
+executable command configuration, and URL credentials/query values are masked. The effective runtime configuration
+is unchanged. Review any diagnostic output before sharing it; custom free-text configuration can contain private text.
 
 ## Calling ax-code from another agent
 

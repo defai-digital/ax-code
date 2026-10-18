@@ -31,6 +31,9 @@ export function readNonTtyStdin(
     stdin?: StdinLike
     isRegularFile?: boolean
     quietWindowMs?: number
+    /** Explicit stdin input waits for EOF even on a slow pipe. */
+    waitForEof?: boolean
+    signal?: AbortSignal
   } = {},
 ): Promise<string> {
   const stdin = input.stdin ?? (process.stdin as unknown as StdinLike)
@@ -45,6 +48,7 @@ export function readNonTtyStdin(
       stdin.off("data", onData)
       stdin.off("end", onEnd)
       stdin.off("error", onError)
+      input.signal?.removeEventListener("abort", onAbort)
     }
     const finish = (pause: boolean) => {
       if (settled) return
@@ -54,7 +58,7 @@ export function readNonTtyStdin(
       resolve(Buffer.concat(chunks).toString("utf8"))
     }
     const armQuietTimer = () => {
-      if (isRegularFile) return
+      if (isRegularFile || input.waitForEof) return
       if (quietTimer) clearTimeout(quietTimer)
       quietTimer = setTimeout(() => finish(true), quietWindowMs)
       quietTimer.unref?.()
@@ -70,6 +74,15 @@ export function readNonTtyStdin(
       cleanup()
       reject(error)
     }
+    const onAbort = () => {
+      onError(input.signal?.reason ?? new Error("Stdin read cancelled"))
+      stdin.pause?.()
+    }
+    if (input.signal?.aborted) {
+      onAbort()
+      return
+    }
+    input.signal?.addEventListener("abort", onAbort, { once: true })
     stdin.on("data", onData)
     stdin.on("end", onEnd)
     stdin.on("error", onError)

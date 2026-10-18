@@ -1,3 +1,4 @@
+import { withProjectDirectory, projectDirectory } from "../../project-directory"
 import type { Argv } from "yargs"
 import { cmd } from "../cmd"
 import { ReplayCommand } from "../replay"
@@ -248,7 +249,7 @@ export const SessionClearProjectCommand = cmd({
   command: "clear-project",
   describe: "delete all sessions for the current project after writing a backup",
   builder: (yargs: Argv) => {
-    return yargs
+    return withProjectDirectory(yargs)
       .option("yes", {
         describe: "confirm deletion",
         type: "boolean",
@@ -260,7 +261,7 @@ export const SessionClearProjectCommand = cmd({
   },
   handler: async (args) => {
     const { Session } = await import("../../../session")
-    await bootstrap(process.cwd(), async () => {
+    await bootstrap(projectDirectory(args), async () => {
       const { sessions, duplicateProjectIdentities, deletionRoots } = await getCurrentProjectCleanupContext()
 
       if (sessions.length === 0) {
@@ -299,13 +300,13 @@ export const SessionBackupProjectCommand = cmd({
   command: "backup-project",
   describe: "back up all sessions for the current project without deleting them",
   builder: (yargs: Argv) => {
-    return yargs.option("backup-dir", {
+    return withProjectDirectory(yargs).option("backup-dir", {
       describe: "directory for the JSON backup (default: ax-code cleanup-backups data directory)",
       type: "string",
     })
   },
   handler: async (args) => {
-    await bootstrap(process.cwd(), async () => {
+    await bootstrap(projectDirectory(args), async () => {
       const { sessions, duplicateProjectIdentities, deletionRoots } = await getCurrentProjectCleanupContext()
 
       if (sessions.length === 0) {
@@ -330,14 +331,14 @@ export const SessionProjectStatusCommand = cmd({
   command: "project-status",
   describe: "show current project session storage status",
   builder: (yargs: Argv) => {
-    return yargs.option("json", {
+    return withProjectDirectory(yargs).option("json", {
       describe: "output machine-readable JSON",
       type: "boolean",
       default: false,
     })
   },
   handler: async (args) => {
-    await bootstrap(process.cwd(), async () => {
+    await bootstrap(projectDirectory(args), async () => {
       const { sessions, duplicateProjectIdentities } = await getCurrentProjectSessionContext()
       const payload = sessionProjectStatusPayload({
         projectID: Instance.project.id,
@@ -373,7 +374,7 @@ export const SessionPruneCommand = cmd({
   command: "prune",
   describe: "delete sessions older than N days (default: config session.ttl_days or 30)",
   builder: (yargs: Argv) => {
-    return yargs
+    return withProjectDirectory(yargs)
       .option("days", {
         describe: "delete sessions older than this many days (default: config session.ttl_days or 30)",
         type: "number",
@@ -393,7 +394,7 @@ export const SessionPruneCommand = cmd({
   },
   handler: async (args) => {
     const { Session } = await import("../../../session")
-    await bootstrap(process.cwd(), async () => {
+    await bootstrap(projectDirectory(args), async () => {
       const { Config } = await import("../../../config/config")
       const cfg = await Config.get()
       const days = Session.validatePruneTtlDays(args.days ?? cfg.session?.ttl_days ?? 30)
@@ -416,7 +417,7 @@ export const SessionDeleteCommand = cmd({
   command: "delete <sessionID>",
   describe: "delete a session",
   builder: (yargs: Argv) => {
-    return yargs
+    return withProjectDirectory(yargs)
       .positional("sessionID", {
         describe: "session ID to delete",
         type: "string",
@@ -431,7 +432,7 @@ export const SessionDeleteCommand = cmd({
   handler: async (args) => {
     const { Session } = await import("../../../session")
     const { SessionID } = await import("../../../session/schema")
-    await bootstrap(process.cwd(), async () => {
+    await bootstrap(projectDirectory(args), async () => {
       const sessionID = SessionID.make(args.sessionID)
       try {
         await Session.get(sessionID)
@@ -452,7 +453,7 @@ export const SessionListCommand = cmd({
   command: "list",
   describe: "list sessions",
   builder: (yargs: Argv) => {
-    return yargs
+    return withProjectDirectory(yargs)
       .option("limit", {
         alias: "n",
         describe: "limit to N most recent sessions",
@@ -467,7 +468,7 @@ export const SessionListCommand = cmd({
   handler: async (args) => {
     const { Session } = await import("../../../session")
     const { Process } = await import("../../../util/process")
-    await bootstrapReadonly(process.cwd(), async () => {
+    await bootstrapReadonly(projectDirectory(args), async () => {
       const sessions = [...Session.list({ roots: true, limit: args.limit })]
 
       if (sessions.length === 0 && !args.json) {

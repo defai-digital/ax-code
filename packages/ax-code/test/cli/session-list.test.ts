@@ -35,6 +35,30 @@ async function createSessions(project: string, count: number) {
 }
 
 describe("session list pagination (#417)", () => {
+  test("--dir selects another project's sessions without changing the caller cwd", async () => {
+    await using first = await tmpdir({ git: true })
+    await using second = await tmpdir({ git: true })
+    const local = await createSessions(first.path, 1)
+    const remote = await createSessions(second.path, 2)
+    const output = vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await withCwd(first.path, async () => {
+        await SessionListCommand.handler({
+          dir: second.path,
+          json: true,
+          $0: "ax-code",
+          _: ["session", "list"],
+        } as never)
+        expect(process.cwd()).toBe(first.path)
+      })
+      const rows = JSON.parse(output.mock.calls.map(([text]) => String(text)).join("\n"))
+      expect(rows.map((row: { id: string }) => row.id).sort()).toEqual(remote.map((row) => row.id).sort())
+      expect(rows.map((row: { id: string }) => row.id)).not.toContain(local[0]!.id)
+    } finally {
+      output.mockRestore()
+    }
+  })
+
   test.each([true, false])("empty session storage produces valid json=%s output", async (json) => {
     await using project = await tmpdir({ git: true })
     const output = vi.spyOn(console, "log").mockImplementation(() => {})

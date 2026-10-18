@@ -5,6 +5,7 @@ import { GenerateCommand } from "./cmd/generate"
 import { setAxCodeProcessTitle } from "../util/process-title"
 import { clearForcedExitTimer } from "./boot-lifecycle"
 import { createAxCodeCli, runAxCodeCli } from "./boot-shared"
+import { writeJsonUsageError } from "./cmd/json-output"
 
 const cmds = [DoctorCommand, GenerateCommand]
 
@@ -17,15 +18,17 @@ export function cli(argv = hideBin(process.argv)) {
 
   return base
     .fail((msg, err) => {
-      if (err) throw err
-      if (msg) process.stderr.write(`${msg}\n`)
+      if (err && !(base.parsed && base.parsed.error)) throw err
+      const jsonUsageError = writeJsonUsageError(base.parsed, msg)
+      if (msg && !jsonUsageError) process.stderr.write(`${msg}\n`)
       if (
-        msg?.startsWith("Unknown argument") ||
-        msg?.startsWith("Not enough non-option arguments") ||
-        msg?.startsWith("Invalid values:") ||
-        msg?.startsWith("Missing required argument")
+        !jsonUsageError &&
+        (msg?.startsWith("Unknown argument") ||
+          msg?.startsWith("Not enough non-option arguments") ||
+          msg?.startsWith("Invalid values:") ||
+          msg?.startsWith("Missing required argument"))
       ) {
-        base.showHelp("log")
+        base.showHelp((text) => process.stderr.write(text + "\n"))
       }
       process.exit(1)
     })

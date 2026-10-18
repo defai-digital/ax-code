@@ -137,7 +137,7 @@ describe("release-notes command", () => {
     try {
       // Inject the changelog through the module's own loader by pointing at the
       // repository CHANGELOG.md (present in a source checkout).
-      await ReleaseNotesCommand.handler({ version: "7.26.3", json: true, _: [], $0: "ax-code" } as any)
+      await ReleaseNotesCommand.handler({ "target-version": "7.26.3", json: true, _: [], $0: "ax-code" } as any)
       const printed = writeSpy.mock.calls.map((call) => String(call[0])).join("")
       const parsed = JSON.parse(printed)
       expect(parsed.version).toBe("7.26.3")
@@ -154,7 +154,12 @@ describe("release-notes command", () => {
     const previous = process.exitCode
     process.exitCode = undefined
     try {
-      await ReleaseNotesCommand.handler({ version: "0.0.0-nonexistent", json: false, _: [], $0: "ax-code" } as any)
+      await ReleaseNotesCommand.handler({
+        "target-version": "0.0.0-nonexistent",
+        json: false,
+        _: [],
+        $0: "ax-code",
+      } as any)
       expect(process.exitCode).toBe(1)
       const printed = errSpy.mock.calls.map((call) => String(call[0])).join("")
       expect(printed).toContain("no release notes for version 0.0.0-nonexistent")

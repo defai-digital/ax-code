@@ -9,6 +9,51 @@ function fakeStdin() {
 }
 
 describe("readNonTtyStdin", () => {
+  test("explicit stdin waits beyond the quiet window before the first chunk and between chunks", async () => {
+    vi.useFakeTimers()
+    try {
+      const stdin = fakeStdin()
+      const resolved = vi.fn()
+      const p = readNonTtyStdin({ stdin, isRegularFile: false, waitForEof: true }).then(resolved)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(resolved).not.toHaveBeenCalled()
+      const bytes = Buffer.from("hello \u4e16\u754c")
+      stdin.emit("data", bytes.subarray(0, 8))
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(resolved).not.toHaveBeenCalled()
+      stdin.emit("data", bytes.subarray(8))
+      stdin.emit("end")
+      await p
+      expect(resolved).toHaveBeenCalledWith("hello \u4e16\u754c")
+      expect(stdin.pause).not.toHaveBeenCalled()
+      expect(stdin.listenerCount("data")).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test.each([false, true])("cancellation stops an explicit stdin reader (already aborted: %s)", async (before) => {
+    const stdin = fakeStdin()
+    const controller = new AbortController()
+    const error = new Error("cancel input")
+    if (before) controller.abort(error)
+    const p = readNonTtyStdin({ stdin, isRegularFile: false, waitForEof: true, signal: controller.signal })
+    if (!before) {
+      stdin.emit("data", Buffer.from("partial"))
+      controller.abort(error)
+    }
+    await expect(p).rejects.toBe(error)
+    expect(stdin.pause).toHaveBeenCalledTimes(1)
+    for (const event of ["data", "end", "error"]) expect(stdin.listenerCount(event)).toBe(0)
+  })
+
+  test("explicit empty stdin resolves on EOF", async () => {
+    const stdin = fakeStdin()
+    const p = readNonTtyStdin({ stdin, isRegularFile: false, waitForEof: true })
+    stdin.emit("end")
+    expect(await p).toBe("")
+  })
+
   test("has a sane default quiet window", () => {
     expect(DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS).toBe(300)
   })

@@ -39,6 +39,7 @@ import {
   runUsageFailureHint,
 } from "./cmd/run-usage"
 import { buildRunEarlyErrorEvent } from "./cmd/run-output"
+import { writeJsonUsageError } from "./cmd/json-output"
 import { ServeCommand } from "./cmd/serve"
 import { RuntimeCommand } from "./cmd/runtime"
 import { SessionCommand } from "./cmd/session"
@@ -63,54 +64,58 @@ import { setAxCodeProcessTitle } from "../util/process-title"
 import { clearForcedExitTimer } from "./boot-lifecycle"
 import { createAxCodeCli, runAxCodeCli } from "./boot-shared"
 
+export function commandName(command: { command?: string | readonly string[] }) {
+  const signature = typeof command.command === "string" ? command.command : command.command?.[0]
+  return signature?.split(" ")[0] ?? ""
+}
+
+// Registration and help use the same sections so new commands cannot drift.
+export const commandSections = [
+  {
+    title: "Core:",
+    commands: [RunCommand, AskCommand, AttachCommand, LoginCommand, LogoutCommand, ModelsCommand, ProvidersCommand],
+  },
+  {
+    title: "Sessions & evidence:",
+    commands: [
+      SessionCommand,
+      AuditCommand,
+      StatsCommand,
+      ContextCommand,
+      RiskCommand,
+      GraphCommand,
+      RunReportCommand,
+      GoalCommand,
+    ],
+  },
+  {
+    title: "Customize:",
+    commands: [AgentCommand, SkillCommand, CapabilityCommand, MemoryCommand, WikiCommand, McpCommand],
+  },
+  {
+    title: "Project:",
+    commands: [InitCommand, IndexCommand, DesignCheckCommand, GithubCommand, WorkflowCommand, WatchCommand],
+  },
+  { title: "Servers & runtime:", commands: [ServeCommand, RuntimeCommand, AcpCommand] },
+  {
+    title: "Maintenance:",
+    commands: [
+      TaskCommand,
+      ScheduleCommand,
+      DbCommand,
+      SnapshotCommand,
+      DoctorCommand,
+      DebugCommand,
+      UpgradeCommand,
+      UninstallCommand,
+      ReleaseCommand,
+      ReleaseNotesCommand,
+    ],
+  },
+] as const
+
 const cmds = [
-  // Core
-  RunCommand,
-  AskCommand,
-  AttachCommand,
-  LoginCommand,
-  LogoutCommand,
-  ModelsCommand,
-  ProvidersCommand,
-  // Sessions & evidence
-  SessionCommand,
-  AuditCommand,
-  StatsCommand,
-  ContextCommand,
-  RiskCommand,
-  GraphCommand,
-  RunReportCommand,
-  GoalCommand,
-  // Customize
-  AgentCommand,
-  SkillCommand,
-  CapabilityCommand,
-  MemoryCommand,
-  WikiCommand,
-  McpCommand,
-  // Project
-  InitCommand,
-  IndexCommand,
-  DesignCheckCommand,
-  GithubCommand,
-  WorkflowCommand,
-  // Servers & runtime
-  ServeCommand,
-  RuntimeCommand,
-  AcpCommand,
-  // Maintenance
-  TaskCommand,
-  ScheduleCommand,
-  DbCommand,
-  SnapshotCommand,
-  DoctorCommand,
-  DebugCommand,
-  UpgradeCommand,
-  UninstallCommand,
-  ReleaseCommand,
-  ReleaseNotesCommand,
-  WatchCommand,
-  // Hidden / internal commands (registered, never listed)
+  ...commandSections.flatMap((section) => [...section.commands]),
   TuiBackendCommand,
   TuiThreadCommand,
   HeadlessRunCommand,
@@ -135,19 +140,14 @@ setKnownCommands([
   }),
 ])
 
-// Top-level help sections (ADR-132). yargs .group() only groups options,
-// never commands, so the root help text is regrouped after rendering.
-// Command names must match the first token of a registered command string;
-// anything visible but unlisted (including the default `$0` command) falls
-// back into the plain "Commands:" section.
-const commandGroups: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ["Core:", ["run", "ask", "attach", "login", "logout", "models", "providers"]],
-  ["Sessions & evidence:", ["session", "audit", "stats", "context", "risk", "graph", "run-report"]],
-  ["Customize:", ["agent", "skill", "capability", "memory", "wiki", "mcp"]],
-  ["Project:", ["init", "index", "design-check", "github", "workflow"]],
-  ["Servers & runtime:", ["serve", "runtime", "acp"]],
-  ["Maintenance:", ["task", "schedule", "db", "doctor", "debug", "upgrade", "uninstall", "release", "completion"]],
-]
+// yargs groups options only; regroup the rendered command rows by metadata.
+const commandGroups: ReadonlyArray<readonly [string, readonly string[]]> = commandSections.map((section) => [
+  section.title,
+  [
+    ...section.commands.map((command) => commandName(command)),
+    ...(section.title === "Maintenance:" ? ["completion"] : []),
+  ],
+])
 
 type UsageCommand = [string, string, boolean, string[] | undefined, string | boolean | undefined]
 type UsageLike = {
@@ -221,7 +221,7 @@ export function cli(argv = hideBin(process.argv)) {
 
   return cli
     .fail((msg, err) => {
-      if (err) throw err
+      if (err && !(cli.parsed && cli.parsed.error)) throw err
       // Stream consumers (`run --format json|jsonl|ndjson`) get one
       // structured error line on stdout before any stderr prose, so a
       // yargs-level usage failure (e.g. a mistyped flag) is still machine-
@@ -229,7 +229,8 @@ export function cli(argv = hideBin(process.argv)) {
       if (runArgvUsesEventStream(rawArgv) && msg) {
         process.stdout.write(JSON.stringify(buildRunEarlyErrorEvent("usage", msg)) + "\n")
       }
-      if (msg) process.stderr.write(`${msg}\n`)
+      const jsonUsageError = writeJsonUsageError(cli.parsed, msg)
+      if (msg && !jsonUsageError) process.stderr.write(`${msg}\n`)
       if (isCliUsageFailureMessage(msg)) {
         const command = commandTokenFromArgv(rawArgv)
         const hint = runUsageFailureHint(msg, command)
@@ -238,7 +239,8 @@ export function cli(argv = hideBin(process.argv)) {
         // never the full help dump; every other command keeps the full help.
         // Usage-failure help goes to stderr so a mistyped command keeps stdout
         // empty (a scripted caller must not see 60 lines of help on stdout).
-        if (cliFailureShowsFullHelp(msg, command)) cli.showHelp((text) => process.stderr.write(text + "\n"))
+        if (!jsonUsageError && cliFailureShowsFullHelp(msg, command))
+          cli.showHelp((text) => process.stderr.write(text + "\n"))
       }
       process.exit(1)
     })
