@@ -93,3 +93,25 @@ test.each(["lowercase", "MixedCase"])("retains a %s recorded leftover until clea
     },
   })
 })
+
+test("reset falls back to the primary checkout's branch when no remote or main/master exists", async () => {
+  await using tmp = await tmpdir()
+  const run = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" })
+  run(tmp.path, "init", "-b", "trunk")
+  run(tmp.path, "config", "user.email", "test@example.com")
+  run(tmp.path, "config", "user.name", "test")
+  run(tmp.path, "commit", "--allow-empty", "-m", "init")
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const info = await Worktree.create({ name: "trunk-reset" })
+      await fs.writeFile(path.join(info.directory, "dirty.txt"), "local change\n")
+
+      // Pre-fix this threw "Default branch not found": a local-only repo whose
+      // primary branch is neither main nor master had no resolvable target.
+      await expect(Worktree.reset({ directory: info.directory })).resolves.toBeTruthy()
+      await expect(fs.stat(path.join(info.directory, "dirty.txt"))).rejects.toMatchObject({ code: "ENOENT" })
+    },
+  })
+})

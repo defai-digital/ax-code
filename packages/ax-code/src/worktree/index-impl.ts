@@ -923,7 +923,20 @@ export namespace Worktree {
     const masterCheck = await git(["show-ref", "--verify", "--quiet", "refs/heads/master"], {
       cwd: Instance.worktree,
     })
-    const localBranch = mainCheck.exitCode === 0 ? "main" : masterCheck.exitCode === 0 ? "master" : ""
+    let localBranch = mainCheck.exitCode === 0 ? "main" : masterCheck.exitCode === 0 ? "master" : ""
+    if (!localBranch) {
+      // A local-only repository can carry its primary branch under any name
+      // (for example `trunk`): the primary checkout's own HEAD is the
+      // repository's default branch, so fall back to it before failing.
+      const head = await git(["symbolic-ref", "--short", "HEAD"], { cwd: Instance.worktree })
+      const headBranch = head.exitCode === 0 ? outputText(head.stdout).trim() : ""
+      if (headBranch) {
+        const headCheck = await git(["show-ref", "--verify", "--quiet", `refs/heads/${headBranch}`], {
+          cwd: Instance.worktree,
+        })
+        if (headCheck.exitCode === 0) localBranch = headBranch
+      }
+    }
 
     const target = remoteBranch ? `${remote}/${remoteBranch}` : localBranch
     if (!target) {
