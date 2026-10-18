@@ -280,7 +280,12 @@ pub(crate) fn replace(
                     for j in i + 1..lines.len() {
                         check(cancel)?;
                         if trim(lines[j]) == trim(search[n - 1]) {
-                            candidates.push((i, j));
+                            // The block must span exactly the searched line
+                            // count; pairing anchors across any distance
+                            // replaced unnamed lines between them.
+                            if j - i + 1 == n {
+                                candidates.push((i, j));
+                            }
                             break;
                         }
                     }

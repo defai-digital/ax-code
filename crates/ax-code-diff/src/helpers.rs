@@ -177,10 +177,16 @@ pub(crate) fn strategy_block_anchor(content: &str, find: &str) -> Vec<String> {
             continue;
         }
         for (j, line) in original_lines.iter().enumerate().skip(i + 1) {
-            if line.trim() == last_line_search {
-                candidates.push((i, j));
-                break;
+            if line.trim() != last_line_search {
+                continue;
             }
+            // The block must span exactly the searched line count: pairing
+            // the anchors across a different distance silently replaced
+            // unnamed lines between them.
+            if j - i + 1 == search_block_size {
+                candidates.push((i, j));
+            }
+            break;
         }
     }
 
@@ -320,14 +326,12 @@ pub(crate) fn strategy_whitespace_normalized(content: &str, find: &str) -> Vec<S
             let normalized_line = normalize_ws(line);
             if normalized_line.contains(&normalized_find) {
                 // Find the actual substring in the original line that matches, by
-                // building a `word\s+word\s+...` regex from the search text. Cap the
-                // word count at 6 to avoid ReDoS-prone regexes on adversarial input;
-                // for longer searches, fall back to yielding the find string itself
-                // (matches WhitespaceNormalizedReplacer in edit-impl.ts).
+                // building a `word\s+word\s+...` regex from the search text. The
+                // rust regex crate is linear-time, so there is no ReDoS cap;
+                // returning the find string itself for long searches made the
+                // match unlocatable in the raw content.
                 let words: Vec<&str> = find.split_whitespace().collect();
-                if words.len() > 6 {
-                    results.push(find.to_string());
-                } else if !words.is_empty() {
+                if !words.is_empty() {
                     let pattern = words
                         .iter()
                         .map(|word| regex::escape(word))

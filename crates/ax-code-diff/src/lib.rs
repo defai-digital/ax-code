@@ -801,3 +801,35 @@ mod tests {
         let _ = strategy_indentation_flexible(content, find);
     }
 }
+
+#[cfg(test)]
+mod edit_anchor_regression_tests {
+    use super::*;
+
+    #[test]
+    fn block_anchor_refuses_blocks_of_a_different_length() {
+        // head/keep/tail with an unnamed EXTRA line between keep and tail:
+        // the anchor pair spans four lines, the search names three. The
+        // replacement must refuse rather than delete EXTRA.
+        let content = "prefix\nhead\nkeep\nEXTRA\ntail\nsuffix";
+        // The search names three lines but the anchors span four: refusing is
+        // correct — the pre-fix match succeeded and silently deleted EXTRA.
+        let result = edit_replace(content.into(), "head\nkeep\ntail".into(), "REPLACED".into(), false);
+        let err = result.expect_err("block anchor replaced across a different line count");
+        let reason = format!("{err}");
+        assert!(reason.contains("Could not find oldString"), "reason: {reason}");
+    }
+
+    #[test]
+    fn whitespace_normalized_long_search_returns_raw_substring() {
+        // Longer than the historical 6-word cap: the returned match must be
+        // locatable in the raw content.
+        let content = "prefix a  b  c  d  e  f  g suffix";
+        // Ok(...) is the success contract here; the result JSON carries the
+        // new content rather than a success flag.
+        let json = edit_replace(content.into(), "a b c d e f g".into(), "new".into(), false).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let new_content = v["new_content"].as_str().unwrap_or_default();
+        assert!(new_content.contains("prefix new suffix"), "new_content was: {new_content}");
+    }
+}
