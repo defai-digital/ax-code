@@ -11,7 +11,7 @@ changes belong to AX Coder.
 ### Changed
 
 - Update the upstream model catalog and pin ax-tui 2.1.1.
-- Publish SDK 2.6.33 with bounded recovery for duplicate Rekor entries. SDK 2.6.32 was published but its provenance attachment failed; use 2.6.33.
+- Publish SDK 2.6.34 with verified provenance, duplicate Rekor entry recovery, and exact workflow identity checks. SDK 2.6.32 and 2.6.33 have incomplete provenance; use 2.6.34.
 
 ### Fixed
 
