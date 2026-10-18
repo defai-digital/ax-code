@@ -171,7 +171,13 @@ async function axcodeFiles(input: { directories: string[]; managed: string }) {
 
   const existing = await Promise.all(
     unique(files).map(async (file) => {
-      const ok = await Filesystem.exists(file)
+      // Migration is best-effort: one inaccessible candidate (an unsearchable
+      // parent directory, EMFILE, a broken link) must not reject this pass
+      // and fail TUI startup through the config state initializer.
+      const ok = await Filesystem.exists(file).catch((error) => {
+        log.warn("failed to inspect config for tui migration", { path: file, error })
+        return false
+      })
       return ok ? file : undefined
     }),
   )

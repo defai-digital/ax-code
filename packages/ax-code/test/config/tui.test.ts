@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "vitest"
+import { afterEach, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -78,6 +78,36 @@ test("migrates tui-specific keys from ax-code.json when tui.json does not exist"
       expect(await Filesystem.exists(path.join(tmp.path, "tui.json"))).toBe(true)
     },
   })
+})
+
+test("keeps migrating when one config candidate is inaccessible", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "survivor-theme" }, null, 2))
+    },
+  })
+  const inaccessible = path.join(managedConfigDir, "ax-code.json")
+  const originalExists = Filesystem.exists.bind(Filesystem)
+  const spy = vi.spyOn(Filesystem, "exists").mockImplementation((candidate: string) => {
+    if (candidate === inaccessible) {
+      return Promise.reject(Object.assign(new Error("permission denied"), { code: "EACCES" }))
+    }
+    return originalExists(candidate)
+  })
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // Migration is best-effort: an unreadable candidate must not reject
+        // the config state initializer and fail TUI startup.
+        const config = await TuiConfig.get()
+        expect(config.theme).toBe("survivor-theme")
+      },
+    })
+  } finally {
+    spy.mockRestore()
+  }
 })
 
 test("migrates project legacy tui keys even when global tui.json already exists", async () => {
