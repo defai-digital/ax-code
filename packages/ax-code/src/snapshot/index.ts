@@ -8,6 +8,7 @@ import { Global } from "../global"
 import type { Shape } from "../project/instance"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
+import { FileLock } from "../util/filelock"
 import { git } from "../util/git"
 import {
   parseLsTreePath,
@@ -301,7 +302,16 @@ export namespace Snapshot {
 
   async function withOperationLock<T>(current: State, fn: () => Promise<T>): Promise<T> {
     const key = process.platform === "win32" ? current.gitdir.toLowerCase() : current.gitdir
-    return operations.run(key, fn)
+    return operations.run(key, async () => {
+      // Recovery, captures, restore and GC share an on-disk index across
+      // processes. Never steal this lock from a live owner just due to age;
+      // FileLock can reclaim it when the owning process has exited.
+      // @scan-suppress security_scan - The operation lock uses fixed leaves within the managed snapshot store.
+      using lock = await FileLock.acquire(path.join(current.gitdir, "ax-code", "operation"), {
+        staleMs: Number.POSITIVE_INFINITY,
+      })
+      return await fn()
+    })
   }
 
   async function blob(current: State, hash: string, file: string) {
@@ -906,7 +916,6 @@ export namespace Snapshot {
       if (!(await enabled())) return
       const { key, packer } = packerFor(current)
       capturing.add(key)
-      let done = false
       try {
         // ADR-248: a leftover marker means a previous capture was interrupted;
         // its partial index is discarded before this attempt stages anything.
@@ -919,14 +928,12 @@ export namespace Snapshot {
         // process dies next, the following run discards its partial state.
         const hash = await withCaptureRetry(() => captureOnce(current))
         await removeCaptureMarker(current.gitdir)
-        done = true
         if (packer.recordSuccess()) {
           capturing.delete(key)
           await maybePack(current)
         }
         return hash
       } finally {
-        if (!done) await removeCaptureMarker(current.gitdir)
         capturing.delete(key)
       }
     })

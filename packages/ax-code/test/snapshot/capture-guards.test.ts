@@ -8,6 +8,7 @@ import { tmpdir } from "../fixture/fixture"
 import * as Guards from "../../src/snapshot/capture-guards"
 import { Snapshot } from "../../src/snapshot"
 import { Filesystem } from "../../src/util/filesystem"
+import { FileLock } from "../../src/util/filelock"
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -17,6 +18,15 @@ afterEach(async () => {
 const keyError = () => new Guards.CaptureCollisionError("Snapshot tracking failed: write-tree exited with code 128")
 
 describe("withCaptureRetry", () => {
+  test.each([NaN, Infinity, -Infinity])("bounds non-finite attempt counts (%s)", async (attempts) => {
+    const failure = keyError()
+    const run = vi.fn(async () => {
+      if (run.mock.calls.length > 3) throw new Error("unbounded retry")
+      throw failure
+    })
+    await expect(Guards.withCaptureRetry(run, { attempts, sleep: async () => {} })).rejects.toBe(failure)
+    expect(run).toHaveBeenCalledTimes(3)
+  })
   test("retries a lock collision with jitter and succeeds", async () => {
     const sleeps: number[] = []
     let calls = 0
@@ -202,21 +212,34 @@ describe("interrupted capture marker", () => {
     expect(Guards.markerInterrupted({ pid: 1, startedAt: now }, { now, pidAlive: () => true })).toBe(false)
   })
 
-  test("only one of two concurrent recoveries claims the marker", async () => {
+  test("only one of two store-locked recoveries discards the marker", async () => {
     await using tmp = await tmpdir()
     const gitdir = path.join(tmp.path, "store")
     await fs.mkdir(path.join(gitdir, "ax-code"), { recursive: true })
     await Filesystem.write(path.join(gitdir, "index"), "torn")
     await Guards.writeCaptureMarker(gitdir, { pid: 999_997, startedAt: Date.now() - 120_000 })
 
-    const results = await Promise.all([
-      Guards.recoverInterruptedCapture({ gitdir, pidAlive: () => false }),
-      Guards.recoverInterruptedCapture({ gitdir, pidAlive: () => false }),
-    ])
+    const recover = async () => {
+      using lock = await FileLock.acquire(path.join(gitdir, "ax-code", "operation"))
+      return Guards.recoverInterruptedCapture({ gitdir, pidAlive: () => false })
+    }
+    const results = await Promise.all([recover(), recover()])
     expect(results.slice().sort()).toEqual([false, true])
     await expect(fs.access(Guards.captureMarkerPath(gitdir))).rejects.toThrow()
     await expect(fs.access(path.join(gitdir, "index"))).rejects.toThrow()
   })
+})
+
+test("failed recovery preserves the marker and can be retried", async () => {
+  await using tmp = await tmpdir()
+  const gitdir = path.join(tmp.path, "store")
+  const index = path.join(gitdir, "index")
+  await fs.mkdir(index, { recursive: true })
+  await Guards.writeCaptureMarker(gitdir, { pid: process.pid, startedAt: Date.now() - 120_000 })
+  await expect(Guards.recoverInterruptedCapture({ gitdir })).rejects.toThrow()
+  await expect(fs.access(Guards.captureMarkerPath(gitdir))).resolves.toBeUndefined()
+  await fs.rmdir(index)
+  expect(await Guards.recoverInterruptedCapture({ gitdir })).toBe(true)
 })
 
 describe("capture packing cadence", () => {
@@ -253,6 +276,43 @@ describe("capture packing cadence", () => {
 })
 
 describe("snapshot store integration", () => {
+  test("capture waits for the shared store lock and retains failed recovery evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Snapshot.track()
+        const gitdir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+        const index = path.join(gitdir, "index")
+        await fs.rm(index, { force: true })
+        await fs.mkdir(index)
+        await Guards.writeCaptureMarker(gitdir, { pid: process.pid, startedAt: Date.now() - 120_000 })
+        const held = await FileLock.acquire(path.join(gitdir, "ax-code", "operation"))
+        const entered = Promise.withResolvers<void>()
+        const acquire = FileLock.acquire
+        vi.spyOn(FileLock, "acquire").mockImplementation((...args) => {
+          entered.resolve()
+          return acquire(...args)
+        })
+        const result = Snapshot.track().then(
+          () => undefined,
+          (error: unknown) => error,
+        )
+        try {
+          await entered.promise
+          await expect(fs.access(Guards.captureMarkerPath(gitdir))).resolves.toBeUndefined()
+          expect((await fs.stat(index)).isDirectory()).toBe(true)
+        } finally {
+          held[Symbol.dispose]()
+        }
+        expect(await result).toBeInstanceOf(Error)
+        await expect(fs.access(Guards.captureMarkerPath(gitdir))).resolves.toBeUndefined()
+        await fs.rmdir(index)
+        expect(await Snapshot.track()).toMatch(/^[0-9a-f]{40}$/)
+      },
+    })
+  })
+
   test("a real capture leaves no marker or lock behind", async () => {
     await using tmp = await tmpdir({ git: true, config: { username: "test" } })
     await Instance.provide({
@@ -316,8 +376,8 @@ describe("snapshot store integration", () => {
         })
         await expect(Snapshot.track()).rejects.toThrow(/write-tree/)
         const gitdir = path.join(Global.Path.data, "snapshot", Instance.project.id)
-        // A failed capture never leaves its marker behind after the error.
-        await expect(fs.access(Guards.captureMarkerPath(gitdir))).rejects.toThrow()
+        // A failed capture leaves evidence for the next attempt to recover.
+        await expect(fs.access(Guards.captureMarkerPath(gitdir))).resolves.toBeUndefined()
       },
     })
   }, 60_000)

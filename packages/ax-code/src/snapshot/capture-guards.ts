@@ -64,7 +64,8 @@ function jitter(minDelayMs: number, maxDelayMs: number, random: () => number) {
 export async function withCaptureRetry<T>(run: () => Promise<T>, config: CaptureRetryConfig = {}): Promise<T> {
   // Clamp to at least one attempt: a configured 0 would skip the loop entirely
   // and fall through to `throw last`, which is still undefined at that point.
-  const attempts = Math.max(1, config.attempts ?? 3)
+  const requested = config.attempts ?? 3
+  const attempts = Number.isFinite(requested) ? Math.max(1, Math.floor(requested)) : 3
   const minDelayMs = config.minDelayMs ?? 50
   const maxDelayMs = config.maxDelayMs ?? 250
   const sleep = config.sleep ?? defaultSleep
@@ -205,13 +206,9 @@ export function markerInterrupted(
  * torn staging index, and any index lock it left behind. Returns true when a
  * recovery actually happened.
  *
- * The marker is claimed with an atomic rename before anything is deleted.
- * Between the read above and the deletes, another process can complete its
- * own recovery and start a fresh capture with a new marker and a live index;
- * without the claim, this pass would delete that capture's index mid-write.
- * The rename either wins (the marker path is gone, so concurrent recovery
- * returns false and concurrent captures write a fresh marker at the canonical
- * path) or fails (someone else recovered first — report no recovery).
+ * The caller must hold the store's cross-process operation lock through
+ * recovery and capture. Keep the canonical marker until both removals succeed
+ * so a failed recovery remains discoverable on the next access.
  */
 export async function recoverInterruptedCapture(input: MarkerRecoveryInput): Promise<boolean> {
   const file = captureMarkerPath(input.gitdir)
@@ -229,15 +226,11 @@ export async function recoverInterruptedCapture(input: MarkerRecoveryInput): Pro
     const staleMs = input.staleMs ?? STALE_LOCK_MS
     if (!stat || now - stat.mtimeMs < staleMs) return false
   }
-  const claim = `${file}.${process.pid}.${Date.now()}.reclaiming`
-  const claimed = await fs.rename(file, claim).then(
-    () => true,
-    () => false,
-  )
-  if (!claimed) return false
-  await fs.rm(path.join(input.gitdir, "index"), { force: true }).catch(() => undefined)
-  await fs.rm(path.join(input.gitdir, "index.lock"), { force: true }).catch(() => undefined)
-  await fs.rm(claim, { force: true }).catch(() => undefined)
+  // @scan-suppress security_scan - gitdir is the managed snapshot store; index is a fixed leaf under the operation lock.
+  await fs.rm(path.join(input.gitdir, "index"), { force: true })
+  // @scan-suppress security_scan - gitdir is the managed snapshot store; index.lock is a fixed leaf under the operation lock.
+  await fs.rm(path.join(input.gitdir, "index.lock"), { force: true })
+  await fs.rm(file, { force: true })
   return true
 }
 
