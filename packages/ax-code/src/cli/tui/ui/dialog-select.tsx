@@ -138,20 +138,15 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     return dialogSelectFlatOptions(grouped())
   })
 
+  // Track the current value's position as asynchronous options arrive or move.
+  // Unrelated option updates must not reset a cursor the user has already moved.
+  const currentIndex = createMemo(() =>
+    dialogSelectHasCurrentValue(props.current) ? flat().findIndex((opt) => isDeepEqual(opt.value, props.current)) : -1,
+  )
   createEffect(
-    on(
-      () => props.current,
-      (current) => {
-        // Null check only: falsy-but-valid values such as "" (DialogEffort's
-        // Auto option) must still position the cursor on the current entry.
-        if (dialogSelectHasCurrentValue(current)) {
-          const currentIndex = flat().findIndex((opt) => isDeepEqual(opt.value, current))
-          if (currentIndex >= 0) {
-            setStore("selected", currentIndex)
-          }
-        }
-      },
-    ),
+    on(currentIndex, (index) => {
+      if (index >= 0) setStore("selected", index)
+    }),
   )
 
   // When the filter changes due to how TUI works, the mousemove might still be triggered
@@ -225,16 +220,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const selected = createMemo(() => dialogSelectActionOption(flat(), store.selected))
 
   createEffect(
-    on([() => store.filter, () => props.current], ([filter, current]) => {
+    on([() => store.filter, currentIndex], ([filter, index]) => {
       const cancel = scheduleMicrotaskTask(
         () => {
           if (filter.length > 0) {
             moveTo(0, true)
-          } else if (dialogSelectHasCurrentValue(current)) {
-            const currentIndex = flat().findIndex((opt) => isDeepEqual(opt.value, current))
-            if (currentIndex >= 0) {
-              moveTo(currentIndex, true)
-            }
+          } else if (index >= 0) {
+            moveTo(index, true)
           }
           revealSelected() // rows may lack layout on open
         },
@@ -414,11 +406,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     }
     if (evt.name === "home") {
       armConfirm()
-      moveTo(0)
+      move(-Math.max(2, flat().length))
     }
     if (evt.name === "end") {
       armConfirm()
-      moveTo(flat().length - 1)
+      move(Math.max(2, flat().length))
     }
 
     if (CONFIRM_KEYS.has(evt.name)) {

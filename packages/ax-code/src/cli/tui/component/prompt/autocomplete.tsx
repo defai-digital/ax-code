@@ -717,6 +717,9 @@ export function Autocomplete(props: {
 
   createEffect(() => {
     filter()
+    // File requests can replace the visible results without changing the query.
+    // A position from the old list must not select a different or missing result.
+    options()
     setStore("selected", 0)
   })
 

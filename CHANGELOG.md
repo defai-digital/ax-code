@@ -6,6 +6,8 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.27.2] - 2026-10-18
+
 ### Added
 
 - Preview session PNG attachments on demand through attachment links or `/images`, with bounded decoding and terminal graphics fallback.
@@ -13,8 +15,19 @@ changes belong to AX Coder.
 
 ### Changed
 
+- Align Node.js 26 types and publish SDK 2.6.31 with the matching HTTP/2 compatibility adjustment.
+- Apply prompt mentions through undo-preserving completion and use positioned context-menu overlays.
 - Upgrade ax-tui to 2.1.0 with matching ABI 3 native libraries. Use modal focus scopes for connection forms and shortcut help, and share command registry execution across pickers, shortcuts, and slash commands.
 - Virtualize large text-based pickers while preserving their layout, keyboard selection, and mouse actions.
+
+### Fixed
+
+- Skip disabled edge rows during Home/End navigation in ordinary and virtualized pickers.
+- Select the current value when picker options arrive asynchronously, without resetting manual navigation on unrelated updates.
+- Reset autocomplete selection when asynchronous file results replace the visible list.
+- Retry snapshot staging lock collisions instead of dropping undo coverage.
+- Reject instruction symlink escapes, write-capable time wrappers in plan mode, and oversized attachments before reading.
+- Bound write approval diffs, honor cancellation before writes, clear superseded abort timers, and tolerate unreadable TUI migration candidates.
 
 ## [7.27.1] - 2026-10-18
 
@@ -34,11 +47,6 @@ changes belong to AX Coder.
 - Disconnect a live MCP client when untrust completes after its server was removed or disabled from config.
 - Do not report a stray `.git` directory or unrelated file as a Git repository in `doctor`.
 - Treat `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` as a failed Git inventory in Wiki discovery instead of walking gitignored files.
-
-### Changed
-
-- Upgrade ax-tui to 1.1.0, apply prompt mentions through its undo-preserving completion adapter, and render the context menu as a positioned non-capturing overlay.
-- Align `@types/node` with the Node.js 26 runtime and adapt the timer, file-stat, and HTTP/2 typings it rechecked.
 
 ## [7.27.0] - 2026-10-17
 
