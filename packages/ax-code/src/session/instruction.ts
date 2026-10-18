@@ -315,7 +315,9 @@ export namespace InstructionPrompt {
     // Containment check keeps the fixed openwiki pointer under the worktree
     // root even if worktree resolution is unexpected (security_scan path_traversal).
     if (!Filesystem.contains(Instance.worktree, index)) return undefined
-    if (!(await Filesystem.exists(index))) return undefined
+    // Advisory probe: an unreadable path (EACCES, EPERM) must not reject the
+    // whole system-prompt build — skip the pointer like a missing one.
+    if (!(await Filesystem.exists(index).catch(() => false))) return undefined
     if (loadedInstructions.some((text) => text.toLowerCase().includes("openwiki"))) return undefined
     return (
       "This repository has an OpenWiki knowledge base in openwiki/. " +
@@ -440,6 +442,10 @@ export namespace InstructionPrompt {
   }
 
   export async function resolve(messages: MessageV2.WithParts[], filepath: string, messageID: string) {
+    // Project-controlled instructions follow the same gate as systemPaths and
+    // loadPathRules: with project config disabled, a nested AGENTS.md is an
+    // untrusted project file and must not be injected either.
+    if (Flag.AX_CODE_DISABLE_PROJECT_CONFIG) return []
     const system = await systemPaths()
     const already = loaded(messages)
     const results: { filepath: string; content: string }[] = []
@@ -456,11 +462,14 @@ export namespace InstructionPrompt {
       const found = await find(current)
 
       if (found && found !== target && !system.has(found) && !already.has(found) && !isClaimed(messageID, found)) {
+        // Claim before the first await: read/write/edit run concurrently for
+        // one message, and a check-then-claim split by an await injects the
+        // same file twice into the same message.
+        claim(messageID, found)
         const real = await realpathOrResolved(found)
         if (!Filesystem.contains(realRoot, real)) {
           log.warn("instruction file symlink escapes instance root", { path: found, real })
         } else {
-          claim(messageID, found)
           const content = await Filesystem.readText(found)
           if (content) {
             const hidden = detectHiddenUnicode(content)

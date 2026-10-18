@@ -678,4 +678,85 @@ describe("InstructionPrompt.system openwiki interop", () => {
       },
     })
   })
+
+  test("stays silent when the openwiki index probe fails (EACCES)", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "openwiki"), { recursive: true })
+        await fs.writeFile(path.join(dir, "openwiki", "index.md"), "# Wiki Index")
+        await fs.writeFile(path.join(dir, "AGENTS.md"), "# Project rules, no wiki reference")
+      },
+    })
+    const original = Filesystem.exists
+    const existsSpy = vi.spyOn(Filesystem, "exists").mockImplementation(async (p: string) => {
+      if (p.includes("openwiki")) throw Object.assign(new Error("permission denied"), { code: "EACCES" })
+      return original(p)
+    })
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          // An unreadable openwiki path must skip the pointer, not reject the
+          // whole system-prompt build.
+          const prompts = await InstructionPrompt.system()
+          expect(prompts.filter((p) => p.includes("OpenWiki knowledge base"))).toEqual([])
+        },
+      })
+    } finally {
+      existsSpy.mockRestore()
+    }
+  })
+})
+
+describe("InstructionPrompt.resolve project-config gate and claiming", () => {
+  test("returns empty when project config is disabled", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "subdir"), { recursive: true })
+        await fs.writeFile(path.join(dir, "subdir", "AGENTS.md"), "# Subdir Instructions")
+        await fs.writeFile(path.join(dir, "subdir", "file.ts"), "const x = 1")
+      },
+    })
+    vi.stubEnv("AX_CODE_DISABLE_PROJECT_CONFIG", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          // A nested AGENTS.md is a project-controlled file; with project
+          // config disabled it must not be injected through resolve() either.
+          const results = await InstructionPrompt.resolve(
+            [],
+            path.join(tmp.path, "subdir", "file.ts"),
+            "test-message-gate",
+          )
+          expect(results).toEqual([])
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("concurrent resolves with the same message inject a nested AGENTS.md only once", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "subdir"), { recursive: true })
+        await fs.writeFile(path.join(dir, "subdir", "AGENTS.md"), "# Subdir Instructions")
+        await fs.mkdir(path.join(dir, "subdir", "nested"), { recursive: true })
+        await fs.writeFile(path.join(dir, "subdir", "nested", "file.ts"), "const x = 1")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const filepath = path.join(tmp.path, "subdir", "nested", "file.ts")
+        const [first, second] = await Promise.all([
+          InstructionPrompt.resolve([], filepath, "test-message-concurrent"),
+          InstructionPrompt.resolve([], filepath, "test-message-concurrent"),
+        ])
+        const injected = [...first, ...second].filter((result) => result.filepath.endsWith("AGENTS.md"))
+        expect(injected).toHaveLength(1)
+      },
+    })
+  })
 })
