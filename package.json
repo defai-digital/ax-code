@@ -67,6 +67,8 @@
   },
   "devDependencies": {
     "@actions/artifact": "5.0.1",
+    "@sigstore/bundle": "catalog:",
+    "@sigstore/sign": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native": "catalog:",
     "husky": "9.1.7",

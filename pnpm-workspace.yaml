@@ -49,6 +49,8 @@ catalog:
   "remeda": "2.50.0"
   "semver": "7.8.5"
   "sigstore": "5.0.0"
+  "@sigstore/sign": "5.0.0"
+  "@sigstore/bundle": "5.0.0"
   "smol-toml": "1.9.1"
   "strip-ansi": "7.2.0"
   # Match the published ax-tui dependency so both share one reactive runtime.

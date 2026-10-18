@@ -2,6 +2,11 @@ name: Qualify SDK provenance
 
 on:
   workflow_dispatch:
+    inputs:
+      published-version:
+        description: Previously qualified SDK version for the read-only metadata check
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -19,6 +24,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Sign and verify a harmless SDK provenance fixture
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PUBLISHED_VERSION: ${{ inputs.published-version }}
         with:
           script: |
             const fs = require('node:fs/promises')
@@ -41,18 +48,25 @@ jobs:
                 runDetails: { builder: { id: `https://github.com/${process.env.GITHUB_WORKFLOW_REF}` } }
               }
             })
+            const { verify } = await import('sigstore')
+            const assert = require('node:assert/strict')
+            await assert.rejects(() => verify(bundle, {
+              certificateIssuer: 'https://token.actions.githubusercontent.com',
+              certificateIdentityURI: '^https://github.com/untrusted/fixture$',
+            }))
             const legacy = await toJsrBundle(bundle, '0.0.0', hash)
             const audience = JSON.stringify({ permissions: [{ permission: 'package/publish', scope: 'defai-digital', package: 'ax-code-sdk' }] })
             const jsrToken = await core.getIDToken(audience)
             core.setSecret(jsrToken)
-            const source = await new Response(await fs.readFile('packages/sdk/js/jsr.json')).json()
-            const response = await fetch(`https://jsr.io/api/scopes/defai-digital/packages/ax-code-sdk/versions/${source.version}`, {
+            const version = process.env.PUBLISHED_VERSION
+            if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Invalid published SDK version')
+            const response = await fetch(`https://jsr.io/api/scopes/defai-digital/packages/ax-code-sdk/versions/${version}`, {
               headers: { authorization: `githuboidc ${jsrToken}` }, signal: AbortSignal.timeout(30000)
             })
             if (!response.ok) throw new Error(`JSR OIDC metadata request failed: ${response.status}`)
             const metadata = await response.json()
-            if (metadata.version !== source.version || !metadata.rekorLogId) throw new Error('Published SDK provenance is missing')
-            await fs.writeFile(path.join(process.env.RUNNER_TEMP, 'sdk-provenance-qualification.json'), JSON.stringify({ visibility, commit: context.sha, fixtureBundle: bundle, jsrBundle: legacy, publishedVersion: source.version }, null, 2))
+            if (metadata.version !== version || !metadata.rekorLogId) throw new Error('Published SDK provenance is missing')
+            await fs.writeFile(path.join(process.env.RUNNER_TEMP, 'sdk-provenance-qualification.json'), JSON.stringify({ visibility, commit: context.sha, fixtureBundle: bundle, jsrBundle: legacy, publishedVersion: version }, null, 2))
             core.info(`Verified ${visibility} repository signing, exact workflow identity, Rekor inclusion, JSR bundle conversion and OIDC metadata access. No package version was published.`)
       - uses: actions/upload-artifact@v7
         with:

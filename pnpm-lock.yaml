@@ -30,6 +30,12 @@ catalogs:
     '@octokit/webhooks-types':
       specifier: 7.6.1
       version: 7.6.1
+    '@sigstore/bundle':
+      specifier: 5.0.0
+      version: 5.0.0
+    '@sigstore/sign':
+      specifier: 5.0.0
+      version: 5.0.0
     '@standard-schema/spec':
       specifier: 1.1.0
       version: 1.1.0
@@ -234,6 +240,12 @@ importers:
       '@actions/artifact':
         specifier: 5.0.1
         version: 5.0.1
+      '@sigstore/bundle':
+        specifier: 'catalog:'
+        version: 5.0.0
+      '@sigstore/sign':
+        specifier: 'catalog:'
+        version: 5.0.0
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.5

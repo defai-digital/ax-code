@@ -1,7 +1,32 @@
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
-const { attest, verify } = vi.hoisted(() => ({ attest: vi.fn(), verify: vi.fn() }))
-vi.mock("sigstore", () => ({ attest, verify }))
+const { create, verify, builderOptions, signerOptions, witnessOptions } = vi.hoisted(() => ({
+  create: vi.fn(),
+  verify: vi.fn(),
+  builderOptions: vi.fn(),
+  signerOptions: vi.fn(),
+  witnessOptions: vi.fn(),
+}))
+vi.mock("sigstore", () => ({ verify }))
+vi.mock("@sigstore/bundle", () => ({ bundleToJSON: (bundle: unknown) => bundle }))
+vi.mock("@sigstore/sign", () => ({
+  DSSEBundleBuilder: class {
+    constructor(options: unknown) {
+      builderOptions(options)
+    }
+    create = create
+  },
+  FulcioSigner: class {
+    constructor(options: unknown) {
+      signerOptions(options)
+    }
+  },
+  RekorWitness: class {
+    constructor(options: unknown) {
+      witnessOptions(options)
+    }
+  },
+}))
 vi.mock("../.github/scripts/jsr-provenance-recovery.mjs", async (original) => ({
   ...(await original<object>()),
   toJsrBundle: vi.fn(),
@@ -21,47 +46,36 @@ const input = {
 describe("free SDK provenance signing", () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    attest.mockResolvedValue({ dsseEnvelope: {} })
+    create.mockResolvedValue({ dsseEnvelope: {} })
   })
 
-  test("signs a fresh bundle once when Rekor reports an already-created entry", async () => {
-    const duplicate = Object.assign(new Error("duplicate entry"), {
-      code: "TLOG_CREATE_ENTRY_ERROR",
-      cause: { statusCode: 409 },
-    })
-    const bundle = { dsseEnvelope: {} }
-    attest.mockRejectedValueOnce(duplicate).mockResolvedValueOnce(bundle)
-    expect(await signJsrProvenance(input)).toBe(bundle)
-    expect(attest).toHaveBeenCalledTimes(2)
-    expect(verify).toHaveBeenCalledWith(bundle, undefined, signingPolicy(workflowRef))
-    expect(toJsrBundle).toHaveBeenCalledWith(bundle, input.version, input.digest)
-  })
-
-  test.each([409, 403])("bounds duplicate recovery and never retries other errors (%s)", async (statusCode) => {
+  test.each([409, 403])("propagates unrecoverable log failures without signing again (%s)", async (statusCode) => {
     const failure = Object.assign(new Error("log rejected"), {
       code: "TLOG_CREATE_ENTRY_ERROR",
       cause: { statusCode },
     })
-    attest.mockRejectedValue(failure)
+    create.mockRejectedValue(failure)
     await expect(signJsrProvenance(input)).rejects.toBe(failure)
-    expect(attest).toHaveBeenCalledTimes(statusCode === 409 ? 2 : 1)
+    expect(create).toHaveBeenCalledTimes(1)
     expect(verify).not.toHaveBeenCalled()
   })
 
   test("verifies a logged JSR-compatible signature against the exact workflow identity", async () => {
     const bundle = { dsseEnvelope: {} }
-    attest.mockResolvedValue(bundle)
+    create.mockResolvedValue(bundle)
     verify.mockResolvedValue({})
     expect(await signJsrProvenance(input)).toBe(bundle)
-    const [bytes, type, options] = attest.mock.lastCall!
+    const [{ data: bytes, type }] = create.mock.lastCall!
     const statement = await new Response(bytes).json()
     expect(statement.subject).toEqual([
       { name: "pkg:jsr/@defai-digital/ax-code-sdk@2.6.7", digest: { sha256: input.digest } },
     ])
     expect(statement.predicateType).toBe("https://slsa.dev/provenance/v1")
     expect(type).toBe("application/vnd.in-toto+json")
-    expect(options).toEqual({ identityToken: "fixture", legacyCompatibility: true, tlogUpload: true })
-    expect(verify).toHaveBeenLastCalledWith(bundle, undefined, signingPolicy(workflowRef))
+    expect(builderOptions.mock.lastCall![0].certificateChain).toBe(true)
+    expect(await signerOptions.mock.lastCall![0].identityProvider.getToken()).toBe("fixture")
+    expect(witnessOptions.mock.lastCall![0]).toMatchObject({ entryType: "intoto", fetchOnConflict: true })
+    expect(verify).toHaveBeenLastCalledWith(bundle, signingPolicy(workflowRef))
     expect(toJsrBundle).toHaveBeenLastCalledWith(bundle, input.version, input.digest)
     const identity = new RegExp(signingPolicy(workflowRef).certificateIdentityURI)
     expect(identity.test(`https://github.com/${workflowRef}`)).toBe(true)
@@ -70,6 +84,7 @@ describe("free SDK provenance signing", () => {
   test("fails closed on signature verification and untrusted workflow identities", async () => {
     verify.mockRejectedValueOnce(new Error("identity mismatch"))
     await expect(signJsrProvenance(input)).rejects.toThrow("identity mismatch")
+    expect(toJsrBundle).not.toHaveBeenCalled()
     for (const ref of [
       workflowRef.replace("defai-digital", "other"),
       workflowRef.replace("sdk-jsr", "release"),
