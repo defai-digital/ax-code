@@ -37,6 +37,8 @@ interface ZipEntry {
   name: string
   /** Uncompressed size from the central directory header. */
   size: number
+  /** Compressed size from the central directory, including data-descriptor entries. */
+  compressedSize: number
   /** Local header offset, used to read the file data. */
   localOffset: number
   /** Compression method: 0 = stored, 8 = deflated. */
@@ -70,7 +72,7 @@ function findEocd(buf: Buffer): number {
   const max = Math.min(buf.length, 0xffff + 22)
   for (let i = buf.length - 22; i >= buf.length - max; i--) {
     if (i < 0) break
-    if (readU32(buf, i) === SIG_EOCD) return i
+    if (readU32(buf, i) === SIG_EOCD && i + 22 + readU16(buf, i + 20) === buf.length) return i
   }
   return -1
 }
@@ -107,6 +109,7 @@ function readEntries(buf: Buffer): ZipEntry[] {
     entries.push({
       name,
       size: uncompressedSize,
+      compressedSize,
       localOffset,
       method,
       crc,
@@ -123,9 +126,9 @@ function inflateEntry(buf: Buffer, entry: ZipEntry): Buffer {
   if (readU32(buf, entry.localOffset) !== SIG_LOCAL) throw new Error("bad local header signature")
   const nameLen = readU16(buf, entry.localOffset + 26)
   const extraLen = readU16(buf, entry.localOffset + 28)
-  // The compressed size lives in the local header at offset 18; the central
-  // directory also carries it, but the local header is what we slice from.
-  const csize = readU32(buf, entry.localOffset + 18)
+  // Streaming ZIP writers leave local sizes at zero and append a data descriptor.
+  // The central directory always carries the final compressed size.
+  const csize = entry.compressedSize
   const dataStart = entry.localOffset + 30 + nameLen + extraLen
   if (dataStart + csize > buf.length) throw new Error("entry data overruns file")
   if (csize > MAX_SINGLE_ENTRY) {
@@ -383,7 +386,10 @@ export async function extractOfficeText(filePath: string): Promise<OfficeExtract
   if (Buffer.byteLength(output, "utf8") > MAX_OUTPUT_BYTES) {
     // Slice UTF-8 bytes, not UTF-16 code units, so multibyte text stays
     // within the advertised cap (a code-unit slice keeps ~3x the cap for CJK).
-    output = Buffer.from(output, "utf8").subarray(0, MAX_OUTPUT_BYTES).toString("utf8")
+    const encoded = Buffer.from(output, "utf8")
+    let end = MAX_OUTPUT_BYTES
+    while (end > 0 && (encoded[end]! & 0xc0) === 0x80) end--
+    output = encoded.subarray(0, end).toString("utf8")
     truncated = true
   }
 

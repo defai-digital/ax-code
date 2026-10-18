@@ -14,6 +14,7 @@ interface ZipEntry {
   data: Buffer
   /** ms-dos time/date stamp for entries; defaults to a fixed recent value. */
   mtime?: Date
+  dataDescriptor?: boolean
 }
 
 const CRC_TABLE = (() => {
@@ -64,13 +65,13 @@ function buildZip(entries: ZipEntry[]): Buffer {
     const local = Buffer.alloc(30)
     local.writeUInt32LE(0x04034b50, 0) // signature
     local.writeUInt16LE(20, 4) // version needed
-    local.writeUInt16LE(0, 6) // flags
+    local.writeUInt16LE(e.dataDescriptor ? 8 : 0, 6) // flags
     local.writeUInt16LE(8, 8) // method: deflate
     local.writeUInt16LE(mtimeT, 10)
     local.writeUInt16LE(mtimeD, 12)
-    local.writeUInt32LE(crc, 14)
-    local.writeUInt32LE(csize, 18)
-    local.writeUInt32LE(size, 22)
+    local.writeUInt32LE(e.dataDescriptor ? 0 : crc, 14)
+    local.writeUInt32LE(e.dataDescriptor ? 0 : csize, 18)
+    local.writeUInt32LE(e.dataDescriptor ? 0 : size, 22)
     local.writeUInt16LE(nameBuf.length, 26)
     local.writeUInt16LE(0, 28) // extra length
     localParts.push(local, nameBuf, compressed)
@@ -80,7 +81,7 @@ function buildZip(entries: ZipEntry[]): Buffer {
     central.writeUInt32LE(0x02014b50, 0) // signature
     central.writeUInt16LE(20, 4) // version made by
     central.writeUInt16LE(20, 6) // version needed
-    central.writeUInt16LE(0, 8) // flags
+    central.writeUInt16LE(e.dataDescriptor ? 8 : 0, 8) // flags
     central.writeUInt16LE(8, 10) // method
     central.writeUInt16LE(time, 12)
     central.writeUInt16LE(date, 14)
@@ -96,7 +97,15 @@ function buildZip(entries: ZipEntry[]): Buffer {
     central.writeUInt32LE(localOffset, 42)
     centralParts.push(central, nameBuf)
 
-    localOffset += local.length + nameBuf.length + compressed.length
+    if (e.dataDescriptor) {
+      const descriptor = Buffer.alloc(16)
+      descriptor.writeUInt32LE(0x08074b50, 0)
+      descriptor.writeUInt32LE(crc, 4)
+      descriptor.writeUInt32LE(csize, 8)
+      descriptor.writeUInt32LE(size, 12)
+      localParts.push(descriptor)
+    }
+    localOffset += local.length + nameBuf.length + compressed.length + (e.dataDescriptor ? 16 : 0)
   }
 
   const centralStart = localOffset
@@ -132,6 +141,44 @@ function forgeCentralSizes(buf: Buffer) {
 /* -------------------------------------------------------------------------- */
 /*                              Tests                                          */
 /* -------------------------------------------------------------------------- */
+
+describe("Office ZIP streaming and comments", () => {
+  test("reads entries whose sizes are supplied by data descriptors", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "streamed.docx")
+    await writeFile(
+      file,
+      buildZip([
+        {
+          name: "word/document.xml",
+          dataDescriptor: true,
+          data: Buffer.from("<w:document><w:p><w:r><w:t>Streamed content</w:t></w:r></w:p></w:document>"),
+        },
+      ]),
+    )
+    const result = await extractOfficeText(file)
+    expect(result.reason).toBeUndefined()
+    expect(result.text).toContain("Streamed content")
+  })
+
+  test("ignores an EOCD signature embedded in a valid archive comment", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "comment.docx")
+    const archive = buildZip([
+      {
+        name: "word/document.xml",
+        data: Buffer.from("<w:document><w:p><w:r><w:t>Commented content</w:t></w:r></w:p></w:document>"),
+      },
+    ])
+    const comment = Buffer.alloc(30, 65)
+    comment.writeUInt32LE(0x06054b50, 0)
+    archive.writeUInt16LE(comment.length, archive.length - 2)
+    await writeFile(file, Buffer.concat([archive, comment]))
+    const result = await extractOfficeText(file)
+    expect(result.reason).toBeUndefined()
+    expect(result.text).toContain("Commented content")
+  })
+})
 
 describe("detectOfficeKind", () => {
   test("recognizes the three Open XML extensions", () => {
@@ -457,10 +504,10 @@ describe("extractOfficeText - safety", () => {
     // 70k CJK characters: 70_000 UTF-16 code units (below the cap) but
     // 210_000 UTF-8 bytes (above it). A code-unit slice would keep everything
     // while still reporting truncated.
-    const para = "字".repeat(175)
+    const para = "字".repeat(70_000)
     const xml = `<?xml version="1.0"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>${Array.from({ length: 400 }, () => `<w:p><w:r><w:t>${para}</w:t></w:r></w:p>`).join("")}</w:body>
+  <w:body>${Array.from({ length: 1 }, () => `<w:p><w:r><w:t>${para}</w:t></w:r></w:p>`).join("")}</w:body>
 </w:document>`
     const buf = buildZip([{ name: "word/document.xml", data: Buffer.from(xml) }])
     await writeFile(filePath, buf)
@@ -469,9 +516,9 @@ describe("extractOfficeText - safety", () => {
     const body = result.text
       .replace(/^<extracted_text[^>]*>\n(?:\[truncated to 200 KB\]\n)?/, "")
       .replace(/\n<\/extracted_text>$/, "")
-    // A mid-character byte cut decodes as one U+FFFD (3 bytes), so allow the
-    // cap plus that single replacement character.
-    expect(Buffer.byteLength(body, "utf8")).toBeLessThanOrEqual(200 * 1024 + 3)
+    // Truncation must preserve complete UTF-8 characters and the strict byte cap.
+    expect(body).not.toContain("\uFFFD")
+    expect(Buffer.byteLength(body, "utf8")).toBeLessThanOrEqual(200 * 1024)
     // The content really was shortened: 70k source characters cannot fit whole.
     expect(body.length).toBeLessThan(70_000)
   })
