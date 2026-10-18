@@ -21,9 +21,14 @@ test("analysis output is builtin, model eligible and explicitly invocable withou
       const command = await Command.get("analysis-output")
       expect(command?.source).toBe("skill")
       expect(await command?.template).toBe(skill?.content)
-      // This is the presentation contract consumed by Desktop, not a permission grant.
-      const fence = skill?.content.match(/```ax-code-app\n([^]*?)\n```/)
-      expect(fence?.[1]).toBe('{"version":1,"kind":"streamlit","entrypoint":"streamlit_app.py"}')
+      expect(skill?.content).toContain("AX BI MCP")
+      expect(skill?.content).toContain("`dry_run: true`")
+      expect(skill?.content).toContain("`save_charts: false`")
+      expect(skill?.content).toContain("AX BI is optional")
+      expect(skill?.content).toContain("Honor the requested framework")
+      expect(skill?.content).toContain("Do not read an entire file into model context")
+      expect(skill?.content).not.toContain("```ax-code-app")
+      expect(skill?.content).not.toContain('"kind":"streamlit"')
     },
   })
 })
