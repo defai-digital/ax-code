@@ -1509,7 +1509,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(history).toContain("createEffect(")
     expect(history).toContain("() => sdk.directory")
     expect(history).toContain('setStore("history", [])')
-    expect(history).toContain("refreshProjectHistory({ directory, mergeLocal: false })")
+    expect(history).toContain("refreshProjectHistory(directory)")
     expect(history).toContain("appendProjectHistory(entry, directory)")
   })
 

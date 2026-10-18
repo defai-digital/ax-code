@@ -16,6 +16,23 @@ const MAX_HISTORY_ENTRIES = 50
 const HISTORY_LOAD_DELAY_MS = 100
 const log = Log.create({ service: "tui.prompt-history" })
 
+function mergeProjectHistory(persisted: PromptInfo[], local: PromptInfo[]) {
+  const key = (entry: PromptInfo) => JSON.stringify([entry.input, entry.mode ?? null, entry.parts])
+  const persistedKeys = persisted.map(key)
+  const localKeys = local.map(key)
+  // A GET can already include the first local POSTs. Keep the local suffix
+  // once, in order, including entries appended while the GET was pending.
+  let overlap = Math.min(persisted.length, local.length)
+  while (overlap > 0) {
+    if (
+      localKeys.slice(0, overlap).every((value, index) => value === persistedKeys[persisted.length - overlap + index])
+    )
+      break
+    overlap--
+  }
+  return [...persisted.slice(0, persisted.length - overlap), ...local].slice(-MAX_HISTORY_ENTRIES)
+}
+
 export const { use: usePromptHistory, provider: PromptHistoryProvider } = createSimpleContext({
   name: "PromptHistory",
   init: () => {
@@ -50,10 +67,10 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
     }
 
-    async function refreshProjectHistory(options: { directory: string | undefined; mergeLocal: boolean }) {
+    async function refreshProjectHistory(directory: string | undefined) {
       const generation = ++loadGeneration
-      const lines = await loadProjectHistory(options.directory).catch((error) => {
-        log.warn("failed to load prompt history", { directory: options.directory, error })
+      const lines = await loadProjectHistory(directory).catch((error) => {
+        log.warn("failed to load prompt history", { directory, error })
         if (shouldSurfaceOptionalStateError(error)) {
           toast.show({
             message: optionalStateErrorMessage(error, "Failed to load prompt history"),
@@ -66,9 +83,9 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
       if (generation !== loadGeneration) return
       setStore(
         produce((draft) => {
-          const local = options.mergeLocal ? draft.history : []
-          draft.history = [...lines, ...local].slice(-MAX_HISTORY_ENTRIES)
-          draft.index = 0
+          // Existing local entries remain the suffix, so negative navigation
+          // offsets still name the same prompt after the load completes.
+          draft.history = mergeProjectHistory(lines, draft.history)
         }),
       )
     }
@@ -76,7 +93,7 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
     onMount(() => {
       const cancel = scheduleDeferredStartupTask(
         async () => {
-          await refreshProjectHistory({ directory: sdk.directory, mergeLocal: true })
+          await refreshProjectHistory(sdk.directory)
         },
         {
           name: "prompt-history-load",
@@ -92,7 +109,7 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
         (directory) => {
           setStore("history", [])
           setStore("index", 0)
-          void refreshProjectHistory({ directory, mergeLocal: false })
+          void refreshProjectHistory(directory)
         },
         { defer: true },
       ),
@@ -106,6 +123,9 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
     return {
       move(direction: 1 | -1, input: string) {
         if (!store.history.length) return undefined
+        // Clearing a recalled draft (Escape/Ctrl+C), deleting its text, or
+        // mounting another session starts a fresh traversal at the newest row.
+        if (!input.length) setStore("index", 0)
         // Index 0 is the live-draft position — history.at(0) would be the
         // *oldest* entry, so the guard must not compare the draft against it.
         if (!promptHistoryNavigationAllowed({ index: store.index, draft: input, history: store.history })) return
