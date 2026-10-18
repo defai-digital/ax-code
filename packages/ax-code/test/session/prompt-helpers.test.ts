@@ -321,6 +321,14 @@ describe("session.prompt helpers", () => {
     expect(shellArgs("/bin/fish", "echo hi", "darwin")).toEqual(["-c", "echo hi"])
     expect(shellArgs("/bin/bash", "echo hi", "darwin")[0]).toBe("-c")
     expect(shellArgs("/bin/zsh", "echo hi", "darwin")[0]).toBe("-c")
+    // The command is spliced into a login wrapper and re-parsed by eval, so it
+    // must arrive as a single-quoted literal. Double quotes (JSON.stringify)
+    // let the wrapper shell expand $var/$(...) before eval and collapsed
+    // multi-line commands (`onenecho two`).
+    for (const shell of ["/bin/bash", "/bin/zsh"]) {
+      const script = shellArgs(shell, "x=inner; echo val=$x", "darwin").at(-1)!
+      expect(script).toContain("eval 'x=inner; echo val=$x'")
+    }
     expect(shellArgs("C:\\Windows\\System32\\cmd.exe", "dir", "win32")).toEqual(["/c", "dir"])
     expect(shellArgs("C:\\Windows\\System32\\CMD.EXE", "dir", "win32")).toEqual(["/c", "dir"])
     expect(
@@ -331,6 +339,36 @@ describe("session.prompt helpers", () => {
       "-Command",
       "Get-ChildItem",
     ])
+  })
+
+  // The login wrapper re-parses the command through eval, so its observable
+  // behavior must match running the command directly with `bash -c`: variable
+  // assignments earlier in the command are visible later, command substitution
+  // runs at eval time, and multi-line commands keep their line breaks. HOME is
+  // pointed at an empty temp dir so login rc files cannot skew stdout parity.
+  test.skipIf(process.platform === "win32")("login wrapper matches plain bash -c semantics", async () => {
+    const { spawnSync } = await import("child_process")
+    const { mkdtemp, rm } = await import("fs/promises")
+    const os = await import("os")
+    const home = await mkdtemp(await import("path").then((p) => p.join(os.tmpdir(), "shellargs-parity-")))
+    try {
+      const bash = process.platform === "darwin" ? "/bin/bash" : "bash"
+      const env = { ...process.env, HOME: home }
+      for (const command of [
+        "x=inner; echo val=$x",
+        "echo one\necho two",
+        "echo a;echo $(echo sub)",
+        'echo "it\'s fine"',
+      ]) {
+        const args = shellArgs(bash, command, process.platform)
+        const wrapped = spawnSync(bash, args, { encoding: "utf8", env })
+        const plain = spawnSync(bash, ["-c", command], { encoding: "utf8", env })
+        expect(wrapped.status).toBe(plain.status)
+        expect(wrapped.stdout).toBe(plain.stdout)
+      }
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
   })
 
   test("expands shell-backed template blocks", async () => {

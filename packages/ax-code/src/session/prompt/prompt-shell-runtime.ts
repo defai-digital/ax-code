@@ -67,6 +67,17 @@ function shellKey(shell: string, platform = process.platform) {
   return name.toLowerCase()
 }
 
+/**
+ * Quote a command as one single-quoted shell word for `eval`. JSON.stringify's
+ * double quotes let the login shell expand `$var`, `$(...)`, and backticks
+ * while parsing the wrapper (before `eval` runs), and its `\n`/`\t` escapes
+ * are not shell escapes, so multi-line commands collapsed (`onenecho two`).
+ * Single quotes keep the command literal until `eval` executes it.
+ */
+function shellEvalQuote(command: string) {
+  return `'` + command.replace(/'/g, `'\\''`) + `'`
+}
+
 export function shellArgs(shell: string, command: string, platform = process.platform) {
   const name = shellKey(shell, platform)
   const args: Record<string, string[]> = {
@@ -78,7 +89,7 @@ export function shellArgs(shell: string, command: string, platform = process.pla
       `
             [[ -f ~/.zshenv ]] && source ~/.zshenv >/dev/null 2>&1 || true
             [[ -f "\${ZDOTDIR:-$HOME}/.zshrc" ]] && source "\${ZDOTDIR:-$HOME}/.zshrc" >/dev/null 2>&1 || true
-            eval ${JSON.stringify(command)}
+            eval ${shellEvalQuote(command)}
           `,
     ],
     bash: [
@@ -87,7 +98,7 @@ export function shellArgs(shell: string, command: string, platform = process.pla
       `
             shopt -s expand_aliases
             [[ -f ~/.bashrc ]] && source ~/.bashrc >/dev/null 2>&1 || true
-            eval ${JSON.stringify(command)}
+            eval ${shellEvalQuote(command)}
           `,
     ],
     cmd: ["/c", command],
