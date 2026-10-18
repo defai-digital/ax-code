@@ -323,6 +323,12 @@ export async function executeShellCommand(
           exitSignal = signal ?? null
           exitCode = signal == null ? (code ?? 0) : 1
         }
+        // The streams are destroyed by now, so no further chunks can arrive.
+        // Flush any partial UTF-8 sequence the decoders still hold instead of
+        // silently dropping up to three trailing bytes.
+        for (const tail of [stdoutDecoder.end(), stderrDecoder.end()]) {
+          if (tail) appendOutput(tail)
+        }
         resolve()
       })
       proc.once("error", (err) => {
