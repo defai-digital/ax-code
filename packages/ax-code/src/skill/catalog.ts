@@ -1,7 +1,10 @@
 import { pathToFileURL } from "url"
 
 export namespace SkillCatalog {
-  export const MAX_CHARACTERS = 8000
+  // The built-in catalog (including the WebMCP guidance) now fits in 9k
+  // characters. Keep the bound: larger sets still fall back to the omission
+  // notice and the searchable skill tool.
+  export const MAX_CHARACTERS = 9000
   const MAX_DESCRIPTION_CHARACTERS = 400
 
   export interface Entry {

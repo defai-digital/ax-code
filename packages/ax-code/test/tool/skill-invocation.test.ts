@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { Skill } from "../../src/skill"
+import { SkillCatalog } from "../../src/skill/catalog"
 import { buildSkillDoctorReport, buildSkillValidationReport } from "../../src/skill/authoring"
 import { Agent } from "../../src/agent/agent"
 import { Command } from "../../src/command"
@@ -190,7 +191,7 @@ test("tool validates discovery mode and returns bounded pages with continuation"
       let pages = 0
       do {
         const page = await tool.execute({ query: "page-fixture", offset }, context())
-        expect(page.output.length).toBeLessThanOrEqual(8000)
+        expect(page.output.length).toBeLessThanOrEqual(SkillCatalog.MAX_CHARACTERS)
         expect(page.output).not.toContain("PRIVATE BODY")
         shown += page.metadata.shown ?? 0
         if (page.metadata.nextOffset !== undefined) expect(page.metadata.nextOffset).toBeGreaterThan(offset!)
