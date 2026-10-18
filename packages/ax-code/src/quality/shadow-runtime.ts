@@ -76,9 +76,16 @@ export namespace QualityShadow {
     const frame = primaryDebugFrame(input.result)
     if (!frame) return undefined
 
-    const anchor: Finding["anchor"] = frame.symbol
+    // An unresolved frame can carry line 0 (e.g. `at f (/missing.ts:0:1)`),
+    // which the line anchor schema rejects (min 1). A finding without a
+    // usable anchor adds nothing over the returned analysis, so skip it
+    // instead of failing the whole debug_analyze call.
+    const anchor: Finding["anchor"] | undefined = frame.symbol
       ? { kind: "symbol", symbolId: String(frame.symbol.id) }
-      : { kind: "line", line: frame.line }
+      : frame.line >= 1
+        ? { kind: "line", line: frame.line }
+        : undefined
+    if (!anchor) return undefined
     const ruleId = "axcode:debug-analyze"
     const findingId = computeFindingId({
       workflow: "debug",

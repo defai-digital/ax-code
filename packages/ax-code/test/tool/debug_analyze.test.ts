@@ -117,6 +117,68 @@ describe("DebugAnalyzeTool", () => {
     })
   })
 
+  test("skips the finding instead of crashing on a zero-line frame", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const spies: Array<ReturnType<typeof vi.spyOn>> = []
+        try {
+          spies.push(
+            vi.spyOn(DebugEngine, "analyzeBug").mockResolvedValue({
+              chain: [
+                {
+                  frame: 0,
+                  symbol: null,
+                  file: "src/app.ts",
+                  line: 0,
+                  role: "failure",
+                },
+              ],
+              rootCauseHypothesis: null,
+              fixSuggestion: null,
+              confidence: 0.5,
+              truncated: false,
+              explain: {
+                tool: "debug_analyze",
+                queryId: "debug-query-0",
+                graphQueries: [],
+                heuristicsApplied: ["stack-trace"],
+                indexedAt: 0,
+                completeness: "full",
+              },
+            } as any),
+          )
+          spies.push(vi.spyOn(Session, "get").mockResolvedValue(session))
+
+          const tool = await DebugAnalyzeTool.init()
+          // Line anchors require line >= 1; an unresolved frame at line 0
+          // must degrade to "no finding", not reject the whole analysis.
+          const result = await tool.execute(
+            { error: "TypeError: boom", stackTrace: "at fail (/repo/src/app.ts:0:1)" },
+            {
+              sessionID: session.id,
+              messageID: "msg_test" as any,
+              agent: "test-agent",
+              abort: new AbortController().signal,
+              callID: "call_debug0",
+              messages: [],
+              metadata() {},
+              ask: async () => {},
+            } as any,
+          )
+
+          expect(result.metadata.chainLength).toBe(1)
+          expect(result.metadata.findingId).toBeUndefined()
+          expect(result.metadata.finding).toBeUndefined()
+        } finally {
+          for (const spy of spies) spy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("does not cite debug query id as graph evidence", async () => {
     await using tmp = await tmpdir({ git: true })
 
