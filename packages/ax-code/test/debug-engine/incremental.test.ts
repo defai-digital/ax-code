@@ -69,4 +69,68 @@ describe("debug-engine incremental file selection", () => {
       },
     })
   })
+
+  test("reports the root commit's files inside a window that starts at it", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await mkdir(path.join(dir, "src"), { recursive: true })
+        await writeFile(path.join(dir, "src", "only-file.ts"), "export const only = 1\n")
+      },
+    })
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "ignore" })
+    execFileSync("git", ["commit", "-m", "root commit"], { cwd: tmp.path, stdio: "ignore" })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // `root^` does not exist; the window used to come back empty.
+        const result = await Incremental.changedFilesInWindow(60 * 60)
+        expect(result.files).toEqual([path.join(tmp.path, "src", "only-file.ts")])
+      },
+    })
+  })
+
+  test("handles non-ASCII paths without git quoting", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await mkdir(path.join(dir, "原始"), { recursive: true })
+        await writeFile(path.join(dir, "原始", "檔案.ts"), "export const v = 1\n")
+      },
+    })
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "ignore" })
+    execFileSync("git", ["commit", "-m", "seed"], { cwd: tmp.path, stdio: "ignore" })
+    await writeFile(path.join(tmp.path, "原始", "檔案.ts"), "export const v = 2\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await Incremental.changedFilesSince("HEAD")
+        expect(result.files).toEqual([path.join(tmp.path, "原始", "檔案.ts")])
+      },
+    })
+  })
+
+  test("finds .mjs importers of a changed module", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await mkdir(path.join(dir, "src"), { recursive: true })
+        await writeFile(path.join(dir, "src", "util.ts"), "export const value = 1\n")
+        await writeFile(path.join(dir, "src", "run.mjs"), "import { value } from './util.js'\nconsole.log(value)\n")
+      },
+    })
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "ignore" })
+    execFileSync("git", ["commit", "-m", "seed"], { cwd: tmp.path, stdio: "ignore" })
+    await writeFile(path.join(tmp.path, "src", "util.ts"), "export const value = 2\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await Incremental.filesToScan("HEAD", { transitive: true })
+        expect(result.files).toContain(path.join(tmp.path, "src", "run.mjs"))
+      },
+    })
+  })
 })

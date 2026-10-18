@@ -34,17 +34,17 @@ export namespace Incremental {
 
     // Get changed files from git. Use --diff-filter=ACMR to exclude
     // deleted files (D) — we can't scan files that no longer exist.
+    // `-z` keeps paths byte-exact: without it git C-quotes non-ASCII and
+    // special characters, and the quoted text would be treated as the
+    // literal filename.
     const result = await Process.text(
-      ["git", "diff", "--name-only", "--diff-filter=ACMR", ref, "--", ...includeGlobs],
+      ["git", "diff", "--name-only", "-z", "--diff-filter=ACMR", ref, "--", ...includeGlobs],
       {
         cwd,
         nothrow: true,
       },
     ).then((out) => out.text)
-    const relPaths = result
-      .trim()
-      .split("\n")
-      .filter((l) => l.length > 0)
+    const relPaths = result.split("\0").filter((l) => l.length > 0)
 
     const files = relPaths.map((rel) => path.resolve(cwd, rel)).filter((f) => codeReasonHost().containsPath(f))
     const truncated = files.length > maxFiles
@@ -80,7 +80,15 @@ export namespace Incremental {
       return { files: [], ref: `since-${seconds}s`, truncated: false }
     }
 
-    return changedFilesSince(`${firstCommit}^`, { include: includeGlobs, maxFiles })
+    // A root commit has no `^` parent: the diff command errors and its
+    // swallowed empty output would report the window as "no changes".
+    // Diff against Git's stable empty-tree object instead.
+    const parent = await Process.text(["git", "rev-parse", "--verify", "--quiet", `${firstCommit}^`], {
+      cwd,
+      nothrow: true,
+    }).then((out) => out.text.trim())
+    const baseRef = parent || "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+    return changedFilesSince(baseRef, { include: includeGlobs, maxFiles })
   }
 
   // Get files that import a given set of changed files. This provides
@@ -96,7 +104,9 @@ export namespace Incremental {
   ): Promise<string[]> {
     const cwd = codeReasonHost().projectRoot()
     const maxFiles = opts?.maxFiles ?? 500
-    const includeGlobs = opts?.include ?? ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
+    // Match changedFilesSince's default module set so `.mjs`/`.cjs`
+    // importers are not invisible to transitive invalidation.
+    const includeGlobs = opts?.include ?? ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"]
 
     // Fixed-string grep of basenames (separate argv, never interpolated into a
     // shell or `-E` regex). A superset of true importers is safe: extra files
@@ -106,8 +116,9 @@ export namespace Incremental {
     ]
     if (bases.length === 0) return []
 
+    // `-z` keeps paths byte-exact (see changedFilesSince).
     const result = await Process.text(
-      ["git", "grep", "-l", "-F", ...bases.flatMap((base) => ["-e", base]), "--", ...includeGlobs],
+      ["git", "grep", "-l", "-z", "-F", ...bases.flatMap((base) => ["-e", base]), "--", ...includeGlobs],
       {
         cwd,
         nothrow: true,
@@ -115,8 +126,7 @@ export namespace Incremental {
     ).then((out) => out.text)
 
     const importers = result
-      .trim()
-      .split("\n")
+      .split("\0")
       .filter((l) => l.length > 0)
       .map((rel) => path.resolve(cwd, rel))
       .filter((f) => codeReasonHost().containsPath(f))
