@@ -25,7 +25,9 @@ function selectFindings(sessionID: SessionID, ids: string[] | undefined) {
   const findings = loadSessionFindings(sessionID).filter((finding) => finding.workflow === "review")
   const byId = new Map(findings.map((finding) => [finding.findingId, finding]))
   if (!ids) return findings
-  return ids.map((id) => {
+  // A repeated id must not count the same finding twice in counts/blockers
+  // or fork the review id; keep first-seen order.
+  return [...new Set(ids)].map((id) => {
     const finding = byId.get(id)
     if (!finding) {
       throw new Error(`findingIds references an unknown review finding id: ${id}`)
@@ -42,7 +44,7 @@ function selectEnvelopes(sessionID: SessionID, ids: string[] | undefined): Verif
       .filter((item) => item.envelope.workflow === "review")
       .map((item) => ({ envelopeId: item.envelopeId, envelope: item.envelope }))
   }
-  return ids.map((id) => {
+  return [...new Set(ids)].map((id) => {
     const item = byId.get(id)
     if (!item) {
       throw new Error(`verificationEnvelopeIds references an unknown verification envelope id: ${id}`)

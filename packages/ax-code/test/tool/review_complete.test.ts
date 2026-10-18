@@ -157,6 +157,39 @@ describe("ReviewCompleteTool", () => {
     })
   })
 
+  test("ignores duplicate finding and envelope ids instead of double counting", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const low = finding(session.id)
+        const passed = envelope(session.id)
+
+        Recorder.begin(session.id)
+        emitFinding(session.id, low)
+        emitEnvelope(session.id, passed)
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const tool = await ReviewCompleteTool.init()
+        const result = await tool.execute(
+          {
+            summary: "One finding, listed twice by mistake.",
+            findingIds: [low.findingId, low.findingId],
+            verificationEnvelopeIds: [computeEnvelopeId(passed), computeEnvelopeId(passed)],
+          },
+          ctx(session.id),
+        )
+
+        expect(result.metadata.reviewResult).toMatchObject({
+          findingIds: [low.findingId],
+          verificationEnvelopeIds: [computeEnvelopeId(passed)],
+        })
+      },
+    })
+  })
+
   test("blocks approve when HIGH or CRITICAL findings exist", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
