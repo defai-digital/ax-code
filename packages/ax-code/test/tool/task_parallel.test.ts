@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -1037,6 +1038,38 @@ describe("task_parallel swarm scale (item: swarm)", () => {
               ctx,
             ),
           ).rejects.toThrow()
+          expect(promptSpy).not.toHaveBeenCalled()
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+  test("worktree isolation refuses to fall back to the shared tree without a base commit", async () => {
+    // A repository with no commits has no start point for writer worktrees.
+    // Falling back to the shared tree would run concurrent writers unprotected,
+    // so the call must fail before any child session exists.
+    await using tmp = await tmpdir({
+      config: { agents: { task_parallel: { worktree_isolation: true } } },
+    })
+    execFileSync("git", ["init"], { cwd: tmp.path })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt")
+        try {
+          await expect(
+            (await TaskParallelTool.init()).execute(
+              {
+                tasks: [
+                  { description: "a", prompt: "write a", subagent_type: "build" },
+                  { description: "b", prompt: "write b", subagent_type: "build" },
+                ],
+              } as any,
+              ctx,
+            ),
+          ).rejects.toThrow(/base commit/)
           expect(promptSpy).not.toHaveBeenCalled()
         } finally {
           vi.restoreAllMocks()

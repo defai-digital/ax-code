@@ -689,6 +689,15 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       // only need this in worktree mode, but computing it once is cheap and
       // keeps the post-pool cleanup simple.
       const worktreeBaseCommit = isolation.mode === "worktree" ? await captureBaseCommit() : null
+      // Worktree isolation is the only policy that admits concurrent writers,
+      // so falling back to the shared tree when no base commit exists (e.g. a
+      // repository with no commits yet) would silently reintroduce the
+      // multi-writer hazard the policy refuses. Fail before any child starts.
+      if (isolation.mode === "worktree" && !worktreeBaseCommit) {
+        throw new Error(
+          "task_parallel.worktree_isolation needs a git base commit: the project has no commit to start worktrees from",
+        )
+      }
 
       toolCtx.metadata({
         title: `Parallel digs (${members.length})`,
