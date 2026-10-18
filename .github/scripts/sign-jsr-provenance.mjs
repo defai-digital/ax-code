@@ -29,10 +29,19 @@ export async function signJsrProvenance({ version, digest, predicate, workflowRe
     predicateType: "https://slsa.dev/provenance/v1",
     predicate,
   }
-  const bundle = await attest(Buffer.from(JSON.stringify(statement)), "application/vnd.in-toto+json", {
-    identityToken,
-    legacyCompatibility: true,
-    tlogUpload: true,
+  const sign = () =>
+    attest(Buffer.from(JSON.stringify(statement)), "application/vnd.in-toto+json", {
+      identityToken,
+      legacyCompatibility: true,
+      tlogUpload: true,
+    })
+  const bundle = await sign().catch((error) => {
+    // A successful Rekor POST can lose its response, then its transport retry
+    // gets 409 for the entry it just created. The SDK discards that bundle.
+    // Generate a fresh ephemeral signature once, within JSR's short attachment
+    // window. Never accept an unverified entry or retry other signing errors.
+    if (error?.code !== "TLOG_CREATE_ENTRY_ERROR" || error?.cause?.statusCode !== 409) throw error
+    return sign()
   })
   await verify(bundle, undefined, policy)
   // Validate the exact package subject and legacy conversion before upload.

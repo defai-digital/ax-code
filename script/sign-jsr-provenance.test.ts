@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest"
+import { beforeEach, describe, expect, test, vi } from "vitest"
 
 const { attest, verify } = vi.hoisted(() => ({ attest: vi.fn(), verify: vi.fn() }))
 vi.mock("sigstore", () => ({ attest, verify }))
@@ -19,6 +19,35 @@ const input = {
 }
 
 describe("free SDK provenance signing", () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    attest.mockResolvedValue({ dsseEnvelope: {} })
+  })
+
+  test("signs a fresh bundle once when Rekor reports an already-created entry", async () => {
+    const duplicate = Object.assign(new Error("duplicate entry"), {
+      code: "TLOG_CREATE_ENTRY_ERROR",
+      cause: { statusCode: 409 },
+    })
+    const bundle = { dsseEnvelope: {} }
+    attest.mockRejectedValueOnce(duplicate).mockResolvedValueOnce(bundle)
+    expect(await signJsrProvenance(input)).toBe(bundle)
+    expect(attest).toHaveBeenCalledTimes(2)
+    expect(verify).toHaveBeenCalledWith(bundle, undefined, signingPolicy(workflowRef))
+    expect(toJsrBundle).toHaveBeenCalledWith(bundle, input.version, input.digest)
+  })
+
+  test.each([409, 403])("bounds duplicate recovery and never retries other errors (%s)", async (statusCode) => {
+    const failure = Object.assign(new Error("log rejected"), {
+      code: "TLOG_CREATE_ENTRY_ERROR",
+      cause: { statusCode },
+    })
+    attest.mockRejectedValue(failure)
+    await expect(signJsrProvenance(input)).rejects.toBe(failure)
+    expect(attest).toHaveBeenCalledTimes(statusCode === 409 ? 2 : 1)
+    expect(verify).not.toHaveBeenCalled()
+  })
+
   test("verifies a logged JSR-compatible signature against the exact workflow identity", async () => {
     const bundle = { dsseEnvelope: {} }
     attest.mockResolvedValue(bundle)
