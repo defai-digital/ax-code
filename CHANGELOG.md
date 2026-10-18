@@ -16,6 +16,7 @@ changes belong to AX Coder.
 ### Changed
 
 - Upgrade ax-tui to 1.1.0, apply prompt mentions through its undo-preserving completion adapter, and render the context menu as a positioned non-capturing overlay.
+- Align `@types/node` with the Node.js 26 runtime and adapt the timer, file-stat, and HTTP/2 typings it rechecked.
 
 ## [7.27.0] - 2026-10-17
 

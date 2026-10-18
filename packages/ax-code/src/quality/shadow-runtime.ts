@@ -1,4 +1,5 @@
 import fs from "fs/promises"
+import type { Stats } from "node:fs"
 import path from "path"
 import z from "zod"
 import type { DebugEngine } from "@ax-code/ax-code-reason"
@@ -38,11 +39,7 @@ export namespace QualityShadow {
     return schema.parse(value)
   }
 
-  export async function loadShadowJsonFile<T>(
-    resolved: string,
-    schema: z.ZodType<T>,
-    stat: Pick<Awaited<ReturnType<typeof fs.stat>>, "mtimeMs">,
-  ) {
+  export async function loadShadowJsonFile<T>(resolved: string, schema: z.ZodType<T>, stat: Pick<Stats, "mtimeMs">) {
     const raw = await fs.readFile(resolved, "utf8")
     return {
       file: decodeShadowJsonFileValue(parseJsonStrict(raw), schema),

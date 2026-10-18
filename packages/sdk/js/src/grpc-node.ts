@@ -222,8 +222,11 @@ const PROTO_CODECS: Record<string, ProtoCodec> = {
 /** Attach the AX Code gRPC native bridge to an existing Node `http2` server. */
 export function bindAxCodeGrpcNodeHttp2Server(server: Http2.Http2Server, bridge: AxCodeGrpcNativeBridge) {
   server.on("stream", (stream, headers) => {
-    void handleAxCodeGrpcHttp2Stream(stream, headers, bridge).catch((error) => {
-      sendGrpcError(stream, 13, errorMessage(error))
+    // @types/node 26 types the server event with the session's base
+    // Http2Stream, but a listening server always emits ServerHttp2Stream.
+    const serverStream = stream as Http2.ServerHttp2Stream
+    void handleAxCodeGrpcHttp2Stream(serverStream, headers, bridge).catch((error) => {
+      sendGrpcError(serverStream, 13, errorMessage(error))
     })
   })
 }

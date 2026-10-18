@@ -1,6 +1,6 @@
 import { createReconnectRecoveryGate } from "../util/reconnect-recovery"
 
-type IntervalHandle = ReturnType<typeof setInterval>
+type IntervalHandle = NodeJS.Timeout
 
 export interface SyncStartupCoordinator {
   start: () => void
@@ -26,7 +26,8 @@ export function createSyncStartupCoordinator(input: {
   clearIntervalFn?: (handle: IntervalHandle) => void
   createReconnectGate?: (input: { recover: () => Promise<void> | void }) => ReconnectGate
 }): SyncStartupCoordinator {
-  const setIntervalFn = input.setIntervalFn ?? setInterval
+  const setIntervalFn =
+    input.setIntervalFn ?? ((handler: () => void, timeout: number) => setInterval(handler, timeout) as IntervalHandle)
   const clearIntervalFn = input.clearIntervalFn ?? clearInterval
   const createReconnectGate = input.createReconnectGate ?? createReconnectRecoveryGate
   const pollIntervalMs = input.pollIntervalMs ?? 10_000

@@ -4,6 +4,7 @@
  */
 
 import fs from "fs/promises"
+import type { Stats } from "node:fs"
 import path from "path"
 import os from "os"
 import { Filesystem } from "../util/filesystem"
@@ -128,10 +129,7 @@ export function _resetReadCache(): void {
   inFlightReads.clear()
 }
 
-async function readFresh(
-  filePath: string,
-  initialStat: Pick<Awaited<ReturnType<typeof fs.stat>>, "mtimeMs" | "size">,
-): Promise<string | null> {
+async function readFresh(filePath: string, initialStat: Pick<Stats, "mtimeMs" | "size">): Promise<string | null> {
   // Stat → read → verify-stat: cache only when the mtime/size before and
   // after the read agree, otherwise the file changed under us between the
   // two syscalls and the cached `text` would not match the cached

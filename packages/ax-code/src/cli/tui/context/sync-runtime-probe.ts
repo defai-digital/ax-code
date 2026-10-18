@@ -50,8 +50,8 @@ export function createRuntimeSyncProbeScheduler(
     delayMs?: number
     env?: Record<string, string | undefined>
     onCoalesced?: (key: RuntimeSyncProbeKey) => void
-    setTimeoutFn?: (handler: () => void, timeout: number) => ReturnType<typeof setTimeout>
-    clearTimeoutFn?: (handle: ReturnType<typeof setTimeout>) => void
+    setTimeoutFn?: (handler: () => void, timeout: number) => NodeJS.Timeout
+    clearTimeoutFn?: (handle: NodeJS.Timeout) => void
   } = {},
 ): RuntimeSyncProbeScheduler {
   const delayMs =
@@ -62,12 +62,13 @@ export function createRuntimeSyncProbeScheduler(
       fallback: DEFAULT_RUNTIME_SYNC_PROBE_DELAY_MS,
       min: 0,
     })
-  const setTimeoutFn = input.setTimeoutFn ?? setTimeout
+  const setTimeoutFn =
+    input.setTimeoutFn ?? ((handler: () => void, timeout: number) => setTimeout(handler, timeout) as NodeJS.Timeout)
   const clearTimeoutFn = input.clearTimeoutFn ?? clearTimeout
   const queued = new Map<RuntimeSyncProbeKey, RuntimeSyncProbeTask>()
   const queuedAfterInFlight = new Map<RuntimeSyncProbeKey, RuntimeSyncProbeTask>()
   const inFlight = new Set<RuntimeSyncProbeKey>()
-  let timer: ReturnType<typeof setTimeout> | undefined
+  let timer: NodeJS.Timeout | undefined
   let disposed = false
 
   const start = (task: RuntimeSyncProbeTask) => {
