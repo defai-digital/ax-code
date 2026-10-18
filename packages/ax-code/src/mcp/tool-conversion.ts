@@ -408,7 +408,10 @@ export async function convertMcpTool(
         // rejects the awaited promise immediately instead of waiting for
         // the SDK timeout. The reconnect thunk uses a dynamic import to
         // avoid a circular dependency between this module and impl.ts.
-        const tracker = SessionHealth.trackCall(client)
+        // The tracker must be armed on the POST-preflight client: arming it
+        // on the pre-reconnect client lets the reconnect's close of that
+        // client reject this call with TransportClosed even though the call
+        // itself runs on the fresh live client.
         const preflight = await SessionHealth.preflightCall(client, async () => {
           if (!serverName) throw new Error("MCP reconnect requested without a server name")
           const mod = await import("./impl")
@@ -418,6 +421,7 @@ export async function convertMcpTool(
           return live
         })
         const callClient = preflight.client
+        const tracker = SessionHealth.trackCall(callClient)
         let result: Awaited<ReturnType<typeof callClient.callTool>>
         try {
           // The call context bound by the session wrapper rides on `opts`;
