@@ -9,6 +9,38 @@ function fakeStdin() {
 }
 
 describe("readNonTtyStdin", () => {
+  test("explicit stdin rejects a pipe closed before EOF instead of hanging", async () => {
+    const stdin = fakeStdin()
+    const controller = new AbortController()
+    const rejected = vi.fn()
+    const pending = readNonTtyStdin({ stdin, waitForEof: true, signal: controller.signal }).catch(rejected)
+    try {
+      stdin.emit("data", Buffer.from("partial prompt"))
+      stdin.emit("close")
+      await Promise.resolve()
+      expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ message: "Stdin closed before EOF" }))
+      expect(stdin.listenerCount("close")).toBe(0)
+    } finally {
+      controller.abort()
+      await pending
+    }
+  })
+
+  test("explicit stdin resolves when EOF was already emitted", async () => {
+    const stdin = Object.assign(fakeStdin(), { readableEnded: true })
+    const controller = new AbortController()
+    const resolved = vi.fn()
+    const pending = readNonTtyStdin({ stdin, waitForEof: true, signal: controller.signal }).then(resolved, () => {})
+    try {
+      await Promise.resolve()
+      expect(resolved).toHaveBeenCalledWith("")
+      expect(stdin.listenerCount("data")).toBe(0)
+    } finally {
+      controller.abort()
+      await pending
+    }
+  })
+
   test("explicit stdin waits beyond the quiet window before the first chunk and between chunks", async () => {
     vi.useFakeTimers()
     try {

@@ -6,8 +6,11 @@ type StdinLike = {
   on(event: "data", listener: (chunk: Buffer | string) => void): unknown
   on(event: "end", listener: () => void): unknown
   on(event: "error", listener: (error: Error) => void): unknown
+  on(event: "close", listener: () => void): unknown
   off(event: string, listener: (...args: any[]) => void): unknown
   pause?: () => unknown
+  readableEnded?: boolean
+  destroyed?: boolean
 }
 
 function stdinIsRegularFile(fd = 0): boolean {
@@ -48,6 +51,7 @@ export function readNonTtyStdin(
       stdin.off("data", onData)
       stdin.off("end", onEnd)
       stdin.off("error", onError)
+      stdin.off("close", onClose)
       input.signal?.removeEventListener("abort", onAbort)
     }
     const finish = (pause: boolean) => {
@@ -78,14 +82,24 @@ export function readNonTtyStdin(
       onError(input.signal?.reason ?? new Error("Stdin read cancelled"))
       stdin.pause?.()
     }
+    const onClose = () => onError(new Error("Stdin closed before EOF"))
     if (input.signal?.aborted) {
       onAbort()
+      return
+    }
+    if (stdin.readableEnded) {
+      finish(false)
+      return
+    }
+    if (stdin.destroyed) {
+      onClose()
       return
     }
     input.signal?.addEventListener("abort", onAbort, { once: true })
     stdin.on("data", onData)
     stdin.on("end", onEnd)
     stdin.on("error", onError)
+    stdin.on("close", onClose)
     // An idle open pipe emits neither data nor end, so start the quiet window
     // before the first chunk. Regular files remain EOF-driven.
     armQuietTimer()
