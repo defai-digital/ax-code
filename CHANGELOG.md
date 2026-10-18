@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.27.3] - 2026-10-18
+
+### Changed
+
+- Update the upstream model catalog and pin ax-tui 2.1.1.
+- Publish the matching SDK 2.6.32.
+
+### Fixed
+
+- Finish stdin reads on premature close or previously emitted EOF instead of hanging.
+- Preserve split UTF-8 shell output and quote shell commands as a single eval argument.
+- Harden snapshot capture recovery, retention, file-lock cleanup, and database backup handling.
+- Prevent deleted session shards from reappearing during backfill and bound large shard queries.
+- Restore prompt history reliably after Escape and asynchronous loads.
+- Tighten destructive-command classification, environment sanitization, nested instructions, and worktree-isolated swarm admission.
+- Verify discovered model metadata against the current catalog instead of a stale display name.
+
 ## [7.27.2] - 2026-10-18
 
 ### Added
