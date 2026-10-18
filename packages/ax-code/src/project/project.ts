@@ -585,6 +585,9 @@ export namespace Project {
       fs.rm(file + "-wal", { force: true }),
       fs.rm(file + "-shm", { force: true }),
     ]).catch(() => undefined)
+    // The damaged file is gone, so the poison must lift too — otherwise
+    // re-adding this directory fails fast against the fresh shard forever.
+    Shard.clearCorruption(id)
     Database.use((db) => db.delete(ProjectShardTable).where(eq(ProjectShardTable.project_id, id)).run())
   }
 }

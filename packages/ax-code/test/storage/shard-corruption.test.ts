@@ -57,10 +57,55 @@ describe("Shard corruption handling", () => {
     expect(() => Shard.closeAll()).not.toThrow()
   })
 
-  test("a brand-new shard takes no backup", () => {
+  test("a brand-new shard takes no backup", async () => {
     const id = pid("project-fresh-shard")
     Shard.handle(id).use(() => "fresh open")
     expect(listDatabaseBackups({ dbPath: Shard.pathFor(id) })).toHaveLength(0)
+  })
+
+  test("clearCorruption lifts the poison once the damaged file is gone", () => {
+    const id = pid("project-corrupt-cleared")
+    const file = Shard.pathFor(id)
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, "this is definitely not a sqlite database\n")
+
+    expect(() => Shard.handle(id).use(() => "unreachable")).toThrow(CorruptDatabaseError)
+    expect(() => Shard.handle(id).use(() => "unreachable")).toThrow(CorruptDatabaseError)
+
+    // While the damaged file exists the poison must stay in place.
+    Shard.clearCorruption(id)
+    expect(() => Shard.handle(id).use(() => "unreachable")).toThrow(CorruptDatabaseError)
+
+    // After the file is removed (Project.remove), clearing lets a fresh valid
+    // shard open — re-adding the directory must not fail fast forever.
+    Shard.clearCorruption(id)
+    fs.rmSync(file, { force: true })
+    expect(Shard.handle(id).use(() => "reopened")).toBe("reopened")
+  })
+
+  test("an effect retry that rejects asynchronously does not raise an unhandled rejection", async () => {
+    const id = pid("project-effect-retry")
+    const rejections: unknown[] = []
+    const onUnhandled = (reason: unknown) => rejections.push(reason)
+    process.on("unhandledRejection", onUnhandled)
+    let calls = 0
+    try {
+      Shard.handle(id).use(() => {
+        // SyncEffect forbids Promise returns at the type level, but JS callers
+        // and casts can still slip one through — the runtime must not let that
+        // become an unhandled rejection.
+        Shard.handle(id).effect((() => {
+          calls += 1
+          if (calls === 1) throw new Error("transient post-commit failure")
+          return Promise.reject(new Error("async retry failure"))
+        }) as unknown as () => void)
+      })
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(calls).toBe(2)
+      expect(rejections).toEqual([])
+    } finally {
+      process.off("unhandledRejection", onUnhandled)
+    }
   })
 
   test("backs up an existing shard before a column migration alters it", () => {

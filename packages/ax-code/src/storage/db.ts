@@ -209,19 +209,21 @@ export namespace Database {
 
       return client
     } catch (error) {
-      if (isCorruptErrorImpl(error)) {
-        markCorruption(error)
-        // Release the handle WITHOUT a checkpoint (see close()). Best-effort:
-        // a close failure on the damaged file must not mask the classified
-        // error below.
+      // The failed client is not cached, so any open failure (corrupt or not)
+      // would otherwise leak the fd/lock on every lazy retry. Release the
+      // handle WITHOUT a checkpoint in every failure path (see close()).
+      if (db) {
         try {
-          db?.$client.close()
+          db.$client.close()
         } catch (closeError) {
-          log.warn("failed to close corrupt database handle", {
+          log.warn("failed to close database handle after open failure", {
             path: Path,
             error: toErrorMessage(closeError),
           })
         }
+      }
+      if (isCorruptErrorImpl(error)) {
+        markCorruption(error)
         raiseCorruptDatabaseError(Path, error)
       }
       throw error

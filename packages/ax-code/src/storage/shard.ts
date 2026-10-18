@@ -509,14 +509,20 @@ export namespace Shard {
       for (const statement of SHARD_SCHEMA_DDL) db.run(statement)
       applyColumnMigrations(db)
     } catch (error) {
+      // The handle is not in the cache yet, so any setup failure (corrupt or
+      // not — e.g. SQLITE_FULL/SQLITE_BUSY during DDL) would otherwise leak the
+      // open fd and lock on every retry. Release WITHOUT a checkpoint in every
+      // failure path — see closeClient().
+      try {
+        db.$client.close()
+      } catch (closeError) {
+        log.warn("failed to close shard handle after open failure", {
+          projectID,
+          error: toErrorMessage(closeError),
+        })
+      }
       if (isCorrupt(error)) {
         markShardCorruption(key, error)
-        // Release the handle WITHOUT a checkpoint — see closeClient().
-        try {
-          db.$client.close()
-        } catch (closeError) {
-          log.warn("failed to close corrupt shard handle", { projectID, error: toErrorMessage(closeError) })
-        }
         raiseCorruptDatabaseError(file, error)
       }
       throw error
@@ -547,7 +553,14 @@ export namespace Shard {
       } catch (error) {
         // One immediate retry for transient post-commit failures (mirrors db.ts).
         try {
-          effects[i]()
+          const retry = effects[i]() as unknown
+          // A retry that returns a rejecting Promise would otherwise be an
+          // unhandled rejection — db.ts attaches the same catch.
+          if (retry instanceof Promise) {
+            retry.catch((err) =>
+              log.error("shard post-commit async effect rejected on retry", { index: i, error: toErrorMessage(err) }),
+            )
+          }
         } catch (retryError) {
           log.warn("shard post-commit effect failed after retry", {
             index: i,
@@ -653,6 +666,19 @@ export namespace Shard {
     if (!db) return
     cache.delete(key)
     closeClient(key, db)
+  }
+
+  /**
+   * Lift the corruption poison for a project whose shard file has been deleted
+   * (Project.remove). Without this, re-adding the same directory in a
+   * long-running host fails fast with CorruptDatabaseError against the
+   * brand-new valid file — the error text even tells the user to remove the
+   * file, which is exactly the path the poison then blocks. The poison stays
+   * in place while the damaged file exists; only its removal resets the
+   * classification.
+   */
+  export function clearCorruption(projectID: ProjectID): void {
+    corruptedShards.delete(projectID as string)
   }
 
   /** Close and evict every cached shard handle (idempotent). Wired into Database.close(). */
