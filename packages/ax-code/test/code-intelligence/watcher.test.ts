@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
+import path from "node:path"
 import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -189,6 +190,35 @@ describe("CodeGraphWatcher.start / stop", () => {
 
         // File was purged exactly once — final state is zero nodes.
         expect(CodeGraphQuery.countNodes(projectID)).toBe(0)
+
+        CodeGraphWatcher.stop(projectID)
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("a re-add supersedes a pending unlink", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const file = path.join(tmp.path, "recreated.ts")
+        await writeFile(file, "export const recreated = 1\n")
+        CodeGraphWatcher.start(projectID)
+        const purge = vi.spyOn(CodeGraphBuilder, "purgeFile").mockImplementation(() => {})
+        const index = vi.spyOn(CodeGraphBuilder, "indexFiles").mockResolvedValue({} as never)
+
+        // Atomic editors and git write a replacement file as delete+create.
+        // The create is the latest truth: keep the file indexed instead of
+        // letting the earlier unlink purge it.
+        await Bus.publish(FileWatcher.Event.Updated, { file, event: "unlink" })
+        await Bus.publish(FileWatcher.Event.Updated, { file, event: "add" })
+        await CodeGraphWatcher.__drainForTests(projectID)
+
+        expect(purge).not.toHaveBeenCalled()
+        expect(index).toHaveBeenCalledWith(projectID, [file], expect.anything())
 
         CodeGraphWatcher.stop(projectID)
         CodeIntelligence.__clearProject(projectID)

@@ -144,19 +144,19 @@ export namespace CodeGraphWatcher {
     if (event !== "unlink" && !shouldIndex(file)) return
 
     // Coalesce rapid events on the same file. The most recent event wins
-    // (e.g. add followed by change becomes a single "change"); unlink
-    // takes precedence because it's terminal.
+    // (e.g. add followed by change becomes a single "change"). That includes
+    // a re-add after an unlink: editors and git rename over a path, so a
+    // sticky unlink would purge a file that exists again and never reindex it.
     const existing = state.pending.get(file)
     if (existing) {
       clearTimeout(existing.timer)
     }
-    const nextEvent = event === "unlink" ? "unlink" : existing?.event === "unlink" ? "unlink" : event
     const timer = setTimeout(() => {
       state.pending.delete(file)
-      state.ripe.set(file, nextEvent)
+      state.ripe.set(file, event)
       scheduleFlush(state)
     }, DEBOUNCE_MS)
-    state.pending.set(file, { timer, event: nextEvent })
+    state.pending.set(file, { timer, event })
   }
 
   /**
