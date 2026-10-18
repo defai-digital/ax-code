@@ -13,6 +13,7 @@ export function withProjectDirectory<T>(yargs: Argv<T>) {
 export function projectDirectory(args: { dir?: unknown }): string {
   if (args.dir === undefined) return process.cwd()
   if (typeof args.dir !== "string" || !args.dir.trim()) throw new Error("--dir must name an existing directory")
+  // @scan-suppress security_scan - The local CLI caller explicitly selects the project directory; stat below requires a directory.
   const directory = path.resolve(args.dir)
   let isDirectory: boolean
   try {

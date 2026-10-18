@@ -111,8 +111,11 @@ export namespace JsonMigration {
     // ADR-210 hazard), and NORMAL is not corruption-safe in rollback modes.
     // The path mirrors Database.Path (importing db.ts here would close a
     // module cycle through its lazy import of this file).
+    // @scan-suppress security_scan - The database path is a fixed leaf in the application data directory.
     const journalMode = resolveSqliteJournalMode({ path: path.join(Global.Path.data, "ax-code.db") })
+    // @scan-suppress security_scan - resolveSqliteJournalMode returns a validated SQLite journal-mode enum, not arbitrary SQL.
     sqlite.exec(`PRAGMA journal_mode = ${journalMode}`)
+    // @scan-suppress security_scan - resolveSqliteSynchronous returns only FULL or NORMAL.
     sqlite.exec(`PRAGMA synchronous = ${resolveSqliteSynchronous(journalMode)}`)
     sqlite.exec("PRAGMA cache_size = 10000")
     sqlite.exec("PRAGMA temp_store = MEMORY")

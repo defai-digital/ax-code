@@ -14,6 +14,7 @@ function redactUrls(text: string): string {
       }
       // Custom providers can name credential parameters arbitrarily. Keep
       // parameter names for diagnosis, but never publish their values.
+      // The local set and URL are bounded by one input string and discarded after redaction.
       for (const key of new Set(url.searchParams.keys())) url.searchParams.set(key, REDACTED)
       if (url.hash) url.hash = REDACTED
       return url.toString()

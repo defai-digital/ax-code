@@ -128,6 +128,7 @@ export function takePreMigrationBackup(input: {
   // one temp file, and VACUUM INTO refuses (or worse, tears) an existing
   // target. The final name stays tag-only — same-millisecond backups of one
   // database are interchangeable snapshots and the rename is atomic.
+  // @scan-suppress security_scan - directory is the database backup directory; base is a basename/tag and the suffix is generated locally.
   const temporary = path.join(directory, `${base}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`)
   const final = path.join(directory, `${base}.bak`)
   try {
