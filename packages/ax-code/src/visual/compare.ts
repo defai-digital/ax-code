@@ -108,9 +108,12 @@ export function compareVisualRuns(before: VisualRun, after: VisualRun): CompareR
   for (const bf of beforeFindings) {
     const match = afterFindings.find((af) => af.title === bf.title && af.category === bf.category)
     if (match) {
-      if (match.status === "fixed") {
+      // Any non-open after status resolves the finding — `accepted` and
+      // `false-positive` are resolutions too (allFindingsResolved treats
+      // every non-open status as resolved).
+      if (match.status !== "open") {
         resolved.push(bf)
-        statusTransitions.push({ findingID: bf.id, from: "open", to: "fixed" })
+        statusTransitions.push({ findingID: bf.id, from: "open", to: match.status })
       } else {
         persistent.push(bf)
       }
@@ -121,8 +124,11 @@ export function compareVisualRuns(before: VisualRun, after: VisualRun): CompareR
     }
   }
 
-  // Check for new findings in after that weren't in before
+  // Check for new OPEN findings in after that weren't open in before. A
+  // non-open after finding (fixed/accepted/false-positive) is a closed
+  // record, not an introduction.
   for (const af of afterFindings) {
+    if (af.status !== "open") continue
     const existed = beforeFindings.find((bf) => bf.title === af.title && bf.category === af.category)
     if (!existed) {
       introduced.push(af)

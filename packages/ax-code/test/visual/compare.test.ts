@@ -80,6 +80,37 @@ describe("visual.compare", () => {
     expect(result.delta.introduced[0]?.title).toBe("New regression")
   })
 
+  test("compareVisualRuns counts accepted and false-positive after status as resolved", () => {
+    const before = makeRun({
+      id: "run-before",
+      findings: [makeFinding({ title: "Overflow", status: "open" })],
+    })
+    const after = makeRun({
+      id: "run-after",
+      findings: [makeFinding({ title: "Overflow", status: "accepted" })],
+    })
+
+    const result = compareVisualRuns(before, after)
+    expect(result.resolvedCount).toBe(1)
+    expect(result.unresolvedCount).toBe(0)
+    expect(result.delta.statusTransitions).toEqual([{ findingID: "finding_1", from: "open", to: "accepted" }])
+  })
+
+  test("compareVisualRuns does not count closed after-only findings as introduced", () => {
+    const before = makeRun({ id: "run-before", findings: [] })
+    const after = makeRun({
+      id: "run-after",
+      findings: [
+        makeFinding({ title: "Historical issue", status: "fixed" }),
+        makeFinding({ title: "Real new issue", status: "open" }),
+      ],
+    })
+
+    const result = compareVisualRuns(before, after)
+    expect(result.introducedCount).toBe(1)
+    expect(result.delta.introduced[0]?.title).toBe("Real new issue")
+  })
+
   test("compareVisualRuns handles missing findings in after as resolved", () => {
     const before = makeRun({
       id: "run-before",
