@@ -73,6 +73,19 @@ describe("withCaptureRetry", () => {
     expect(error).toBeInstanceOf(Guards.CaptureCollisionError)
   })
 
+  test("runs the work once when attempts is configured as zero", async () => {
+    let calls = 0
+    const error = await Guards.withCaptureRetry(
+      async () => {
+        calls++
+        throw keyError()
+      },
+      { attempts: 0, sleep: async () => undefined },
+    ).catch((err: unknown) => err)
+    expect(calls).toBe(1)
+    expect(error).toBeInstanceOf(Guards.CaptureCollisionError)
+  })
+
   test("does not retry unrelated failures", async () => {
     let calls = 0
     await expect(
@@ -141,6 +154,24 @@ describe("stale lock removal", () => {
     await fs.utimes(lock, (now - Guards.STALE_LOCK_MS) / 1000, (now - Guards.STALE_LOCK_MS) / 1000)
     expect(await Guards.removeStaleLock({ lock, store, now })).toBe(true)
   })
+
+  test("reports false when the stale lock cannot be deleted", async () => {
+    await using tmp = await tmpdir()
+    const store = path.join(tmp.path, "store")
+    await fs.mkdir(store, { recursive: true })
+    const lock = path.join(store, "index.lock")
+    await Filesystem.write(lock, "")
+    const now = Date.now()
+    await fs.utimes(lock, (now - 61_000) / 1000, (now - 61_000) / 1000)
+    const original = fs.rm
+    vi.spyOn(fs, "rm").mockImplementation(((target: unknown, ...rest: unknown[]) =>
+      String(target) === lock
+        ? Promise.reject(Object.assign(new Error("denied"), { code: "EACCES" }))
+        : original(target as never, ...(rest as []))) as typeof fs.rm)
+    expect(await Guards.removeStaleLock({ lock, store, now })).toBe(false)
+    // The failed removal is not reported as cleared, and the lock survives.
+    await expect(fs.access(lock)).resolves.toBeUndefined()
+  })
 })
 
 describe("interrupted capture marker", () => {
@@ -169,6 +200,22 @@ describe("interrupted capture marker", () => {
     const now = Date.now()
     expect(Guards.markerInterrupted({ pid: 1, startedAt: now - 61_000 }, { now, pidAlive: () => true })).toBe(true)
     expect(Guards.markerInterrupted({ pid: 1, startedAt: now }, { now, pidAlive: () => true })).toBe(false)
+  })
+
+  test("only one of two concurrent recoveries claims the marker", async () => {
+    await using tmp = await tmpdir()
+    const gitdir = path.join(tmp.path, "store")
+    await fs.mkdir(path.join(gitdir, "ax-code"), { recursive: true })
+    await Filesystem.write(path.join(gitdir, "index"), "torn")
+    await Guards.writeCaptureMarker(gitdir, { pid: 999_997, startedAt: Date.now() - 120_000 })
+
+    const results = await Promise.all([
+      Guards.recoverInterruptedCapture({ gitdir, pidAlive: () => false }),
+      Guards.recoverInterruptedCapture({ gitdir, pidAlive: () => false }),
+    ])
+    expect(results.slice().sort()).toEqual([false, true])
+    await expect(fs.access(Guards.captureMarkerPath(gitdir))).rejects.toThrow()
+    await expect(fs.access(path.join(gitdir, "index"))).rejects.toThrow()
   })
 })
 

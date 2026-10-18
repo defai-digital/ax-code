@@ -62,7 +62,9 @@ function jitter(minDelayMs: number, maxDelayMs: number, random: () => number) {
  * jittered 50-250 ms between transient collisions.
  */
 export async function withCaptureRetry<T>(run: () => Promise<T>, config: CaptureRetryConfig = {}): Promise<T> {
-  const attempts = config.attempts ?? 3
+  // Clamp to at least one attempt: a configured 0 would skip the loop entirely
+  // and fall through to `throw last`, which is still undefined at that point.
+  const attempts = Math.max(1, config.attempts ?? 3)
   const minDelayMs = config.minDelayMs ?? 50
   const maxDelayMs = config.maxDelayMs ?? 250
   const sleep = config.sleep ?? defaultSleep
@@ -105,8 +107,14 @@ export async function removeStaleLock(input: StaleLockInput): Promise<boolean> {
   const now = input.now ?? Date.now()
   const staleMs = input.staleMs ?? STALE_LOCK_MS
   if (now - stat.mtimeMs < staleMs) return false
-  await fs.rm(lock, { force: true }).catch(() => undefined)
-  return true
+  // Only a successful removal counts: force:true suppresses ENOENT, but an
+  // EACCES/EPERM/EBUSY failure must not be reported as "lock cleared" — the
+  // caller would otherwise proceed straight into the collision it was trying
+  // to pre-clear.
+  return fs.rm(lock, { force: true }).then(
+    () => true,
+    () => false,
+  )
 }
 
 /** Fixed set of top-level Git locks the capture path contends for. */
@@ -196,6 +204,14 @@ export function markerInterrupted(
  * Discard the partial on-disk state of an interrupted capture: the marker, the
  * torn staging index, and any index lock it left behind. Returns true when a
  * recovery actually happened.
+ *
+ * The marker is claimed with an atomic rename before anything is deleted.
+ * Between the read above and the deletes, another process can complete its
+ * own recovery and start a fresh capture with a new marker and a live index;
+ * without the claim, this pass would delete that capture's index mid-write.
+ * The rename either wins (the marker path is gone, so concurrent recovery
+ * returns false and concurrent captures write a fresh marker at the canonical
+ * path) or fails (someone else recovered first — report no recovery).
  */
 export async function recoverInterruptedCapture(input: MarkerRecoveryInput): Promise<boolean> {
   const file = captureMarkerPath(input.gitdir)
@@ -213,9 +229,15 @@ export async function recoverInterruptedCapture(input: MarkerRecoveryInput): Pro
     const staleMs = input.staleMs ?? STALE_LOCK_MS
     if (!stat || now - stat.mtimeMs < staleMs) return false
   }
-  await fs.rm(file, { force: true }).catch(() => undefined)
+  const claim = `${file}.${process.pid}.${Date.now()}.reclaiming`
+  const claimed = await fs.rename(file, claim).then(
+    () => true,
+    () => false,
+  )
+  if (!claimed) return false
   await fs.rm(path.join(input.gitdir, "index"), { force: true }).catch(() => undefined)
   await fs.rm(path.join(input.gitdir, "index.lock"), { force: true }).catch(() => undefined)
+  await fs.rm(claim, { force: true }).catch(() => undefined)
   return true
 }
 
