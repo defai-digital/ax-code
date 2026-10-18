@@ -2538,6 +2538,12 @@ export namespace MCP {
         await McpAuth.clearOAuthState(mcpName).catch((e) => {
           log.debug("failed to clear OAuth state after successful auth", { mcpName, error: toErrorMessage(e) })
         })
+        // The probe client is gone; attach the real client so tools are
+        // available and the reported status is live instead of a stale
+        // needs_auth or a synthesized "connected".
+        await connect(mcpName).catch((error) => {
+          log.warn("mcp connect after authenticated probe failed", { mcpName, error: toErrorMessage(error) })
+        })
         return { authorizationUrl: "", oauthState }
       } catch (error) {
         if (!error) {
@@ -2582,7 +2588,8 @@ export namespace MCP {
       const { authorizationUrl, oauthState } = await startAuth(mcpName)
 
       if (!authorizationUrl) {
-        // Already authenticated
+        // Already authenticated: startAuth attached the live client, so the
+        // stored status is the real post-connect state.
         const s = await state()
         return s.status[mcpName] ?? { status: "connected" }
       }
