@@ -660,6 +660,29 @@ test("track surfaces update-ref failures instead of returning a stale hash", asy
   })
 })
 
+test("track surfaces staging lock collisions after retries instead of dropping the baseline", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const gitdir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      await fs.mkdir(gitdir, { recursive: true })
+      // A fresh index.lock survives clearStaleSnapshotLocks, so every
+      // `git add` attempt fails with a lock collision. The ADR-248 retry
+      // exhausts and the failure must surface — not degrade to a silent
+      // "no new baseline" return.
+      const lock = path.join(gitdir, "index.lock")
+      await Filesystem.write(lock, "")
+
+      try {
+        await expect(Snapshot.track()).rejects.toThrow("Snapshot staging failed: git add")
+      } finally {
+        await fs.rm(lock, { force: true })
+      }
+    },
+  })
+})
+
 test("cleanup deletes expired snapshot refs before pruning", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({

@@ -28,6 +28,7 @@ import {
   PACK_TIMEOUT_MS,
   captureFailure,
   clearStaleSnapshotLocks,
+  isCaptureCollision,
   recoverInterruptedCapture,
   removeCaptureMarker,
   withCaptureRetry,
@@ -850,6 +851,10 @@ export namespace Snapshot {
     try {
       await add(current, { excludesSynced: Boolean(current.prevHash) })
     } catch (error) {
+      // A lock collision is transient: rethrow so withCaptureRetry in
+      // track() retries it (ADR-248). Only genuine staging failures degrade
+      // to "no new baseline" (eb17f9804).
+      if (isCaptureCollision(error)) throw error
       const message = error instanceof Error ? error.message : String(error)
       if (!message.startsWith("Snapshot staging failed")) throw error
       warnCoverageOff(
