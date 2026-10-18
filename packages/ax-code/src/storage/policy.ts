@@ -60,11 +60,21 @@ export function parseSqliteJournalOverride(value: string | undefined): SqliteJou
   }
 }
 
+/**
+ * NORMAL is corruption-safe only in WAL mode. In the rollback-journal modes
+ * (network-filesystem fallback or AX_CODE_SQLITE_JOURNAL override), a journal
+ * page that power loss catches unsynced can corrupt the database, not just
+ * roll back the last transaction, so those modes run FULL.
+ */
+export function resolveSqliteSynchronous(journalMode: SqliteJournalMode): "NORMAL" | "FULL" {
+  return journalMode === "WAL" ? DurableStoragePolicy.synchronous : "FULL"
+}
+
 export function describeDurableStoragePolicy(input?: { journalMode?: SqliteJournalMode }) {
   const journalMode = input?.journalMode ?? DurableStoragePolicy.journalMode
   return [
     `SQLite policy: journal ${journalMode}`,
-    `synchronous ${DurableStoragePolicy.synchronous}`,
+    `synchronous ${resolveSqliteSynchronous(journalMode)}`,
     `busy timeout ${DurableStoragePolicy.busyTimeoutMs}ms`,
     `WAL autocheckpoint ${DurableStoragePolicy.walAutoCheckpointPages} pages`,
     `journal limit ${formatStorageBytes(DurableStoragePolicy.journalSizeLimitBytes)}`,

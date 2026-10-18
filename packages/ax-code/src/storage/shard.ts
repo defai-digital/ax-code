@@ -9,7 +9,7 @@ import { Context } from "../util/context"
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
-import { DurableStoragePolicy, resolveSqliteJournalMode } from "./policy"
+import { DurableStoragePolicy, resolveSqliteJournalMode, resolveSqliteSynchronous } from "./policy"
 import { isCorruptError as isCorrupt, raiseCorruptDatabaseError } from "./corrupt"
 import { readSchemaTableCount, takePreMigrationBackup } from "./backup"
 import type { ProjectID } from "../project/schema"
@@ -126,10 +126,12 @@ export namespace Shard {
     db.run(`PRAGMA busy_timeout = ${DurableStoragePolicy.busyTimeoutMs}`)
     // ADR-210: DELETE (rollback journal) instead of WAL when the shard sits
     // on a network filesystem; AX_CODE_SQLITE_JOURNAL overrides.
-    db.run(`PRAGMA journal_mode = ${resolveSqliteJournalMode({ path: file })}`)
-    // NORMAL (not FULL): ~10-20% faster writes; on OS crash/power loss only the
-    // most recent transaction may roll back. Consistent with the registry DB.
-    db.run(`PRAGMA synchronous = ${DurableStoragePolicy.synchronous}`)
+    const journalMode = resolveSqliteJournalMode({ path: file })
+    db.run(`PRAGMA journal_mode = ${journalMode}`)
+    // NORMAL in WAL trades only the last transaction on power loss;
+    // rollback-journal modes need FULL for the same no-corruption
+    // guarantee. Consistent with the registry DB (db.ts).
+    db.run(`PRAGMA synchronous = ${resolveSqliteSynchronous(journalMode)}`)
     db.run(`PRAGMA cache_size = -${DurableStoragePolicy.cacheSizeKiB}`)
     db.run(`PRAGMA temp_store = ${DurableStoragePolicy.tempStore}`)
     db.run(`PRAGMA wal_autocheckpoint = ${DurableStoragePolicy.walAutoCheckpointPages}`)

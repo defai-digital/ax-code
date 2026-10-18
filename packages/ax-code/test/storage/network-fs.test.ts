@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest"
 import { isNetworkFilesystem } from "../../src/storage/network-fs"
-import { describeDurableStoragePolicy, resolveSqliteJournalMode } from "../../src/storage/policy"
+import {
+  describeDurableStoragePolicy,
+  resolveSqliteJournalMode,
+  resolveSqliteSynchronous,
+} from "../../src/storage/policy"
 
 // Linux statfs magic numbers (see network-fs.ts for the full set).
 const NFS = 0x6969
@@ -156,6 +160,14 @@ describe("isNetworkFilesystem (win32)", () => {
   test("reports local paths as not network", () => {
     expect(isNetworkFilesystem("C:\\Users\\me\\ax-code\\ax-code.db", { platform: "win32" })).toBe(false)
     expect(isNetworkFilesystem("\\\\.\\PhysicalDrive0", { platform: "win32" })).toBe(false)
+    // Long-path and Volume-GUID spellings of local disks are still local;
+    // only the \\?\UNC\ form of the prefix is a network share.
+    expect(isNetworkFilesystem("\\\\?\\C:\\Users\\me\\ax-code\\ax-code.db", { platform: "win32" })).toBe(false)
+    expect(
+      isNetworkFilesystem("\\\\?\\Volume{12345678-0000-0000-0000-000000000000}\\ax-code\\ax-code.db", {
+        platform: "win32",
+      }),
+    ).toBe(false)
   })
 })
 
@@ -210,6 +222,16 @@ describe("resolveSqliteJournalMode", () => {
       }),
     ).toBe("DELETE")
     expect(resolveSqliteJournalMode({ env: { AX_CODE_SQLITE_JOURNAL: "banana" } })).toBe("WAL")
+  })
+})
+
+describe("resolveSqliteSynchronous", () => {
+  test("NORMAL in WAL, FULL in rollback-journal modes", () => {
+    // NORMAL's no-corruption guarantee on power loss is WAL-only; in DELETE
+    // or TRUNCATE an unsynced journal page can corrupt the database.
+    expect(resolveSqliteSynchronous("WAL")).toBe("NORMAL")
+    expect(resolveSqliteSynchronous("DELETE")).toBe("FULL")
+    expect(resolveSqliteSynchronous("TRUNCATE")).toBe("FULL")
   })
 })
 

@@ -18,7 +18,7 @@ import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
 import { sleep as sleepDefault } from "@/util/timeout"
 import { init } from "#db"
-import { DurableStoragePolicy, resolveSqliteJournalMode } from "./policy"
+import { DurableStoragePolicy, resolveSqliteJournalMode, resolveSqliteSynchronous } from "./policy"
 import { Shard } from "./shard"
 import { isCorruptError as isCorruptErrorImpl, raiseCorruptDatabaseError } from "./corrupt"
 import {
@@ -127,13 +127,14 @@ export namespace Database {
     input.run(`PRAGMA busy_timeout = ${DurableStoragePolicy.busyTimeoutMs}`)
     // ADR-210: DELETE (rollback journal) instead of WAL when the database
     // sits on a network filesystem; AX_CODE_SQLITE_JOURNAL overrides.
-    input.run(`PRAGMA journal_mode = ${resolveSqliteJournalMode({ path: input.path })}`)
-    // NORMAL (not FULL): ~10-20% faster writes. Trade-off: on an OS crash or
-    // power loss (not app crash), the most recently committed transaction may
-    // be silently rolled back. Acceptable for a local dev tool where the
-    // database remains consistent (no corruption) and only the last action
-    // is lost. Use FULL if write durability becomes critical.
-    input.run(`PRAGMA synchronous = ${DurableStoragePolicy.synchronous}`)
+    const journalMode = resolveSqliteJournalMode({ path: input.path })
+    input.run(`PRAGMA journal_mode = ${journalMode}`)
+    // NORMAL (not FULL): ~10-20% faster writes. In WAL the trade-off is only
+    // the most recently committed transaction on OS crash or power loss (not
+    // app crash): the database stays consistent. Rollback-journal modes keep
+    // the speedup's no-corruption guarantee only at FULL, so they resolve
+    // through resolveSqliteSynchronous.
+    input.run(`PRAGMA synchronous = ${resolveSqliteSynchronous(journalMode)}`)
     input.run(`PRAGMA cache_size = -${DurableStoragePolicy.cacheSizeKiB}`)
     input.run(`PRAGMA temp_store = ${DurableStoragePolicy.tempStore}`)
     input.run(`PRAGMA wal_autocheckpoint = ${DurableStoragePolicy.walAutoCheckpointPages}`)

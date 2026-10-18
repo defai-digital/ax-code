@@ -8,6 +8,7 @@ type SqliteHandle = {
   run?(sql: string, ...params: unknown[]): unknown
 }
 import { Global } from "../global"
+import { resolveSqliteJournalMode, resolveSqliteSynchronous } from "./policy"
 import { Log } from "../util/log"
 import { ProjectTable } from "../project/project.sql"
 import { ProjectID } from "../project/schema"
@@ -105,9 +106,14 @@ export namespace JsonMigration {
     const { drizzle } = await import("drizzle-orm/node-sqlite")
     const db = drizzle({ client: sqlite as unknown as import("node:sqlite").DatabaseSync })
 
-    // Optimize SQLite for bulk inserts
-    sqlite.exec("PRAGMA journal_mode = WAL")
-    sqlite.exec("PRAGMA synchronous = NORMAL")
+    // Mirror Database.applyStartupPragmas: WAL only where it is safe. Forcing
+    // WAL here would put the -shm sidecar on a network filesystem (the exact
+    // ADR-210 hazard), and NORMAL is not corruption-safe in rollback modes.
+    // The path mirrors Database.Path (importing db.ts here would close a
+    // module cycle through its lazy import of this file).
+    const journalMode = resolveSqliteJournalMode({ path: path.join(Global.Path.data, "ax-code.db") })
+    sqlite.exec(`PRAGMA journal_mode = ${journalMode}`)
+    sqlite.exec(`PRAGMA synchronous = ${resolveSqliteSynchronous(journalMode)}`)
     sqlite.exec("PRAGMA cache_size = 10000")
     sqlite.exec("PRAGMA temp_store = MEMORY")
     const stats = {
