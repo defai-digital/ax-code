@@ -2025,6 +2025,24 @@ export namespace MCP {
     return { ok: true, status: await untrust(name) }
   }
 
+  async function revokeTrustedClient(
+    s: McpState,
+    name: string,
+    decision: Awaited<ReturnType<typeof McpTrust.untrust>>,
+    mcp?: Config.Mcp,
+  ) {
+    if (decision.removed) publishTrustChanged(name, decision, "untrust")
+    invalidateTools(s)
+    const client = s.clients[name]
+    if (client) {
+      await closeIfPossible(client, name, "untrusting")
+      delete s.clients[name]
+    }
+    await closePendingOAuthTransport(name)
+    if (mcp) s.status[name] = needsTrustStatus(decision, mcp)
+    else delete s.status[name]
+  }
+
   export async function untrust(name: string): Promise<Record<string, Status>> {
     const entry = await Config.mcpEntry(name)
     const mcp = entry?.config
@@ -2039,18 +2057,14 @@ export namespace MCP {
       const current = await Config.mcpEntry(name)
       const currentMcp = current?.config
       if (!current || !currentMcp || !isConfigured(currentMcp)) {
+        // The server was removed or its config became unusable while this
+        // call waited. The review still applies to the snapshot the user
+        // acted on, so revoke that fingerprint and close the live client
+        // before failing. The stale status entry must not survive either.
+        await revokeTrustedClient(s, name, await McpTrust.untrust(name, mcp))
         throw new Error(`MCP server not found: ${name}`)
       }
-      const decision = await McpTrust.untrust(name, currentMcp)
-      if (decision.removed) publishTrustChanged(name, decision, "untrust")
-      invalidateTools(s)
-      const client = s.clients[name]
-      if (client) {
-        await closeIfPossible(client, name, "untrusting")
-        delete s.clients[name]
-      }
-      await closePendingOAuthTransport(name)
-      s.status[name] = needsTrustStatus(decision, currentMcp)
+      await revokeTrustedClient(s, name, await McpTrust.untrust(name, currentMcp), currentMcp)
     })
     return status()
   }

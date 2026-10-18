@@ -161,6 +161,7 @@ describe("cli doctor", () => {
     await mkdir(path.join(tmp.path, ".git"), { recursive: true })
     await mkdir(path.join(tmp.path, ".ax-code"), { recursive: true })
     await mkdir(packageDir, { recursive: true })
+    await mkdir(path.join(packageDir, ".git"))
     await writeFile(path.join(tmp.path, ".git", "HEAD"), "ref: refs/heads/main\n")
     await writeFile(path.join(tmp.path, "AGENTS.md"), "# Project instructions\n")
     await writeFile(path.join(tmp.path, ".ax-code", "ax-code.json"), "{}\n")
@@ -192,6 +193,16 @@ describe("cli doctor", () => {
 
     expect(context.projectRoot).toBe(tmp.path)
     await expect(hasGitRepository(context)).resolves.toBe(false)
+  })
+
+  test("does not treat a stray .git entry as a repository", async () => {
+    await using emptyDir = await tmpdir()
+    await mkdir(path.join(emptyDir.path, ".git"))
+    await expect(hasGitRepository(await doctorProjectContext(emptyDir.path))).resolves.toBe(false)
+
+    await using strayFile = await tmpdir()
+    await writeFile(path.join(strayFile.path, ".git"), "not a gitdir pointer\n")
+    await expect(hasGitRepository(await doctorProjectContext(strayFile.path))).resolves.toBe(false)
   })
 
   test("warns when one worktree has duplicate project identities", async () => {

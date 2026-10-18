@@ -115,6 +115,20 @@ function buildZip(entries: ZipEntry[]): Buffer {
   return Buffer.concat([...localParts, ...centralParts, eocd])
 }
 
+/** Rewrite every central-directory uncompressed size to 0, simulating an
+ *  archive whose header lies about how much its entries expand to. */
+function forgeCentralSizes(buf: Buffer) {
+  const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+  if (eocd < 0) throw new Error("missing EOCD")
+  const total = buf.readUInt16LE(eocd + 10)
+  let p = buf.readUInt32LE(eocd + 16)
+  for (let i = 0; i < total; i++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error("bad central directory signature")
+    buf.writeUInt32LE(0, p + 24)
+    p += 46 + buf.readUInt16LE(p + 28) + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32)
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                              Tests                                          */
 /* -------------------------------------------------------------------------- */
@@ -386,6 +400,29 @@ describe("extractOfficeText - safety", () => {
     // inflate it because the size guard runs before any decompression.
     const huge = Buffer.alloc(50 * 1024 * 1024 + 1, 0x61) // 50 MB + 1
     const buf = buildZip([{ name: "word/document.xml", data: huge }])
+    await writeFile(filePath, buf)
+    const result = await extractOfficeText(filePath)
+    expect(result.text).toBe("")
+    expect(result.reason).toMatch(/too large|exceeds/i)
+  })
+
+  test("rejects archives whose central directory under-reports uncompressed sizes", async () => {
+    await using tmp = await tmpdir()
+    const filePath = path.join(tmp.path, "forged-size.docx")
+    const xml = `<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:t>hello</w:t></w:r></w:p></w:body>
+</w:document>`
+    // Three 17 MB entries pass the per-entry 25 MB cap and expand past the
+    // 50 MB total cap, but their central-directory sizes claim 0.
+    const chunk = Buffer.alloc(17 * 1024 * 1024, 0x61)
+    const buf = buildZip([
+      { name: "word/document.xml", data: Buffer.from(xml) },
+      { name: "media/a.bin", data: chunk },
+      { name: "media/b.bin", data: chunk },
+      { name: "media/c.bin", data: chunk },
+    ])
+    forgeCentralSizes(buf)
     await writeFile(filePath, buf)
     const result = await extractOfficeText(filePath)
     expect(result.text).toBe("")

@@ -347,10 +347,22 @@ export async function extractOfficeText(filePath: string): Promise<OfficeExtract
   }
 
   const inflated = new Map<string, Buffer>()
+  let inflatedBytes = 0
   for (const e of entries) {
     if (e.name.includes("..") || e.name.startsWith("/")) continue
     try {
-      inflated.set(e.name, inflateEntry(bytes, e))
+      const data = inflateEntry(bytes, e)
+      // Central-directory sizes are attacker-controlled; bound the bytes we
+      // actually hold rather than the sizes the archive claims.
+      inflatedBytes += data.length
+      if (inflatedBytes > MAX_TOTAL_UNCOMPRESSED) {
+        return {
+          kind,
+          text: "",
+          reason: `compressed archive too large: ${inflatedBytes} > ${MAX_TOTAL_UNCOMPRESSED}`,
+        }
+      }
+      inflated.set(e.name, data) // @scan-suppress lifecycle_scan - bounded by MAX_TOTAL_UNCOMPRESSED above.
     } catch (err) {
       return { kind, text: "", reason: `cannot inflate ${e.name}: ${(err as Error).message}` }
     }

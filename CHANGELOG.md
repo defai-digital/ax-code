@@ -6,6 +6,13 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject Office archives that under-report their central-directory sizes instead of inflating unbounded output.
+- Disconnect a live MCP client when untrust completes after its server was removed or disabled from config.
+- Do not report a stray `.git` directory or unrelated file as a Git repository in `doctor`.
+- Treat `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` as a failed Git inventory in Wiki discovery instead of walking gitignored files.
+
 ## [7.27.0] - 2026-10-17
 
 ### Fixed

@@ -26,7 +26,7 @@ import { runTerminalDoctorChecks, type TmuxOptionSource } from "./doctor-termina
 import path from "path"
 import net from "net"
 import { realpathSync } from "fs"
-import { access } from "fs/promises"
+import { access, readFile, stat } from "fs/promises"
 import { isLoopbackHostname } from "../../util/listen-security"
 import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import type { Isolation as IsolationConfig } from "../../config/schema"
@@ -319,14 +319,20 @@ async function exists(file: string) {
 }
 
 /**
- * True when the caller's directory sits inside a git repository. A linked
- * worktree or submodule keeps `.git` as a pointer file, so probe the entry
- * itself — the same predicate `doctorProjectContext` uses to find the root.
+ * True when the resolved project root is a git repository. A linked worktree
+ * or submodule keeps `.git` as a pointer file, so probe the entry directly.
+ * A bare directory or unrelated file named `.git` is not a repository.
  */
-export async function hasGitRepository(project: { projectRoot: string; callerCwd: string }): Promise<boolean> {
-  if (project.projectRoot !== project.callerCwd) return true
+export async function hasGitRepository(project: { projectRoot: string }): Promise<boolean> {
+  // @scan-suppress security_scan - Fixed .git leaf under the caller-selected project root; only metadata and pointer content are read.
+  const git = path.join(project.projectRoot, ".git")
   // @scan-suppress security_scan - Read-only probe of the fixed .git entry under the caller-selected project directory.
-  return exists(path.join(project.callerCwd, ".git"))
+  if (await exists(path.join(git, "HEAD"))) return true
+  // @scan-suppress security_scan - Read-only size probe of the fixed .git entry under the caller-selected project directory.
+  const info = await stat(git).catch(() => undefined)
+  if (!info?.isFile() || info.size > 4096) return false
+  const pointer = await readFile(git, "utf8").catch(() => undefined)
+  return pointer !== undefined && /^gitdir:\s*\S/.test(pointer)
 }
 
 export function isLocalPortInUse(port: number): Promise<boolean> {
@@ -394,11 +400,7 @@ export async function getDuplicateProjectIdentityCheck(input: {
 }
 
 export async function doctorProjectContext(callerCwd = Filesystem.callerCwd()) {
-  const projectRoot =
-    (await findAncestor(
-      callerCwd,
-      async (dir) => (await exists(path.join(dir, ".git", "HEAD"))) || (await exists(path.join(dir, ".git"))),
-    )) ?? callerCwd
+  const projectRoot = (await findAncestor(callerCwd, (dir) => hasGitRepository({ projectRoot: dir }))) ?? callerCwd
   const agentsPath = await findAncestor(callerCwd, (dir) => exists(path.join(dir, "AGENTS.md")))
   const configPath = await findAncestor(
     callerCwd,

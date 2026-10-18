@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest"
-import { readFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
+import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 
 let connectStarted!: Promise<void>
@@ -173,6 +174,72 @@ test("disconnect waits for an in-flight connect before disabling the MCP server"
       expect(clients.race).toBeUndefined()
     },
   })
+})
+
+test("untrust still disconnects a server removed from config while waiting for the connect lock", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { mcp: { stale: { type: "local", command: ["stale"] } } },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entry = await Config.mcpEntry("stale")
+      if (!entry || !("type" in entry.config)) throw new Error("missing MCP fixture")
+      await McpTrust.trust("stale", entry.config, entry.source)
+
+      const connecting = MCP.connect("stale")
+      await connectStarted
+
+      // Hold untrust's pre-lock read after it captured the old entry, so the
+      // in-lock re-read is guaranteed to see the mutated config.
+      let releasePreRead!: () => void
+      const preReadGate = new Promise<void>((resolve) => {
+        releasePreRead = resolve
+      })
+      let preReadCaptured!: () => void
+      const captured = new Promise<void>((resolve) => {
+        preReadCaptured = resolve
+      })
+      let gated = false
+      const original = Config.mcpEntry
+      const spy = vi.spyOn(Config, "mcpEntry").mockImplementation(async (name: string) => {
+        const value = await original(name)
+        if (name === "stale" && !gated) {
+          gated = true
+          preReadCaptured()
+          await preReadGate
+        }
+        return value
+      })
+      const untrusting = MCP.untrust("stale")
+      try {
+        await captured
+        await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ mcp: {} }))
+        await Config.invalidate()
+      } finally {
+        releasePreRead()
+        spy.mockRestore()
+      }
+
+      releaseConnect()
+      await connecting
+      await expect(untrusting).rejects.toThrow(/not found/i)
+
+      expect((await MCP.clients()).stale).toBeUndefined()
+
+      // A later config that reuses the name must not inherit the removed
+      // server's stale needs_trust review.
+      await writeFile(
+        path.join(tmp.path, "ax-code.json"),
+        JSON.stringify({ mcp: { stale: { type: "local", command: ["stale"] } } }),
+      )
+      await Config.invalidate()
+      expect((await MCP.status()).stale).toEqual({ status: "disabled" })
+    },
+  })
+  expect(createdClients[0]?.closed).toBe(true)
 })
 
 test("keeps discovered MCP tool caches isolated between live instances", async () => {

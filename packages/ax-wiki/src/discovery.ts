@@ -94,8 +94,10 @@ async function gitFiles(root: string, strict = false, signal?: AbortSignal): Pro
     // would certify a differently-scoped inventory.
     if (signal?.aborted) throw error
     // A maxBuffer overflow means the git inventory is incomplete; falling back
-    // to a walk would silently mix gitignored files into the source set.
-    if (failure.code === "ENOBUFS") {
+    // to a walk would silently mix gitignored files into the source set. Node
+    // reports this as ERR_CHILD_PROCESS_STDIO_MAXBUFFER (ENOBUFS survives for
+    // non-Node runtimes).
+    if (failure.code === "ENOBUFS" || failure.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
       throw new Error(`AX Wiki source discovery exceeded the git ls-files buffer at ${root}`, { cause: error })
     }
     // A non-Git tree (or unavailable Git executable) uses filesystem discovery.
