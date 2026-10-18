@@ -24,8 +24,17 @@ function backupPrefix(dbPath: string): string {
   return path.basename(dbPath) + "."
 }
 
+// The tag portion of a backup filename: exactly one backupTag() stamp
+// (YYYYMMDDThhmmssSSSZ) plus ".bak". Matching the full shape — not just the
+// prefix and suffix — keeps an operator's hand-placed copy like
+// "ax-code.db.bak" out of the rotation list, where pruneBackups would
+// silently delete it.
+const BACKUP_TAG_SUFFIX = /^\d{8}T\d{9}Z\.bak$/
+
 export function isBackupFileFor(dbPath: string, name: string): boolean {
-  return name.startsWith(backupPrefix(dbPath)) && name.endsWith(".bak")
+  const prefix = backupPrefix(dbPath)
+  if (!name.startsWith(prefix)) return false
+  return BACKUP_TAG_SUFFIX.test(name.slice(prefix.length))
 }
 
 // UTC, fixed-width, lexicographically sortable: 20261016T093000123Z
@@ -114,7 +123,12 @@ export function takePreMigrationBackup(input: {
 
   const directory = backupsDirectoryFor(input.dbPath)
   const base = `${backupPrefix(input.dbPath)}${backupTag((input.now ?? Date.now)())}`
-  const temporary = path.join(directory, `${base}.tmp`)
+  // The temp name must not derive from wall-clock time alone: two processes
+  // backing up the same database in the same millisecond would otherwise share
+  // one temp file, and VACUUM INTO refuses (or worse, tears) an existing
+  // target. The final name stays tag-only — same-millisecond backups of one
+  // database are interchangeable snapshots and the rename is atomic.
+  const temporary = path.join(directory, `${base}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`)
   const final = path.join(directory, `${base}.bak`)
   try {
     fs.mkdirSync(directory, { recursive: true })

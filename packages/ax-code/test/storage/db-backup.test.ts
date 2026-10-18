@@ -153,6 +153,60 @@ describe("journal version helpers", () => {
     // (ax-code.db vs the source/dev ax-code-local.db).
     expect(isBackupFileFor("/data/ax-code.db", "ax-code-local.db.20261016T093000000Z.bak")).toBe(false)
     expect(isBackupFileFor("/data/ax-code.db", "ax-code.db.20261016T093000000Z.tmp")).toBe(false)
+    // A hand-placed copy without the exact tag shape must not enter the
+    // rotation list — pruneBackups would silently delete it.
+    expect(isBackupFileFor("/data/ax-code.db", "ax-code.db.bak")).toBe(false)
+    expect(isBackupFileFor("/data/ax-code.db", "ax-code.db.keep.bak")).toBe(false)
+    expect(isBackupFileFor("/data/ax-code.db", "ax-code.db.20261016.bak")).toBe(false)
+  })
+
+  test("a hand-placed backup survives the pre-migration rotation", async () => {
+    await using tmp = await tmpdir()
+    const file = createPopulatedDb(path.join(tmp.path, "ax-code.db"))
+    const manual = path.join(backupsDirectoryFor(file), "ax-code.db.bak")
+    fs.mkdirSync(path.dirname(manual), { recursive: true })
+    fs.copyFileSync(file, manual)
+
+    const start = Date.UTC(2026, 9, 16, 9, 30, 0)
+    for (const at of [start, start + 60_000, start + 120_000]) {
+      takePreMigrationBackup({
+        dbPath: file,
+        fileBytes: fs.statSync(file).size,
+        migrationPending: true,
+        existingSchema: true,
+        vacuumInto: vacuumIntoWith(file),
+        now: () => at,
+      })
+    }
+
+    expect(fs.existsSync(manual)).toBe(true)
+    expect(listDatabaseBackups({ dbPath: file }).map((backup) => backup.file)).toEqual([
+      "ax-code.db.20261016T093200000Z.bak",
+      "ax-code.db.20261016T093100000Z.bak",
+    ])
+  })
+
+  test("same-millisecond backups use distinct temp paths", async () => {
+    await using tmp = await tmpdir()
+    const file = createPopulatedDb(path.join(tmp.path, "ax-code.db"))
+    const targets: string[] = []
+    const at = Date.UTC(2026, 9, 16, 9, 30, 0)
+    for (let i = 0; i < 2; i++) {
+      const result = takePreMigrationBackup({
+        dbPath: file,
+        fileBytes: fs.statSync(file).size,
+        migrationPending: true,
+        existingSchema: true,
+        vacuumInto: (target) => {
+          targets.push(target)
+          fs.writeFileSync(target, `snapshot-${i}`)
+        },
+        now: () => at,
+      })
+      expect(result.took).toBe(true)
+    }
+    expect(targets).toHaveLength(2)
+    expect(new Set(targets).size).toBe(2)
   })
 })
 
