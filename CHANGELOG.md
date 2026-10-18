@@ -6,8 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.27.1] - 2026-10-18
+
+### Changed
+
+- Adopt compatible dependency updates, including ax-tui 1.0.6, and publish SDK 2.6.30.
+- Run impact graph walks on native workers with cancellation and bounded work.
+
 ### Fixed
 
+- Read Office ZIP entries written with data descriptors and ignore false end markers inside archive comments.
+- Preserve complete UTF-8 characters at the Office extraction byte limit.
+- Preserve line breaks in Office text and harden MCP elicitation, OAuth reconnects, and unknown-server route errors.
+- Honor explicit Wiki refresh requests during build settlement and preserve locks owned by a successor.
+- Correct webfetch response and redirect edge cases and doctor worktree detection.
 - Reject Office archives that under-report their central-directory sizes instead of inflating unbounded output.
 - Disconnect a live MCP client when untrust completes after its server was removed or disabled from config.
 - Do not report a stray `.git` directory or unrelated file as a Git repository in `doctor`.
