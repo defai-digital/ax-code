@@ -388,6 +388,63 @@ describe("session.prompt missing file", () => {
     })
   })
 
+  test("pins the 0-based attachment line-range convention against the UI suffix", async () => {
+    // The attachment `start`/`end` URL params are 0-based: the single-line LSP
+    // symbol expansion matches `start` against a 0-based document-symbol line
+    // and then rewrites both params in the same space, so Read is offset by
+    // exactly one. The autocomplete suffix is 1-based in the UI, which means
+    // `demo.ts#3-5` resolves to lines 4-6. That divergence is deliberate here
+    // (pinned, not fixed): changing the base would silently regress symbol
+    // expansion, which shares the same params.
+    const { extractLineRange } = await import("../../src/cli/tui/component/prompt/autocomplete")
+    expect(extractLineRange("demo.ts#3-5").lineRange).toEqual({ baseName: "demo.ts", startLine: 3, endLine: 5 })
+
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, "demo.ts"), ["a", "b", "c", "d", "e", "f", "g"].join("\n"))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const file = path.join(tmp.path, "demo.ts")
+        const ranged = new URL(pathToFileURL(file).href)
+        ranged.searchParams.set("start", "3")
+        ranged.searchParams.set("end", "5")
+
+        try {
+          const msg = await SessionPrompt.prompt({
+            sessionID: session.id,
+            model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
+            noReply: true,
+            parts: [{ type: "file", mime: "text/plain", url: ranged.href, filename: "demo.ts" }],
+          })
+          if (msg.info.role !== "user") throw new Error("expected user message")
+
+          const stored = await MessageV2.get({ sessionID: session.id, messageID: msg.info.id })
+          const text = stored.parts.filter((part) => part.type === "text").map((part) => part.text)
+
+          expect(text[0]).toContain(`"offset":4`)
+          expect(text[0]).toContain(`"limit":3`)
+          // Read's first content line follows <content> with no newline, so
+          // strip the tag before anchoring the "N: line" numbering.
+          const content = text[1]!
+            .replace(/^[\s\S]*<content>/, "")
+            .split("\n")
+            .map((line) => line.match(/^(\d+): ([a-g])$/))
+            .filter((match) => match !== null)
+            .map((match) => `${match![1]}:${match![2]}`)
+          expect(content).toEqual(["4:d", "5:e", "6:f"])
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("ignores malformed file attachment line ranges instead of skipping the first line", async () => {
     await using tmp = await tmpdir({
       git: true,
