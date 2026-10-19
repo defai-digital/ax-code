@@ -14,7 +14,7 @@ function unknownError(message: string) {
 }
 
 /**
- * ADR-212: the identity a StopFailure observation hook sees — error name and
+ * ADR-259: the identity a StopFailure observation hook sees — error name and
  * code only, redacted at the log boundary and bounded. The failure message
  * itself is deliberately excluded: it can quote provider payloads or tool
  * arguments.
@@ -86,7 +86,7 @@ export async function publishPromptFailure(input: {
   }
   await Session.updateMessage(input.assistant)
   Session.publishError({ sessionID: input.sessionID, error })
-  // ADR-212: observation-only StopFailure hook. Fire-and-forget — a broken
+  // ADR-259: observation-only StopFailure hook. Fire-and-forget — a broken
   // or slow hook must never affect the failure path.
   void import("@/hooks/lifecycle")
     .then(({ LifecycleHooks }) =>

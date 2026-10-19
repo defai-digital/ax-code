@@ -5,7 +5,7 @@ Scope: current-state
 Last reviewed: 2026-10-16
 Owner: ax-code runtime
 
-[Herdr](https://herdr.sh) is a terminal pane manager that shows whether each agent pane is **idle**, **working**, or **blocked**. AX Code does not talk to herdr directly. Instead, a small observation-only reporter script maps AX Code's lifecycle hooks (ADR-212) onto herdr's agent state, so herdr can show the right state without AX Code injecting keys into any pane.
+[Herdr](https://herdr.sh) is a terminal pane manager that shows whether each agent pane is **idle**, **working**, or **blocked**. AX Code does not talk to herdr directly. Instead, a small observation-only reporter script maps AX Code's lifecycle hooks (ADR-259) onto herdr's agent state, so herdr can show the right state without AX Code injecting keys into any pane.
 
 ## What it does
 

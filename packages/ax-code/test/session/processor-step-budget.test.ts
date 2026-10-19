@@ -38,7 +38,7 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
-describe("session.processor step tool-result budget (ADR-211)", () => {
+describe("session.processor step tool-result budget (ADR-258)", () => {
   test("spills the largest step results until the total fits; keeps ids, order, and errors intact", async () => {
     await using tmp = await tmpdir({
       git: true,

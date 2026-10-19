@@ -254,7 +254,7 @@ export namespace BackgroundShell {
           variant: entry.status === "completed" ? "info" : "warning",
           duration: TOAST_DURATION_LONG_MS,
         })
-        // ADR-212: observation-only Notification hook (background task
+        // ADR-259: observation-only Notification hook (background task
         // complete). No command text or description — the shell id, status
         // and exit code identify the task without secrets. Fire-and-forget.
         void import("@/hooks/lifecycle")

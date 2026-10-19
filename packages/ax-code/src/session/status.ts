@@ -77,7 +77,7 @@ export namespace SessionStatus {
 
     // Update state before publishing events so subscribers see current state.
     if (status.type === "idle") {
-      // ADR-212: the Notification observation hook fires only on a genuine
+      // ADR-259: the Notification observation hook fires only on a genuine
       // busy/retry -> idle transition (the "idle prompt" — the agent finished
       // and is waiting for input), not on repeated idle sets. Fire-and-forget
       // so a broken or slow hook can never affect the status machine.

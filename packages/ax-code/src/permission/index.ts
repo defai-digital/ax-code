@@ -827,7 +827,7 @@ export namespace Permission {
         tool: typeof info.metadata?.tool === "string" ? info.metadata.tool : undefined,
       })
     }
-    // ADR-212: observation-only PermissionRequest hook. Fired once per ask —
+    // ADR-259: observation-only PermissionRequest hook. Fired once per ask —
     // the queue-promotion and idle-once republishes of Event.Asked above do
     // not refire it. The payload carries the tool name, patterns and risk
     // class only, never tool arguments (metadata), which can hold secrets;

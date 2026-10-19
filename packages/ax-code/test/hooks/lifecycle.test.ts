@@ -260,7 +260,7 @@ describe("LifecycleHooks matcher and run", () => {
     }
   })
 
-  test("ADR-212 observation events are fail-open under the claude-code protocol too", async () => {
+  test("ADR-259 observation events are fail-open under the claude-code protocol too", async () => {
     // A hook that answers deny (exit 2) on PermissionRequest/StopFailure/
     // Notification must not block or veto anything: observation-only.
     for (const event of ["PermissionRequest", "StopFailure", "Notification"] as const) {

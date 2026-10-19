@@ -9,7 +9,7 @@
  * - config `hooks` field
  *
  * Observation-only events (ADR-057): SessionStart, SessionEnd, PostCompact,
- * Interrupt, PostToolUseFailure, and the ADR-212 trio PermissionRequest,
+ * Interrupt, PostToolUseFailure, and the ADR-259 trio PermissionRequest,
  * StopFailure, Notification. They are NOT in BLOCKABLE_EVENTS, so a
  * non-zero exit can never veto anything — `runHooks` logs the failure and
  * continues.
@@ -112,7 +112,7 @@ export namespace LifecycleHooks {
     "SessionEnd",
     "PostCompact",
     "Interrupt",
-    // ADR-212 observation-only events: a permission prompt was raised, a turn
+    // ADR-259 observation-only events: a permission prompt was raised, a turn
     // ended in failure, or a user-facing notification fired. Payloads are
     // redacted at the log boundary and never carry tool arguments.
     "PermissionRequest",
