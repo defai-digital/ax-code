@@ -267,4 +267,38 @@ describe("QualityRollbackAdvisor", () => {
     expect(mismatchRecommendation.action).toBe("observe")
     expect(mismatchRecommendation.rollbackTargetSource).toBeNull()
   })
+
+  test("rejects a stale watch and does not rollback without an active model", () => {
+    expect(() =>
+      QualityRollbackAdvisor.recommend({
+        promotion: promotionRecord({
+          source: "candidate-v2",
+          promotedAt: "2026-04-20T02:00:00.000Z",
+          previousActiveSource: "candidate-v1",
+        }),
+        watch: watchSummary({
+          source: "candidate-v2",
+          promotedAt: "2026-04-20T01:00:00.000Z",
+          overallStatus: "fail",
+        }),
+        currentActiveSource: "candidate-v2",
+      }),
+    ).toThrow(/timestamp mismatch/)
+
+    const noActiveModel = QualityRollbackAdvisor.recommend({
+      promotion: promotionRecord({
+        source: "candidate-v2",
+        promotedAt: "2026-04-20T02:00:00.000Z",
+        previousActiveSource: "candidate-v1",
+      }),
+      watch: watchSummary({
+        source: "candidate-v2",
+        promotedAt: "2026-04-20T02:00:00.000Z",
+        overallStatus: "fail",
+      }),
+      currentActiveSource: null,
+    })
+    expect(noActiveModel.action).toBe("observe")
+    expect(noActiveModel.rollbackTargetSource).toBeNull()
+  })
 })

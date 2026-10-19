@@ -41,6 +41,11 @@ export namespace QualityRollbackAdvisor {
         `Rollback recommendation source mismatch: promotion=${input.promotion.source} watch=${input.watch.source}`,
       )
     }
+    if (input.promotion.promotedAt !== input.watch.promotedAt) {
+      throw new Error(
+        `Rollback recommendation timestamp mismatch: promotion=${input.promotion.promotedAt} watch=${input.watch.promotedAt}`,
+      )
+    }
 
     const currentActiveSource = input.currentActiveSource ?? null
     const rationale: string[] = []
@@ -49,10 +54,10 @@ export namespace QualityRollbackAdvisor {
     if (input.watch.overallStatus === "pass") {
       action = "keep"
       rationale.push("Post-promotion watch status is pass; keep the active model in place.")
-    } else if (currentActiveSource && currentActiveSource !== input.promotion.source) {
+    } else if (currentActiveSource !== input.promotion.source) {
       action = "observe"
       rationale.push(
-        `Promotion source ${input.promotion.source} is not the current active model (${currentActiveSource}); do not rollback automatically.`,
+        `Promotion source ${input.promotion.source} is not the current active model (${currentActiveSource ?? "none"}); do not rollback automatically.`,
       )
     } else if (input.watch.overallStatus === "fail") {
       action = "rollback"
