@@ -42,7 +42,11 @@ import { pathToFileURL } from "node:url"
 // Environment isolation (before any app module loads), mirroring
 // check-product-frames.tsx so themes, kv, and i18n resolve identically.
 
+// The prepared native cache (CI's verified offline download) is kept; every
+// other inherited AX_CODE_* / OPENCODE_* variable is dropped.
+const KEEP_ENV = new Set(["AX_CODE_TUI_NATIVE_CACHE_DIR", "AX_CODE_TUI_NATIVE_OFFLINE"])
 for (const key of Object.keys(process.env)) {
+  if (KEEP_ENV.has(key)) continue
   if (key.startsWith("AX_CODE_") || key.startsWith("OPENCODE_")) delete process.env[key]
 }
 const state = await fsp.mkdtemp(path.join(os.tmpdir(), "ax-code-transcript-frame-time-"))
