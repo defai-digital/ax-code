@@ -351,3 +351,20 @@ test("throwing a script error with a non-string message never throws a host erro
   const result = await execute("const e=new Error('x');e.message=()=>1;throw e")
   expect(result.diagnostic).toMatchObject({ error: "RuntimeError", message: "Uncaught script exception" })
 })
+
+test("waits for tools started by a resumed async function", async () => {
+  const completed: string[] = []
+  const result = await execute("async function f(){await tools.first({});tools.second({})};f();return 1", {
+    tools: ["first", "second"],
+    dispatch: async (name) => {
+      await new Promise((resolve) => setTimeout(resolve, name === "first" ? 10 : 20))
+      completed.push(name)
+      return name
+    },
+  })
+
+  expect(result.output).toBe("1")
+  // Pre-fix execute resolved after f() settled but before the second tool
+  // (started after the await) finished, then aborted its signal.
+  expect(completed).toEqual(["first", "second"])
+})

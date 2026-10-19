@@ -120,7 +120,8 @@ class Interpreter {
     // Attach a handler immediately: a script may intentionally ignore a call.
     this.budget.allocate(1)
     this.pending.add(promise)
-    void promise.catch(() => {})
+    const settled = () => this.pending.delete(promise)
+    void promise.then(settled, settled)
     return { kind: "promise", promise }
   }
   async call(fn: Value, args: Value[], receiver?: Value): Promise<Value> {
@@ -654,8 +655,12 @@ class Interpreter {
       else throw error
     }
     value = await this.settle(value)
-    // No detached work may intentionally escape the execute lifetime.
-    await Promise.allSettled([...this.pending])
+    // No detached work may intentionally escape the execute lifetime. A
+    // resumed async function can start a NEW tool call after the previous
+    // batch settled, so keep draining until the set stays empty.
+    while (this.pending.size > 0) {
+      await Promise.allSettled([...this.pending])
+    }
     this.budget.check()
     if (this.fatal) throw this.fatal
     return serialize(value, this.budget)
