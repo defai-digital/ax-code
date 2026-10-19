@@ -24,6 +24,7 @@ const RECENT_MIN_ENTRIES = 2
 const RECENT_LIMIT = 3
 
 const log = Log.create({ service: "tui.dialog-command" })
+const registrationOwner = Symbol("command-registration-owner")
 
 type Context = ReturnType<typeof init>
 const ctx = createContext<Context>()
@@ -39,6 +40,7 @@ type Slash = {
 }
 
 export type CommandOption = DialogSelectOption<string> & {
+  readonly [registrationOwner]?: object
   keybind?: KeybindKey
   suggested?: boolean
   slash?: Slash
@@ -51,7 +53,7 @@ export type CommandOption = DialogSelectOption<string> & {
 
 function init() {
   const { t } = useLanguage()
-  const [registrations, setRegistrations] = createSignal<Accessor<CommandOption[]>[]>([])
+  const [registrations, setRegistrations] = createSignal<{ read: Accessor<CommandOption[]>; owner: object }[]>([])
   const [suspendCount, setSuspendCount] = createSignal(0)
   const dialog = useDialog()
   const keybind = useKeybind()
@@ -65,11 +67,13 @@ function init() {
   })
 
   const entries = createMemo(() => {
-    const all = registrations().flatMap((x) => x())
-    return all.map((x) => ({
-      ...x,
-      footer: x.keybind ? keybind.print(x.keybind) : undefined,
-    }))
+    return registrations().flatMap(({ read, owner }) =>
+      read().map((option) => ({
+        ...option,
+        [registrationOwner]: owner,
+        footer: option.keybind ? keybind.print(option.keybind) : undefined,
+      })),
+    )
   })
 
   const isEnabled = (option: CommandOption) => option.enabled !== false
@@ -139,6 +143,7 @@ function init() {
   const executor = createCommandExecutor({
     renderer,
     entries,
+    owner: (option) => option[registrationOwner],
     dialog,
     scope: () => applicationScope(),
     record: recordUsage,
@@ -247,10 +252,10 @@ function init() {
       ))
     },
     register(cb: () => CommandOption[]) {
-      const results = createMemo(cb)
-      setRegistrations((arr) => [results, ...arr])
+      const registration = { read: createMemo(cb), owner: {} }
+      setRegistrations((arr) => [registration, ...arr])
       onCleanup(() => {
-        setRegistrations((arr) => arr.filter((x) => x !== results))
+        setRegistrations((arr) => arr.filter((x) => x !== registration))
       })
     },
   }

@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep TUI slash commands such as `/update` available when the reactive command catalog refreshes during dispatch.
+
 ## [7.27.6] - 2026-10-19
 
 ### Changed

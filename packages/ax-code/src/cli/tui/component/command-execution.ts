@@ -15,6 +15,7 @@ type Invocation = { route: "keybind" | "trigger" | "slash"; args?: string; scope
 export function createCommandExecutor(input: {
   renderer: CliRenderer
   entries: () => readonly CommandOption[]
+  owner?: (option: CommandOption) => object | undefined
   scope: () => string
   dialog: DialogContext
   record: (option: CommandOption) => void
@@ -118,15 +119,27 @@ export function createCommandExecutor(input: {
   }
 
   async function execute(option: CommandOption, route: Invocation["route"], args?: string): Promise<CommandResult> {
+    if (disposed || input.renderer.isDestroyed) return { status: "disposed" }
     const scope = input.scope()
+    const value = option.value
+    const owner = (entry: CommandOption) => input.owner?.(entry) ?? entry
+    const registration = owner(option)
+    const matches = (entry: CommandOption) => entry.value === value && owner(entry) === registration
+    const occurrence = input.entries().filter(matches).indexOf(option)
+    if (occurrence < 0) return { status: "stale-context" }
     // Preserve the old asynchronous dispatch boundary, but recheck live entries
     // and application scope before invoking a captured row or shortcut.
     await Promise.resolve()
     if (disposed || input.renderer.isDestroyed) return { status: "disposed" }
-    if (args !== undefined && (route !== "slash" || !option.onSlashArguments)) return { status: "disabled" }
     if (scope !== input.scope()) return { status: "stale-context" }
     sync()
-    const id = ids.get(option)
+    // A reactive catalog refresh recreates its rows without revoking the
+    // registration. Resolve the current row from the same owner; a removed
+    // owner must never dispatch a replacement registration with the same value.
+    const current = input.entries().filter(matches)[occurrence]
+    if (!current) return { status: "stale-context" }
+    if (args !== undefined && (route !== "slash" || !current.onSlashArguments)) return { status: "disabled" }
+    const id = ids.get(current)
     if (!id) return { status: "stale-context" }
     const context = captureCommandContext(input.renderer)
     invocations.set(context, { route, args, scope })

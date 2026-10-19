@@ -25,7 +25,7 @@ const { CommandProvider, useCommandDialog } = await import("../src/cli/tui/compo
 const { createCommandExecutor } = await import("../src/cli/tui/component/command-execution")
 const { DialogSelect } = await import("../src/cli/tui/ui/dialog-select")
 const { Keybinds } = await import("../src/config/schema")
-const { createEffect, createSignal } = await import("solid-js")
+const { createEffect, createRoot, createSignal } = await import("solid-js")
 const { DialogPrivateGpuConnect } = await import("../src/cli/tui/component/dialog-private-gpu")
 const { PRIVATE_GPU_VENDORS } = await import("../src/provider/private-gpu/presets")
 const { DialogImagePreview } = await import("../src/cli/tui/ui/dialog-image-preview")
@@ -48,6 +48,7 @@ let dialog!: ReturnType<typeof useDialog>
 let kvStore!: ReturnType<typeof useKV>
 let ready = false
 let backgroundCommands = 0
+let updateCommands = 0
 function findRenderable(node: Renderable, matches: (node: Renderable) => boolean): Renderable | undefined {
   if (matches(node)) return node
   for (const child of node.getChildren()) {
@@ -84,6 +85,12 @@ function Controls() {
       onSelect: () => {
         duplicateCalls.push("two")
       },
+    },
+    {
+      title: "Check for updates",
+      value: "app.update.check",
+      slash: { name: "update", aliases: ["upgrade"] },
+      onSelect: () => updateCommands++,
     },
     {
       title: "Background command probe",
@@ -297,6 +304,31 @@ try {
   setImageParts({})
   await setup.flush()
   assert.equal(dialog.stack.length, 0, "removing an attachment must retire its preview")
+  assert(commandAPI.trySlash("update"))
+  setProbeTitle("Refreshed while submitting /update")
+  await setup.flush()
+  assert.equal(updateCommands, 1, "/update must survive a reactive command catalog refresh before dispatch")
+  assert(commandAPI.trySlash("upgrade"))
+  setProbeTitle("Refreshed while submitting /upgrade")
+  await setup.flush()
+  assert.equal(updateCommands, 2, "/upgrade must survive the same catalog refresh")
+  let retiredCalls = 0
+  let replacementCalls = 0
+  const registerOwnerProbe = (run: () => void) =>
+    createRoot((dispose) => {
+      commandAPI.register(() => [{ value: "test.replaced-owner", title: "Owner probe", onSelect: run }])
+      return dispose
+    })
+  const retireOwner = registerOwnerProbe(() => retiredCalls++)
+  const retiredAction = commandAPI.trigger("test.replaced-owner")
+  retireOwner()
+  const removeReplacement = registerOwnerProbe(() => replacementCalls++)
+  assert.equal((await retiredAction)?.status, "stale-context")
+  assert.equal(retiredCalls, 0)
+  assert.equal(replacementCalls, 0, "retired commands must not invoke a new owner with the same value")
+  assert.equal((await commandAPI.trigger("test.replaced-owner"))?.status, "executed")
+  assert.equal(replacementCalls, 1)
+  removeReplacement()
   const registry = getCommandRegistry(setup.renderer)
   const recoveryEntries = [
     { value: "test.registry-first", title: "First" },
@@ -357,6 +389,12 @@ try {
   await setup.flush()
   assert.equal((await registry.execute(metadata.id)).status, "disabled")
   assert.equal(actionCalls, 1)
+  setProbeEnabled(true)
+  await setup.flush()
+  const disabledDuringRefresh = commandAPI.trigger("test.async")
+  setProbeEnabled(false)
+  assert.equal((await disabledDuringRefresh)?.status, "disabled")
+  assert.equal(actionCalls, 1, "a catalog refresh must recheck the live enabled state")
   setProbeEnabled(true)
   await setup.flush()
   commandAction = async () => {
