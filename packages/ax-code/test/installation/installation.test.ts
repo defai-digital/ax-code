@@ -1,4 +1,8 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto"
+import { execFile } from "node:child_process"
+import { createRequire } from "node:module"
+import path from "node:path"
+import { promisify } from "node:util"
 import { describe, expect, test, vi } from "vitest"
 import { verifyMinisign } from "../../src/installation/minisign"
 import { Installation } from "../../src/installation"
@@ -59,6 +63,27 @@ function withTestDependencies<T>(
 }
 
 describe("installation", () => {
+  describe("source ESM version", () => {
+    test.each([undefined, "8.0.0-test.1"])("resolves metadata with build version %s", async (version) => {
+      const require = createRequire(import.meta.url)
+      const pkg = require("../../package.json") as { version: string }
+      const core = path.resolve(import.meta.dirname, "../..")
+      const script = [
+        ...(version ? [`globalThis.AX_CODE_VERSION = ${JSON.stringify(version)}`] : []),
+        'const { Installation } = await import("./src/installation/index.ts")',
+        "console.log(JSON.stringify({ version: Installation.VERSION, channel: Installation.CHANNEL, local: Installation.isLocal(), require: typeof require }))",
+      ].join("\n")
+      const { stdout } = await promisify(execFile)(
+        process.execPath,
+        ["--import", require.resolve("tsx"), "--conditions=node", "--input-type=module", "-e", script],
+        { cwd: core, env: { ...process.env, NODE_OPTIONS: "" }, timeout: 15_000 },
+      )
+      expect(stdout.trim()).toBe(
+        JSON.stringify({ version: version ?? pkg.version, channel: "local", local: true, require: "undefined" }),
+      )
+    })
+  })
+
   describe("release type", () => {
     test("classifies semver changes", () => {
       expect(Installation.getReleaseType("1.2.3", "1.2.4")).toBe("patch")

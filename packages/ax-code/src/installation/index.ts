@@ -4,6 +4,7 @@ import path from "path"
 import os from "os"
 import fs from "fs/promises"
 import { buffer } from "node:stream/consumers"
+import { createRequire } from "node:module"
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import {
@@ -86,7 +87,7 @@ export namespace Installation {
   export const VERSION = (() => {
     if (typeof AX_CODE_VERSION === "string") return AX_CODE_VERSION
     try {
-      return require("../../package.json").version as string
+      return createRequire(import.meta.url)("../../package.json").version as string
     } catch {
       return "local"
     }

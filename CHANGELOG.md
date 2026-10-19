@@ -9,6 +9,7 @@ changes belong to AX Coder.
 ### Fixed
 
 - Keep TUI slash commands such as `/update` available when the reactive command catalog refreshes during dispatch.
+- Read the source runtime version correctly in Node ESM so update checks can compare it with published releases.
 
 ## [7.27.6] - 2026-10-19
 
