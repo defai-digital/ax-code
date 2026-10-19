@@ -191,3 +191,34 @@ test("an unreadable borrowed flag denies ownership even for prefixed branches", 
     },
   })
 })
+
+test("an operation ID reused for a different worktree is rejected", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const first = await Worktree.create({ name: "a", operationId: "same" })
+      await expect(Worktree.create({ name: "b", operationId: "same" })).rejects.toThrow(/already used/)
+      await Worktree.remove({ directory: first.directory })
+      // After removal the ID no longer returns the deleted worktree.
+      const again = await Worktree.create({ name: "a", operationId: "same" })
+      expect(gitOut(tmp.path, ["worktree", "list", "--porcelain"])).toContain(again.directory)
+      await Worktree.remove({ directory: again.directory })
+    },
+  })
+})
+
+test("a refused borrow does not leave the branch marked borrowed", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const current = gitOut(tmp.path, ["symbolic-ref", "--short", "HEAD"])
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // git refuses a branch that is already checked out in the primary worktree.
+      await expect(Worktree.create({ name: "dup", existingBranch: current })).rejects.toThrow()
+      expect(() => gitOut(tmp.path, ["config", "--get", `branch.${current}.axCodeBorrowed`])).toThrow()
+    },
+  })
+})
