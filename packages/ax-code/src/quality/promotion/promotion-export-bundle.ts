@@ -74,11 +74,19 @@ export namespace QualityPromotionExportBundle {
     verification: { manifestReasons: string[] },
   ) {
     const { manifestReasons } = verification
+    // Structural verification is not readiness: a manifest can be internally
+    // consistent while its own summary says fail. The export gate must not
+    // report a failing manifest as passing.
+    const manifestReady = manifestReasons.length === 0 && auditManifest.summary.overallStatus === "pass"
     const gates = [
       {
         name: "audit-manifest-verification",
-        status: manifestReasons.length === 0 ? "pass" : "fail",
-        detail: manifestReasons[0] ?? `audit manifest ${auditManifest.manifestID} is valid`,
+        status: manifestReady ? "pass" : "fail",
+        detail:
+          manifestReasons[0] ??
+          (auditManifest.summary.overallStatus === "pass"
+            ? `audit manifest ${auditManifest.manifestID} is valid`
+            : `audit manifest ${auditManifest.manifestID} status is ${auditManifest.summary.overallStatus}`),
       },
       {
         name: "release-packet-readiness",

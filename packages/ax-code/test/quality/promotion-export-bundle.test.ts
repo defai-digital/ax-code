@@ -411,6 +411,26 @@ describe("QualityPromotionExportBundle", () => {
     }
   })
 
+  test("does not report a failing audit manifest as export-ready", () => {
+    const { manifest } = buildAuditManifest()
+    // A forced promotion on a release packet that only authorizes "pass" makes
+    // the manifest's own summary fail while remaining structurally consistent.
+    const failingManifest = QualityPromotionAuditManifest.create({
+      releasePacket: manifest.releasePacket,
+      promotion: { ...manifest.promotion, decision: "force" },
+    })
+    expect(QualityPromotionAuditManifest.verify(failingManifest.releasePacket, failingManifest)).toEqual([])
+    expect(failingManifest.summary.overallStatus).toBe("fail")
+
+    const exportBundle = QualityPromotionExportBundle.create({
+      auditManifest: failingManifest,
+    })
+
+    expect(exportBundle.summary.overallStatus).toBe("fail")
+    expect(exportBundle.summary.gates.find((gate) => gate.name === "audit-manifest-verification")?.status).toBe("fail")
+    expect(QualityPromotionExportBundle.verify(exportBundle)).toEqual([])
+  })
+
   test("reports verification failures when the export bundle summary is tampered", async () => {
     const { manifest } = buildAuditManifest()
     const exportBundle = QualityPromotionExportBundle.create({
