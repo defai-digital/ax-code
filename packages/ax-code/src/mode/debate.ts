@@ -40,17 +40,22 @@ export namespace Debate {
   const SHORT_MODEL_PART = /^[a-z]\d+$/i
 
   /** Every identity to mask, longest first so a longer id wins over its own prefix. */
-  function memberIdentities(report: Council.CouncilReport): string[] {
+  function memberIdentities(report: Council.CouncilReport, allMemberIds: readonly string[] = []): string[] {
     const identities = new Set<string>()
-    for (const item of [...report.consensus, ...report.majority, ...report.minority, ...report.singleton]) {
-      for (const memberId of item.memberIds) {
-        identities.add(memberId)
-        for (const part of memberId.split("/")) {
-          const shortModel = SHORT_MODEL_PART.test(part)
-          if ((part.length >= 3 || shortModel) && !GENERIC_IDENTITY_PARTS.has(part.toLowerCase())) identities.add(part)
-        }
+    const track = (memberId: string) => {
+      identities.add(memberId)
+      for (const part of memberId.split("/")) {
+        const shortModel = SHORT_MODEL_PART.test(part)
+        if ((part.length >= 3 || shortModel) && !GENERIC_IDENTITY_PARTS.has(part.toLowerCase())) identities.add(part)
       }
     }
+    for (const item of [...report.consensus, ...report.majority, ...report.minority, ...report.singleton]) {
+      for (const memberId of item.memberIds) track(memberId)
+    }
+    // A member that raised no issues is absent from every issue's
+    // memberIds, but another member's finding can still name its identity —
+    // redaction must cover every participant, not only the contributors.
+    for (const memberId of allMemberIds) track(memberId)
     return [...identities].sort((a, b) => b.length - a.length)
   }
 
@@ -69,8 +74,12 @@ export namespace Debate {
    * Build an anonymous synthesis block for the next debate round.
    * Strips member ids so models cannot anchor on brand prestige.
    */
-  export function buildAnonymousSynthesis(report: Council.CouncilReport, round: number): RoundSummary {
-    const identityPatterns = memberIdentities(report).map(identityPattern)
+  export function buildAnonymousSynthesis(
+    report: Council.CouncilReport,
+    round: number,
+    allMemberIds: readonly string[] = [],
+  ): RoundSummary {
+    const identityPatterns = memberIdentities(report, allMemberIds).map(identityPattern)
     const issuesRaised: string[] = []
     for (const item of [...report.consensus, ...report.majority, ...report.minority, ...report.singleton]) {
       const loc = item.location ? ` @ ${item.location}` : ""

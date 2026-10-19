@@ -770,7 +770,11 @@ export const CouncilTool = Tool.define("council", async () => {
           break
         }
 
-        const summary = Debate.buildAnonymousSynthesis(report, round)
+        const summary = Debate.buildAnonymousSynthesis(
+          report,
+          round,
+          results.map((result) => result.memberId),
+        )
         const synthesis = Debate.renderSynthesisPrompt(summary)
         const debatePrompt = CouncilContext.userPrompt({
           kind,
