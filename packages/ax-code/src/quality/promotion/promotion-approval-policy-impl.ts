@@ -203,6 +203,9 @@ export namespace QualityPromotionApprovalPolicy {
 
   function approvalReasons(bundle: DecisionBundleLike, approval: ApprovalArtifactLike) {
     const reasons: string[] = []
+    if (approval.approver.trim().length === 0) {
+      reasons.push(`approval ${approval.approvalID} has no approver identity`)
+    }
     if (approval.source !== bundle.source) {
       reasons.push(`approval source mismatch: ${approval.source} vs ${bundle.source}`)
     }
@@ -446,7 +449,7 @@ export namespace QualityPromotionApprovalPolicy {
     const requirement = resolved.requirement
     // Canonical identity, matching the approval side: comparison against a raw
     // spelling would let the remediation author approve their own remediation.
-    const remediationAuthor = input.bundle.eligibility.remediation?.author?.trim() ?? null
+    const remediationAuthor = input.bundle.eligibility.remediation?.author?.trim() || null
     const independentReviewRequired = resolved.reentryApplicable && requirement.requireIndependentReviewer
     const priorApproverExclusionRequired = resolved.reentryApplicable && requirement.requirePriorApproverExclusion
     const maxPriorApproverOverlapRatio = resolved.reentryApplicable ? requirement.maxPriorApproverOverlapRatio : null
@@ -837,7 +840,6 @@ export namespace QualityPromotionApprovalPolicy {
         name: "prior-reporting-chain-overlap",
         status:
           maxPriorReportingChainOverlapRatio === null ||
-          reportingChainCarryoverHistory.length === 0 ||
           priorPromotionReportingChains.length === 0 ||
           priorReportingChainOverlapRatio === null ||
           priorReportingChainOverlapRatio <= maxPriorReportingChainOverlapRatio
@@ -846,13 +848,11 @@ export namespace QualityPromotionApprovalPolicy {
         detail:
           maxPriorReportingChainOverlapRatio === null
             ? "prior reporting chain overlap cap not configured"
-            : reportingChainCarryoverHistory.length === 0
-              ? "no prior reentry reporting chain carryover history recorded"
-              : priorPromotionReportingChains.length === 0
-                ? "no prior promotion reporting chains recorded"
-                : priorReportingChainOverlapRatio === null
-                  ? "no effective qualified reporting chains available for overlap evaluation"
-                  : `${overlappingQualifiedReportingChains.length} overlapping effective reporting chain(s) across ${effectiveQualifiedReportingChains.length} effective reporting chain(s); ratio=${priorReportingChainOverlapRatio.toFixed(2)}; cap=${maxPriorReportingChainOverlapRatio.toFixed(2)}`,
+            : priorPromotionReportingChains.length === 0
+              ? "no prior promotion reporting chains recorded"
+              : priorReportingChainOverlapRatio === null
+                ? "no effective qualified reporting chains available for overlap evaluation"
+                : `${overlappingQualifiedReportingChains.length} overlapping effective reporting chain(s) across ${effectiveQualifiedReportingChains.length} effective reporting chain(s); ratio=${priorReportingChainOverlapRatio.toFixed(2)}; cap=${maxPriorReportingChainOverlapRatio.toFixed(2)}`,
       },
       {
         name: "reporting-chain-carryover-budget",

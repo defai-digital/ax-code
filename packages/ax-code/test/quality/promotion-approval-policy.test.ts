@@ -1278,4 +1278,66 @@ describe("QualityPromotionApprovalPolicy", () => {
     expect(summary.gates.find((gate) => gate.name === "distinct-approvers")?.status).toBe("fail")
     expect(summary.overallStatus).toBe("fail")
   })
+
+  test("enforces the reporting chain overlap cap on the first reentry", () => {
+    const decisionBundle = bundle("none", {
+      reentryRollbackID: "rollback-first-chain",
+      remediationAuthor: "author@example.com",
+      priorPromotionID: "promotion-first-chain",
+      priorPromotionApprovers: ["prior@example.com"],
+      priorPromotionReportingChains: ["eng/platform/director-a"],
+    })
+
+    const summary = QualityPromotionApprovalPolicy.evaluate({
+      bundle: decisionBundle,
+      approvals: [
+        approval({
+          bundle: decisionBundle,
+          approver: "fresh@example.com",
+          role: "staff-engineer",
+          team: "quality-platform",
+          reportingChain: "eng/platform/director-a",
+        }),
+      ],
+    })
+
+    expect(summary.reportingChainCarryoverHistory).toEqual([])
+    expect(summary.priorReportingChainOverlapRatio).toBe(1)
+    expect(summary.gates.find((gate) => gate.name === "prior-reporting-chain-overlap")?.status).toBe("fail")
+  })
+
+  test("does not count an approval without an approver identity", () => {
+    const decisionBundle = bundle("allow_warn")
+    const summary = QualityPromotionApprovalPolicy.evaluate({
+      bundle: decisionBundle,
+      approvals: [approval({ bundle: decisionBundle, approver: "   ", role: "staff-engineer" })],
+    })
+
+    expect(summary.qualifiedApprovals).toBe(0)
+    expect(summary.gates.find((gate) => gate.name === "minimum-role")?.status).not.toBe("fail")
+    expect(summary.overallStatus).toBe("fail")
+  })
+
+  test("requires a usable remediation author for independent review provenance", () => {
+    const decisionBundle = bundle("allow_warn", {
+      reentryRollbackID: "rollback-blank-author",
+      remediationAuthor: "   ",
+      priorPromotionID: "promotion-blank-author",
+    })
+    const summary = QualityPromotionApprovalPolicy.evaluate({
+      bundle: decisionBundle,
+      approvals: [
+        approval({
+          bundle: decisionBundle,
+          approver: "reviewer@example.com",
+          role: "staff-engineer",
+          team: "quality-platform",
+          reportingChain: "eng/platform/director-a",
+        }),
+      ],
+    })
+
+    expect(summary.remediationAuthor).toBeNull()
+    expect(summary.gates.find((gate) => gate.name === "reentry-remediation-context")?.status).toBe("fail")
+  })
 })
