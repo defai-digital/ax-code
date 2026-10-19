@@ -89,6 +89,13 @@ describe("tui command autocomplete", () => {
     expect(mergeTargetBranchMatches(["main"], "MAIN")).toEqual(["main"])
   })
 
+  test("ranks the exact-case branch first when case variants both exist", () => {
+    expect(mergeTargetBranchMatches(["Main", "main"], "main")[0]).toBe("main")
+    expect(mergeTargetBranchMatches(["main", "Main"], "Main")[0]).toBe("Main")
+    expect(mergeTargetBranchMatches(["Main", "main", "maint"], "ma")).toEqual(["main", "maint", "Main"])
+    expect(mergeTargetBranchMatches(["main", "Maintenance"], "MAIN")).toEqual(["main", "Maintenance"])
+  })
+
   test("clears the draft when autocomplete executes a client-side slash action", () => {
     expect(
       shouldClearPromptForAutocompleteSelection({

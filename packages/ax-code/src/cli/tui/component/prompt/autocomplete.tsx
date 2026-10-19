@@ -258,6 +258,18 @@ export function Autocomplete(props: {
 
   const [cursorTick, setCursorTick] = createSignal(0)
 
+  // Arrow keys move the caret without closing the popup, so the token being
+  // completed can continue past the caret. Replace through the token end, not
+  // just to the caret, or its tail survives as a stray argument.
+  function logicalCursorAtTokenEnd() {
+    const input = props.input()
+    const value = props.value
+    let end = stringIndexFromDisplayOffset(value, input.cursorOffset)
+    while (end < value.length && !/\s/.test(value[end]!)) end++
+    input.cursorOffset = stringWidth(value.slice(0, end))
+    return input.logicalCursor
+  }
+
   const anchorMetrics = createMemo(() => {
     if (!store.visible) return { x: 0, y: 0, width: 0, globalY: 0, height: 1 }
     props.value
@@ -619,7 +631,7 @@ export function Autocomplete(props: {
           : serverCommand.description,
         onSelect: () => {
           const newText = "/" + serverCommand.name + " "
-          const cursor = props.input().logicalCursor
+          const cursor = logicalCursorAtTokenEnd()
           props.input().deleteRange(0, 0, cursor.row, cursor.col)
           props.input().insertText(newText)
           props.input().cursorOffset = stringWidth(newText)
@@ -718,7 +730,7 @@ export function Autocomplete(props: {
             description: "Local Git branch",
             onSelect: () => {
               const input = props.input()
-              const cursor = input.logicalCursor
+              const cursor = logicalCursorAtTokenEnd()
               input.deleteRange(0, 0, cursor.row, cursor.col)
               const text = `/${MERGE_AND_SYNC_GITHUB} ${branch} `
               input.insertText(text)

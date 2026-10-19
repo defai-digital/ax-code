@@ -200,6 +200,23 @@ describe("autocomplete anchor lifecycle", () => {
     expect(fixture.ref().visible).toBe(false)
   })
 
+  test("replaces the whole branch token when the caret moved back before selecting", async () => {
+    const fixture = mount()
+    fixture.attachAnchor()
+    mocked.branches = vi.fn(async () => ({ data: ["main", "feature/api"] }))
+
+    const text = "/merge-and-sync-github fe"
+    fixture.type(text)
+    expect(fixture.ref().visible).toBe("/")
+    fixture.input.cursorOffset = text.length - 1
+    fixture.ref().onKeyDown({ name: "left", preventDefault: vi.fn() } as unknown as KeyEvent)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    fixture.ref().onKeyDown({ name: "return", preventDefault: vi.fn() } as unknown as KeyEvent)
+
+    expect(fixture.input.deleteRange).toHaveBeenCalledWith(0, 0, 0, text.length)
+    expect(fixture.input.insertText).toHaveBeenCalledWith("/merge-and-sync-github feature/api ")
+  })
+
   test("offers the merge command in slash name completion", () => {
     mocked.commands = [
       {
