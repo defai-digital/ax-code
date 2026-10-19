@@ -53,6 +53,12 @@ export const TuiOptions = z.object({
     .optional()
     .describe("Independent TUI conversation language preference (default auto); project instructions take precedence"),
   scroll_speed: z.number().min(0.001).optional().describe("TUI scroll speed"),
+  screen: z
+    .enum(["auto", "full", "inline"])
+    .optional()
+    .describe(
+      "Terminal screen mode (default auto). 'full' uses the full-screen renderer, 'inline' opts into the inline split-footer renderer. --screen and AX_CODE_TUI_SCREEN take precedence over this file",
+    ),
   scroll_acceleration: z
     .object({
       enabled: z.boolean().describe("Enable scroll acceleration"),

@@ -136,6 +136,8 @@ export type TuiInput = {
   url: string
   args: Args
   config: TuiConfig.Info
+  /** --screen from the launching command (auto | full | inline). */
+  screen?: string
   onSnapshot?: () => Promise<string[]>
   directory?: string
   fetch?: typeof fetch
@@ -157,7 +159,12 @@ export function tui(input: TuiInput) {
         // Resolve mouse capture from tui.json `mouse` here: this is the one
         // profile the renderer actually mounts with, so it must carry the
         // config value (AX_CODE_DISABLE_MOUSE still wins inside the resolver).
-        const renderProfile = getTuiRenderProfile(input.config.mouse)
+        // The screen selection follows the same precedence: --screen beats
+        // AX_CODE_TUI_SCREEN beats tui.json `screen` (ADR-261).
+        const renderProfile = getTuiRenderProfile(input.config.mouse, {
+          screen: input.screen,
+          screenConfig: input.config.screen,
+        })
         // Claim the terminal tab title before the renderer mounts (kimi-code
         // style: one fire-and-forget OSC 0 write at startup). Entry already
         // wrote this for the default TUI path; repeating it here covers attach

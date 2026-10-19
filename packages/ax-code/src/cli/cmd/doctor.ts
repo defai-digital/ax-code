@@ -36,6 +36,7 @@ import type { AxEngineStatus } from "@/provider/ax-engine/status"
 import { whichAll } from "../../util/which"
 import { Process } from "../../util/process"
 import { awaitSystemCa, networkEnvState, proxyEnvSummary } from "../../util/network-env"
+import { resolveTuiScreen } from "../tui/inline/screen"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
 
@@ -66,6 +67,27 @@ export function getRuntimeCheck(): DoctorCheck {
       ? `Bun ${process.versions.bun} (${runtimeMode()})`
       : `Node ${process.version} (${runtimeMode()})`,
   }
+}
+
+/**
+ * Report the TUI screen mode the next launch will actually use and which layer
+ * selected it (ADR-261). Doctor runs before any project TUI config is loaded
+ * through `Instance`, so it resolves the flag and env layers here and reports
+ * the config layer separately from the raw tui.json value when available.
+ */
+export function getTuiScreenCheck(input: { flag?: string; env?: string; config?: string } = {}): DoctorCheck {
+  const resolution = resolveTuiScreen({
+    flag: input.flag ?? undefined,
+    env: input.env ?? Flag.AX_CODE_TUI_SCREEN,
+    config: input.config,
+  })
+  const mode = resolution.screen === "inline" ? "split-footer" : undefined
+  const detail = [
+    `screen ${resolution.screen} (from ${resolution.source})`,
+    mode ? `renderer ${mode}` : "renderer full-screen",
+    "--screen > AX_CODE_TUI_SCREEN > tui.json `screen`",
+  ].join("; ")
+  return { name: "TUI screen", status: "ok", detail }
 }
 
 export function isHomebrewManagedPath(
@@ -462,6 +484,7 @@ export const DOCTOR_CHECK_IDS = [
   "recent-errors",
   "code-index",
   "tui-engine",
+  "tui-screen",
   "legacy-render-flags",
   "feature-flags",
   "db-integrity",
@@ -797,6 +820,7 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
     status: "ok",
     detail: "AX Code TUI (native Zig renderer)",
   })
+  push("tui-screen", getTuiScreenCheck())
   if (process.env.AX_CODE_NATIVE_RENDER === "1" || process.env.AX_CODE_NATIVE_RENDER_SCOPE) {
     push("legacy-render-flags", {
       name: "Legacy native renderer flags",

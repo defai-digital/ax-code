@@ -397,6 +397,7 @@ describe("cli doctor machine contract", () => {
       "recent-errors",
       "code-index",
       "tui-engine",
+      "tui-screen",
       "legacy-render-flags",
       "feature-flags",
       "db-integrity",

@@ -15,6 +15,7 @@ export type TuiRendererContractRequirement = {
     | "packaging"
     | "visual"
     | "routing"
+    | "screen"
   requirement: string
   gate: TuiRendererContractGate
 }
@@ -107,6 +108,27 @@ export const TUI_RENDERER_CONTRACT: TuiRendererContractRequirement[] = [
       "Workflow dashboard polling is not part of the default startup path. Dashboard ownership belongs to AX Code Desktop (ADR-035).",
     gate: "automated",
   },
+  {
+    id: "screen.inline-append-only",
+    area: "screen",
+    requirement:
+      "In the opt-in split-footer inline mode (--screen inline / AX_CODE_TUI_SCREEN / tui.json `screen`, ADR-261), finished transcript turns are committed to the normal buffer and never repainted, so terminal scrollback stays append-only while the footer repaints in place.",
+    gate: "automated",
+  },
+  {
+    id: "screen.inline-teardown",
+    area: "screen",
+    requirement:
+      "split-footer teardown and crash recovery restore the terminal without emitting ESC[2J or ESC[?1049l, while still restoring cursor visibility, mouse/keyboard protocols, and raw mode; alternate-screen and main-screen teardown stay unchanged.",
+    gate: "automated",
+  },
+  {
+    id: "focus.inline-footer-prompts",
+    area: "focus",
+    requirement:
+      "Permission and question prompts in the split-footer surface keep the same submit semantics (latch, timeout, local removal) and own focus until answered, rendering as a bounded footer instead of a full-height overlay (ADR-261).",
+    gate: "automated",
+  },
 ]
 
 export const TUI_RENDERER_CONTRACT_REQUIRED_AREAS = [
@@ -122,4 +144,5 @@ export const TUI_RENDERER_CONTRACT_REQUIRED_AREAS = [
   "packaging",
   "visual",
   "routing",
+  "screen",
 ] as const

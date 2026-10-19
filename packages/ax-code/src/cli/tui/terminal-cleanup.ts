@@ -13,6 +13,10 @@ type RawModeStream = {
 }
 
 export const TUI_MOUSE_TRACKING_DISABLE_SEQUENCE = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l"
+// Screen modes this module resets for. Declared locally (not imported from
+// renderer.ts) to avoid a terminal-cleanup -> renderer import cycle.
+// "split-footer" is the opt-in inline renderer from ADR-261.
+export type TuiTerminalScreenMode = "alternate-screen" | "main-screen" | "split-footer"
 // xterm modifyOtherKeys mode 2. Terminals without Kitty keyboard protocol
 // support (xterm.js/VS Code, iTerm2 legacy mode, mintty) cannot report
 // Shift+Enter distinctly until the app opts in with this sequence; the
@@ -37,13 +41,22 @@ export const TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE = "\x1b]9;4;0\x07"
 // tab title on OSC 0 and then shows the job name.
 export const TUI_TERMINAL_TITLE_CLEAR_SEQUENCE = axCodeTerminalTitleClearSequence()
 
-export function createTuiTerminalCrashResetSequence(input: { kittyKeyboard?: boolean } = {}) {
+export function createTuiTerminalCrashResetSequence(
+  input: {
+    kittyKeyboard?: boolean
+    screenMode?: TuiTerminalScreenMode
+  } = {},
+) {
   const kittyKeyboard = input.kittyKeyboard ?? true
+  // split-footer commits its transcript to the normal buffer and owns no
+  // alternate screen, so the reset must not leave it (ESC[?1049l) — that
+  // would switch a terminal that never entered the alt screen onto it.
+  const leaveAlternateScreen = input.screenMode === "split-footer" ? "" : "\x1b[?1049l"
   // The native renderer always enables xterm modifyOtherKeys mode 1 during
   // setup, even when AX Code's mode-2 enhancement is disabled, so crash
   // recovery must always turn it off. Native clean teardown owns the normal
   // mode-0 reset.
-  return `${TUI_MOUSE_TRACKING_DISABLE_SEQUENCE}${TUI_MODIFY_OTHER_KEYS_DISABLE_SEQUENCE}${kittyKeyboard ? TUI_KITTY_KEYBOARD_POP_SEQUENCE : ""}\x1b[?2004l\x1b[?25h\x1b[?1049l${TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE}${TUI_TERMINAL_TITLE_CLEAR_SEQUENCE}`
+  return `${TUI_MOUSE_TRACKING_DISABLE_SEQUENCE}${TUI_MODIFY_OTHER_KEYS_DISABLE_SEQUENCE}${kittyKeyboard ? TUI_KITTY_KEYBOARD_POP_SEQUENCE : ""}\x1b[?2004l\x1b[?25h${leaveAlternateScreen}${TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE}${TUI_TERMINAL_TITLE_CLEAR_SEQUENCE}`
 }
 
 export const TUI_TERMINAL_CRASH_RESET_SEQUENCE = createTuiTerminalCrashResetSequence()
@@ -91,22 +104,27 @@ export function resetTuiTerminalState(
     // Injectable for tests. Defaults to the same flag the renderer profile
     // uses (renderer.ts reads it via getTuiRenderProfile); duplicated here to
     // avoid a terminal-cleanup -> renderer import cycle.
-    screenMode?: "alternate-screen" | "main-screen"
+    screenMode?: TuiTerminalScreenMode
     kittyKeyboard?: boolean
   } = {},
 ) {
   const stdout = input.stdout ?? process.stdout
   let written = false
   if (stdout.writable !== false && !stdout.destroyed) {
-    const screenMode = input.screenMode ?? (Flag.AX_CODE_TUI_ADVANCED_TERMINAL ? "alternate-screen" : "main-screen")
+    const screenMode: TuiTerminalScreenMode =
+      input.screenMode ?? (Flag.AX_CODE_TUI_ADVANCED_TERMINAL ? "alternate-screen" : "main-screen")
     try {
       // Alternate-screen restores the prior shell view via \x1b[?1049l above.
       // Main-screen paints on the normal buffer, so the crash path must also
       // erase the last frame — otherwise a dead full-screen TUI lingers above
       // the shell prompt (the clean-exit path does the same in renderer.ts).
+      // split-footer commits its transcript to the normal buffer: it owns no
+      // alternate screen to leave, and erasing the display would wipe the
+      // user's shell scrollback above the dead footer. Emit neither.
       const clear = screenMode === "main-screen" ? TUI_MAIN_SCREEN_CLEAR_SEQUENCE : ""
       const reset = createTuiTerminalCrashResetSequence({
         kittyKeyboard: input.kittyKeyboard ?? Flag.AX_CODE_TUI_KITTY_KEYBOARD,
+        screenMode,
       })
       // Protocol disables are written BEFORE stdin raw mode is restored:
       // once the terminal stops reporting Kitty/modifyOtherKeys sequences,

@@ -25,10 +25,20 @@ export const AttachCommand = cmd({
             description: "directory to run in",
           }),
       ),
-    ).option("password", {
-      type: "string",
-      describe: "basic auth password (defaults to AX_CODE_SERVER_PASSWORD)",
-    }),
+    )
+      .option("password", {
+        type: "string",
+        describe: "basic auth password (defaults to AX_CODE_SERVER_PASSWORD)",
+      })
+      .option("screen", {
+        type: "string",
+        choices: ["auto", "full", "inline"] as const,
+        // Hidden until the inline frontend ships (ADR-261 slice 2); the value is
+        // already resolved and reported by doctor / debug explain.
+        hidden: true,
+        describe:
+          "terminal screen mode (default auto). 'inline' opts into the inline split-footer renderer; overrides AX_CODE_TUI_SCREEN and tui.json `screen`",
+      }),
   handler: async (args) => {
     const [{ assertTuiMcpPlatform }, { Instance }, { TuiConfig }] = await Promise.all([
       import("@/tuimcp/endpoint"),
@@ -69,6 +79,7 @@ export const AttachCommand = cmd({
       await tui({
         url: args.url,
         config,
+        screen: args.screen,
         args: {
           tuiMcp: args.tuiMcp,
           continue: args.continue,

@@ -662,6 +662,15 @@ export const TuiThreadCommand = cmd({
       .option("agent", {
         type: "string",
         describe: "agent to use",
+      })
+      .option("screen", {
+        type: "string",
+        choices: ["auto", "full", "inline"] as const,
+        // Hidden until the inline frontend ships (ADR-261 slice 2); the value is
+        // already resolved and reported by doctor / debug explain.
+        hidden: true,
+        describe:
+          "terminal screen mode (default auto). 'inline' opts into the inline split-footer renderer; overrides AX_CODE_TUI_SCREEN and tui.json `screen`",
       }),
   handler: async (args) => {
     const [{ assertTuiMcpPlatform }, { Instance }, { TuiConfig }, { resolveNetworkOptions }] = await Promise.all([
@@ -1002,6 +1011,9 @@ export const TuiThreadCommand = cmd({
             return [tuiSnapshot, server]
           },
           config,
+          // Highest-priority screen selection; resolved against the env flag
+          // and tui.json `screen` inside the render profile (ADR-261).
+          screen: args.screen,
           directory: cwd,
           fetch: transport.fetch,
           events: transport.events,
