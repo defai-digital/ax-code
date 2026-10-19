@@ -2793,6 +2793,95 @@ describe("QualityShadow", () => {
     }
   })
 
+  test("rejects forcing a stale decision bundle through its old approval requirements", async () => {
+    await clearModelRegistry()
+    try {
+      const previous = createModel("stale-bypass-previous-v1")
+      await QualityModelRegistry.register(previous)
+      await QualityModelRegistry.activate(previous.source)
+
+      const releasePolicyResolution = await QualityPromotionReleasePolicyStore.resolve({
+        policy: QualityPromotionReleasePolicy.defaults(),
+      })
+      const bundle = createBenchmarkBundle("stale-bypass-candidate-v1", "pass")
+      const built = await QualityModelRegistry.buildPromotionDecisionBundle(bundle, {
+        releasePolicyResolution,
+      })
+      expect(built.decisionBundle.eligibility.requiredOverride).toBe("none")
+      const promoted = await QualityModelRegistry.promoteDecisionBundle(built.decisionBundle, {
+        releasePolicyResolution,
+      })
+      const watch = createWatchSummary({
+        source: promoted.record.source,
+        promotedAt: promoted.record.promotedAt,
+        status: "fail",
+      })
+      await QualityModelRegistry.rollbackPromotion(promoted.record, watch)
+
+      // These approvals satisfy the bundle's original "none" requirement.
+      const approval = QualityPromotionApproval.create({
+        bundle: built.decisionBundle,
+        approver: "staff@example.com",
+        role: "staff-engineer",
+      })
+      await QualityPromotionApproval.append(approval)
+      const adoptionReviews = await createAndPersistAdoptionReviews(built.decisionBundle)
+
+      await expect(
+        QualityModelRegistry.promoteApprovedDecisionBundle(built.decisionBundle, approval, {
+          force: true,
+          adoptionReviews,
+          approvalPolicy: releasePolicyResolution.policy.approval,
+          approvalPolicySource: releasePolicyResolution.source,
+          projectID: releasePolicyResolution.projectID,
+          releasePolicyResolution,
+        }),
+      ).rejects.toThrow("rebuild the decision bundle and approvals")
+    } finally {
+      await clearModelRegistry()
+    }
+  })
+
+  test("does not roll back an older promotion of an active source", async () => {
+    await clearModelRegistry()
+    try {
+      const previous = createModel("stale-rollback-previous-v1")
+      await QualityModelRegistry.register(previous)
+      await QualityModelRegistry.activate(previous.source)
+
+      const releasePolicyResolution = await QualityPromotionReleasePolicyStore.resolve({
+        policy: QualityPromotionReleasePolicy.defaults(),
+      })
+      const bundle = createBenchmarkBundle("stale-rollback-candidate-v1", "pass")
+      const first = await QualityModelRegistry.promote(bundle, {
+        releasePolicy: {
+          policy: releasePolicyResolution.policy,
+          provenance: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution),
+        },
+      })
+      const second = await QualityModelRegistry.promote(bundle, {
+        releasePolicy: {
+          policy: releasePolicyResolution.policy,
+          provenance: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution),
+        },
+      })
+      expect(second.record.source).toBe(first.record.source)
+      expect(second.record.promotionID).not.toBe(first.record.promotionID)
+
+      const staleWatch = createWatchSummary({
+        source: first.record.source,
+        promotedAt: first.record.promotedAt,
+        status: "fail",
+      })
+
+      await expect(QualityModelRegistry.rollbackPromotion(first.record, staleWatch)).rejects.toThrow(
+        "is not the latest promotion",
+      )
+    } finally {
+      await clearModelRegistry()
+    }
+  })
+
   test("requires at least one fresh approver beyond the rolled-back promotion approver set", async () => {
     await clearModelRegistry()
     try {

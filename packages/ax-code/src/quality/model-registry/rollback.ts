@@ -35,6 +35,15 @@ export async function rollbackPromotion(
       `Cannot rollback model ${promotion.source}: current active model is ${currentActive?.source ?? "none"}`,
     )
   }
+  // Two promotions of the same source share an active source name, so the
+  // active check alone accepts rolling back an older promotion with its stale
+  // watch. Only the latest promotion may be undone.
+  const latest = await QualityModelRegistry.latestPromotion(promotion.source)
+  if (latest && latest.promotionID !== promotion.promotionID) {
+    throw new Error(
+      `Cannot rollback model ${promotion.source}: promotion ${promotion.promotionID} is not the latest promotion (${latest.promotionID})`,
+    )
+  }
 
   const resultingActive = promotion.previousActiveSource
     ? await QualityModelRegistry.activate(promotion.previousActiveSource)

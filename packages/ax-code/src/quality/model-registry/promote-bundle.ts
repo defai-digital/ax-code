@@ -64,6 +64,23 @@ export async function promoteApprovedDecisionBundle(
     )
   }
 
+  // Resolve the current eligibility before judging approvals. Approval policy
+  // depends on the required override and reentry state, and an old bundle can
+  // become eligible under a different state before it is promoted.
+  const evaluation = await evaluateDecisionBundleForPromotion(decisionBundle, options)
+  if (
+    decisionBundle.eligibility.requiredOverride !== evaluation.eligibility.requiredOverride ||
+    (decisionBundle.eligibility.reentryContext?.rollbackID ?? null) !==
+      (evaluation.eligibility.reentryContext?.rollbackID ?? null)
+  ) {
+    throw new Error(
+      `Cannot promote model ${decisionBundle.source}: current eligibility requires ${evaluation.eligibility.requiredOverride}` +
+        `${evaluation.eligibility.reentryContext ? ` after rollback ${evaluation.eligibility.reentryContext.rollbackID}` : ""}` +
+        ` but the decision bundle recorded ${decisionBundle.eligibility.requiredOverride}` +
+        `${decisionBundle.eligibility.reentryContext ? ` after rollback ${decisionBundle.eligibility.reentryContext.rollbackID}` : ""}; rebuild the decision bundle and approvals`,
+    )
+  }
+
   let approvalPacket: QualityPromotionApprovalPacket.PacketArtifact | undefined
   let approvals: QualityPromotionApproval.ApprovalArtifact[] = []
   let resolvedAdoptionReviews: QualityPromotionAdoptionReview.ReviewArtifact[] = []
@@ -234,7 +251,6 @@ export async function promoteApprovedDecisionBundle(
   }
   assertPromotionSummaryPass(decisionBundle.source, "approval policy not satisfied", approvalEvaluation)
 
-  const evaluation = await evaluateDecisionBundleForPromotion(decisionBundle, options)
   return finalizePromotion({
     bundle: decisionBundle.benchmark,
     currentActive: evaluation.currentActive,
