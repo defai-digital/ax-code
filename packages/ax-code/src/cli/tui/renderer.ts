@@ -16,6 +16,7 @@ import {
   TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE,
   TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE,
 } from "./terminal-cleanup"
+import { resolveTuiScreen, type TuiScreen, type TuiScreenResolution, type TuiScreenSource } from "./inline/screen"
 
 const log = Log.create({ service: "tui.renderer" })
 
@@ -32,8 +33,24 @@ export type TuiRenderProfile = {
   useMouse: boolean
   useKittyKeyboard: boolean
   useModifyOtherKeys: boolean
-  screenMode: "alternate-screen" | "main-screen"
+  screenMode: "alternate-screen" | "main-screen" | "split-footer"
+  // Resolved screen selection and the layer that decided it (ADR-261).
+  // "split-footer" is reserved for the inline frontend (slice 2); until then
+  // every selection mounts the full-screen renderer.
+  screen: TuiScreen
+  screenSource: TuiScreenSource
   allowTerminalTitle: boolean
+}
+
+export function resolveTuiScreenFor(input: {
+  /** --screen, when the launch command passed one. */
+  flag?: string
+  /** AX_CODE_TUI_SCREEN (access-time flag). */
+  env?: string
+  /** tui.json `screen`. */
+  config?: string
+}): TuiScreenResolution {
+  return resolveTuiScreen(input)
 }
 
 export function resolveTuiRenderProfile(input: {
@@ -45,8 +62,20 @@ export function resolveTuiRenderProfile(input: {
   mouse?: boolean
   /** AX_CODE_DISABLE_MOUSE — a hard, one-way disable that beats `mouse`. */
   disableMouse?: boolean
+  /** Resolved screen selection (default auto). */
+  screen?: TuiScreenResolution
+  /** Raw --screen value; wins over `screen` and env, like AX_CODE flags do. */
+  screenFlag?: string
+  /** Raw AX_CODE_TUI_SCREEN value. */
+  screenEnv?: string
+  /** Raw tui.json `screen` value. */
+  screenConfig?: string
 }): TuiRenderProfile {
   const { advancedTerminal, terminalTitleDisabled } = input
+  const screen =
+    input.screen ?? resolveTuiScreen({ flag: input.screenFlag, env: input.screenEnv, config: input.screenConfig })
+  // The full-screen mapping is unchanged from before ADR-261.
+  const fullScreenMode = advancedTerminal ? "alternate-screen" : "main-screen"
   return {
     advancedTerminal,
     profile: advancedTerminal ? "advanced" : "compatible",
@@ -69,7 +98,12 @@ export function resolveTuiRenderProfile(input: {
     // Keep whether AX Code enabled xterm's complementary keyboard protocol
     // so teardown never resets inherited state when the user opted out.
     useModifyOtherKeys: input.modifyOtherKeys ?? true,
-    screenMode: advancedTerminal ? "alternate-screen" : "main-screen",
+    // Until the inline frontend lands (ADR-261 slice 2), an inline request is
+    // recorded in `screen` but still mounts the full-screen renderer, so every
+    // teardown path keeps resetting the screen mode it actually entered.
+    screenMode: fullScreenMode,
+    screen: screen.screen,
+    screenSource: screen.source,
     // Terminal title/progress are fire-and-forget OSC escapes written
     // directly to stdout (probe-free, same risk class as the kitty keyboard
     // flags push), so they are decoupled from the advanced profile and
@@ -80,7 +114,15 @@ export function resolveTuiRenderProfile(input: {
   }
 }
 
-export function getTuiRenderProfile(mouse?: boolean): TuiRenderProfile {
+export function getTuiRenderProfile(
+  mouse?: boolean,
+  input: {
+    /** --screen from the launch command (thread / attach / runtime attach). */
+    screen?: string
+    /** tui.json `screen`. */
+    screenConfig?: string
+  } = {},
+): TuiRenderProfile {
   return resolveTuiRenderProfile({
     advancedTerminal: Flag.AX_CODE_TUI_ADVANCED_TERMINAL,
     terminalTitleDisabled: Flag.AX_CODE_DISABLE_TERMINAL_TITLE,
@@ -90,6 +132,11 @@ export function getTuiRenderProfile(mouse?: boolean): TuiRenderProfile {
     mouse,
     // Read per call: AX_CODE_DISABLE_MOUSE is an access-time flag.
     disableMouse: Flag.AX_CODE_DISABLE_MOUSE,
+    // Access-time flag: a wrapper may set AX_CODE_TUI_SCREEN after module
+    // load. --screen still wins over env, and env still wins over tui.json.
+    screenFlag: input.screen,
+    screenEnv: Flag.AX_CODE_TUI_SCREEN,
+    screenConfig: input.screenConfig,
   })
 }
 
@@ -267,6 +314,8 @@ export async function destroyTuiRenderer(
   // Alternate-screen mode restores the prior shell view automatically on exit.
   // Main-screen mode paints on the normal buffer, so explicitly clear the stale
   // TUI frame to avoid a dead full-screen UI lingering above the shell prompt.
+  // split-footer owns no alternate screen and must keep the committed
+  // transcript + shell scrollback, so it never clears the display (ADR-261).
   if (profile.screenMode === "main-screen") clearTuiMainScreen()
   await flushTuiStdout()
   if (destroyError) throw destroyError

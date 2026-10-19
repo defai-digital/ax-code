@@ -41,6 +41,8 @@ interface DiagnosticReport {
   sessionCount: number
   errorCount: number
   warningCount: number
+  // Resolved TUI screen selection (ADR-261); "unknown" when unrecorded.
+  rendererScreen: { screen: string; source: string; screenMode: string }
   issues: DiagnosticIssue[]
   health: "healthy" | "degraded" | "unhealthy"
   summary: string
@@ -523,6 +525,39 @@ function summarizeProcessFailures(records: ProcessDebugRecord[]) {
   return summarizeCounts([...counts.entries()].map(([label, count]) => ({ label, count })))
 }
 
+/**
+ * Human/JSON summary of the recorded `tui.startup.rendererProfile` record.
+ * Reports the resolved screen mode and which layer decided it (ADR-261) so a
+ * bug report shows whether the user actually ran in inline or full screen.
+ * Older logs have no `screen`/`screenSource`; they report "unknown" rather
+ * than inventing a value.
+ */
+export function describeRendererScreen(input: { screen?: string; screenSource?: string; screenMode?: string }): {
+  screen: string
+  source: string
+  screenMode: string
+} {
+  return {
+    screen: input.screen?.trim() || "unknown",
+    source: input.screenSource?.trim() || "unknown",
+    screenMode: input.screenMode?.trim() || "unknown",
+  }
+}
+
+/** Screen summary from the latest recorded renderer profile in a log. */
+export function latestRendererScreen(records: ProcessDebugRecord[]): ReturnType<typeof describeRendererScreen> {
+  let latest: ProcessDebugRecord | undefined
+  for (const record of records) {
+    if (record.eventType === "tui.startup.rendererProfile") latest = record
+  }
+  if (!latest) return describeRendererScreen({})
+  return describeRendererScreen({
+    screen: asString(latest.data.screen),
+    screenSource: asString(latest.data.screenSource),
+    screenMode: asString(latest.data.screenMode),
+  })
+}
+
 export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.now()): DiagnosticIssue[] {
   if (records.length === 0) return []
 
@@ -559,6 +594,10 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
         profile?: string
         testing?: boolean
         screenMode?: string
+        // Resolved --screen/AX_CODE_TUI_SCREEN/tui.json selection and the
+        // layer that decided it (ADR-261). Absent in logs from older builds.
+        screen?: string
+        screenSource?: string
         exitOnCtrlC?: boolean
         useThread?: boolean
       }
@@ -589,6 +628,8 @@ export function classifyProcessIssues(records: ProcessDebugRecord[], now = Date.
           profile: asString(record.data.profile),
           testing: asBoolean(record.data.testing),
           screenMode: asString(record.data.screenMode),
+          screen: asString(record.data.screen),
+          screenSource: asString(record.data.screenSource),
           exitOnCtrlC: asBoolean(record.data.exitOnCtrlC),
           useThread: asBoolean(record.data.useThread),
         }
@@ -1147,6 +1188,9 @@ export const ExplainCommand = cmd({
       sessionCount: sessionIDs.size,
       errorCount: standard.totalErrors,
       warningCount: standard.totalWarnings,
+      // Resolved screen mode and the layer that selected it (ADR-261); "unknown"
+      // when the logs predate the field or never recorded a profile.
+      rendererScreen: latestRendererScreen(processRecords),
       issues,
       health,
       summary:
@@ -1172,7 +1216,10 @@ export const ExplainCommand = cmd({
     console.log(`\n  ax-code debug explain\n`)
     console.log(`  ${healthIcon}  System health: ${healthLabel}`)
     console.log(
-      `  \x1b[90m${report.sessionCount} sessions | ${report.errorCount} errors | ${report.warningCount} warnings\x1b[0m\n`,
+      `  \x1b[90m${report.sessionCount} sessions | ${report.errorCount} errors | ${report.warningCount} warnings\x1b[0m`,
+    )
+    console.log(
+      `  \x1b[90mscreen: ${report.rendererScreen.screen} (from ${report.rendererScreen.source}) | mode: ${report.rendererScreen.screenMode}\x1b[0m\n`,
     )
 
     if (issues.length === 0) {

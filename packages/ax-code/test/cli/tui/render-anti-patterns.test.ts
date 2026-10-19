@@ -206,7 +206,10 @@ describe("AX Code TUI stability guardrails", () => {
     expect(renderer).toContain("exitOnCtrlC: false")
     expect(renderer).not.toContain("testing:")
     expect(renderer).toContain("useThread: advancedTerminal")
-    expect(renderer).toContain('screenMode: advancedTerminal ? "alternate-screen" : "main-screen"')
+    // Every screen selection mounts the full-screen mapping until the inline
+    // frontend lands (ADR-261 slice 2).
+    expect(renderer).toContain('const fullScreenMode = advancedTerminal ? "alternate-screen" : "main-screen"')
+    expect(renderer).toContain("screenMode: fullScreenMode,")
     // Terminal title is decoupled from the advanced profile (probe-free OSC
     // escape); only AX_CODE_DISABLE_TERMINAL_TITLE disables it.
     expect(renderer).toContain("allowTerminalTitle: !terminalTitleDisabled")

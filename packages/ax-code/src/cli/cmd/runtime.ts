@@ -18,6 +18,15 @@ export const RuntimeCommand = cmd({
       .option("dir", { type: "string", describe: "project directory" })
       .option("session", { type: "string", describe: "session to open when attaching" })
       .option("continue", { type: "boolean", describe: "open the last session when attaching" })
+      .option("screen", {
+        type: "string",
+        choices: ["auto", "full", "inline"] as const,
+        // Hidden until the inline frontend ships (ADR-261 slice 2); the value is
+        // already resolved and reported by doctor / debug explain.
+        hidden: true,
+        describe:
+          "terminal screen mode when attaching (default auto). 'inline' opts into the inline split-footer renderer; overrides AX_CODE_TUI_SCREEN and tui.json `screen`",
+      })
       .option("json", { type: "boolean", describe: "output machine-readable JSON" })
       .option("port", {
         type: "number",
@@ -105,6 +114,7 @@ export const RuntimeCommand = cmd({
         headers: RuntimeRegistry.headers(record),
         directory: record.directory,
         config,
+        screen: args.screen,
         args: {
           sessionID: args.session,
           continue: args.continue,

@@ -34,6 +34,9 @@ const PURE_TUI_FILES = [
   "component/prompt/view-model.ts",
   "navigation/launch-policy.ts",
   "navigation/desktop-handoff.ts",
+  // Screen selection is pure: flag > env > tui.json > default, validated
+  // without touching the renderer (ADR-261).
+  "inline/screen.ts",
 ].map((file) => path.join(TUI_SRC, file))
 
 async function files(dir: string): Promise<string[]> {

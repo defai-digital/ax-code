@@ -56,6 +56,8 @@ export namespace Flag {
   export const AX_CODE_GIT_BASH_PATH = process.env["AX_CODE_GIT_BASH_PATH"]
   export const AX_CODE_CONFIG = process.env["AX_CODE_CONFIG"]
   export declare const AX_CODE_TUI_CONFIG: string | undefined
+  // AX_CODE_TUI_SCREEN: auto | full | inline (access-time string flag).
+  export declare const AX_CODE_TUI_SCREEN: string | undefined
   export declare const AX_CODE_CONFIG_DIR: string | undefined
   export declare const AX_CODE_CONFIG_CONTENT: string | undefined
   export const AX_CODE_DISABLE_AUTOUPDATE = truthy("AX_CODE_DISABLE_AUTOUPDATE")
@@ -403,6 +405,12 @@ defineBooleanFlag("AX_CODE_ALLOW_INSECURE_NETWORK_AUTH")
 // This must be evaluated at access time, not module load time,
 // because tests and external tooling may set this env var at runtime
 defineStringFlag("AX_CODE_TUI_CONFIG")
+
+// Terminal screen mode override: auto | full | inline. Resolved by
+// resolveTuiScreen (cli/tui/inline/screen.ts) with precedence
+// --screen > AX_CODE_TUI_SCREEN > tui.json `screen` > default "auto".
+// Read at access time so wrappers and tests can set it after module load.
+defineStringFlag("AX_CODE_TUI_SCREEN")
 
 // This must be evaluated at access time, not module load time,
 // because external tooling may set this env var at runtime
