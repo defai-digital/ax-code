@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.27.7] - 2026-10-19
+
+### Changed
+
+- Publish SDK 2.6.38 with the client worktree creation inputs.
+
 ### Added
 
 - Load earlier transcript history in the TUI from the truncated-history banner or the `Load earlier messages` command, up to 300 messages per session, keeping the scroll position.
