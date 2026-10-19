@@ -151,4 +151,66 @@ describe("QualityModelRegistry canonical promotion summary", () => {
     expect(summary.nextAction).toContain("signed archive")
     expect(summary.gaps).toContain("Signed archive is missing.")
   })
+
+  test("points at the missing attestation record before the post-signing dossier", () => {
+    const record = basePromotionRecord({
+      reviewDossier: {
+        dossierID: "pre-release-review-dossier",
+        createdAt: "2026-04-21T00:01:00.000Z",
+        submissionID: "submission-1",
+        submissionCreatedAt: "2026-04-21T00:00:30.000Z",
+        decisionBundleCreatedAt: "2026-04-21T00:00:10.000Z",
+        approvalPacketID: "approval-packet-1",
+        overallStatus: "pass",
+        recommendation: "approve_promotion",
+      },
+      releasePacket: {
+        packetID: "release-packet-1",
+        createdAt: "2026-04-21T00:02:00.000Z",
+        recordID: "release-record-1",
+        decisionID: "board-decision-1",
+        authorizedPromotion: true,
+        promotionMode: "pass",
+        overallStatus: "pass",
+      },
+      signedArchive: {
+        signedArchiveID: "signed-archive-1",
+        createdAt: "2026-04-21T00:04:00.000Z",
+        archiveID: "packaged-archive-1",
+        exportID: "portable-export-1",
+        promotionID: "promotion-1",
+        keyID: "archive-key-v1",
+        attestedBy: "release-integrity-bot",
+        algorithm: "hmac-sha256",
+        overallStatus: "pass",
+      },
+    })
+
+    const summary = QualityModelRegistry.summarizeCanonicalPromotion(record)
+
+    expect(summary.gaps).toContain("Signed archive attestation record is missing.")
+    expect(summary.nextAction).toContain("attestation record")
+    expect(summary.nextAction).not.toContain("review dossier")
+  })
+
+  test("rejects a record whose nested artifact belongs to another promotion", () => {
+    expect(() =>
+      basePromotionRecord({
+        signedArchiveReviewDossier: {
+          dossierID: "signed-review-dossier-1",
+          createdAt: "2026-04-21T00:05:00.000Z",
+          promotionID: "promotion-2",
+          governancePacketID: "governance-packet-1",
+          packageID: "handoff-package-1",
+          releasePacketID: "release-packet-1",
+          signedArchiveID: "signed-archive-1",
+          authorizedPromotion: true,
+          promotionMode: "pass",
+          policySource: "project",
+          policyProjectID: "project-1",
+          overallStatus: "pass",
+        },
+      }),
+    ).toThrow(/signedArchiveReviewDossier promotionID/)
+  })
 })

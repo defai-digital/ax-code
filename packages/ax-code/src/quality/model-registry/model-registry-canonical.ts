@@ -69,11 +69,13 @@ export function summarizeCanonicalPromotion(record: PromotionRecord) {
       ? "Create a release packet to freeze release authorization and operator intent."
       : !record.signedArchive
         ? "Create and verify a signed archive from the release packet."
-        : attestationAccepted === false
-          ? "Resolve signed archive trust or attestation policy mismatches before distribution."
-          : !record.signedArchiveReviewDossier
-            ? "Build the signed archive review dossier so post-signing review has a canonical entry point."
-            : null
+        : !record.signedArchiveAttestationRecord
+          ? "Create the signed archive attestation record from the evaluated trust and attestation policy."
+          : attestationAccepted === false
+            ? "Resolve signed archive trust or attestation policy mismatches before distribution."
+            : !record.signedArchiveReviewDossier
+              ? "Build the signed archive review dossier so post-signing review has a canonical entry point."
+              : null
 
   return CanonicalPromotionSummary.parse({
     promotionID: record.promotionID,
