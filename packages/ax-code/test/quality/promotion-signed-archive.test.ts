@@ -633,6 +633,77 @@ describe("QualityPromotionSignedArchive", () => {
       await clearSignedArchives()
     }
   })
+
+  test("does not fall back to a persisted archive when an explicit file is invalid", async () => {
+    const { packagedArchive } = buildPackagedArchive()
+    await clearSignedArchives()
+    await using tmp = await tmpdir()
+    try {
+      const signing = {
+        attestedBy: "release-integrity-bot",
+        keyID: "archive-key-v1",
+        keySource: "env" as const,
+        keyLocator: "AX_CODE_QUALITY_ARCHIVE_KEY",
+        keyMaterial: "quality-archive-secret-v1",
+      }
+      const signedArchive = QualityPromotionSignedArchive.create({ packagedArchive, signing })
+      await QualityPromotionSignedArchive.append(signedArchive)
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      const promotionRecord = QualityModelRegistry.PromotionRecord.parse({
+        schemaVersion: 1,
+        kind: "ax-code-quality-model-promotion",
+        promotionID: promotion.promotionID,
+        source: promotion.source,
+        promotedAt: promotion.promotedAt,
+        previousActiveSource: promotion.previousActiveSource,
+        decision: promotion.decision,
+        benchmark: {
+          baselineSource: "baseline",
+          overallStatus: "pass",
+          trainSessions: 2,
+          evalSessions: 1,
+          labeledTrainingItems: 4,
+          gates: [{ name: "dataset-consistency", status: "pass", detail: "ok" }],
+        },
+      })
+      await Storage.write(["quality_model_promotion", promotionRecord.promotionID], promotionRecord)
+
+      const tampered = QualityPromotionSignedArchive.ArchiveArtifact.parse({
+        ...signedArchive,
+        attestation: { ...signedArchive.attestation, payloadDigest: "deadbeef" },
+      })
+      const explicitFile = path.join(tmp.path, "tampered-signed-archive.json")
+      await fs.writeFile(explicitFile, JSON.stringify(tampered, null, 2))
+
+      const result = spawnSync(
+        process.execPath,
+        [
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
+          "--mode",
+          "model-signed-archive-status",
+          "--promotion-id",
+          promotionRecord.promotionID,
+          "--signed-archive",
+          explicitFile,
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr.toString()).toContain("No explicit signed archive matches")
+    } finally {
+      await clearSignedArchives()
+    }
+  })
 })
 
 describe("QualityPromotionSignedArchiveAttestationRecord", () => {
@@ -1448,6 +1519,145 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
       expect(result.status).toBe(0)
       expect(result.stdout.toString()).toContain(`promotion id: ${promotionRecord.promotionID}`)
       expect(result.stdout.toString()).toContain(`signed archive id: ${record.signedArchive.signedArchiveID}`)
+    } finally {
+      await clearSignedArchives()
+    }
+  })
+
+  test("rejects a recorded attestation packet that is no longer available", async () => {
+    const { packagedArchive } = buildPackagedArchive()
+    await clearSignedArchives()
+    await using tmp = await tmpdir()
+    try {
+      const signing = {
+        attestedBy: "release-integrity-bot",
+        keyID: "archive-key-v1",
+        keySource: "env" as const,
+        keyLocator: "AX_CODE_QUALITY_ARCHIVE_KEY",
+        keyMaterial: "quality-archive-secret-v1",
+      }
+      const signedArchive = QualityPromotionSignedArchive.create({ packagedArchive, signing })
+      const trustEntry = QualityPromotionSignedArchiveTrust.create({
+        scope: "project",
+        projectID: "signed-archive-project-1",
+        signing,
+      })
+      await QualityPromotionSignedArchiveTrust.append(trustEntry)
+      const trust = await QualityPromotionSignedArchiveTrust.evaluate({
+        archive: signedArchive,
+        keyMaterial: signing.keyMaterial,
+        projectID: "signed-archive-project-1",
+      })
+      const attestation = QualityPromotionSignedArchiveAttestationPolicy.evaluate({
+        trust,
+        policy: QualityPromotionSignedArchiveAttestationPolicy.defaults({ minimumTrustScope: "project" }),
+        policySource: "project",
+        policyProjectID: "signed-archive-project-1",
+      })
+      const record = QualityPromotionSignedArchiveAttestationRecord.create({
+        signedArchive,
+        trust,
+        attestation,
+      })
+      await QualityPromotionSignedArchiveAttestationRecord.append(record)
+      const releasePacket =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+          .releasePacket
+      const promotion =
+        signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      // The promotion embeds a packet id, but the packet itself is never
+      // persisted. Falling back to a reconstructed packet would hide that.
+      const missingPacket = QualityPromotionSignedArchiveAttestationPacket.create({
+        promotion: QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
+          promotionID: promotion.promotionID,
+          source: promotion.source,
+          promotedAt: promotion.promotedAt,
+          decision: promotion.decision,
+          previousActiveSource: promotion.previousActiveSource,
+          releasePacketID: releasePacket.packetID,
+          promotionMode: releasePacket.summary.promotionMode,
+          authorizedPromotion: releasePacket.summary.authorizedPromotion,
+          signedArchiveID: signedArchive.signedArchiveID,
+        }),
+        attestationRecord: record,
+      })
+      const promotionRecord = QualityModelRegistry.PromotionRecord.parse({
+        schemaVersion: 1,
+        kind: "ax-code-quality-model-promotion",
+        promotionID: promotion.promotionID,
+        source: promotion.source,
+        promotedAt: promotion.promotedAt,
+        previousActiveSource: promotion.previousActiveSource,
+        decision: promotion.decision,
+        benchmark: {
+          baselineSource: "baseline",
+          overallStatus: "pass",
+          trainSessions: 2,
+          evalSessions: 1,
+          labeledTrainingItems: 4,
+          gates: [{ name: "dataset-consistency", status: "pass", detail: "ok" }],
+        },
+        releasePacket: {
+          packetID: releasePacket.packetID,
+          createdAt: releasePacket.createdAt,
+          recordID: releasePacket.releaseDecisionRecord.recordID,
+          decisionID: releasePacket.releaseDecisionRecord.boardDecision.decisionID,
+          authorizedPromotion: releasePacket.summary.authorizedPromotion,
+          promotionMode: releasePacket.summary.promotionMode,
+          overallStatus: releasePacket.summary.overallStatus,
+        },
+        signedArchiveAttestationRecord: {
+          recordID: record.recordID,
+          createdAt: record.createdAt,
+          signedArchiveID: signedArchive.signedArchiveID,
+          promotionID: promotion.promotionID,
+          trustStatus: record.summary.trustStatus,
+          attestationStatus: record.summary.attestationStatus,
+          trusted: record.summary.trusted,
+          acceptedByPolicy: record.summary.acceptedByPolicy,
+          policySource: record.summary.policySource,
+          policyProjectID: record.summary.policyProjectID,
+          overallStatus: record.summary.overallStatus,
+        },
+        signedArchiveAttestationPacket: {
+          packetID: missingPacket.packetID,
+          createdAt: missingPacket.createdAt,
+          promotionID: promotion.promotionID,
+          signedArchiveID: signedArchive.signedArchiveID,
+          trustStatus: missingPacket.summary.trustStatus,
+          attestationStatus: missingPacket.summary.attestationStatus,
+          acceptedByPolicy: missingPacket.summary.acceptedByPolicy,
+          policySource: missingPacket.summary.policySource,
+          policyProjectID: missingPacket.summary.policyProjectID,
+          overallStatus: missingPacket.summary.overallStatus,
+        },
+      })
+      await Storage.write(["quality_model_promotion", promotionRecord.promotionID], promotionRecord)
+
+      const result = spawnSync(
+        process.execPath,
+        [
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
+          "--mode",
+          "model-signed-archive-attestation-packet-status",
+          "--promotion-id",
+          promotionRecord.promotionID,
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr.toString()).toContain(
+        `Could not resolve signed archive attestation packet ${missingPacket.packetID}`,
+      )
     } finally {
       await clearSignedArchives()
     }

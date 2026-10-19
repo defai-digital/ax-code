@@ -740,6 +740,27 @@ async function resolvePackagedArchiveForPromotion(
   promotion: QualityModelRegistry.PromotionRecord,
   explicitArtifacts?: QualityPromotionPackagedArchive.ArchiveArtifact[],
 ) {
+  const explicit =
+    explicitArtifacts ??
+    (await Promise.all(argsMany("--packaged-archive").map((file) => loadPackagedArchiveArtifact(file))))
+  if (explicit.length > 0) {
+    // An explicitly supplied file must be the artifact used; silently falling
+    // back to a persisted archive would attest work the caller did not pick.
+    const matching = explicit.filter((archive) => {
+      const embedded = archive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      return (
+        embedded.promotionID === promotion.promotionID &&
+        embedded.source === promotion.source &&
+        QualityPromotionPackagedArchive.verify(archive).length === 0
+      )
+    })
+    if (matching.length === 0) {
+      throw new Error(`No explicit packaged archive matches promotion ${promotion.promotionID}`)
+    }
+    return [...matching]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.archiveID.localeCompare(b.archiveID))
+      .at(-1)!
+  }
   return (
     (
       await QualityPromotionPackagedArchive.resolveForPromotion(
@@ -757,8 +778,7 @@ async function resolvePackagedArchiveForPromotion(
           submissionBundle: promotion.submissionBundle,
           approvalPacket: promotion.approvalPacket,
         }),
-        explicitArtifacts ??
-          (await Promise.all(argsMany("--packaged-archive").map((file) => loadPackagedArchiveArtifact(file)))),
+        [],
       )
     ).at(-1) ??
     QualityPromotionPackagedArchive.create({
@@ -771,6 +791,26 @@ async function resolveSignedArchiveForPromotion(
   promotion: QualityModelRegistry.PromotionRecord,
   explicitArtifacts?: QualityPromotionSignedArchive.ArchiveArtifact[],
 ) {
+  const explicit =
+    explicitArtifacts ??
+    (await Promise.all(argsMany("--signed-archive").map((file) => loadSignedArchiveArtifact(file))))
+  if (explicit.length > 0) {
+    const matching = explicit.filter((archive) => {
+      const embedded =
+        archive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
+      return (
+        embedded.promotionID === promotion.promotionID &&
+        embedded.source === promotion.source &&
+        QualityPromotionSignedArchive.verify(archive).length === 0
+      )
+    })
+    if (matching.length === 0) {
+      throw new Error(`No explicit signed archive matches promotion ${promotion.promotionID}`)
+    }
+    return [...matching]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.signedArchiveID.localeCompare(b.signedArchiveID))
+      .at(-1)
+  }
   return (
     await QualityPromotionSignedArchive.resolveForPromotion(
       QualityPromotionAuditManifest.PromotionSnapshot.parse({
@@ -787,8 +827,7 @@ async function resolveSignedArchiveForPromotion(
         submissionBundle: promotion.submissionBundle,
         approvalPacket: promotion.approvalPacket,
       }),
-      explicitArtifacts ??
-        (await Promise.all(argsMany("--signed-archive").map((file) => loadSignedArchiveArtifact(file)))),
+      [],
     )
   ).at(-1)
 }
@@ -948,11 +987,11 @@ async function resolveSignedArchiveAttestationPacketForPromotion(
   if (packetID) {
     const match = resolved.find((packet) => packet.packetID === packetID)
     if (match) return verifiedSignedArchiveAttestationPacketOrThrow(promotion, match)
-    if (explicit.length > 0) {
-      throw new Error(
-        `Could not resolve signed archive attestation packet ${packetID} for promotion ${promotion.promotionID}`,
-      )
-    }
+    // The promotion recorded this packet; a different or reconstructed packet
+    // would hide the missing canonical provenance.
+    throw new Error(
+      `Could not resolve signed archive attestation packet ${packetID} for promotion ${promotion.promotionID}`,
+    )
   }
   const matchesByPromotion = resolved
     .filter((packet) => packet.promotion.promotionID === promotion.promotionID)
@@ -3612,6 +3651,10 @@ async function modelSignedArchiveAttestationRecordStatusMode() {
     record = await resolveSignedArchiveAttestationRecordForPromotion(promotion, explicitRecords)
   } catch (err) {
     if (explicitRecords.length > 0 || promotion.signedArchiveAttestationRecord) throw err
+    // A persisted record for this promotion must be reported, not replaced by
+    // a freshly reconstructed one when its verification fails.
+    const persisted = await QualityPromotionSignedArchiveAttestationRecord.list(promotion.source)
+    if (persisted.some((candidate) => candidate.promotionID === promotion.promotionID)) throw err
     const explicitArchives = await Promise.all(
       argsMany("--signed-archive").map((file) => loadSignedArchiveArtifact(file)),
     )
