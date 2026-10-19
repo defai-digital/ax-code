@@ -124,6 +124,13 @@ pub fn parse_input(input: &str) -> Vec<InputEvent> {
                 idx += "\x1b[200~".len() + end + "\x1b[201~".len();
                 continue;
             }
+            // No terminator in this input: keep the body a paste. Falling
+            // through would type it as live keys, so a pasted newline would
+            // submit, which bracketed paste exists to prevent.
+            out.push(InputEvent::Paste {
+                text: text.to_string(),
+            });
+            break;
         }
 
         if rest.starts_with("\x1b[<") {
@@ -142,10 +149,18 @@ pub fn parse_input(input: &str) -> Vec<InputEvent> {
             continue;
         }
 
-        // SS3 sequences: F1-F4 as \x1bOP..\x1bOS
+        // SS3 sequences: F1-F4 as \x1bOP..\x1bOS, and cursor keys in
+        // application cursor mode (DECCKM) as \x1bOA..\x1bOD, \x1bOH, \x1bOF.
         if let Some(rest_after_o) = rest.strip_prefix("\x1bO") {
             if let Some(ch) = rest_after_o.chars().next() {
                 let name = match ch {
+                    'A' => Some("up"),
+                    'B' => Some("down"),
+                    'C' => Some("right"),
+                    'D' => Some("left"),
+                    'H' => Some("home"),
+                    'F' => Some("end"),
+                    'M' => Some("enter"),
                     'P' => Some("f1"),
                     'Q' => Some("f2"),
                     'R' => Some("f3"),
@@ -954,11 +969,40 @@ mod tests {
     }
 
     #[test]
+    fn ss3_application_cursor_keys() {
+        assert_eq!(
+            parse_input("\x1bOA\x1bOB\x1bOC\x1bOD\x1bOH\x1bOF\x1bOM"),
+            vec![
+                key("up", false, false, false),
+                key("down", false, false, false),
+                key("right", false, false, false),
+                key("left", false, false, false),
+                key("home", false, false, false),
+                key("end", false, false, false),
+                key("enter", false, false, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn unterminated_bracketed_paste_stays_a_paste() {
+        assert_eq!(
+            parse_input("a\x1b[200~echo pwned\r"),
+            vec![
+                InputEvent::Text { text: "a".into() },
+                InputEvent::Paste {
+                    text: "echo pwned\r".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn ss3_unrecognized_final_byte_consumed_without_phantom_text() {
-        // \x1bO followed by an unrecognized final byte (e.g. 'A') must consume
+        // \x1bO followed by an unrecognized final byte (e.g. 'X') must consume
         // the full 3-byte sequence. Previously, the fallthrough emitted Escape +
-        // Text("O") + Text("A") — injecting phantom characters into the input stream.
-        let events = parse_input("\x1bOA");
+        // Text("O") + Text("X") — injecting phantom characters into the input stream.
+        let events = parse_input("\x1bOX");
         assert!(
             events.is_empty(),
             "unrecognized SS3 final should produce no events, got: {events:?}"
@@ -975,7 +1019,7 @@ mod tests {
         assert_eq!(events[1], InputEvent::Text { text: "e".into() });
 
         // Multiple unrecognized SS3 sequences back-to-back.
-        let events = parse_input("\x1bOA\x1bOB");
+        let events = parse_input("\x1bOX\x1bOY");
         assert!(
             events.is_empty(),
             "two unrecognized SS3 sequences should produce no events, got: {events:?}"
