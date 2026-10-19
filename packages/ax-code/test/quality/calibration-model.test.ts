@@ -56,6 +56,140 @@ function label(input: { labelID: string; artifactID: string; sessionID: string; 
 }
 
 describe("QualityCalibrationModel", () => {
+  test("pools bins that split a run of identical confidences instead of depending on training order", () => {
+    const outcomes = ["dismissed", "dismissed", "accepted", "accepted"] as const
+    const build = (order: readonly ("accepted" | "dismissed")[]) => {
+      const items = order.map((_, index) =>
+        replayItem({
+          artifactID: `tie_${index}`,
+          sessionID: `ses_${index % 2}`,
+          createdAt: `2026-04-20T00:00:0${index}.000Z`,
+          confidence: 0.8,
+        }),
+      )
+      const labels = order.map((outcome, index) =>
+        label({ labelID: `lbl_${index}`, artifactID: `tie_${index}`, sessionID: `ses_${index % 2}`, outcome }),
+      )
+      const model = QualityCalibrationModel.train(items, labels, { binCount: 2, minBinCount: 1, laplaceAlpha: 2 })
+      expect(model.groups[0]?.bins).toHaveLength(1)
+      return QualityCalibrationModel.predict([items[0]!], model).predictions[0]?.confidence
+    }
+
+    const forward = build(outcomes)
+    const reversed = build([...outcomes].reverse())
+    expect(forward).toBe(reversed)
+    expect(forward).toBeCloseTo(0.5, 2)
+  })
+
+  test("pools a low-confidence spike down instead of lifting higher bins to it", () => {
+    const rows = [
+      { confidence: 0.1, outcome: "accepted" },
+      { confidence: 0.2, outcome: "accepted" },
+      { confidence: 0.7, outcome: "dismissed" },
+      { confidence: 0.75, outcome: "dismissed" },
+      { confidence: 0.8, outcome: "dismissed" },
+      { confidence: 0.85, outcome: "dismissed" },
+      { confidence: 0.9, outcome: "accepted" },
+      { confidence: 0.95, outcome: "dismissed" },
+    ] as const
+    const items = rows.map((row, index) =>
+      replayItem({
+        artifactID: `pav_${index}`,
+        sessionID: `ses_${index % 2}`,
+        createdAt: `2026-04-20T00:00:0${index}.000Z`,
+        confidence: row.confidence,
+      }),
+    )
+    const labels = rows.map((row, index) =>
+      label({
+        labelID: `lbl_${index}`,
+        artifactID: `pav_${index}`,
+        sessionID: `ses_${index % 2}`,
+        outcome: row.outcome,
+      }),
+    )
+    const bins = QualityCalibrationModel.train(items, labels, { binCount: 4, minBinCount: 2, laplaceAlpha: 1 })
+      .groups[0]!.bins
+    const rates = bins.map((bin) => bin.smoothedRate)
+    for (let index = 1; index < rates.length; index++) expect(rates[index]!).toBeGreaterThanOrEqual(rates[index - 1]!)
+    // Prefix max pins every bin to the 2/2 low-confidence spike (0.7917); pooling
+    // pulls the spike down and leaves the top bin at its own 1/2 evidence.
+    expect(rates[0]!).toBeLessThan(0.5)
+    expect(rates[rates.length - 1]!).toBeCloseTo(0.4583, 4)
+  })
+
+  test("keeps confidences that share a stored bin edge in one bin", () => {
+    const rows = [
+      ...Array.from({ length: 5 }, () => ({ confidence: 0.5, outcome: "dismissed" as const })),
+      ...Array.from({ length: 5 }, () => ({ confidence: 0.50001, outcome: "accepted" as const })),
+    ]
+    const items = rows.map((row, index) =>
+      replayItem({
+        artifactID: `edge_${index}`,
+        sessionID: `ses_${index % 2}`,
+        createdAt: `2026-04-20T00:00:${String(index).padStart(2, "0")}.000Z`,
+        confidence: row.confidence,
+      }),
+    )
+    const labels = rows.map((row, index) =>
+      label({
+        labelID: `lbl_${index}`,
+        artifactID: `edge_${index}`,
+        sessionID: `ses_${index % 2}`,
+        outcome: row.outcome,
+      }),
+    )
+    const model = QualityCalibrationModel.train(items, labels, { binCount: 2, minBinCount: 5, laplaceAlpha: 2 })
+    expect(model.groups[0]?.bins).toHaveLength(1)
+    expect(QualityCalibrationModel.predict([items[9]!], model).predictions[0]?.confidence).toBeCloseTo(0.5, 4)
+  })
+
+  test("does not pool zero-count bins into a NaN prediction", () => {
+    const item = replayItem({
+      artifactID: "z",
+      sessionID: "ses_1",
+      createdAt: "2026-04-20T00:00:00.000Z",
+      confidence: 0.4,
+    })
+    const bin = {
+      start: 0,
+      end: 1,
+      count: 0,
+      positives: 0,
+      negatives: 0,
+      avgBaselineConfidence: 0.4,
+      empiricalRate: null,
+      smoothedRate: 0.3,
+    }
+    const model = QualityCalibrationModel.ModelFile.parse({
+      ...QualityCalibrationModel.train(
+        [item, { ...item, artifactID: "y", sessionID: "ses_2" }],
+        [
+          label({ labelID: "lbl_z", artifactID: "z", sessionID: "ses_1", outcome: "accepted" }),
+          label({ labelID: "lbl_y", artifactID: "y", sessionID: "ses_2", outcome: "dismissed" }),
+        ],
+        { binCount: 1, minBinCount: 1 },
+      ),
+    })
+    model.groups[0]!.bins = [bin, { ...bin, smoothedRate: 0.6 }]
+    const confidence = QualityCalibrationModel.predict([item], model).predictions[0]?.confidence
+    expect(Number.isNaN(confidence)).toBe(false)
+  })
+
+  test("abstains on a non-finite baseline confidence", () => {
+    const items = [
+      replayItem({ artifactID: "a", sessionID: "ses_1", createdAt: "2026-04-20T00:00:00.000Z", confidence: 0.9 }),
+      replayItem({ artifactID: "b", sessionID: "ses_2", createdAt: "2026-04-20T00:01:00.000Z", confidence: 0.1 }),
+    ]
+    const labels = [
+      label({ labelID: "lbl_a", artifactID: "a", sessionID: "ses_1", outcome: "accepted" }),
+      label({ labelID: "lbl_b", artifactID: "b", sessionID: "ses_2", outcome: "dismissed" }),
+    ]
+    const model = QualityCalibrationModel.train(items, labels, { binCount: 2, minBinCount: 1 })
+    const nan = { ...items[0]!, baseline: { ...items[0]!.baseline, confidence: Number.NaN } }
+    expect(QualityCalibrationModel.predict([nan], model).predictions[0]?.confidence).toBeNull()
+  })
+
   test("trains a grouped calibration model and predicts ranked candidate confidences", () => {
     const items: ProbabilisticRollout.ReplayItem[] = [
       replayItem({ artifactID: "a", sessionID: "ses_1", createdAt: "2026-04-20T00:00:00.000Z", confidence: 0.9 }),
