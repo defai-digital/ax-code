@@ -144,6 +144,25 @@ export const AppRoutes = lazy(() =>
       },
     )
     .get(
+      "/vcs/branches",
+      describeRoute({
+        summary: "List local Git branches",
+        description: "List local branch names for slash command argument completion.",
+        operationId: "vcs.branches",
+        responses: {
+          200: {
+            description: "Local branch names",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(z.string())),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => c.json(await Vcs.branches()),
+    )
+    .get(
       "/command",
       describeRoute({
         summary: "List commands",

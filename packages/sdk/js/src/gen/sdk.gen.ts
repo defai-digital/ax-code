@@ -365,6 +365,7 @@ import type {
   TuiSelectSessionResponses,
   TuiShowToastResponses,
   TuiSubmitPromptResponses,
+  VcsBranchesResponses,
   VcsGetResponses,
   WikiEnableErrors,
   WikiEnableResponses,
@@ -8189,6 +8190,25 @@ export class Vcs extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<VcsGetResponses, unknown, ThrowOnError>({
       url: "/vcs",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List local Git branches
+   *
+   * List local branch names for slash command argument completion.
+   */
+  public branches<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<VcsBranchesResponses, unknown, ThrowOnError>({
+      url: "/vcs/branches",
       ...options,
       ...params,
     })

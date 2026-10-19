@@ -17894,6 +17894,27 @@ export type VcsGetResponses = {
 /** Successful response payload for `GET /vcs` — Get VCS info */
 export type VcsGetResponse = VcsGetResponses[keyof VcsGetResponses]
 
+/** Request payload shape for `GET /vcs/branches` — List local Git branches */
+export type VcsBranchesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/vcs/branches"
+}
+
+/** Success response payloads for `GET /vcs/branches` — List local Git branches */
+export type VcsBranchesResponses = {
+  /**
+   * Local branch names
+   */
+  200: Array<string>
+}
+
+/** Successful response payload for `GET /vcs/branches` — List local Git branches */
+export type VcsBranchesResponse = VcsBranchesResponses[keyof VcsBranchesResponses]
+
 /** Request payload shape for `GET /command` — List commands */
 export type CommandListData = {
   body?: never

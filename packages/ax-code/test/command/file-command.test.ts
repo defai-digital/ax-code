@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "vitest"
+import { afterEach, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -62,26 +62,29 @@ Review branch $ARGUMENTS.
   })
 })
 
-test.skipIf(process.platform === "win32")("ignores a symlinked command file that escapes the commands directory", async () => {
-  await using tmp = await tmpdir({
-    git: true,
-    init: async (dir) => {
-      const commandDir = path.join(dir, ".agents", "commands")
-      await fs.mkdir(commandDir, { recursive: true })
-      const secret = path.join(dir, "outside-secret.txt")
-      await fs.writeFile(secret, "SUPER-SECRET-PRIVATE-KEY-CONTENT\n")
-      await fs.symlink(secret, path.join(commandDir, "linked.md"))
-      await fs.writeFile(path.join(commandDir, "real.md"), "Real command template\n")
-    },
-  })
+test.skipIf(process.platform === "win32")(
+  "ignores a symlinked command file that escapes the commands directory",
+  async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        const commandDir = path.join(dir, ".agents", "commands")
+        await fs.mkdir(commandDir, { recursive: true })
+        const secret = path.join(dir, "outside-secret.txt")
+        await fs.writeFile(secret, "SUPER-SECRET-PRIVATE-KEY-CONTENT\n")
+        await fs.symlink(secret, path.join(commandDir, "linked.md"))
+        await fs.writeFile(path.join(commandDir, "real.md"), "Real command template\n")
+      },
+    })
 
-  await withTestHome(path.join(tmp.path, "home"), async () => {
-    const results = await FileCommand.discover({ directory: tmp.path, worktree: tmp.path })
-    const names = results.map((entry) => entry.name)
-    expect(names).toContain("real")
-    expect(names).not.toContain("linked")
-  })
-})
+    await withTestHome(path.join(tmp.path, "home"), async () => {
+      const results = await FileCommand.discover({ directory: tmp.path, worktree: tmp.path })
+      const names = results.map((entry) => entry.name)
+      expect(names).toContain("real")
+      expect(names).not.toContain("linked")
+    })
+  },
+)
 
 test("orders project file-backed commands ahead of same-named global ones", async () => {
   // Regression test: home is an ancestor of the project directory (mirrors
@@ -198,6 +201,7 @@ test("exposes plan and debug builtins and hides document-generator commands", as
         expect(names).toContain("debug")
         expect(names).toContain("verified-fix")
         expect(names).toContain("review")
+        expect(names).toContain("merge-and-sync-github")
         expect(names).not.toContain("adr")
         expect(names).not.toContain("prd")
         expect(names).not.toContain("impact")
@@ -217,6 +221,30 @@ test("exposes plan and debug builtins and hides document-generator commands", as
         expect(verifiedFix).toBeDefined()
         expect(verifiedFix!.workflow).toBe("builtin:issue-to-verified-fix")
         expect(verifiedFix!.agent).toBe("debug")
+
+        const mergeAndSync = await Command.get("merge-and-sync-github")
+        expect(mergeAndSync).toMatchObject({
+          sourceTool: "builtin",
+          scope: "builtin",
+          argumentHint: "[target branch]",
+          allowShell: false,
+        })
+        expect(
+          await commandTemplateText({
+            template: await mergeAndSync!.template,
+            arguments: "release",
+            allowShell: mergeAndSync!.allowShell,
+          }),
+        ).toContain("Target branch argument: release")
+        const run = vi.fn(async () => "unexpected")
+        const inert = await commandTemplateText({
+          template: await mergeAndSync!.template,
+          arguments: "!`echo-should-not-run`",
+          allowShell: mergeAndSync!.allowShell,
+          run,
+        })
+        expect(inert).toContain("!`echo-should-not-run`")
+        expect(run).not.toHaveBeenCalled()
       },
     })
   })

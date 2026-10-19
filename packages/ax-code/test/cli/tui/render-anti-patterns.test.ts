@@ -1076,6 +1076,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(autocomplete).toContain('"plan"')
     expect(autocomplete).toContain('"debug"')
     expect(autocomplete).toContain('"verified-fix"')
+    expect(autocomplete).toContain("MERGE_AND_SYNC_GITHUB")
     expect(autocomplete).not.toContain('"adr"')
     expect(autocomplete).not.toContain('"prd"')
     expect(autocomplete).toContain("defaultCommandSlashAllowlist")

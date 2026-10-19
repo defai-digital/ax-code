@@ -30,7 +30,12 @@ import {
   autocompletePopupPlacement,
   autocompleteSelectionScrollDelta,
 } from "./autocomplete-scroll"
-import { commandAutocompleteSuffix } from "./autocomplete-command"
+import {
+  commandAutocompleteSuffix,
+  MERGE_AND_SYNC_GITHUB,
+  mergeTargetArgumentPrefix,
+  mergeTargetBranchMatches,
+} from "./autocomplete-command"
 import { useKV } from "@tui/context/kv"
 import { buildGlyphSet, detectNerdFontTerminal, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"
@@ -189,6 +194,14 @@ export function shouldHideAutocompleteOnInput(input: {
   // This runs per keystroke while the dropdown is open; one walk yields both
   // indices instead of re-scanning the prefix up to the trigger.
   const [triggerStringIndex, cursorStringIndex] = stringIndicesFromDisplayOffsets(value, triggerIndex, cursorOffset)
+  if (
+    mode === "/" &&
+    triggerStringIndex === 0 &&
+    cursorStringIndex === value.length &&
+    (mergeTargetArgumentPrefix(value)?.length ?? 0) > 0
+  ) {
+    return false
+  }
   if (value.slice(triggerStringIndex, cursorStringIndex).match(/\s/)) return true
   if (mode === "/" && value.match(/^\S+\s+\S+\s*$/)) return true
   return false
@@ -284,6 +297,17 @@ export function Autocomplete(props: {
     const next = filter()
     setSearch(next ? next : "")
   })
+
+  const [mergeTargetBranches] = createResource(
+    () =>
+      store.visible === "/" && (mergeTargetArgumentPrefix(`/${search()}`)?.length ?? 0) > 0
+        ? (sync.data.path.directory ?? ".")
+        : false,
+    createAbortableResourceFetcher(async (_directory: string, signal) => {
+      const result = await sdk.client.vcs.branches({}, { signal })
+      return result.error ? [] : (result.data ?? [])
+    }),
+  )
 
   // When the filter changes due to how TUI works, the mousemove might still be triggered
   // via a synthetic event as the layout moves underneath the cursor. This is a workaround to make sure the input mode remains keyboard so
@@ -567,6 +591,7 @@ export function Autocomplete(props: {
       "arena",
       "mode",
       "verified-fix",
+      MERGE_AND_SYNC_GITHUB,
     ])
 
     // Collect slash names already registered client-side so we skip duplicates
@@ -589,7 +614,9 @@ export function Autocomplete(props: {
       const label = commandAutocompleteSuffix(serverCommand)
       results.push({
         display: "/" + serverCommand.name + label,
-        description: serverCommand.description,
+        description: serverCommand.argumentHint
+          ? `${serverCommand.argumentHint} — ${serverCommand.description ?? ""}`.trim()
+          : serverCommand.description,
         onSelect: () => {
           const newText = "/" + serverCommand.name + " "
           const cursor = props.input().logicalCursor
@@ -681,6 +708,26 @@ export function Autocomplete(props: {
         : [...commandsValue]
 
     const searchValue = search()
+
+    if (store.visible === "/") {
+      const branchPrefix = mergeTargetArgumentPrefix(`/${searchValue}`)
+      if (branchPrefix !== undefined && branchPrefix.length > 0) {
+        return mergeTargetBranchMatches(mergeTargetBranches() ?? [], branchPrefix).map(
+          (branch): AutocompleteOption => ({
+            display: branch,
+            description: "Local Git branch",
+            onSelect: () => {
+              const input = props.input()
+              const cursor = input.logicalCursor
+              input.deleteRange(0, 0, cursor.row, cursor.col)
+              const text = `/${MERGE_AND_SYNC_GITHUB} ${branch} `
+              input.insertText(text)
+              input.cursorOffset = stringWidth(text)
+            },
+          }),
+        )
+      }
+    }
 
     if (!searchValue) {
       return mixed
@@ -872,7 +919,11 @@ export function Autocomplete(props: {
         const cursorStringIndex = stringIndexFromDisplayOffset(value, offset)
 
         // Check for "/" at position 0 - reopen slash commands
-        if (value.startsWith("/") && !value.slice(0, cursorStringIndex).match(/\s/)) {
+        if (
+          value.startsWith("/") &&
+          (!value.slice(0, cursorStringIndex).match(/\s/) ||
+            (cursorStringIndex === value.length && (mergeTargetArgumentPrefix(value)?.length ?? 0) > 0))
+        ) {
           show("/")
           setStore("index", 0)
           return

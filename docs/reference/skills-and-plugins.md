@@ -2,12 +2,14 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-08-12
+Last reviewed: 2026-10-18
 Owner: AX Code runtime
 
 Discoverable registry of built-in skills and how to add project skills.
 
 The default `/` menu is a control plane (`/plan`, `/review`, `/debug`, `/status`, `/model`). Older built-in skills stay agent-only (skill tool). The backend reliability pack is also listed as slash commands.
+
+`/merge-and-sync-github [target branch]` is a built-in agent workflow for consolidating local branches and linked worktrees. With no argument it targets the verified GitHub default branch when that branch is `main` or `master`; an argument names an existing local target branch. The TUI suggests local branch names as the target is typed. The workflow inventories all worktrees and branch tips before merging committed changes, runs the repository's checks, pushes only the target branch without force, and verifies the remote commit. Dirty or ambiguous worktrees, conflicts, failed checks, and protected-branch push rejection stop the workflow. It does not delete branches or worktrees. Git operations remain subject to normal tool permissions; the agent reports a partial local merge if a later step fails.
 
 ## Built-in skills (shipped under `packages/ax-code/skills/`)
 

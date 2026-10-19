@@ -4,7 +4,11 @@ import {
   shouldClearPromptForAutocompleteSelection,
   shouldHideAutocompleteOnInput,
 } from "../../../src/cli/tui/component/prompt/autocomplete"
-import { commandAutocompleteSuffix } from "../../../src/cli/tui/component/prompt/autocomplete-command"
+import {
+  commandAutocompleteSuffix,
+  mergeTargetArgumentPrefix,
+  mergeTargetBranchMatches,
+} from "../../../src/cli/tui/component/prompt/autocomplete-command"
 
 describe("tui command autocomplete", () => {
   test("labels reusable command sources", () => {
@@ -59,6 +63,30 @@ describe("tui command autocomplete", () => {
         cursorOffset: "/review staged".length,
       }),
     ).toBe(true)
+  })
+
+  test("completes only the first merge target argument from local branch names", () => {
+    expect(mergeTargetArgumentPrefix("/merge-and-sync-github ")).toBe("")
+    expect(mergeTargetArgumentPrefix("/merge-and-sync-github feat")).toBe("feat")
+    expect(mergeTargetArgumentPrefix("/merge-and-sync-github feat extra")).toBeUndefined()
+    expect(mergeTargetArgumentPrefix("/review feat")).toBeUndefined()
+    expect(mergeTargetBranchMatches(["main", "feature/api", "feature/ui"], "FEAT")).toEqual([
+      "feature/api",
+      "feature/ui",
+    ])
+    expect(mergeTargetBranchMatches(["main", "feature/api"], "main")).toEqual([])
+    expect(
+      shouldHideAutocompleteOnInput({
+        mode: "/",
+        value: "/merge-and-sync-github fea",
+        triggerIndex: 0,
+        cursorOffset: "/merge-and-sync-github fea".length,
+      }),
+    ).toBe(false)
+  })
+
+  test("offers the canonical case when the typed branch differs only by case", () => {
+    expect(mergeTargetBranchMatches(["main"], "MAIN")).toEqual(["main"])
   })
 
   test("clears the draft when autocomplete executes a client-side slash action", () => {

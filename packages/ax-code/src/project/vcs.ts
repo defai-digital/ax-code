@@ -78,4 +78,15 @@ export namespace Vcs {
   export function branch() {
     return state().then((entry) => entry.current)
   }
+
+  /** Local branch names for command argument completion. No remote refs or worktree mutation. */
+  export async function branches(): Promise<string[]> {
+    if (Instance.project.vcs !== "git") return []
+    const result = await git(["for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads"], {
+      cwd: Instance.worktree,
+      timeout: 5_000,
+    })
+    if (result.exitCode !== 0) throw new Error("Unable to list local Git branches")
+    return result.text().split("\n").filter(Boolean)
+  }
 }

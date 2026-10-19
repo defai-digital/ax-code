@@ -18,6 +18,7 @@ import PROMPT_ARENA from "./template/arena.txt"
 import PROMPT_WIKI from "./template/wiki.txt"
 import PROMPT_COMMIT from "./template/commit.txt"
 import PROMPT_PR from "./template/pr.txt"
+import PROMPT_MERGE_AND_SYNC_GITHUB from "./template/merge-and-sync-github.txt"
 import PROMPT_VERIFIED_FIX from "./template/verified-fix.txt"
 
 export namespace Command {
@@ -125,6 +126,7 @@ export namespace Command {
     WIKI: "wiki",
     COMMIT: "commit",
     PR: "pr",
+    MERGE_AND_SYNC_GITHUB: "merge-and-sync-github",
     VERIFIED_FIX: "verified-fix",
   } as const
 
@@ -277,6 +279,19 @@ export namespace Command {
         return PROMPT_PR
       },
       hints: hints(PROMPT_PR),
+    }
+    commands[Default.MERGE_AND_SYNC_GITHUB] = {
+      name: Default.MERGE_AND_SYNC_GITHUB,
+      description: "merge eligible local branches and worktrees into main/master or a named target, then sync GitHub",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      argumentHint: "[target branch]",
+      allowShell: false,
+      get template() {
+        return PROMPT_MERGE_AND_SYNC_GITHUB
+      },
+      hints: hints(PROMPT_MERGE_AND_SYNC_GITHUB),
     }
     commands[Default.VERIFIED_FIX] = {
       name: Default.VERIFIED_FIX,

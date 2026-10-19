@@ -121,3 +121,31 @@ describeVcs("Vcs", () => {
     })
   })
 })
+
+test("branches() returns local branches without remote-tracking refs", async () => {
+  await using tmp = await tmpdir({ git: true })
+  execSync("git branch feature/merge-target", { cwd: tmp.path, stdio: "pipe" })
+  execSync("git update-ref refs/remotes/origin/remote-only HEAD", { cwd: tmp.path, stdio: "pipe" })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const branches = await Vcs.branches()
+      expect(branches).toContain("feature/merge-target")
+      expect(branches).not.toContain("remote-only")
+    },
+  })
+})
+
+test("branches() preserves a branch name shared with a tag", async () => {
+  await using tmp = await tmpdir({ git: true })
+  execSync("git branch release-target", { cwd: tmp.path, stdio: "pipe" })
+  execSync("git tag release-target", { cwd: tmp.path, stdio: "pipe" })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(await Vcs.branches()).toContain("release-target")
+      expect(await Vcs.branches()).not.toContain("heads/release-target")
+    },
+  })
+})

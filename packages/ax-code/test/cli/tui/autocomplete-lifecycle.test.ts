@@ -27,6 +27,8 @@ vi.mock("solid-js/store", async () => {
 const mocked = vi.hoisted(() => ({
   dimensions: () => ({ width: 120, height: 40 }),
   files: async () => ({ data: [] as string[] }),
+  branches: async () => ({ data: [] as string[] }),
+  commands: [] as { name: string; source: string; description?: string; argumentHint?: string }[],
   agents: [] as { name: string; tier?: string }[],
   editor: { text: "", cursor: 0 },
 }))
@@ -43,12 +45,17 @@ vi.mock("@tui/context/language", () => ({ useLanguage: () => ({ t: (key: string)
 vi.mock("@tui/context/theme", () => ({ useTheme: () => ({ theme: {} }) }))
 vi.mock("@tui/context/kv", () => ({ useKV: () => ({ get: () => false }) }))
 vi.mock("@tui/context/sdk", () => ({
-  useSDK: () => ({ client: { find: { files: (...args: Parameters<typeof mocked.files>) => mocked.files(...args) } } }),
+  useSDK: () => ({
+    client: {
+      find: { files: (...args: Parameters<typeof mocked.files>) => mocked.files(...args) },
+      vcs: { branches: (...args: Parameters<typeof mocked.branches>) => mocked.branches(...args) },
+    },
+  }),
 }))
 vi.mock("@tui/context/sync", () => ({
   useSync: () => ({
     get data() {
-      return { agent: mocked.agents, command: [], mcp_resource: {}, path: { directory: "/project" } }
+      return { agent: mocked.agents, command: mocked.commands, mcp_resource: {}, path: { directory: "/project" } }
     },
   }),
 }))
@@ -65,6 +72,8 @@ beforeEach(() => {
   vi.stubGlobal("React", { createElement: () => undefined })
   vi.spyOn(Locale, "truncateMiddle")
   mocked.files = async () => ({ data: [] })
+  mocked.branches = async () => ({ data: [] })
+  mocked.commands = []
   mocked.agents = []
   mocked.editor = { text: "", cursor: 0 }
   vi.mocked(axTui.applyEditorAutocomplete).mockClear()
@@ -171,6 +180,40 @@ describe("autocomplete anchor lifecycle", () => {
     fixture.ref().onInput("/")
     expect(fixture.ref().visible).toBe("/")
     expect(Locale.truncateMiddle).not.toHaveBeenCalled()
+  })
+
+  test("suggests a target branch after typing while leaving the no-argument command ready to submit", async () => {
+    const fixture = mount()
+    fixture.attachAnchor()
+    const branches = vi.fn(async () => ({ data: ["main", "feature/api"] }))
+    mocked.branches = branches
+
+    fixture.type("/merge-and-sync-github ")
+    expect(fixture.ref().visible).toBe(false)
+
+    fixture.type("/merge-and-sync-github fe")
+    expect(fixture.ref().visible).toBe("/")
+    await vi.waitFor(() => expect(branches).toHaveBeenCalledOnce())
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    fixture.ref().onKeyDown({ name: "return", preventDefault: vi.fn() } as unknown as KeyEvent)
+    expect(fixture.input.insertText).toHaveBeenCalledWith("/merge-and-sync-github feature/api ")
+    expect(fixture.ref().visible).toBe(false)
+  })
+
+  test("offers the merge command in slash name completion", () => {
+    mocked.commands = [
+      {
+        name: "merge-and-sync-github",
+        source: "command",
+        description: "Merge and sync GitHub",
+        argumentHint: "[target branch]",
+      },
+    ]
+    const fixture = mount()
+    fixture.attachAnchor()
+    fixture.type("/merge-a")
+    fixture.ref().onKeyDown({ name: "return", preventDefault: vi.fn() } as unknown as KeyEvent)
+    expect(fixture.input.insertText).toHaveBeenCalledWith("/merge-and-sync-github ")
   })
 
   test("replaces only the reference token when @ is triggered mid-prompt", () => {
