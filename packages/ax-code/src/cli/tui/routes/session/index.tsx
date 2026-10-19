@@ -45,7 +45,8 @@ import { useDialog } from "../../ui/dialog"
 import { DialogPrompt } from "../../ui/dialog-prompt"
 import { DialogMessage } from "./dialog-message"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
-import { captureScrollAnchor, restoredScrollTop } from "./history-scroll-anchor"
+import { captureScrollAnchor, restoreScrollAfterPrepend } from "./history-scroll-anchor"
+import { TranscriptHistoryNotice } from "./transcript-history-notice"
 import { loadRevertHistory, mergeRevertHistory, MissingRevertMessageError } from "./revert-history"
 import { DialogActivity } from "./dialog-activity"
 import { DialogCapabilityCatalog } from "./dialog-capability-catalog"
@@ -761,7 +762,6 @@ export function Session() {
   }
   onCleanup(() => cancelScrollTimer?.())
 
-  const EARLIER_ANCHOR_ATTEMPTS = 8
   let cancelEarlierAnchor: (() => void) | undefined
   onCleanup(() => cancelEarlierAnchor?.())
   async function loadEarlier() {
@@ -775,21 +775,13 @@ export function Session() {
       if (result !== "loaded" || !anchor) return
       // scrollHeight only changes after the renderer's next layout frame, so
       // poll briefly for it instead of reading it right after the store update.
-      let attempts = 0
-      const restore = () => {
-        cancelEarlierAnchor = undefined
-        if (route.sessionID !== sessionID || !isRenderableAlive(scroll)) return
-        // The user scrolled while the page was loading: keep their position.
-        if (scroll.scrollTop !== anchor.top) return
-        if (scroll.scrollHeight === anchor.height && ++attempts < EARLIER_ANCHOR_ATTEMPTS) {
-          cancelEarlierAnchor = scheduleTuiTimeout(restore, { name: "session-load-earlier-anchor", delayMs: 25 })
-          return
-        }
-        const top = restoredScrollTop(anchor, scroll.scrollHeight)
-        if (top !== undefined) scroll.scrollTo(top)
-      }
       cancelEarlierAnchor?.()
-      cancelEarlierAnchor = scheduleTuiTimeout(restore, { name: "session-load-earlier-anchor", delayMs: 25 })
+      cancelEarlierAnchor = restoreScrollAfterPrepend({
+        scroll,
+        anchor,
+        isCurrent: () => route.sessionID === sessionID && isRenderableAlive(scroll),
+        schedule: (fn, delayMs) => scheduleTuiTimeout(fn, { name: "session-load-earlier-anchor", delayMs }),
+      })
     } catch {
       if (route.sessionID !== sessionID) return
       toast.show({ message: uiText("ui.failedToLoadEarlierMessages"), variant: "error" })
@@ -1716,20 +1708,12 @@ export function Session() {
                   </box>
                 </Show>
                 <Show when={sync.data.message_truncated[route.sessionID]}>
-                  <box paddingLeft={2} paddingBottom={1}>
-                    <text fg={theme.textMuted}>
-                      {messages().length >= MAX_LOADED_SESSION_MESSAGES
-                        ? uiText("ui.transcriptLoadLimitReached", { count: messages().length })
-                        : uiText("ui.showingLatestMessages", { count: messages().length })}
-                    </text>
-                    <Show when={messages().length < MAX_LOADED_SESSION_MESSAGES}>
-                      <text fg={theme.text} onMouseUp={() => void loadEarlier()}>
-                        {earlierLoadingID() === route.sessionID
-                          ? uiText("ui.loadingEarlierMessages")
-                          : uiText("ui.loadEarlierMessages")}
-                      </text>
-                    </Show>
-                  </box>
+                  <TranscriptHistoryNotice
+                    count={messages().length}
+                    max={MAX_LOADED_SESSION_MESSAGES}
+                    loading={earlierLoadingID() === route.sessionID}
+                    onLoad={() => void loadEarlier()}
+                  />
                 </Show>
                 <Show when={sync.data.message_memory_limited[route.sessionID]}>
                   <box paddingLeft={2} paddingBottom={1}>
