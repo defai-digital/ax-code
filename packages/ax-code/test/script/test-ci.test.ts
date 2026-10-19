@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
+import { spawnSync } from "node:child_process"
 import { tmpdir } from "../fixture/fixture"
 import {
   aggregateRunResults,
@@ -12,6 +13,7 @@ import {
   resolveCoverageEnabled,
   resolveMatrixShard,
   resolveRerunOnFail,
+  resolveRunExitCode,
   resolveShardConcurrency,
   resolveTestCIGroup,
   renderSummaryText,
@@ -19,6 +21,31 @@ import {
 } from "../../script/test-ci"
 
 describe("script.test-ci", () => {
+  test("missing, empty, skipped-only, or failed reports cannot become a passing process", async () => {
+    await using tmp = await tmpdir()
+    expect(resolveRunExitCode(0, await parseJUnit(path.join(tmp.path, "missing.xml")))).toBe(1)
+    expect(resolveRunExitCode(0, { tests: 0, skipped: 0, failures: 0, ignored: 0 })).toBe(1)
+    expect(resolveRunExitCode(0, { tests: 2, skipped: 2, failures: 0, ignored: 0 })).toBe(1)
+    expect(resolveRunExitCode(0, { tests: 2, skipped: 0, failures: 1, ignored: 0 })).toBe(1)
+    expect(resolveRunExitCode(1, { tests: 2, skipped: 0, failures: 0, ignored: 0 })).toBe(1)
+    expect(resolveRunExitCode(0, { tests: 2, skipped: 1, failures: 0, ignored: 0 })).toBe(0)
+  })
+  test("never reruns integration contracts even when a caller requests retries", () => {
+    expect(resolveRerunOnFail({ group: "integration", flagValue: "2", githubActions: "true" })).toBe(0)
+  })
+
+  test("a matrix shard with no tests exits nonzero before starting workers", () => {
+    const result = spawnSync(process.execPath, ["--import", "tsx", "script/test-ci.ts", "deterministic"], {
+      cwd: path.resolve(import.meta.dirname, "../.."),
+      env: { ...process.env, AX_TEST_SHARD_INDEX: "999999", AX_TEST_SHARD_COUNT: "999999" },
+      encoding: "utf8",
+      timeout: 15_000,
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("refusing an empty CI run")
+    expect(result.stdout).not.toContain("Starting deterministic")
+  })
   test("never reruns runtime contracts even when CI or a flag requests retries", () => {
     expect(resolveRerunOnFail({ group: "runtime-contract", flagValue: undefined, githubActions: "true" })).toBe(0)
     expect(resolveRerunOnFail({ group: "runtime-contract", flagValue: "2", githubActions: "true" })).toBe(0)

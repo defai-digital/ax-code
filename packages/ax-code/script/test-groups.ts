@@ -21,18 +21,21 @@ async function main() {
   check(all)
   const next = pick(all, name)
   if (next.length === 0) {
-    console.log(`No tests in group: ${name}`)
-    return
+    throw new Error(`No tests in group: ${name}; refusing an empty test run`)
   }
 
   console.log(`Running ${name} tests (${next.length})`)
   // Pass the exact file list through the config's `include` via AX_TEST_FILES;
   // vitest positional filters can't reliably target an exact set (see config).
-  const proc = spawn(process.execPath, [vitestCli(), "run", ...(name === "runtime-contract" ? ["--retry=0"] : [])], {
-    cwd: root,
-    stdio: "inherit",
-    env: { ...process.env, AX_TEST_FILES: next.join(",") },
-  })
+  const proc = spawn(
+    process.execPath,
+    [vitestCli(), "run", ...(["runtime-contract", "integration"].includes(name) ? ["--retry=0"] : [])],
+    {
+      cwd: root,
+      stdio: "inherit",
+      env: { ...process.env, AX_TEST_FILES: next.join(",") },
+    },
+  )
   const code: number = await new Promise((resolve) => {
     proc.on("exit", (value) => resolve(value ?? 1))
     proc.on("error", () => resolve(1))

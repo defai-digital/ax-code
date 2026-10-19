@@ -68,7 +68,7 @@ export function resolveRerunOnFail(input: {
   githubActions: string | undefined
   group?: string
 }) {
-  if (input.group === "runtime-contract") return 0
+  if (input.group === "runtime-contract" || input.group === "integration") return 0
   if (input.flagValue != null && input.flagValue !== "") {
     const parsed = Number.parseInt(input.flagValue, 10)
     if (Number.isNaN(parsed) || parsed < 0) {
@@ -208,6 +208,16 @@ export async function parseJUnit(file: string, output = "") {
   return { tests, failures: Math.max(0, failures - ignored), skipped, time, ignored }
 }
 
+export function resolveRunExitCode(
+  code: number,
+  stats: { tests: number; skipped: number; failures: number; ignored: number },
+) {
+  // Missing reports, empty collections, and entirely skipped suites provide no
+  // executed-test evidence, even if the child happens to exit successfully.
+  if (stats.tests <= stats.skipped || stats.failures > 0) return code || 1
+  return code !== 0 && stats.ignored > 0 ? 0 : code
+}
+
 // Mirror a child stream to a writer while capturing its text.
 function tee(stream: Readable | null, writer: NodeJS.WriteStream): Promise<string> {
   if (!stream) return Promise.resolve("")
@@ -242,7 +252,7 @@ async function run(
   const command = [vitestCli(), "run", "--reporter=default", "--reporter=junit"]
   // This lane measures first-attempt behavior independently of the normal
   // deterministic group's timing-sensitive retry policy.
-  if (group === "runtime-contract") command.push("--retry=0")
+  if (group === "runtime-contract" || group === "integration") command.push("--retry=0")
   if (shardCoverage) {
     command.push("--reporter=blob", `--outputFile.junit=${file}`, `--outputFile.blob=${shardCoverage.blobFile}`)
   } else {
@@ -277,14 +287,19 @@ async function run(
     }),
   ])
   const stats = await parseJUnit(file, `${stdout}\n${stderr}`)
+  const resultCode = resolveRunExitCode(exit.code, stats)
   const durationMs = Date.now() - started
   const prefix = file.replace(/\.xml$/, "")
   await fs.writeFile(`${prefix}.stdout.log`, stdout)
   await fs.writeFile(`${prefix}.stderr.log`, stderr)
-  await fs.writeFile(`${prefix}.result.json`, JSON.stringify({ files, ...exit, durationMs, stats }, null, 2) + "\n")
+  await fs.writeFile(
+    `${prefix}.result.json`,
+    JSON.stringify({ files, ...exit, resultCode, durationMs, stats }, null, 2) + "\n",
+  )
+  if (stats.tests <= stats.skipped) console.error(`${label}: no executed tests in the JUnit report`)
   console.log(`Finished ${label}: exit ${exit.code}, ${stats.failures} failures, ${(durationMs / 1000).toFixed(1)}s`)
   return {
-    code: exit.code !== 0 && stats.failures === 0 && stats.ignored > 0 ? 0 : exit.code,
+    code: resultCode,
     file,
     ignored: stats.ignored,
     coverageDir,
@@ -422,8 +437,7 @@ async function main() {
     console.log(`Using GitHub matrix shard ${matrix.index}/${matrix.count}: ${files.length} files`)
   }
   if (files.length === 0) {
-    console.log(`No tests in group: ${group}`)
-    return
+    throw new Error(`No tests in group: ${group}; refusing an empty CI run`)
   }
   if (flag("--coverage") && !coverageOn()) {
     console.log("Skipping V8 coverage on GitHub Actions (set AX_TEST_COVERAGE=1 to enable)")
