@@ -6,6 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.27.5] - 2026-10-19
+
+### Changed
+
+- Ship the built-in analysis-output skill with static artifact guidance and optional AX BI MCP integration.
+- Add `/merge-and-sync-github` with local branch completion that preserves case and handles branch/tag name collisions.
+- Integrate runtime reliability fixes for background tasks, structured output retries, MCP reconnection, memory recall, worktrees, file edits, and terminal input.
+- Harden promotion and rollback artifact identity, export containment, policy validation, and reporting.
+- Publish SDK 2.6.36 with the local Git branch listing endpoint.
+
 ## [7.27.4] - 2026-10-18
 
 ### Changed
