@@ -31,6 +31,7 @@ export namespace Vcs {
 
   interface State {
     current: string | undefined
+    disposed?: boolean
     unsubscribe?: () => void
   }
 
@@ -43,12 +44,24 @@ export namespace Vcs {
       // `failed` distinguishes a git error (lock, partial HEAD write, timeout)
       // from a successful read that names no branch.
       const readCurrentBranch = async () => {
-        const result = await git(["rev-parse", "--abbrev-ref", "HEAD"], {
+        const result = await git(["symbolic-ref", "--quiet", "HEAD"], {
           cwd: Instance.worktree,
           timeout: 5_000,
         })
-        if (result.exitCode !== 0) return { failed: true as const }
-        return { failed: false as const, branch: result.text().trim() || undefined }
+        if (result.exitCode === 0) {
+          // Full symbolic refs work before the first commit and cannot become
+          // ambiguous when a tag has the same name as the current branch.
+          const ref = result.text().trim()
+          if (!ref.startsWith("refs/heads/")) return { failed: true as const }
+          return { failed: false as const, branch: ref.slice("refs/heads/".length) }
+        }
+        if (result.exitCode !== 1) return { failed: true as const }
+        const detached = await git(["rev-parse", "--verify", "HEAD"], {
+          cwd: Instance.worktree,
+          timeout: 5_000,
+        })
+        if (detached.exitCode !== 0) return { failed: true as const }
+        return { failed: false as const, branch: "HEAD" }
       }
       const getCurrentBranch = async () => {
         const read = await readCurrentBranch()
@@ -56,14 +69,18 @@ export namespace Vcs {
       }
 
       const value: State = {
-        current: await getCurrentBranch(),
+        current: undefined,
       }
-      log.info("initialized", { branch: value.current })
 
       // Serialize refreshes: concurrent HEAD events (rebase, rapid switches) can
       // finish their git reads out of order and let a stale branch win.
-      let refreshing: Promise<void> = Promise.resolve()
+      // Subscribe before awaiting initialization so a HEAD event during the
+      // first read queues a refresh instead of being permanently lost.
+      let refreshing = getCurrentBranch().then((branch) => {
+        value.current = branch
+      })
       const refresh = async () => {
+        if (value.disposed) return
         let read = await readCurrentBranch()
         // A HEAD rewrite can be caught mid-write; one HEAD event may be the only
         // signal, so re-read once before giving up on it.
@@ -72,7 +89,7 @@ export namespace Vcs {
           read = await readCurrentBranch()
         }
         // A transient git failure must not clear a known branch.
-        if (read.failed) return
+        if (read.failed || value.disposed) return
         const next = read.branch
         if (next === value.current) return
         log.info("branch changed", { from: value.current, to: next })
@@ -90,9 +107,12 @@ export namespace Vcs {
         }),
       )
 
+      await refreshing
+      log.info("initialized", { branch: value.current })
       return value
     },
     async (entry) => {
+      entry.disposed = true
       entry.unsubscribe?.()
     },
   )

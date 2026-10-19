@@ -149,3 +149,52 @@ test("branches() preserves a branch name shared with a tag", async () => {
     },
   })
 })
+
+test("branch() reports an unborn branch before the first commit", async () => {
+  await using tmp = await tmpdir({
+    init: async (directory) => {
+      execSync("git init --initial-branch=unborn-target", { cwd: directory, stdio: "pipe" })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      try {
+        expect(await Vcs.branch()).toBe("unborn-target")
+      } finally {
+        await Instance.dispose()
+      }
+    },
+  })
+})
+
+test("branch() preserves the current branch name when a tag shares its name", async () => {
+  await using tmp = await tmpdir({ git: true })
+  execSync("git checkout -b release-target", { cwd: tmp.path, stdio: "pipe" })
+  execSync("git tag release-target", { cwd: tmp.path, stdio: "pipe" })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      try {
+        expect(await Vcs.branch()).toBe("release-target")
+      } finally {
+        await Instance.dispose()
+      }
+    },
+  })
+})
+
+test("branch() preserves the detached HEAD indicator", async () => {
+  await using tmp = await tmpdir({ git: true })
+  execSync("git checkout --detach", { cwd: tmp.path, stdio: "pipe" })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      try {
+        expect(await Vcs.branch()).toBe("HEAD")
+      } finally {
+        await Instance.dispose()
+      }
+    },
+  })
+})
