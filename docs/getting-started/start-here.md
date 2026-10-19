@@ -48,7 +48,7 @@ AX Code optimizes the moment _after_ the agent finishes: deciding whether to kee
 - **Reversibility.** Snapshots are recoverable per step, not only per session, from a Git object store kept outside your repository.
 - **Your decision.** AX Code ranks, scores, and reports. It does not merge for you.
 
-Supporting these: explicit tools with permission rules and isolation modes, durable sessions, `AGENTS.md` for repository conventions, provider portability, and one runtime behind the TUI, CLI, VS Code extension, SDK, headless server, and MCP integrations. Those are foundations rather than the reason to choose AX Code — see [Why AX Code](../why-ax-code.md).
+Supporting these: explicit tools with permission rules and isolation modes, durable sessions, `AGENTS.md` for repository conventions, provider portability, and one runtime behind the TUI, CLI, SDK, headless server, and MCP integrations. Those are foundations rather than the reason to choose AX Code — see [Why AX Code](../why-ax-code.md).
 
 For the commands themselves, see [Execution Evidence](../guides/execution-evidence.md).
 
@@ -122,19 +122,18 @@ Grok runs exclusively through `Grok Build CLI`. Select `grok-build-cli` in `/con
 
 ## Doc Map
 
-| Topic                    | Start here                                                                                                                                                        |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Why choose AX Code       | [Why AX Code](../why-ax-code.md)                                                                                                                                  |
-| Product overview         | [Start Here](start-here.md)                                                                                                                                       |
-| Review / undo agent work | [Execution Evidence](../guides/execution-evidence.md)                                                                                                             |
-| Multi-model changes      | [Verified Multi-Model Changes](../guides/verified-multi-model-change.md)                                                                                          |
-| Install/runtime channels | [Installation and Runtime Channels](install-runtime.md)                                                                                                           |
-| Providers and models     | [Supported Providers and Models](../providers/supported-providers.md)                                                                                             |
-| Free-tier API evaluation | [Free-Tier API Quickstart](../providers/free-tier-apis.md)                                                                                                        |
-| Sandbox and permissions  | [Sandbox Mode](../guides/sandbox.md)                                                                                                                              |
-| Unattended execution     | [Autonomous Mode](../guides/autonomous.md)                                                                                                                        |
-| Routing and model tier   | [Auto-Route](../guides/auto-route.md)                                                                                                                             |
-| SDK embedding            | [`@defai-digital/ax-code-sdk`](../../packages/sdk/js/README.md)                                                                                                   |
-| HTTP/OpenAPI clients     | [HTTP and OpenAPI Compatibility](../sdk/http-openapi.md)                                                                                                          |
-| VS Code integration      | [VS Code integration](../../packages/integration-vscode/README.md) · [Marketplace](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) |
-| Architecture             | [Semantic Layer](../architecture/semantic-layer.md)                                                                                                               |
+| Topic                    | Start here                                                               |
+| ------------------------ | ------------------------------------------------------------------------ |
+| Why choose AX Code       | [Why AX Code](../why-ax-code.md)                                         |
+| Product overview         | [Start Here](start-here.md)                                              |
+| Review / undo agent work | [Execution Evidence](../guides/execution-evidence.md)                    |
+| Multi-model changes      | [Verified Multi-Model Changes](../guides/verified-multi-model-change.md) |
+| Install/runtime channels | [Installation and Runtime Channels](install-runtime.md)                  |
+| Providers and models     | [Supported Providers and Models](../providers/supported-providers.md)    |
+| Free-tier API evaluation | [Free-Tier API Quickstart](../providers/free-tier-apis.md)               |
+| Sandbox and permissions  | [Sandbox Mode](../guides/sandbox.md)                                     |
+| Unattended execution     | [Autonomous Mode](../guides/autonomous.md)                               |
+| Routing and model tier   | [Auto-Route](../guides/auto-route.md)                                    |
+| SDK embedding            | [`@defai-digital/ax-code-sdk`](../../packages/sdk/js/README.md)          |
+| HTTP/OpenAPI clients     | [HTTP and OpenAPI Compatibility](../sdk/http-openapi.md)                 |
+| Architecture             | [Semantic Layer](../architecture/semantic-layer.md)                      |

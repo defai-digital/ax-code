@@ -379,7 +379,7 @@ Release archives are verified with minisign. Platform support, update paths, sig
 
 ![AX Code components and workflow](docs/images/ax-code-components.svg)
 
-The terminal UI, `ax-code run`, the local HTTP server and TypeScript SDK, and ACP or VS Code hosts enter the same runtime. Extracted packages sit beside that runtime: `ax-wiki` plans the source-backed wiki, `ax-wiki-viewer` draws its evidence graph, `ax-code-intel` runs language servers, and `ax-code-reason` does deterministic debug and refactor analysis. Plugin, the native addons, the GitHub Action, and MCP are the other integration edges. WebMCP sits with them as the Chrome bridge: the sidebar chip starts an isolated Chrome 150+ window, and the agent can read a page and, with your approval, act on it. A turn stores the user message, resolves a provider, and streams the model. Each tool call passes a hook and a permission check, then runs inside the configured isolation mode. File changes are snapshotted outside the repository, and the step is appended to the event log. `ax-code session compare`, `risk`, `replay`, and `rollback` read that record.
+The terminal UI, `ax-code run`, the local HTTP server and TypeScript SDK, and ACP hosts enter the same runtime. Extracted packages sit beside that runtime: `ax-wiki` plans the source-backed wiki, `ax-wiki-viewer` draws its evidence graph, `ax-code-intel` runs language servers, and `ax-code-reason` does deterministic debug and refactor analysis. Plugin, the native addons, the GitHub Action, and MCP are the other integration edges. WebMCP sits with them as the Chrome bridge: the sidebar chip starts an isolated Chrome 150+ window, and the agent can read a page and, with your approval, act on it. A turn stores the user message, resolves a provider, and streams the model. Each tool call passes a hook and a permission check, then runs inside the configured isolation mode. File changes are snapshotted outside the repository, and the step is appended to the event log. `ax-code session compare`, `risk`, `replay`, and `rollback` read that record.
 
 Council reviews stay advisory. Arena implement builds candidates in isolated Git worktrees and ranks them with the repository's own checks. AX Code does not merge the winner. AX Engine stays a sidecar: AX Code starts `ax-engine serve` and calls it on loopback. Cloud APIs, vendor CLIs, local OpenAI-compatible servers, private GPU endpoints, and AX Trust share the same provider boundary.
 
@@ -387,13 +387,14 @@ Council reviews stay advisory. Arena implement builds candidates in isolated Git
 
 The same runtime, session store, and evidence model back every surface.
 
-| Surface             | Entry point                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------ |
-| Terminal UI         | `ax-code` — provider, model, agent, session, MCP, and skill flows                                      |
-| One-shot / headless | `ax-code run --model qwen -- "review the auth flow"` for scripts, CI, bots, and other coding agents    |
-| Local service       | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                         |
-| TypeScript SDK      | `@defai-digital/ax-code-sdk` provides typed headless, gRPC, event, session, and testing APIs           |
-| VS Code             | The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) |
+| Surface             | Entry point                                                                                         |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| Terminal UI         | `ax-code` — provider, model, agent, session, MCP, and skill flows                                   |
+| One-shot / headless | `ax-code run --model qwen -- "review the auth flow"` for scripts, CI, bots, and other coding agents |
+| Local service       | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                      |
+| TypeScript SDK      | `@defai-digital/ax-code-sdk` provides typed headless, gRPC, event, session, and testing APIs        |
+
+The first-party VS Code extension is no longer supported. Run `ax-code` in an integrated terminal or use the SDK or ACP for editor integrations.
 
 ## Control model
 
@@ -519,8 +520,8 @@ reading this README from cold context). Internal agents working in this repo sho
 - **Product:** AX Code — an open-source coding-agent runtime for reviewable, reversible work.
 - **Repository:** `defai-digital/ax-code`. Apache-2.0; named MIT-derived portions are preserved in
   [LICENSE-MIT](LICENSE-MIT) and [NOTICE](NOTICE).
-- **What it is:** a local-first CLI + terminal UI + HTTP server + generated TypeScript SDK +
-  VS Code extension. Sessions are recorded as structured event logs with file snapshots;
+- **What it is:** a local-first CLI + terminal UI + HTTP server + generated TypeScript SDK.
+  Sessions are recorded as structured event logs with file snapshots;
   candidate implementations can be ranked against the repository's own checks before anything
   merges.
 - **Out of scope here:** AX Agent, AX Engine, AX Serving, AX Fabric, AX Trust, AX Telemetry,

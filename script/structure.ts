@@ -10,7 +10,6 @@ const root = path.resolve(import.meta.dirname, "..")
 
 const note = [
   "packages/integration-github/ARCHITECTURE.md",
-  "packages/integration-vscode/ARCHITECTURE.md",
   "packages/ax-code/ARCHITECTURE.md",
   "packages/util/ARCHITECTURE.md",
   "packages/plugin/ARCHITECTURE.md",
@@ -154,7 +153,6 @@ async function deep() {
     "packages/plugin/test",
     "packages/sdk/js/src",
     "packages/integration-github",
-    "packages/integration-vscode/src",
     "packages/util/src",
     "packages/util/test",
     "packages/ax-code-intel/src",

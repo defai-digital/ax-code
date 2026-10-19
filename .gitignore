@@ -41,10 +41,6 @@ crates/*/index.js
 crates/*/index.d.ts
 crates/*/*.node
 
-# VSCode extension build artifacts
-packages/*/*.vsix
-packages/integration-vscode/out/
-
 .scripts
 .direnv/
 debug-log/

@@ -38,7 +38,6 @@ Upgrade the report integration and runtime together. Other integration surfaces 
 | Shared work-mode contracts  | `@defai-digital/ax-code-sdk/mode`             | Mode ids and helpers shared by TUI and app clients                                      |
 | Provider connection picker  | `@defai-digital/ax-code-sdk/provider-connect` | Provider-category taxonomy without runtime-source imports                               |
 | In-process source embedding | `@defai-digital/ax-code-sdk` `createAgent()`  | Lowest overhead and custom tools when the private runtime package is resolvable         |
-| Editor-native workflow      | VS Code integration                           | Uses the installed CLI/runtime inside the editor                                        |
 
 Public applications should use `headless` or `grpc` with a compatible signed AX Code runtime. HTTP/OpenAPI stays behind those SDKs as a fallback and diagnostics layer. Legacy `@defai-digital/ax-code-sdk/v2` subpaths remain for runtime compatibility; new integrations should not start there.
 

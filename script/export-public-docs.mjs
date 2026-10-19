@@ -17,7 +17,6 @@ export function assertPublicSource(name) {
     "NOTICE",
     "SECURITY.md",
     "packages/sdk/js/README.md",
-    "packages/integration-vscode/README.md",
     "packages/sdk/openapi.json",
     "packages/sdk/proto/ax_code/v1/headless.proto",
     "packages/sdk/js/example/headless-app.ts",

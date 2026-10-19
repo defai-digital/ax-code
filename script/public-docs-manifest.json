@@ -362,10 +362,6 @@
       "page": "sdk/javascript"
     },
     {
-      "source": "packages/integration-vscode/README.md",
-      "page": "integrations/vscode"
-    },
-    {
       "source": "SECURITY.md",
       "page": "security"
     },

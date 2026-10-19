@@ -4,8 +4,6 @@ packages:
 
 catalog:
   "@hono/node-server": "2.1.5"
-  "@typescript-eslint/eslint-plugin": "8.71.2"
-  "@typescript-eslint/parser": "8.71.2"
   "turbo": "2.11.9"
   "tsx": "4.23.15"
   "acorn": "8.16.0"
@@ -45,7 +43,6 @@ catalog:
   "hono-openapi": "1.1.2"
   "jsr": "0.14.3"
   "luxon": "3.6.1"
-  "marked": "12.0.2"
   "remeda": "2.50.0"
   "semver": "7.8.5"
   "sigstore": "5.0.0"

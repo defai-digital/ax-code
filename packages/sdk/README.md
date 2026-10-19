@@ -5,7 +5,7 @@ Scope: current-state
 Last reviewed: 2026-09-02
 Owner: ax-code sdk
 
-This directory owns the SDK and OpenAPI integration surfaces for AX Code. Use it when you are embedding AX Code into another program; for interactive developer workflows, start from the root README, TUI, CLI, or VS Code integration.
+This directory owns the SDK and OpenAPI integration surfaces for AX Code. Use it when you are embedding AX Code into another program; for interactive developer workflows, start from the root README, TUI, or CLI.
 
 ## Surfaces
 
@@ -28,7 +28,7 @@ an owner, tests, and a release workflow.
 | App UI with a local process-isolated AX backend | `@defai-digital/ax-code-sdk/headless`             |
 | TypeScript or JavaScript over raw HTTP          | Generate from `openapi.json` with `ax-code serve` |
 | Python, Go, Java, Rust, or another runtime      | Generate a client from `openapi.json`             |
-| Interactive developer workflow                  | Root README, TUI, CLI, or VS Code integration     |
+| Interactive developer workflow                  | Root README, TUI, or CLI                          |
 
 Keep this page short. Detailed cross-language guidance belongs in `docs/sdk/http-openapi.md`; detailed TypeScript examples belong in `js/README.md`.
 

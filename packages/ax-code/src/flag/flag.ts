@@ -118,7 +118,6 @@ export namespace Flag {
   export declare const AX_CODE_TUI_SESSION_FIRST: boolean
   export declare const AX_CODE_TUI_DISABLE_WORKFLOW_DASHBOARD_POLL: boolean
   export declare const AX_CODE_SUPER_LONG: boolean
-  export declare const AX_CODE_CALLER: string | undefined
   export declare const AX_CODE_ORIGINAL_CWD: string | undefined
   export declare const AX_CODE_CLI_ENTRY: string | undefined
   export declare const AX_CODE_CLI_SOLID_LOADER: string | undefined
@@ -355,12 +354,6 @@ defineBooleanFlag("AX_CODE_WORKFLOW_RUNTIME")
 // The session override is set by the Super-Long route and must match the
 // route's GET precedence so the reported state and runtime behavior agree.
 defineBooleanFlagWithOverride("AX_CODE_SUPER_LONG", "AX_CODE_SUPER_LONG_SESSION_OVERRIDE")
-
-// Evaluate at access time so test/runtime overrides can be flipped
-// without requiring a module reload.
-
-// Some IDE detection paths read this at request time.
-defineStringFlag("AX_CODE_CALLER")
 
 // Keep evaluation lazy so launch-time overrides remain effective.
 defineStringFlag("AX_CODE_ORIGINAL_CWD")
