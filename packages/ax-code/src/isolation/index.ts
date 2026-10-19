@@ -195,10 +195,14 @@ export namespace Isolation {
         for (const item of config.protected) protectedPaths.push(path.resolve(root, item))
       }
     }
+    const networkEnabled = mode === "full-access" ? true : (envNetwork ?? policy.enabled ?? false)
     return {
       mode,
-      network: mode === "full-access" ? true : (envNetwork ?? policy.enabled ?? false),
-      allowedDomains: policy.allowedDomains.length ? policy.allowedDomains : undefined,
+      network: networkEnabled,
+      // An explicit process-level denial overrides the configured allowlist;
+      // keeping the domains would leave egressConfigured() true and let
+      // dual-use commands reach the proxy.
+      allowedDomains: networkEnabled && policy.allowedDomains.length ? policy.allowedDomains : undefined,
       deniedDomains: policy.deniedDomains.length ? policy.deniedDomains : undefined,
       protected: uniqueStrings(protectedPaths.map(resolvePath)),
       backend,
@@ -228,7 +232,7 @@ export namespace Isolation {
 
   /** Whether a non-empty egress allowlist applies to this state. */
   export function egressConfigured(state: State | undefined): boolean {
-    if (!state || state.mode === "full-access") return false
+    if (!state || state.mode === "full-access" || !state.network) return false
     return (state.allowedDomains?.length ?? 0) > 0
   }
 

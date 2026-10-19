@@ -70,6 +70,24 @@ describe("Isolation egress state", () => {
     expect(Isolation.egressConfigured(state)).toBe(false)
   })
 
+  test("an explicit process-level network denial clears the allowlist", () => {
+    const previous = process.env.AX_CODE_ISOLATION_NETWORK
+    process.env.AX_CODE_ISOLATION_NETWORK = "false"
+    try {
+      const state = Isolation.resolve(
+        { mode: "workspace-write", network: { allowed_domains: ["registry.npmjs.org"] } },
+        "/tmp",
+      )
+      expect(state.network).toBe(false)
+      expect(state.allowedDomains).toBeUndefined()
+      expect(Isolation.egressConfigured(state)).toBe(false)
+      expect(Isolation.egressEnforcement(state, "darwin")).toBe("off")
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_ISOLATION_NETWORK
+      else process.env.AX_CODE_ISOLATION_NETWORK = previous
+    }
+  })
+
   test("enforcement is platform-dependent", () => {
     const state = Isolation.resolve({ mode: "workspace-write", network: { allowed_domains: ["example.com"] } }, "/tmp")
     expect(Isolation.egressEnforcement(state, "darwin")).toBe("enforced")
