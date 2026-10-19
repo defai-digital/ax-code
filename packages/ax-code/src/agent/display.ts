@@ -11,6 +11,8 @@ const AGENT_DISPLAY: Record<string, string> = {
   perf: "Perf",
   devops: "DevOps",
   test: "Tester",
+  cloudops: "Cloud Ops",
+  "goal-plan-writer": "Goal Plan Writer",
 }
 
 export function agentDisplay(name: string): string {

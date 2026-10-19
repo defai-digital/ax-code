@@ -22,6 +22,10 @@ describe("quality.run-report-format", () => {
   test("formats labels, numbers, durations, and timestamps", () => {
     expect(agentDisplay("debug")).toBe("Debugger")
     expect(agentDisplay("custom")).toBe("Custom")
+    // Registry-declared display names must not drift back to title-case
+    // fallbacks in run reports and graphs.
+    expect(agentDisplay("cloudops")).toBe("Cloud Ops")
+    expect(agentDisplay("goal-plan-writer")).toBe("Goal Plan Writer")
     expect(num(1234567)).toBe("1,234,567")
     expect(time(undefined)).toBe("0s")
     expect(time(59_900)).toBe("59s")
