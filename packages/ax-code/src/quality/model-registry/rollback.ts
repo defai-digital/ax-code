@@ -44,6 +44,12 @@ export async function rollbackPromotion(
       `Cannot rollback model ${promotion.source}: promotion ${promotion.promotionID} is not the latest promotion (${latest.promotionID})`,
     )
   }
+  const priorRollbacks = await QualityModelRegistry.listRollbacks(promotion.source)
+  if (priorRollbacks.some((record) => record.promotionID === promotion.promotionID)) {
+    throw new Error(
+      `Cannot rollback model ${promotion.source}: promotion ${promotion.promotionID} is already rolled back`,
+    )
+  }
 
   const resultingActive = promotion.previousActiveSource
     ? await QualityModelRegistry.activate(promotion.previousActiveSource)
@@ -55,7 +61,6 @@ export async function rollbackPromotion(
   const decision = options?.force ? "force" : status === "warn" ? "warn_override" : "fail_guard"
   const rolledBackAt = new Date().toISOString()
   const rollbackID = `${Date.now()}-${encode(promotion.source)}`
-  const priorRollbacks = await QualityModelRegistry.listRollbacks(promotion.source)
   const stability = QualityStabilityGuard.summarize({
     source: promotion.source,
     rollbacks: [...priorRollbacks, { source: promotion.source, rolledBackAt }],

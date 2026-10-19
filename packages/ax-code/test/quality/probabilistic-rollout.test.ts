@@ -2910,6 +2910,38 @@ describe("QualityShadow", () => {
     }
   })
 
+  test("does not roll back the same promotion twice", async () => {
+    await clearModelRegistry()
+    try {
+      const previous = createModel("double-rollback-previous-v1")
+      await QualityModelRegistry.register(previous)
+      await QualityModelRegistry.activate(previous.source)
+
+      const releasePolicyResolution = await QualityPromotionReleasePolicyStore.resolve({
+        policy: QualityPromotionReleasePolicy.defaults(),
+      })
+      const releasePolicy = {
+        policy: releasePolicyResolution.policy,
+        provenance: QualityPromotionReleasePolicyStore.provenance(releasePolicyResolution),
+      }
+      const bundle = createBenchmarkBundle("double-rollback-candidate-v1", "pass")
+      await QualityModelRegistry.promote(bundle, { releasePolicy })
+      const second = await QualityModelRegistry.promote(bundle, { releasePolicy })
+      expect(second.record.previousActiveSource).toBe(second.record.source)
+
+      const watch = createWatchSummary({
+        source: second.record.source,
+        promotedAt: second.record.promotedAt,
+        status: "fail",
+      })
+      await QualityModelRegistry.rollbackPromotion(second.record, watch)
+
+      await expect(QualityModelRegistry.rollbackPromotion(second.record, watch)).rejects.toThrow("already rolled back")
+    } finally {
+      await clearModelRegistry()
+    }
+  })
+
   test("requires at least one fresh approver beyond the rolled-back promotion approver set", async () => {
     await clearModelRegistry()
     try {
