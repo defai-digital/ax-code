@@ -2570,6 +2570,36 @@ describe("QualityShadow", () => {
     }
   })
 
+  test("records the rollback cooldown from the watch release policy", async () => {
+    await clearModelRegistry()
+    try {
+      const promoted = await QualityModelRegistry.promote(createBenchmarkBundle("rollback-policy-cooldown-v1", "pass"))
+      const watch = createWatchSummary({
+        source: promoted.record.source,
+        promotedAt: promoted.record.promotedAt,
+        status: "fail",
+      })
+      watch.releasePolicy!.policy.stability = {
+        cooldownHours: 72,
+        repeatFailureWindowHours: 336,
+        repeatFailureThreshold: 3,
+      }
+
+      const rolledBack = await QualityModelRegistry.rollbackPromotion(promoted.record, watch)
+      const stability = rolledBack.record.stability
+      expect(stability?.cooldownHours).toBe(72)
+      expect(stability?.repeatFailureWindowHours).toBe(336)
+      expect(stability?.repeatFailureThreshold).toBe(3)
+      expect(Date.parse(stability!.cooldownUntil!) - Date.parse(rolledBack.record.rolledBackAt)).toBe(72 * 3_600_000)
+
+      const reentryContext = await QualityReentryContext.latest("rollback-policy-cooldown-v1")
+      expect(reentryContext?.stability.cooldownUntil).toBe(stability?.cooldownUntil)
+      expect(reentryContext?.stability.repeatFailureThreshold).toBe(3)
+    } finally {
+      await clearModelRegistry()
+    }
+  })
+
   test("requires explicit override to rollback a warn-only watch", async () => {
     await clearModelRegistry()
     try {

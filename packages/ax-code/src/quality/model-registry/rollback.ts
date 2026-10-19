@@ -61,9 +61,11 @@ export async function rollbackPromotion(
   const decision = options?.force ? "force" : status === "warn" ? "warn_override" : "fail_guard"
   const rolledBackAt = new Date().toISOString()
   const rollbackID = `${Date.now()}-${encode(promotion.source)}`
+  // Record the cooldown the release policy will actually enforce, not the defaults.
   const stability = QualityStabilityGuard.summarize({
     source: promotion.source,
     rollbacks: [...priorRollbacks, { source: promotion.source, rolledBackAt }],
+    ...watch.releasePolicy?.policy.stability,
   })
   const record = QualityModelRegistry.RollbackRecord.parse({
     schemaVersion: 1,
