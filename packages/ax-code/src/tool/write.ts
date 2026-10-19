@@ -117,7 +117,7 @@ export const WriteTool = Tool.define("write", {
       }
       ctx.abort.throwIfAborted()
 
-      await Filesystem.write(filepath, params.content)
+      await Filesystem.write(filepath, params.content, undefined, { followSymlink: true })
       await notifyFileEdited(filepath, exists ? "change" : "add")
       await FileTime.read(ctx.sessionID, filepath)
       // Match edit/multiedit/apply_patch: feed BlastRadius the diff churn

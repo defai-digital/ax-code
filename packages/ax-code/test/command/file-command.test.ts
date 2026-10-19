@@ -360,3 +360,26 @@ Local template
     })
   })
 })
+
+test("command names that match Object.prototype members resolve only to real commands", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const commandDir = path.join(dir, ".agents", "commands")
+      await fs.mkdir(commandDir, { recursive: true })
+      await fs.writeFile(path.join(commandDir, "constructor.md"), "Build the thing.\n")
+    },
+  })
+
+  await withTestHome(path.join(tmp.path, "home"), async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Command.get("toString")).toBeUndefined()
+        const command = await Command.get("constructor")
+        expect(command?.source).toBe("file")
+        expect((await Command.list()).some((item) => item.name === "constructor")).toBe(true)
+      },
+    })
+  })
+})

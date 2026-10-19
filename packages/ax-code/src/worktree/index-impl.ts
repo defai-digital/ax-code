@@ -281,14 +281,24 @@ export namespace Worktree {
     )
   }
 
-  async function prune(root: string, entries: string[]) {
+  /** Exported for tests: delete leftovers `git clean` reported it could not remove. */
+  export async function prune(root: string, entries: string[]) {
     const base = await canonical(root)
     await Promise.all(
       entries.map(async (entry) => {
-        const target = await canonical(path.resolve(root, entry))
-        if (target === base) return
-        if (!target.startsWith(`${base}${path.sep}`)) return
-        await fs.rm(target, { recursive: true, force: true }).catch(() => undefined)
+        // Contain by the canonical parent but delete the entry's own path:
+        // canonicalizing the entry itself follows a symlink, and removing the
+        // resolved target would recursively delete the tree it points at.
+        const target = path.resolve(root, entry)
+        const parent = await canonical(path.dirname(target))
+        if (parent !== base && !parent.startsWith(`${base}${path.sep}`)) return
+        if (path.basename(target) === "" || target === path.resolve(root)) return
+        await fs
+          .rm(path.join(await realOnDiskPath(path.dirname(target)), path.basename(target)), {
+            recursive: true,
+            force: true,
+          })
+          .catch(() => undefined)
       }),
     )
   }
@@ -736,6 +746,17 @@ export namespace Worktree {
 
       return start().catch((error) => {
         log.error("worktree start task failed", { directory: info.directory, error })
+        // Clients wait for ready or failed; an unexpected throw must still
+        // settle them like the handled failure paths above.
+        GlobalBus.emit("event", {
+          directory: info.directory,
+          payload: {
+            type: Event.Failed.type,
+            properties: {
+              message: NamedError.message(error) || "Worktree start task failed",
+            },
+          },
+        })
         return false
       })
     }
@@ -1002,6 +1023,9 @@ export namespace Worktree {
       return true
     }
 
+    // A timer queued under git's spelling of the path (list/restart paths)
+    // is not keyed by the caller's spelling cancelled above.
+    cancelPendingStartScripts(entry.path)
     await stop(entry.path)
     const removed = await git(["worktree", "remove", "--force", entry.path], {
       cwd: Instance.worktree,
@@ -1151,7 +1175,9 @@ export namespace Worktree {
       // A local-only repository can carry its primary branch under any name
       // (for example `trunk`): the primary checkout's own HEAD is the
       // repository's default branch, so fall back to it before failing.
-      const head = await git(["symbolic-ref", "--short", "HEAD"], { cwd: Instance.worktree })
+      // Instance.worktree is the sandbox itself when the instance runs inside
+      // one; its HEAD is the sandbox branch, so reset would target itself.
+      const head = await git(["symbolic-ref", "--short", "HEAD"], { cwd: Instance.project.worktree })
       const headBranch = head.exitCode === 0 ? outputText(head.stdout).trim() : ""
       if (headBranch) {
         const headCheck = await git(["show-ref", "--verify", "--quiet", `refs/heads/${headBranch}`], {

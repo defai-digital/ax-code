@@ -4,11 +4,19 @@
 // ref'd because the CLI awaits those sleeps as a correctness boundary. Do not
 // merge the two — the timer lifetime is the contract.
 
+// Node fires a delay above 2^31-1 ms (including Infinity) after ~1 ms, so a
+// long or "never" deadline would expire at once. Same clamp as timeout.ts.
+const MAX_TIMER_DELAY_MS = 2_147_483_647
+function clampDelay(ms: number) {
+  if (Number.isNaN(ms)) return 0
+  return Math.min(Math.max(ms, 0), MAX_TIMER_DELAY_MS)
+}
+
 // Resolve after `ms`, with the timer unref'd so a pending sleep never keeps
 // the process alive (e.g. a lock poll loop during shutdown).
 export function sleep(ms: number): Promise<void> {
   return new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms)
+    const timer = setTimeout(resolve, clampDelay(ms))
     timer.unref?.()
   })
 }
@@ -30,7 +38,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, message?: string
       if (settled) return
       settled = true
       reject(new Error(message ?? `Operation timed out after ${ms}ms`))
-    }, ms)
+    }, clampDelay(ms))
     timer.unref?.()
     promise.then(
       (value) => {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { writeFile, readFile, chmod } from "node:fs/promises"
+import { writeFile, readFile, chmod, mkdir } from "node:fs/promises"
 import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -93,6 +93,28 @@ describe("Format", () => {
         // and the added extension was silently ignored).
         expect(gofmt).toBeDefined()
         expect(gofmt!.extensions).toContain(".gofmtextra")
+      },
+    })
+  })
+
+  test("an extensions-only override keeps the built-in availability check", async () => {
+    await using tmp = await tmpdir({
+      config: {
+        formatter: {
+          prettier: { extensions: [".js", ".prettierextra"] },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // The fixture has no package.json, so the built-in prettier detection
+        // reports it unavailable; adding an extension must not force it on.
+        const prettier = (await Format.status()).find((status) => status.name === "prettier")
+        expect(prettier).toBeDefined()
+        expect(prettier!.extensions).toContain(".prettierextra")
+        expect(prettier!.enabled).toBe(false)
       },
     })
   })
@@ -207,6 +229,34 @@ describe("Format", () => {
     expect(max).toBe(2)
   })
 
+  test("passes filenames containing replacement patterns through literally", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+
+    await using tmp = await tmpdir({
+      config: {
+        formatter: {
+          literal: {
+            command: ["sh", "-c", 'printf formatted > "$1"', "sh", "$FILE"],
+            extensions: [".lit"],
+          },
+        },
+      },
+    })
+
+    const file = `${tmp.path}/a$&b$$c.lit`
+    await writeFile(file, "x")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Format.init()
+        await Bus.publish(File.Event.Edited, { file })
+      },
+    })
+
+    expect(await readFile(file, "utf-8")).toBe("formatted")
+  })
+
   test("runs matching formatters sequentially for the same file", async () => {
     // This fixture intentionally defines executable project formatters. The
     // production default rejects those until the user explicitly trusts the
@@ -288,6 +338,54 @@ describe("Format", () => {
     },
   )
 
+  test("a formatter probe whose spawn throws reports the formatter unavailable", async () => {
+    const whichSpy = vi.spyOn(Which, "which").mockImplementation((name) => (name === "uv" ? "/fixture/uv" : null))
+    const spawnSpy = vi.spyOn(Process, "spawn").mockImplementation(() => {
+      throw Object.assign(new Error("spawn EMFILE"), { code: "EMFILE" })
+    })
+    try {
+      await expect(Formatter.uvformat.enabled()).resolves.toBe(false)
+    } finally {
+      whichSpy.mockRestore()
+      spawnSpy.mockRestore()
+    }
+  })
+
+  test("ruff detection reads an ancestor pyproject.toml past a nearer one without [tool.ruff]", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const pkg = path.join(tmp.path, "pkg")
+    await mkdir(pkg)
+    await writeFile(path.join(tmp.path, "pyproject.toml"), "[tool.ruff]\nline-length = 100\n")
+    await writeFile(path.join(pkg, "pyproject.toml"), "[project]\nname = 'pkg'\n")
+    const whichSpy = vi.spyOn(Which, "which").mockImplementation((name) => (name === "ruff" ? "/fixture/ruff" : null))
+    try {
+      await Instance.provide({
+        directory: pkg,
+        fn: async () => {
+          await expect(Formatter.ruff.enabled()).resolves.toBe(true)
+        },
+      })
+    } finally {
+      whichSpy.mockRestore()
+    }
+  })
+
+  test("ruff detection accepts a [tool.ruff.*] subtable", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(path.join(tmp.path, "pyproject.toml"), "[tool.ruff.lint]\nselect = ['E']\n")
+    const whichSpy = vi.spyOn(Which, "which").mockImplementation((name) => (name === "ruff" ? "/fixture/ruff" : null))
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(Formatter.ruff.enabled()).resolves.toBe(true)
+        },
+      })
+    } finally {
+      whichSpy.mockRestore()
+    }
+  })
+
   test("formatter help checks wait for process kill to complete on timeout", async () => {
     const originalSetTimeout = globalThis.setTimeout
     const setTimeoutSpy = (
@@ -349,25 +447,28 @@ describe("Format", () => {
     })
   })
 
-  test.skipIf(process.platform === "win32")("status() tolerates an unreadable ruff config instead of rejecting", async () => {
-    await using tmp = await tmpdir()
-    // ruff.enabled() reads pyproject.toml to look for [tool.ruff]; an
-    // unreadable file used to throw out of enabled() and reject status().
-    const config = path.join(tmp.path, "pyproject.toml")
-    await writeFile(config, "[tool.ruff]\n")
-    await chmod(config, 0)
-    const whichSpy = vi.spyOn(Which, "which").mockReturnValue("/usr/local/bin/ruff")
+  test.skipIf(process.platform === "win32")(
+    "status() tolerates an unreadable ruff config instead of rejecting",
+    async () => {
+      await using tmp = await tmpdir()
+      // ruff.enabled() reads pyproject.toml to look for [tool.ruff]; an
+      // unreadable file used to throw out of enabled() and reject status().
+      const config = path.join(tmp.path, "pyproject.toml")
+      await writeFile(config, "[tool.ruff]\n")
+      await chmod(config, 0)
+      const whichSpy = vi.spyOn(Which, "which").mockReturnValue("/usr/local/bin/ruff")
 
-    try {
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          await expect(Format.status()).resolves.toEqual(expect.any(Array))
-        },
-      })
-    } finally {
-      whichSpy.mockRestore()
-      await chmod(config, 0o600).catch(() => undefined)
-    }
-  })
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await expect(Format.status()).resolves.toEqual(expect.any(Array))
+          },
+        })
+      } finally {
+        whichSpy.mockRestore()
+        await chmod(config, 0o600).catch(() => undefined)
+      }
+    },
+  )
 })

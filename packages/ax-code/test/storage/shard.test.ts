@@ -62,6 +62,12 @@ describe("Shard.handle", () => {
     expect(Shard.openCount()).toBe(1)
     Shard.close(id)
   })
+
+  test("rejects an async use() callback like the transaction path", () => {
+    const id = pid("project-async-use")
+    expect(() => Shard.handle(id).use((async () => {}) as unknown as () => void)).toThrow("must be synchronous")
+    Shard.close(id)
+  })
 })
 
 describe("Shard LRU eviction", () => {

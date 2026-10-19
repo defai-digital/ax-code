@@ -59,10 +59,18 @@ type HelpCheckResult = {
 }
 
 async function runHelpCommand(cmd: string[]): Promise<HelpCheckResult | null> {
-  const proc = Process.spawn(cmd, {
-    stdout: "pipe",
-    stderr: "pipe",
-  })
+  // A synchronous spawn failure (EMFILE, EAGAIN, ...) must not throw out of
+  // `enabled()`, which would abort the whole formatter set.
+  let proc: ReturnType<typeof Process.spawn>
+  try {
+    proc = Process.spawn(cmd, {
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+  } catch (error) {
+    log.warn("formatter probe failed to start", { cmd: cmd[0], error })
+    return null
+  }
   if (!proc.stdout || !proc.stderr) return null
 
   let timedOut = false
@@ -261,8 +269,13 @@ export const ruff: Info = {
       const found = await Filesystem.findUp(config, Instance.directory, Instance.worktree)
       if (found.length > 0) {
         if (config === "pyproject.toml") {
-          const content = await readTextForDetection(found[0])
-          if (content.includes("[tool.ruff]")) return true
+          // Like ruff's own discovery, a nearer pyproject.toml without a
+          // [tool.ruff] table does not hide an ancestor's configuration.
+          for (const file of found) {
+            const content = await readTextForDetection(file)
+            // `[tool.ruff]` or any `[tool.ruff.*]` subtable header configures ruff.
+            if (/^\s*\[tool\.ruff[\].]/m.test(content)) return true
+          }
         } else {
           return true
         }

@@ -111,14 +111,46 @@ describe("Patch namespace", () => {
       expect(hunk.chunks[0].is_end_of_file).toBe(true)
     })
 
-    test("starts an implicit chunk when the first chunk omits the @@ marker", () => {
+    test("keeps hunks after a context line that reads *** End Patch", () => {
       const patchText = [
         "*** Begin Patch",
-        "*** Update File: file.py",
-        " import foo",
-        "+bar",
+        "*** Update File: prompt.txt",
+        "@@",
+        " *** End Patch",
+        "-old",
+        "+new",
+        "*** Update File: second.txt",
+        "@@",
+        "-a",
+        "+b",
         "*** End Patch",
       ].join("\n")
+
+      const result = Patch.parsePatch(patchText)
+      expect(result.hunks.map((hunk) => hunk.path)).toEqual(["prompt.txt", "second.txt"])
+      const first = result.hunks[0]
+      if (first.type !== "update") throw new Error("expected update hunk")
+      expect(first.chunks[0].old_lines).toEqual(["*** End Patch", "old"])
+    })
+
+    test("keeps unprefixed *** content lines in an added file", () => {
+      const patchText = [
+        "*** Begin Patch",
+        "*** Add File: README.md",
+        "+# Title",
+        "***",
+        "+more text",
+        "*** End Patch",
+      ].join("\n")
+
+      const result = Patch.parsePatch(patchText)
+      expect(result.hunks).toEqual([{ type: "add", path: "README.md", contents: "# Title\n***\nmore text\n" }])
+    })
+
+    test("starts an implicit chunk when the first chunk omits the @@ marker", () => {
+      const patchText = ["*** Begin Patch", "*** Update File: file.py", " import foo", "+bar", "*** End Patch"].join(
+        "\n",
+      )
 
       const result = Patch.parsePatch(patchText)
       expect(result.hunks).toHaveLength(1)
@@ -392,9 +424,14 @@ PATCH`
       const filePath = path.join(tempDir, "implicit-chunk.txt")
       await fs.writeFile(filePath, "import foo\nold\n")
 
-      const patchText = ["*** Begin Patch", `*** Update File: ${filePath}`, " import foo", "-old", "+new", "*** End Patch"].join(
-        "\n",
-      )
+      const patchText = [
+        "*** Begin Patch",
+        `*** Update File: ${filePath}`,
+        " import foo",
+        "-old",
+        "+new",
+        "*** End Patch",
+      ].join("\n")
 
       const result = await Patch.applyPatch(patchText)
       expect(result.modified).toHaveLength(1)

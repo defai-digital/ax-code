@@ -165,6 +165,37 @@ describe("Discovery.pull", () => {
     }
   })
 
+  test("resolves a pack URL with a query or fragment against the pack path", async () => {
+    const implementation = pinnedFetchSpy.getMockImplementation()!
+    const requested: string[] = []
+    pinnedFetchSpy.mockImplementation(async (url) => {
+      requested.push(String(url))
+      if (String(url) === `${origin}/query-pack/security/index.json?ref=v3`)
+        return Response.json({
+          skills: [{ name: "query-skill", files: [{ path: "SKILL.md", sha256: safeSkillHash }] }],
+        })
+      if (String(url) === `${origin}/query-pack/security/query-skill/SKILL.md?ref=v3`)
+        return new Response(safeSkillBody)
+      return new Response("not found", { status: 404 })
+    })
+    try {
+      expect(await pull(`${origin}/query-pack/security?ref=v3#top`)).toHaveLength(1)
+      // The query stays on every request (it can select or authorize the pack).
+      expect(requested.sort()).toEqual(
+        [
+          `${origin}/query-pack/security/index.json?ref=v3`,
+          `${origin}/query-pack/security/query-skill/SKILL.md?ref=v3`,
+        ].sort(),
+      )
+    } finally {
+      pinnedFetchSpy.mockImplementation(implementation)
+    }
+  })
+
+  test("skips a malformed pack URL instead of throwing", async () => {
+    await expect(pull("not a url")).resolves.toEqual([])
+  })
+
   test("ignores malformed Unicode filenames without rejecting a valid skill", async () => {
     pinnedFetchSpy.mockResolvedValueOnce(
       Response.json({

@@ -15,6 +15,8 @@ function user(text: string) {
 
 test("encodeProjectPath mirrors Claude Code's directory naming", () => {
   expect(ClaudeSessions.encodeProjectPath("/Users/me/project")).toBe("-Users-me-project")
+  // Dots, underscores, and spaces are encoded like separators.
+  expect(ClaudeSessions.encodeProjectPath("/Users/me/.config/my_app v2")).toBe("-Users-me--config-my-app-v2")
   expect(ClaudeSessions.projectDirectory({ root: "/r", projectPath: "/Users/me/project" })).toBe(
     path.join("/r", "-Users-me-project"),
   )

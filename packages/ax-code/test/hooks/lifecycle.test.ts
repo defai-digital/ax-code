@@ -58,6 +58,50 @@ describe("LifecycleHooks matcher and run", () => {
     expect(allowed.blocked).toBe(false)
   })
 
+  test.each([
+    ["git push -uf origin HEAD", true],
+    ["git push -fv origin HEAD", true],
+    ["git -C /repo push --force", true],
+    ["git push --force-with-lease origin main", true],
+    ["git push origin +HEAD:main", true],
+    ["cd repo && git push -f", true],
+    ["git push -u origin feature", false],
+    ["git fetch -f origin", false],
+    ["git push origin main && echo +done", false],
+    ['git push "--force" origin main', true],
+    ["sh -c 'git push --force origin main'", true],
+    ["git -C push log -f", false],
+    ["git --git-dir .git push -f", true],
+    ["(git push --force)", true],
+    ["echo $(git push -f)", true],
+    ['git -C "my repo" push --force', true],
+    ["git --super-prefix pref push --force", true],
+    ["C:\\Git\\bin\\git.exe push --force", true],
+    ['git push "a;b" --force', true],
+  ])("block-force-push decides %s", async (command, expected) => {
+    const hooks = LifecycleHooks.listBuiltinPacks().find((p) => p.name === "block-force-push")!.hooks
+    const result = await LifecycleHooks.runHooks(hooks, {
+      event: "PreToolUse",
+      tool: "bash",
+      args: { command },
+      cwd: process.cwd(),
+    })
+    expect(result.blocked).toBe(expected)
+  })
+
+  test("an out-of-range hook timeout falls back to the default instead of firing at once", async () => {
+    vi.stubEnv("AX_CODE_HOOK_TIMEOUT_MS", "3000000000")
+    try {
+      const result = await LifecycleHooks.runHooks(
+        [{ event: "PreToolUse", command: 'node -e "setTimeout(()=>process.exit(0),200)"', blockOnFailure: true }],
+        { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+      )
+      expect(result.blocked).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   test("sends large hook arguments through stdin without exceeding spawn environment limits", async () => {
     const result = await LifecycleHooks.runHooks(
       [

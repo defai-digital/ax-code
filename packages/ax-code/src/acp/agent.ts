@@ -984,6 +984,9 @@ export namespace ACP {
           command: command.name,
           arguments: cmd.args,
           model: providerModelKey(model),
+          // Same variant as the direct prompt path, so a slash command does not
+          // silently run on the model's default variant.
+          variant: this.sessionManager.getVariant(sessionID),
           agent,
           directory,
         })

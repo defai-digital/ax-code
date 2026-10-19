@@ -115,3 +115,66 @@ test("reset falls back to the primary checkout's branch when no remote or main/m
     },
   })
 })
+
+test("removing a user's linked worktree keeps its branch, even when recorded", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await using external = await tmpdir()
+  const directory = path.join(external.path, "feature-tree")
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: tmp.path, encoding: "utf8", stdio: "pipe" })
+  git("worktree", "add", "-b", "feature", directory)
+  execFileSync("git", ["commit", "--allow-empty", "-m", "unmerged work"], { cwd: directory, stdio: "pipe" })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Project.addSandbox(Instance.project.id, directory)
+      await expect(Worktree.remove({ directory })).resolves.toBe(true)
+      expect(git("worktree", "list", "--porcelain")).not.toContain(directory)
+      expect(git("branch", "--list", "feature").trim()).toBe("feature")
+    },
+  })
+})
+
+test("reset from inside a sandbox targets the primary checkout's branch", async () => {
+  await using tmp = await tmpdir()
+  const run = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" })
+  run(tmp.path, "init", "-b", "trunk")
+  run(tmp.path, "config", "user.email", "test@example.com")
+  run(tmp.path, "config", "user.name", "test")
+  run(tmp.path, "commit", "--allow-empty", "-m", "init")
+  const trunk = run(tmp.path, "rev-parse", "HEAD").trim()
+
+  const info = await Instance.provide({
+    directory: tmp.path,
+    fn: () => Worktree.create({ name: "inner-reset" }),
+  })
+  await vi.waitFor(async () => expect(await fs.stat(path.join(info.directory, ".git"))).toBeTruthy())
+  run(info.directory, "commit", "--allow-empty", "-m", "sandbox work")
+  expect(run(info.directory, "rev-parse", "HEAD").trim()).not.toBe(trunk)
+
+  await Instance.provide({
+    directory: info.directory,
+    fn: async () => {
+      await expect(Worktree.reset({ directory: info.directory })).resolves.toBeTruthy()
+    },
+  })
+  expect(run(info.directory, "rev-parse", "HEAD").trim()).toBe(trunk)
+})
+
+test.skipIf(process.platform === "win32")(
+  "pruning a git clean leftover removes a symlink without following it",
+  async () => {
+    await using tmp = await tmpdir()
+    const tracked = path.join(tmp.path, "packages")
+    await fs.mkdir(tracked)
+    await fs.writeFile(path.join(tracked, "keep.txt"), "tracked\n")
+    await fs.symlink(tracked, path.join(tmp.path, "evil-link"))
+    await fs.writeFile(path.join(tmp.path, "stale.txt"), "untracked\n")
+
+    await Worktree.prune(tmp.path, ["evil-link", "stale.txt", "..", "."])
+
+    await expect(fs.lstat(path.join(tmp.path, "evil-link"))).rejects.toMatchObject({ code: "ENOENT" })
+    await expect(fs.stat(path.join(tmp.path, "stale.txt"))).rejects.toMatchObject({ code: "ENOENT" })
+    expect(await fs.readFile(path.join(tracked, "keep.txt"), "utf8")).toBe("tracked\n")
+  },
+)

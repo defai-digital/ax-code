@@ -390,3 +390,12 @@ wait`,
     })
   })
 })
+
+describe("pty replay frames", () => {
+  test("never split a surrogate pair across frames", () => {
+    const data = "ab😀cd"
+    const frames = Pty.replayFrames(data, 3)
+    expect(frames.join("")).toBe(data)
+    for (const frame of frames) expect(frame.isWellFormed()).toBe(true)
+  })
+})

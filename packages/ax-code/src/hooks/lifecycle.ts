@@ -68,13 +68,16 @@ const log = Log.create({ service: "hooks.lifecycle" })
 
 export namespace LifecycleHooks {
   const HOOK_TIMEOUT_MS = 30_000
+  const MAX_TIMER_MS = 2_147_483_647
   const MAX_CONCURRENT_HOOKS = 4
   const MAX_CAPTURE_BYTES = 1024 * 1024
   /** Read per call so tests can shorten it; an invalid value falls back. */
   function hookTimeoutMs(): number {
     const raw = process.env["AX_CODE_HOOK_TIMEOUT_MS"]
     const parsed = raw === undefined || raw === "" ? Number.NaN : Number(raw)
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : HOOK_TIMEOUT_MS
+    // Node treats a delay above 2^31-1 ms as 1 ms, which would kill every hook
+    // at once (and block every blockOnFailure tool), so reject those too.
+    return Number.isFinite(parsed) && parsed > 0 && parsed <= MAX_TIMER_MS ? parsed : HOOK_TIMEOUT_MS
   }
   const MAX_COMPAT_ENV_BYTES = 32 * 1024
   const FULL_ENV_FLAG = "AX_CODE_HOOKS_FULL_ENV"
@@ -385,7 +388,12 @@ export namespace LifecycleHooks {
           event: "PreToolUse",
           matcher: "bash",
           blockOnFailure: true,
-          command: `node -e "${READ_HOOK_ARGS}const c=String(a.command||'');if(/git\\s+push\\s+.*(--force|-f)\\b/.test(c)){console.error('Blocked force push by block-force-push hook');process.exit(2)}"`,
+          // Quote-aware token scan per command segment, recursing into quoted
+          // nested commands (sh -c '...'): git options may precede `push`
+          // (git -C repo push), short flags cluster (-uf), and a `+refspec`
+          // force-updates without any flag. The plain substring check stays as
+          // a second net for shapes the tokenizer does not model.
+          command: `node -e "${READ_HOOK_ARGS}const D=String.fromCharCode(34),S=String.fromCharCode(39);const tok=s=>{const o=[];let c='',q='';for(const h of s){if(q){if(h===q)q='';else c+=h}else if(h===D||h===S)q=h;else if(/\\s/.test(h)){if(c)o.push(c);c=''}else c+=h}if(c)o.push(c);return o};const opt=['-C','-c','--git-dir','--work-tree','--namespace','--super-prefix','--attr-source','--config-env','--exec-path','--list-cmds'];const chk=s=>s.split(/[;&|\\n]+/).some(seg=>{const t=tok(seg).map(x=>x.replace(/^[($\\x60{]+/,'').replace(/[)\\x60}]+$/,''));if(t.some(x=>/\\s/.test(x)&&chk(x)))return true;const g=t.findIndex(x=>/(^|\\/)git(\\.exe)?$/i.test(x.split(String.fromCharCode(92)).join('/')));if(g<0)return false;let p=-1;for(let i=g+1;i<t.length;i++){if(opt.includes(t[i])){i++;continue}if(t[i].startsWith('-'))continue;p=i;break}if(p<0||t[p]!=='push')return false;return t.slice(p+1).some(x=>x.startsWith('--force')||/^-[a-zA-Z0-9]*f/.test(x)||(x.startsWith('+')&&x.length>1))});const cmd=String(a.command||'');if(chk(cmd)||/git(\\.exe)?\\s+push\\s+.*(--force|-f)\\b/i.test(cmd)){console.error('Blocked force push by block-force-push hook');process.exit(2)}"`,
           pack: "block-force-push",
         },
       ],

@@ -17,6 +17,43 @@ describe("Bus", () => {
     await Instance.disposeAll()
   })
 
+  test("once fires a single time for publishes queued in the same tick", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const seen: number[] = []
+        Bus.once(TestEvent, (event) => {
+          seen.push(event.properties.value)
+          return "done"
+        })
+        await Promise.all([Bus.publish(TestEvent, { value: 1 }), Bus.publish(TestEvent, { value: 2 })])
+        expect(seen).toEqual([1])
+      },
+    })
+  })
+
+  test("unsubscribing one registration keeps another registration of the same callback", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let calls = 0
+        const callback = () => {
+          calls++
+        }
+        const first = Bus.subscribe(TestEvent, callback)
+        Bus.subscribe(TestEvent, callback)
+        first()
+        first()
+        await Bus.publish(TestEvent, { value: 1 })
+        expect(calls).toBe(1)
+      },
+    })
+  })
+
   test("publish waits for async subscribers", async () => {
     await using tmp = await tmpdir()
 

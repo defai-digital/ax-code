@@ -41,8 +41,6 @@ function drain(stream: Readable): Promise<Buffer> {
   })
 }
 
-const TIMEOUT_FORCE_KILL_GRACE_MS = 250
-
 // Bounded grace before the exit pipes of a finished child are destroyed. A
 // single I/O cycle is not enough under load: pending pipe data can still be in
 // flight, and truncating it makes complete output look partial.
@@ -165,31 +163,27 @@ export function createProcess(killTree: ProcessKillTree): ProcessApi {
     })
 
     let closed = false
-    let forceKillTimer: ReturnType<typeof setTimeout> | undefined
     let timeoutTimer: ReturnType<typeof setTimeout> | undefined
     let timedOut = false
 
-    const terminate = (graceful = true) => {
+    const terminate = (timeout: boolean) => {
       if (closed) return
       if (proc.exitCode !== null || proc.signalCode !== null) return
       closed = true
       if (timeoutTimer) clearTimeout(timeoutTimer)
-      if (!graceful) timedOut = true
-      // Abort and timeout semantics diverge:
-      // - graceful (abort): prefer full-tree termination so we don't leave subprocesses behind,
-      //   with a short hard-kill fallback handled inside killProcessTree.
-      // - non-graceful (timeout): keep existing timed escalation behavior.
-      if (graceful) {
-        void killProcessTree(proc, { signal: opts.kill }).catch(() => undefined)
-        return
-      }
-
-      const signal = opts.kill ?? "SIGTERM"
-      proc.kill(signal)
-      if (TIMEOUT_FORCE_KILL_GRACE_MS <= 0) return
-      forceKillTimer = setTimeout(() => {
-        void killProcessTree(proc, { signal: opts.kill }).catch(() => undefined)
-      }, TIMEOUT_FORCE_KILL_GRACE_MS)
+      if (timeout) timedOut = true
+      // Abort and timeout both terminate the whole tree up front, with the
+      // hard-kill fallback inside killProcessTree. Signalling only the direct
+      // child first and deferring the tree kill lost the descendants whenever
+      // the child exited on that signal: its exit cleared the deferred kill,
+      // and the reparented grandchildren were never reaped.
+      void killProcessTree(proc, { signal: opts.kill }).catch(() => {
+        // The tree kill failed; still signal the direct child so it cannot
+        // outlive its timeout or abort.
+        try {
+          proc.kill(opts.kill ?? "SIGTERM")
+        } catch {}
+      })
     }
 
     const exited = new Promise<number>((resolve, reject) => {
@@ -197,7 +191,6 @@ export function createProcess(killTree: ProcessKillTree): ProcessApi {
         if (opts.abort && onAbort) {
           opts.abort.removeEventListener("abort", onAbort)
         }
-        if (forceKillTimer) clearTimeout(forceKillTimer)
         if (timeoutTimer) clearTimeout(timeoutTimer)
       }
 
@@ -224,14 +217,14 @@ export function createProcess(killTree: ProcessKillTree): ProcessApi {
     })
     void exited.catch(() => undefined)
 
-    const onAbort = () => terminate(true)
+    const onAbort = () => terminate(false)
     if (opts.abort) {
       opts.abort.addEventListener("abort", onAbort, { once: true })
-      if (opts.abort.aborted) terminate(true)
+      if (opts.abort.aborted) terminate(false)
     }
 
     if (opts.timeout !== undefined) {
-      timeoutTimer = setTimeout(() => terminate(false), opts.timeout)
+      timeoutTimer = setTimeout(() => terminate(true), opts.timeout)
     }
 
     const child = proc as ProcessChild
@@ -248,6 +241,7 @@ export function createProcess(killTree: ProcessKillTree): ProcessApi {
       abort: opts.abort,
       kill: opts.kill,
       timeout: opts.timeout,
+      detached: opts.detached,
       stdout: "pipe",
       stderr: "pipe",
     })

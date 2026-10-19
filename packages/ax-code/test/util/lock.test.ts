@@ -205,3 +205,21 @@ describe("util.lock", () => {
     }
   })
 })
+
+describe("Lock queued readers", () => {
+  test("a reader queued behind a timed-out writer shares the held read lock", async () => {
+    const key = `lock-queued-reader-${Math.random()}`
+    using _held = await Lock.read(key)
+    const writer = Lock.write(key, { timeoutMs: 30 }).catch((error: Error) => error)
+    const reader = Lock.read(key, { timeoutMs: 1_000 })
+    expect(await writer).toBeInstanceOf(Error)
+    const granted = await Promise.race([
+      reader.then((lock) => {
+        lock[Symbol.dispose]()
+        return "granted"
+      }),
+      new Promise((resolve) => setTimeout(() => resolve("still waiting"), 200)),
+    ])
+    expect(granted).toBe("granted")
+  })
+})

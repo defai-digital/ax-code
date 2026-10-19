@@ -87,6 +87,11 @@ export interface RecordInput {
   /** Restrict this entry to a subset of agents (empty/undefined = all agents). */
   agents?: string[]
   /**
+   * Original save time to keep when restoring a removed entry (curation undo),
+   * applied under the same write lock. Defaults to now.
+   */
+  restoreSavedAt?: string
+  /**
    * Where to store the entry. "project" (default) saves to .ax-code/memory.json
    * in the project root. "global" saves to ~/.ax-code/memory.json and persists
    * across all projects — intended for user-level preferences and feedback.
@@ -177,7 +182,12 @@ export async function recordEntry(
       why: input.why?.trim() || undefined,
       howToApply: input.howToApply?.trim() || undefined,
     })
-    const savedAt = new Date().toISOString()
+    const restoredTime = input.restoreSavedAt ? new Date(input.restoreSavedAt).getTime() : Number.NaN
+    // Only a valid, non-future original time is restored; anything else is now.
+    const savedAt =
+      input.restoreSavedAt && Number.isFinite(restoredTime) && restoredTime <= Date.now()
+        ? input.restoreSavedAt
+        : new Date().toISOString()
     const entry: MemoryEntry = {
       name,
       body,
@@ -222,22 +232,35 @@ export async function removeEntry(
   name: string,
   scope: "project" | "global" = "project",
 ): Promise<boolean> {
+  return (await takeEntry(projectRoot, kind, name, scope)) !== undefined
+}
+
+/**
+ * Remove an entry by name and return the entry exactly as it was removed
+ * (read under the write lock), or undefined if it was not found.
+ */
+export async function takeEntry(
+  projectRoot: string,
+  kind: MemoryEntryKind,
+  name: string,
+  scope: "project" | "global" = "project",
+): Promise<MemoryEntry | undefined> {
   const isGlobal = scope === "global"
   return withMemoryWriteLock(memoryPath(projectRoot, isGlobal), async () => {
     const memory = isGlobal ? await store.loadGlobal() : await store.load(projectRoot)
-    if (!memory) return false
+    if (!memory) return undefined
     const section = memory.sections[kind]
-    if (!section) return false
-    const before = section.entries.length
+    if (!section) return undefined
     const targetName = nameKey(name)
+    const removed = section.entries.find((e) => nameKey(e.name) === targetName)
+    if (!removed) return undefined
     const filtered = section.entries.filter((e) => nameKey(e.name) !== targetName)
-    if (filtered.length === before) return false
     if (filtered.length === 0) memory.sections[kind] = undefined
     else memory.sections[kind] = rebuildSection(filtered)
     recomputeMetrics(memory)
     if (isGlobal) await store.saveGlobal(memory)
     else await store.save(projectRoot, memory)
-    return true
+    return removed
   })
 }
 

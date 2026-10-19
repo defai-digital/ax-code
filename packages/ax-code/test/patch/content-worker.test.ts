@@ -29,6 +29,7 @@ describe.skipIf(!enabled)("native patch content worker", () => {
       ["a\nb\n", [update(["a", ""], ["A", ""])]],
       ["a\na\n", [update(["a"], ["A"], { is_end_of_file: true })]],
       ["a \na\n", [update(["a"], ["A"], { is_end_of_file: true })]],
+      ["a\na \n", [update(["a"], ["A"], { is_end_of_file: true })]],
       ["a\nb\n", [update([], ["x"], { change_context: "a" }), update([], ["y"], { change_context: "" })]],
       ["a\n", [update([], ["x"]), update([], ["y"]), update([], ["z"])]],
       ["a\n\n", [update([], ["x"]), update([], ["y"])]],

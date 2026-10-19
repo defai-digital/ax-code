@@ -68,10 +68,15 @@ export namespace Format {
 
           if (info.command.length === 0) continue
 
+          // An override that only adjusts extensions or environment still
+          // runs the built-in command, so it keeps the built-in availability
+          // check (e.g. prettier only in projects that depend on it). A
+          // configured command is an explicit opt-in.
+          const builtin = formatters[name]
           formatters[name] = {
             ...info,
             name,
-            enabled: async () => true,
+            enabled: builtin && !command ? builtin.enabled : async () => true,
           }
         }
       } else {
@@ -116,7 +121,9 @@ export namespace Format {
             log.info("running", { command: item.command })
             try {
               const proc = Process.spawn(
-                item.command.map((x) => x.replace("$FILE", file)),
+                // A function replacer keeps `$&`, `$$`, and similar sequences in
+                // the filename literal.
+                item.command.map((x) => x.replaceAll("$FILE", () => file)),
                 {
                   cwd: Instance.directory,
                   env: { ...Env.sanitize(), ...item.environment },

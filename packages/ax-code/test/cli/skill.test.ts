@@ -15,6 +15,7 @@ import {
   createSkill,
   skillCreateContent,
   skillCreatePath,
+  SkillExistsError,
   SkillInputError,
 } from "../../src/skill/authoring"
 import { tmpdir } from "../fixture/fixture"
@@ -195,6 +196,23 @@ describe("skill command helpers", () => {
     expect(content).toContain("name: release-notes")
     expect(content).toContain("description: Draft release notes.")
     expect(content).toContain("# release-notes")
+  })
+
+  test("concurrent creates of the same skill name let exactly one succeed", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    const results = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        Promise.allSettled(
+          ["First description here.", "Second description here."].map((description) =>
+            createSkill({ name: "racer", description }),
+          ),
+        ),
+    })
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
+    const rejected = results.find((result) => result.status === "rejected")
+    expect((rejected as PromiseRejectedResult | undefined)?.reason).toBeInstanceOf(SkillExistsError)
   })
 
   test("createSkill validates names at the shared authoring boundary", async () => {

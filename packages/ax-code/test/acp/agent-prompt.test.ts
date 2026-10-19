@@ -6,6 +6,7 @@ import { tmpdir } from "../fixture/fixture"
 
 function createPromptAgent() {
   const promptCalls: any[] = []
+  const commandCalls: any[] = []
   const connectionAbort = new AbortController()
   const connection = {
     async sessionUpdate() {},
@@ -50,6 +51,10 @@ function createPromptAgent() {
         }
       },
       messages: async () => ({ data: [] }),
+      command: async (params: any) => {
+        commandCalls.push(params)
+        return { data: { info: { role: "assistant", tokens: { input: 0, output: 0, reasoning: 0 } } } }
+      },
     },
     config: {
       providers: async () => ({
@@ -72,7 +77,7 @@ function createPromptAgent() {
       }),
     },
     command: {
-      list: async () => ({ data: [] }),
+      list: async () => ({ data: [{ name: "review" }] }),
     },
     mcp: {
       add: async () => ({ data: true }),
@@ -84,7 +89,7 @@ function createPromptAgent() {
     defaultModel: { providerID: "opencode", modelID: "big-pickle" },
   } as any)
 
-  return { agent, promptCalls, stop: () => connectionAbort.abort() }
+  return { agent, promptCalls, commandCalls, stop: () => connectionAbort.abort() }
 }
 
 describe("ACP agent prompt", () => {
@@ -138,6 +143,28 @@ describe("ACP agent prompt", () => {
 
           expect(promptCalls).toHaveLength(1)
           expect(promptCalls[0].parts).toEqual([{ type: "text", text: "/not-a-command keep this text" }])
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("a slash command keeps the session's selected variant", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, commandCalls, stop } = createPromptAgent()
+
+        try {
+          const { sessionId } = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any)
+          ;(agent as any).sessionManager.setVariant(sessionId, "high")
+          await agent.prompt({ sessionId, prompt: [{ type: "text", text: "/review src" }] } as any)
+
+          expect(commandCalls).toHaveLength(1)
+          expect(commandCalls[0]).toMatchObject({ command: "review", variant: "high" })
         } finally {
           stop()
         }

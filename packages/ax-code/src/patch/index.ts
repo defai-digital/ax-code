@@ -215,7 +215,10 @@ export namespace Patch {
     let content = ""
     let i = startIdx
 
-    while (i < endIdx && !lines[i].startsWith("***")) {
+    // Stop only at the next file header: an unprefixed content line such as
+    // a Markdown "***" rule is content, and ending the body there dropped it
+    // and every following line without an error.
+    while (i < endIdx && !parsePatchHeader(lines, i)) {
       // A line with no "+" prefix is most often a blank line a model emitted
       // without the leading "+" — keep it as literal content instead of
       // silently dropping it (mirrors parseUpdateFileChunks's handling of
@@ -254,7 +257,10 @@ export namespace Patch {
     const endMarker = "*** End Patch"
 
     const beginIdx = lines.findIndex((line) => line.trim() === beginMarker)
-    const endIdx = lines.findIndex((line) => line.trim() === endMarker)
+    // The closing marker is the last one: a file line equal to "*** End Patch"
+    // can legitimately appear earlier as space-prefixed context, and taking
+    // the first match there silently dropped every later hunk.
+    const endIdx = lines.findLastIndex((line) => line.trim() === endMarker)
 
     if (beginIdx === -1 || endIdx === -1 || beginIdx >= endIdx) {
       throw new Error("Invalid patch format: missing Begin/End markers")
@@ -432,20 +438,14 @@ export namespace Patch {
             (a, b) => normalizeUnicode(a.trim()) === normalizeUnicode(b.trim()),
           )
           if (!pattern.length) return -1
-          for (const compare of passes) {
-            const found = tryMatch(
-              lines,
-              pattern,
-              start,
+          const counted = passes.map(
+            (compare): Comparator =>
               (a, b) => {
                 tick(a, b)
                 return compare(a, b)
               },
-              eof,
-            )
-            if (found !== -1) return found
-          }
-          return -1
+          )
+          return seekWithPasses(lines, pattern, start, counted, eof)
         }
         return deriveContent(originalContent, filePath, snapshot, seek, PATCH_MAX_OUTPUT)
       },
@@ -584,7 +584,14 @@ export namespace Patch {
 
   type Comparator = (a: string, b: string) => boolean
 
-  function tryMatch(lines: string[], pattern: string[], startIndex: number, compare: Comparator, eof: boolean): number {
+  function tryMatch(
+    lines: string[],
+    pattern: string[],
+    startIndex: number,
+    compare: Comparator,
+    eof: boolean,
+    eofOnly = false,
+  ): number {
     // If EOF anchor, try matching from end of file first
     if (eof) {
       const fromEnd = lines.length - pattern.length
@@ -599,6 +606,7 @@ export namespace Patch {
         if (matches) return fromEnd
       }
     }
+    if (eofOnly) return -1
 
     // Forward search from startIndex
     for (let i = startIndex; i <= lines.length - pattern.length; i++) {
@@ -624,7 +632,14 @@ export namespace Patch {
           { lines: lines.length, pattern: pattern.length, startIndex, eof },
           () => native.seekSequence(lines, pattern, startIndex, eof),
         )
-        if (found !== -1) return found
+        if (found !== -1) {
+          // The native passes already tried the tail first. A forward hit
+          // still has to lose to a JS-whitespace match at the tail, the same
+          // order the patch content worker uses.
+          if (!eof || found === lines.length - pattern.length) return found
+          const tail = seekWithPasses(lines, pattern, startIndex, SEEK_PASSES, true, true)
+          return tail !== -1 ? tail : found
+        }
       } catch (e) {
         log.warn("native diff seekSequence failed, using JS fallback", { error: e })
       }
@@ -632,27 +647,44 @@ export namespace Patch {
 
     if (pattern.length === 0) return -1
 
+    return seekWithPasses(lines, pattern, startIndex, SEEK_PASSES, eof)
+  }
+
+  const SEEK_PASSES: Comparator[] = [
     // Pass 1: exact match
-    const exact = tryMatch(lines, pattern, startIndex, (a, b) => a === b, eof)
-    if (exact !== -1) return exact
-
+    (a, b) => a === b,
     // Pass 2: rstrip (trim trailing whitespace)
-    const rstrip = tryMatch(lines, pattern, startIndex, (a, b) => a.trimEnd() === b.trimEnd(), eof)
-    if (rstrip !== -1) return rstrip
-
+    (a, b) => a.trimEnd() === b.trimEnd(),
     // Pass 3: trim (both ends)
-    const trim = tryMatch(lines, pattern, startIndex, (a, b) => a.trim() === b.trim(), eof)
-    if (trim !== -1) return trim
-
+    (a, b) => a.trim() === b.trim(),
     // Pass 4: normalized (Unicode punctuation to ASCII)
-    const normalized = tryMatch(
-      lines,
-      pattern,
-      startIndex,
-      (a, b) => normalizeUnicode(a.trim()) === normalizeUnicode(b.trim()),
-      eof,
-    )
-    return normalized
+    (a, b) => normalizeUnicode(a.trim()) === normalizeUnicode(b.trim()),
+  ]
+
+  // An "*** End of File" chunk tries the file's tail under every comparator
+  // before any forward search. Interleaving them per pass let an exact copy of
+  // the pattern earlier in the file win over a whitespace-only difference at
+  // the real end, so the wrong region was replaced.
+  function seekWithPasses(
+    lines: string[],
+    pattern: string[],
+    startIndex: number,
+    passes: Comparator[],
+    eof: boolean,
+    tailOnly = false,
+  ) {
+    if (eof) {
+      for (const compare of passes) {
+        const found = tryMatch(lines, pattern, startIndex, compare, true, true)
+        if (found !== -1) return found
+      }
+    }
+    if (tailOnly) return -1
+    for (const compare of passes) {
+      const found = tryMatch(lines, pattern, startIndex, compare, false)
+      if (found !== -1) return found
+    }
+    return -1
   }
 
   function generateUnifiedDiff(oldContent: string, newContent: string): string {

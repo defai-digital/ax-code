@@ -375,10 +375,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             if (first === second) {
               await FileTime.withLock(first, async () => {
                 await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-                await Filesystem.write(change.filePath, change.oldContent, change.sourceMode)
+                await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
                 if (change.moveExisted) {
                   await fs.mkdir(path.dirname(dest), { recursive: true })
-                  await Filesystem.write(dest, change.moveOldContent ?? "", change.moveMode)
+                  await Filesystem.write(dest, change.moveOldContent ?? "", change.moveMode, { followSymlink: true })
                   return
                 }
                 await fs.unlink(dest).catch(() => undefined)
@@ -387,10 +387,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               await FileTime.withLock(first, async () => {
                 await FileTime.withLock(second, async () => {
                   await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-                  await Filesystem.write(change.filePath, change.oldContent, change.sourceMode)
+                  await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
                   if (change.moveExisted) {
                     await fs.mkdir(path.dirname(dest), { recursive: true })
-                    await Filesystem.write(dest, change.moveOldContent ?? "", change.moveMode)
+                    await Filesystem.write(dest, change.moveOldContent ?? "", change.moveMode, { followSymlink: true })
                     return
                   }
                   await fs.unlink(dest).catch(() => undefined)
@@ -405,7 +405,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               return
             }
             await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-            await Filesystem.write(change.filePath, change.oldContent, change.sourceMode)
+            await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
           })
           if (change.type === "delete") {
             await FileTime.read(ctx.sessionID, change.filePath)
@@ -437,7 +437,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                 throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
               }
               activeDirty = true
-              await Filesystem.write(change.filePath, change.newContent)
+              await Filesystem.write(change.filePath, change.newContent, undefined, { followSymlink: true })
             })
             await FileTime.read(ctx.sessionID, change.filePath)
             updates.push({ file: change.filePath, event: change.existed ? "change" : "add" })
@@ -455,7 +455,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               if (current !== change.oldContent)
                 throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
               activeDirty = true
-              await Filesystem.write(change.filePath, change.newContent)
+              await Filesystem.write(change.filePath, change.newContent, undefined, { followSymlink: true })
             })
             await FileTime.read(ctx.sessionID, change.filePath)
             updates.push({ file: change.filePath, event: "change" })
@@ -478,7 +478,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                     )
                   }
                   activeDirty = true
-                  await Filesystem.write(dest, change.newContent, change.sourceMode)
+                  await Filesystem.write(dest, change.newContent, change.sourceMode, { followSymlink: true })
                   await finishMove(change.filePath, dest)
                 })
               } else {
@@ -501,7 +501,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                       throw new Error(`apply_patch conflict: ${dest} was modified between verification and write`)
                     }
                     activeDirty = true
-                    await Filesystem.write(dest, change.newContent, change.sourceMode)
+                    await Filesystem.write(dest, change.newContent, change.sourceMode, { followSymlink: true })
                     await finishMove(change.filePath, dest)
                   })
                 })

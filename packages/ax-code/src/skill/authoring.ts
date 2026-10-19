@@ -1,10 +1,9 @@
-import { existsSync } from "fs"
+import { constants as fsConstants, existsSync } from "fs"
 import fs from "fs/promises"
 import os, { EOL } from "os"
 import path from "path"
 import matter from "gray-matter"
 import z from "zod"
-import { Filesystem } from "@/util/filesystem"
 import { uniqueStrings } from "@/util/string-list"
 import { Instance } from "@/project/instance"
 import { Skill } from "./index"
@@ -223,8 +222,37 @@ export async function createSkill(input: SkillCreateRequest): Promise<SkillCreat
   const basePath = request.path ? path.resolve(request.path) : path.join(Instance.worktree, ".ax-code", "skill")
   const filePath = skillCreatePath({ basePath, name: request.name })
   await assertContained(filePath)
-  if (await Filesystem.exists(filePath)) throw new SkillExistsError(filePath)
-  await Filesystem.write(filePath, skillCreateContent({ name: request.name, description: request.description }))
+  // Publish atomically and exclusively: write a temp file, then hard-link it
+  // to the final name. link() fails with EEXIST when the skill exists, so a
+  // concurrent create of the same name cannot silently replace the first, and
+  // a crash never leaves an empty or partial SKILL.md behind.
+  const dir = path.dirname(filePath)
+  const created = await fs.mkdir(dir, { recursive: true })
+  const tmp = path.join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
+  try {
+    await fs.writeFile(tmp, skillCreateContent({ name: request.name, description: request.description }))
+    await fs.link(tmp, filePath).catch(async (error: NodeJS.ErrnoException) => {
+      // Some mounts (SMB, NFS, FUSE) refuse hard links; an exclusive copy
+      // still fails with EEXIST when the skill exists.
+      if (!["EPERM", "ENOTSUP", "EOPNOTSUPP", "ENOSYS", "EXDEV", "EMLINK"].includes(error.code ?? "")) throw error
+      await fs.copyFile(tmp, filePath, fsConstants.COPYFILE_EXCL).catch(async (copyError: NodeJS.ErrnoException) => {
+        // A copy that created SKILL.md but failed midway must not leave a
+        // partial file that wedges the name with SkillExistsError.
+        if (copyError.code !== "EEXIST") await fs.rm(filePath, { force: true }).catch(() => undefined)
+        throw copyError
+      })
+    })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new SkillExistsError(filePath)
+    // Do not leave behind a skill directory this call created for nothing.
+    if (created) {
+      await fs.unlink(tmp).catch(() => undefined)
+      await fs.rmdir(dir).catch(() => undefined)
+    }
+    throw error
+  } finally {
+    await fs.unlink(tmp).catch(() => undefined)
+  }
   return { path: filePath }
 }
 

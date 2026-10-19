@@ -43,12 +43,14 @@ export namespace ClaudeSessions {
   }
 
   /**
-   * Claude Code's directory-name encoding: the absolute project path with the
-   * leading separator kept and every `/` replaced by `-`.
-   * `/Users/me/project` -> `-Users-me-project`.
+   * Claude Code's directory-name encoding: every character of the absolute
+   * project path that is not an ASCII letter or digit becomes `-` (separators,
+   * dots, underscores, spaces alike).
+   * `/Users/me/project` -> `-Users-me-project`, `/Users/me/.config/my_app` ->
+   * `-Users-me--config-my-app`.
    */
   export function encodeProjectPath(projectPath: string): string {
-    return projectPath.replace(/\//g, "-")
+    return projectPath.replace(/[^A-Za-z0-9]/g, "-")
   }
 
   /** Directory Claude Code would keep the transcripts for `projectPath`. */

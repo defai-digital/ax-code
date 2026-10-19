@@ -75,3 +75,15 @@ describe("withTimeout", () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
 })
+
+describe("oversized delays", () => {
+  test("withTimeout with an Infinity or overflowing deadline does not fire at once", async () => {
+    for (const ms of [Infinity, 2_147_483_648]) {
+      const result = await Promise.race([
+        withTimeout(new Promise<string>(() => {}), ms).catch(() => "timed out"),
+        new Promise<string>((resolve) => setTimeout(() => resolve("still pending"), 50)),
+      ])
+      expect(result).toBe("still pending")
+    }
+  })
+})

@@ -92,21 +92,28 @@ fn seek(
         return Ok(None);
     }
     let last = lines.len() - pattern.len();
-    for pass in 0..8 {
-        let mut matches = |i: usize| -> Result<bool> {
-            for (j, expected) in pattern.iter().enumerate() {
-                budget.compare(lines[i + j], expected)?;
-                if !equal(lines[i + j], expected, pass) {
-                    return Ok(false);
-                }
+    let mut matches = |i: usize, pass: usize| -> Result<bool> {
+        for (j, expected) in pattern.iter().enumerate() {
+            budget.compare(lines[i + j], expected)?;
+            if !equal(lines[i + j], expected, pass) {
+                return Ok(false);
             }
-            Ok(true)
-        };
-        if eof && last >= start && matches(last)? {
-            return Ok(Some(last));
         }
+        Ok(true)
+    };
+    // An end-of-file chunk tries the tail under every pass before any forward
+    // search, so an earlier exact copy cannot win over a whitespace-only
+    // difference at the real end.
+    if eof && last >= start {
+        for pass in 0..8 {
+            if matches(last, pass)? {
+                return Ok(Some(last));
+            }
+        }
+    }
+    for pass in 0..8 {
         for i in start..=last {
-            if matches(i)? {
+            if matches(i, pass)? {
                 return Ok(Some(i));
             }
         }
@@ -318,6 +325,15 @@ mod tests {
         assert_eq!(
             run(
                 "a\na\n",
+                serde_json::json!([{"old_lines":["a"],"new_lines":["x"],"is_end_of_file":true}])
+            )
+            .unwrap(),
+            "a\nx\n"
+        );
+        // The tail wins under a looser pass before an earlier exact copy.
+        assert_eq!(
+            run(
+                "a\na \n",
                 serde_json::json!([{"old_lines":["a"],"new_lines":["x"],"is_end_of_file":true}])
             )
             .unwrap(),
