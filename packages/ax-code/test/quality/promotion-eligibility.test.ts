@@ -389,4 +389,67 @@ describe("QualityPromotionEligibility", () => {
       }),
     ).toThrow(/comparison mismatch/)
   })
+
+  test("rejects a stability summary evaluated for another source", () => {
+    expect(() =>
+      QualityPromotionEligibility.summarize({
+        bundle: benchmarkBundle("pass"),
+        stability: { ...stabilitySummary("pass"), source: "another-model-v2" },
+      }),
+    ).toThrow(/Stability source mismatch/)
+  })
+
+  test("rejects a remediation whose offset timestamp predates the rollback", () => {
+    const reentryContext = QualityReentryContext.ContextArtifact.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-model-reentry-context",
+      contextID: "rollback-ctx-offset",
+      source: "eligibility-model-v1",
+      rollbackID: "rollback-offset",
+      promotionID: "promotion-offset",
+      createdAt: "2026-04-20T01:30:00.000Z",
+      promotedAt: "2026-04-19T22:00:00.000Z",
+      rolledBackAt: "2026-04-20T00:30:00.000Z",
+      previousActiveSource: "baseline-model-v1",
+      rollbackTargetSource: "baseline-model-v1",
+      watch: {
+        overallStatus: "fail",
+        releasePolicySource: "project",
+        releasePolicyDigest: null,
+        totalRecords: 8,
+        sessionsCovered: 6,
+        gates: [{ name: "candidate-coverage", status: "fail", detail: "coverage missing" }],
+      },
+      stability: {
+        cooldownUntil: "2026-04-20T01:00:00.000Z",
+        repeatFailureWindowHours: 168,
+        repeatFailureThreshold: 2,
+        recentRollbackCount: 1,
+      },
+    })
+    const remediation = QualityReentryRemediation.RemediationArtifact.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-model-reentry-remediation",
+      remediationID: "rem-offset",
+      source: "eligibility-model-v1",
+      contextID: "rollback-ctx-offset",
+      rollbackID: "rollback-offset",
+      rolledBackAt: "2026-04-20T00:30:00.000Z",
+      // Lexically later than the rollback, but 2026-04-19T23:00:00Z.
+      createdAt: "2026-04-20T01:00:00+02:00",
+      author: "staff@example.com",
+      summary: "Remediation recorded before the rollback it claims to follow.",
+      evidence: [{ kind: "validation", detail: "Evidence recorded out of order." }],
+      currentReleasePolicyDigest: null,
+    })
+
+    expect(() =>
+      QualityPromotionEligibility.summarize({
+        bundle: benchmarkBundle("pass"),
+        stability: stabilitySummary("pass"),
+        reentryContext,
+        remediation,
+      }),
+    ).toThrow(/predates rollback/)
+  })
 })

@@ -103,7 +103,11 @@ export function summarizeShadowFile(shadow: ShadowFile): ShadowSummary {
     candidateSource: shadow.candidateSource,
     totalItems: shadow.records.length,
     comparableItems: comparable.length,
-    missingCandidateItems: shadow.records.filter((record) => record.disagreement.candidateMissing).length,
+    // A record with an unavailable candidate is missing it even if the
+    // disagreement flag was not filled in; trust either signal.
+    missingCandidateItems: shadow.records.filter(
+      (record) => !record.candidate.available || record.disagreement.candidateMissing,
+    ).length,
     predictionChangedItems: shadow.records.filter((record) => record.disagreement.predictionChanged).length,
     abstentionChangedItems: shadow.records.filter((record) => record.disagreement.abstentionChanged).length,
     avgConfidenceDelta,

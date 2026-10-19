@@ -45,9 +45,15 @@ export namespace QualityPromotionWatch {
     return record.capturedAt ?? record.createdAt
   }
 
+  function timestampMs(value: string) {
+    const ms = Date.parse(value)
+    if (!Number.isFinite(ms)) throw new Error(`Invalid watch timestamp: ${value}`)
+    return ms
+  }
+
   function sortRecords(records: ProbabilisticRollout.ShadowRecord[]) {
     return [...records].sort((a, b) => {
-      const byCapture = recordTimestamp(a).localeCompare(recordTimestamp(b))
+      const byCapture = timestampMs(recordTimestamp(a)) - timestampMs(recordTimestamp(b))
       if (byCapture !== 0) return byCapture
       return a.artifactID.localeCompare(b.artifactID)
     })
@@ -66,7 +72,9 @@ export namespace QualityPromotionWatch {
   }) {
     const filtered = sortRecords(
       input.records.filter(
-        (record) => record.candidate.source === input.source && recordTimestamp(record) >= input.promotedAt,
+        (record) =>
+          record.candidate.source === input.source &&
+          timestampMs(recordTimestamp(record)) >= timestampMs(input.promotedAt),
       ),
     )
     if (!input.maxRecords || filtered.length <= input.maxRecords) return filtered

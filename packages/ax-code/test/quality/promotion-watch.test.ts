@@ -173,6 +173,48 @@ describe("QualityPromotionWatch", () => {
     expect(summary.window.maxRecords).toBe(QualityPromotionReleasePolicy.DEFAULT_WATCH_MAX_RECORDS)
   })
 
+  test("derives missing candidate coverage from availability, not only the flag", () => {
+    const record = shadowRecord({
+      artifactID: "after-inconsistent",
+      sessionID: "ses_5",
+      createdAt: "2026-04-20T03:00:00.000Z",
+      capturedAt: "2026-04-20T03:00:00.000Z",
+      candidateAvailable: false,
+      confidenceDelta: null,
+    })
+    record.disagreement.candidateMissing = false
+
+    const summary = QualityPromotionWatch.summarize({
+      records: [record],
+      source: "watch-model-v1",
+      promotedAt: "2026-04-20T00:30:00.000Z",
+      minRecords: 1,
+    })
+
+    expect(summary.shadow.missingCandidateItems).toBe(1)
+    expect(summary.gates.find((gate) => gate.name === "candidate-coverage")?.status).toBe("fail")
+  })
+
+  test("filters records by instant, not by timestamp text", () => {
+    const record = shadowRecord({
+      artifactID: "offset-before",
+      sessionID: "ses_6",
+      // 2026-04-19T23:00:00Z: before the promotion despite the local clock.
+      createdAt: "2026-04-20T01:00:00+02:00",
+      capturedAt: "2026-04-20T01:00:00+02:00",
+      candidateAvailable: true,
+    })
+
+    const summary = QualityPromotionWatch.summarize({
+      records: [record],
+      source: "watch-model-v1",
+      promotedAt: "2026-04-20T00:30:00.000Z",
+      minRecords: 1,
+    })
+
+    expect(summary.window.totalRecords).toBe(0)
+  })
+
   test("uses release policy watch thresholds instead of fixed defaults", () => {
     const records: ProbabilisticRollout.ShadowRecord[] = [
       shadowRecord({

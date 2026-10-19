@@ -128,6 +128,14 @@ export namespace QualityPromotionEligibility {
     if (input.remediation && !input.reentryContext) {
       throw new Error(`Remediation ${input.remediation.remediationID} requires a reentry context`)
     }
+    // A stability summary evaluated for another candidate cannot decide this
+    // bundle's eligibility, and a reentry context belongs to one source.
+    if (input.stability.source !== input.bundle.model.source) {
+      throw new Error(`Stability source mismatch: ${input.stability.source} vs ${input.bundle.model.source}`)
+    }
+    if (input.reentryContext && input.reentryContext.source !== input.bundle.model.source) {
+      throw new Error(`Reentry context source mismatch: ${input.reentryContext.source} vs ${input.bundle.model.source}`)
+    }
     if (input.remediation && input.reentryContext) {
       if (input.remediation.source !== input.bundle.model.source) {
         throw new Error(`Remediation source mismatch: ${input.remediation.source} vs ${input.bundle.model.source}`)
@@ -142,7 +150,14 @@ export namespace QualityPromotionEligibility {
           `Remediation rollback mismatch: ${input.remediation.rollbackID} vs ${input.reentryContext.rollbackID}`,
         )
       }
-      if (input.remediation.createdAt < input.reentryContext.rolledBackAt) {
+      const remediationAt = Date.parse(input.remediation.createdAt)
+      const rolledBackAt = Date.parse(input.reentryContext.rolledBackAt)
+      if (!Number.isFinite(remediationAt) || !Number.isFinite(rolledBackAt)) {
+        throw new Error(
+          `Remediation ${input.remediation.remediationID} or rollback ${input.reentryContext.rollbackID} has an invalid timestamp`,
+        )
+      }
+      if (remediationAt < rolledBackAt) {
         throw new Error(
           `Remediation ${input.remediation.remediationID} predates rollback ${input.reentryContext.rollbackID}`,
         )
