@@ -430,7 +430,7 @@ jobs:
   # Native delivery and its integrity checks belong to the installed package.
   tui-node26-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       AX_CODE_DISABLE_SHARE: "true"
     steps:
@@ -485,6 +485,22 @@ jobs:
 
       - name: Fixed-context dialog native interaction
         run: pnpm --dir packages/ax-code run check:fixed-context-dialog
+
+      # Real-renderer frame gates. Before these ran in CI, the product-frames
+      # and golden-frames goldens drifted on main without anyone noticing.
+      - name: TUI golden and product frame gates
+        run: |
+          pnpm --dir packages/ax-code run check:golden-frames
+          pnpm --dir packages/ax-code run check:product-frames
+          pnpm --dir packages/ax-code run check:tui-snapshot
+
+      - name: TUI component render checks
+        run: |
+          pnpm --dir packages/ax-code run check:prompt-footer
+          pnpm --dir packages/ax-code run check:context-menu
+          pnpm --dir packages/ax-code run check:transcript-code-render
+          pnpm --dir packages/ax-code run check:session-tree-memo
+          pnpm --dir packages/ax-code run check:webmcp-allowlist
 
       - name: TUI startup smoke
         run: pnpm --dir packages/ax-code run tui:startup-smoke -- --bin "$GITHUB_WORKSPACE/.tmp/tui-smoke-bin/ax-code"

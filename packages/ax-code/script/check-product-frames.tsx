@@ -66,6 +66,10 @@ process.env.COLORTERM = "truecolor"
 delete process.env.TERM_PROGRAM
 delete process.env.NO_COLOR
 delete process.env.FORCE_COLOR
+// Installation.VERSION prefers the build-time AX_CODE_VERSION global and falls
+// back to package.json in source mode. Pin it so footers that show the version
+// do not drift on every release bump.
+;(globalThis as { AX_CODE_VERSION?: string }).AX_CODE_VERSION = "local"
 
 // ---------------------------------------------------------------------------
 // Sync stub: every importer of src/cli/tui/context/sync.tsx gets a module that
@@ -438,6 +442,7 @@ function installSync(fixture?: SyncFixture) {
 const OFFLINE_ROUTES: Record<string, unknown> = {
   "GET /prompt-history": [],
   "GET /provider/ax-engine/downloads": [],
+  "GET /permission/auto-accept": { enabled: false, managedDisabled: false, directory: DIRECTORY },
 }
 const unexpectedRequests = new Set<string>()
 const offlineFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
