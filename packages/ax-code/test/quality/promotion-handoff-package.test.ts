@@ -16,6 +16,7 @@ import { QualityPromotionReleasePolicy } from "../../src/quality/promotion/promo
 import { QualityPromotionReviewDossier } from "../../src/quality/promotion/promotion-review-dossier"
 import { QualityPromotionSubmissionBundle } from "../../src/quality/promotion/promotion-submission-bundle"
 import { QualityStabilityGuard } from "../../src/quality/stability-guard"
+import { sha256Hex } from "../../src/quality/digest"
 import { Storage } from "../../src/storage/storage"
 
 function benchmarkBundle(): QualityCalibrationModel.BenchmarkBundle {
@@ -421,6 +422,18 @@ describe("QualityPromotionHandoffPackage", () => {
       )
     } finally {
       await clearHandoffPackages()
+    }
+  })
+
+  test("records document digests over the exported markdown bytes", () => {
+    const { archiveManifest } = buildArchiveManifest()
+    const packet = QualityPromotionHandoffPackage.create({
+      archiveManifest,
+    })
+
+    for (const document of packet.documents) {
+      const normalized = document.content.endsWith("\n") ? document.content : document.content + "\n"
+      expect(document.contentDigest).toBe(sha256Hex(normalized))
     }
   })
 

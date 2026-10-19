@@ -1,5 +1,5 @@
 import z from "zod"
-import { sha256JsonHex } from "../digest"
+import { sha256Hex, sha256JsonHex } from "../digest"
 import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
 import { createPromotionArtifactStore } from "./artifact-store"
 import { QualityPromotionArchiveManifest } from "./promotion-archive-manifest"
@@ -85,6 +85,13 @@ export namespace QualityPromotionHandoffPackage {
   export type PackageRecord = z.output<typeof PackageRecord>
 
   const digest = sha256JsonHex
+
+  // Document bytes are exported as Markdown files. The digest must match the
+  // bytes a consumer hashes (sha256 of the file content, normalized with the
+  // trailing newline the portable export writes), not a JSON-wrapped copy.
+  function markdownDigest(content: string) {
+    return sha256Hex(content.endsWith("\n") ? content : content + "\n")
+  }
 
   function sortPackages(packets: PackageArtifact[]) {
     return [...packets].sort((a, b) => compareStringFields(a, b, ["createdAt", "packageID"]))
@@ -246,7 +253,7 @@ export namespace QualityPromotionHandoffPackage {
         documentInput.map((item) => ({
           ...item,
           format: "markdown",
-          contentDigest: digest(item.content),
+          contentDigest: markdownDigest(item.content),
         })),
       ),
     )
