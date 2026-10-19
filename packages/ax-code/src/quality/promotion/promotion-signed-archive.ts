@@ -92,8 +92,27 @@ export namespace QualityPromotionSignedArchive {
 
   const digest = sha256Hex
 
-  function sign(payloadDigest: string, keyMaterial: string) {
-    return createHmac("sha256", keyMaterial).update(payloadDigest).digest("hex")
+  function canonicalAttestation(attestation: Omit<Attestation, "signature">) {
+    return JSON.stringify({
+      schemaVersion: 1,
+      kind: "ax-code-quality-promotion-signed-archive-attestation",
+      algorithm: attestation.algorithm,
+      attestedBy: attestation.attestedBy,
+      keyID: attestation.keyID,
+      keySource: attestation.keySource,
+      keyLocator: attestation.keyLocator,
+      signedAt: attestation.signedAt,
+      payloadDigest: attestation.payloadDigest,
+      signatureEncoding: attestation.signatureEncoding,
+    })
+  }
+
+  // The signature must bind the whole attestation envelope, not only the
+  // payload digest: trust resolution reads signedAt, attestedBy, and keyID
+  // from the envelope, so leaving them unsigned lets a holder rewrite the
+  // attestation without invalidating the signature.
+  function sign(attestation: Omit<Attestation, "signature">, keyMaterial: string) {
+    return createHmac("sha256", keyMaterial).update(canonicalAttestation(attestation)).digest("hex")
   }
 
   function sortArchives(archives: ArchiveArtifact[]) {
@@ -236,16 +255,19 @@ export namespace QualityPromotionSignedArchive {
     const createdAt = new Date().toISOString()
     const signedArchiveID = `${Date.now()}-${input.packagedArchive.archiveID}-${encode(input.signing.keyID)}-signed`
     const payloadDigest = computePayloadDigest(input.packagedArchive)
-    const attestation = Attestation.parse({
-      algorithm: "hmac-sha256",
+    const envelope = {
+      algorithm: "hmac-sha256" as const,
       attestedBy: input.signing.attestedBy,
       keyID: input.signing.keyID,
       keySource: input.signing.keySource,
       keyLocator: input.signing.keyLocator,
       signedAt: createdAt,
       payloadDigest,
-      signatureEncoding: "hex",
-      signature: sign(payloadDigest, input.signing.keyMaterial),
+      signatureEncoding: "hex" as const,
+    }
+    const attestation = Attestation.parse({
+      ...envelope,
+      signature: sign(envelope, input.signing.keyMaterial),
     })
     const summary = evaluateSummary(input.packagedArchive, attestation, { archiveReasons })
     return ArchiveArtifact.parse({
@@ -285,7 +307,7 @@ export namespace QualityPromotionSignedArchive {
 
   export function verifySignature(archive: ArchiveArtifact, keyMaterial: string) {
     const reasons = verify(archive)
-    const expectedSignature = sign(archive.attestation.payloadDigest, keyMaterial)
+    const expectedSignature = sign(archive.attestation, keyMaterial)
     const current = Buffer.from(archive.attestation.signature, "hex")
     const expected = Buffer.from(expectedSignature, "hex")
     if (current.length !== expected.length || !timingSafeEqual(current, expected)) {

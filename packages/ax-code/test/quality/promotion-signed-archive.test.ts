@@ -494,6 +494,50 @@ describe("QualityPromotionSignedArchive", () => {
     const signatureReasons = QualityPromotionSignedArchive.verifySignature(signedArchive, "wrong-secret")
     expect(signatureReasons.some((reason) => reason.includes("signature mismatch"))).toBe(true)
   })
+
+  test("binds the attestation envelope to the signature", () => {
+    const { packagedArchive } = buildPackagedArchive()
+    const signing = {
+      attestedBy: "release-integrity-bot",
+      keyID: "archive-key-v1",
+      keySource: "env" as const,
+      keyLocator: "AX_CODE_QUALITY_ARCHIVE_KEY",
+      keyMaterial: "quality-archive-secret-v1",
+    }
+    const signedArchive = QualityPromotionSignedArchive.create({ packagedArchive, signing })
+
+    const shifted = QualityPromotionSignedArchive.ArchiveArtifact.parse({
+      ...signedArchive,
+      attestation: {
+        ...signedArchive.attestation,
+        signedAt: "1999-01-01T00:00:00.000Z",
+      },
+    })
+    expect(QualityPromotionSignedArchive.verify(shifted)).toEqual([])
+    expect(
+      QualityPromotionSignedArchive.verifySignature(shifted, signing.keyMaterial).some((reason) =>
+        reason.includes("signature mismatch"),
+      ),
+    ).toBe(true)
+
+    const rewritten = QualityPromotionSignedArchive.ArchiveArtifact.parse({
+      ...signedArchive,
+      attestation: {
+        ...signedArchive.attestation,
+        attestedBy: "someone-else@example.com",
+      },
+      summary: {
+        ...signedArchive.summary,
+        attestedBy: "someone-else@example.com",
+      },
+    })
+    expect(QualityPromotionSignedArchive.verify(rewritten)).toEqual([])
+    expect(
+      QualityPromotionSignedArchive.verifySignature(rewritten, signing.keyMaterial).some((reason) =>
+        reason.includes("signature mismatch"),
+      ),
+    ).toBe(true)
+  })
 })
 
 describe("QualityPromotionSignedArchiveAttestationRecord", () => {
