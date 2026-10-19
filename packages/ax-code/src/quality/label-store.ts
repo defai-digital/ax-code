@@ -1,6 +1,7 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
+import { QualityStorageKey } from "./storage-key"
 import { jsonEqual } from "./json"
 import { compareStringFields } from "./sort"
 
@@ -19,8 +20,13 @@ export namespace QualityLabelStore {
     return label.sessionID
   }
 
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
+
   function key(sessionID: string, labelID: string) {
-    return ["quality_label", sessionID, labelID]
+    // Imported label files carry arbitrary ids; both segments are storage path
+    // components, so encode them like the shadow store does.
+    return ["quality_label", encode(sessionID), encode(labelID)]
   }
 
   function sortLabels(labels: ProbabilisticRollout.Label[]) {
@@ -60,10 +66,13 @@ export namespace QualityLabelStore {
   }
 
   export async function list(sessionID: string, workflow?: ProbabilisticRollout.Workflow) {
-    const keys = await Storage.list(["quality_label", sessionID])
+    const keys = await Storage.list(["quality_label", encode(sessionID)])
     const labels: ProbabilisticRollout.Label[] = []
     for (const parts of keys) {
-      const labelID = parts[parts.length - 1]
+      // Skip records written by older builds as nested paths; they are not
+      // addressable as a single label id.
+      if (parts.length !== 3) continue
+      const labelID = decode(parts[parts.length - 1]!)
       if (!labelID) continue
       const record = await get({ sessionID, labelID })
       if (workflow && record.label.workflow !== workflow) continue

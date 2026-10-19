@@ -1638,6 +1638,34 @@ describe("QualityLabelStore", () => {
       await clearSessionLabels(sessionID)
     }
   })
+
+  test("keeps imported label ids with separators or dot segments addressable", async () => {
+    const sessionID = `ses_quality_ids_${Date.now()}`
+    await clearSessionLabels(sessionID)
+
+    const label = (labelID: string): ProbabilisticRollout.Label => ({
+      labelID,
+      artifactID: `review:${labelID}:0`,
+      artifactKind: "review_finding",
+      workflow: "review",
+      projectID: "proj_1",
+      sessionID,
+      labeledAt: "2026-04-20T00:00:00.000Z",
+      labelSource: "human",
+      labelVersion: 1,
+      outcome: "accepted",
+    })
+
+    try {
+      await QualityLabelStore.append(label("a/b"))
+      await QualityLabelStore.append(label(".."))
+
+      const labels = await QualityLabelStore.list(sessionID)
+      expect(labels.map((item) => item.labelID)).toEqual(["..", "a/b"])
+    } finally {
+      await clearSessionLabels(sessionID)
+    }
+  })
 })
 
 describe("QualityShadow", () => {
