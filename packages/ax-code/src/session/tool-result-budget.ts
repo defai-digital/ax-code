@@ -1,5 +1,5 @@
 /**
- * Aggregate byte budget for the tool results of one model step (ADR-211).
+ * Aggregate byte budget for the tool results of one model step (ADR-258).
  *
  * Per-tool truncation (`tool/truncate.ts`) caps each result individually, but
  * nothing bounded the SUM of one step's parallel results; ten results could
@@ -16,11 +16,11 @@ export namespace ToolResultBudget {
   export const CONTEXT_FRACTION = 0.35
   /** Rough bytes-per-token conversion for the context-window estimate. */
   export const BYTES_PER_TOKEN = 4
-  /** Floor for the derived budget (ADR-211 D2). */
+  /** Floor for the derived budget (ADR-258 D2). */
   export const MIN_BUDGET_BYTES = 32 * 1024
-  /** Ceiling for the derived budget (ADR-211 D2). */
+  /** Ceiling for the derived budget (ADR-258 D2). */
   export const MAX_BUDGET_BYTES = 400 * 1024
-  /** Spilled results keep at least this much preview text (ADR-211 D3). */
+  /** Spilled results keep at least this much preview text (ADR-258 D3). */
   export const PREVIEW_FLOOR_BYTES = 2 * 1024
   /**
    * Headroom added to the preview floor when projecting a spilled result's
@@ -32,7 +32,7 @@ export namespace ToolResultBudget {
   export interface ResultSize {
     /** Emitted byte length of one tool result (already per-tool truncated results count by their emitted size). */
     bytes: number
-    /** Error results are never spilled (ADR-211 D3). */
+    /** Error results are never spilled (ADR-258 D3). */
     error?: boolean
   }
 

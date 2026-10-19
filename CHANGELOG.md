@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- Load earlier transcript history in the TUI from the truncated-history banner or the `Load earlier messages` command, up to 300 messages per session, keeping the scroll position.
+
 ### Fixed
 
 - Keep TUI slash commands such as `/update` available when the reactive command catalog refreshes during dispatch.

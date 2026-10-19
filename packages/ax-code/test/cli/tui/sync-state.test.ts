@@ -40,6 +40,8 @@ describe("tui sync state", () => {
       message_memory_limited: {},
       message_reload: {},
       message_truncated: {},
+      message_cursor: {},
+      message_window: {},
       part: {},
       lsp: [],
       debugEngine: {

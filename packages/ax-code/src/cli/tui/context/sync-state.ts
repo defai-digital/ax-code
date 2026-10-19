@@ -68,6 +68,8 @@ export interface SyncStoreState {
   message_memory_limited: Record<string, boolean>
   message_reload: Record<string, boolean>
   message_truncated: Record<string, boolean>
+  message_cursor: Record<string, string>
+  message_window: Record<string, number>
   part: Record<string, Part[]>
   lsp: LspStatus[]
   debugEngine: {
@@ -145,6 +147,8 @@ export function createInitialSyncState(): SyncStoreState {
     message_memory_limited: {},
     message_reload: {},
     message_truncated: {},
+    message_cursor: {},
+    message_window: {},
     part: {},
     lsp: [],
     debugEngine: {

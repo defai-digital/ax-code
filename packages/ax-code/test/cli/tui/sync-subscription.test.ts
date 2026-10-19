@@ -39,6 +39,7 @@ describe("tui sync subscription", () => {
       unsubscribed = true
     }
     let autonomous = false
+    let limit = 200
 
     const result = subscribeStoreBackedSyncEvents<
       Session,
@@ -64,8 +65,10 @@ describe("tui sync subscription", () => {
       bootstrap: () => undefined,
       onWarn: () => undefined,
       maxSessionMessages: 100,
+      sessionMessageLimit: () => limit,
       onHandlerError: () => undefined,
       dispatch(input) {
+        expect(input.sessionMessageLimit?.("ses_1")).toBe(limit)
         dispatched.push({ autonomous: input.autonomous, type: input.event.type })
         return true
       },
@@ -73,6 +76,7 @@ describe("tui sync subscription", () => {
 
     listener?.({ details: { type: "session.updated", properties: { info: { id: "ses_1" } } } })
     autonomous = true
+    limit = 300
     listener?.({
       details: {
         type: "permission.asked",

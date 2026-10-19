@@ -890,6 +890,14 @@ export const messages = {
   "ui.showingTheMostRecent": "\u25b2 \ucd5c\uadfc",
   "ui.messagesEarlierHistoryIsNotLoaded":
     "\uac1c \uba54\uc2dc\uc9c0 \ud45c\uc2dc \u00b7 \uc774\uc804 \uae30\ub85d\uc740 \ubd88\ub7ec\uc624\uc9c0 \uc54a\uc74c",
+  "ui.showingLatestMessages":
+    "\u25b2 \ucd5c\uc2e0 \uba54\uc2dc\uc9c0 {count}\uac1c\ub97c \ud45c\uc2dc \uc911\uc785\ub2c8\ub2e4.",
+  "ui.loadEarlierMessages": "\uc774\uc804 \uba54\uc2dc\uc9c0 \ubd88\ub7ec\uc624\uae30",
+  "ui.loadingEarlierMessages": "\uc774\uc804 \uba54\uc2dc\uc9c0 \ubd88\ub7ec\uc624\ub294 \uc911\u2026",
+  "ui.failedToLoadEarlierMessages":
+    "\uc774\uc804 \uba54\uc2dc\uc9c0\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4",
+  "ui.transcriptLoadLimitReached":
+    "\u25b2 \uba54\uc2dc\uc9c0 {count}\uac1c \ud45c\uc2dc \uc911, \uc774 \ubcf4\uae30\uc758 \ucd5c\ub300 \uac1c\uc218\uc785\ub2c8\ub2e4.",
   "ui.in": "\uc704\uce58",
   "ui.out": "\ucd9c\ub825",
   "ui.messageCopiedToClipboard":

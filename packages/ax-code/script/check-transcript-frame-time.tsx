@@ -26,8 +26,13 @@
 // 300-3000 chars of markdown, ~20% of replies with a fenced code block and
 // ~30% with a completed bash/read tool part.
 //
+//   d) cold300Ms / append300 - the same cold render and appends with 300
+//      messages mounted, the MAX_LOADED_SESSION_MESSAGES ceiling reached after
+//      "Load earlier messages".
+//
 // The last line of output is a one-line JSON summary:
-//   {"cold100Ms":...,"append100":{"median":...,"p95":...,"max":...},"append10":{...}}
+//   {"cold100Ms":...,"append100":{"median":...,"p95":...,"max":...},"append10":{...},
+//    "cold300Ms":...,"append300":{...}}
 // Exit code is 0 on a successful measurement and 1 only on a harness error.
 //
 // Usage: pnpm --dir packages/ax-code run check:transcript-frame-time
@@ -42,7 +47,11 @@ import { pathToFileURL } from "node:url"
 // Environment isolation (before any app module loads), mirroring
 // check-product-frames.tsx so themes, kv, and i18n resolve identically.
 
+// The prepared native cache (CI's verified offline download) is kept; every
+// other inherited AX_CODE_* / OPENCODE_* variable is dropped.
+const KEEP_ENV = new Set(["AX_CODE_TUI_NATIVE_CACHE_DIR", "AX_CODE_TUI_NATIVE_OFFLINE"])
 for (const key of Object.keys(process.env)) {
+  if (KEEP_ENV.has(key)) continue
   if (key.startsWith("AX_CODE_") || key.startsWith("OPENCODE_")) delete process.env[key]
 }
 const state = await fsp.mkdtemp(path.join(os.tmpdir(), "ax-code-transcript-frame-time-"))
@@ -151,8 +160,8 @@ import type {
 type SyncContextValue = ReturnType<typeof useSync>
 
 // ---------------------------------------------------------------------------
-// Fixtures. One full 100-message session is generated once; a smaller mount
-// slices the tail so the streaming target (the last assistant reply) is byte
+// Fixtures. One 300-message session is generated once; smaller mounts slice
+// the tail so the streaming target (the last assistant reply) is byte
 // identical in both mounts and only the mounted context differs.
 
 const SESSION_ID = "ses_transcript_frame_time"
@@ -162,6 +171,8 @@ const WIDTH = 120
 const HEIGHT = 40
 const FULL_COUNT = 100
 const SMALL_COUNT = 10
+// MAX_LOADED_SESSION_MESSAGES: the most a session holds after Load earlier.
+const LOADED_COUNT = 300
 const APPEND_ITERATIONS = 60
 const APPEND_CHUNK_CHARS = 40
 // One tick past STREAM_PAINT_MAX_MS (stream-paint.ts) so every paced append
@@ -289,7 +300,7 @@ function buildFullFixture(): Fixture {
   const rng = createRng(0x5eed_100)
   const messages: Message[] = []
   const parts: Record<string, Part[]> = {}
-  for (let pair = 0; pair < FULL_COUNT / 2; pair++) {
+  for (let pair = 0; pair < LOADED_COUNT / 2; pair++) {
     const created = T0 + pair * 20_000
     const user: UserMessageInfo = {
       id: `msg_${String(pair * 2).padStart(4, "0")}_user`,
@@ -299,7 +310,7 @@ function buildFullFixture(): Fixture {
       agent: "build",
       model: { providerID: "acme", modelID: "acme-coder-large" },
     }
-    const last = pair === FULL_COUNT / 2 - 1
+    const last = pair === LOADED_COUNT / 2 - 1
     const assistant: AssistantMessageInfo = {
       id: `msg_${String(pair * 2 + 1).padStart(4, "0")}_assistant`,
       sessionID: SESSION_ID,
@@ -374,7 +385,7 @@ const FULL_FIXTURE = buildFullFixture()
 
 function fixtureFor(count: number): Fixture {
   return {
-    messages: FULL_FIXTURE.messages.slice(FULL_COUNT - count),
+    messages: FULL_FIXTURE.messages.slice(LOADED_COUNT - count),
     parts: FULL_FIXTURE.parts,
     lastAssistantID: FULL_FIXTURE.lastAssistantID,
     lastTextPartIndex: FULL_FIXTURE.lastTextPartIndex,
@@ -667,6 +678,8 @@ async function mount(count: number) {
 let cold100Ms = 0
 let append100: Stats | undefined
 let append10: Stats | undefined
+let cold300Ms = 0
+let append300: Stats | undefined
 try {
   // Cold: a fresh 100-message mount, timed on its first renderOnce.
   const full = await mount(FULL_COUNT)
@@ -719,7 +732,22 @@ try {
     `append10: median ${append10.median.toFixed(2)} ms, p95 ${append10.p95.toFixed(2)} ms, max ${append10.max.toFixed(2)} ms`,
   )
 
-  console.log(JSON.stringify({ cold100Ms, append100, append10 }))
+  // Upper bound after Load earlier: all 300 messages mounted.
+  const loaded = await mount(LOADED_COUNT)
+  try {
+    const coldStart = performance.now()
+    await loaded.setup.renderOnce()
+    cold300Ms = round(performance.now() - coldStart)
+    await settle(loaded.setup)
+    append300 = await measureAppends(loaded.setup, loaded.installed)
+  } finally {
+    loaded.setup.renderer.destroy()
+  }
+  console.log(
+    `append300: cold ${cold300Ms.toFixed(2)} ms, median ${append300.median.toFixed(2)} ms, p95 ${append300.p95.toFixed(2)} ms, max ${append300.max.toFixed(2)} ms`,
+  )
+
+  console.log(JSON.stringify({ cold100Ms, append100, append10, cold300Ms, append300 }))
 } catch (error) {
   console.error(`transcript-frame-time harness error: ${error instanceof Error ? error.message : String(error)}`)
   process.exitCode = 1

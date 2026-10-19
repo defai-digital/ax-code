@@ -258,7 +258,7 @@ export namespace Question {
   }
 
   /**
-   * ADR-212: observation-only Notification hook (question asked). The
+   * ADR-259: observation-only Notification hook (question asked). The
    * payload carries a bounded, redacted first-question label only — never
    * the full questions, which are model-authored text. Fire-and-forget.
    */

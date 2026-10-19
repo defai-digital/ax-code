@@ -1,3 +1,4 @@
+import type { LoadEarlierResult } from "./sync-earlier-messages"
 import { findByID, findWorkspace, sessionRuntimeStatus } from "./sync-query"
 import { createSessionTreeIndex, type SessionTreeIndex } from "../util/session-tree"
 
@@ -26,6 +27,8 @@ export function createSyncContextValue<
   sessionSync: TSessionSync
   /** Drop fullSynced/in-flight marks so the next sync reloads heavy state (leave prune). */
   sessionClear?: (sessionID: string) => void
+  sessionLoadEarlier?: (sessionID: string) => Promise<LoadEarlierResult>
+  sessionAdoptHistoryCursor?: (sessionID: string, cursor: string | undefined) => void
   workspaceSync: TWorkspaceSync
   bootstrap: TBootstrap
   runtime: TRuntime
@@ -61,6 +64,12 @@ export function createSyncContextValue<
         )
       },
       sync: input.sessionSync,
+      loadEarlier(sessionID: string): Promise<LoadEarlierResult> {
+        return input.sessionLoadEarlier?.(sessionID) ?? Promise.resolve("exhausted")
+      },
+      adoptHistoryCursor(sessionID: string, cursor: string | undefined) {
+        input.sessionAdoptHistoryCursor?.(sessionID, cursor)
+      },
       clear(sessionID: string) {
         input.sessionClear?.(sessionID)
       },

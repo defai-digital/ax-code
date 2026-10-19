@@ -831,6 +831,12 @@ export const messages = {
   "ui.ran": ", \u00e7al\u0131\u015ft\u0131r\u0131ld\u0131",
   "ui.showingTheMostRecent": "\u25b2 En yeniler g\u00f6steriliyor",
   "ui.messagesEarlierHistoryIsNotLoaded": "iletiler \u2014 \u00f6nceki ge\u00e7mi\u015f y\u00fckl\u00fc de\u011fil",
+  "ui.showingLatestMessages": "\u25b2 En son {count} ileti g\u00f6steriliyor.",
+  "ui.loadEarlierMessages": "\u00d6nceki iletileri y\u00fckle",
+  "ui.loadingEarlierMessages": "\u00d6nceki iletiler y\u00fckleniyor\u2026",
+  "ui.failedToLoadEarlierMessages": "\u00d6nceki iletiler y\u00fcklenemedi",
+  "ui.transcriptLoadLimitReached":
+    "\u25b2 {count} ileti g\u00f6steriliyor, bu g\u00f6r\u00fcn\u00fcm\u00fcn tuttu\u011fu en fazla say\u0131.",
   "ui.in": "i\u00e7inde",
   "ui.out": "\u00e7\u0131k\u0131\u015f",
   "ui.messageCopiedToClipboard": "\u0130leti panoya kopyaland\u0131!",

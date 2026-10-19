@@ -50,7 +50,11 @@ const SNAPSHOT_DIR = path.resolve(import.meta.dirname, "../test/cli/tui/__snapsh
 // ---------------------------------------------------------------------------
 // Environment isolation (before any app module loads).
 
+// The prepared native cache (CI's verified offline download) is kept; every
+// other inherited AX_CODE_* / OPENCODE_* variable is dropped.
+const KEEP_ENV = new Set(["AX_CODE_TUI_NATIVE_CACHE_DIR", "AX_CODE_TUI_NATIVE_OFFLINE"])
 for (const key of Object.keys(process.env)) {
+  if (KEEP_ENV.has(key)) continue
   if (key.startsWith("AX_CODE_") || key.startsWith("OPENCODE_")) delete process.env[key]
 }
 const state = await fsp.mkdtemp(path.join(os.tmpdir(), "ax-code-product-frames-"))
@@ -66,6 +70,10 @@ process.env.COLORTERM = "truecolor"
 delete process.env.TERM_PROGRAM
 delete process.env.NO_COLOR
 delete process.env.FORCE_COLOR
+// Installation.VERSION prefers the build-time AX_CODE_VERSION global and falls
+// back to package.json in source mode. Pin it so footers that show the version
+// do not drift on every release bump.
+;(globalThis as { AX_CODE_VERSION?: string }).AX_CODE_VERSION = "local"
 
 // ---------------------------------------------------------------------------
 // Sync stub: every importer of src/cli/tui/context/sync.tsx gets a module that
@@ -438,6 +446,7 @@ function installSync(fixture?: SyncFixture) {
 const OFFLINE_ROUTES: Record<string, unknown> = {
   "GET /prompt-history": [],
   "GET /provider/ax-engine/downloads": [],
+  "GET /permission/auto-accept": { enabled: false, managedDisabled: false, directory: DIRECTORY },
 }
 const unexpectedRequests = new Set<string>()
 const offlineFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -949,8 +958,11 @@ try {
     const actual = await renderScene(scene)
     if (print) writeSync(1, `--- ${scene.name}\n${actual.chars.join("\n")}\n`)
     if (unexpectedRequests.size > 0) {
-      console.warn(`! ${scene.name}: unanswered offline requests: ${[...unexpectedRequests].sort().join(", ")}`)
+      // A new request path means the scene rendered against a 404 fallback, so
+      // the frame may not show what users see. Stub the route in OFFLINE_ROUTES.
+      console.error(`✗ ${scene.name}: unanswered offline requests: ${[...unexpectedRequests].sort().join(", ")}`)
       unexpectedRequests.clear()
+      failures++
     }
     const goldenPath = path.join(SNAPSHOT_DIR, `${scene.name}.json`)
     if (update) {

@@ -19,7 +19,7 @@ import {
   Switch,
 } from "solid-js"
 import { useRoute, useRouteData } from "@tui/context/route"
-import { MAX_SESSION_MESSAGES, useSync } from "@tui/context/sync"
+import { MAX_LOADED_SESSION_MESSAGES, MAX_SESSION_MESSAGES, useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
 import { tint, useTheme } from "@tui/context/theme"
 import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAcceleration, RGBA } from "ax-tui"
@@ -45,6 +45,7 @@ import { useDialog } from "../../ui/dialog"
 import { DialogPrompt } from "../../ui/dialog-prompt"
 import { DialogMessage } from "./dialog-message"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
+import { captureScrollAnchor, restoredScrollTop } from "./history-scroll-anchor"
 import { loadRevertHistory, mergeRevertHistory, MissingRevertMessageError } from "./revert-history"
 import { DialogActivity } from "./dialog-activity"
 import { DialogCapabilityCatalog } from "./dialog-capability-catalog"
@@ -208,6 +209,7 @@ export function Session() {
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
   const [historyLoading, setHistoryLoading] = createSignal(false)
   const [historyError, setHistoryError] = createSignal("")
+  const [earlierLoadingID, setEarlierLoadingID] = createSignal<string>()
   let historyFlight: { key: string; controller: AbortController; promise: Promise<boolean> } | undefined
   async function ensureRevertHistory() {
     const sessionID = route.sessionID
@@ -242,6 +244,10 @@ export function Session() {
             draft.message_truncated[sessionID] = history.truncated
           }),
         )
+        // Undo recovery pages from the newest end; its cursor is only the next
+        // older boundary when it reached the oldest message now loaded.
+        if (history.messages[0]?.info.id === sync.data.message[sessionID]?.[0]?.id)
+          sync.session.adoptHistoryCursor(sessionID, history.cursor)
         return true
       } catch (error) {
         // A new prompt commits the undo: the deleted boundary can disappear
@@ -755,6 +761,43 @@ export function Session() {
   }
   onCleanup(() => cancelScrollTimer?.())
 
+  const EARLIER_ANCHOR_ATTEMPTS = 8
+  let cancelEarlierAnchor: (() => void) | undefined
+  onCleanup(() => cancelEarlierAnchor?.())
+  async function loadEarlier() {
+    const sessionID = route.sessionID
+    if (earlierLoadingID() === sessionID) return
+    const anchor = isRenderableAlive(scroll) ? captureScrollAnchor(scroll) : undefined
+    setEarlierLoadingID(sessionID)
+    try {
+      const result = await sync.session.loadEarlier(sessionID)
+      if (route.sessionID !== sessionID) return
+      if (result !== "loaded" || !anchor) return
+      // scrollHeight only changes after the renderer's next layout frame, so
+      // poll briefly for it instead of reading it right after the store update.
+      let attempts = 0
+      const restore = () => {
+        cancelEarlierAnchor = undefined
+        if (route.sessionID !== sessionID || !isRenderableAlive(scroll)) return
+        // The user scrolled while the page was loading: keep their position.
+        if (scroll.scrollTop !== anchor.top) return
+        if (scroll.scrollHeight === anchor.height && ++attempts < EARLIER_ANCHOR_ATTEMPTS) {
+          cancelEarlierAnchor = scheduleTuiTimeout(restore, { name: "session-load-earlier-anchor", delayMs: 25 })
+          return
+        }
+        const top = restoredScrollTop(anchor, scroll.scrollHeight)
+        if (top !== undefined) scroll.scrollTo(top)
+      }
+      cancelEarlierAnchor?.()
+      cancelEarlierAnchor = scheduleTuiTimeout(restore, { name: "session-load-earlier-anchor", delayMs: 25 })
+    } catch {
+      if (route.sessionID !== sessionID) return
+      toast.show({ message: uiText("ui.failedToLoadEarlierMessages"), variant: "error" })
+    } finally {
+      setEarlierLoadingID((current) => (current === sessionID ? undefined : current))
+    }
+  }
+
   const local = useLocal()
 
   function moveFirstChild() {
@@ -891,6 +934,16 @@ export function Session() {
       slash: { name: "undo-history" },
       onSelect: async (dialog) => {
         if (await ensureRevertHistory()) dialog.clear()
+      },
+    },
+    {
+      title: uiText("ui.loadEarlierMessages"),
+      value: "session.load-earlier",
+      category: uiText("common.session"),
+      enabled: !!sync.data.message_truncated[route.sessionID] && messages().length < MAX_LOADED_SESSION_MESSAGES,
+      onSelect: (dialog) => {
+        dialog.clear()
+        void loadEarlier()
       },
     },
     {
@@ -1665,9 +1718,17 @@ export function Session() {
                 <Show when={sync.data.message_truncated[route.sessionID]}>
                   <box paddingLeft={2} paddingBottom={1}>
                     <text fg={theme.textMuted}>
-                      {uiText("ui.showingTheMostRecent")} {messages().length}{" "}
-                      {uiText("ui.messagesEarlierHistoryIsNotLoaded")}
+                      {messages().length >= MAX_LOADED_SESSION_MESSAGES
+                        ? uiText("ui.transcriptLoadLimitReached", { count: messages().length })
+                        : uiText("ui.showingLatestMessages", { count: messages().length })}
                     </text>
+                    <Show when={messages().length < MAX_LOADED_SESSION_MESSAGES}>
+                      <text fg={theme.text} onMouseUp={() => void loadEarlier()}>
+                        {earlierLoadingID() === route.sessionID
+                          ? uiText("ui.loadingEarlierMessages")
+                          : uiText("ui.loadEarlierMessages")}
+                      </text>
+                    </Show>
                   </box>
                 </Show>
                 <Show when={sync.data.message_memory_limited[route.sessionID]}>

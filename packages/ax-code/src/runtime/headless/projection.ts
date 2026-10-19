@@ -409,6 +409,15 @@ function deleteSessionState<
   delete state.session_risk[sessionID]
   delete state.session_goal[sessionID]
   delete state.message[sessionID]
+  // TUI-only transcript paging state rides on the same store object.
+  const paging = state as {
+    message_truncated?: Record<string, unknown>
+    message_cursor?: Record<string, unknown>
+    message_window?: Record<string, unknown>
+  }
+  if (paging.message_truncated) delete paging.message_truncated[sessionID]
+  if (paging.message_cursor) delete paging.message_cursor[sessionID]
+  if (paging.message_window) delete paging.message_window[sessionID]
 }
 
 function upsertMessage<

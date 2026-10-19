@@ -31,6 +31,8 @@ function pager(items = history) {
   }
 }
 
+const adopted: Array<{ id: string; cursor?: string }> = []
+
 describe("recover undo history", () => {
   test.each(["cleared", "changed", "missing", "offline", "navigation"])(
     "missing boundary revalidates authoritative session: %s",
@@ -59,7 +61,11 @@ describe("recover undo history", () => {
         route,
         session: () => state.session[0],
         messages: () => state.message.session,
-        sync: { data: state, set: (fn: (store: typeof state) => void) => fn(state) },
+        sync: {
+          data: state,
+          set: (fn: (store: typeof state) => void) => fn(state),
+          session: { adoptHistoryCursor: (id: string, cursor?: string) => adopted.push({ id, cursor }) },
+        },
         produce: (fn: unknown) => fn,
         sdk: {
           client: {
@@ -216,6 +222,7 @@ describe("recover undo history", () => {
             fn(state)
             setMessages(state.message.session)
           },
+          session: { adoptHistoryCursor: (id: string, cursor?: string) => adopted.push({ id, cursor }) },
         },
         produce: (fn: unknown) => fn,
         sdk: {
@@ -246,6 +253,8 @@ describe("recover undo history", () => {
       expect(await loader.flight()).toBe(true)
       expect(messages()).toHaveLength(350)
       expect(loader.historyLoading()).toBe(false)
+      // The whole history was paged in, so Load earlier has nothing left to fetch.
+      expect(adopted.at(-1)).toEqual({ id: "session", cursor: undefined })
     } finally {
       dispose()
     }
@@ -267,6 +276,7 @@ describe("recover undo history", () => {
     const messages = loaded.messages.map((x) => x.info)
     expect(source.requests).toEqual([undefined, "250", "150", "50"])
     expect(loaded.truncated).toBe(false)
+    expect(loaded).toHaveProperty("cursor", undefined)
     expect(hiddenMessageIDs(messages, boundary).size).toBe(302)
     expect(undoMessageID(messages, boundary)).toBe(history[46].info.id)
     expect(redoMessageID(messages, boundary)).toBe(history[50].info.id)
@@ -281,6 +291,7 @@ describe("recover undo history", () => {
     })
     expect(source.requests).toHaveLength(2)
     expect(loaded.truncated).toBe(true)
+    expect(loaded.cursor).toBe("150")
     expect(
       undoMessageID(
         loaded.messages.map((x) => x.info),
@@ -383,7 +394,11 @@ describe("recover undo history", () => {
       route,
       session: () => ({ revert: { messageID: history[48].info.id } }),
       messages: () => state.message.session,
-      sync: { data: state, set: (fn: (store: typeof state) => void) => fn(state) },
+      sync: {
+        data: state,
+        set: (fn: (store: typeof state) => void) => fn(state),
+        session: { adoptHistoryCursor: (id: string, cursor?: string) => adopted.push({ id, cursor }) },
+      },
       produce: (fn: unknown) => fn,
       sdk: {
         client: {

@@ -33,7 +33,7 @@ export async function loadRevertHistory<T extends Entry>(input: {
     found ||= index >= 0
     const next = result.response.headers.get("X-Next-Cursor") || undefined
     if (found && (!next || preceding)) {
-      return { messages: pages.reverse().flat(), truncated: !!next }
+      return { messages: pages.reverse().flat(), truncated: !!next, cursor: next }
     }
     if (!next) throw new MissingRevertMessageError()
     if (cursors.has(next) || result.data.length === 0) throw new Error("Message history pagination made no progress")

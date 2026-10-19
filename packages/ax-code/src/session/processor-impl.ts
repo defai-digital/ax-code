@@ -651,7 +651,7 @@ export namespace SessionProcessor {
               | { type: "reasoning"; text: string }
               | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
             > = []
-            // ADR-211: completed string outputs of the current step's tool
+            // ADR-258: completed string outputs of the current step's tool
             // calls, in arrival order. Errors never enter this list (they
             // are never spilled); the finish-step handler applies the
             // aggregate step budget over it.
@@ -1676,7 +1676,7 @@ export namespace SessionProcessor {
                   // keep stretching future retry delays for this provider.
                   SessionRetry.recordNetworkSuccess(input.model.providerID)
                   SessionRetry.recordConcurrencySuccess(input.model.providerID)
-                  // ADR-211: bound the summed tool output of this step. Each
+                  // ADR-258: bound the summed tool output of this step. Each
                   // result already carries its per-tool truncation; this pass
                   // spills the largest emitted outputs through the same
                   // Truncate path (head preview + spill file note) until the

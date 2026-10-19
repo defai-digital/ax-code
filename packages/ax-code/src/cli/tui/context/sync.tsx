@@ -15,7 +15,14 @@ import { createTuiStartupSpan, recordTuiStartupOnce } from "@tui/util/startup-tr
 import { createBootstrapController } from "./sync-bootstrap-controller"
 import { createStoreBackedRuntimeSyncActions } from "./sync-runtime-adapter"
 import { createStoreBackedSessionSyncController } from "./sync-session-sync"
-import { capSyncedMessages } from "./sync-session-store"
+import { applyEarlierMessagePage } from "./sync-session-store"
+import {
+  adoptHistoryCursor,
+  MAX_LOADED_SESSION_MESSAGES,
+  MAX_SESSION_MESSAGES,
+  sessionMessageLimit,
+} from "./sync-message-window"
+import { createEarlierMessageLoader } from "./sync-earlier-messages"
 import { createStoreBackedBootstrapTasks } from "./sync-bootstrap-assembly"
 import {
   applyProviderBootstrapState,
@@ -35,11 +42,10 @@ import { useLanguage } from "./language"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { sessionDerivedRequestHeaders, sessionGoalURL, sessionRiskURL } from "./sync-session-urls"
 
+export { MAX_SESSION_MESSAGES, MAX_LOADED_SESSION_MESSAGES } from "./sync-message-window"
+
 const BOOTSTRAP_REQUEST_TIMEOUT_MS = 10_000
 const SESSION_SYNC_REQUEST_TIMEOUT_MS = 10_000
-// The transcript only loads the most recent N messages of a session. The
-// fetch below probes with N+1 so truncation is detectable and surfaced.
-export const MAX_SESSION_MESSAGES = 100
 // Floor between two drift-triggered session refetches (see resyncSession).
 const ELIDED_DRIFT_RESYNC_MIN_INTERVAL_MS = 5_000
 
@@ -89,17 +95,11 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       setStore,
       fetchSession: (sessionID) => sdk.client.session.get({ sessionID }, { throwOnError: true }),
       fetchMessages: async (sessionID) => {
-        // Fetch one extra message as an overflow probe (capSyncedMessages):
-        // older history beyond the cap is recorded as truncation rather than
-        // silently presented as the whole conversation.
         const result = await sdk.client.session.messages(
-          { sessionID, limit: MAX_SESSION_MESSAGES + 1 },
+          { sessionID, limit: sessionMessageLimit(store, sessionID) },
           { throwOnError: true },
         )
-        const { messages, truncated } = capSyncedMessages(result.data, MAX_SESSION_MESSAGES)
-        setStore("message_truncated", sessionID, truncated)
-        if (!truncated) return result
-        return { ...result, data: messages }
+        return { ...result, history: { cursor: result.response.headers.get("X-Next-Cursor") || undefined } }
       },
       fetchTodo: (sessionID) => sdk.client.session.todo({ sessionID }, { throwOnError: true }),
       fetchDiff: (sessionID) => sdk.client.session.diff({ sessionID }, { throwOnError: true }),
@@ -135,6 +135,27 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       },
     })
 
+    const earlierMessages = createEarlierMessageLoader<Message, Part>({
+      store,
+      createFetchPage() {
+        const client = sdk.client
+        return (sessionID, before, limit, signal) =>
+          client.session.messages({ sessionID, before, limit }, { throwOnError: true, signal })
+      },
+      applyPage(sessionID, page, cursor) {
+        setStore(
+          produce((draft) => {
+            applyEarlierMessagePage(draft, sessionID, page, cursor, { maxMessages: MAX_LOADED_SESSION_MESSAGES })
+          }),
+        )
+      },
+    })
+    const clearSession = (sessionID: string) => {
+      earlierMessages.clear(sessionID)
+      sessionSync.clear(sessionID)
+    }
+    onCleanup(() => earlierMessages.reset())
+
     const exit = useExit()
     const args = useArgs()
     // SyncProvider mounts inside ToastProvider and LanguageProvider, so the
@@ -145,7 +166,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       store,
       setStatus: (status) => setStore("status", status),
       setSessionLoaded: (loaded) => setStore("session_loaded", loaded),
-      resetSessionSync: sessionSync.reset,
+      resetSessionSync() {
+        earlierMessages.reset()
+        sessionSync.reset()
+      },
       wrap: withSyncTimeout,
       // Live accessor so a bootstrap re-run after a workspace switch (reconnect
       // recovery) rebuilds its requests against the current workspace's client.
@@ -235,7 +259,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       getAutoReplyRequests: () => store.superLong,
       batch,
       setStore,
-      clearSessionSyncState: sessionSync.clear,
+      clearSessionSyncState: clearSession,
       replyPermission(payload) {
         return sdk.client.permission.reply(payload)
       },
@@ -279,6 +303,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         Log.Default.warn(label, { error })
       },
       maxSessionMessages: MAX_SESSION_MESSAGES,
+      sessionMessageLimit: (sessionID) => sessionMessageLimit(store, sessionID),
       onHandlerError({ type, error }) {
         Log.Default.error("sync event handler error", { type, error })
       },
@@ -303,7 +328,21 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       store,
       setStore,
       sessionSync: sessionSync.sync,
-      sessionClear: sessionSync.clear,
+      sessionClear: clearSession,
+      async sessionLoadEarlier(sessionID) {
+        const result = await earlierMessages.loadEarlier(sessionID)
+        const loaded = store.message[sessionID]?.length ?? 0
+        if (result !== "exhausted" || !store.message_truncated[sessionID] || loaded >= MAX_LOADED_SESSION_MESSAGES)
+          return result
+        // Truncated without a usable cursor (a live update evicted the oldest
+        // loaded message): widen the window and refetch it from the newest end.
+        setStore("message_window", sessionID, Math.min(loaded + MAX_SESSION_MESSAGES, MAX_LOADED_SESSION_MESSAGES))
+        await sessionSync.sync(sessionID, { force: true })
+        return "loaded"
+      },
+      sessionAdoptHistoryCursor(sessionID, cursor) {
+        setStore(produce((draft) => adoptHistoryCursor(draft, sessionID, cursor)))
+      },
       workspaceSync: syncWorkspaces,
       runtime: {
         syncSuperLong,
