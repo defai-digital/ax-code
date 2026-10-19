@@ -59,6 +59,20 @@ export namespace Worktree {
 
   export type ListItem = z.infer<typeof ListItem>
 
+  const StartPoint = z
+    .string()
+    .min(1)
+    .max(1024)
+    .refine((value) => !value.startsWith("-"), "Git revision cannot start with '-'")
+
+  const BranchName = z
+    .string()
+    .min(1)
+    .max(255)
+    .refine((value) => !value.startsWith("-"), "Branch name cannot start with '-'")
+
+  // ADR-260: clients choose the branch, its start point, or an existing branch
+  // to borrow, and can retry a create safely with an operation ID.
   export const CreateInput = z
     .object({
       name: z.string().optional(),
@@ -66,18 +80,23 @@ export namespace Worktree {
         .string()
         .optional()
         .describe("Additional startup script to run after the project's start command"),
+      branch: BranchName.optional().describe("Name of the new branch. Defaults to ax-code/<name>."),
+      startRef: StartPoint.optional().describe("Start point of the new branch. Defaults to HEAD."),
+      existingBranch: BranchName.optional().describe(
+        "Check out this existing local branch instead of creating one. AX Code never deletes or resets it.",
+      ),
+      operationId: z
+        .string()
+        .min(1)
+        .max(128)
+        .optional()
+        .describe("Idempotency key: repeating a create with the same ID returns the first result."),
     })
     .meta({
       ref: "WorktreeCreateInput",
     })
 
   export type CreateInput = z.infer<typeof CreateInput>
-
-  const StartPoint = z
-    .string()
-    .min(1)
-    .max(1024)
-    .refine((value) => !value.startsWith("-"), "Git revision cannot start with '-'")
 
   const CreateReadyInput = CreateInput.extend({
     startPoint: StartPoint.optional(),
@@ -362,20 +381,28 @@ export namespace Worktree {
     return items
   }
 
-  async function candidate(root: string, base?: string) {
+  type BranchChoice = { branch?: string; existingBranch?: string }
+
+  async function candidate(root: string, base?: string, choice: BranchChoice = {}) {
     for (const attempt of Array.from({ length: 26 }, (_, i) => i)) {
       // Use randomName for all non-first attempts to reduce TOCTOU collision window
       const name = base ? (attempt === 0 ? base : `${base}-${randomName()}`) : randomName()
-      const branch = `ax-code/${name}`
+      const branch = choice.existingBranch ?? choice.branch ?? `ax-code/${name}`
       const directory = path.join(root, name)
 
       if (await exists(directory)) continue
 
-      const ref = `refs/heads/${branch}`
-      const branchCheck = await git(["show-ref", "--verify", "--quiet", ref], {
-        cwd: Instance.worktree,
-      })
-      if (branchCheck.exitCode === 0) continue
+      if (!choice.existingBranch) {
+        const ref = `refs/heads/${branch}`
+        const branchCheck = await git(["show-ref", "--verify", "--quiet", ref], {
+          cwd: Instance.worktree,
+        })
+        if (branchCheck.exitCode === 0) {
+          // A caller-chosen name is not renamed behind its back.
+          if (choice.branch) throw new CreateFailedError({ message: `Branch ${branch} already exists` })
+          continue
+        }
+      }
 
       // Attempt to create the directory atomically to close the TOCTOU window.
       // If another process created it between our exists() check and now, mkdir
@@ -487,7 +514,7 @@ export namespace Worktree {
     for (const [key] of startScriptTimers) cancelTimers(key)
   }
 
-  export async function makeWorktreeInfo(name?: string): Promise<Info> {
+  export async function makeWorktreeInfo(name?: string, choice: BranchChoice = {}): Promise<Info> {
     if (Instance.project.vcs !== "git") {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
@@ -496,18 +523,98 @@ export namespace Worktree {
     await fs.mkdir(root, { recursive: true })
 
     const base = name ? slug(name) : ""
-    return candidate(root, base || undefined)
+    return candidate(root, base || undefined, choice)
   }
 
-  export async function createFromInfo(info: Info, startCommand?: string, startPoint?: string) {
-    const args = ["worktree", "add", "--no-checkout", "-b", info.branch, info.directory]
-    if (startPoint) args.push(StartPoint.parse(startPoint))
-    const created = await git(args, { cwd: Instance.worktree })
+  // ADR-260: branch ownership lives in the repository's git config, which git
+  // writes under its own lock and drops when the branch is deleted. Removal and
+  // reset act only on branches AX Code positively owns, so a lost or unreadable
+  // marker leaves a branch behind instead of deleting the user's work.
+  const OWNED_KEY = "axCodeOwned"
+  const BORROWED_KEY = "axCodeBorrowed"
+
+  // A flag's value is the branch name it was written for: `git branch -c`
+  // copies branch config, and a copied flag must not transfer to the copy.
+  type FlagState = "set" | "absent" | "unknown"
+
+  async function branchFlag(branch: string, key: string): Promise<FlagState> {
+    const read = await git(["config", "--get", `branch.${branch}.${key}`], { cwd: Instance.worktree })
+    // `git config --get` exits 1 only when the key is missing; anything else is
+    // an unreadable or invalid config and must not be read as "not borrowed".
+    if (read.exitCode === 1) return "absent"
+    if (read.exitCode !== 0) return "unknown"
+    return outputText(read.stdout).trim() === branch ? "set" : "unknown"
+  }
+
+  async function setBranchFlag(branch: string, key: string) {
+    const written = await git(["config", `branch.${branch}.${key}`, branch], { cwd: Instance.worktree })
+    if (written.exitCode !== 0) {
+      throw new CreateFailedError({ message: errorText(written) || `Failed to mark branch ${branch}` })
+    }
+  }
+
+  /** The branch a worktree borrowed from the user, if its checkout is marked borrowed (ADR-260). */
+  export async function borrowedBranch(directory: string): Promise<string | undefined> {
+    const head = await git(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: directory }).catch(() => undefined)
+    const branch = head && head.exitCode === 0 ? outputText(head.stdout).trim() : ""
+    if (!branch) return undefined
+    return (await branchFlag(branch, BORROWED_KEY)) === "set" ? branch : undefined
+  }
+
+  /**
+   * Whether AX Code may delete or reset `branch` (ADR-260). It must provably not be borrowed: any borrowed flag, or an
+   * unreadable one, denies. Branches AX Code created carry the owned flag; the `ax-code/` and `opencode/` prefixes cover
+   * branches created before the flag existed.
+   */
+  export async function ownsBranch(branch: string | undefined) {
+    if (!branch) return false
+    if ((await branchFlag(branch, BORROWED_KEY)) !== "absent") return false
+    const owned = await branchFlag(branch, OWNED_KEY)
+    if (owned === "set") return true
+    if (owned === "unknown") return false
+    return branch.startsWith("ax-code/") || branch.startsWith("opencode/")
+  }
+
+  // Serializes ownership decisions with borrowing and branch deletion inside
+  // this process, so a branch cannot be borrowed between remove()'s ownership
+  // check and its `git branch -D`. Separate processes are not coordinated.
+  const branchLocks = new Map<string, Promise<unknown>>()
+
+  async function withBranchLock<T>(task: () => Promise<T>): Promise<T> {
+    const key = Instance.worktree
+    const previous = branchLocks.get(key) ?? Promise.resolve()
+    const next = previous.catch(() => undefined).then(task)
+    branchLocks.set(key, next)
+    try {
+      return await next
+    } finally {
+      if (branchLocks.get(key) === next) branchLocks.delete(key)
+    }
+  }
+
+  export async function createFromInfo(
+    info: Info,
+    startCommand?: string,
+    startPoint?: string,
+    options: { borrowed?: boolean } = {},
+  ) {
+    const args = options.borrowed
+      ? ["worktree", "add", "--no-checkout", info.directory, info.branch]
+      : ["worktree", "add", "--no-checkout", "-b", info.branch, info.directory]
+    if (startPoint && !options.borrowed) args.push(StartPoint.parse(startPoint))
+    // Mark a borrowed branch before git publishes the worktree, so no window
+    // exists in which it could be treated as owned. The mark stays on failure:
+    // it only ever protects the branch.
+    const created = await withBranchLock(async () => {
+      if (options.borrowed) await setBranchFlag(info.branch, BORROWED_KEY)
+      return git(args, { cwd: Instance.worktree })
+    })
     if (created.exitCode !== 0) {
       throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
     }
 
     try {
+      if (!options.borrowed) await setBranchFlag(info.branch, OWNED_KEY)
       await Project.addSandbox(Instance.project.id, info.directory)
     } catch (err) {
       log.warn("failed to record worktree in database; rolling back git worktree", {
@@ -521,12 +628,14 @@ export namespace Worktree {
           message: errorText(removed) || "git worktree remove failed",
         })
       }
-      const deletedBranch = await git(["branch", "-D", info.branch], { cwd: Instance.worktree })
-      if (deletedBranch.exitCode !== 0) {
-        log.warn("failed to delete rolled-back worktree branch", {
-          branch: info.branch,
-          message: errorText(deletedBranch) || "git branch delete failed",
-        })
+      if (!options.borrowed && removed.exitCode === 0) {
+        const deletedBranch = await git(["branch", "-D", info.branch], { cwd: Instance.worktree })
+        if (deletedBranch.exitCode !== 0) {
+          log.warn("failed to delete rolled-back worktree branch", {
+            branch: info.branch,
+            message: errorText(deletedBranch) || "git branch delete failed",
+          })
+        }
       }
       await fs.rm(info.directory, { recursive: true, force: true }).catch((removeError) => {
         log.warn("failed to remove rolled-back worktree directory", {
@@ -616,9 +725,33 @@ export namespace Worktree {
     }
   }
 
+  async function validateBranchChoice(input: CreateInput | undefined, startPoint?: string) {
+    if (input?.existingBranch && (input.branch || startPoint)) {
+      throw new CreateFailedError({ message: "existingBranch cannot be combined with branch or startRef" })
+    }
+    for (const name of [input?.branch, input?.existingBranch]) {
+      if (!name) continue
+      const valid = await git(["check-ref-format", "--branch", name], { cwd: Instance.worktree })
+      if (valid.exitCode !== 0) throw new CreateFailedError({ message: `Invalid branch name: ${name}` })
+    }
+    if (input?.existingBranch) {
+      const found = await git(["show-ref", "--verify", "--quiet", `refs/heads/${input.existingBranch}`], {
+        cwd: Instance.worktree,
+      })
+      if (found.exitCode !== 0) {
+        throw new CreateFailedError({ message: `Branch ${input.existingBranch} does not exist` })
+      }
+    }
+  }
+
   async function prepareCreate(input: CreateInput | undefined, startPoint?: string) {
-    const info = await makeWorktreeInfo(input?.name)
-    const bootstrap = await createFromInfo(info, input?.startCommand, startPoint).catch(async (error) => {
+    if (Instance.project.vcs !== "git") {
+      throw new NotGitError({ message: "Worktrees are only supported for git projects" })
+    }
+    await validateBranchChoice(input, startPoint)
+    const borrowed = Boolean(input?.existingBranch)
+    const info = await makeWorktreeInfo(input?.name, { branch: input?.branch, existingBranch: input?.existingBranch })
+    const bootstrap = await createFromInfo(info, input?.startCommand, startPoint, { borrowed }).catch(async (error) => {
       await fs.rm(info.directory, { recursive: true, force: true }).catch((cleanupError) => {
         log.warn("failed to clean up failed worktree creation", {
           directory: info.directory,
@@ -630,8 +763,43 @@ export namespace Worktree {
     return { info, bootstrap }
   }
 
+  // ADR-260: creates keyed by client operation ID, newest last, bounded.
+  const MAX_OPERATIONS = 256
+  const operations = new Map<string, Promise<Info>>()
+  const settledOperations = new Set<string>()
+
   export const create = fn(CreateInput.optional(), async (input) => {
-    const { info, bootstrap } = await prepareCreate(input)
+    if (!input?.operationId) return createNow(input)
+    // Scope by the repository's common git directory: separate clones of one
+    // project share a project ID but must not share created worktrees.
+    const common = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: Instance.worktree })
+    const repository =
+      common.exitCode === 0 ? await realOnDiskPath(outputText(common.stdout).trim()) : Instance.worktree
+    const key = `${repository}\u0000${input.operationId}`
+    const known = operations.get(key)
+    if (known) return known
+    const pending = createNow(input)
+    operations.set(key, pending)
+    pending.then(
+      () => {
+        settledOperations.add(key)
+        // Only settled operations are evicted; an in-flight one stays joinable.
+        for (const old of settledOperations) {
+          if (operations.size <= MAX_OPERATIONS) break
+          settledOperations.delete(old)
+          operations.delete(old)
+        }
+      },
+      () => {
+        // A failed create may be retried with the same ID.
+        if (operations.get(key) === pending) operations.delete(key)
+      },
+    )
+    return pending
+  })
+
+  async function createNow(input: CreateInput | undefined): Promise<Info> {
+    const { info, bootstrap } = await prepareCreate(input, input?.startRef)
     // Defer bootstrap to the next microtask so callers see the
     // worktree info synchronously before post-create hooks run.
     // Tracked via startScriptTimers so cancelPendingStartScripts()
@@ -644,10 +812,10 @@ export namespace Worktree {
     timer.unref?.()
     trackTimer(info.directory, timer)
     return info
-  })
+  }
 
   export const createReady = fn(CreateReadyInput.optional(), async (input) => {
-    const { info, bootstrap } = await prepareCreate(input, input?.startPoint)
+    const { info, bootstrap } = await prepareCreate(input, input?.startPoint ?? input?.startRef)
     if (await bootstrap()) return info
 
     await remove({ directory: info.directory }).catch((error) => {
@@ -808,7 +976,10 @@ export namespace Worktree {
 
     await cleanupInstance()
 
-    const branch = entry.branch?.replace(/^refs\/heads\//, "")
+    // ADR-260: delete only a branch AX Code owns; a borrowed or unknown branch
+    // belongs to the user.
+    const checkedOut = entry.branch?.replace(/^refs\/heads\//, "")
+    let branch: string | undefined
     let cleanupError: unknown
     let branchError: unknown
     try {
@@ -816,14 +987,16 @@ export namespace Worktree {
     } catch (error) {
       cleanupError = error
     } finally {
-      if (branch) {
+      await withBranchLock(async () => {
+        branch = (await ownsBranch(checkedOut)) ? checkedOut : undefined
+        if (!branch) return
         const deleted = await git(["branch", "-D", branch], { cwd: Instance.worktree })
         if (deleted.exitCode !== 0) {
           branchError = new RemoveFailedError({
             message: errorText(deleted) || "Failed to delete worktree branch",
           })
         }
-      }
+      })
     }
     if (cleanupError) {
       if (branchError) {
@@ -889,6 +1062,10 @@ export namespace Worktree {
     })()
     if (!entry?.path) {
       throw new ResetFailedError({ message: "Worktree not found" })
+    }
+    // ADR-260: resetting would overwrite a branch that is not AX Code's.
+    if (!(await ownsBranch(entry.branch?.replace(/^refs\/heads\//, "")))) {
+      throw new ResetFailedError({ message: "Cannot reset a worktree whose branch AX Code did not create" })
     }
 
     const remoteList = await git(["remote"], { cwd: Instance.worktree })

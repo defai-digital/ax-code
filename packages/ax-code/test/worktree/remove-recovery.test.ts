@@ -16,7 +16,7 @@ test("retains the sandbox when cleanup fails after Git detaches the worktree", a
   await using external = await tmpdir()
   const directory = path.join(external.path, "DetachedWorktree")
   const git = (...args: string[]) => execFileSync("git", args, { cwd: tmp.path, encoding: "utf8", stdio: "pipe" })
-  git("worktree", "add", "-b", "cleanup-recovery", directory)
+  git("worktree", "add", "-b", "ax-code/cleanup-recovery", directory)
 
   try {
     await Instance.provide({
@@ -37,7 +37,7 @@ test("retains the sandbox when cleanup fails after Git detaches the worktree", a
         try {
           await expect(Worktree.remove({ directory })).rejects.toMatchObject({ name: "WorktreeRemoveFailedError" })
           expect(git("worktree", "list", "--porcelain")).not.toContain(directory)
-          expect(git("branch", "--list", "cleanup-recovery").trim()).toBe("")
+          expect(git("branch", "--list", "ax-code/cleanup-recovery").trim()).toBe("")
           expect(await Project.sandboxes(Instance.project.id)).toEqual(recorded)
         } finally {
           rm.mockRestore()

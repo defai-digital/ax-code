@@ -57065,6 +57065,30 @@
           "startCommand": {
             "description": "Additional startup script to run after the project's start command",
             "type": "string"
+          },
+          "branch": {
+            "description": "Name of the new branch. Defaults to ax-code/<name>.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "startRef": {
+            "description": "Start point of the new branch. Defaults to HEAD.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "existingBranch": {
+            "description": "Check out this existing local branch instead of creating one. AX Code never deletes or resets it.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "operationId": {
+            "description": "Idempotency key: repeating a create with the same ID returns the first result.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
           }
         }
       },

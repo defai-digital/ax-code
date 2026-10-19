@@ -9,6 +9,7 @@ changes belong to AX Coder.
 ### Added
 
 - Load earlier transcript history in the TUI from the truncated-history banner or the `Load earlier messages` command, up to 300 messages per session, keeping the scroll position.
+- `worktree.create` accepts a branch name, a start ref, an existing branch to check out (never deleted or reset by AX Code), and an operation ID that makes a repeated create return the first worktree.
 
 ### Fixed
 
