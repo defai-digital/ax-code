@@ -213,4 +213,22 @@ describe("QualityModelRegistry canonical promotion summary", () => {
       }),
     ).toThrow(/signedArchiveReviewDossier promotionID/)
   })
+
+  test("rejects a signed archive that belongs to another promotion", () => {
+    expect(() =>
+      basePromotionRecord({
+        signedArchive: {
+          signedArchiveID: "signed-archive-1",
+          createdAt: "2026-04-21T00:04:00.000Z",
+          archiveID: "archive-1",
+          exportID: "export-1",
+          promotionID: "promotion-2",
+          keyID: "key-1",
+          attestedBy: "release-bot",
+          algorithm: "hmac-sha256",
+          overallStatus: "pass",
+        },
+      }),
+    ).toThrow(/signedArchive promotionID/)
+  })
 })

@@ -490,6 +490,7 @@ export const PromotionRecord = z
       ["handoffPackage", record.handoffPackage],
       ["portableExport", record.portableExport],
       ["packagedArchive", record.packagedArchive],
+      ["signedArchive", record.signedArchive],
       ["signedArchiveAttestationRecord", record.signedArchiveAttestationRecord],
       ["signedArchiveAttestationPacket", record.signedArchiveAttestationPacket],
       ["signedArchiveGovernancePacket", record.signedArchiveGovernancePacket],
