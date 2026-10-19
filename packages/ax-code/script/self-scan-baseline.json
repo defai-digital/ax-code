@@ -5299,17 +5299,17 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "276a737ce53ed95ecc4d711e6c698c9d21b142b38cbb482e1665fe0ffe706c3f",
-          "file": "src/quality/promotion/promotion-packaged-archive.ts",
-          "line": 266,
+          "fingerprint": "c347164f09221117eeb899c6a335da9260547c2c2172cd462ad0ace26be06c3f",
+          "file": "src/quality/promotion/promotion-portable-export.ts",
+          "line": 316,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "8fcc3c10705e7a4e3ac6c2353da572b41c4bb131d28b30126d15b34d8960edde",
+          "fingerprint": "26d36399388616ca145a9c872ab74c5f3f5196d4423b63cbdff6f8ff6138e488",
           "file": "src/quality/promotion/promotion-portable-export.ts",
-          "line": 310,
+          "line": 323,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
