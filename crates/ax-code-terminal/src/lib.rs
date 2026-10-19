@@ -135,7 +135,9 @@ pub fn parse_input(input: &str) -> Vec<InputEvent> {
         }
 
         if let Some((event, consumed)) = parse_csi_key(rest) {
-            out.push(event);
+            if let Some(event) = event {
+                out.push(event);
+            }
             idx += consumed;
             continue;
         }
@@ -189,7 +191,7 @@ fn key(name: &str, ctrl: bool, alt: bool, shift: bool) -> InputEvent {
     }
 }
 
-fn parse_csi_key(input: &str) -> Option<(InputEvent, usize)> {
+fn parse_csi_key(input: &str) -> Option<(Option<InputEvent>, usize)> {
     if !input.starts_with("\x1b[") {
         return None;
     }
@@ -211,11 +213,28 @@ fn parse_csi_key(input: &str) -> Option<(InputEvent, usize)> {
         'D' => "left",
         'H' => "home",
         'F' => "end",
-        '~' => match params.first().copied()? {
+        '~' => match params.first().copied().unwrap_or(0) {
             1 | 7 => "home",
+            2 => "insert",
             3 => "delete",
             4 | 8 => "end",
-            _ => return None,
+            5 => "pageup",
+            6 => "pagedown",
+            11 => "f1",
+            12 => "f2",
+            13 => "f3",
+            14 => "f4",
+            15 => "f5",
+            17 => "f6",
+            18 => "f7",
+            19 => "f8",
+            20 => "f9",
+            21 => "f10",
+            23 => "f11",
+            24 => "f12",
+            // A well-formed CSI sequence with an unhandled code is still
+            // consumed whole; falling through would type its bytes as text.
+            _ => return Some((None, consumed)),
         },
         _ => return None,
     };
@@ -225,7 +244,7 @@ fn parse_csi_key(input: &str) -> Option<(InputEvent, usize)> {
     // (e.g. \x1b[5A = "up 5 times"), not a modifier code.
     let modifier = params.get(1).copied();
     let (shift, alt, ctrl) = key_modifiers(modifier);
-    Some((key(name, ctrl, alt, shift), consumed))
+    Some((Some(key(name, ctrl, alt, shift)), consumed))
 }
 
 fn key_modifiers(value: Option<u16>) -> (bool, bool, bool) {
@@ -350,9 +369,10 @@ fn apply_sgr(style: &mut Style, codes: &str) {
     let values: Vec<u16> = if codes.is_empty() {
         vec![0]
     } else {
+        // An empty SGR field is parameter 0 (reset), not a missing parameter.
         codes
             .split(';')
-            .filter_map(|item| item.parse().ok())
+            .map(|item| item.parse().unwrap_or(0))
             .collect()
     };
 
@@ -464,6 +484,11 @@ impl CellBuffer {
 
             let width = char_width(ch);
             if width == 0 {
+                continue;
+            }
+            // A glyph wider than the viewport cannot be stored anywhere; skip
+            // it instead of writing a cell that overflows the grid.
+            if width > cols {
                 continue;
             }
             if x + width > cols {
@@ -796,6 +821,54 @@ mod tests {
             parse_input("\x1b[1;5A"),
             vec![key("up", true, false, false)]
         );
+    }
+
+    #[test]
+    fn parse_csi_tilde_keys_consume_the_whole_sequence() {
+        assert_eq!(
+            parse_input("\x1b[2~"),
+            vec![key("insert", false, false, false)]
+        );
+        assert_eq!(
+            parse_input("\x1b[5~"),
+            vec![key("pageup", false, false, false)]
+        );
+        assert_eq!(
+            parse_input("\x1b[6~"),
+            vec![key("pagedown", false, false, false)]
+        );
+        assert_eq!(
+            parse_input("\x1b[5;2~"),
+            vec![key("pageup", false, false, true)]
+        );
+        // An unhandled code must still be consumed: falling through typed the
+        // escape plus "[99~" as phantom input.
+        assert_eq!(parse_input("\x1b[99~"), Vec::<InputEvent>::new());
+        assert_eq!(
+            parse_input("a\x1b[99~b"),
+            vec![
+                InputEvent::Text { text: "a".into() },
+                InputEvent::Text { text: "b".into() },
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_ansi_empty_sgr_parameters_reset() {
+        let runs = parse_ansi("\x1b[1mbold\x1b[;31mred");
+        assert_eq!(runs[1].text, "red");
+        assert_eq!(runs[1].style.fg.as_deref(), Some("red"));
+        assert!(!runs[1].style.bold);
+
+        let runs = parse_ansi("\x1b[31mred\x1b[31;mplain");
+        assert_eq!(runs[1].text, "plain");
+        assert_eq!(runs[1].style, Style::default());
+    }
+
+    #[test]
+    fn write_wrapped_skips_a_glyph_wider_than_the_viewport() {
+        let buffer = CellBuffer::blank(Viewport::new(1, 2)).write_wrapped("界a", Style::default());
+        assert_eq!(buffer.cells[0].text, "a");
     }
 
     #[test]
