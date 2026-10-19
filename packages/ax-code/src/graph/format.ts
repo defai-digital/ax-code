@@ -385,14 +385,32 @@ export namespace GraphFormat {
 
     lines.push("")
 
-    // Only sequence edges between high-level nodes
+    // Sequence edges run through every node (tools, llm, errors), so a
+    // direct pair filter loses step -> step links whenever a tool node sits
+    // between them. Walk the chain and connect each allowed node to the
+    // next allowed node, preserving execution order.
+    const sequenceNext = new Map<string, string>()
+    const sequenceFrom = new Set<string>()
     for (const edge of graph.edges) {
       if (edge.type !== "sequence") continue
-      const fromNode = graph.nodes.find((n) => n.id === edge.from)
-      const toNode = graph.nodes.find((n) => n.id === edge.to)
-      if (!fromNode || !toNode) continue
-      if (!allowed.has(fromNode.type) || !allowed.has(toNode.type)) continue
-      lines.push(`  ${sanitizeId(edge.from)} --> ${sanitizeId(edge.to)}`)
+      sequenceNext.set(edge.from, edge.to)
+      sequenceFrom.add(edge.to)
+    }
+    const nodeByID = new Map(graph.nodes.map((n) => [n.id, n]))
+    const chainStart = graph.nodes.find((n) => n.type === "session" && !sequenceFrom.has(n.id))?.id
+    let previousAllowed: string | undefined
+    let cursor = chainStart
+    const visited = new Set<string>()
+    while (cursor !== undefined && !visited.has(cursor)) {
+      visited.add(cursor)
+      const node = nodeByID.get(cursor)
+      if (node && allowed.has(node.type)) {
+        if (previousAllowed !== undefined) {
+          lines.push(`  ${sanitizeId(previousAllowed)} --> ${sanitizeId(cursor)}`)
+        }
+        previousAllowed = cursor
+      }
+      cursor = sequenceNext.get(cursor)
     }
 
     lines.push("")
@@ -407,6 +425,15 @@ export namespace GraphFormat {
     if (routes.length > 0) lines.push(`  class ${routes.join(",")} route`)
 
     return lines.join("\n")
+  }
+
+  /** Agent that was active before any explicit route: the session start row. */
+  function initialAgent(graph: ExecutionGraph.Graph): string {
+    const start = graph.nodes.find(
+      (node) => node.type === "session" && node.agent !== undefined && node.id.includes("start"),
+    )
+    if (start?.agent) return start.agent
+    return graph.metadata.agents[0] ?? "agent"
   }
 
   export function gantt(graph: ExecutionGraph.Graph): string {
@@ -425,7 +452,7 @@ export namespace GraphFormat {
 
     // Walk nodes in timestamp order to detect agent changes
     const sorted = [...graph.nodes].sort((a, b) => a.timestamp - b.timestamp)
-    let currentAgent = graph.metadata.agents[0] ?? "agent"
+    let currentAgent = initialAgent(graph)
     let lastSection = ""
 
     // Pre-compute tool counts per step
@@ -475,7 +502,7 @@ export namespace GraphFormat {
 
     // Detect which agent ran each step
     const sorted = [...graph.nodes].sort((a, b) => a.timestamp - b.timestamp)
-    let curAgent = graph.metadata.agents[0] ?? "agent"
+    let curAgent = initialAgent(graph)
     const stepAgent = new Map<string, string>()
     for (const n of sorted) {
       if (n.type === "agent_route" && n.agent) curAgent = n.agent
