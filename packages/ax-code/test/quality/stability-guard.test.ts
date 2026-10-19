@@ -101,4 +101,17 @@ describe("QualityStabilityGuard", () => {
     expect(summary.repeatFailureWindowHours).toBe(QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_WINDOW_HOURS)
     expect(summary.repeatFailureThreshold).toBe(QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_THRESHOLD)
   })
+
+  test("keeps an oversized cooldown active instead of overflowing to the epoch", () => {
+    const summary = QualityStabilityGuard.summarize({
+      source: "overflow-model-v1",
+      rollbacks: [{ source: "overflow-model-v1", rolledBackAt: "2026-04-20T10:00:00.000Z" }],
+      now: "2026-04-20T12:00:00.000Z",
+      cooldownHours: Number.MAX_VALUE,
+    })
+
+    expect(summary.coolingWindowActive).toBe(true)
+    expect(summary.overallStatus).toBe("fail")
+    expect(summary.cooldownUntil).not.toBe("1970-01-01T00:00:00.000Z")
+  })
 })

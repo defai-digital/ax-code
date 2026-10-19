@@ -55,12 +55,17 @@ export namespace QualityStabilityGuard {
     return ms === undefined ? undefined : isoAt(new Date(ms))
   }
 
-  function addHours(iso: string, hours: number) {
-    return isoAt(new Date(new Date(iso).getTime() + hours * 60 * 60 * 1000))
+  const MAX_DATE_MS = 8.64e15
+
+  function clampDateMs(ms: number) {
+    return Math.max(-MAX_DATE_MS, Math.min(ms, MAX_DATE_MS))
   }
 
-  function subtractHours(iso: string, hours: number) {
-    return isoAt(new Date(new Date(iso).getTime() - hours * 60 * 60 * 1000))
+  function addHours(iso: string, hours: number) {
+    // Clamp instead of letting an oversized policy value overflow into an
+    // Invalid Date, which would silently become the Unix epoch and disarm the
+    // cooling window.
+    return isoAt(new Date(clampDateMs(new Date(iso).getTime() + hours * 60 * 60 * 1000)))
   }
 
   export function summarize(input: {
@@ -100,10 +105,14 @@ export namespace QualityStabilityGuard {
 
     const latestRollbackAt = records[records.length - 1]?.rolledBackAt ?? null
     const cooldownUntil = latestRollbackAt ? addHours(latestRollbackAt, cooldownHours) : null
-    const coolingWindowActive = cooldownUntil ? evaluatedAt < cooldownUntil : false
-    const windowStart = subtractHours(evaluatedAt, repeatFailureWindowHours)
+    // Compare instants, not canonical strings: an extreme cooldown produces an
+    // extended-year ISO string that sorts differently from a four-digit year.
+    const evaluatedAtMs = new Date(evaluatedAt).getTime()
+    const cooldownUntilMs = cooldownUntil ? new Date(cooldownUntil).getTime() : null
+    const coolingWindowActive = cooldownUntilMs !== null && evaluatedAtMs < cooldownUntilMs
+    const windowStartMs = evaluatedAtMs - repeatFailureWindowHours * 60 * 60 * 1000
     const recentRollbackCount = records.filter(
-      (record) => record.rolledBackAt >= windowStart && record.rolledBackAt <= evaluatedAt,
+      (record) => record.rolledBackAtMs >= windowStartMs && record.rolledBackAtMs <= evaluatedAtMs,
     ).length
     const escalationRequired = recentRollbackCount >= repeatFailureThreshold
 
