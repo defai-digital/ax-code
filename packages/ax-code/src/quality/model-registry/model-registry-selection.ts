@@ -39,20 +39,29 @@ export function normalizeRegistryTeam(team: string | null | undefined) {
   return normalizeApprovalTeam(team)
 }
 
+function compareTimestamps(left: string, right: string) {
+  const leftMs = Date.parse(left)
+  const rightMs = Date.parse(right)
+  if (Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs !== rightMs) return leftMs - rightMs
+  return left.localeCompare(right)
+}
+
 export function sortModelRecords<T extends RegistryModelRecord>(records: readonly T[]) {
   return [...records].sort((a, b) => {
-    const byRegisteredAt = a.registeredAt.localeCompare(b.registeredAt)
+    const byRegisteredAt = compareTimestamps(a.registeredAt, b.registeredAt)
     if (byRegisteredAt !== 0) return byRegisteredAt
     return a.model.source.localeCompare(b.model.source)
   })
 }
 
 export function sortPromotionRecords<T extends RegistryPromotionRecord>(records: readonly T[]) {
-  return [...records].sort((a, b) => a.promotedAt.localeCompare(b.promotedAt) || a.source.localeCompare(b.source))
+  return [...records].sort((a, b) => compareTimestamps(a.promotedAt, b.promotedAt) || a.source.localeCompare(b.source))
 }
 
 export function sortRollbackRecords<T extends RegistryRollbackRecord>(records: readonly T[]) {
-  return [...records].sort((a, b) => a.rolledBackAt.localeCompare(b.rolledBackAt) || a.source.localeCompare(b.source))
+  return [...records].sort(
+    (a, b) => compareTimestamps(a.rolledBackAt, b.rolledBackAt) || a.source.localeCompare(b.source),
+  )
 }
 
 function approvalList(promotion: RegistryPromotionRecord) {
@@ -60,7 +69,11 @@ function approvalList(promotion: RegistryPromotionRecord) {
 }
 
 export function promotionApprovers(promotion: RegistryPromotionRecord) {
-  return uniqueSortedStrings(approvalList(promotion).map((approval) => approval.approver))
+  return uniqueSortedStrings(
+    approvalList(promotion)
+      .map((approval) => approval.approver.trim())
+      .filter((approver) => approver.length > 0),
+  )
 }
 
 export function promotionTeams(promotion: RegistryPromotionRecord) {

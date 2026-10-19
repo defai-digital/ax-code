@@ -139,4 +139,43 @@ describe("quality model registry selection helpers", () => {
     expect(reportingChainCarryoverHistory(promotions, 0)).toEqual([])
     expect(reviewerCarryoverHistory(promotions, 1.9).map((entry) => entry.approver)).toEqual(["alice", "bob"])
   })
+
+  test("normalizes approver whitespace before carryover aggregation", () => {
+    const promotions = [
+      promotion({
+        promotionID: "older-reentry",
+        promotedAt: "2026-04-21T00:01:00.000Z",
+        eligibility: { reentryContext: { rollbackID: "rollback-1" } },
+        approval: { approver: "alice" },
+      }),
+      promotion({
+        promotionID: "newer-reentry",
+        promotedAt: "2026-04-21T00:02:00.000Z",
+        eligibility: { reentryContext: { rollbackID: "rollback-2" } },
+        approval: { approver: " alice " },
+      }),
+    ]
+
+    expect(reviewerCarryoverHistory(promotions, 2)).toEqual([
+      {
+        approver: "alice",
+        weightedReuseScore: 1.5,
+        appearances: 2,
+        mostRecentPromotionID: "newer-reentry",
+        mostRecentPromotedAt: "2026-04-21T00:02:00.000Z",
+      },
+    ])
+  })
+
+  test("orders promotions by instant, not by timestamp text", () => {
+    const promotions = [
+      promotion({ promotionID: "fractional-later", promotedAt: "2026-04-21T00:00:00.100Z" }),
+      promotion({ promotionID: "whole-earlier", promotedAt: "2026-04-21T00:00:00Z" }),
+    ]
+
+    expect(sortPromotionRecords(promotions).map((record) => record.promotionID)).toEqual([
+      "whole-earlier",
+      "fractional-later",
+    ])
+  })
 })
