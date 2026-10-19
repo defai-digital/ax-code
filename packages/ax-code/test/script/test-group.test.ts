@@ -1,11 +1,34 @@
 import { describe, expect, test } from "vitest"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
-import { check, list, pick } from "../../script/test-group"
+import { check, ciGroups, list, pick } from "../../script/test-group"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 
 describe("test group classification", () => {
+  test("every offline file has a CI lane, with no duplicate integration contracts", async () => {
+    const files = await list()
+    const workflow = await readFile(path.join(repoRoot, ".github/workflows/ax-code-ci.yml"), "utf8")
+    for (const group of ciGroups) expect(workflow).toContain(`test:ci -- ${group}`)
+    const automated = new Set(ciGroups.flatMap((group) => pick(files, group)))
+    const live = new Set(pick(files, "live"))
+    expect(files.filter((file) => !automated.has(file) && !live.has(file))).toEqual([])
+    expect(pick(files, "integration").length).toBeGreaterThan(0)
+    for (const file of pick(files, "integration")) {
+      expect(pick(files, "runtime-contract")).not.toContain(file)
+      expect(pick(files, "deterministic")).not.toContain(file)
+      expect(live.has(file)).toBe(false)
+    }
+    expect(pick(files, "integration")).toContain("test/server/session-messages.test.ts")
+    expect(pick(files, "integration")).toContain("test/pty/pty-session.test.ts")
+  })
+
+  test("rejects stale group entries instead of silently dropping renamed tests", async () => {
+    const files = await list()
+    expect(() => check(files.filter((file) => file !== "test/server/session-messages.test.ts"))).toThrow(
+      "Missing grouped tests",
+    )
+  })
   test("runtime contracts include real process, permission, recovery, and plugin tests", async () => {
     const files = await list()
     expect(() => check(files)).not.toThrow()

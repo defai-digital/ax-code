@@ -5,6 +5,12 @@ on:
     paths:
       - ".github/workflows/ax-code-ci.yml"
       - ".github/actions/build-evidence-cache/**"
+      - ".github/actions/setup-ax-code-toolchain/**"
+      - "packages/ax-agent-runtime/**"
+      - "packages/ax-wiki/**"
+      - "patches/**"
+      - "tools/**"
+      - "tsconfig.json"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -25,6 +31,12 @@ on:
     paths:
       - ".github/workflows/ax-code-ci.yml"
       - ".github/actions/build-evidence-cache/**"
+      - ".github/actions/setup-ax-code-toolchain/**"
+      - "packages/ax-agent-runtime/**"
+      - "packages/ax-wiki/**"
+      - "patches/**"
+      - "tools/**"
+      - "tsconfig.json"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -50,7 +62,7 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -326,7 +338,7 @@ jobs:
           retention-days: 14
           name: ax-code-deterministic-report-${{ matrix.shard }}
           path: |
-            .internal/reports/testing/junit/*.xml
+            .internal/reports/testing/junit/
             .internal/reports/testing/test-risk.md
           if-no-files-found: ignore
 
@@ -354,7 +366,59 @@ jobs:
         with:
           retention-days: 14
           name: ax-code-runtime-contract-report
-          path: .internal/reports/testing/runtime-contract/*.xml
+          path: .internal/reports/testing/runtime-contract/
+          if-no-files-found: error
+
+  # Previously excluded e2e files now run automatically. Collect first-attempt
+  # hosted evidence before making this newly exercised group a required check.
+  integration:
+    name: Offline process and server integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    env:
+      AX_TEST_MAX_WORKERS: "2"
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "26"
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Compile SDK
+        run: pnpm --dir packages/sdk/js exec tsc
+      - name: Build Plugin
+        run: pnpm --dir packages/plugin run build
+      - name: Install process integration dependencies
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ripgrep build-essential python3
+      - name: Build and verify the current Node PTY runtime
+        timeout-minutes: 5
+        run: |
+          node script/rebuild-node-pty.mjs
+          node script/verify-pty.cjs packages/ax-code/node_modules/node-pty-prebuilt-multiarch
+      - name: Run offline integration without retries
+        id: integration-tests
+        run: pnpm --dir packages/ax-code run test:ci -- integration --rerun-on-fail 0 --dir ../../.internal/reports/testing/integration
+      - name: Report advisory integration status
+        if: always()
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.integration-tests.outcome }}
+        run: |
+          echo "### Offline integration (advisory during qualification)" >> "$GITHUB_STEP_SUMMARY"
+          echo "First-attempt result: ${OUTCOME:-not run}" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$OUTCOME" != success ]; then
+            echo "::warning::Offline integration did not pass; inspect the retained reports before promotion."
+          fi
+      - name: Retain integration logs, file inventory, exit status, and JUnit
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          retention-days: 14
+          name: ax-code-integration-report
+          path: .internal/reports/testing/integration/
           if-no-files-found: error
 
   # Heavy or timing-sensitive integration suites excluded from the
@@ -386,7 +450,7 @@ jobs:
         with:
           retention-days: 14
           name: ax-code-quarantine-report
-          path: .internal/reports/testing/quarantine/*.xml
+          path: .internal/reports/testing/quarantine/
           if-no-files-found: error
 
   live:
@@ -504,3 +568,26 @@ jobs:
 
       - name: TUI startup smoke
         run: pnpm --dir packages/ax-code run tui:startup-smoke -- --bin "$GITHUB_WORKSPACE/.tmp/tui-smoke-bin/ax-code"
+
+  required-checks:
+    name: AX Code required checks
+    if: always()
+    needs: [evidence-plan, evidence-native, checks, deterministic, runtime-contract, windows-snapshot, tui-node26-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+      - name: Require every selected check to succeed
+        env:
+          CI_PLAN: ${{ needs.evidence-plan.result }}
+          CI_NATIVE_REQUIRED: ${{ needs.evidence-plan.outputs.run }}
+          CI_NATIVE: ${{ needs.evidence-native.result }}
+          CI_CHECKS: ${{ needs.checks.result }}
+          CI_DETERMINISTIC: ${{ needs.deterministic.result }}
+          CI_RUNTIME: ${{ needs.runtime-contract.result }}
+          CI_WINDOWS: ${{ needs.windows-snapshot.result }}
+          CI_TUI: ${{ needs.tui-node26-smoke.result }}
+        run: node --experimental-strip-types script/ci-required-checks.ts

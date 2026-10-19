@@ -141,6 +141,10 @@ const quarantined = new Set([
 
 export const defaultExcludedTests = [...live, ...e2e, ...recovery, ...quarantined]
 
+// Every offline test must have an automated lane. Integration contains the
+// e2e files not already exercised by the stricter runtime-contract lane.
+export const ciGroups = ["deterministic", "runtime-contract", "integration", "quarantine"] as const
+
 export async function list() {
   const out = await scan("test/**/*.test.ts", { cwd: root, absolute: false })
   out.sort()
@@ -148,6 +152,7 @@ export async function list() {
 }
 
 export function pick(all: string[], name: string) {
+  if (name === "integration") return all.filter((file) => e2e.has(file) && !runtimeContract.has(file))
   if (name === "runtime-contract") return all.filter((file) => runtimeContract.has(file))
   if (name === "quarantine") return all.filter((file) => quarantined.has(file))
   if (name === "live") return all.filter((file) => live.has(file))
@@ -164,4 +169,7 @@ export function check(all: string[]) {
   const known = [...new Set([...defaultExcludedTests, ...tuiRenderer, ...runtimeContract])]
   const miss = known.filter((file) => !all.includes(file))
   if (miss.length) throw new Error(`Missing grouped tests:\n${miss.join("\n")}`)
+  const covered = new Set([...ciGroups.flatMap((group) => pick(all, group)), ...pick(all, "live")])
+  const uncovered = all.filter((file) => !covered.has(file))
+  if (uncovered.length) throw new Error(`Tests without a CI lane:\n${uncovered.join("\n")}`)
 }
