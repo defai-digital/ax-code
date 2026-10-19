@@ -5631,6 +5631,22 @@ export type WorktreeCreateInput = {
    * Additional startup script to run after the project's start command
    */
   startCommand?: string
+  /**
+   * Name of the new branch. Defaults to ax-code/<name>.
+   */
+  branch?: string
+  /**
+   * Start point of the new branch. Defaults to HEAD.
+   */
+  startRef?: string
+  /**
+   * Check out this existing local branch instead of creating one. AX Code never deletes or resets it.
+   */
+  existingBranch?: string
+  /**
+   * Idempotency key: repeating a create with the same ID returns the first result.
+   */
+  operationId?: string
 }
 
 /** AX Code API schema `WorktreeListItem` (auto-generated from the OpenAPI contract). */
