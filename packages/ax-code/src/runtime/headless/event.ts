@@ -37,7 +37,7 @@ export type HeadlessRuntimeStatusEvent =
   | { type: "provider.updated" }
   | { type: "code.index.progress" }
   | { type: "code.index.state" }
-  | { type: "vcs.branch.updated"; properties: { branch: string } }
+  | { type: "vcs.branch.updated"; properties: { branch?: string } }
   | { type: "workflow.run.created"; properties: Record<string, unknown> }
   | { type: "workflow.run.updated"; properties: Record<string, unknown> }
   | { type: "workflow.run.started"; properties: Record<string, unknown> }

@@ -48,7 +48,7 @@ export interface HeadlessProjectionState<
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>
   message_reload?: Record<string, boolean>
-  vcs: { branch: string } | undefined
+  vcs: { branch?: string } | undefined
 }
 
 export type HeadlessStreamHealth = "fixture" | "connecting" | "connected" | "unavailable" | "error"

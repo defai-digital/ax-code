@@ -3,6 +3,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { FileWatcher } from "@/file/watcher"
 import { Log } from "@/util/log"
 import { git } from "@/util/git"
+import { sleep } from "@/util/timeout"
 import { Instance } from "./instance"
 import z from "zod"
 
@@ -20,7 +21,8 @@ export namespace Vcs {
 
   export const Info = z
     .object({
-      branch: z.string(),
+      // Absent outside a Git repository, matching Event.BranchUpdated.
+      branch: z.string().optional(),
     })
     .meta({
       ref: "VcsInfo",
@@ -38,13 +40,19 @@ export namespace Vcs {
         return { current: undefined } satisfies State
       }
 
-      const getCurrentBranch = async () => {
+      // `failed` distinguishes a git error (lock, partial HEAD write, timeout)
+      // from a successful read that names no branch.
+      const readCurrentBranch = async () => {
         const result = await git(["rev-parse", "--abbrev-ref", "HEAD"], {
           cwd: Instance.worktree,
+          timeout: 5_000,
         })
-        if (result.exitCode !== 0) return undefined
-        const text = result.text().trim()
-        return text || undefined
+        if (result.exitCode !== 0) return { failed: true as const }
+        return { failed: false as const, branch: result.text().trim() || undefined }
+      }
+      const getCurrentBranch = async () => {
+        const read = await readCurrentBranch()
+        return read.failed ? undefined : read.branch
       }
 
       const value: State = {
@@ -52,15 +60,33 @@ export namespace Vcs {
       }
       log.info("initialized", { branch: value.current })
 
+      // Serialize refreshes: concurrent HEAD events (rebase, rapid switches) can
+      // finish their git reads out of order and let a stale branch win.
+      let refreshing: Promise<void> = Promise.resolve()
+      const refresh = async () => {
+        let read = await readCurrentBranch()
+        // A HEAD rewrite can be caught mid-write; one HEAD event may be the only
+        // signal, so re-read once before giving up on it.
+        if (read.failed) {
+          await sleep(250)
+          read = await readCurrentBranch()
+        }
+        // A transient git failure must not clear a known branch.
+        if (read.failed) return
+        const next = read.branch
+        if (next === value.current) return
+        log.info("branch changed", { from: value.current, to: next })
+        value.current = next
+        await Bus.publish(Event.BranchUpdated, { branch: next })
+      }
+
       value.unsubscribe = Bus.subscribe(
         FileWatcher.Event.Updated,
         Instance.bind(async (evt) => {
           if (!evt.properties.file.endsWith("HEAD")) return
-          const next = await getCurrentBranch()
-          if (next === value.current) return
-          log.info("branch changed", { from: value.current, to: next })
-          value.current = next
-          await Bus.publish(Event.BranchUpdated, { branch: next })
+          const run = refreshing.then(refresh, refresh)
+          refreshing = run.catch(() => undefined)
+          await run
         }),
       )
 

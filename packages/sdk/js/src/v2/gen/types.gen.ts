@@ -5082,7 +5082,7 @@ export type UserMessage = {
 
 /** AX Code API schema `VcsInfo` (auto-generated from the OpenAPI contract). */
 export type VcsInfo = {
-  branch: string
+  branch?: string
 }
 
 /** AX Code API schema `WebMcpApprovalRecord` (auto-generated from the OpenAPI contract). */

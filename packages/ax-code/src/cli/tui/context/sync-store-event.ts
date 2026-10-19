@@ -82,7 +82,7 @@ export interface SyncEventStoreState<
   session: TSession[]
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>
-  vcs: { branch: string } | undefined
+  vcs: { branch?: string } | undefined
   // Set when the V8 heap approaches its hard limit: the transcript budget was
   // narrowed adaptively and the app layer surfaces a warning with recovery
   // guidance instead of dying silently at FatalProcessOutOfMemory.

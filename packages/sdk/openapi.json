@@ -54693,10 +54693,7 @@
           "branch": {
             "type": "string"
           }
-        },
-        "required": [
-          "branch"
-        ]
+        }
       },
       "WebMcpApprovalRecord": {
         "type": "object",
