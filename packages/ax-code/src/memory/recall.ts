@@ -9,6 +9,8 @@
  * and recency/confidence nudge otherwise similar results.
  */
 
+import { realpath } from "node:fs/promises"
+import path from "node:path"
 import * as store from "./store"
 import { entryApplies, normalizeTags } from "./applicability"
 import type { MemoryEntry, MemoryEntryKind, ProjectMemory } from "./types"
@@ -67,8 +69,21 @@ export async function recall(projectRoot: string, query: RecallQuery = {}): Prom
   }
 
   if (scope === "global" || scope === "all") {
-    const global = await store.loadGlobal()
-    if (global) results.push(...collectResults(projectRoot, global.sections, query, "global"))
+    // When the project root is the home directory (or a symlink/alias of it)
+    // the project and global stores are the SAME file; loading both would
+    // return every entry twice. Mirror injector.getContext's identity check.
+    const projectPath = scope === "all" ? store.getMemoryPath(projectRoot) : undefined
+    const sharedSource =
+      projectPath !== undefined &&
+      (path.resolve(projectPath) === path.resolve(store.getGlobalMemoryPath()) ||
+        (await Promise.all([
+          realpath(projectPath).catch(() => undefined),
+          realpath(store.getGlobalMemoryPath()).catch(() => undefined),
+        ]).then(([project, global]) => project !== undefined && project === global)))
+    if (!sharedSource) {
+      const global = await store.loadGlobal()
+      if (global) results.push(...collectResults(projectRoot, global.sections, query, "global"))
+    }
   }
 
   const hasQuery = !!query.query?.trim()

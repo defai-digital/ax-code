@@ -328,3 +328,24 @@ describe("memory.recall", () => {
     expect(results[0].source).toBe("project")
   })
 })
+
+describe("memory.recall shared project and global store", () => {
+  test("does not double-count when the project root is the global home", async () => {
+    await using tmp = await tmpdir()
+    const previous = process.env.AX_CODE_TEST_HOME
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    try {
+      await store.clearGlobal().catch(() => {})
+      // projectRoot === AX_CODE_TEST_HOME, so both stores resolve to the
+      // same ~/.ax-code/memory.json file.
+      await recordEntry(tmp.path, "feedback", { name: "only-once", body: "shared store" })
+
+      const results = await recall(tmp.path, { scope: "all" })
+      expect(results.filter((r) => r.entry.name === "only-once")).toHaveLength(1)
+    } finally {
+      await store.clearGlobal().catch(() => {})
+      if (previous === undefined) delete process.env.AX_CODE_TEST_HOME
+      else process.env.AX_CODE_TEST_HOME = previous
+    }
+  })
+})
