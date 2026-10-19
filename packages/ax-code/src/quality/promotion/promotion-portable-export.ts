@@ -169,11 +169,16 @@ export namespace QualityPromotionPortableExport {
     const expectedFiles = buildFiles(handoffPackage)
     const filesMatch = jsonEqual(files, expectedFiles)
     const digestCoverage = files.every((file) => file.contentDigest.length > 0)
+    const packageReady = packageReasons.length === 0 && handoffPackage.summary.overallStatus === "pass"
     const gates = [
       {
         name: "handoff-package-verification",
-        status: packageReasons.length === 0 ? "pass" : "fail",
-        detail: packageReasons[0] ?? `handoff package ${handoffPackage.packageID} is valid`,
+        status: packageReady ? "pass" : "fail",
+        detail:
+          packageReasons[0] ??
+          (handoffPackage.summary.overallStatus === "pass"
+            ? `handoff package ${handoffPackage.packageID} is valid`
+            : `handoff package ${handoffPackage.packageID} status is ${handoffPackage.summary.overallStatus}`),
       },
       {
         name: "file-coverage",

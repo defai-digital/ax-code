@@ -182,11 +182,16 @@ export namespace QualityPromotionArchiveManifest {
     const expectedInventory = buildInventory(exportBundle)
     const inventoryMatches = jsonEqual(inventory, expectedInventory)
     const digestsPresent = inventory.every((item) => item.digest.length > 0)
+    const exportReady = exportReasons.length === 0 && exportBundle.summary.overallStatus === "pass"
     const gates = [
       {
         name: "export-bundle-verification",
-        status: exportReasons.length === 0 ? "pass" : "fail",
-        detail: exportReasons[0] ?? `export bundle ${exportBundle.bundleID} is valid`,
+        status: exportReady ? "pass" : "fail",
+        detail:
+          exportReasons[0] ??
+          (exportBundle.summary.overallStatus === "pass"
+            ? `export bundle ${exportBundle.bundleID} is valid`
+            : `export bundle ${exportBundle.bundleID} status is ${exportBundle.summary.overallStatus}`),
       },
       {
         name: "inventory-completeness",

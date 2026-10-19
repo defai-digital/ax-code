@@ -538,6 +538,40 @@ describe("QualityPromotionSignedArchive", () => {
       ),
     ).toBe(true)
   })
+
+  test("propagates a failing upstream summary through the artifact chain", () => {
+    const { packagedArchive } = buildPackagedArchive()
+    const auditManifest = packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+    // A forced promotion on a packet that only authorizes "pass" keeps every
+    // artifact structurally valid while its summary is fail.
+    const failingAudit = QualityPromotionAuditManifest.create({
+      releasePacket: auditManifest.releasePacket,
+      promotion: { ...auditManifest.promotion, decision: "force" },
+    })
+    const failingExport = QualityPromotionExportBundle.create({ auditManifest: failingAudit })
+    const failingArchive = QualityPromotionArchiveManifest.create({ exportBundle: failingExport })
+    const failingHandoff = QualityPromotionHandoffPackage.create({ archiveManifest: failingArchive })
+    const failingPortable = QualityPromotionPortableExport.create({ handoffPackage: failingHandoff })
+    const failingPackaged = QualityPromotionPackagedArchive.create({ portableExport: failingPortable })
+    const failingSigned = QualityPromotionSignedArchive.create({
+      packagedArchive: failingPackaged,
+      signing: {
+        attestedBy: "release-integrity-bot",
+        keyID: "archive-key-v1",
+        keySource: "env",
+        keyLocator: "AX_CODE_QUALITY_ARCHIVE_KEY",
+        keyMaterial: "quality-archive-secret-v1",
+      },
+    })
+
+    expect(failingExport.summary.overallStatus).toBe("fail")
+    expect(failingArchive.summary.overallStatus).toBe("fail")
+    expect(failingHandoff.summary.overallStatus).toBe("fail")
+    expect(failingPortable.summary.overallStatus).toBe("fail")
+    expect(failingPackaged.summary.overallStatus).toBe("fail")
+    expect(failingSigned.summary.overallStatus).toBe("fail")
+    expect(QualityPromotionSignedArchive.verify(failingSigned)).toEqual([])
+  })
 })
 
 describe("QualityPromotionSignedArchiveAttestationRecord", () => {

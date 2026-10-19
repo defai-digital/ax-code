@@ -124,11 +124,16 @@ export namespace QualityPromotionPackagedArchive {
     const expectedEntries = buildEntries(portableExport)
     const entriesMatch = jsonEqual(entries, expectedEntries)
     const digestCoverage = entries.every((entry) => entry.contentDigest.length > 0)
+    const exportReady = exportReasons.length === 0 && portableExport.summary.overallStatus === "pass"
     const gates = [
       {
         name: "portable-export-verification",
-        status: exportReasons.length === 0 ? "pass" : "fail",
-        detail: exportReasons[0] ?? `portable export ${portableExport.exportID} is valid`,
+        status: exportReady ? "pass" : "fail",
+        detail:
+          exportReasons[0] ??
+          (portableExport.summary.overallStatus === "pass"
+            ? `portable export ${portableExport.exportID} is valid`
+            : `portable export ${portableExport.exportID} status is ${portableExport.summary.overallStatus}`),
       },
       {
         name: "entry-coverage",

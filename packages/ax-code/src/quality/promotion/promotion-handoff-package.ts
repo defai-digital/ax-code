@@ -271,11 +271,16 @@ export namespace QualityPromotionHandoffPackage {
       (document) =>
         document.contentDigest.length > 0 && (document.kind === "index" || (document.artifactDigest?.length ?? 0) > 0),
     )
+    const archiveReady = archiveReasons.length === 0 && archiveManifest.summary.overallStatus === "pass"
     const gates = [
       {
         name: "archive-manifest-verification",
-        status: archiveReasons.length === 0 ? "pass" : "fail",
-        detail: archiveReasons[0] ?? `archive manifest ${archiveManifest.archiveID} is valid`,
+        status: archiveReady ? "pass" : "fail",
+        detail:
+          archiveReasons[0] ??
+          (archiveManifest.summary.overallStatus === "pass"
+            ? `archive manifest ${archiveManifest.archiveID} is valid`
+            : `archive manifest ${archiveManifest.archiveID} status is ${archiveManifest.summary.overallStatus}`),
       },
       {
         name: "document-coverage",

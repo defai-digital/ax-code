@@ -188,12 +188,17 @@ export namespace QualityPromotionSignedArchive {
       attestation.keyID.length > 0 &&
       attestation.keyLocator.length > 0 &&
       attestation.signature.length > 0
+    const archiveReady = archiveReasons.length === 0 && packagedArchive.summary.overallStatus === "pass"
 
     const gates = [
       {
         name: "packaged-archive-verification",
-        status: archiveReasons.length === 0 ? "pass" : "fail",
-        detail: archiveReasons[0] ?? `packaged archive ${packagedArchive.archiveID} is valid`,
+        status: archiveReady ? "pass" : "fail",
+        detail:
+          archiveReasons[0] ??
+          (packagedArchive.summary.overallStatus === "pass"
+            ? `packaged archive ${packagedArchive.archiveID} is valid`
+            : `packaged archive ${packagedArchive.archiveID} status is ${packagedArchive.summary.overallStatus}`),
       },
       {
         name: "payload-digest-consistency",
