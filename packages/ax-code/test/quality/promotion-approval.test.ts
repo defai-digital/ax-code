@@ -326,25 +326,25 @@ describe("QualityPromotionApproval", () => {
     expect(reasons.some((reason) => reason.includes("eligibility decision mismatch"))).toBe(true)
   })
 
-  test("reports release policy verification failures when the approval snapshot is tampered", () => {
+  test("rejects a release policy snapshot whose digest was tampered", () => {
     const bundle = decisionBundle()
     const approval = QualityPromotionApproval.create({
       bundle,
       approver: "reviewer@example.com",
     })
-    const tampered = QualityPromotionApproval.ApprovalArtifact.parse({
-      ...approval,
-      releasePolicy: {
-        ...approval.releasePolicy,
-        provenance: {
-          ...approval.releasePolicy?.provenance,
-          digest: "tampered-digest",
-        },
-      },
-    })
 
-    const reasons = QualityPromotionApproval.verify(bundle, tampered)
-    expect(reasons.some((reason) => reason.includes("release policy digest mismatch"))).toBe(true)
+    expect(() =>
+      QualityPromotionApproval.ApprovalArtifact.parse({
+        ...approval,
+        releasePolicy: {
+          ...approval.releasePolicy,
+          provenance: {
+            ...approval.releasePolicy?.provenance,
+            digest: "tampered-digest",
+          },
+        },
+      }),
+    ).toThrow(/does not match policy content/)
   })
 
   test("reports approval policy suggestion verification failures when the approval snapshot is tampered", () => {

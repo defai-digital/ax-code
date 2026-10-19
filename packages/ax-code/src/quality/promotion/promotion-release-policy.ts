@@ -57,17 +57,22 @@ export namespace QualityPromotionReleasePolicy {
   export const DEFAULT_AVG_CONFIDENCE_FAIL_ABS_DELTA = 0.3
   export const DEFAULT_MAX_CONFIDENCE_WARN_ABS_DELTA = 0.6
 
+  function withoutUndefined<T extends object>(input: T | undefined): Partial<T> {
+    if (!input) return {}
+    return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Partial<T>
+  }
+
   export function merge(base: Policy, overrides?: PolicyOverrides): Policy {
     return Policy.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-release-policy",
       stability: {
         ...base.stability,
-        ...overrides?.stability,
+        ...withoutUndefined(overrides?.stability),
       },
       watch: {
         ...base.watch,
-        ...overrides?.watch,
+        ...withoutUndefined(overrides?.watch),
       },
       approval: overrides?.approval
         ? QualityPromotionApprovalPolicy.merge(base.approval, overrides.approval)

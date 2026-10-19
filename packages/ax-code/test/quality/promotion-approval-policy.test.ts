@@ -1340,4 +1340,14 @@ describe("QualityPromotionApprovalPolicy", () => {
     expect(summary.remediationAuthor).toBeNull()
     expect(summary.gates.find((gate) => gate.name === "reentry-remediation-context")?.status).toBe("fail")
   })
+
+  test("ignores undefined fields in partial overrides", () => {
+    const base = QualityPromotionApprovalPolicy.defaults({ allowWarn: { minimumRole: "director" } })
+    const merged = QualityPromotionApprovalPolicy.merge(base, {
+      allowWarn: { minimumApprovals: 2, minimumRole: undefined },
+    })
+
+    expect(merged.rules.allow_warn.minimumApprovals).toBe(2)
+    expect(merged.rules.allow_warn.minimumRole).toBe("director")
+  })
 })

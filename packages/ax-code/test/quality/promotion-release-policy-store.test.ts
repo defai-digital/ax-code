@@ -86,6 +86,15 @@ describe("QualityPromotionReleasePolicyStore", () => {
     }
   })
 
+  test("preserves inherited fields when overrides contain undefined", () => {
+    const merged = QualityPromotionReleasePolicy.defaults({
+      watch: { minRecords: 30, abstentionWarnRate: undefined },
+    })
+
+    expect(merged.watch.minRecords).toBe(30)
+    expect(merged.watch.abstentionWarnRate).toBe(QualityPromotionReleasePolicy.DEFAULT_ABSTENTION_WARN_RATE)
+  })
+
   test("falls back to the legacy approval policy store when no release policy is stored", async () => {
     await clearPolicyStores()
     try {

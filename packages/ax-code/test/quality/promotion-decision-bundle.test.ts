@@ -335,4 +335,21 @@ describe("QualityPromotionDecisionBundle", () => {
 
     expect(reasons.some((reason) => reason.includes("release policy snapshot missing"))).toBe(true)
   })
+
+  test("rejects a release policy snapshot whose digest does not match its policy", () => {
+    const policy = QualityPromotionReleasePolicy.defaults()
+    const provenance = QualityPromotionReleasePolicy.PolicyProvenance.parse({
+      policySource: "default",
+      policyProjectID: null,
+      compatibilityApprovalSource: null,
+      resolvedAt: "2026-04-20T12:00:00.000Z",
+      persistedScope: null,
+      persistedUpdatedAt: null,
+      digest: "deadbeef",
+    })
+
+    expect(() => QualityPromotionDecisionBundle.ReleasePolicySnapshot.parse({ policy, provenance })).toThrow(
+      /does not match policy content/,
+    )
+  })
 })

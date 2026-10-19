@@ -25,10 +25,23 @@ export namespace QualityPromotionDecisionBundle {
   })
   export type HistorySnapshot = z.output<typeof HistorySnapshot>
 
-  export const ReleasePolicySnapshot = z.object({
-    policy: z.lazy(() => QualityPromotionReleasePolicy.Policy),
-    provenance: z.lazy(() => QualityPromotionReleasePolicy.PolicyProvenance),
-  })
+  export const ReleasePolicySnapshot = z
+    .object({
+      policy: z.lazy(() => QualityPromotionReleasePolicy.Policy),
+      provenance: z.lazy(() => QualityPromotionReleasePolicy.PolicyProvenance),
+    })
+    .superRefine((snapshot, ctx) => {
+      // Downstream checks trust the claimed digest; an inconsistent snapshot
+      // would let a weakened policy pass as the reviewed one.
+      const digest = QualityPromotionReleasePolicy.digest(snapshot.policy)
+      if (snapshot.provenance.digest !== digest) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["provenance", "digest"],
+          message: `release policy digest ${snapshot.provenance.digest} does not match policy content ${digest}`,
+        })
+      }
+    })
   export type ReleasePolicySnapshot = z.output<typeof ReleasePolicySnapshot>
 
   export const ApprovalConcentrationPolicySnapshot = z.object({

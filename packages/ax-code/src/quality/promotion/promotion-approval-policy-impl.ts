@@ -173,31 +173,35 @@ export namespace QualityPromotionApprovalPolicy {
   const normalizeTeam = QualityPromotionApprovalPolicyContract.normalizeApprovalTeam
   const normalizeReportingChain = QualityPromotionApprovalPolicyContract.normalizeApprovalReportingChain
 
+  function withoutUndefined<T extends object>(input: T | undefined): Partial<T> {
+    if (!input) return {}
+    return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Partial<T>
+  }
+
   function mergeRequirement(
     baseRequirement: ApprovalRequirement,
     override?: ApprovalRequirementOverrides,
   ): ApprovalRequirement {
-    const hasWeightOverride = override?.approvalConcentrationWeights !== undefined
-    const presetWeightBase = override?.approvalConcentrationPreset
-      ? concentrationWeightsForPreset(override.approvalConcentrationPreset)
+    const normalized = override ? withoutUndefined(override) : undefined
+    const weightOverride = normalized?.approvalConcentrationWeights
+      ? withoutUndefined(normalized.approvalConcentrationWeights)
+      : undefined
+    const hasWeightOverride = weightOverride !== undefined && Object.keys(weightOverride).length > 0
+    const presetWeightBase = normalized?.approvalConcentrationPreset
+      ? concentrationWeightsForPreset(normalized.approvalConcentrationPreset)
       : baseRequirement.approvalConcentrationWeights
     const nextPreset =
-      override?.approvalConcentrationPreset !== undefined
-        ? override.approvalConcentrationPreset
+      normalized?.approvalConcentrationPreset !== undefined
+        ? normalized.approvalConcentrationPreset
         : hasWeightOverride
           ? null
           : baseRequirement.approvalConcentrationPreset
     const baseWeights = presetWeightBase
     return ApprovalRequirement.parse({
       ...baseRequirement,
-      ...override,
+      ...normalized,
       approvalConcentrationPreset: hasWeightOverride ? null : nextPreset,
-      approvalConcentrationWeights: override?.approvalConcentrationWeights
-        ? {
-            ...baseWeights,
-            ...override.approvalConcentrationWeights,
-          }
-        : baseWeights,
+      approvalConcentrationWeights: hasWeightOverride ? { ...baseWeights, ...weightOverride } : baseWeights,
     })
   }
 
