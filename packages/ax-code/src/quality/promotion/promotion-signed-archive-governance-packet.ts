@@ -87,6 +87,9 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     verification: { releasePacketReasons: string[]; attestationPacketReasons: string[] },
   ) {
     const { releasePacketReasons, attestationPacketReasons } = verification
+    const releasePacketReady = releasePacketReasons.length === 0 && input.releasePacket.summary.overallStatus === "pass"
+    const attestationPacketReady =
+      attestationPacketReasons.length === 0 && input.attestationPacket.summary.overallStatus === "pass"
 
     const releasePacketLinkagePass =
       input.promotion.releasePacketID === input.releasePacket.packetID &&
@@ -100,13 +103,21 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     const gates: QualityPromotionSignedArchiveTrust.Gate[] = [
       {
         name: "release-packet-verification",
-        status: releasePacketReasons.length === 0 ? "pass" : "fail",
-        detail: releasePacketReasons[0] ?? `release packet ${input.releasePacket.packetID} is valid`,
+        status: releasePacketReady ? "pass" : "fail",
+        detail:
+          releasePacketReasons[0] ??
+          (input.releasePacket.summary.overallStatus === "pass"
+            ? `release packet ${input.releasePacket.packetID} is valid`
+            : `release packet ${input.releasePacket.packetID} status is ${input.releasePacket.summary.overallStatus}`),
       },
       {
         name: "attestation-packet-verification",
-        status: attestationPacketReasons.length === 0 ? "pass" : "fail",
-        detail: attestationPacketReasons[0] ?? `attestation packet ${input.attestationPacket.packetID} is valid`,
+        status: attestationPacketReady ? "pass" : "fail",
+        detail:
+          attestationPacketReasons[0] ??
+          (input.attestationPacket.summary.overallStatus === "pass"
+            ? `attestation packet ${input.attestationPacket.packetID} is valid`
+            : `attestation packet ${input.attestationPacket.packetID} status is ${input.attestationPacket.summary.overallStatus}`),
       },
       {
         name: "source-linkage",
@@ -209,6 +220,11 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
 
   export function verify(packet: PacketArtifact) {
     const reasons: string[] = []
+    if (packet.packetID !== `${packet.attestationPacket.packetID}-governance`) {
+      reasons.push(
+        `signed archive governance packet id ${packet.packetID} does not match its attestation packet ${packet.attestationPacket.packetID}`,
+      )
+    }
     if (packet.source !== packet.releasePacket.source) {
       reasons.push(
         `signed archive governance packet release packet source mismatch: ${packet.source} vs ${packet.releasePacket.source}`,

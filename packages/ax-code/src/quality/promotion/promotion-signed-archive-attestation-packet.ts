@@ -83,6 +83,8 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
     verification: { attestationRecordReasons: string[] },
   ) {
     const { attestationRecordReasons } = verification
+    const attestationRecordReady =
+      attestationRecordReasons.length === 0 && input.attestationRecord.summary.overallStatus === "pass"
     const embeddedAuditManifest =
       input.attestationRecord.signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle
         .auditManifest
@@ -106,8 +108,12 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
     const gates: QualityPromotionSignedArchiveTrust.Gate[] = [
       {
         name: "attestation-record-verification",
-        status: attestationRecordReasons.length === 0 ? "pass" : "fail",
-        detail: attestationRecordReasons[0] ?? `attestation record ${input.attestationRecord.recordID} is valid`,
+        status: attestationRecordReady ? "pass" : "fail",
+        detail:
+          attestationRecordReasons[0] ??
+          (input.attestationRecord.summary.overallStatus === "pass"
+            ? `attestation record ${input.attestationRecord.recordID} is valid`
+            : `attestation record ${input.attestationRecord.recordID} status is ${input.attestationRecord.summary.overallStatus}`),
       },
       {
         name: "promotion-linkage",

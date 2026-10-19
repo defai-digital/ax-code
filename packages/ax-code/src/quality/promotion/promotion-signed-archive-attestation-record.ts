@@ -73,6 +73,7 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     verification: { signedArchiveReasons: string[] },
   ) {
     const { signedArchiveReasons } = verification
+    const signedArchiveReady = signedArchiveReasons.length === 0 && input.signedArchive.summary.overallStatus === "pass"
     const trustIdentityPass =
       input.trust.attestedBy === input.signedArchive.attestation.attestedBy &&
       input.trust.keyID === input.signedArchive.attestation.keyID
@@ -93,8 +94,12 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     const gates: QualityPromotionSignedArchiveTrust.Gate[] = [
       {
         name: "signed-archive-verification",
-        status: signedArchiveReasons.length === 0 ? "pass" : "fail",
-        detail: signedArchiveReasons[0] ?? `signed archive ${input.signedArchive.signedArchiveID} is valid`,
+        status: signedArchiveReady ? "pass" : "fail",
+        detail:
+          signedArchiveReasons[0] ??
+          (input.signedArchive.summary.overallStatus === "pass"
+            ? `signed archive ${input.signedArchive.signedArchiveID} is valid`
+            : `signed archive ${input.signedArchive.signedArchiveID} status is ${input.signedArchive.summary.overallStatus}`),
       },
       {
         name: "trust-summary",

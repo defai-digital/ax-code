@@ -93,6 +93,12 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     verification: { governanceReasons: string[]; handoffReasons: string[] },
   ) {
     const { governanceReasons, handoffReasons } = verification
+    const governanceReady = governanceReasons.length === 0 && input.governancePacket.summary.overallStatus === "pass"
+    const handoffReady = handoffReasons.length === 0 && input.handoffPackage.summary.overallStatus === "pass"
+    const signedHandoff =
+      input.governancePacket.attestationPacket.attestationRecord.signedArchive.packagedArchive.portableExport
+        .handoffPackage
+    const signedHandoffBindingPass = jsonEqual(input.handoffPackage, signedHandoff)
     const handoffPromotion = input.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
     const handoffReleasePacket = input.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
 
@@ -108,13 +114,28 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     const gates: QualityPromotionSignedArchiveTrust.Gate[] = [
       {
         name: "governance-packet-verification",
-        status: governanceReasons.length === 0 ? "pass" : "fail",
-        detail: governanceReasons[0] ?? `governance packet ${input.governancePacket.packetID} is valid`,
+        status: governanceReady ? "pass" : "fail",
+        detail:
+          governanceReasons[0] ??
+          (input.governancePacket.summary.overallStatus === "pass"
+            ? `governance packet ${input.governancePacket.packetID} is valid`
+            : `governance packet ${input.governancePacket.packetID} status is ${input.governancePacket.summary.overallStatus}`),
       },
       {
         name: "handoff-package-verification",
-        status: handoffReasons.length === 0 ? "pass" : "fail",
-        detail: handoffReasons[0] ?? `handoff package ${input.handoffPackage.packageID} is valid`,
+        status: handoffReady ? "pass" : "fail",
+        detail:
+          handoffReasons[0] ??
+          (input.handoffPackage.summary.overallStatus === "pass"
+            ? `handoff package ${input.handoffPackage.packageID} is valid`
+            : `handoff package ${input.handoffPackage.packageID} status is ${input.handoffPackage.summary.overallStatus}`),
+      },
+      {
+        name: "signed-handoff-linkage",
+        status: signedHandoffBindingPass ? "pass" : "fail",
+        detail: signedHandoffBindingPass
+          ? `handoff package ${input.handoffPackage.packageID} matches the package covered by signed archive ${input.governancePacket.summary.signedArchiveID}`
+          : `handoff package ${input.handoffPackage.packageID} is not the package covered by signed archive ${input.governancePacket.summary.signedArchiveID}`,
       },
       {
         name: "source-linkage",
@@ -212,6 +233,11 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
 
   export function verify(dossier: DossierArtifact) {
     const reasons: string[] = []
+    if (dossier.dossierID !== `${dossier.governancePacket.packetID}-review-dossier`) {
+      reasons.push(
+        `signed archive review dossier id ${dossier.dossierID} does not match its governance packet ${dossier.governancePacket.packetID}`,
+      )
+    }
     if (dossier.source !== dossier.governancePacket.source) {
       reasons.push(
         `signed archive review dossier governance source mismatch: ${dossier.source} vs ${dossier.governancePacket.source}`,

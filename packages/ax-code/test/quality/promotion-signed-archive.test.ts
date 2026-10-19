@@ -539,38 +539,99 @@ describe("QualityPromotionSignedArchive", () => {
     ).toBe(true)
   })
 
-  test("propagates a failing upstream summary through the artifact chain", () => {
+  test("propagates a failing upstream summary through the artifact chain", async () => {
     const { packagedArchive } = buildPackagedArchive()
-    const auditManifest = packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
-    // A forced promotion on a packet that only authorizes "pass" keeps every
-    // artifact structurally valid while its summary is fail.
-    const failingAudit = QualityPromotionAuditManifest.create({
-      releasePacket: auditManifest.releasePacket,
-      promotion: { ...auditManifest.promotion, decision: "force" },
-    })
-    const failingExport = QualityPromotionExportBundle.create({ auditManifest: failingAudit })
-    const failingArchive = QualityPromotionArchiveManifest.create({ exportBundle: failingExport })
-    const failingHandoff = QualityPromotionHandoffPackage.create({ archiveManifest: failingArchive })
-    const failingPortable = QualityPromotionPortableExport.create({ handoffPackage: failingHandoff })
-    const failingPackaged = QualityPromotionPackagedArchive.create({ portableExport: failingPortable })
-    const failingSigned = QualityPromotionSignedArchive.create({
-      packagedArchive: failingPackaged,
-      signing: {
+    await clearSignedArchives()
+    try {
+      const auditManifest = packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
+      // A forced promotion on a packet that only authorizes "pass" keeps every
+      // artifact structurally valid while its summary is fail.
+      const failingAudit = QualityPromotionAuditManifest.create({
+        releasePacket: auditManifest.releasePacket,
+        promotion: { ...auditManifest.promotion, decision: "force" },
+      })
+      const failingExport = QualityPromotionExportBundle.create({ auditManifest: failingAudit })
+      const failingArchive = QualityPromotionArchiveManifest.create({ exportBundle: failingExport })
+      const failingHandoff = QualityPromotionHandoffPackage.create({ archiveManifest: failingArchive })
+      const failingPortable = QualityPromotionPortableExport.create({ handoffPackage: failingHandoff })
+      const failingPackaged = QualityPromotionPackagedArchive.create({ portableExport: failingPortable })
+      const signing = {
         attestedBy: "release-integrity-bot",
         keyID: "archive-key-v1",
-        keySource: "env",
+        keySource: "env" as const,
         keyLocator: "AX_CODE_QUALITY_ARCHIVE_KEY",
         keyMaterial: "quality-archive-secret-v1",
-      },
-    })
+      }
+      const failingSigned = QualityPromotionSignedArchive.create({
+        packagedArchive: failingPackaged,
+        signing,
+      })
 
-    expect(failingExport.summary.overallStatus).toBe("fail")
-    expect(failingArchive.summary.overallStatus).toBe("fail")
-    expect(failingHandoff.summary.overallStatus).toBe("fail")
-    expect(failingPortable.summary.overallStatus).toBe("fail")
-    expect(failingPackaged.summary.overallStatus).toBe("fail")
-    expect(failingSigned.summary.overallStatus).toBe("fail")
-    expect(QualityPromotionSignedArchive.verify(failingSigned)).toEqual([])
+      expect(failingExport.summary.overallStatus).toBe("fail")
+      expect(failingArchive.summary.overallStatus).toBe("fail")
+      expect(failingHandoff.summary.overallStatus).toBe("fail")
+      expect(failingPortable.summary.overallStatus).toBe("fail")
+      expect(failingPackaged.summary.overallStatus).toBe("fail")
+      expect(failingSigned.summary.overallStatus).toBe("fail")
+      expect(QualityPromotionSignedArchive.verify(failingSigned)).toEqual([])
+
+      const trustEntry = QualityPromotionSignedArchiveTrust.create({
+        scope: "project",
+        projectID: "signed-archive-project-1",
+        signing,
+        effectiveFrom: "2020-01-01T00:00:00.000Z",
+      })
+      const trust = await QualityPromotionSignedArchiveTrust.evaluate({
+        archive: failingSigned,
+        keyMaterial: signing.keyMaterial,
+        trusts: [trustEntry],
+      })
+      const attestation = QualityPromotionSignedArchiveAttestationPolicy.evaluate({
+        trust,
+        policy: QualityPromotionSignedArchiveAttestationPolicy.defaults({
+          minimumTrustScope: "project",
+        }),
+        policySource: "project",
+        policyProjectID: "signed-archive-project-1",
+      })
+      const failingRecord = QualityPromotionSignedArchiveAttestationRecord.create({
+        signedArchive: failingSigned,
+        trust,
+        attestation,
+      })
+      const promotionReference = QualityPromotionSignedArchiveAttestationPacket.PromotionReference.parse({
+        promotionID: auditManifest.promotion.promotionID,
+        source: auditManifest.promotion.source,
+        promotedAt: auditManifest.promotion.promotedAt,
+        decision: auditManifest.promotion.decision,
+        previousActiveSource: auditManifest.promotion.previousActiveSource,
+        releasePacketID: auditManifest.releasePacket.packetID,
+        promotionMode: auditManifest.releasePacket.summary.promotionMode,
+        authorizedPromotion: auditManifest.releasePacket.summary.authorizedPromotion,
+        signedArchiveID: failingSigned.signedArchiveID,
+      })
+      const failingAttestationPacket = QualityPromotionSignedArchiveAttestationPacket.create({
+        promotion: promotionReference,
+        attestationRecord: failingRecord,
+      })
+      const failingGovernance = QualityPromotionSignedArchiveGovernancePacket.create({
+        promotion: promotionReference,
+        releasePacket: auditManifest.releasePacket,
+        attestationPacket: failingAttestationPacket,
+      })
+      const failingDossier = QualityPromotionSignedArchiveReviewDossier.create({
+        governancePacket: failingGovernance,
+        handoffPackage: failingHandoff,
+      })
+
+      expect(failingRecord.summary.overallStatus).toBe("fail")
+      expect(failingAttestationPacket.summary.overallStatus).toBe("fail")
+      expect(failingGovernance.summary.overallStatus).toBe("fail")
+      expect(failingDossier.summary.overallStatus).toBe("fail")
+      expect(QualityPromotionSignedArchiveReviewDossier.verify(failingDossier)).toEqual([])
+    } finally {
+      await clearSignedArchives()
+    }
   })
 })
 
@@ -1597,6 +1658,16 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
 
       expect(QualityPromotionSignedArchiveGovernancePacket.verify(governancePacket)).toEqual([])
 
+      const replayed = QualityPromotionSignedArchiveGovernancePacket.PacketArtifact.parse({
+        ...governancePacket,
+        packetID: `${governancePacket.packetID}-copy`,
+      })
+      expect(
+        QualityPromotionSignedArchiveGovernancePacket.verify(replayed).some((reason) =>
+          reason.includes("does not match its attestation packet"),
+        ),
+      ).toBe(true)
+
       await QualityPromotionSignedArchiveGovernancePacket.append(governancePacket)
       await QualityPromotionSignedArchiveGovernancePacket.assertPersisted(governancePacket)
 
@@ -2030,6 +2101,28 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
       } finally {
         auditVerification.mockRestore()
       }
+
+      const replayedDossier = QualityPromotionSignedArchiveReviewDossier.DossierArtifact.parse({
+        ...dossier,
+        dossierID: `${dossier.dossierID}-copy`,
+      })
+      expect(
+        QualityPromotionSignedArchiveReviewDossier.verify(replayedDossier).some((reason) =>
+          reason.includes("does not match its governance packet"),
+        ),
+      ).toBe(true)
+
+      // A freshly built handoff package from the same chain passes every
+      // shallow linkage gate but was not the package the archive signed.
+      const freshHandoff = QualityPromotionHandoffPackage.create({
+        archiveManifest: signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest,
+      })
+      const unbound = QualityPromotionSignedArchiveReviewDossier.create({
+        governancePacket,
+        handoffPackage: freshHandoff,
+      })
+      expect(unbound.summary.overallStatus).toBe("fail")
+      expect(unbound.summary.gates.find((gate) => gate.name === "signed-handoff-linkage")?.status).toBe("fail")
 
       await QualityPromotionSignedArchiveReviewDossier.append(dossier)
       await QualityPromotionSignedArchiveReviewDossier.assertPersisted(dossier)
