@@ -266,12 +266,7 @@ export namespace QualityPromotionPackagedArchive {
     if (reasons.length > 0) {
       throw new Error(`Cannot extract packaged archive for ${archive.source}: invalid archive (${reasons[0]})`)
     }
-    await fs.mkdir(directory, { recursive: true })
-    for (const entry of archive.entries) {
-      const target = path.join(directory, entry.path)
-      await fs.mkdir(path.dirname(target), { recursive: true })
-      await fs.writeFile(target, entry.content)
-    }
+    await QualityPromotionPortableExport.writeContainedFiles(directory, archive.entries, "extract packaged archive")
     return {
       directory,
       entryCount: archive.entries.length,

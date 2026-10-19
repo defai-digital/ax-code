@@ -449,6 +449,29 @@ describe("QualityPromotionPackagedArchive", () => {
     }
   })
 
+  test("extract refuses symlinked directories and replaces symlinked files in the destination", async () => {
+    const { portableExport } = buildPortableExport()
+    const archive = QualityPromotionPackagedArchive.create({ portableExport })
+    await using tmp = await tmpdir()
+    const outside = path.join(tmp.path, "outside")
+    await fs.mkdir(outside, { recursive: true })
+
+    const linkedDir = path.join(tmp.path, "linked-dir")
+    await fs.mkdir(linkedDir, { recursive: true })
+    await fs.symlink(outside, path.join(linkedDir, "docs"), "dir")
+    await expect(QualityPromotionPackagedArchive.extract(archive, linkedDir)).rejects.toThrow(/symlinked directory/)
+    expect(await fs.readdir(outside)).toEqual([])
+
+    const linkedFile = path.join(tmp.path, "linked-file")
+    const outsideFile = path.join(outside, "keep.md")
+    await fs.mkdir(linkedFile, { recursive: true })
+    await fs.writeFile(outsideFile, "keep me")
+    await fs.symlink(outsideFile, path.join(linkedFile, "README.md"))
+    await QualityPromotionPackagedArchive.extract(archive, linkedFile)
+    expect(await fs.readFile(outsideFile, "utf8")).toBe("keep me")
+    expect((await fs.lstat(path.join(linkedFile, "README.md"))).isSymbolicLink()).toBe(false)
+  })
+
   test("reports verification failures when the packaged archive entries are tampered", () => {
     const { portableExport } = buildPortableExport()
     const archive = QualityPromotionPackagedArchive.create({

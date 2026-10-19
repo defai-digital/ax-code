@@ -459,6 +459,37 @@ describe("QualityPromotionPortableExport", () => {
     expect(await fs.readdir(outside)).toEqual([])
   })
 
+  test("creates no directory outside the destination for a nested path under a symlink", async () => {
+    await using tmp = await tmpdir()
+    const outDir = path.join(tmp.path, "out")
+    const outside = path.join(tmp.path, "outside")
+    await fs.mkdir(outDir, { recursive: true })
+    await fs.mkdir(outside, { recursive: true })
+    await fs.symlink(outside, path.join(outDir, "link"), "dir")
+
+    await expect(
+      QualityPromotionPortableExport.writeContainedFiles(
+        outDir,
+        [{ path: "link/nested/file.txt", content: "x" }],
+        "write test files",
+      ),
+    ).rejects.toThrow(/symlinked directory/)
+    expect(await fs.readdir(outside)).toEqual([])
+  })
+
+  test("removes the temporary file when the final rename fails", async () => {
+    const { handoffPackage } = buildHandoffPackage()
+    const exportArtifact = QualityPromotionPortableExport.create({
+      handoffPackage,
+    })
+    await using tmp = await tmpdir()
+    const outDir = path.join(tmp.path, "portable-export")
+    await fs.mkdir(path.join(outDir, "README.md", "occupied"), { recursive: true })
+
+    await expect(QualityPromotionPortableExport.materialize(exportArtifact, outDir)).rejects.toThrow()
+    expect((await fs.readdir(outDir)).filter((name) => name.endsWith(".tmp"))).toEqual([])
+  })
+
   test("replaces a symlinked file instead of writing through it", async () => {
     const { handoffPackage } = buildHandoffPackage()
     const exportArtifact = QualityPromotionPortableExport.create({
