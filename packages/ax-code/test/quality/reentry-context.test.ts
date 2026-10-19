@@ -71,4 +71,49 @@ describe("QualityReentryContext", () => {
       await clearReentryContexts()
     }
   })
+
+  test("orders contexts by instant, not by timestamp text", async () => {
+    await clearReentryContexts()
+    try {
+      const policy = QualityPromotionReleasePolicy.defaults()
+      const context = (rollbackID: string, rolledBackAt: string) =>
+        QualityReentryContext.create({
+          rollback: {
+            rollbackID,
+            source: "candidate-offset",
+            rolledBackAt,
+            promotionID: `promotion-${rollbackID}`,
+            promotedAt: "2026-04-20T00:00:00.000Z",
+            previousActiveSource: null,
+            rollbackTargetSource: null,
+          },
+          watch: {
+            overallStatus: "fail",
+            releasePolicy: {
+              policy,
+              provenance: {
+                policySource: "project",
+                policyProjectID: "reentry-project-1",
+                compatibilityApprovalSource: null,
+                resolvedAt: "2026-04-20T12:00:00.000Z",
+                persistedScope: "project",
+                persistedUpdatedAt: "2026-04-20T11:00:00.000Z",
+                digest: QualityPromotionReleasePolicy.digest(policy),
+              },
+            },
+            window: { totalRecords: 1, sessionsCovered: 1 },
+            gates: [],
+          },
+        })
+
+      // 07:00Z but lexically later than the 08:00Z context.
+      await QualityReentryContext.append(context("rollback-offset", "2026-04-20T12:00:00+05:00"))
+      await QualityReentryContext.append(context("rollback-utc", "2026-04-20T08:00:00.000Z"))
+
+      const latest = await QualityReentryContext.latest("candidate-offset")
+      expect(latest?.rollbackID).toBe("rollback-utc")
+    } finally {
+      await clearReentryContexts()
+    }
+  })
 })
