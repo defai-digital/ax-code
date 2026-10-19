@@ -1965,6 +1965,16 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
 
     const reasons = QualityPromotionSignedArchiveGovernancePacket.verify(tampered)
     expect(reasons.some((reason) => reason.includes("summary mismatch"))).toBe(true)
+
+    // A different release packet that reuses the embedded packet id must not
+    // link: ids are not content-derived.
+    const substituted = QualityPromotionSignedArchiveGovernancePacket.create({
+      promotion: attestationPacket.promotion,
+      releasePacket: { ...releasePacket, createdAt: "2030-01-01T00:00:00.000Z" },
+      attestationPacket,
+    })
+    expect(substituted.summary.gates.find((gate) => gate.name === "release-packet-linkage")?.status).toBe("fail")
+    expect(substituted.summary.overallStatus).toBe("fail")
   })
 
   test("builds governance packet status from explicit release packet and attestation record when no governance packet is persisted", async () => {

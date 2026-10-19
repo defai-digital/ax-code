@@ -91,9 +91,16 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     const attestationPacketReady =
       attestationPacketReasons.length === 0 && input.attestationPacket.summary.overallStatus === "pass"
 
+    // Packet ids are not content-derived, so an id match alone would let another
+    // promotion's authorizing release packet stand in for the one this signed
+    // archive actually carries. Bind the supplied packet to the embedded copy.
+    const embeddedReleasePacket =
+      input.attestationPacket.attestationRecord.signedArchive.packagedArchive.portableExport.handoffPackage
+        .archiveManifest.exportBundle.auditManifest.releasePacket
     const releasePacketLinkagePass =
       input.promotion.releasePacketID === input.releasePacket.packetID &&
-      input.attestationPacket.promotion.releasePacketID === input.releasePacket.packetID
+      input.attestationPacket.promotion.releasePacketID === input.releasePacket.packetID &&
+      jsonEqual(input.releasePacket, embeddedReleasePacket)
     const promotionReferencePass = jsonEqual(input.promotion, input.attestationPacket.promotion)
     const sourceLinkagePass =
       input.releasePacket.source === input.attestationPacket.source &&
@@ -138,7 +145,7 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
         status: releasePacketLinkagePass ? "pass" : "fail",
         detail: releasePacketLinkagePass
           ? `release packet ${input.releasePacket.packetID} matches governance promotion reference`
-          : `promotion release packet ${input.promotion.releasePacketID ?? "n/a"} does not match release packet ${input.releasePacket.packetID}`,
+          : `promotion release packet ${input.promotion.releasePacketID ?? "n/a"} does not match release packet ${input.releasePacket.packetID} carried by the signed archive`,
       },
       {
         name: "promotion-authorization",
