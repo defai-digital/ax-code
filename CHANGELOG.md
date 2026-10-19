@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.27.6] - 2026-10-19
+
+### Changed
+
+- Refresh the upstream model snapshot and publish SDK 2.6.37 with optional Git branch state.
+
+### Fixed
+
+- Resolve unborn Git branches and preserve branch names shared with tags.
+- Capture branch changes during initialization and suppress stale refresh events after disposal.
+- Replace complete autocomplete tokens, rank exact branch matches first, and retain known branches on transient Git failures.
+- Preserve unterminated bracketed pastes and SS3 cursor keys in terminal input.
+- Keep calibration bins tie-stable and pool rate violations by sample count.
+- Enforce packaged archive containment, promotion identity, signed governance packet binding, and rollback cooldown reporting.
+
 ## [7.27.5] - 2026-10-19
 
 ### Changed
