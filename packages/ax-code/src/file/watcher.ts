@@ -224,7 +224,7 @@ export namespace FileWatcher {
         })
       }
 
-      const subscribeParcel = async (dir: string, ignore: string[]) => {
+      const subscribeParcel = async (dir: string, ignore: string[], abandoned: () => boolean) => {
         const parcel = watcher()
         if (!parcel) throw new Error("@parcel/watcher binding unavailable")
 
@@ -260,6 +260,14 @@ export namespace FileWatcher {
           { ignore: parcelIgnore },
         )
 
+        // The caller stops waiting after SUBSCRIBE_TIMEOUT_MS and falls back
+        // to polling. A subscription that resolves after that would deliver
+        // duplicate events next to the poll watcher, and could miss the
+        // handle sweep entirely, so close it instead of registering it.
+        if (abandoned()) {
+          await subscription.unsubscribe()
+          return
+        }
         handles.push(() => subscription.unsubscribe())
       }
 
@@ -271,20 +279,24 @@ export namespace FileWatcher {
             `Timed out after ${SUBSCRIBE_TIMEOUT_MS}ms`,
           )
           let busy = false
+          let closed = false
           let pollErrorCount = 0
           const tick = Instance.bind(async () => {
-            if (busy) return
+            if (busy || closed) return
             busy = true
             try {
               const next = await NativePerf.runAsync("fs.watcher.pollSnapshot", dir, () =>
                 snapshotPollTree(dir, ignore),
               )
+              if (closed) return
               for (const [file, hash] of next) {
                 const last = prev.get(file)
+                if (closed) return
                 if (!last) await Bus.publish(Event.Updated, { file, event: "add" })
                 else if (last !== hash) await Bus.publish(Event.Updated, { file, event: "change" })
               }
               for (const file of prev.keys()) {
+                if (closed) return
                 if (!next.has(file)) await Bus.publish(Event.Updated, { file, event: "unlink" })
               }
               prev = next
@@ -305,6 +317,7 @@ export namespace FileWatcher {
           id.unref?.()
 
           handles.push(async () => {
+            closed = true
             clearInterval(id)
           })
         } catch (error) {
@@ -342,14 +355,16 @@ export namespace FileWatcher {
         // Polling remains the fallback where the binding is missing
         // (e.g. some CI Linux images) or via AX_CODE_POLL_WATCHER=true.
         if (!flagBoolean("AX_CODE_POLL_WATCHER", false)) {
+          let abandoned = false
           try {
             await withTimeout(
-              subscribeParcel(dir, ignore),
+              subscribeParcel(dir, ignore, () => abandoned),
               SUBSCRIBE_TIMEOUT_MS,
               `Timed out after ${SUBSCRIBE_TIMEOUT_MS}ms`,
             )
             return
           } catch (error) {
+            abandoned = true
             log.warn("parcel watcher unavailable, falling back to polling", { dir, error })
           }
         }

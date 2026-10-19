@@ -7,6 +7,8 @@ import fs from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Filesystem } from "@/util/filesystem"
+import { FileLock } from "@/util/filelock"
+import { Lock } from "@/util/lock"
 import { parseJsonResult } from "@/util/json-value"
 import { UsageRecord } from "./usage"
 import * as store from "./store"
@@ -69,6 +71,8 @@ export namespace Curation {
     before: z.unknown(),
     after: z.unknown(),
     undoneAt: z.string().optional(),
+    /** Set while an undo is restoring; a stale claim (crashed undo) is retryable. */
+    undoingAt: z.string().optional(),
   })
   export type AppliedRecord = z.infer<typeof AppliedRecord>
 
@@ -89,6 +93,19 @@ export namespace Curation {
 
   async function writeApplied(projectRoot: string, data: AppliedFile): Promise<void> {
     await Filesystem.writeJson(recordFile(projectRoot), data)
+  }
+
+  // apply and undo can run from separate processes (CLI and Desktop). An
+  // unserialized read-modify-write of applied.json lets the later writer drop
+  // the earlier record, which then can never be undone.
+  async function updateApplied<T>(projectRoot: string, fn: (data: AppliedFile) => T): Promise<T> {
+    const file = recordFile(projectRoot)
+    using _process = await Lock.write(file)
+    using _crossProcess = await FileLock.acquire(file)
+    const data = await readApplied(projectRoot)
+    const result = fn(data)
+    await writeApplied(projectRoot, data)
+    return result
   }
 
   function ageDays(iso: string | undefined | null, now: Date): number | undefined {
@@ -290,14 +307,7 @@ export namespace Curation {
         throw new Error("only skills that live inside this project can be archived from here")
       const stamp = now.toISOString().replace(/[:.]/g, "-")
       const archivedTo = path.join(UsageRecord.directory(opts.projectRoot), "archive", `${params.id}-${stamp}`)
-      await fs.mkdir(path.dirname(archivedTo), { recursive: true })
-      try {
-        await fs.rename(directory, archivedTo)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error
-        await fs.cp(directory, archivedTo, { recursive: true, errorOnExist: true, force: false })
-        await fs.rm(directory, { recursive: true })
-      }
+      await moveDirectory(directory, archivedTo)
       const record: AppliedRecord = {
         id: params.id,
         target: "skill",
@@ -307,23 +317,23 @@ export namespace Curation {
         before: { directory, location },
         after: { archivedTo },
       }
-      const data = await readApplied(opts.projectRoot)
-      data.records.push(record)
-      await writeApplied(opts.projectRoot, data)
+      await updateApplied(opts.projectRoot, (data) => data.records.push(record)).catch(async (error) => {
+        // Without the record the archive cannot be undone; put the skill back.
+        await moveDirectory(archivedTo, directory).catch((rollback) => {
+          throw rollbackFailed(error, rollback, `the skill remains archived at ${archivedTo}`)
+        })
+        throw error
+      })
       return record
     }
 
-    const memory = params.scope === "global" ? await store.loadGlobal() : await store.load(opts.projectRoot)
     const kind = params.kind as MemoryEntryKind
-    const entry: MemoryEntry | undefined = memory?.sections[kind]?.entries.find(
-      (item) => item.name.toLowerCase() === params.name.toLowerCase(),
-    )
-    if (!memory || !entry) throw new Error(`memory entry not found: ${kind}/${params.name}`)
-
     // Reuse the recorder so the per-file write lock and metrics stay correct.
-    const { removeEntry } = await import("./recorder")
-    const removed = await removeEntry(opts.projectRoot, kind, entry.name, params.scope)
-    if (!removed) throw new Error(`memory entry not found: ${kind}/${params.name}`)
+    // The undo snapshot is the entry as removed under that lock, so a write
+    // that lands between a lookup and the removal is not lost on undo.
+    const { takeEntry } = await import("./recorder")
+    const entry = await takeEntry(opts.projectRoot, kind, params.name, params.scope)
+    if (!entry) throw new Error(`memory entry not found: ${kind}/${params.name}`)
 
     const record: AppliedRecord = {
       id: params.id,
@@ -335,64 +345,126 @@ export namespace Curation {
       before: entry,
       after: null,
     }
-    const data = await readApplied(opts.projectRoot)
-    data.records.push(record)
-    await writeApplied(opts.projectRoot, data)
+    await updateApplied(opts.projectRoot, (data) => data.records.push(record)).catch(async (error) => {
+      // Without the record the removal cannot be undone; restore the entry.
+      await restoreMemoryEntry(opts.projectRoot, record).catch((rollback) => {
+        throw rollbackFailed(error, rollback, `memory entry ${kind}/${entry.name} stays removed`)
+      })
+      throw error
+    })
     return record
   }
 
+  async function restoreMemoryEntry(projectRoot: string, record: AppliedRecord) {
+    const entry = record.before as MemoryEntry
+    const { recordEntry } = await import("./recorder")
+    await recordEntry(projectRoot, record.kind as MemoryEntryKind, {
+      name: entry.name,
+      body: entry.body,
+      why: entry.why,
+      howToApply: entry.howToApply,
+      agents: entry.agents,
+      tags: entry.tags,
+      pathGlobs: entry.pathGlobs,
+      expiresAt: entry.expiresAt,
+      confidence: entry.confidence,
+      sourceSessionId: entry.sourceSessionId,
+      scope: record.scope,
+      // Keep the original savedAt so the entry does not look freshly
+      // reviewed; set under the recorder's write lock, not a second save.
+      restoreSavedAt: entry.savedAt,
+    })
+  }
+
+  // Archive moves can cross devices (project on a mounted volume, state on the
+  // boot volume), so every direction falls back from rename to copy + remove.
+  async function moveDirectory(from: string, to: string) {
+    await fs.mkdir(path.dirname(to), { recursive: true })
+    try {
+      await fs.rename(from, to)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error
+      await fs.cp(from, to, { recursive: true, errorOnExist: true, force: false })
+      await fs.rm(from, { recursive: true })
+    }
+  }
+
+  function rollbackFailed(error: unknown, rollback: unknown, detail: string) {
+    return new Error(
+      `${error instanceof Error ? error.message : String(error)}; rollback also failed (${detail}): ${
+        rollback instanceof Error ? rollback.message : String(rollback)
+      }`,
+      { cause: error },
+    )
+  }
+
   /** Restore the entry removed by `apply`. Returns the record that was undone. */
+  // An undo claim older than this belongs to a process that died mid-restore.
+  const UNDO_CLAIM_STALE_MS = 5 * 60 * 1000
+
   export async function undo(opts: Options, id: string): Promise<AppliedRecord> {
-    const data = await readApplied(opts.projectRoot)
-    const record = [...data.records].reverse().find((item) => item.id === id && !item.undoneAt)
-    if (!record) throw new Error(`no applied proposal with id: ${id}`)
-
-    if (record.target === "memory") {
-      const entry = record.before as MemoryEntry
-      const { recordEntry } = await import("./recorder")
-      await recordEntry(opts.projectRoot, record.kind as MemoryEntryKind, {
-        name: entry.name,
-        body: entry.body,
-        why: entry.why,
-        howToApply: entry.howToApply,
-        agents: entry.agents,
-        tags: entry.tags,
-        pathGlobs: entry.pathGlobs,
-        expiresAt: entry.expiresAt,
-        confidence: entry.confidence,
-        sourceSessionId: entry.sourceSessionId,
-        scope: record.scope,
+    // Claim the record under the applied.json lock before restoring, so two
+    // concurrent undos cannot both restore the same change. The claim is an
+    // intermediate state: only a completed restore sets undoneAt, and a claim
+    // left by a crashed undo becomes retryable once stale.
+    const record = await updateApplied(opts.projectRoot, (data) => {
+      const found = [...data.records].reverse().find((item) => item.id === id && !item.undoneAt)
+      if (!found) throw new Error(`no applied proposal with id: ${id}`)
+      if (found.undoingAt && Date.now() - new Date(found.undoingAt).getTime() < UNDO_CLAIM_STALE_MS)
+        throw new Error(`undo already in progress for: ${id}`)
+      // Stamped under the lock, so time spent waiting for it cannot age the claim.
+      found.undoingAt = new Date().toISOString()
+      return { ...found }
+    })
+    const claimedAt = record.undoingAt
+    const settle = (done: boolean) =>
+      updateApplied(opts.projectRoot, (data) => {
+        const stored = data.records.find(
+          (item) => item.id === record.id && item.appliedAt === record.appliedAt && item.undoingAt === claimedAt,
+        )
+        // The claim is gone only if another undo took it over as stale.
+        if (!stored) throw new Error(`undo claim for ${id} was taken over by another undo`)
+        delete stored.undoingAt
+        if (done) stored.undoneAt = new Date().toISOString()
+        return stored.undoneAt
       })
-      // recordEntry stamps a fresh savedAt; restore the original one so the
-      // entry does not look freshly reviewed.
-      const memory = record.scope === "global" ? await store.loadGlobal() : await store.load(opts.projectRoot)
-      const section = memory?.sections[record.kind as MemoryEntryKind]
-      const restored = section?.entries.find((item) => item.name.toLowerCase() === entry.name.toLowerCase())
-      if (memory && restored && restored.savedAt !== entry.savedAt) {
-        restored.savedAt = entry.savedAt
-        if (record.scope === "global") await store.saveGlobal(memory)
-        else await store.save(opts.projectRoot, memory)
-      }
-    }
 
-    if (record.target === "skill") {
-      const before = record.before as { directory?: string }
-      const after = record.after as { archivedTo?: string }
-      if (!before.directory || !after.archivedTo) throw new Error("the archive record is incomplete")
-      if (await fs.stat(before.directory).catch(() => undefined))
-        throw new Error(`cannot restore: ${before.directory} already exists`)
-      await fs.mkdir(path.dirname(before.directory), { recursive: true })
-      try {
-        await fs.rename(after.archivedTo, before.directory)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error
-        await fs.cp(after.archivedTo, before.directory, { recursive: true, errorOnExist: true, force: false })
-        await fs.rm(after.archivedTo, { recursive: true })
-      }
-    }
+    try {
+      if (record.target === "memory") await restoreMemoryEntry(opts.projectRoot, record)
 
-    record.undoneAt = new Date().toISOString()
-    await writeApplied(opts.projectRoot, data)
-    return record
+      if (record.target === "skill") {
+        const before = record.before as { directory?: string }
+        const after = record.after as { archivedTo?: string }
+        if (!before.directory || !after.archivedTo) throw new Error("the archive record is incomplete")
+        // Only absence counts as missing; any other stat failure must not be
+        // read as "already restored".
+        const statOrMissing = (target: string) =>
+          fs.stat(target).catch((error: NodeJS.ErrnoException) => {
+            if (error.code === "ENOENT") return undefined
+            throw error
+          })
+        const archived = await statOrMissing(after.archivedTo)
+        const restored = await statOrMissing(before.directory)
+        // A crashed undo may already have moved the directory back.
+        if (!(restored && !archived)) {
+          if (restored) throw new Error(`cannot restore: ${before.directory} already exists`)
+          await moveDirectory(after.archivedTo, before.directory)
+        }
+      }
+    } catch (error) {
+      // The change was not restored; make the record undoable again.
+      await settle(false).catch(() => undefined)
+      throw error
+    }
+    const undoneAt = await settle(true).catch((error) => {
+      throw new Error(
+        `undo restored ${record.target} ${record.name} but could not record it (${
+          error instanceof Error ? error.message : String(error)
+        }); rerun undo after the claim expires to record it`,
+        { cause: error },
+      )
+    })
+    const { undoingAt: _claim, ...done } = record
+    return { ...done, undoneAt }
   }
 }

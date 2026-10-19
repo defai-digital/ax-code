@@ -32,3 +32,40 @@ describe("process output drain", () => {
     })
   }
 })
+
+describe("process timeout", () => {
+  test("terminates the whole tree at once instead of signalling only the direct child", async () => {
+    vi.useFakeTimers()
+    try {
+      const child = new ChildProcess()
+      const kill = vi.spyOn(child, "kill")
+      Object.defineProperty(child, "pid", { value: 4242 })
+      launch.mockReturnValueOnce(child)
+      const killTree = vi.fn(async () => {
+        child.emit("exit", null, "SIGTERM")
+      })
+      const proc = createProcess(killTree).spawn(["fixture"], { timeout: 100 })
+      await vi.advanceTimersByTimeAsync(100)
+      expect(killTree).toHaveBeenCalledTimes(1)
+      expect(kill).not.toHaveBeenCalled()
+      await expect(proc.exited).resolves.toBe(124)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("run forwards detached to spawn", async () => {
+    const child = new ChildProcess()
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    child.stdout = stdout
+    child.stderr = stderr
+    launch.mockReturnValueOnce(child)
+    const pending = createProcess(async () => undefined).run(["fixture"], { detached: true })
+    stdout.end()
+    stderr.end()
+    child.emit("exit", 0, null)
+    await pending
+    expect(launch.mock.calls.at(-1)?.[2]).toMatchObject({ detached: true })
+  })
+})

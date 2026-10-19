@@ -59,6 +59,12 @@ export function parsePromptParts(
         if (part.name && parsed.type === "file") {
           parsed.filename = part.name
         }
+        // parseUri labels every file text/plain. Honor a declared media type so
+        // an image or PDF link is attached as media instead of read as text.
+        const mime = part.mimeType?.split(";")[0]?.trim().toLowerCase()
+        if (parsed.type === "file" && mime && (mime.startsWith("image/") || mime === "application/pdf")) {
+          parsed.mime = mime
+        }
         parts.push(parsed as PromptPart)
         break
       }
@@ -69,14 +75,17 @@ export function parsePromptParts(
             type: "text",
             text: resource.text,
           })
-        } else if (resource && "blob" in resource && resource.blob && resource.mimeType) {
+        } else if (resource && "blob" in resource && resource.blob) {
           const parsed = parseUri(resource.uri ?? "")
           const filename = parsed.type === "file" ? parsed.filename : "file"
+          // mimeType is optional in the protocol; default it like MCP blob
+          // content instead of silently dropping the attachment.
+          const mime = resource.mimeType || "application/octet-stream"
           parts.push({
             type: "file",
-            url: `data:${resource.mimeType};base64,${resource.blob}`,
+            url: `data:${mime};base64,${resource.blob}`,
             filename,
-            mime: resource.mimeType,
+            mime,
           })
         }
         break

@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach, vi } from "vitest"
+import { describe, expect, test, beforeEach, afterEach, vi, onTestFinished } from "vitest"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { tmpdir } from "../fixture/fixture"
@@ -6,6 +6,7 @@ import { UsageRecord } from "../../src/memory/usage"
 import { Curation } from "../../src/memory/curate"
 import { recordEntry, listEntries } from "../../src/memory/recorder"
 import * as store from "../../src/memory/store"
+import { Filesystem } from "../../src/util/filesystem"
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -266,6 +267,72 @@ describe("memory.curate apply/undo", () => {
     await Curation.undo({ projectRoot: tmp.path }, record.id)
     const restored = (await listEntries(tmp.path, "userPrefs"))[0]
     expect(restored).toEqual(before)
+  })
+
+  test("concurrent applies keep every undo record", async () => {
+    await using tmp = await tmpdir()
+    const names = ["alpha", "beta", "gamma", "delta"]
+    for (const name of names) await recordEntry(tmp.path, "userPrefs", { name, body: `body ${name}` })
+    // Widen the read-modify-write window on applied.json.
+    const writeJson = Filesystem.writeJson.bind(Filesystem)
+    const spy = vi.spyOn(Filesystem, "writeJson").mockImplementation(async (file, data, ...rest) => {
+      if (String(file).endsWith("applied.json")) await new Promise((resolve) => setTimeout(resolve, 50))
+      return writeJson(file, data, ...rest)
+    })
+    onTestFinished(() => spy.mockRestore())
+
+    await Promise.all(
+      names.map((name) =>
+        Curation.apply(
+          { projectRoot: tmp.path },
+          { id: `mem-project-userprefs-${name}`, kind: "userPrefs", name, scope: "project" },
+        ),
+      ),
+    )
+
+    for (const name of names) await Curation.undo({ projectRoot: tmp.path }, `mem-project-userprefs-${name}`)
+    expect((await listEntries(tmp.path, "userPrefs")).map((entry) => entry.name).sort()).toEqual([...names].sort())
+  })
+
+  test("concurrent undos of one record restore it once and report one success", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "userPrefs", { name: "solo", body: "only once" })
+    const record = await Curation.apply(
+      { projectRoot: tmp.path },
+      { id: "mem-project-userprefs-solo", kind: "userPrefs", name: "solo", scope: "project" },
+    )
+
+    const results = await Promise.allSettled([
+      Curation.undo({ projectRoot: tmp.path }, record.id),
+      Curation.undo({ projectRoot: tmp.path }, record.id),
+    ])
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
+    expect(await listEntries(tmp.path, "userPrefs")).toHaveLength(1)
+  })
+
+  test("an undo claim left by a crashed undo is retryable once stale", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "userPrefs", { name: "crashy", body: "restore me" })
+    const record = await Curation.apply(
+      { projectRoot: tmp.path },
+      { id: "mem-project-userprefs-crashy", kind: "userPrefs", name: "crashy", scope: "project" },
+    )
+    const file = path.join(UsageRecord.directory(tmp.path), "applied.json")
+    const claim = async (at: string) => {
+      const data = JSON.parse(await fs.readFile(file, "utf8"))
+      data.records[0].undoingAt = at
+      await fs.writeFile(file, JSON.stringify(data))
+    }
+
+    await claim(new Date().toISOString())
+    await expect(Curation.undo({ projectRoot: tmp.path }, record.id)).rejects.toThrow("in progress")
+
+    await claim(new Date(Date.now() - 60 * 60 * 1000).toISOString())
+    await expect(Curation.undo({ projectRoot: tmp.path }, record.id)).resolves.toMatchObject({ id: record.id })
+    expect((await listEntries(tmp.path, "userPrefs")).map((entry) => entry.name)).toEqual(["crashy"])
+    const stored = JSON.parse(await fs.readFile(file, "utf8")).records[0]
+    expect(stored.undoneAt).toBeDefined()
+    expect(stored.undoingAt).toBeUndefined()
   })
 
   test("proposals are read-only and apply requires an existing id", async () => {

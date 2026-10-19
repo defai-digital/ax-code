@@ -152,27 +152,34 @@ export function takePreMigrationBackup(input: {
   return { took: true, backupPath: final }
 }
 
-// Journal-migration pending check. Drizzle records applied journal entries in
-// `__drizzle_migrations` with `created_at` = the entry's timestamp
-// (milliseconds); a migration will run when the journal contains an entry
-// newer than the newest applied one — the same comparison drizzle's migrator
-// makes before applying.
-export function readAppliedJournalVersion(client: { prepare(sql: string): { get(): unknown } }): number {
+// Journal-migration pending check. Drizzle decides which journal entries to
+// run by name: an entry runs when its name is missing from
+// `__drizzle_migrations`, whatever its timestamp (a migration merged from a
+// branch can be older than the newest applied one). Mirror that set check so
+// the backup is never skipped for a migration that is about to run.
+//
+// Returns undefined when the table predates the `name` column. Drizzle
+// rewrites such a table in place before migrating, so callers treat it as
+// pending.
+export function readAppliedMigrationNames(client: {
+  prepare(sql: string): { all(): unknown[] }
+}): Set<string> | undefined {
   try {
-    const row = client.prepare("SELECT COALESCE(MAX(created_at), -1) AS version FROM __drizzle_migrations").get() as
-      | { version?: unknown }
-      | undefined
-    const version = Number(row?.version)
-    return Number.isFinite(version) ? version : -1
+    const rows = client.prepare("SELECT name FROM __drizzle_migrations").all() as Array<{ name?: unknown }>
+    return new Set(rows.flatMap((row) => (typeof row.name === "string" ? [row.name] : [])))
   } catch (error) {
-    // A database with no migration table yet is simply at version 0.
-    if (toErrorMessage(error).includes("no such table")) return -1
+    const message = toErrorMessage(error)
+    // A database with no migration table yet has applied nothing.
+    if (message.includes("no such table")) return new Set()
+    if (message.includes("no such column")) return undefined
     throw error
   }
 }
 
-export function journalMigrationPending(appliedVersion: number, latestJournalTimestamp: number): boolean {
-  return latestJournalTimestamp > appliedVersion
+export function journalMigrationPending(applied: Set<string> | undefined, entries: ReadonlyArray<{ name: string }>) {
+  if (entries.length === 0) return false
+  if (!applied) return true
+  return entries.some((entry) => !applied.has(entry.name))
 }
 
 /** True when the database already holds at least one table (i.e. it is not brand-new). */

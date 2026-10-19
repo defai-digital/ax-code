@@ -139,7 +139,8 @@ function collectResults(
         score *= entry.confidence
         reasons.push(`confidence ${entry.confidence}`)
       }
-      if (q && ageSaved <= RECENCY_WINDOW_MS) {
+      // A future-dated savedAt is not "recent"; it must not outrank real matches.
+      if (q && ageSaved >= 0 && ageSaved <= RECENCY_WINDOW_MS) {
         score += RECENCY_BONUS
         reasons.push("recent")
       }
@@ -170,7 +171,9 @@ function tokenize(text: string): string[] {
   return Array.from(
     new Set(
       text
-        .split(/[^a-z0-9_./:-]+/i)
+        // Unicode letters and digits are term characters, so CJK and other
+        // non-ASCII words become searchable terms instead of separators.
+        .split(/[^\p{L}\p{N}_./:-]+/u)
         .map((term) => term.toLowerCase())
         .filter(Boolean),
     ),

@@ -600,8 +600,13 @@ export namespace Shard {
           const effects: Effect[] = []
           let result: T
           try {
-            result = shardCtx.provide({ effects, tx: open(projectID), inTransaction: false, projectID: key }, () =>
-              callback(open(projectID)),
+            // Same guard as the ambient and transaction paths: an async callback
+            // would run its effects and release the in-use pin before its body
+            // finishes writing.
+            result = requireSync(
+              shardCtx.provide({ effects, tx: open(projectID), inTransaction: false, projectID: key }, () =>
+                callback(open(projectID)),
+              ),
             )
           } catch (error) {
             // Structural failures poison this shard: later writes fail fast

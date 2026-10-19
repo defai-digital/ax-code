@@ -9,7 +9,7 @@ import {
   isBackupFileFor,
   journalMigrationPending,
   listDatabaseBackups,
-  readAppliedJournalVersion,
+  readAppliedMigrationNames,
   takePreMigrationBackup,
 } from "../../src/storage/backup"
 import { DurableStoragePolicy } from "../../src/storage/policy"
@@ -127,24 +127,34 @@ describe("takePreMigrationBackup", () => {
 })
 
 describe("journal version helpers", () => {
-  test("reads the applied drizzle journal version and treats a missing table as fresh", async () => {
+  test("reads applied drizzle migration names", async () => {
     await using tmp = await tmpdir()
     const db = new DatabaseSync(path.join(tmp.path, "journal.db"))
-    db.exec("CREATE TABLE __drizzle_migrations (id INTEGER PRIMARY KEY, hash TEXT, created_at NUMERIC)")
-    db.exec("INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('a', 100)")
-    db.exec("INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('b', 500)")
-    expect(readAppliedJournalVersion(db)).toBe(500)
+    db.exec("CREATE TABLE __drizzle_migrations (id INTEGER PRIMARY KEY, hash TEXT, created_at NUMERIC, name TEXT)")
+    db.exec("INSERT INTO __drizzle_migrations (hash, created_at, name) VALUES ('a', 100, 'm100_a')")
+    db.exec("INSERT INTO __drizzle_migrations (hash, created_at, name) VALUES ('b', 500, 'm500_b')")
+    expect(readAppliedMigrationNames(db)).toEqual(new Set(["m100_a", "m500_b"]))
 
     const fresh = new DatabaseSync(path.join(tmp.path, "fresh.db"))
     fresh.exec("CREATE TABLE unrelated (id INTEGER PRIMARY KEY)")
-    expect(readAppliedJournalVersion(fresh)).toBe(-1)
+    expect(readAppliedMigrationNames(fresh)).toEqual(new Set())
+
+    // Pre-`name` tables are rewritten by drizzle before migrating.
+    const legacy = new DatabaseSync(path.join(tmp.path, "legacy.db"))
+    legacy.exec("CREATE TABLE __drizzle_migrations (id INTEGER PRIMARY KEY, hash TEXT, created_at NUMERIC)")
+    expect(readAppliedMigrationNames(legacy)).toBeUndefined()
   })
 
-  test("a migration is pending only when the journal is ahead", () => {
-    expect(journalMigrationPending(-1, 100)).toBe(true)
-    expect(journalMigrationPending(100, 400)).toBe(true)
-    expect(journalMigrationPending(400, 400)).toBe(false)
-    expect(journalMigrationPending(500, 400)).toBe(false)
+  test("a migration is pending when any journal name is unapplied, whatever its timestamp", () => {
+    const applied = new Set(["m100_a", "m500_b"])
+    expect(journalMigrationPending(applied, [{ name: "m100_a" }, { name: "m500_b" }])).toBe(false)
+    // Merged from a branch: older than the newest applied entry, still runs.
+    expect(journalMigrationPending(applied, [{ name: "m100_a" }, { name: "m300_merged" }, { name: "m500_b" }])).toBe(
+      true,
+    )
+    expect(journalMigrationPending(new Set(), [{ name: "m100_a" }])).toBe(true)
+    expect(journalMigrationPending(undefined, [{ name: "m100_a" }])).toBe(true)
+    expect(journalMigrationPending(undefined, [])).toBe(false)
   })
 
   test("backup filenames are scoped per database file", () => {

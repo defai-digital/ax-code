@@ -1331,3 +1331,67 @@ describe("file/index Filesystem patterns", () => {
     })
   })
 })
+
+describe("file/index review fixes", () => {
+  test.skipIf(process.platform === "win32")("status() tolerates an untracked symlink to a directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.mkdir(path.join(tmp.path, "shared"))
+    await fs.writeFile(path.join(tmp.path, "shared", "a.txt"), "one\ntwo\n")
+    await fs.symlink("shared", path.join(tmp.path, "shared-link"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const status = await File.status()
+        expect(status.find((item) => item.path === "shared-link")).toMatchObject({ added: 0, status: "added" })
+        expect(status.find((item) => item.path === "shared/a.txt")).toMatchObject({ added: 2, status: "added" })
+      },
+    })
+  })
+
+  test.each(["entry.s", "module.wat", "bitcode.ll"])("reads the text source file %s", async (name) => {
+    await using tmp = await tmpdir()
+    await fs.writeFile(path.join(tmp.path, name), "text source\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await File.read(name)).toMatchObject({ type: "text", content: "text source\n" })
+      },
+    })
+  })
+
+  test("a nested .gitignore negation re-includes a file the root ignores", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(path.join(tmp.path, ".gitignore"), "*.log\n")
+    await fs.mkdir(path.join(tmp.path, "sub"))
+    await fs.writeFile(path.join(tmp.path, "sub", ".gitignore"), "!keep.log\n")
+    await fs.writeFile(path.join(tmp.path, "sub", "keep.log"), "kept\n")
+    await fs.writeFile(path.join(tmp.path, "sub", "drop.log"), "dropped\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const nodes = await File.list("sub")
+        expect(nodes.find((node) => node.name === "keep.log")?.ignored).toBe(false)
+        expect(nodes.find((node) => node.name === "drop.log")?.ignored).toBe(true)
+      },
+    })
+  })
+
+  test("a nested negation cannot re-include a file under an excluded directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(path.join(tmp.path, ".gitignore"), "secrets/\n")
+    await fs.mkdir(path.join(tmp.path, "secrets"))
+    await fs.writeFile(path.join(tmp.path, "secrets", ".gitignore"), "!readme.txt\n")
+    await fs.writeFile(path.join(tmp.path, "secrets", "readme.txt"), "hidden\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const nodes = await File.list("secrets")
+        expect(nodes.find((node) => node.name === "readme.txt")?.ignored).toBe(true)
+      },
+    })
+  })
+})

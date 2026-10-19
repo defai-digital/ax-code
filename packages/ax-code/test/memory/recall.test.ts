@@ -46,6 +46,27 @@ describe("memory.recall", () => {
     expect(results[0].kind).toBe("feedback")
   })
 
+  test("query: CJK words are matched as terms", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "userPrefs", { name: "reply-language", body: "回覆使用繁體中文，設定在這裡" })
+    await recordEntry(tmp.path, "userPrefs", { name: "use-tabs", body: "use tabs for indentation" })
+
+    const results = await recall(tmp.path, { query: "use 設定" })
+    expect(results.map((result) => result.entry.name)).toContain("reply-language")
+    expect(await recall(tmp.path, { query: "設定 中文" })).toHaveLength(1)
+  })
+
+  test("query: a future-dated entry gets no recency bonus", async () => {
+    await using tmp = await tmpdir()
+    await recordEntry(tmp.path, "userPrefs", { name: "future-pref", body: "deploy notes" })
+    const data = await store.load(tmp.path)
+    data!.sections.userPrefs!.entries[0]!.savedAt = "2999-01-01T00:00:00.000Z"
+    await store.save(tmp.path, data!)
+
+    const [result] = await recall(tmp.path, { query: "deploy" })
+    expect(result.reasons).not.toContain("recent")
+  })
+
   test("query: exact name match scores highest", async () => {
     await using tmp = await tmpdir()
     await recordEntry(tmp.path, "feedback", { name: "tests", body: "use real DB" })

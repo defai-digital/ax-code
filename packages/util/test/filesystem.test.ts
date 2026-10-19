@@ -69,3 +69,40 @@ describe.skipIf(process.platform === "win32")("atomic write permissions", () => 
     expect(child.stdout.trim()).toBe("493,493,493")
   })
 })
+
+describe("write through a symlink", () => {
+  test.skipIf(process.platform === "win32")("updates the link target and keeps the link", async () => {
+    const dir = await fs.mkdtemp(join(tmpdir(), "fs-symlink-write-"))
+    try {
+      await fs.writeFile(join(dir, "AGENTS.md"), "old\n")
+      await fs.symlink("AGENTS.md", join(dir, "CLAUDE.md"))
+
+      await Filesystem.write(join(dir, "CLAUDE.md"), "new\n", undefined, { followSymlink: true })
+      await Filesystem.writeStream(join(dir, "CLAUDE.md"), Readable.from([Buffer.from("streamed\n")]), undefined, {
+        followSymlink: true,
+      })
+
+      expect((await fs.lstat(join(dir, "CLAUDE.md"))).isSymbolicLink()).toBe(true)
+      expect(await fs.readFile(join(dir, "AGENTS.md"), "utf8")).toBe("streamed\n")
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("write without followSymlink", () => {
+  test.skipIf(process.platform === "win32")("replaces the link and never writes its target", async () => {
+    const dir = await fs.mkdtemp(join(tmpdir(), "fs-symlink-nofollow-"))
+    try {
+      await fs.writeFile(join(dir, "outside.txt"), "keep\n")
+      await fs.symlink(join(dir, "outside.txt"), join(dir, "memory.json"))
+
+      await Filesystem.write(join(dir, "memory.json"), "{}")
+
+      expect((await fs.lstat(join(dir, "memory.json"))).isSymbolicLink()).toBe(false)
+      expect(await fs.readFile(join(dir, "outside.txt"), "utf8")).toBe("keep\n")
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+})

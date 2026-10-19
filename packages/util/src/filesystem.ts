@@ -87,7 +87,36 @@ export namespace Filesystem {
     return typeof code === "string" ? code : undefined
   }
 
-  export async function write(p: string, content: string | Buffer | Uint8Array, mode?: number): Promise<void> {
+  export interface WriteOptions {
+    /**
+     * Publish through a symlink onto its final target instead of replacing the
+     * link with a regular file (e.g. CLAUDE.md -> AGENTS.md). Opt-in: only a
+     * caller that has already verified the link target is in bounds may set
+     * it, or a repository-controlled link could redirect the write anywhere.
+     * A dangling link has no target to preserve and is replaced.
+     */
+    followSymlink?: boolean
+  }
+
+  async function publishTarget(p: string, options?: WriteOptions) {
+    if (!options?.followSymlink) return p
+    const stat = await fs.lstat(p).catch(() => undefined)
+    if (!stat?.isSymbolicLink()) return p
+    return fs.realpath(p).catch((error: NodeJS.ErrnoException) => {
+      // Only a dangling link falls back to replacing the link itself; any
+      // other resolution failure (EACCES, ELOOP) must not silently do so.
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return p
+      throw error
+    })
+  }
+
+  export async function write(
+    target: string,
+    content: string | Buffer | Uint8Array,
+    mode?: number,
+    options?: WriteOptions,
+  ): Promise<void> {
+    const p = await publishTarget(target, options)
     const dir = dirname(p)
     const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
     // Preserve the target's existing permissions on overwrite (e.g. a script's
@@ -130,10 +159,12 @@ export namespace Filesystem {
   }
 
   export async function writeStream(
-    p: string,
+    target: string,
     stream: ReadableStream<Uint8Array> | Readable,
     mode?: number,
+    options?: WriteOptions,
   ): Promise<void> {
+    const p = await publishTarget(target, options)
     const dir = dirname(p)
     const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
     const resolvedMode =

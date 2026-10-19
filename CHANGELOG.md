@@ -6,6 +6,25 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Edit and write tools update a symlink's target instead of replacing the link (for example `CLAUDE.md -> AGENTS.md`).
+- Close a Parcel watcher subscription that resolves after the polling fallback started, and stop polling after disposal.
+- Keep `$&`-style sequences in formatter filenames literal, keep a built-in formatter's availability check when an override only adds extensions, survive a failed formatter probe spawn, and find ruff configuration in ancestor `pyproject.toml` files and `[tool.ruff.*]` subtables.
+- Patch parsing keeps hunks after a context line that reads `*** End Patch` and Markdown `***` lines in added files; `*** End of File` chunks prefer the file tail across every match pass.
+- Back up the database before migrations whenever an unapplied migration name exists, not only a newer timestamp.
+- Worktree reset from inside a sandbox targets the primary checkout's branch, cleanup does not follow symlinks, and unexpected start failures emit `worktree.failed`.
+- File status tolerates untracked symlinks to directories, `.s`/`.wat`/`.ll` files read as text, and nested `.gitignore` negations re-include files unless a parent directory is excluded.
+- Bus `once` subscribers fire once, and unsubscribing one registration no longer removes another registration of the same callback.
+- Slash commands named like `Object.prototype` members (`/toString`, `/constructor`) resolve only to real commands.
+- The `block-force-push` hook pack recognises clustered flags, `+refspec`, git global options, quoting, and nested shells; out-of-range hook timeouts fall back to the default.
+- Claude session import encodes project paths with dots, underscores, and spaces the way Claude Code does.
+- Memory curation serializes applied records, rolls back when a record cannot be written, makes undo claim-based and retryable, escapes the memory wrapper tag in scanned sections, and matches non-ASCII recall terms.
+- Skill packs resolve URLs with a query or fragment against the pack path, skip malformed URLs, and keep query credentials out of logs; skill creation is atomic and exclusive.
+- ACP slash commands keep the selected model variant, and resource links keep declared image and PDF media types.
+- Process timeouts terminate the whole process tree, `run()` forwards `detached`, unref'd timers clamp oversized delays, and a reader queued behind a timed-out writer gets the shared read lock.
+- Pseudo-terminal replay never splits a surrogate pair, and shard `use()` rejects async callbacks.
+
 ## [7.27.7] - 2026-10-19
 
 ### Changed

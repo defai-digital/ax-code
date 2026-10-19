@@ -23,7 +23,7 @@ import { Shard } from "./shard"
 import { isCorruptError as isCorruptErrorImpl, raiseCorruptDatabaseError } from "./corrupt"
 import {
   journalMigrationPending,
-  readAppliedJournalVersion,
+  readAppliedMigrationNames,
   readSchemaTableCount,
   takePreMigrationBackup,
 } from "./backup"
@@ -237,16 +237,15 @@ export namespace Database {
   // backup is taken unless a migration will actually run.
   function backupBeforeMigration(client: ReturnType<typeof init>, entries: Journal) {
     if (Flag.AX_CODE_SKIP_MIGRATIONS) return
-    const latest = entries.reduce((max, entry) => Math.max(max, entry.timestamp), 0)
-    if (latest <= 0) return
+    if (entries.length === 0) return
     let fileBytes = 0
     try {
       fileBytes = statSync(Path, { throwIfNoEntry: false })?.size ?? 0
     } catch {
       // Unstatable — treat as empty; the backup helper skips it.
     }
-    const applied = readAppliedJournalVersion(client.$client)
-    if (!journalMigrationPending(applied, latest)) return
+    const applied = readAppliedMigrationNames(client.$client)
+    if (!journalMigrationPending(applied, entries)) return
     takePreMigrationBackup({
       dbPath: Path,
       fileBytes,

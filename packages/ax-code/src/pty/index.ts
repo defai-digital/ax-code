@@ -122,10 +122,23 @@ export namespace Pty {
     }
   }
 
+  /** Split replay text into frames without cutting a surrogate pair in half. */
+  export function replayFrames(data: string, size = BUFFER_CHUNK) {
+    const frames: string[] = []
+    for (let i = 0; i < data.length; ) {
+      let end = Math.min(i + size, data.length)
+      const last = data.charCodeAt(end - 1)
+      if (end < data.length && end - 1 > i && last >= 0xd800 && last <= 0xdbff) end--
+      frames.push(data.slice(i, end))
+      i = end
+    }
+    return frames
+  }
+
   const trySendBuffered = (ws: Socket, data: string) => {
     try {
-      for (let i = 0; i < data.length; i += BUFFER_CHUNK) {
-        ws.send(data.slice(i, i + BUFFER_CHUNK))
+      for (const frame of replayFrames(data)) {
+        ws.send(frame)
       }
       return true
     } catch {

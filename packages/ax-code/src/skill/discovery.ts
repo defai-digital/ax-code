@@ -89,9 +89,25 @@ export namespace Discovery {
     }
   }
 
-  async function fetchArrayBuffer(url: string, init?: RequestInit) {
+  // A pack URL's query or userinfo can carry a credential. Requests keep it;
+  // log lines and error messages show this redacted form instead.
+  function redactUrl(url: string) {
     try {
-      const res = await Ssrf.pinnedFetch(url, {
+      const shown = new URL(url)
+      shown.search = ""
+      shown.hash = ""
+      shown.username = ""
+      shown.password = ""
+      return shown.href
+    } catch {
+      return "<invalid url>"
+    }
+  }
+
+  async function fetchArrayBuffer(request: string, init?: RequestInit) {
+    const url = redactUrl(request)
+    try {
+      const res = await Ssrf.pinnedFetch(request, {
         ...init,
         // A hung skill URL must not hang the whole (Instance-cached) skill state
         // forever — every other fetch path (models, instructions, providers)
@@ -138,24 +154,47 @@ export namespace Discovery {
       }
 
       const body = await fetchArrayBuffer(url)
-      const verified = verifyFile(body, expectedSha256, url)
+      const verified = verifyFile(body, expectedSha256, redactUrl(url))
       await Filesystem.write(dest, verified)
       return true
     } catch (err) {
-      log.error("failed to download", { url, err })
+      log.error("failed to download", { url: redactUrl(url), err })
       return false
     }
   }
 
   export async function pull(url: string): Promise<string[]> {
-    const base = url.endsWith("/") ? url : `${url}/`
-    const index = new URL("index.json", base).href
-    const host = base.slice(0, -1)
+    // Resolve with the URL API: appending "/" to the raw string lands inside a
+    // query or fragment (`.../pack?ref=v3/`), so index.json and every file
+    // resolved against the host root instead of the pack. A malformed entry
+    // is skipped like an unreachable index rather than failing skill loading.
+    let base: URL
+    try {
+      base = new URL(url)
+    } catch {
+      // The raw string may carry a credential; log only that it was rejected.
+      log.warn("invalid skill url")
+      return []
+    }
+    // Relative resolution drops the query, so carry it explicitly onto every
+    // request: a pack can be selected or authorized by it (?ref=, ?token=).
+    const query = base.search
+    base.search = ""
+    base.hash = ""
+    if (!base.pathname.endsWith("/")) base.pathname += "/"
+    const withQuery = (url: URL) => {
+      url.search = query
+      return url.href
+    }
+    // `index` (no query) is what logs and cache keys see; only the request
+    // carries the query, which may hold a credential.
+    const indexRequest = withQuery(new URL("index.json", base))
+    const index = redactUrl(indexRequest)
     const cache = path.join(Global.Path.cache, "skills")
 
     log.info("fetching index", { url: index })
 
-    const data = await fetchArrayBuffer(index, { headers: { Accept: "application/json" } })
+    const data = await fetchArrayBuffer(indexRequest, { headers: { Accept: "application/json" } })
       .then((body) => parseIndexText(Buffer.from(body).toString("utf8")))
       .catch((err) => {
         log.error("failed to fetch index", { url: index, err })
@@ -224,7 +263,7 @@ export namespace Discovery {
         // their validated relative segments so #, %, and encoded dot segments
         // cannot change which remote file is fetched.
         const relative = path.relative(root, dest).split(path.sep).map(encodeURIComponent).join("/")
-        return [{ file, dest, url: new URL(relative, `${host}/${skill.name}/`).href }]
+        return [{ file, dest, url: withQuery(new URL(relative, new URL(`${encodeURIComponent(skill.name)}/`, base))) }]
       })
 
       // Reject aliases before concurrent writes. Use portable case folding so

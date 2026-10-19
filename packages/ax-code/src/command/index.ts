@@ -133,7 +133,10 @@ export namespace Command {
   const state = Instance.state(async () => {
     const ctx = Instance.current
     const cfg = await Config.get()
-    const commands: Record<string, Info> = {}
+    // Null prototype: command names come from users, files, and MCP servers,
+    // and `/toString` or a `commands/constructor.md` must not resolve to (or be
+    // shadowed by) an inherited Object.prototype member.
+    const commands: Record<string, Info> = Object.create(null)
 
     commands[Default.INIT] = {
       name: Default.INIT,
@@ -381,7 +384,7 @@ export namespace Command {
   })
 
   async function mergeMcpPrompts(commands: Record<string, Info>): Promise<Record<string, Info>> {
-    const next = { ...commands }
+    const next: Record<string, Info> = Object.assign(Object.create(null), commands)
     for (const [key, prompt] of Object.entries(await MCP.prompts())) {
       // MCP catalog keys are `server:prompt`. Yield commit/pr to the prompt
       // name so slash /commit matches Command.list and GET /command.

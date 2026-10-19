@@ -70,6 +70,16 @@ export namespace Lock {
     maybeDelete(lock, key)
   }
 
+  function grantQueuedReaders(lock: ReturnType<typeof get>) {
+    if (lock.writer || lock.waitingWriters.some((waiter) => !waiter.settled)) return
+    while (lock.waitingReaders.length > 0) {
+      const next = lock.waitingReaders.shift()!
+      if (next.settled) continue
+      next.settled = true
+      next.fire()
+    }
+  }
+
   function timeoutMessage(kind: "read" | "write", key: string, ms: number) {
     return `Lock.${kind}: timed out after ${ms}ms waiting for ${JSON.stringify(key)}`
   }
@@ -114,8 +124,13 @@ export namespace Lock {
         if (waiter.settled) return
         waiter.settled = true
         dropWaiter(queue, waiter)
-        maybeDelete(lock, key)
         reject(new Error(timeoutMessage(kind, key, timeoutMs)))
+        // Readers queue behind a waiting writer. When the last one gives up
+        // while other readers still hold the lock, process() (which waits for
+        // readers to drain) would leave the queued readers stranded even
+        // though they can share the lock now.
+        if (kind === "write") grantQueuedReaders(lock)
+        maybeDelete(lock, key)
       }, timeoutMs)
       // The timer must stay ref'd: it is the only thing that settles this
       // awaited promise while the lock is held. An unref'd timer lets a

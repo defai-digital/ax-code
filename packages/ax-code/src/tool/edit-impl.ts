@@ -122,7 +122,7 @@ export const EditTool = Tool.define("edit", {
           )
         }
         ctx.abort.throwIfAborted()
-        await Filesystem.write(filePath, params.newString)
+        await Filesystem.write(filePath, params.newString, undefined, { followSymlink: true })
         await notifyFileEdited(filePath, existed ? "change" : "add")
         await FileTime.read(ctx.sessionID, filePath)
         return
@@ -216,7 +216,7 @@ export const EditTool = Tool.define("edit", {
       ctx.abort.throwIfAborted()
       await assertUnchangedBeforeWrite(contentOld)
       ctx.abort.throwIfAborted()
-      await Filesystem.write(filePath, contentNew)
+      await Filesystem.write(filePath, contentNew, undefined, { followSymlink: true })
       await notifyFileEdited(filePath, "change")
       // The diff above was already computed from the same `contentOld`
       // and `contentNew` locals — recomputing here produces an

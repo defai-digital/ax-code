@@ -180,10 +180,7 @@ export namespace File {
     "oat",
     "art",
     "wasm",
-    "wat",
     "bc",
-    "ll",
-    "s",
     "ko",
     "sys",
     "drv",
@@ -377,14 +374,34 @@ export namespace File {
     return contexts.filter((context): context is IgnoreContext => context !== undefined)
   }
 
-  function isIgnoredByContexts(absolute: string, type: "file" | "directory", contexts: IgnoreContext[]) {
+  // Contexts run from the work-tree root to the deepest directory. Like git, a
+  // deeper .gitignore overrides a shallower one, so a nested `!keep.log`
+  // re-includes what the root `*.log` excluded: the last matching rule wins.
+  function lastMatch(absolute: string, type: "file" | "directory", contexts: IgnoreContext[]) {
+    let ignored = false
     for (const context of contexts) {
       const relative = path.relative(context.base, absolute)
       if (!relative || Filesystem.isOutsideRelative(relative)) continue
       const candidate = relative.split(path.sep).join("/") + (type === "directory" ? "/" : "")
-      if (context.matcher.ignores(candidate)) return true
+      const result = context.matcher.test(candidate)
+      if (result.ignored) ignored = true
+      else if (result.unignored) ignored = false
     }
-    return false
+    return ignored
+  }
+
+  // Git cannot re-include a path whose parent directory is excluded, so an
+  // excluded ancestor (below the outermost context) keeps the path ignored
+  // whatever a deeper negation says.
+  function isIgnoredByContexts(absolute: string, type: "file" | "directory", contexts: IgnoreContext[]) {
+    const root = contexts[0]?.base
+    if (root) {
+      for (let dir = path.dirname(absolute); dir !== root && Filesystem.contains(root, dir); dir = path.dirname(dir)) {
+        if (lastMatch(dir, "directory", contexts)) return true
+        if (path.dirname(dir) === dir) break
+      }
+    }
+    return lastMatch(absolute, type, contexts)
   }
 
   const state = Instance.state(() => {
@@ -577,15 +594,17 @@ export namespace File {
       const untrackedResults: (File.Info | null)[] = []
       const readOne = async (file: string): Promise<File.Info | null> => {
         try {
-          const content = await Filesystem.readText(path.join(Instance.directory, file))
+          const full = path.join(Instance.directory, file)
+          // Git lists an untracked symlink as one path. Reading through it
+          // follows the link (EISDIR for a directory, content outside the
+          // project, or a FIFO that never ends), so count only regular files.
+          const info = await fs.promises.lstat(full)
+          if (!info.isFile()) return untrackedFileStatus(file, "")
+          const content = await Filesystem.readText(full)
           return untrackedFileStatus(file, content)
         } catch (error) {
-          if (
-            (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT" ||
-            (error as NodeJS.ErrnoException | undefined)?.code === "ENOTDIR"
-          ) {
-            return null
-          }
+          const code = (error as NodeJS.ErrnoException | undefined)?.code
+          if (code === "ENOENT" || code === "ENOTDIR") return null
           throw error
         }
       }

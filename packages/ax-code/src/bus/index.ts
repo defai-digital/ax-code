@@ -164,30 +164,49 @@ export namespace Bus {
     unsubscribe: () => void
   } {
     const current = state()
-    current.sequencedSubscriptions.push(callback)
+    const registration = guarded(callback)
+    current.sequencedSubscriptions.push(registration.deliver)
     const replay = cursor ? current.journal.replayAfter(cursor) : undefined
     return {
       cursor: current.journal.cursor(),
       replay,
       unsubscribe: () => {
-        const index = current.sequencedSubscriptions.indexOf(callback)
+        registration.active = false
+        const index = current.sequencedSubscriptions.indexOf(registration.deliver)
         if (index !== -1) current.sequencedSubscriptions.splice(index, 1)
       },
     }
+  }
+
+  // Deliveries are queued asynchronously from a snapshot of the subscriber
+  // list, so a delivery can still be pending when its subscription ends. Each
+  // registration gets its own wrapper and active flag: an unsubscribed (or
+  // `once`-completed) callback is never invoked again, and unsubscribing one
+  // registration of a callback never removes another registration of it.
+  function guarded<T>(callback: (event: T) => void) {
+    const registration = {
+      active: true,
+      deliver: (event: T) => {
+        if (registration.active) return callback(event)
+      },
+    }
+    return registration
   }
 
   function raw(type: string, callback: (event: any) => void) {
     log.debug("subscribing", { type })
     const subscriptions = state().subscriptions
     let match = subscriptions.get(type) ?? []
-    match.push(callback)
+    const registration = guarded(callback)
+    match.push(registration.deliver)
     subscriptions.set(type, match)
 
     return () => {
       log.debug("unsubscribing", { type })
+      registration.active = false
       const match = subscriptions.get(type)
       if (!match) return
-      const index = match.indexOf(callback)
+      const index = match.indexOf(registration.deliver)
       if (index === -1) return
       match.splice(index, 1)
     }

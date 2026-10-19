@@ -279,28 +279,35 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
     pushEntries(parts, "References", memory.sections.reference, { ...entryOpts, kind: "reference" }, budget)
   }
 
-  const patternsContent = memory.sections.patterns?.content && budget.takeLines(memory.sections.patterns.content)
+  // Scanned sections come from repository files (README, package manifests,
+  // tree listing), so escape the wrapper tag before truncation exactly like
+  // curated entries: a literal </project-memory> must not close the block.
+  const patternsContent =
+    memory.sections.patterns?.content && budget.takeLines(escapeMemoryTags(memory.sections.patterns.content))
   if (patternsContent) {
     parts.push("## Tech Stack")
     parts.push(patternsContent)
     parts.push("")
   }
 
-  const configContent = memory.sections.config?.content && budget.takeLines(memory.sections.config.content)
+  const configContent =
+    memory.sections.config?.content && budget.takeLines(escapeMemoryTags(memory.sections.config.content))
   if (configContent) {
     parts.push("## Project Config")
     parts.push(configContent)
     parts.push("")
   }
 
-  const structureContent = memory.sections.structure?.content && budget.takeLines(memory.sections.structure.content)
+  const structureContent =
+    memory.sections.structure?.content && budget.takeLines(escapeMemoryTags(memory.sections.structure.content))
   if (structureContent) {
     parts.push("## Directory Structure")
     parts.push(structureContent)
     parts.push("")
   }
 
-  const readmeContent = memory.sections.readme?.content && budget.takeLines(memory.sections.readme.content)
+  const readmeContent =
+    memory.sections.readme?.content && budget.takeLines(escapeMemoryTags(memory.sections.readme.content))
   if (readmeContent) {
     parts.push("## README Summary")
     parts.push(readmeContent)

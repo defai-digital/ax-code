@@ -161,6 +161,7 @@ fn try_match_bounded<F>(
     start_index: usize,
     compare: F,
     eof: bool,
+    eof_only: bool,
     comparisons: &mut usize,
 ) -> napi::Result<i32>
 where
@@ -187,6 +188,9 @@ where
                 return Ok(from_end as i32);
             }
         }
+    }
+    if eof_only {
+        return Ok(-1);
     }
     for i in start_index..=(lines.len() - pattern.len()) {
         let mut matches = true;
@@ -227,40 +231,30 @@ fn seek_sequence_bounded(
         return Ok(-1);
     }
     let mut comparisons = 0usize;
-    let exact = try_match_bounded(lines, pattern, start_index, |a, b| a == b, eof, &mut comparisons)?;
-    if exact != -1 {
-        return Ok(exact);
+    let passes: [&dyn Fn(&str, &str) -> bool; 4] = [
+        &|a, b| a == b,
+        &|a, b| a.trim_end() == b.trim_end(),
+        &|a, b| a.trim() == b.trim(),
+        &|a, b| normalize_unicode(a.trim()) == normalize_unicode(b.trim()),
+    ];
+    // An end-of-file chunk tries the tail under every pass before any forward
+    // search, so an earlier exact copy cannot win over a whitespace-only
+    // difference at the real end.
+    if eof {
+        for compare in passes {
+            let found = try_match_bounded(lines, pattern, start_index, compare, true, true, &mut comparisons)?;
+            if found != -1 {
+                return Ok(found);
+            }
+        }
     }
-    let rstrip = try_match_bounded(
-        lines,
-        pattern,
-        start_index,
-        |a, b| a.trim_end() == b.trim_end(),
-        eof,
-        &mut comparisons,
-    )?;
-    if rstrip != -1 {
-        return Ok(rstrip);
+    for compare in passes {
+        let found = try_match_bounded(lines, pattern, start_index, compare, false, false, &mut comparisons)?;
+        if found != -1 {
+            return Ok(found);
+        }
     }
-    let trimmed = try_match_bounded(
-        lines,
-        pattern,
-        start_index,
-        |a, b| a.trim() == b.trim(),
-        eof,
-        &mut comparisons,
-    )?;
-    if trimmed != -1 {
-        return Ok(trimmed);
-    }
-    try_match_bounded(
-        lines,
-        pattern,
-        start_index,
-        |a, b| normalize_unicode(a.trim()) == normalize_unicode(b.trim()),
-        eof,
-        &mut comparisons,
-    )
+    Ok(-1)
 }
 
 /// 4-pass fuzzy line matching.
@@ -603,6 +597,14 @@ mod tests {
         assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, false).unwrap(), 1);
         // With eof, should prefer the match closest to end (index 4).
         assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, true).unwrap(), 4);
+    }
+
+    #[test]
+    fn seek_sequence_eof_prefers_a_fuzzy_tail_over_an_earlier_exact_match() {
+        let lines = vec!["a", "a "];
+        let pattern = vec!["a"];
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, true).unwrap(), 1);
+        assert_eq!(seek_sequence_bounded(&lines, &pattern, 0, false).unwrap(), 0);
     }
 
     #[test]
