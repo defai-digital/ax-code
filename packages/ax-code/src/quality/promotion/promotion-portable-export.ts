@@ -295,10 +295,27 @@ export namespace QualityPromotionPortableExport {
       throw new Error(`Cannot materialize portable export for ${exportArtifact.source}: invalid export (${reasons[0]})`)
     }
     await fs.mkdir(directory, { recursive: true })
+    const root = await fs.realpath(directory)
     for (const file of exportArtifact.files) {
-      const target = path.join(directory, file.path)
-      await fs.mkdir(path.dirname(target), { recursive: true })
-      await fs.writeFile(target, file.content)
+      // Artifact paths are data: reject absolute/escaping spellings instead
+      // of letting path.join resolve them outside the export directory.
+      if (path.isAbsolute(file.path) || file.path.split(/[\\/]/).includes("..")) {
+        throw new Error(`Refusing to materialize portable export path outside the destination: ${file.path}`)
+      }
+      const target = path.join(root, file.path)
+      const parent = path.dirname(target)
+      await fs.mkdir(parent, { recursive: true })
+      // A pre-existing symlinked directory (docs -> /etc) would redirect the
+      // write even though the path string is contained. Compare reals.
+      const realParent = await fs.realpath(parent)
+      if (realParent !== root && !realParent.startsWith(root + path.sep)) {
+        throw new Error(`Refusing to materialize portable export through a symlinked directory: ${file.path}`)
+      }
+      // Write through a sibling temp file and rename, so a symlinked target
+      // entry is replaced rather than followed.
+      const temp = `${target}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
+      await fs.writeFile(temp, file.content, { flag: "wx" })
+      await fs.rename(temp, target)
     }
     return {
       directory,

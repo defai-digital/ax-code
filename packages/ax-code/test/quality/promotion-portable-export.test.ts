@@ -441,6 +441,44 @@ describe("QualityPromotionPortableExport", () => {
     }
   })
 
+  test("refuses to write through a symlinked directory inside the destination", async () => {
+    const { handoffPackage } = buildHandoffPackage()
+    const exportArtifact = QualityPromotionPortableExport.create({
+      handoffPackage,
+    })
+    await using tmp = await tmpdir()
+    const outDir = path.join(tmp.path, "portable-export")
+    const outside = path.join(tmp.path, "outside")
+    await fs.mkdir(outDir, { recursive: true })
+    await fs.mkdir(outside, { recursive: true })
+    await fs.symlink(outside, path.join(outDir, "docs"), "dir")
+
+    await expect(QualityPromotionPortableExport.materialize(exportArtifact, outDir)).rejects.toThrow(
+      /symlinked directory/,
+    )
+    expect(await fs.readdir(outside)).toEqual([])
+  })
+
+  test("replaces a symlinked file instead of writing through it", async () => {
+    const { handoffPackage } = buildHandoffPackage()
+    const exportArtifact = QualityPromotionPortableExport.create({
+      handoffPackage,
+    })
+    await using tmp = await tmpdir()
+    const outDir = path.join(tmp.path, "portable-export")
+    const outsideFile = path.join(tmp.path, "outside.md")
+    await fs.mkdir(outDir, { recursive: true })
+    await fs.writeFile(outsideFile, "keep me")
+    await fs.symlink(outsideFile, path.join(outDir, "README.md"))
+
+    await QualityPromotionPortableExport.materialize(exportArtifact, outDir)
+
+    expect(await fs.readFile(outsideFile, "utf8")).toBe("keep me")
+    const target = path.join(outDir, "README.md")
+    expect((await fs.lstat(target)).isSymbolicLink()).toBe(false)
+    expect(await fs.readFile(target, "utf8")).toContain("ax-code quality promotion portable export")
+  })
+
   test("reports verification failures when the portable export files are tampered", () => {
     const { handoffPackage } = buildHandoffPackage()
     const exportArtifact = QualityPromotionPortableExport.create({
