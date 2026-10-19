@@ -32,6 +32,12 @@ export function createPromotionArtifactStore<TArtifact extends { source: string 
   const decode = QualityStorageKey.decode
 
   function key(source: string, id: string) {
+    // The id is a single storage path component, never a path. A dot segment
+    // or a separator would let path.join resolve the write outside the
+    // namespace (or hide it from list), so reject it at the boundary.
+    if (id === "" || id === "." || id === ".." || id.includes("/") || id.includes("\\")) {
+      throw new Error(`Promotion artifact id must be a single path segment: ${JSON.stringify(id)}`)
+    }
     return [config.keyPrefix, encode(source), id]
   }
 

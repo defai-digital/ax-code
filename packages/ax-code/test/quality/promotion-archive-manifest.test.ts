@@ -417,6 +417,24 @@ describe("QualityPromotionArchiveManifest", () => {
     }
   })
 
+  test("keeps a dot-segment artifact id inside the storage namespace", async () => {
+    const { exportBundle } = buildExportBundle()
+    await clearArchives()
+    try {
+      const archive = QualityPromotionArchiveManifest.create({
+        exportBundle,
+      })
+      const tampered = QualityPromotionArchiveManifest.ArchiveArtifact.parse({
+        ...archive,
+        archiveID: "../../project/victim",
+      })
+
+      await expect(QualityPromotionArchiveManifest.append(tampered)).rejects.toThrow(/single path segment/)
+    } finally {
+      await clearArchives()
+    }
+  })
+
   test("reports verification failures when the archive manifest inventory is tampered", () => {
     const { exportBundle } = buildExportBundle()
     const archive = QualityPromotionArchiveManifest.create({
