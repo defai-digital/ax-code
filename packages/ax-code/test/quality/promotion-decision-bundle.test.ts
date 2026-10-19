@@ -303,4 +303,36 @@ describe("QualityPromotionDecisionBundle", () => {
     expect(reasons.some((reason) => reason.includes("current active source changed"))).toBe(true)
     expect(reasons.some((reason) => reason.includes("eligibility decision changed"))).toBe(true)
   })
+
+  test("reports drift when only the current side carries a release policy", () => {
+    const built = QualityPromotionDecisionBundle.build({
+      benchmark: benchmarkBundle(),
+      stability: stability("pass"),
+      eligibility: eligibility("go", "none"),
+    })
+    const bundle = QualityPromotionDecisionBundle.DecisionBundle.parse({
+      ...built,
+      releasePolicy: undefined,
+    })
+    const policy = QualityPromotionReleasePolicy.defaults()
+
+    const reasons = QualityPromotionDecisionBundle.driftReasons(bundle, {
+      stability: stability("pass"),
+      eligibility: eligibility("go", "none"),
+      releasePolicy: {
+        policy,
+        provenance: QualityPromotionReleasePolicy.PolicyProvenance.parse({
+          policySource: "default",
+          policyProjectID: null,
+          compatibilityApprovalSource: null,
+          resolvedAt: "2026-04-20T12:00:00.000Z",
+          persistedScope: null,
+          persistedUpdatedAt: null,
+          digest: QualityPromotionReleasePolicy.digest(policy),
+        }),
+      },
+    })
+
+    expect(reasons.some((reason) => reason.includes("release policy snapshot missing"))).toBe(true)
+  })
 })

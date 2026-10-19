@@ -412,7 +412,14 @@ export namespace QualityPromotionDecisionBundle {
         `stability status changed from ${bundle.stability.overallStatus} to ${current.stability.overallStatus}`,
       )
     }
-    if (bundle.releasePolicy && current.releasePolicy) {
+    // A bundle that omitted the release-policy snapshot cannot be proven
+    // current when this evaluation has one; an absent current side keeps the
+    // old behavior because callers may promote without a resolution.
+    if (!bundle.releasePolicy && current.releasePolicy) {
+      reasons.push(
+        `release policy snapshot missing from decision bundle; current digest is ${current.releasePolicy.provenance.digest}`,
+      )
+    } else if (bundle.releasePolicy && current.releasePolicy) {
       if (bundle.releasePolicy.provenance.digest !== current.releasePolicy.provenance.digest) {
         reasons.push(
           `release policy digest changed from ${bundle.releasePolicy.provenance.digest} to ${current.releasePolicy.provenance.digest}`,
