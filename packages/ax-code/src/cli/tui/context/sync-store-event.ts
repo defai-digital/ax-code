@@ -1,6 +1,7 @@
 import { enforceTranscriptBudget, adaptiveTranscriptMaxBytes } from "@/runtime/headless/projection-retention"
 import { getHeapStatistics } from "node:v8"
 import { retainTranscriptEvent, transcriptEventSession } from "./sync-transcript-event"
+import { invalidateCursorOnEviction, oldestMessageIDs } from "./sync-message-window"
 import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 import { produce, type SetStoreFunction } from "solid-js/store"
 import { executeHeadlessProjectionEffects } from "@/runtime/headless/effects"
@@ -122,6 +123,7 @@ export interface DispatchStoreBackedSyncEventInput<
   resyncSession?: (sessionID: string, reason: string) => void
   onWarn: (label: string, error: unknown) => void
   maxSessionMessages: number
+  sessionMessageLimit?: (sessionID: string) => number
   getActiveSessionID?: () => string | undefined
 }
 
@@ -289,6 +291,12 @@ function dispatchHeadlessProjectionEvent<
           drift = elidedPartDrift(draft, input.event)
           const messageSessionID =
             input.event.type === "message.updated" ? input.event.properties.info.sessionID : undefined
+          const messageLimit =
+            (messageSessionID ? input.sessionMessageLimit?.(messageSessionID) : undefined) ?? input.maxSessionMessages
+          const transcriptSessionID =
+            transcriptEventSession(input.event) ??
+            (input.event.type === "session.updated" ? input.event.properties.info.id : undefined)
+          const oldestBefore = oldestMessageIDs(draft, [messageSessionID, transcriptSessionID])
           effects = applyHeadlessProjectionEvent(draft, input.event, {
             autonomous: input.autonomous && input.autoReplyRequests === true,
             // Keep the recovered undo window until the revert is cleared.
@@ -299,16 +307,13 @@ function dispatchHeadlessProjectionEvent<
                   session.id === messageSessionID &&
                   !!(session as { revert?: { messageID?: string } }).revert?.messageID,
               )
-                ? Math.max(input.maxSessionMessages, (draft.message[messageSessionID]?.length ?? 0) + 1)
-                : input.maxSessionMessages,
+                ? Math.max(messageLimit, (draft.message[messageSessionID]?.length ?? 0) + 1)
+                : messageLimit,
           }).effects
-          const transcriptSessionID =
-            transcriptEventSession(input.event) ??
-            (input.event.type === "session.updated" ? input.event.properties.info.id : undefined)
           if (input.getActiveSessionID && transcriptSessionID && transcriptSessionID === input.getActiveSessionID()) {
             const pressure = currentHeapPressureRatio()
             enforceTranscriptBudget(draft, transcriptSessionID, {
-              maxMessages: input.maxSessionMessages,
+              maxMessages: input.sessionMessageLimit?.(transcriptSessionID) ?? input.maxSessionMessages,
               maxBytes: adaptiveTranscriptMaxBytes(pressure),
               preserve: !!draft.session.find(
                 (session) => session.id === transcriptSessionID && (session as { revert?: unknown }).revert,
@@ -324,6 +329,7 @@ function dispatchHeadlessProjectionEvent<
               }
             }
           }
+          for (const [sessionID, oldest] of oldestBefore) invalidateCursorOnEviction(draft, sessionID, oldest)
         }),
       )
       executeHeadlessProjectionEffects(effects, {

@@ -4,6 +4,7 @@ import {
   enforceTranscriptBudget,
   forgetProjectionMessage,
 } from "@/runtime/headless/projection-retention"
+import { adoptHistoryCursor, invalidateCursorOnEviction, sessionMessageLimit } from "./sync-message-window"
 import { mergeSorted, removeByID, upsert } from "./sync-util"
 
 export interface SyncedMessageParts<TMessage, TPart> {
@@ -27,6 +28,7 @@ export function createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDif
   diff: TDiff[] | undefined
   risk?: TRisk
   goal?: TGoal | null
+  history?: { cursor: string | undefined }
 }) {
   if (!input.session) return
   // A malformed (non-array) payload, or entries missing `info`, would pass the
@@ -46,6 +48,7 @@ export function createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDif
     diff: Array.isArray(input.diff) ? input.diff : [],
     risk: input.risk,
     goal: input.goal,
+    ...(input.history ? { history: input.history } : {}),
   }
 }
 
@@ -60,6 +63,9 @@ export function applySessionSyncSnapshot<
 >(
   store: {
     session: TSession[]
+    message_window?: Record<string, number>
+    message_cursor?: Record<string, string>
+    message_truncated?: Record<string, boolean>
     todo: Record<string, TTodo[]>
     message: Record<string, TMessage[]>
     part: Record<string, TPart[]>
@@ -75,6 +81,7 @@ export function applySessionSyncSnapshot<
     diff: TDiff[]
     risk?: TRisk
     goal?: TGoal | null
+    history?: { cursor: string | undefined }
   },
 ) {
   upsert(store.session, snapshot.session)
@@ -110,8 +117,22 @@ export function applySessionSyncSnapshot<
   }
   store.session_diff[sessionID] = snapshot.diff
   if (snapshot.goal !== undefined) store.session_goal[sessionID] = snapshot.goal
+  if (snapshot.history) {
+    if (store.message_cursor) {
+      if (snapshot.history.cursor) store.message_cursor[sessionID] = snapshot.history.cursor
+      else delete store.message_cursor[sessionID]
+    }
+    if (store.message_truncated) store.message_truncated[sessionID] = !!snapshot.history.cursor
+  }
   refreshProjectionSizes(store, sessionID)
-  enforceTranscriptBudget(store, sessionID, { preserve: !!(snapshot.session as { revert?: unknown }).revert })
+  enforceTranscriptBudget(store, sessionID, {
+    maxMessages: sessionMessageLimit(store, sessionID),
+    preserve: !!(snapshot.session as { revert?: unknown }).revert,
+  })
+  // Live messages that arrived during the fetch can push the snapshot's oldest
+  // messages out; the cursor was minted for those, so it would now skip them.
+  const snapshotOldest = nextMessages[0]?.id
+  if (snapshot.history?.cursor && snapshotOldest) invalidateCursorOnEviction(store, sessionID, snapshotOldest)
 }
 
 /**
@@ -151,6 +172,8 @@ export function applySessionDeleteCleanup<
 >(
   store: {
     session: TSession[]
+    message_cursor?: Record<string, string>
+    message_window?: Record<string, number>
     permission: Record<string, TPermission[]>
     question: Record<string, TQuestion[]>
     session_status: Record<string, TStatus>
@@ -164,6 +187,8 @@ export function applySessionDeleteCleanup<
   sessionID: string,
 ) {
   removeByID(store.session, sessionID)
+  if (store.message_cursor) delete store.message_cursor[sessionID]
+  if (store.message_window) delete store.message_window[sessionID]
 
   clearProjectionSession(store, sessionID)
 
@@ -198,6 +223,8 @@ export function applySessionLeavePrune<TMessage extends { id: string }, TPart, T
     part: Record<string, TPart[]>
     session_error?: Record<string, unknown>
     message_truncated?: Record<string, boolean>
+    message_cursor?: Record<string, string>
+    message_window?: Record<string, number>
     message_reload?: Record<string, boolean>
     message_memory_limited?: Record<string, boolean>
   },
@@ -212,6 +239,8 @@ export function applySessionLeavePrune<TMessage extends { id: string }, TPart, T
   delete store.message[sessionID]
   if (store.session_error) delete store.session_error[sessionID]
   if (store.message_truncated) delete store.message_truncated[sessionID]
+  if (store.message_cursor) delete store.message_cursor[sessionID]
+  if (store.message_window) delete store.message_window[sessionID]
   if (store.message_reload) delete store.message_reload[sessionID]
   if (store.message_memory_limited) delete store.message_memory_limited[sessionID]
 }
@@ -236,6 +265,8 @@ export function pruneOrphanSessionRecords(store: {
   session_diff?: Record<string, unknown>
   todo?: Record<string, unknown>
   message?: Record<string, Array<{ id: string }>>
+  message_cursor?: Record<string, string>
+  message_window?: Record<string, number>
   message_truncated?: Record<string, unknown>
   message_reload?: Record<string, unknown>
   message_memory_limited?: Record<string, unknown>
@@ -253,6 +284,8 @@ export function pruneOrphanSessionRecords(store: {
     store.todo,
     store.message,
     store.message_truncated,
+    store.message_cursor,
+    store.message_window,
     store.message_reload,
     store.message_memory_limited,
   ]
@@ -286,4 +319,47 @@ export function pruneOrphanSessionRecords(store: {
       )
     }
   }
+}
+
+export function applyEarlierMessagePage<TMessage extends { id: string }, TPart>(
+  store: {
+    session: Array<{ id: string; revert?: unknown }>
+    message: Record<string, TMessage[]>
+    part: Record<string, TPart[]>
+    message_cursor: Record<string, string>
+    message_window: Record<string, number>
+    message_truncated: Record<string, boolean>
+  },
+  sessionID: string,
+  page: Array<SyncedMessageParts<TMessage, TPart>>,
+  nextCursor: string | undefined,
+  options: { maxMessages: number; maxBytes?: number },
+) {
+  const existing = store.message[sessionID] ?? []
+  const ids = new Set(existing.map((message) => message.id))
+  const older = page.filter((message) => {
+    if (ids.has(message.info.id)) return false
+    ids.add(message.info.id)
+    return true
+  })
+  const merged = mergeSorted(
+    existing,
+    older.map((message) => message.info),
+  )
+  store.message[sessionID] = merged
+  for (const message of older) store.part[message.info.id] = message.parts
+  adoptHistoryCursor(store, sessionID, nextCursor)
+  store.message_truncated[sessionID] = !!nextCursor
+  refreshProjectionSizes(store, sessionID)
+  const length = merged.length
+  enforceTranscriptBudget(store, sessionID, {
+    ...options,
+    preserve: !!store.session.find((session) => session.id === sessionID)?.revert,
+  })
+  const evicted = length - store.message[sessionID].length
+  if (evicted && page.some((message) => !store.message[sessionID].some((item) => item.id === message.info.id))) {
+    delete store.message_cursor[sessionID]
+    store.message_truncated[sessionID] = true
+  }
+  return { added: older.length, evicted }
 }

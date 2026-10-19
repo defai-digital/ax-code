@@ -62,6 +62,66 @@ function createTestStore() {
 }
 
 describe("tui sync store event", () => {
+  test("live insertion and byte-budget enforcement honor the admitted session limit", () => {
+    const [store, setStore] = createTestStore()
+    const messages = Array.from({ length: 251 }, (_, i) => ({
+      id: `msg_${String(i).padStart(4, "0")}`,
+      sessionID: "ses_1",
+    }))
+    setStore("session", [{ id: "ses_1" }])
+    setStore("message", "ses_1", messages.slice(0, 250))
+    dispatchStoreBackedSyncEvent<Session, Todo, Diff, Status, Message, Part, typeof store>({
+      event: { type: "message.updated", properties: { info: messages[250] } },
+      autonomous: false,
+      setStore,
+      clearSessionSyncState: () => {},
+      replyPermission: () => {},
+      replyQuestion: () => {},
+      syncMcpStatus: () => {},
+      syncLspStatus: () => {},
+      syncDebugEngine: () => {},
+      bootstrap: () => {},
+      onWarn: () => {},
+      maxSessionMessages: 100,
+      sessionMessageLimit: (id) => (id === "ses_1" ? 300 : 100),
+      getActiveSessionID: () => "ses_1",
+    })
+    expect(store.message.ses_1).toHaveLength(251)
+    expect(store.message.ses_1[0]).toEqual(messages[0])
+  })
+
+  test("a live eviction of the oldest loaded message drops the stale older-page cursor", () => {
+    const [store, setStore] = createTestStore()
+    const messages = Array.from({ length: 101 }, (_, i) => ({
+      id: `msg_${String(i).padStart(4, "0")}`,
+      sessionID: "ses_1",
+    }))
+    setStore("session", [{ id: "ses_1" }])
+    setStore("message", "ses_1", messages.slice(0, 100))
+    setStore("message_cursor" as never, { ses_1: "cursor-before-msg_0000" } as never)
+    setStore("message_truncated" as never, { ses_1: true } as never)
+    dispatchStoreBackedSyncEvent<Session, Todo, Diff, Status, Message, Part, typeof store>({
+      event: { type: "message.updated", properties: { info: messages[100] } },
+      autonomous: false,
+      setStore,
+      clearSessionSyncState: () => {},
+      replyPermission: () => {},
+      replyQuestion: () => {},
+      syncMcpStatus: () => {},
+      syncLspStatus: () => {},
+      syncDebugEngine: () => {},
+      bootstrap: () => {},
+      onWarn: () => {},
+      maxSessionMessages: 100,
+      sessionMessageLimit: () => 100,
+      getActiveSessionID: () => "ses_1",
+    })
+    expect(store.message.ses_1).toHaveLength(100)
+    expect(store.message.ses_1[0].id).toBe("msg_0001")
+    expect((store as { message_cursor?: Record<string, string> }).message_cursor?.ses_1).toBeUndefined()
+    expect((store as { message_truncated?: Record<string, boolean> }).message_truncated?.ses_1).toBe(true)
+  })
+
   test("live updates retain recovered undo history, then resume the normal cap after restore", () => {
     const [store, setStore] = createTestStore()
     const messages = Array.from({ length: 350 }, (_, i) => ({
@@ -348,6 +408,10 @@ describe("tui sync store event", () => {
       part: { msg_1: [{ id: "part_1", messageID: "msg_1" }] },
       vcs: undefined,
     })
+    // TUI transcript paging bags live on the same store; delete must drop them too.
+    setStore("message_cursor" as never, { ses_1: "cursor" } as never)
+    setStore("message_window" as never, { ses_1: 300 } as never)
+    setStore("message_truncated" as never, { ses_1: true } as never)
 
     const handled = dispatchStoreBackedSyncEvent<
       Session,
@@ -396,6 +460,9 @@ describe("tui sync store event", () => {
       message: {},
       part: {},
       vcs: undefined,
+      message_cursor: {},
+      message_window: {},
+      message_truncated: {},
     })
   })
 

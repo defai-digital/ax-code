@@ -2,6 +2,7 @@ import { createSessionSyncSnapshot, type SyncedMessageParts } from "./sync-sessi
 
 export interface SessionSyncFetchResult<T> {
   data: T | undefined
+  history?: { cursor: string | undefined }
 }
 
 export interface SessionSyncSnapshotLoader<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal> {
@@ -46,6 +47,7 @@ export async function fetchSessionSyncSnapshot<
     session: session.data,
     todo: todo.data,
     messages: messages.data,
+    history: messages.history,
     diff: [],
   })
   if (!core) return
@@ -72,6 +74,7 @@ export async function fetchSessionSyncSnapshot<
     session: session.data,
     todo: todo.data,
     messages: messages.data,
+    history: messages.history,
     diff: diff.data,
     risk: risk?.data,
     goal: goal?.data,

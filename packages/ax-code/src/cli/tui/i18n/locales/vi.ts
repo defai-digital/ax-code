@@ -867,6 +867,13 @@ export const messages = {
   "ui.showingTheMostRecent": "\u25b2 \u0110ang hi\u1ec7n m\u1edbi nh\u1ea5t",
   "ui.messagesEarlierHistoryIsNotLoaded":
     "tin nh\u1eafn \u2014 l\u1ecbch s\u1eed tr\u01b0\u1edbc ch\u01b0a \u0111\u01b0\u1ee3c t\u1ea3i",
+  "ui.showingLatestMessages": "\u25b2 \u0110ang hi\u1ec3n th\u1ecb {count} tin nh\u1eafn m\u1edbi nh\u1ea5t.",
+  "ui.loadEarlierMessages": "T\u1ea3i tin nh\u1eafn tr\u01b0\u1edbc \u0111\u00f3",
+  "ui.loadingEarlierMessages": "\u0110ang t\u1ea3i tin nh\u1eafn tr\u01b0\u1edbc \u0111\u00f3\u2026",
+  "ui.failedToLoadEarlierMessages":
+    "Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c tin nh\u1eafn tr\u01b0\u1edbc \u0111\u00f3",
+  "ui.transcriptLoadLimitReached":
+    "\u25b2 \u0110ang hi\u1ec3n th\u1ecb {count} tin nh\u1eafn, t\u1ed1i \u0111a ch\u1ebf \u0111\u1ed9 xem n\u00e0y gi\u1eef l\u1ea1i.",
   "ui.in": "trong",
   "ui.out": "ra",
   "ui.messageCopiedToClipboard": "\u0110\u00e3 sao ch\u00e9p tin nh\u1eafn v\u00e0o b\u1ed9 nh\u1edb t\u1ea1m!",

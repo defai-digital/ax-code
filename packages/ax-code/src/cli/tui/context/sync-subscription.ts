@@ -138,6 +138,7 @@ export function subscribeStoreBackedSyncEvents<
     TPart,
     TStore
   >["maxSessionMessages"]
+  sessionMessageLimit?: (sessionID: string) => number
   onHandlerError: (input: { type: string | undefined; error: string }) => void
   // Reactive batching boundary (Solid `batch`) injected by the caller so this
   // module stays framework-free per the TUI layering guardrails.
@@ -172,6 +173,7 @@ export function subscribeStoreBackedSyncEvents<
       resyncSession: input.resyncSession,
       onWarn: input.onWarn,
       maxSessionMessages: input.maxSessionMessages,
+      sessionMessageLimit: input.sessionMessageLimit,
     })
   }
 

@@ -841,6 +841,12 @@ export const messages = {
   "ui.ran": "\uff0c\u5df2\u57f7\u884c",
   "ui.showingTheMostRecent": "\u25b2 \u986f\u793a\u6700\u8fd1",
   "ui.messagesEarlierHistoryIsNotLoaded": "\u5247\u8a0a\u606f\uff0c\u8f03\u65e9\u7d00\u9304\u5c1a\u672a\u8f09\u5165",
+  "ui.showingLatestMessages": "\u25b2 \u6b63\u5728\u986f\u793a\u6700\u65b0\u7684 {count} \u5247\u8a0a\u606f\u3002",
+  "ui.loadEarlierMessages": "\u8f09\u5165\u8f03\u65e9\u7684\u8a0a\u606f",
+  "ui.loadingEarlierMessages": "\u6b63\u5728\u8f09\u5165\u8f03\u65e9\u7684\u8a0a\u606f\u2026",
+  "ui.failedToLoadEarlierMessages": "\u7121\u6cd5\u8f09\u5165\u8f03\u65e9\u7684\u8a0a\u606f",
+  "ui.transcriptLoadLimitReached":
+    "\u25b2 \u6b63\u5728\u986f\u793a {count} \u5247\u8a0a\u606f\uff0c\u5df2\u9054\u6b64\u6aa2\u8996\u7684\u8f09\u5165\u4e0a\u9650\u3002",
   "ui.in": "\u65bc",
   "ui.out": "\u8f38\u51fa",
   "ui.messageCopiedToClipboard": "\u8a0a\u606f\u5df2\u8907\u88fd\u5230\u526a\u8cbc\u7c3f\uff01",

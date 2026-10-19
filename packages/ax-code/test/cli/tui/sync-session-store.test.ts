@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  applyEarlierMessagePage,
   applySessionDeleteCleanup,
   applySessionLeavePrune,
   applySessionSyncEnrichment,
@@ -549,5 +550,120 @@ describe("tui sync session store", () => {
     expect(store.permission.ses_keep).toEqual([{ id: "p1" }])
     expect(store.message.ses_keep).toEqual([{ id: "msg_keep" }])
     expect(store.part.msg_keep).toEqual([{ id: "part_keep" }])
+  })
+})
+
+describe("admitted transcript history", () => {
+  const page = (start: number, length: number) =>
+    Array.from({ length }, (_, i) => ({
+      info: { id: `msg_${String(start + i).padStart(4, "0")}` },
+      parts: [{ id: `part_${start + i}`, text: "stored" }],
+    }))
+  function state() {
+    return {
+      session: [{ id: "session" }] as Array<{ id: string; revert?: { messageID: string } }>,
+      todo: {},
+      message: { session: page(100, 100).map((item) => item.info) },
+      part: {} as Record<string, Array<{ id: string; text: string }>>,
+      session_diff: {},
+      session_risk: {},
+      session_goal: {},
+      message_cursor: { session: "older" } as Record<string, string>,
+      message_window: { session: 100 } as Record<string, number>,
+      message_truncated: { session: true } as Record<string, boolean>,
+    }
+  }
+
+  test("a forced snapshot keeps the admitted 200-message window and adopts its cursor", () => {
+    const store = state()
+    store.message_window.session = 200
+    applySessionSyncSnapshot(store, "session", {
+      session: { id: "session" },
+      todo: [],
+      messages: page(0, 200),
+      diff: [],
+      history: { cursor: "next-page" },
+    })
+    expect(store.message.session).toHaveLength(200)
+    expect(store.part.msg_0000).toEqual(page(0, 1)[0].parts)
+    expect(store.message_cursor.session).toBe("next-page")
+    expect(store.message_truncated.session).toBe(true)
+  })
+
+  test("a snapshot whose oldest messages are evicted by live arrivals drops its cursor", () => {
+    const store = state()
+    // The fetch returned msg_0090..0189; msg_0190..0199 streamed in meanwhile.
+    applySessionSyncSnapshot(store, "session", {
+      session: { id: "session" },
+      todo: [],
+      messages: page(90, 100),
+      diff: [],
+      history: { cursor: "before-msg_0090" },
+    })
+    expect(store.message.session).toHaveLength(100)
+    expect(store.message.session[0].id).toBe("msg_0100")
+    expect(store.message_cursor.session).toBeUndefined()
+    expect(store.message_truncated.session).toBe(true)
+  })
+
+  test("prepends and deduplicates pages without replacing live parts", () => {
+    const store = state()
+    store.part.msg_0100 = [{ id: "stream", text: "live" }]
+    const older = [...page(0, 101), ...page(0, 1)]
+    expect(applyEarlierMessagePage(store, "session", older, "next-page", { maxMessages: 300 })).toEqual({
+      added: 100,
+      evicted: 0,
+    })
+    expect(store.message.session).toHaveLength(200)
+    expect(store.message.session[0].id).toBe("msg_0000")
+    expect(store.part.msg_0100).toEqual([{ id: "stream", text: "live" }])
+    expect(store.part.msg_0000).toEqual(older[0].parts)
+    expect(store.message_window.session).toBe(200)
+    expect(store.message_cursor.session).toBe("next-page")
+    expect(store.message_truncated.session).toBe(true)
+    expect(applyEarlierMessagePage(store, "session", older, undefined, { maxMessages: 300 })).toEqual({
+      added: 0,
+      evicted: 0,
+    })
+    expect(store.message_cursor.session).toBeUndefined()
+    expect(store.message_truncated.session).toBe(false)
+  })
+
+  test("byte eviction drops parts and invalidates the older-page cursor", () => {
+    const store = state()
+    const result = applyEarlierMessagePage(store, "session", page(0, 100), "next-page", {
+      maxMessages: 300,
+      maxBytes: 1,
+    })
+    expect(result).toEqual({ added: 100, evicted: 199 })
+    expect(store.part.msg_0000).toBeUndefined()
+    expect(store.message_cursor.session).toBeUndefined()
+    expect(store.message_truncated.session).toBe(true)
+    expect(store.message_window.session).toBe(200)
+  })
+
+  test("preserves the undo window despite count and byte budgets", () => {
+    const store = state()
+    store.session[0].revert = { messageID: "msg_0050" }
+    expect(
+      applyEarlierMessagePage(store, "session", page(0, 100), "next-page", {
+        maxMessages: 100,
+        maxBytes: 1,
+      }),
+    ).toEqual({ added: 100, evicted: 0 })
+    expect(store.message.session).toHaveLength(200)
+    expect(store.message_cursor.session).toBe("next-page")
+  })
+
+  test.each(["leave", "delete", "orphan"])("%s pruning removes cursor and admitted window", (kind) => {
+    const store = { ...state(), permission: {}, question: {}, session_status: {} }
+    if (kind === "leave") applySessionLeavePrune(store, "session")
+    if (kind === "delete") applySessionDeleteCleanup(store, "session")
+    if (kind === "orphan") {
+      store.session = []
+      pruneOrphanSessionRecords(store)
+    }
+    expect(store.message_cursor.session).toBeUndefined()
+    expect(store.message_window.session).toBeUndefined()
   })
 })

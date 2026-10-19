@@ -806,6 +806,12 @@ export const messages = {
   "ui.ran": ", executados",
   "ui.showingTheMostRecent": "\u25b2 Mostrando os mais recentes",
   "ui.messagesEarlierHistoryIsNotLoaded": "mensagens; o hist\u00f3rico anterior n\u00e3o est\u00e1 carregado",
+  "ui.showingLatestMessages": "\u25b2 Mostrando as {count} mensagens mais recentes.",
+  "ui.loadEarlierMessages": "Carregar mensagens anteriores",
+  "ui.loadingEarlierMessages": "Carregando mensagens anteriores\u2026",
+  "ui.failedToLoadEarlierMessages": "Falha ao carregar mensagens anteriores",
+  "ui.transcriptLoadLimitReached":
+    "\u25b2 Mostrando {count} mensagens, o m\u00e1ximo que esta exibi\u00e7\u00e3o mant\u00e9m.",
   "ui.in": "em",
   "ui.out": "sa\u00edda",
   "ui.messageCopiedToClipboard": "Mensagem copiada para a \u00e1rea de transfer\u00eancia!",
