@@ -603,18 +603,34 @@ export namespace Worktree {
       : ["worktree", "add", "--no-checkout", "-b", info.branch, info.directory]
     if (startPoint && !options.borrowed) args.push(StartPoint.parse(startPoint))
     // Mark a borrowed branch before git publishes the worktree, so no window
-    // exists in which it could be treated as owned. The mark stays on failure:
-    // it only ever protects the branch.
+    // exists in which it could be treated as owned. A mark this call added is
+    // withdrawn when git refuses the worktree (for example the branch is
+    // checked out elsewhere), so a failed borrow does not pin the branch. The
+    // owned mark is written under the same lock, right after git creates the
+    // branch.
     const created = await withBranchLock(async () => {
+      const markedHere = options.borrowed && (await branchFlag(info.branch, BORROWED_KEY)) === "absent"
       if (options.borrowed) await setBranchFlag(info.branch, BORROWED_KEY)
-      return git(args, { cwd: Instance.worktree })
+      const result = await git(args, { cwd: Instance.worktree })
+      if (result.exitCode !== 0) {
+        if (markedHere)
+          await git(["config", "--unset", `branch.${info.branch}.${BORROWED_KEY}`], { cwd: Instance.worktree })
+        return result
+      }
+      // A failure here is retried and surfaced below, outside the lock.
+      if (!options.borrowed) await setBranchFlag(info.branch, OWNED_KEY).catch(() => undefined)
+      return result
     })
     if (created.exitCode !== 0) {
       throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
     }
 
     try {
-      if (!options.borrowed) await setBranchFlag(info.branch, OWNED_KEY)
+      // Unflagged, a new non-prefixed branch would merely be kept on removal;
+      // verify the mark so ownership stays exact.
+      if (!options.borrowed && (await branchFlag(info.branch, OWNED_KEY)) !== "set") {
+        await setBranchFlag(info.branch, OWNED_KEY)
+      }
       await Project.addSandbox(Instance.project.id, info.directory)
     } catch (err) {
       log.warn("failed to record worktree in database; rolling back git worktree", {
@@ -765,8 +781,30 @@ export namespace Worktree {
 
   // ADR-260: creates keyed by client operation ID, newest last, bounded.
   const MAX_OPERATIONS = 256
-  const operations = new Map<string, Promise<Info>>()
+  const operations = new Map<string, { request: string; pending: Promise<Info> }>()
   const settledOperations = new Set<string>()
+
+  // The request an operation ID was first used with: reusing the ID for a
+  // different worktree is a caller bug, not a retry.
+  function operationRequest(input: CreateInput) {
+    const { operationId: _operationId, ...request } = input
+    return JSON.stringify(
+      Object.keys(request)
+        .sort()
+        .map((key) => [key, request[key as keyof typeof request]]),
+    )
+  }
+
+  async function forgetOperationsFor(directory: string) {
+    const key = await canonical(directory)
+    for (const [id, entry] of operations) {
+      const info = await entry.pending.catch(() => undefined)
+      if (info && (await canonical(info.directory)) === key) {
+        operations.delete(id)
+        settledOperations.delete(id)
+      }
+    }
+  }
 
   export const create = fn(CreateInput.optional(), async (input) => {
     if (!input?.operationId) return createNow(input)
@@ -776,10 +814,16 @@ export namespace Worktree {
     const repository =
       common.exitCode === 0 ? await realOnDiskPath(outputText(common.stdout).trim()) : Instance.worktree
     const key = `${repository}\u0000${input.operationId}`
+    const request = operationRequest(input)
     const known = operations.get(key)
-    if (known) return known
+    if (known) {
+      if (known.request !== request) {
+        throw new CreateFailedError({ message: `Operation ${input.operationId} was already used for another worktree` })
+      }
+      return known.pending
+    }
     const pending = createNow(input)
-    operations.set(key, pending)
+    operations.set(key, { request, pending })
     pending.then(
       () => {
         settledOperations.add(key)
@@ -792,7 +836,7 @@ export namespace Worktree {
       },
       () => {
         // A failed create may be retried with the same ID.
-        if (operations.get(key) === pending) operations.delete(key)
+        if (operations.get(key)?.pending === pending) operations.delete(key)
       },
     )
     return pending
@@ -837,6 +881,8 @@ export namespace Worktree {
     // about to remove. A rapid create→remove cycle would otherwise
     // run the user's start script in a now-deleted directory.
     cancelPendingStartScripts(input.directory)
+    // A removed worktree must not be returned again for its operation ID.
+    await forgetOperationsFor(input.directory)
 
     const directory = await canonical(input.directory)
     // Case-preserving spelling for the Instance cache, which keys on
