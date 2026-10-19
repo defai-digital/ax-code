@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "node:path"
 import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -14,6 +14,16 @@ import { CodeNodeID, CodeFileID } from "../../src/code-intelligence/id"
 import type { ProjectID } from "../../src/project/schema"
 
 Log.init({ print: false })
+
+afterEach(async () => {
+  try {
+    await Instance.disposeAll()
+  } finally {
+    // Each test owns its spies. Retained indexFiles calls from a previous
+    // test must not affect the next test's exact batch-count assertions.
+    vi.restoreAllMocks()
+  }
+})
 
 // These tests exercise the Bus-driven debounce + queue logic in
 // CodeGraphWatcher directly. They do not require a running LSP server
