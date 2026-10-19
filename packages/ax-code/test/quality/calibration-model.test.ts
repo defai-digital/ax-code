@@ -169,4 +169,72 @@ describe("QualityCalibrationModel", () => {
     expect(model.minBinCount).toBe(5)
     expect(model.laplaceAlpha).toBe(2)
   })
+
+  test("keeps labels that omit the optional session id in the benchmark split", () => {
+    const items: ProbabilisticRollout.ReplayItem[] = [
+      replayItem({ artifactID: "a", sessionID: "ses_1", createdAt: "2026-04-20T00:00:00.000Z", confidence: 0.1 }),
+      replayItem({ artifactID: "b", sessionID: "ses_2", createdAt: "2026-04-20T00:01:00.000Z", confidence: 0.9 }),
+    ]
+    const labels: ProbabilisticRollout.Label[] = [
+      {
+        ...label({ labelID: "lbl_a", artifactID: "a", sessionID: "ses_1", outcome: "dismissed" }),
+        sessionID: undefined,
+      },
+      {
+        ...label({ labelID: "lbl_b", artifactID: "b", sessionID: "ses_2", outcome: "accepted" }),
+        sessionID: undefined,
+      },
+    ]
+
+    const benchmark = QualityCalibrationModel.benchmark(items, labels, {
+      ratio: 0.5,
+      binCount: 1,
+      minBinCount: 1,
+      laplaceAlpha: 1,
+    })
+
+    expect(benchmark.model.training.labeledItems).toBe(1)
+    expect(benchmark.baselineSummary.labeledItems).toBe(1)
+  })
+
+  test("clamps a negative laplace alpha instead of crashing training", () => {
+    const items: ProbabilisticRollout.ReplayItem[] = [
+      replayItem({ artifactID: "a", sessionID: "ses_1", createdAt: "2026-04-20T00:00:00.000Z", confidence: 0.9 }),
+    ]
+    const labels: ProbabilisticRollout.Label[] = [
+      label({ labelID: "lbl_a", artifactID: "a", sessionID: "ses_1", outcome: "accepted" }),
+    ]
+
+    const model = QualityCalibrationModel.train(items, labels, {
+      binCount: 1,
+      minBinCount: 1,
+      laplaceAlpha: -1,
+    })
+
+    expect(model.laplaceAlpha).toBe(0)
+    expect(() => QualityCalibrationModel.ModelFile.parse(model)).not.toThrow()
+  })
+
+  test("keeps every calibration bin at or above the minimum count", () => {
+    const items: ProbabilisticRollout.ReplayItem[] = Array.from({ length: 10 }, (_, index) =>
+      replayItem({
+        artifactID: `item_${index}`,
+        sessionID: "ses_1",
+        createdAt: `2026-04-20T00:00:${String(index).padStart(2, "0")}.000Z`,
+        confidence: index / 10,
+      }),
+    )
+    const labels: ProbabilisticRollout.Label[] = items.map((item, index) =>
+      label({
+        labelID: `lbl_${index}`,
+        artifactID: item.artifactID,
+        sessionID: "ses_1",
+        outcome: index % 2 === 0 ? "accepted" : "dismissed",
+      }),
+    )
+
+    const model = QualityCalibrationModel.train(items, labels, { binCount: 3, minBinCount: 3 })
+
+    expect(model.groups[0]?.bins.map((bin) => bin.count)).toEqual([4, 3, 3])
+  })
 })

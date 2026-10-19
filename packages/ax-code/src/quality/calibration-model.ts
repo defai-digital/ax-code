@@ -37,7 +37,7 @@ export namespace QualityCalibrationModel {
     source: z.string(),
     trainedAt: z.string(),
     globalPrior: z.number(),
-    laplaceAlpha: z.number(),
+    laplaceAlpha: z.number().nonnegative(),
     requestedBinCount: z.number().int().positive(),
     minBinCount: z.number().int().positive(),
     training: z.object({
@@ -113,12 +113,18 @@ export namespace QualityCalibrationModel {
     if (records.length === 0) return []
     const maxBinsByCount = Math.max(1, Math.floor(records.length / input.minBinCount) || 1)
     const actualBinCount = Math.max(1, Math.min(input.requestedBinCount, maxBinsByCount, records.length))
-    const chunkSize = Math.max(input.minBinCount, Math.ceil(records.length / actualBinCount))
     const sorted = [...records].sort((a, b) => a.confidence - b.confidence)
     const bins: CalibrationBin[] = []
+    const baseSize = Math.floor(sorted.length / actualBinCount)
+    const remainder = sorted.length % actualBinCount
+    let startIndex = 0
 
-    for (let startIndex = 0; startIndex < sorted.length; startIndex += chunkSize) {
-      const chunk = sorted.slice(startIndex, Math.min(sorted.length, startIndex + chunkSize))
+    for (let binIndex = 0; binIndex < actualBinCount; binIndex++) {
+      // Spread the remainder over the first bins so every bin keeps at least
+      // floor(n / bins) records, which is >= minBinCount by construction.
+      const size = baseSize + (binIndex < remainder ? 1 : 0)
+      const chunk = sorted.slice(startIndex, startIndex + size)
+      startIndex += size
       if (chunk.length === 0) continue
       const positives = chunk.filter((record) => record.actualPositive).length
       const negatives = chunk.length - positives
@@ -265,7 +271,7 @@ export namespace QualityCalibrationModel {
   ): ModelFile {
     const requestedBinCount = Math.max(1, Math.floor(finiteOption(options?.binCount, 5)))
     const minBinCount = Math.max(1, Math.floor(finiteOption(options?.minBinCount, 5)))
-    const laplaceAlpha = finiteOption(options?.laplaceAlpha, 2)
+    const laplaceAlpha = Math.max(0, finiteOption(options?.laplaceAlpha, 2))
     const records = trainingRecords(items, labels)
     const prior = globalPrior(records)
     const grouped = new Map<string, TrainingRecord[]>()
@@ -372,10 +378,21 @@ export namespace QualityCalibrationModel {
     const nextSplit = split(items, labels, options?.ratio)
     const trainSessions = new Set(nextSplit.trainSessionIDs)
     const evalSessions = new Set(nextSplit.evalSessionIDs)
+    // Labels may omit the optional sessionID; their item still identifies the
+    // session used by the split, so partition by that instead of dropping them.
+    const itemSessionByArtifactID = new Map(items.map((item) => [item.artifactID, item.sessionID]))
+    const labelSessionID = (label: ProbabilisticRollout.Label) =>
+      itemSessionByArtifactID.get(label.artifactID) ?? label.sessionID
     const trainItems = items.filter((item) => trainSessions.has(item.sessionID))
-    const trainLabels = labels.filter((label) => label.sessionID && trainSessions.has(label.sessionID))
+    const trainLabels = labels.filter((label) => {
+      const sessionID = labelSessionID(label)
+      return sessionID !== undefined && trainSessions.has(sessionID)
+    })
     const evalItems = items.filter((item) => evalSessions.has(item.sessionID))
-    const evalLabels = labels.filter((label) => label.sessionID && evalSessions.has(label.sessionID))
+    const evalLabels = labels.filter((label) => {
+      const sessionID = labelSessionID(label)
+      return sessionID !== undefined && evalSessions.has(sessionID)
+    })
 
     const model = train(trainItems, trainLabels, {
       source: options?.source,
