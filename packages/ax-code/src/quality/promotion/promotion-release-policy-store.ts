@@ -113,8 +113,16 @@ export namespace QualityPromotionReleasePolicyStore {
 
     const compatibilityApproval = await QualityPromotionApprovalPolicyStore.resolve({ projectID })
     const compatibilitySource = compatibilityApproval.source === "explicit" ? "default" : compatibilityApproval.source
+    // PolicyOverrides names the allow-warn rule `allowWarn`; passing the raw
+    // rules object would drop `allow_warn` and silently fall back to the
+    // release-policy default instead of the persisted approval policy.
     const compatibilityPolicy = QualityPromotionReleasePolicy.defaults({
-      approval: compatibilityApproval.policy.rules,
+      approval: {
+        none: compatibilityApproval.policy.rules.none,
+        allowWarn: compatibilityApproval.policy.rules.allow_warn,
+        force: compatibilityApproval.policy.rules.force,
+        reentry: compatibilityApproval.policy.rules.reentry,
+      },
     })
     return Resolution.parse({
       schemaVersion: 1,

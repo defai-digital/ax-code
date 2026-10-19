@@ -92,6 +92,7 @@ describe("QualityPromotionReleasePolicyStore", () => {
       await QualityPromotionApprovalPolicyStore.setProject(
         "release-project-compat",
         QualityPromotionApprovalPolicy.defaults({
+          allowWarn: { minimumApprovals: 2, minimumRole: "director" },
           force: { minimumApprovals: 3, minimumRole: "director" },
         }),
       )
@@ -99,6 +100,8 @@ describe("QualityPromotionReleasePolicyStore", () => {
       const resolved = await QualityPromotionReleasePolicyStore.resolve({ projectID: "release-project-compat" })
       expect(resolved.source).toBe("project")
       expect(resolved.compatibilityApprovalSource).toBe("project")
+      expect(resolved.policy.approval.rules.allow_warn.minimumApprovals).toBe(2)
+      expect(resolved.policy.approval.rules.allow_warn.minimumRole).toBe("director")
       expect(resolved.policy.approval.rules.force.minimumApprovals).toBe(3)
       expect(resolved.policy.approval.rules.force.minimumRole).toBe("director")
       expect(resolved.policy.watch.minRecords).toBe(QualityPromotionReleasePolicy.DEFAULT_WATCH_MIN_RECORDS)
