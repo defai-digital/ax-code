@@ -36,6 +36,15 @@
       "manifestSha256": "e52cd01c42631fe0b31fbf66390881e580079ab4a2196f09f1de1c9e87020954",
       "verificationReceipt": "https://models.ax-code.app/AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP8-MTP/4a24d2afcda0b7a55acbbd221be9a0cdd6e42292/mirror-receipt.json",
       "verifiedAt": "2026-10-20T02:40:10.493Z"
+    },
+    {
+      "repo": "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP",
+      "revision": "edae19529e9a41d34573f913e5d07374aa65781a",
+      "manifestUrl": "https://models.ax-code.app/AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP/edae19529e9a41d34573f913e5d07374aa65781a/mirror-manifest.json",
+      "signatureUrl": "https://models.ax-code.app/AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP/edae19529e9a41d34573f913e5d07374aa65781a/mirror-manifest.json.minisig",
+      "manifestSha256": "088e6f7238bc82675eb5603d7fa017f74e03ffcfd2e211093ddc907adb51247a",
+      "verificationReceipt": "https://models.ax-code.app/AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP/edae19529e9a41d34573f913e5d07374aa65781a/mirror-receipt.json",
+      "verifiedAt": "2026-10-20T03:28:52.080Z"
     }
   ]
 }
