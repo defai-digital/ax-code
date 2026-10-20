@@ -120,6 +120,14 @@ jobs:
           node .github/scripts/sdk-package-registry.mjs verify
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify private package visibility
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VISIBILITY="$(gh api orgs/defai-digital/packages/npm/ax-code-sdk --jq .visibility)"
+          test "$VISIBILITY" = private
       - name: Install SDK from registry with read-only package access
         shell: bash
         env:
