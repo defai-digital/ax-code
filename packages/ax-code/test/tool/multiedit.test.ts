@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -9,6 +9,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Bus } from "../../src/bus"
 import { File } from "../../src/file"
 import { FileWatcher } from "../../src/file/watcher"
+import { Filesystem } from "../../src/util/filesystem"
 
 const ctx = {
   sessionID: SessionID.make("ses_test-multiedit"),
@@ -73,6 +74,48 @@ describe("tool.multiedit", () => {
         expect(await fs.readFile(second, "utf-8")).toBe("external update\n")
         expect(events).toContain("edited")
         expect(events).toContain("updated")
+      },
+    })
+  })
+
+  test("does not write after the turn is aborted during the final check", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "a.txt")
+    await fs.writeFile(file, "one\n", "utf-8")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await FileTime.read(ctx.sessionID, file)
+        const tool = await MultiEditTool.init()
+        const controller = new AbortController()
+        const originalRead = Filesystem.readText.bind(Filesystem)
+        let reads = 0
+        const readSpy = vi.spyOn(Filesystem, "readText").mockImplementation(async (p: string) => {
+          reads += 1
+          // The initial snapshot read and the final conflict check each read
+          // once; abort while the final check is in flight.
+          if (reads === 2) controller.abort()
+          return originalRead(p)
+        })
+        const events: string[] = []
+        const unsubscribe = Bus.subscribe(File.Event.Edited, () => events.push("edited"))
+        try {
+          await expect(
+            tool.execute(
+              {
+                filePath: file,
+                edits: [{ filePath: file, oldString: "one", newString: "ONE" }],
+              },
+              { ...ctx, abort: controller.signal } as any,
+            ),
+          ).rejects.toThrow(/abort/i)
+          expect(await fs.readFile(file, "utf-8")).toBe("one\n")
+          expect(events).toEqual([])
+        } finally {
+          unsubscribe()
+          readSpy.mockRestore()
+        }
       },
     })
   })

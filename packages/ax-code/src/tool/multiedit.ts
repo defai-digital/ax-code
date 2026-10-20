@@ -141,11 +141,15 @@ export const MultiEditTool = Tool.define("multiedit", {
         writeDeltas.set(file, { additions, deletions })
 
         await FileTime.withLock(file, async () => {
+          ctx.abort.throwIfAborted()
           await FileTime.assert(ctx.sessionID, file)
           const latest = await Filesystem.readText(file)
           if (latest !== prev) {
             throw new Error(`multiedit conflict: ${file} was modified between read and write`)
           }
+          // The read above is the last async boundary before the write; a
+          // cancelled turn must not keep writing after the permission prompt.
+          ctx.abort.throwIfAborted()
           await Filesystem.write(file, next, undefined, { followSymlink: true })
           writtenFiles.add(file)
           await notifyFileEdited(file, "change")

@@ -71,6 +71,14 @@ async function fileMode(filePath: string): Promise<number | undefined> {
     .catch(() => undefined)
 }
 
+/** Literal link target when `filePath` is a symlink; undefined for regular files. */
+async function fileSymlink(filePath: string): Promise<string | undefined> {
+  return fs
+    .lstat(filePath)
+    .then((stats) => (stats.isSymbolicLink() ? fs.readlink(filePath) : undefined))
+    .catch(() => undefined)
+}
+
 const PatchParams = z.object({
   patchText: z
     .string()
@@ -119,6 +127,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       /** Source/destination modes captured at verification for move/rollback. */
       sourceMode?: number
       moveMode?: number
+      /** Delete rollback must recreate the link, not a regular file holding its target. */
+      sourceLink?: string
       /** Source and destination resolve to the same file (case-only rename). */
       moveSameFile?: boolean
       diff: string
@@ -287,6 +297,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           })
           const deleteDiff = trimDiff((await diffPreview(filePath, contentToDelete, "", ctx.abort)).diff)
           const sourceMode = await fileMode(filePath)
+          const sourceLink = await fileSymlink(filePath)
 
           // Count actual lines, not `split("\n").length`. For content
           // "hello\nworld\n", split yields ["hello", "world", ""]
@@ -307,6 +318,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             type: "delete",
             existed: true,
             sourceMode,
+            sourceLink,
             diff: deleteDiff,
             additions: 0,
             deletions,
@@ -400,10 +412,35 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             continue
           }
           await FileTime.withLock(change.filePath, async () => {
+            const current = await readFileIfExists(change.filePath)
             if (!change.existed && change.type === "add") {
-              await fs.unlink(change.filePath).catch(() => undefined)
+              if (current === undefined) return
+              if (current !== change.newContent)
+                throw new Error(`Cannot roll back apply_patch: ${change.filePath} was modified externally`)
+              await fs.unlink(change.filePath)
               return
             }
+            if (change.type === "delete") {
+              if (current === undefined) {
+                await fs.mkdir(path.dirname(change.filePath), { recursive: true })
+                // A deleted symlink must come back as a link; writing its
+                // target's text would replace the link with a regular file.
+                if (change.sourceLink !== undefined) await fs.symlink(change.sourceLink, change.filePath)
+                else
+                  await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, {
+                    followSymlink: true,
+                  })
+                return
+              }
+              if (current === change.oldContent) return
+              throw new Error(`Cannot roll back apply_patch: ${change.filePath} was recreated after the delete`)
+            }
+            // The change may fail before its write (current === oldContent) or
+            // after it (current === newContent). Anything else is an external
+            // edit that rollback must not overwrite.
+            if (current === change.oldContent) return
+            if (current !== change.newContent)
+              throw new Error(`Cannot roll back apply_patch: ${change.filePath} was modified externally`)
             await fs.mkdir(path.dirname(change.filePath), { recursive: true })
             await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
           })

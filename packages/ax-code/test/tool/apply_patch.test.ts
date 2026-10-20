@@ -861,6 +861,82 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("rollback preserves a file edited after a later apply fails", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const first = path.join(fixture.path, "first.txt")
+        const second = path.join(fixture.path, "second.txt")
+        await writeAndTrack(first, "one\n")
+        await writeAndTrack(second, "two\n")
+
+        const originalWrite = Filesystem.write.bind(Filesystem)
+        const writeSpy = vi.spyOn(Filesystem, "write").mockImplementation(async (p: string, c: any, m?: number) => {
+          if (p === second) {
+            // An external editor saves the already-updated file before the
+            // later hunk fails and rollback starts.
+            await fs.writeFile(first, "user edit\n", "utf-8")
+            throw new Error("disk full")
+          }
+          await originalWrite(p, c, m)
+        })
+
+        try {
+          const patchText =
+            "*** Begin Patch\n*** Update File: first.txt\n@@\n-one\n+ONE\n*** Update File: second.txt\n@@\n-two\n+TWO\n*** End Patch"
+
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("rollback was incomplete")
+          expect(await fs.readFile(first, "utf-8")).toBe("user edit\n")
+          expect(await fs.readFile(second, "utf-8")).toBe("two\n")
+        } finally {
+          writeSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("rollback recreates a deleted symlink instead of materializing its target", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "target.txt")
+        const link = path.join(fixture.path, "link.txt")
+        const second = path.join(fixture.path, "second.txt")
+        await writeAndTrack(target, "target\n")
+        await fs.symlink("target.txt", link)
+        await FileTime.read(SESSION, link)
+        await writeAndTrack(second, "second\n")
+
+        const originalUnlink = fs.unlink
+        const unlink = vi.spyOn(fs, "unlink").mockImplementation(async (file) => {
+          if (file === second) throw new Error("Injected delete failure")
+          await originalUnlink(file)
+        })
+        try {
+          await expect(
+            execute(
+              { patchText: "*** Begin Patch\n*** Delete File: link.txt\n*** Delete File: second.txt\n*** End Patch" },
+              ctx,
+            ),
+          ).rejects.toThrow("Injected delete failure")
+
+          expect((await fs.lstat(link)).isSymbolicLink()).toBe(true)
+          expect(await fs.readlink(link)).toBe("target.txt")
+          expect(await fs.readFile(target, "utf8")).toBe("target\n")
+          expect(await fs.readFile(second, "utf8")).toBe("second\n")
+        } finally {
+          unlink.mockRestore()
+        }
+      },
+    })
+  })
+
   test("supports end of file anchor", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
