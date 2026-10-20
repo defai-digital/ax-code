@@ -66,6 +66,14 @@ jobs:
         run: |
           node .github/scripts/sdk-provenance.mjs sign
           node .github/scripts/sdk-provenance.mjs verify
+      - name: Preserve signed candidate before upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-candidate
+          path: ${{ env.SDK_ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: true
       - name: Configure scoped package credentials
         shell: bash
         run: |

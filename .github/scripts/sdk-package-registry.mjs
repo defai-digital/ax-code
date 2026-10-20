@@ -53,34 +53,56 @@ export async function sourceReceipt(tag) {
   }
 }
 
-export async function registryRequest(url, token, fetcher = fetch) {
+export async function registryRequest(url, token, fetcher = fetch, redirect = "error") {
   const target = new URL(url)
   assert.equal(target.origin, registry, "Refuse to send package token to another registry")
   assert(!target.username && !target.password && !target.hash)
   assert(token, "NODE_AUTH_TOKEN is required")
   const response = await fetcher(target, {
     headers: { authorization: `Bearer ${token}` },
-    redirect: "error",
+    redirect,
     signal: AbortSignal.timeout(30_000),
   })
   return response
+}
+
+export async function downloadPackage(url, token, fetcher = fetch) {
+  let target = new URL(url)
+  assert.equal(target.origin, registry, "Package download must start at the registry")
+  for (let redirects = 0; redirects <= 3; redirects++) {
+    assert(!target.username && !target.password && !target.hash)
+    assert(
+      target.origin === registry || target.origin === "https://pkg-npm.githubusercontent.com",
+      "Unexpected package download host",
+    )
+    const response =
+      target.origin === registry
+        ? await registryRequest(target, token, fetcher, "manual")
+        : await fetcher(target, { headers: {}, redirect: "manual", signal: AbortSignal.timeout(30_000) })
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response
+    const location = response.headers.get("location")
+    assert(location, "Missing package redirect location")
+    await response.body?.cancel()
+    target = new URL(location, target)
+  }
+  throw new Error("Package redirect limit exceeded")
 }
 
 export async function verifyRegistry(receipt, candidate, token, fetcher = fetch) {
   assert.equal(receipt.registry, registry)
   assert.equal(receipt.name, "@defai-digital/ax-code-sdk")
   validateTag(`sdk-v${receipt.version}`, receipt.version)
-  const metadata = await registryRequest(
-    `${registry}/${encodeURIComponent(receipt.name)}/${receipt.version}`,
-    token,
-    fetcher,
-  )
+  const metadata = await registryRequest(`${registry}/${encodeURIComponent(receipt.name)}`, token, fetcher)
   assert(metadata.ok, `Package metadata read failed: HTTP ${metadata.status}`)
-  const manifest = await metadata.json()
+  // GitHub Packages exposes a full packument; its /<version> route returns 405.
+  const packument = await metadata.json()
+  assert.equal(packument.name, receipt.name)
+  const manifest = packument.versions?.[receipt.version]
+  assert(manifest, "Published SDK version is missing from registry metadata")
   assert.equal(manifest.name, receipt.name)
   assert.equal(manifest.version, receipt.version)
   assert.equal(manifest.dist?.integrity, receipt.integrity, "Published SDK integrity mismatch")
-  const response = await registryRequest(manifest.dist.tarball, token, fetcher)
+  const response = await downloadPackage(manifest.dist.tarball, token, fetcher)
   assert(response.ok, `Package tarball read failed: HTTP ${response.status}`)
   const bytes = Buffer.from(await response.arrayBuffer())
   assert.equal(`sha512-${createHash("sha512").update(bytes).digest("base64")}`, receipt.integrity)

@@ -87,7 +87,25 @@ export async function pack() {
       await fs.copyFile(path.join(packageRoot, name), path.join(stage, name))
     await fs.copyFile(path.join(repoRoot, "LICENSE"), path.join(stage, "LICENSE"))
     await fs.writeFile(path.join(stage, "package.json"), JSON.stringify(manifest, null, 2) + "\n")
-    execFileSync("pnpm", ["pack", "--pack-destination", artifactDir], { cwd: stage, stdio: "inherit" })
+    // A temporary directory has no packageManager field. Invoking the global
+    // shim there can select a different pnpm and produce different gzip bytes.
+    const pnpmExecutable = process.env.npm_execpath
+    assert(
+      pnpmExecutable && path.isAbsolute(pnpmExecutable),
+      "Run packaging through pnpm run pack:github or test:tarball",
+    )
+    const expected = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"))
+      .packageManager.split("@")
+      .at(-1)
+    const actual = execFileSync(process.execPath, [pnpmExecutable, "--version"], {
+      cwd: stage,
+      encoding: "utf8",
+    }).trim()
+    assert.equal(actual, expected, "SDK packaging must use the pinned pnpm version")
+    execFileSync(process.execPath, [pnpmExecutable, "pack", "--pack-destination", artifactDir], {
+      cwd: stage,
+      stdio: "inherit",
+    })
     const filename = tarballName(manifest.version)
     const bytes = await fs.readFile(path.join(artifactDir, filename))
     const receipt = {

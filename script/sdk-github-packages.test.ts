@@ -3,7 +3,12 @@ import { readFileSync } from "node:fs"
 import { describe, expect, test, vi } from "vitest"
 import path from "node:path"
 import { artifactDir, packageRoot, publicManifest } from "../packages/sdk/js/script/github-package.mjs"
-import { registryRequest, validateTag, verifyRegistry } from "../.github/scripts/sdk-package-registry.mjs"
+import {
+  downloadPackage,
+  registryRequest,
+  validateTag,
+  verifyRegistry,
+} from "../.github/scripts/sdk-package-registry.mjs"
 
 const source = {
   name: "@ax-code/sdk",
@@ -65,20 +70,28 @@ describe("authenticated SDK readback", () => {
     dist: { integrity: receipt.integrity, tarball: "https://npm.pkg.github.com/download/sdk", ...dist },
   })
   test("accepts only exact candidate integrity and downloaded bytes", async () => {
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(metadata())).mockResolvedValueOnce(new Response(bytes))
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ name: receipt.name, versions: { [receipt.version]: metadata() } }))
+      .mockResolvedValueOnce(new Response(bytes))
     expect(await verifyRegistry(receipt, bytes, "fixture-token", fetcher)).toEqual(bytes)
+    expect(new URL(fetcher.mock.calls[0][0]).pathname).toBe("/%40defai-digital%2Fax-code-sdk")
     expect(fetcher.mock.calls[0][1]).toMatchObject({
       redirect: "error",
       headers: { authorization: "Bearer fixture-token" },
     })
   })
   test("fails closed on mismatched integrity or tarball bytes", async () => {
-    const wrongIntegrity = vi.fn().mockResolvedValue(Response.json(metadata({ integrity: "sha512-other" })))
+    const wrongIntegrity = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({ name: receipt.name, versions: { [receipt.version]: metadata({ integrity: "sha512-other" }) } }),
+      )
     await expect(verifyRegistry(receipt, bytes, "fixture-token", wrongIntegrity)).rejects.toThrow("integrity mismatch")
     expect(wrongIntegrity).toHaveBeenCalledTimes(1)
     const wrongBytes = vi
       .fn()
-      .mockResolvedValueOnce(Response.json(metadata()))
+      .mockResolvedValueOnce(Response.json({ name: receipt.name, versions: { [receipt.version]: metadata() } }))
       .mockResolvedValueOnce(new Response("different bytes"))
     await expect(verifyRegistry(receipt, bytes, "fixture-token", wrongBytes)).rejects.toThrow()
   })
@@ -93,8 +106,15 @@ describe("authenticated SDK readback", () => {
       "another registry",
     )
     expect(fetcher).not.toHaveBeenCalled()
-    const redirected = vi.fn().mockResolvedValueOnce(Response.json(metadata({ tarball: "https://example.com/steal" })))
-    await expect(verifyRegistry(receipt, bytes, "fixture-token", redirected)).rejects.toThrow("another registry")
+    const redirected = vi.fn().mockResolvedValueOnce(
+      Response.json({
+        name: receipt.name,
+        versions: { [receipt.version]: metadata({ tarball: "https://example.com/steal" }) },
+      }),
+    )
+    await expect(verifyRegistry(receipt, bytes, "fixture-token", redirected)).rejects.toThrow(
+      "must start at the registry",
+    )
     expect(redirected).toHaveBeenCalledTimes(1)
   })
 })
@@ -126,3 +146,31 @@ test("release evidence stays outside the SDK build scratch directory", () => {
   expect(workflow).toContain("SDK_ARTIFACT_DIR: .tmp/sdk-github-package")
   expect(workflow).not.toContain("packages/sdk/js/.tmp/github-package")
 })
+
+test("GitHub CDN redirects receive no package credential", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://pkg-npm.githubusercontent.com/package?signed=fixture" },
+      }),
+    )
+    .mockResolvedValueOnce(new Response("tarball"))
+  const response = await downloadPackage("https://npm.pkg.github.com/download/sdk", "fixture-token", fetcher)
+  expect(await response.text()).toBe("tarball")
+  expect(fetcher.mock.calls[0][1].headers).toEqual({ authorization: "Bearer fixture-token" })
+  expect(fetcher.mock.calls[1][1].headers).toEqual({})
+  expect(fetcher.mock.calls.every(([, options]) => options.redirect === "manual")).toBe(true)
+})
+
+test.each(["https://example.com/package", "http://pkg-npm.githubusercontent.com/package"])(
+  "rejects untrusted package redirects %s",
+  async (location) => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 302, headers: { location } }))
+    await expect(downloadPackage("https://npm.pkg.github.com/download/sdk", "fixture-token", fetcher)).rejects.toThrow(
+      "Unexpected package download host",
+    )
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  },
+)
