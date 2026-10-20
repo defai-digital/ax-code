@@ -339,8 +339,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         const oldestBefore = store.message[sessionID]?.[0]?.id
         setStore("message_window", sessionID, Math.min(loaded + MAX_SESSION_MESSAGES, MAX_LOADED_SESSION_MESSAGES))
         await sessionSync.sync(sessionID, { force: true })
-        // No older message survived the refetch (the byte budget evicted it
-        // again): report the limit so the action does not loop silently.
+        // No older message survived the reload because the byte budget evicted
+        // it again: report the limit so the action does not loop silently.
         const oldestAfter = store.message[sessionID]?.[0]?.id
         return oldestAfter && oldestBefore && oldestAfter >= oldestBefore ? "limit" : "loaded"
       },
