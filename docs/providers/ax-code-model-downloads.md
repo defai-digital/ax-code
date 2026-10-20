@@ -28,4 +28,6 @@ R2 availability applies only to the exact revision above. A missing or stale mir
 
 HF remains the active download source. R2 is not assumed faster: multi-GB model shards may exceed Cloudflare CDN cacheable-object limits. Mirror publication requires review of redistribution terms, signed manifests, file sizes and SHA-256 digests, and a verified download receipt. Preserve the selected HF cache location; existing local model directories can also be imported with AX Engine.
 
+If Hugging Face is unavailable and the R2 mirror column links a manifest, download that manifest and every file it lists from https://download.ax-code.com/ax-code-models/. The copy for a revision lives under that prefix and is not mixed with release archives. Check each SHA-256, keep the files in one directory, and register them with `ax-code providers ax-engine prepare --model-path <dir>`. AX Code does not switch its own downloader to R2.
+
 See the [publication workflow](model-download-publication.md) for updates. A publisher notification triggers a reviewable documentation proposal through the model-downloads workflow. Scheduled refreshes catch missed notifications. Runtime admission, R2 publication, and merging the proposal remain separate reviewed actions.

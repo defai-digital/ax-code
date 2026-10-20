@@ -29,4 +29,18 @@ Without `--refresh`, generation and checking use only checked-in data. The runti
 
 Add R2 records only after redistribution review and exact-byte verification. Each record requires the source repository and exact commit, a production HTTPS manifest URL, detached signature URL, manifest SHA-256, public verification receipt URL and verification time. Links must use the approved download hosts. A mirror for another revision is shown as unavailable for the current model. Never infer R2 availability from the HF upload alone, and never overwrite a versioned manifest or receipt.
 
-Page publication does not change the runtime download source or publish model weights. Review mirror availability and native compatibility separately before recommending a download to users.
+Page publication does not change the runtime download source. Review mirror availability and native compatibility separately before recommending a download to users.
+
+## One-way R2 folder
+
+Published collection revisions are copied from Hugging Face into the `ax-code-models/` prefix of the public download bucket. Release archives stay outside that prefix. The public base URL is `https://download.ax-code.com/ax-code-models/<repository>/<revision>/`.
+
+The copy is one way. It does not write to Hugging Face, and it does not delete or replace an object that is already stored. A newer Hugging Face revision is a new prefix; the previous prefix stays in place.
+
+When Hugging Face is unavailable, use the signed manifest linked from the [model download page](ax-code-model-downloads.md) for that exact revision. Download every listed file, reject a file whose SHA-256 differs, and register the directory:
+
+```bash
+ax-code providers ax-engine prepare --model-path <dir>
+```
+
+A row that says `Not published` does not have a public R2 copy yet.

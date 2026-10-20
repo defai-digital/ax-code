@@ -31,6 +31,8 @@ test("selected collection models show exact HF revisions and honest missing mirr
   expect(page).toContain(`https://huggingface.co/${repo}/tree/${revision}`)
   expect(page).toContain("| Selected |")
   expect(page).toContain("Not published")
+  expect(page).toContain("https://download.ax-code.com/ax-code-models/")
+  expect(page).toContain("ax-code providers ax-engine prepare --model-path <dir>")
   expect(page).not.toContain("https://download.ax-code.com/models/")
 })
 
