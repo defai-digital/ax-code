@@ -66,6 +66,40 @@ export function axEngineDownloadEnv(
 ): NodeJS.ProcessEnv {
   const python = resolveAxEnginePython(env, home)
   const sanitized = Env.sanitize(env)
+  // This is a trusted downloader, not an agent shell. Forward only its own
+  // credentials, and never send a Hub login to an arbitrary mirror endpoint.
+  let official = !env.HF_ENDPOINT?.trim()
+  if (!official) {
+    try {
+      const value = env.HF_ENDPOINT!.trim()
+      const endpoint = new URL(value)
+      official =
+        !/[\\\x00-\x20\x7f]/.test(value) &&
+        endpoint.protocol === "https:" &&
+        endpoint.hostname === "huggingface.co" &&
+        !endpoint.port &&
+        !endpoint.username &&
+        !endpoint.password &&
+        endpoint.pathname === "/" &&
+        !endpoint.search &&
+        !endpoint.hash
+    } catch {
+      official = false
+    }
+  }
+  if (official) {
+    for (const name of [
+      "HF_TOKEN",
+      "HUGGING_FACE_HUB_TOKEN",
+      "HF_TOKEN_PATH",
+      "HF_HUB_DISABLE_IMPLICIT_TOKEN",
+    ] as const) {
+      if (env[name] !== undefined) sanitized[name] = env[name]
+    }
+  } else {
+    // Suppress cached `hf auth login` credentials as well as environment tokens.
+    sanitized.HF_HUB_DISABLE_IMPLICIT_TOKEN = "1"
+  }
   if (!python) {
     // Resolution already rejected this override; do not reintroduce it into
     // the child environment and prevent the engine's own Python fallback.

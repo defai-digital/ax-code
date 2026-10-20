@@ -400,6 +400,22 @@
     {
       "source": "docs/release/platforms.json",
       "asset": "release/platforms.json"
+    },
+    {
+      "source": "docs/providers/ax-code-model-downloads.md",
+      "page": "providers/ax-code-model-downloads"
+    },
+    {
+      "source": "docs/data/ax-code-model-downloads.json",
+      "asset": "data/ax-code-model-downloads.json"
+    },
+    {
+      "source": "docs/data/ax-code-model-mirrors.json",
+      "asset": "data/ax-code-model-mirrors.json"
+    },
+    {
+      "source": "docs/providers/model-download-publication.md",
+      "page": "providers/model-download-publication"
     }
   ]
 }

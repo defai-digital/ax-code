@@ -31,7 +31,12 @@ import {
 } from "./download-progress"
 import { HfCache } from "./hf-cache"
 import { Log } from "@/util/log"
-import { readDownloadLines, createDownloadJsonParser, createDownloadTranscript } from "./download-output"
+import {
+  readDownloadLines,
+  createDownloadJsonParser,
+  createDownloadTranscript,
+  downloadFailureMessage,
+} from "./download-output"
 import type { Dirent } from "fs"
 
 const log = Log.create({ service: "ax-engine-model-cache" })
@@ -760,8 +765,9 @@ export async function downloadModel(input: {
     expectedBytes: undefined,
   })
   input.signal?.throwIfAborted()
-  if (result.code !== 0) {
-    throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ${result.stderr.trim() || result.stdout.trim()}`)
+  const failure = downloadFailureMessage(result)
+  if (failure !== undefined) {
+    throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ${failure}`)
   }
   const streamed = result.lastSummary ? parseDownloadSummary(result.lastSummary) : undefined
   const parsed = streamed?.dest ? streamed : parseDownloadJson(result.stdout.trim())

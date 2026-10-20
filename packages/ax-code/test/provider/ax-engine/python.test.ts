@@ -128,3 +128,59 @@ describe("resolveAxEnginePython", () => {
     expect(env.FOO).toBe("bar")
   })
 })
+
+describe("HF download credential boundary", () => {
+  const credential = "synthetic-hub-credential"
+  const home = path.join(os.tmpdir(), "ax-engine-no-home-" + process.pid)
+
+  test.each([undefined, "https://huggingface.co", "https://huggingface.co/", "https://HUGGINGFACE.CO:443/"])(
+    "forwards only HF credentials to the official Hub: %s",
+    (HF_ENDPOINT) => {
+      const input = {
+        HF_ENDPOINT,
+        HF_TOKEN: credential,
+        HUGGING_FACE_HUB_TOKEN: credential,
+        HF_TOKEN_PATH: "/custom/hf-token",
+        HF_HUB_DISABLE_IMPLICIT_TOKEN: "1",
+        OPENAI_API_KEY: "fixture-secret",
+        NODE_OPTIONS: "--inspect",
+        HF_HOME: "/custom/hf",
+      }
+      const env = axEngineDownloadEnv(input, home)
+      expect(env.HF_TOKEN).toBe(credential)
+      expect(env.HUGGING_FACE_HUB_TOKEN).toBe(credential)
+      expect(env.HF_TOKEN_PATH).toBe(input.HF_TOKEN_PATH)
+      expect(env.HF_HUB_DISABLE_IMPLICIT_TOKEN).toBe("1")
+      expect(env.HF_HOME).toBe(input.HF_HOME)
+      expect(env.OPENAI_API_KEY).toBeUndefined()
+      expect(env.NODE_OPTIONS).toBeUndefined()
+      expect(input.HF_TOKEN).toBe(credential)
+    },
+  )
+
+  test.each([
+    "https://mirror.example",
+    "http://huggingface.co",
+    "https://huggingface.co.evil.example",
+    "https://huggingface.co/path",
+    "https://user:password@huggingface.co",
+    "https://huggingface.co?x=1",
+  ])("never forwards Hub credentials or implicit login to custom endpoints: %s", (HF_ENDPOINT) => {
+    const env = axEngineDownloadEnv(
+      {
+        HF_ENDPOINT,
+        HF_TOKEN: credential,
+        HUGGING_FACE_HUB_TOKEN: credential,
+        HF_TOKEN_PATH: "/custom/token",
+        HF_HUB_DISABLE_IMPLICIT_TOKEN: "0",
+        HF_HUB_CACHE: "/custom/cache",
+      },
+      home,
+    )
+    expect(env.HF_TOKEN).toBeUndefined()
+    expect(env.HUGGING_FACE_HUB_TOKEN).toBeUndefined()
+    expect(env.HF_TOKEN_PATH).toBeUndefined()
+    expect(env.HF_HUB_DISABLE_IMPLICIT_TOKEN).toBe("1")
+    expect(env.HF_HUB_CACHE).toBe("/custom/cache")
+  })
+})

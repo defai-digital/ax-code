@@ -76,6 +76,9 @@ jobs:
       - name: Check repo structure
         run: pnpm run check:structure
 
+      - name: Check generated model download documentation
+        run: pnpm --dir packages/ax-code exec tsx script/model-download-docs.ts --check
+
       - name: Check core package with Knip
         run: pnpm --dir packages/ax-code run knip
 

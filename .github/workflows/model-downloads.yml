@@ -1,0 +1,79 @@
+name: model-downloads
+
+on:
+  schedule:
+    - cron: "47 7 * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [ax-code-collection-updated]
+
+concurrency:
+  group: model-downloads
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  propose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+      - run: pnpm install --frozen-lockfile
+      - name: Refresh collection download documentation
+        run: pnpm --dir packages/ax-code exec tsx script/model-download-docs.ts --refresh
+      - name: Validate the complete documentation candidate offline
+        run: |
+          pnpm --dir packages/sdk/js exec tsc
+          pnpm --dir packages/ax-code exec tsx script/model-download-docs.ts --check
+          AX_TEST_FILES=test/script/model-download-docs.test.ts pnpm --dir packages/ax-code exec vitest run --retry 0
+          pnpm exec vitest run script/export-public-docs.test.ts
+          pnpm run check:structure
+      - name: Save reviewable documentation patch
+        id: patch
+        run: |
+          mkdir -p "$RUNNER_TEMP/model-downloads"
+          git diff --binary -- docs/data/ax-code-model-downloads.json docs/providers/ax-code-model-downloads.md > "$RUNNER_TEMP/model-downloads/documentation.patch"
+          if git diff --quiet -- docs/data/ax-code-model-downloads.json docs/providers/ax-code-model-downloads.md; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: model-download-documentation
+          path: ${{ runner.temp }}/model-downloads/documentation.patch
+          retention-days: 14
+      - name: Create documentation App token after validation
+        id: app-token
+        if: steps.patch.outputs.changed == 'true' && vars.AX_CODE_MODELS_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.AX_CODE_MODELS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AX_CODE_MODELS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ax-code
+          permission-contents: write
+          permission-pull-requests: write
+      - if: steps.app-token.outcome == 'success'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: automation/model-downloads
+          base: main
+          add-paths: |
+            docs/data/ax-code-model-downloads.json
+            docs/providers/ax-code-model-downloads.md
+          commit-message: "Refresh AX Code model download documentation"
+          title: "Refresh AX Code model download documentation"
+          body: |
+            Refresh the publisher collection metadata and regenerate its download-source page.
+
+            Review model identities, revisions, licensing metadata, and mirror availability. This proposal does not admit new runtime models, activate R2 downloads, upload weights, or merge automatically.

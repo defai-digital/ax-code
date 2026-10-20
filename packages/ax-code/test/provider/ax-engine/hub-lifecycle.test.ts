@@ -173,6 +173,32 @@ describe("pinned Hub artifact lifecycle", () => {
     },
   )
 
+  test("a failing engine preserves its JSON error instead of the anonymous HF warning", async () => {
+    if (process.platform === "win32") return
+    await using tmp = await tmpdir()
+    process.env.HF_HUB_CACHE = path.join(tmp.path, "hub")
+    const binaryPath = path.join(tmp.path, "fake-engine")
+    await fs.writeFile(
+      binaryPath,
+      `#!/usr/bin/env node
+console.error("Warning: You are sending unauthenticated requests to the HF Hub")
+console.log(JSON.stringify({ status: "download_failed", errors: ["HTTP 429: retry later"], failure: { code: "RATE_LIMITED", retryable: true, http_status: 429 } }))
+process.exitCode = 1
+`,
+    )
+    await fs.chmod(binaryPath, 0o755)
+    const original = Process.text
+    vi.spyOn(Process, "text").mockImplementation((cmd, options) => {
+      if (cmd[0] !== "df") return original(cmd, options)
+      const text = "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/test 900000000 1 800000000 1% /\n"
+      return Promise.resolve({ code: 0, stdout: Buffer.from(text), stderr: Buffer.alloc(0), text })
+    })
+    await expect(downloadModel({ modelID: id, binaryPath, binaryVersion: "7.2.1" })).rejects.toThrow(
+      "AX_ENGINE_DOWNLOAD_FAILED: [RATE_LIMITED] HTTP 429: retry later",
+    )
+    expect(await Filesystem.exists(AxEnginePaths.prepareState)).toBe(false)
+  })
+
   test("rejects a matching revision reported from an unexpected destination", async () => {
     if (process.platform === "win32") return
     await using tmp = await tmpdir()

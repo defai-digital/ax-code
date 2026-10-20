@@ -108,6 +108,7 @@ For standalone questions about selected files through AX Trust caching, see
 - [Tiel peer summary (20 September 2026)](guides/tiel-peer-2026-09-20.md) — current Tiel / Cyber-Tiel vs MTPLX native-API numbers; 194.88 completion default, 249.01 peak decode.
 - [AX Code/OpenCode Client Retest](guides/local-client-matrix-2026-09-19.md) — six client/runtime combinations, active MTP, first/repeat timing, and code checks.
 - [Local Inference Measurements](guides/local-inference-results-2026-09-19.md) — dated AX Code/OpenCode and runtime testing with timing and comparability limits.
+- [AX Code Model Downloads](providers/ax-code-model-downloads.md) - reviewed HF collection revisions and verified R2 mirror availability.
 - [AX Engine Model Selection](providers/ax-engine-model-selection.md) — local model ranking and memory guidance.
 
 ## Integrations

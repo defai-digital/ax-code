@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url"
+import { syncModelDownloadDocs } from "./model-download-docs"
 import z from "zod"
 import collection from "../src/provider/ax-engine/collection.json"
 import { readBoundedBody } from "../src/util/http-body"
@@ -50,6 +51,7 @@ for (const model of result.catalog.models) {
   }
 }
 await Filesystem.writeJson(target, { ...result.catalog, models: [...models.values()] })
+await syncModelDownloadDocs({ refresh: true })
 const inspected = await axEngineHubCatalog.inspect()
 const counts = Object.groupBy(inspected.decisions, (decision) => decision.policy)
 console.log(

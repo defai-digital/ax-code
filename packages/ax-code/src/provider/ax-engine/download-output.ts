@@ -2,8 +2,78 @@ import type { Readable } from "node:stream"
 import { StringDecoder } from "node:string_decoder"
 import { parseJsonResult } from "@/util/json-value"
 import { parseProgressJsonLine } from "./download-progress"
+import { Env } from "@/util/env"
 
 export const DOWNLOAD_OUTPUT_LIMIT = 1024 * 1024
+
+/** Keep subprocess diagnostics safe before they become persisted job errors. */
+function redactDownloadDiagnostic(value: string): string {
+  return Env.redactSecrets(value.replace(/\bhf_[A-Za-z0-9]{8,}\b/g, "[redacted]"))
+}
+
+/** A stderr warning must not hide the helper's terminal error (including MTP). */
+export function downloadFailureMessage(input: {
+  code: number
+  stdout: string
+  stderr: string
+  lastSummary?: Record<string, unknown>
+}): string | undefined {
+  let summary = input.lastSummary
+  if (!summary) {
+    const consume = createDownloadJsonParser((event) => {
+      if (event.kind === "summary") summary = event.value
+    })
+    for (const line of input.stdout.split(/\r?\n/)) consume(line)
+  }
+  const records = [summary]
+  if (summary?.download && typeof summary.download === "object" && !Array.isArray(summary.download)) {
+    records.push(summary.download as Record<string, unknown>)
+  }
+  const errors = records.flatMap((record) => {
+    const values: unknown[] = Array.isArray(record?.errors) ? [...record.errors] : []
+    values.push(record?.error)
+    if (record?.failure && typeof record.failure === "object" && !Array.isArray(record.failure)) {
+      values.push((record.failure as Record<string, unknown>).message)
+    }
+    return values.filter((error): error is string => typeof error === "string" && !!error.trim())
+  })
+  const failedRecord = records.find(
+    (record) =>
+      typeof record?.status === "string" &&
+      [
+        "failed",
+        "failure",
+        "error",
+        "download_failed",
+        "validation_failed",
+        "manifest_missing",
+        "invalid_arguments",
+      ].includes(record.status),
+  )
+  if (input.code === 0 && !failedRecord && errors.length === 0) return undefined
+  const classification = records.flatMap((record) => {
+    const failure = record?.failure
+    if (!failure || typeof failure !== "object" || Array.isArray(failure)) return []
+    const code = (failure as Record<string, unknown>).code
+    return typeof code === "string" && /^[A-Z][A-Z_]{2,63}$/.test(code) ? [code] : []
+  })[0]
+  const detail = errors.length
+    ? errors
+        .slice(0, 8)
+        .map((error) => error.trim())
+        .join("\n")
+    : failedRecord
+      ? `ax-engine reported ${String(failedRecord.status)}`
+      : [
+          `ax-engine download exited with code ${input.code}`,
+          input.stdout.trim() ? `stdout:\n${redactDownloadDiagnostic(input.stdout.trim()).slice(-5_000)}` : "",
+          input.stderr.trim() ? `stderr:\n${redactDownloadDiagnostic(input.stderr.trim()).slice(-2_000)}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+  // Redact before truncation so cutting a credential cannot defeat redaction.
+  return redactDownloadDiagnostic(`${classification ? `[${classification}] ` : ""}${detail}`).slice(0, 8_192)
+}
 
 /** Discard oversized lines through their delimiter, then resume the protocol. */
 export async function readDownloadLines(stream: Readable, onLine: (line: string) => void): Promise<void> {
