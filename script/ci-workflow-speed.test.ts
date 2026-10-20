@@ -53,6 +53,18 @@ describe("CI workflow speed policy", () => {
     }
   })
 
+  test("native Linux qualification passes scoped package authentication into its container", () => {
+    const workflow = readFileSync(".github/workflows/qualify-linux-candidate.yml", "utf8")
+    expect(workflow).toContain("packages: read")
+    expect(workflow).toContain("PACKAGE_READ_TOKEN: ${{ github.token }}")
+    expect(workflow).toContain("umask 077")
+    expect(workflow).toContain("trap 'rm -f \"$config\"' EXIT")
+    expect(workflow).toContain("-e NPM_CONFIG_USERCONFIG=/run/ax-code-packages.npmrc")
+    expect(workflow).toContain('-v "$config:/run/ax-code-packages.npmrc:ro"')
+    expect(workflow).not.toContain("SDK_PACKAGES_TOKEN")
+    expect(workflow).not.toContain("-e PACKAGE_READ_TOKEN")
+  })
+
   test("AX Code and SDK automation enforce the Node 26 support floor", () => {
     for (const source of githubAutomationSources()) {
       for (const match of source.matchAll(/node-version:\s*["']?(\d+)/g)) {

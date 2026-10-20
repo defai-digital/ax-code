@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: linux-candidate-${{ inputs.candidate }}-${{ inputs.mode }}
@@ -69,9 +70,18 @@ jobs:
           printf '%s  %s\n' "$SOURCE_SHA256" "$RUNNER_TEMP/linux-work/source.tar.gz" | sha256sum -c -
       - name: Build and qualify native Linux x64 in Ubuntu 24.04
         if: inputs.mode == 'build'
+        env:
+          PACKAGE_READ_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          umask 077
+          config="$RUNNER_TEMP/linux-packages.npmrc"
+          trap 'rm -f "$config"' EXIT
+          printf '//npm.pkg.github.com/:_authToken=%s\n' "$PACKAGE_READ_TOKEN" > "$config"
           docker run --rm --platform linux/amd64 \
             -e CANDIDATE -e VERSION -e SOURCE_SHA256 \
+            -e NPM_CONFIG_USERCONFIG=/run/ax-code-packages.npmrc \
+            -v "$config:/run/ax-code-packages.npmrc:ro" \
             -v "$RUNNER_TEMP/linux-work:/work" -v "$RUNNER_TEMP/linux-cache:/cache" \
             -v "$GITHUB_WORKSPACE/control/.github/scripts:/qualification:ro" \
             ubuntu:24.04 bash /qualification/build-linux-candidate.sh
