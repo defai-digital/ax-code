@@ -28,6 +28,7 @@ describe("@ax-code/sdk top-level exports", () => {
       "./v2/client",
       "./v2/gen/client",
       "./v2/server",
+      "./tui-debug",
     ])
     for (const [subpath, target] of Object.entries(packageJson.exports)) {
       expect(target.startsWith("./dist/")).toBe(true)

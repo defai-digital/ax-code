@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto"
+import { DialogAlert } from "@tui/ui/dialog-alert"
+import { createTuiDebugRenderer } from "./tui-debug-renderer"
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js"
-import { useKeyboard, usePaste } from "ax-tui/solid"
+import { useKeyboard, usePaste, useRenderer } from "ax-tui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
 import { useRoute } from "@tui/context/route"
@@ -15,7 +18,7 @@ import { SessionID } from "@/session/schema"
 import { Log } from "@/util/log"
 
 /** Mounted only for explicit opt-in. No listener, token or controller by default. */
-export function TuiMcp(props: { blocked: boolean; onActive: (active: boolean) => void }) {
+export function TuiMcp(props: { debug?: boolean; blocked: boolean; onActive: (active: boolean) => void }) {
   const sdk = useSDK()
   const sync = useSync()
   const route = useRoute()
@@ -27,7 +30,25 @@ export function TuiMcp(props: { blocked: boolean; onActive: (active: boolean) =>
   const [filename, setFilename] = createSignal<string>()
   let disposed = false
   let endpoint: Awaited<ReturnType<typeof startTuiMcpEndpoint>> | undefined
+  const renderer = useRenderer()
+  const debugRenderer = props.debug ? createTuiDebugRenderer(renderer, () => dialog.stack.length) : undefined
+  const pending = () =>
+    [...Object.values(sync.data.permission), ...Object.values(sync.data.question)].some((items) => items.length > 0)
   const controller = createTuiMcpController({
+    debug: debugRenderer
+      ? {
+          ...debugRenderer,
+          // A draft can already be nonempty: its boolean alone cannot fence edits.
+          fence: () =>
+            JSON.stringify({
+              renderer: debugRenderer.fence(),
+              draftHash: createHash("sha256")
+                .update(JSON.stringify(prompt.current?.current ?? null))
+                .digest("hex"),
+            }),
+          blocked: () => props.blocked || pending(),
+        }
+      : undefined,
     state: () => ({
       workspace: sdk.directory ?? "",
       route: route.data.type,
@@ -56,11 +77,16 @@ export function TuiMcp(props: { blocked: boolean; onActive: (active: boolean) =>
   createEffect(() => {
     controller.observe()
   })
-  useKeyboard(() => controller.humanInput())
-  usePaste(() => controller.humanInput())
+  useKeyboard(() => {
+    if (!debugRenderer?.injecting) controller.humanInput()
+  })
+  usePaste(() => {
+    if (!debugRenderer?.injecting) controller.humanInput()
+  })
   // Observe all raw mouse input before child handlers can stop propagation.
   let mousePrefix = ""
   const mouseInput = (chunk: Buffer | string) => {
+    if (debugRenderer?.injecting) return
     const sequence = mousePrefix + chunk.toString()
     mousePrefix = sequence.slice(-3)
     if (sequence.includes("\x1b[<") || sequence.includes("\x1b[M")) controller.humanInput()
@@ -76,9 +102,21 @@ export function TuiMcp(props: { blocked: boolean; onActive: (active: boolean) =>
     props.onActive(false)
     void endpoint?.close().catch((error) => Log.Default.warn("TUIMCP cleanup failed", { error }))
   }
+  function showEndpoint() {
+    const file = filename()
+    if (file) void DialogAlert.show(dialog, "TUIMCP endpoint", file)
+  }
   command.register(() => [
     {
-      title: "Revoke TUIMCP navigation access",
+      title: "Show TUIMCP endpoint path",
+      value: "tui.mcp.endpoint",
+      slash: { name: "tui-mcp-endpoint" },
+      enabled: !!filename(),
+      category: "System",
+      onSelect: showEndpoint,
+    },
+    {
+      title: "Revoke TUIMCP access",
       value: "tui.mcp.revoke",
       slash: { name: "tui-mcp-revoke" },
       enabled: !!filename(),
@@ -111,8 +149,8 @@ export function TuiMcp(props: { blocked: boolean; onActive: (active: boolean) =>
     <Show when={filename()}>
       {(file) => (
         <box height={1} flexShrink={0} flexDirection="row" backgroundColor={theme.backgroundPanel}>
-          <text fg={theme.textMuted} flexGrow={1}>
-            TUIMCP on: {file()}
+          <text fg={theme.textMuted} flexGrow={1} onMouseUp={showEndpoint}>
+            TUIMCP {props.debug ? "DEBUG (screen + input)" : "on"}: {file()}
           </text>
           <text fg={theme.accent} onMouseUp={revoke}>
             [Revoke]

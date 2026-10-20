@@ -1,6 +1,7 @@
 import { createSimpleContext } from "./helper"
 
 export interface Args {
+  tuiDebug?: boolean
   tuiMcp?: boolean
   persistentRuntime?: { host: string; pid: number }
   model?: string

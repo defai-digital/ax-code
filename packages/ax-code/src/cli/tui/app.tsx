@@ -1473,8 +1473,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onMouseUp={Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
       onMouseScroll={() => contextMenu.close()}
     >
-      <Show when={args.tuiMcp}>
+      <Show when={args.tuiMcp || args.tuiDebug}>
         <TuiMcp
+          debug={args.tuiDebug}
           blocked={exiting || digitalCodePlaying() || reverseRainPlaying() || startupRainPhase() !== "app"}
           onActive={setTuiMcpActive}
         />

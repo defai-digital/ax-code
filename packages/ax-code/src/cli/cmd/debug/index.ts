@@ -1,3 +1,4 @@
+import { TuiDebugCommand } from "./tui"
 import { Global } from "../../../global"
 import { Log } from "../../../util/log"
 import { bootstrap } from "../../bootstrap"
@@ -19,6 +20,7 @@ export const DebugCommand = cmd({
   describe: "debugging and troubleshooting tools",
   builder: (yargs) =>
     yargs
+      .command(TuiDebugCommand)
       .command(ConfigCommand)
       .command(ExplainCommand)
       .command(LSPCommand)

@@ -1,3 +1,6 @@
+import { TuiDebugScreenSchema } from "@ax-code/sdk/tui-debug"
+import { setTimeout as sleep } from "node:timers/promises"
+import type { TuiDebugAction, TuiDebugScreen } from "@ax-code/sdk/tui-debug"
 import { randomUUID } from "node:crypto"
 import { CALL_TIMEOUT_MS, HUMAN_QUIET_MS, MAX_RECEIPTS, RequestSchema, ViewSchema, reject } from "./protocol"
 import type { Request, Result, Select, View } from "./protocol"
@@ -18,6 +21,12 @@ export function createTuiMcpController(options: {
   navigate: (sessionId: SessionID) => void
   now?: () => number
   timeoutMs?: number
+  debug?: {
+    blocked: () => boolean
+    fence: () => string
+    snapshot: () => TuiDebugScreen
+    input: (action: TuiDebugAction) => void
+  }
 }) {
   const instanceId = randomUUID()
   const generation = randomUUID()
@@ -27,6 +36,7 @@ export function createTuiMcpController(options: {
   let lastHumanInput = -Infinity
   let disposed = false
   let inFlight = false
+  let waiters = 0
   const pending = new Set<AbortController>()
   const receipts = new Map<string, { signature: string; result: Promise<Result> }>()
 
@@ -34,7 +44,12 @@ export function createTuiMcpController(options: {
     const state = options.state()
     const blocked = state.blocked || now() - lastHumanInput < HUMAN_QUIET_MS
     // workspace is part of the fence, but never part of the returned DTO.
-    const next = JSON.stringify({ ...state, blocked })
+    const next = JSON.stringify({
+      ...state,
+      blocked,
+      debugFence: options.debug?.fence(),
+      debugBlocked: options.debug?.blocked(),
+    })
     if (fingerprint !== undefined && next !== fingerprint) revision++
     fingerprint = next
     return ViewSchema.parse({
@@ -48,13 +63,17 @@ export function createTuiMcpController(options: {
     })
   }
 
-  function guard(input: Select): Result | undefined {
+  function guard(
+    input: Pick<Select, "instanceId" | "generation" | "expectedRevision">,
+    debug = false,
+  ): Result | undefined {
     if (disposed) return reject("revoked")
     const view = context()
     if (input.instanceId !== instanceId || input.generation !== generation) return reject("stale_target")
     if (input.expectedRevision !== view.revision) return reject("stale_revision")
     if (!view.ready) return reject("not_ready")
-    if (view.blocked) return reject("user_active")
+    if (debug ? options.debug?.blocked() || now() - lastHumanInput < HUMAN_QUIET_MS : view.blocked)
+      return reject("user_active")
   }
 
   async function apply(input: Select, outer: AbortSignal): Promise<Result> {
@@ -110,9 +129,83 @@ export function createTuiMcpController(options: {
     }
   }
 
+  function snapshot(input: { instanceId: string; generation: string }): Result {
+    if (disposed) return reject("revoked")
+    if (!options.debug) return reject("debug_disabled")
+    if (input.instanceId !== instanceId || input.generation !== generation) return reject("stale_target")
+    if (options.debug.blocked()) return reject("user_active")
+    try {
+      const view = context()
+      // No await: the context and buffer are sampled in the same JS turn.
+      const screen = options.debug.snapshot()
+      if (screen.text.length > 48_000) return reject("snapshot_too_large")
+      return { status: "snapshot", context: view, screen: TuiDebugScreenSchema.parse(screen) }
+    } catch {
+      return reject("internal_error")
+    }
+  }
+
+  async function wait(input: Extract<Request, { operation: "wait_for_tui" }>, signal: AbortSignal): Promise<Result> {
+    if (waiters >= 4) return reject("busy")
+    waiters++
+    const abort = new AbortController()
+    pending.add(abort)
+    const cancel = () => abort.abort()
+    signal.addEventListener("abort", cancel, { once: true })
+    // A monotonic deadline is independent of injected state/revision clocks.
+    const deadline = performance.now() + input.timeoutMs
+    try {
+      while (true) {
+        if (disposed) return reject("revoked")
+        if (signal.aborted) return reject("cancelled")
+        const result = snapshot(input)
+        if (result.status !== "snapshot") return result
+        if (
+          (input.text === undefined || result.screen.text.includes(input.text)) &&
+          (input.afterFrameId === undefined || result.screen.frameId > input.afterFrameId)
+        )
+          return result
+        const remaining = deadline - performance.now()
+        if (remaining <= 0) return reject("condition_timeout")
+        await sleep(Math.min(25, remaining), undefined, { signal: abort.signal })
+      }
+    } catch {
+      return reject(disposed ? "revoked" : "cancelled")
+    } finally {
+      waiters--
+      pending.delete(abort)
+      signal.removeEventListener("abort", cancel)
+    }
+  }
+
+  function inputAction(input: Extract<Request, { operation: "tui_input" }>, signal: AbortSignal): Result {
+    if (!options.debug) return reject("debug_disabled")
+    if (signal.aborted) return reject("cancelled")
+    const invalid = guard(input, true)
+    if (invalid) return invalid
+    if (inFlight) return reject("busy")
+    inFlight = true
+    try {
+      if (input.action.kind === "click") {
+        const screen = options.debug.snapshot()
+        if (screen.frameId !== input.action.expectedFrameId) return reject("stale_frame")
+        if (input.action.x >= screen.width || input.action.y >= screen.height) return reject("invalid_request")
+      }
+      // A synchronous adapter emits one bounded parser input, never backend commands.
+      options.debug.input(input.action)
+      revision++
+      return { status: "applied", context: context() }
+    } catch {
+      return reject("outcome_unknown")
+    } finally {
+      inFlight = false
+    }
+  }
+
   return {
     instanceId,
     generation,
+    debugEnabled: !!options.debug,
     context,
     observe: context,
     humanInput() {
@@ -135,12 +228,16 @@ export function createTuiMcpController(options: {
           return reject("internal_error")
         }
       }
+      if (input.operation === "get_tui_snapshot") return snapshot(input)
+      if (input.operation === "wait_for_tui") return wait(input, signal)
       const signature = JSON.stringify(input)
       const cached = receipts.get(input.requestId)
       if (cached) return cached.signature === signature ? cached.result : reject("request_conflict")
       // Never evict a receipt and accidentally execute an old request again.
       if (receipts.size >= MAX_RECEIPTS) return reject("request_limit")
-      const result = apply(input, signal).catch(() => reject("internal_error"))
+      const result = (
+        input.operation === "tui_input" ? Promise.resolve(inputAction(input, signal)) : apply(input, signal)
+      ).catch(() => reject("internal_error"))
       receipts.set(input.requestId, { signature, result })
       return result
     },

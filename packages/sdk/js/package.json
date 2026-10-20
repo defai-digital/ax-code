@@ -35,7 +35,8 @@
     "./v2": "./dist/v2/index.js",
     "./v2/client": "./dist/v2/client.js",
     "./v2/gen/client": "./dist/v2/gen/client/index.js",
-    "./v2/server": "./dist/v2/server.js"
+    "./v2/server": "./dist/v2/server.js",
+    "./tui-debug": "./dist/tui-debug.js"
   },
   "files": [
     "dist"

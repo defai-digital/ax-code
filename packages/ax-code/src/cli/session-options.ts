@@ -21,9 +21,15 @@ export function withSessionContinuationOptions<T>(yargs: Argv<T>) {
 
 /** Shared by the TUI and attach commands (POSIX-only experimental surface). */
 export function withTuiMcpOption<T>(yargs: Argv<T>) {
-  return yargs.option("tui-mcp", {
-    type: "boolean",
-    default: false,
-    describe: "Share this live TUI through experimental local MCP navigation tools (POSIX only)",
-  })
+  return yargs
+    .option("tui-debug", {
+      type: "boolean",
+      default: false,
+      describe: "Share native TUI screen and input with local developer tools (implies --tui-mcp; POSIX only)",
+    })
+    .option("tui-mcp", {
+      type: "boolean",
+      default: false,
+      describe: "Share this live TUI through experimental local MCP navigation tools (POSIX only)",
+    })
 }

@@ -42,7 +42,7 @@ export const AttachCommand = cmd({
       import("@/project/instance"),
       import("@/config/tui"),
     ])
-    if (args.tuiMcp) assertTuiMcpPlatform()
+    if (args.tuiMcp || args.tuiDebug) assertTuiMcpPlatform()
     assertLoopbackHttpUrl(args.url, "attach URL")
     const unguard = win32InstallCtrlCGuard()
     const restoreInputMode = win32DisableProcessedInput()
@@ -78,7 +78,8 @@ export const AttachCommand = cmd({
         config,
         screen: args.screen,
         args: {
-          tuiMcp: args.tuiMcp,
+          tuiMcp: args.tuiMcp || args.tuiDebug,
+          tuiDebug: args.tuiDebug,
           continue: args.continue,
           sessionID: args.session,
           fork: args.fork,

@@ -681,7 +681,7 @@ export const TuiThreadCommand = cmd({
       import("@/config/tui"),
       import("@/cli/network"),
     ])
-    if (args.tuiMcp) assertTuiMcpPlatform()
+    if (args.tuiMcp || args.tuiDebug) assertTuiMcpPlatform()
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
     // (Important when running under `bun run` wrappers on Windows.)
     const unguard = win32InstallCtrlCGuard()
@@ -1014,7 +1014,8 @@ export const TuiThreadCommand = cmd({
           fetch: transport.fetch,
           events: transport.events,
           args: {
-            tuiMcp: args.tuiMcp,
+            tuiMcp: args.tuiMcp || args.tuiDebug,
+            tuiDebug: args.tuiDebug,
             continue: args.continue,
             sessionID: args.session,
             agent: args.agent,

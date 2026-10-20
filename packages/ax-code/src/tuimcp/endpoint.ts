@@ -6,7 +6,15 @@ import path from "node:path"
 import { randomBytes, timingSafeEqual } from "node:crypto"
 import z from "zod"
 import { parseJsonStrict } from "@/util/json-value"
-import { CALL_TIMEOUT_MS, EndpointSchema, MAX_FRAME_BYTES, RequestSchema, ResultSchema, reject } from "./protocol"
+import {
+  CALL_TIMEOUT_MS,
+  EndpointSchema,
+  MAX_FRAME_BYTES,
+  MAX_RESPONSE_BYTES,
+  RequestSchema,
+  ResultSchema,
+  reject,
+} from "./protocol"
 import type { Endpoint, Request, Result } from "./protocol"
 import type { TuiMcpController } from "./controller"
 
@@ -58,6 +66,7 @@ export async function startTuiMcpEndpoint(controller: TuiMcpController, onClose?
   const filename = path.join(directory, "endpoint.json")
   const endpoint: Endpoint = {
     version: 1,
+    ...(controller.debugEnabled ? { debug: true } : {}),
     instanceId: controller.instanceId,
     generation: controller.generation,
     token: randomBytes(32).toString("hex"),
@@ -82,7 +91,13 @@ export async function startTuiMcpEndpoint(controller: TuiMcpController, onClose?
       abort.abort()
     })
     const respond = (result: Result) => {
-      if (!socket.destroyed) socket.end(JSON.stringify(result) + "\n")
+      const payload = JSON.stringify(result) + "\n"
+      if (!socket.destroyed)
+        socket.end(
+          Buffer.byteLength(payload) <= MAX_RESPONSE_BYTES
+            ? payload
+            : JSON.stringify(reject("snapshot_too_large")) + "\n",
+        )
     }
     socket.on("data", (chunk: Buffer) => {
       if (received) {
@@ -176,7 +191,7 @@ export async function callTuiMcpEndpoint(
 ): Promise<Result> {
   const endpoint = await readTuiMcpEndpoint(filename)
   if (
-    request.operation === "select_session" &&
+    "instanceId" in request &&
     (request.instanceId !== endpoint.instanceId || request.generation !== endpoint.generation)
   )
     return reject("stale_target")
@@ -210,7 +225,7 @@ export async function callTuiMcpEndpoint(
     socket.on("error", cancel)
     socket.on("close", cancel)
     socket.on("data", (chunk: Buffer) => {
-      if (buffer.length + chunk.length > MAX_FRAME_BYTES) {
+      if (buffer.length + chunk.length > MAX_RESPONSE_BYTES) {
         finish(reject("invalid_request"))
         return
       }

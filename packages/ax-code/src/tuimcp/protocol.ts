@@ -1,7 +1,14 @@
+import {
+  TuiDebugInputSchema,
+  TuiDebugSnapshotSchema,
+  TuiDebugWaitSchema,
+  TuiDebugScreenSchema,
+} from "@ax-code/sdk/tui-debug"
 import z from "zod"
 import { SessionID } from "@/session/schema"
 
 export const MAX_FRAME_BYTES = 16 * 1024
+export const MAX_RESPONSE_BYTES = 256 * 1024
 export const CALL_TIMEOUT_MS = 4_000
 export const HUMAN_QUIET_MS = 1_500
 export const MAX_RECEIPTS = 128
@@ -33,16 +40,24 @@ export type Select = z.infer<typeof SelectSchema>
 export const RequestSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("get_view_context") }).strict(),
   SelectSchema.extend({ operation: z.literal("select_session") }).strict(),
+  TuiDebugSnapshotSchema.extend({ operation: z.literal("get_tui_snapshot") }).strict(),
+  TuiDebugInputSchema.extend({ operation: z.literal("tui_input") }).strict(),
+  TuiDebugWaitSchema.extend({ operation: z.literal("wait_for_tui") }),
 ])
 export type Request = z.infer<typeof RequestSchema>
 
 export const ResultSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("context"), context: ViewSchema }).strict(),
   z.object({ status: z.literal("applied"), context: ViewSchema }).strict(),
+  z.object({ status: z.literal("snapshot"), context: ViewSchema, screen: TuiDebugScreenSchema }).strict(),
   z
     .object({
       status: z.literal("rejected"),
       code: z.enum([
+        "debug_disabled",
+        "snapshot_too_large",
+        "stale_frame",
+        "condition_timeout",
         "invalid_request",
         "unauthorized",
         "stale_target",
@@ -72,6 +87,7 @@ export const EndpointSchema = z
     version: z.literal(1),
     instanceId: z.uuid(),
     generation: z.uuid(),
+    debug: z.boolean().optional(),
     token: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .strict()

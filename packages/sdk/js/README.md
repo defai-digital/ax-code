@@ -290,3 +290,13 @@ The `./programmatic` subpath still re-exports the default entry; treat it as dep
 ## License
 
 Apache-2.0
+
+## Native TUI debugging
+
+The experimental `@defai-digital/ax-code-sdk/tui-debug` subpath exports
+`createTuiDebugClient(mcpClient)`, a typed wrapper over the native TUI MCP tools.
+Start the target with `ax-code --tui-debug`, then connect a standard MCP client
+to `ax-code mcp tui --endpoint /absolute/private/endpoint.json`. Call `context`,
+`snapshot`, `input`, and `wait` through that client. Screen and input sharing is
+per-process and revocable. Calls never retry automatically; input success means
+dispatch, and visible results require a snapshot or bounded wait.
