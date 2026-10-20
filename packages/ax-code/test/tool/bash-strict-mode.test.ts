@@ -199,6 +199,28 @@ describe("ops.strict bash integration", () => {
     )
   }, 30_000)
 
+  test("classifies a destructive command nested in dash -c", async () => {
+    // POSIX shells other than bash/sh/zsh also execute the string after -c;
+    // choosing one must not bypass the interactive bash_destructive ask.
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+    await withTrustedProjectConfig(() =>
+      Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const asks: PermissionRequest[] = []
+          await bash.execute(
+            { command: `dash -c "rm -rf ./dash-target"`, description: "Remove dash target" },
+            makeCtx(asks),
+          )
+          const destructive = asks.filter((ask) => ask.permission === "bash_destructive")
+          expect(destructive).toHaveLength(1)
+          expect(destructive[0]!.patterns.join(" ")).toContain("rm -rf ./dash-target")
+        },
+      }),
+    )
+  }, 30_000)
+
   test("ops_apply does not consult the bash strict flag", async () => {
     const source = await fs.readFile(path.join(__dirname, "../../src/tool/ops_apply.ts"), "utf-8")
     expect(source).not.toContain("bash-strict")

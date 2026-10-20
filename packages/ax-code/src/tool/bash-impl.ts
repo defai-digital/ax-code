@@ -105,6 +105,11 @@ const COMMAND_WORD_NODE_TYPES = new Set([
   "process_substitution",
 ])
 
+// Shells that execute the string after `-c`. Parsing the inner string keeps
+// destructive and read-only classification from being bypassed by choosing a
+// different POSIX shell.
+const SHELL_COMMAND_INTERPRETERS = new Set(["bash", "sh", "zsh", "dash", "ksh", "mksh", "ash", "fish"])
+
 /**
  * Returns the target argument if the command is a browser-open call targeting
  * a local HTML file or localhost URL that should be intercepted. Returns null
@@ -1056,7 +1061,13 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // wrappers are skipped here: when their inner command string decodes,
         // the inner scan below classifies every nested command, and the
         // fail-closed branch below denies anything it cannot inspect.
-        if (planReadOnly && !["eval", "bash", "sh", "zsh", "source", "."].includes(executable)) {
+        if (
+          planReadOnly &&
+          executable !== "eval" &&
+          !SHELL_COMMAND_INTERPRETERS.has(executable) &&
+          executable !== "source" &&
+          executable !== "."
+        ) {
           const denial = classifyReadOnlyCommand(normalizedCommand)
           if (denial && !planAllowOverride(commandText)) planDenials.push(`${commandText}: ${denial}`)
         }
@@ -1068,8 +1079,13 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // ($(...), `...`, ${...}) are opaque — flag the whole command.
         // Match on the basename so `/bin/bash -c` and `/usr/bin/rm` take the
         // same inner-parse and path-recording branches as the bare names.
-        if (["eval", "bash", "sh", "zsh", "source", "."].includes(executable)) {
-          const isShellWithC = ["bash", "sh", "zsh"].includes(executable) && scanParts.includes("-c")
+        if (
+          executable === "eval" ||
+          SHELL_COMMAND_INTERPRETERS.has(executable) ||
+          executable === "source" ||
+          executable === "."
+        ) {
+          const isShellWithC = SHELL_COMMAND_INTERPRETERS.has(executable) && scanParts.includes("-c")
           const isEval = executable === "eval"
 
           // Collect the inner command string for eval / shell -c
