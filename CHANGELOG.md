@@ -9,7 +9,7 @@ changes belong to AX Coder.
 ### Changed
 
 - Publish SDK 2.6.40 as the public `@defai-digital/ax-code-sdk` package on GitHub Packages. Preserve existing SDK versions and use a dedicated package publication credential.
-- Consume AX TUI 2.1.4 from GitHub Packages with authenticated CI installs.
+- Consume AX TUI 2.1.5 from GitHub Packages with authenticated CI installs.
 
 ### Fixed
 
