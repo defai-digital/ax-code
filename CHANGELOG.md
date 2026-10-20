@@ -6,10 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.27.8] - 2026-10-20
+
 ### Changed
 
-- Prepare SDK 2.6.39 with the TUI debug client and current server contract.
+- Publish SDK 2.6.39 with the TUI debug client and current server contract.
 - Upgrade ax-tui to 2.1.4: the inline TUI now writes fewer bytes per streamed token than the full-screen renderer, including during resize storms.
+
+### Added
+
+- Add opt-in native TUI screen and input debugging through the private MCP endpoint and loopback WebMCP inspector.
+- Add an opt-in inline terminal frontend with permission and question prompts in its footer.
 
 ### Fixed
 
