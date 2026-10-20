@@ -936,6 +936,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   const effortChipLabel = createMemo(() => effortDisplay(local.model.variant.current()))
 
   const placeholderText = createMemo(() => {
+    if (props.inline) return uiText("ui.inlinePromptPlaceholder")
     if (props.sessionID) return undefined
     if (store.mode === "shell") {
       const example = SHELL_PLACEHOLDERS[store.placeholder % SHELL_PLACEHOLDERS.length]
@@ -1126,8 +1127,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
               textColor={keybind.leader ? theme.textMuted : theme.text}
               focusedTextColor={keybind.leader ? theme.textMuted : theme.text}
               minHeight={1}
-              maxHeight={6}
+              maxHeight={props.maxInputRows ?? 6}
               onContentChange={() => {
+                props.onDraftRows?.(Math.max(input.virtualLineCount, input.plainText.split("\n").length))
                 draftLifecycle.edited()
                 const suppressAutocomplete = suppressAutocompleteOnNextContentChange
                 suppressAutocompleteOnNextContentChange = false
@@ -1354,357 +1356,361 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
               cursorColor={theme.text}
               syntaxStyle={syntax()}
             />
-            <box flexDirection={dimensions().width < 60 ? "column" : "row"} flexShrink={0} paddingTop={1} gap={1}>
-              <text fg={highlight()}>
-                {store.mode === "shell"
-                  ? "Shell"
-                  : local.agent.icon(local.agent.current().name) +
-                    " " +
-                    (local.agent.current().displayName ?? Locale.titlecase(local.agent.current().name))}{" "}
-              </text>
-              <Show when={store.mode === "normal"}>
-                <box flexDirection="row" gap={1}>
-                  {/* Clicking the model name opens the model picker — the same
+            <Show when={!props.inline}>
+              <box flexDirection={dimensions().width < 60 ? "column" : "row"} flexShrink={0} paddingTop={1} gap={1}>
+                <text fg={highlight()}>
+                  {store.mode === "shell"
+                    ? "Shell"
+                    : local.agent.icon(local.agent.current().name) +
+                      " " +
+                      (local.agent.current().displayName ?? Locale.titlecase(local.agent.current().name))}{" "}
+                </text>
+                <Show when={store.mode === "normal"}>
+                  <box flexDirection="row" gap={1}>
+                    {/* Clicking the model name opens the model picker — the same
                       registered-command path as the model_list keybind and the
                       /model slash command. The handler lives on the wrapping
                       box, never on <text>: clicks on text nested in a flex row
                       are unreliable (see ModeChips). Connection/download/effort
                       chips stay outside on purpose — they are status, not the
                       model identity. */}
-                  <box flexDirection="row" gap={1} flexShrink={0} onMouseUp={() => command.trigger("model.list")}>
-                    <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
-                      {local.model.parsed().model}
-                    </text>
-                    <Show when={dimensions().width >= 60}>
-                      <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
-                    </Show>
-                  </box>
-                  <Show when={connectionChip()}>
-                    {(chip) => (
-                      <>
-                        {/* ASCII separator: U+00B7 middle dot is East Asian
+                    <box flexDirection="row" gap={1} flexShrink={0} onMouseUp={() => command.trigger("model.list")}>
+                      <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                        {local.model.parsed().model}
+                      </text>
+                      <Show when={dimensions().width >= 60}>
+                        <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                      </Show>
+                    </box>
+                    <Show when={connectionChip()}>
+                      {(chip) => (
+                        <>
+                          {/* ASCII separator: U+00B7 middle dot is East Asian
                             Ambiguous width and shifted following chips on
                             CJK terminals (overlap bug class, see gauge). */}
-                        <text fg={theme.textMuted}>-</text>
-                        <text flexShrink={0} fg={theme.warning}>
-                          {chip()}
-                        </text>
-                      </>
-                    )}
-                  </Show>
-                  <Show when={downloadChip()}>
-                    {(chip) => (
-                      <>
-                        <text fg={theme.textMuted}>-</text>
-                        <text flexShrink={0} fg={theme.warning}>
-                          {chip()}
-                        </text>
-                      </>
-                    )}
-                  </Show>
-                  <Show when={showVariant()}>
-                    <text fg={theme.textMuted}>-</text>
-                    <text>
-                      <span style={{ fg: theme.textMuted }}>{uiText("ui.effort2")} </span>
-                      <span
-                        style={{
-                          fg: local.model.variant.current() ? theme.warning : theme.textMuted,
-                          bold: !!local.model.variant.current(),
-                        }}
-                      >
-                        {effortChipLabel()}
-                      </span>
-                    </text>
-                  </Show>
-                </box>
-              </Show>
-            </box>
-            <Show when={keybind.leader}>
-              <box
-                flexDirection="row"
-                flexShrink={0}
-                paddingTop={1}
-                paddingBottom={0}
-                gap={1}
-                backgroundColor={theme.backgroundElement}
-              >
-                <text>
-                  <span style={{ fg: theme.warning, bold: true }}>{uiText("ui.leaderActive")}</span>
-                </text>
-                <text fg={theme.textMuted}>{uiText("ui.pressShortcutKeyOrWaitToCancel")}</text>
-              </box>
-            </Show>
-            <Show when={pasteViews().length > 0}>
-              <box flexDirection="column" gap={1} paddingTop={1}>
-                <For each={pasteViews()}>
-                  {(view) => {
-                    const expanded = createMemo(() => expandedPastes().has(view.partIndex))
-                    const previewText = createMemo(() => {
-                      if (expanded()) return view.text
-                      const lines = [...view.previewLines]
-                      if (view.hiddenLineCount > 0) {
-                        lines.push(uiText("ui.countMoreLines", { count: view.hiddenLineCount }))
-                      }
-                      return lines.join("\n")
-                    })
-
-                    // Click-vs-drag detection: the previous impl checked
-                    // renderer.getSelection() at mouseUp, which blocked the
-                    // toggle whenever ANY selection existed anywhere on
-                    // screen — including stale selections from prior clicks
-                    // (Selection.copy clears the selection asynchronously)
-                    // and zero-width phantom selections created by a click
-                    // itself. Track mousedown coordinates and only toggle
-                    // when mouseup lands on (roughly) the same cell.
-                    let downX: number | undefined
-                    let downY: number | undefined
-
-                    return (
-                      <box
-                        border={["left"]}
-                        borderColor={theme.warning}
-                        customBorderChars={EmptyBorder}
-                        backgroundColor={theme.backgroundPanel}
-                        onMouseDown={(evt: MouseEvent) => {
-                          downX = evt.x
-                          downY = evt.y
-                        }}
-                        onMouseUp={(evt: MouseEvent) => {
-                          const sx = downX
-                          const sy = downY
-                          downX = undefined
-                          downY = undefined
-                          if (sx === undefined || sy === undefined) return
-                          // Treat anything beyond a ±1 cell tolerance as a
-                          // drag (text selection); otherwise it's a click.
-                          if (Math.abs(evt.x - sx) > 1 || Math.abs(evt.y - sy) > 1) return
-                          togglePastePreview(view.partIndex)
-                        }}
-                      >
-                        <box paddingLeft={2} paddingRight={1} paddingTop={1} paddingBottom={1}>
-                          <text fg={theme.text}>
-                            {/* ASCII marker: U+25A3 is East Asian Ambiguous
-                                width and shifted the label on CJK terminals
-                                (overlap bug class, see gauge). */}
-                            <span style={{ fg: theme.warning }}>&gt; </span>
-                            {view.label}
+                          <text fg={theme.textMuted}>-</text>
+                          <text flexShrink={0} fg={theme.warning}>
+                            {chip()}
                           </text>
-                          <text fg={theme.textMuted}>{previewText()}</text>
-                          <text fg={theme.textMuted}>
-                            {expanded() ? uiText("ui.clickToCollapse") : uiText("ui.clickToExpand")}
+                        </>
+                      )}
+                    </Show>
+                    <Show when={downloadChip()}>
+                      {(chip) => (
+                        <>
+                          <text fg={theme.textMuted}>-</text>
+                          <text flexShrink={0} fg={theme.warning}>
+                            {chip()}
                           </text>
-                        </box>
-                      </box>
-                    )
-                  }}
-                </For>
-              </box>
-            </Show>
-          </box>
-        </Card>
-        <Show when={statusLine()}>
-          {(line) => (
-            <box flexShrink={0}>
-              <text fg={theme.textMuted}>{line()}</text>
-            </box>
-          )}
-        </Show>
-        <Show when={autoAccept.enabled()}>
-          <text fg={theme.warning} onMouseUp={() => void autoAccept.toggle()}>
-            {uiText("ui.autoAcceptOn")}
-          </text>
-        </Show>
-        <box
-          flexDirection={footerLayout().stacked ? "column" : "row"}
-          justifyContent={footerLayout().stacked ? "flex-start" : "space-between"}
-          gap={footerLayout().stacked ? 1 : 0}
-        >
-          <Show
-            when={status().type !== "idle" || subagentStatus() !== undefined}
-            fallback={
-              <Show
-                when={submitPending()}
-                fallback={
-                  <Show when={finishedStatus()} fallback={<text />}>
-                    <text fg={theme.success}>{uiText("ui.finished")}</text>
-                  </Show>
-                }
-              >
-                <text fg={theme.warning}>
-                  {pendingSubmitStatusText(submitStage())}
-                  {pendingCancelHint() ? " " + uiText("ui.keysToCancel", { keys: pendingCancelHint() ?? "" }) : ""}
-                </text>
-              </Show>
-            }
-          >
-            {/* Only the active parent can be interrupted, even when its subagent keeps this row visible. */}
-            <FooterStatusRow
-              width={promptContentWidth()}
-              interrupt={status().type !== "idle" ? uiText("ui.interrupt") : undefined}
-            >
-              <box flexShrink={0} flexDirection="row" gap={1}>
-                <box marginLeft={1} flexDirection="row" gap={1}>
-                  <Show
-                    when={livenessIndicator().type === "native-spinner"}
-                    fallback={
-                      <text fg={busyStatus()?.stale ? theme.warning : theme.textMuted}>
-                        {footerLivenessTextFrame(livenessIndicator())}
+                        </>
+                      )}
+                    </Show>
+                    <Show when={showVariant()}>
+                      <text fg={theme.textMuted}>-</text>
+                      <text>
+                        <span style={{ fg: theme.textMuted }}>{uiText("ui.effort2")} </span>
+                        <span
+                          style={{
+                            fg: local.model.variant.current() ? theme.warning : theme.textMuted,
+                            bold: !!local.model.variant.current(),
+                          }}
+                        >
+                          {effortChipLabel()}
+                        </span>
                       </text>
-                    }
-                  >
-                    <FooterAnimationSpinner />
-                  </Show>
-                  <Show when={busyStatus()?.stale}>
-                    <text fg={theme.warning}>!</text>
-                  </Show>
-                </box>
-                <box flexDirection="row" gap={1} flexShrink={0}>
-                  <Show when={busyStatus()?.label}>
-                    <text fg={busyStatus()?.tone === "warning" ? theme.warning : theme.textMuted}>
-                      {busyStatus()?.label}
-                    </text>
-                  </Show>
-                  <Show when={tokenChipView()} keyed>
-                    {(chip) => (
-                      <text fg={theme.textMuted}>
-                        {uiText("ui.inputTokens")} {chip.input} {uiText("ui.outputTokens")} {chip.output}
-                        <Show when={chip.rate}>
-                          <span style={{ fg: theme.textMuted }}> - {chip.rate}</span>
-                        </Show>
-                      </text>
-                    )}
-                  </Show>
-                  {(() => {
-                    const retry = createMemo(() => {
-                      const s = status()
-                      if (s.type !== "retry") return
-                      return s
-                    })
-                    const message = createMemo(() => {
-                      const r = retry()
-                      if (!r) return
-                      if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
-                        return "Gemini API quota exceeded"
-                      if (r.message.length > 120) return r.message.slice(0, 120) + "..."
-                      return r.message
-                    })
-                    const isTruncated = createMemo(() => {
-                      const r = retry()
-                      if (!r) return false
-                      return r.message.length > 120
-                    })
-                    const [seconds, setSeconds] = createSignal(0)
-                    onMount(() => {
-                      const cancel = scheduleTuiInterval(
-                        () => {
-                          const next = retry()?.next
-                          if (next) setSeconds(Math.round((next - Date.now()) / 1000))
-                        },
-                        {
-                          name: "prompt-retry-countdown",
-                          delayMs: 1000,
-                          unref: true,
-                        },
-                      )
-
-                      onCleanup(cancel)
-                    })
-                    const handleMessageClick = () => {
-                      const r = retry()
-                      if (!r) return
-                      if (r.message) {
-                        DialogAlert.show(dialog, "Retry Error", r.message)
-                      }
-                    }
-
-                    const retryText = () => {
-                      const r = retry()
-                      if (!r) return ""
-                      const baseMessage = message()
-                      const truncatedHint = isTruncated() ? " (click to expand)" : ""
-                      const duration = formatDuration(seconds())
-                      const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
-                      return baseMessage + truncatedHint + retryInfo
-                    }
-
-                    return (
-                      <Show when={retry()}>
-                        <box onMouseUp={handleMessageClick}>
-                          <text fg={theme.error} wrapMode="none">
-                            {retryText()}
-                          </text>
-                        </box>
-                      </Show>
-                    )
-                  })()}
-                </box>
+                    </Show>
+                  </box>
+                </Show>
               </box>
-            </FooterStatusRow>
-          </Show>
-          <Show when={status().type !== "retry"}>
-            <box
-              gap={footerLayout().stacked ? 0 : 1}
-              flexDirection={footerLayout().stacked ? "column" : "row"}
-              flexShrink={0}
-            >
-              <Show when={contextGauge()}>
+              <Show when={keybind.leader}>
                 <box
                   flexDirection="row"
                   flexShrink={0}
-                  paddingRight={1}
-                  onSizeChange={function (this: BoxRenderable) {
-                    setFooterGaugeWidth(this.width)
-                  }}
+                  paddingTop={1}
+                  paddingBottom={0}
+                  gap={1}
+                  backgroundColor={theme.backgroundElement}
                 >
-                  <Gauge
-                    view={contextGauge()}
-                    label={
-                      compactionCount() > 0 ? uiText("ui.compactedXCount", { count: compactionCount() }) : undefined
-                    }
-                  />
+                  <text>
+                    <span style={{ fg: theme.warning, bold: true }}>{uiText("ui.leaderActive")}</span>
+                  </text>
+                  <text fg={theme.textMuted}>{uiText("ui.pressShortcutKeyOrWaitToCancel")}</text>
                 </box>
               </Show>
-              <Show
-                when={
-                  props.footerRight ||
-                  footerLayout().showVariants ||
-                  footerLayout().showShellHint ||
-                  footerLayout().showClearHint
-                }
-              >
-                <box gap={2} flexDirection="row" flexShrink={0}>
-                  <Show when={props.footerRight}>
-                    <box
-                      flexDirection="row"
-                      flexShrink={0}
-                      gap={2}
-                      onSizeChange={function (this: BoxRenderable) {
-                        setFooterExtraWidth(this.width)
-                      }}
-                    >
-                      {props.footerRight}
-                    </box>
-                  </Show>
-                  <Switch>
-                    <Match when={store.mode === "normal"}>
-                      <Show when={footerLayout().showClearHint}>
-                        <KeyHint keys={footerClearHint().keys} label={footerClearHint().label} />
-                      </Show>
-                      <Show when={footerLayout().showVariants}>
-                        <KeyHint keys={keybind.print("variant_cycle")} label={uiText("ui.effort")} />
-                      </Show>
-                    </Match>
-                    <Match when={store.mode === "shell"}>
-                      <Show when={footerLayout().showShellHint}>
-                        <KeyHint keys="esc" label={uiText("ui.exitShellMode")} />
-                      </Show>
-                    </Match>
-                  </Switch>
+              <Show when={pasteViews().length > 0}>
+                <box flexDirection="column" gap={1} paddingTop={1}>
+                  <For each={pasteViews()}>
+                    {(view) => {
+                      const expanded = createMemo(() => expandedPastes().has(view.partIndex))
+                      const previewText = createMemo(() => {
+                        if (expanded()) return view.text
+                        const lines = [...view.previewLines]
+                        if (view.hiddenLineCount > 0) {
+                          lines.push(uiText("ui.countMoreLines", { count: view.hiddenLineCount }))
+                        }
+                        return lines.join("\n")
+                      })
+
+                      // Click-vs-drag detection: the previous impl checked
+                      // renderer.getSelection() at mouseUp, which blocked the
+                      // toggle whenever ANY selection existed anywhere on
+                      // screen — including stale selections from prior clicks
+                      // (Selection.copy clears the selection asynchronously)
+                      // and zero-width phantom selections created by a click
+                      // itself. Track mousedown coordinates and only toggle
+                      // when mouseup lands on (roughly) the same cell.
+                      let downX: number | undefined
+                      let downY: number | undefined
+
+                      return (
+                        <box
+                          border={["left"]}
+                          borderColor={theme.warning}
+                          customBorderChars={EmptyBorder}
+                          backgroundColor={theme.backgroundPanel}
+                          onMouseDown={(evt: MouseEvent) => {
+                            downX = evt.x
+                            downY = evt.y
+                          }}
+                          onMouseUp={(evt: MouseEvent) => {
+                            const sx = downX
+                            const sy = downY
+                            downX = undefined
+                            downY = undefined
+                            if (sx === undefined || sy === undefined) return
+                            // Treat anything beyond a ±1 cell tolerance as a
+                            // drag (text selection); otherwise it's a click.
+                            if (Math.abs(evt.x - sx) > 1 || Math.abs(evt.y - sy) > 1) return
+                            togglePastePreview(view.partIndex)
+                          }}
+                        >
+                          <box paddingLeft={2} paddingRight={1} paddingTop={1} paddingBottom={1}>
+                            <text fg={theme.text}>
+                              {/* ASCII marker: U+25A3 is East Asian Ambiguous
+                                width and shifted the label on CJK terminals
+                                (overlap bug class, see gauge). */}
+                              <span style={{ fg: theme.warning }}>&gt; </span>
+                              {view.label}
+                            </text>
+                            <text fg={theme.textMuted}>{previewText()}</text>
+                            <text fg={theme.textMuted}>
+                              {expanded() ? uiText("ui.clickToCollapse") : uiText("ui.clickToExpand")}
+                            </text>
+                          </box>
+                        </box>
+                      )
+                    }}
+                  </For>
                 </box>
               </Show>
-            </box>
+            </Show>
+          </box>
+        </Card>
+        <Show when={!props.inline}>
+          <Show when={statusLine()}>
+            {(line) => (
+              <box flexShrink={0}>
+                <text fg={theme.textMuted}>{line()}</text>
+              </box>
+            )}
           </Show>
-        </box>
+          <Show when={autoAccept.enabled()}>
+            <text fg={theme.warning} onMouseUp={() => void autoAccept.toggle()}>
+              {uiText("ui.autoAcceptOn")}
+            </text>
+          </Show>
+          <box
+            flexDirection={footerLayout().stacked ? "column" : "row"}
+            justifyContent={footerLayout().stacked ? "flex-start" : "space-between"}
+            gap={footerLayout().stacked ? 1 : 0}
+          >
+            <Show
+              when={status().type !== "idle" || subagentStatus() !== undefined}
+              fallback={
+                <Show
+                  when={submitPending()}
+                  fallback={
+                    <Show when={finishedStatus()} fallback={<text />}>
+                      <text fg={theme.success}>{uiText("ui.finished")}</text>
+                    </Show>
+                  }
+                >
+                  <text fg={theme.warning}>
+                    {pendingSubmitStatusText(submitStage())}
+                    {pendingCancelHint() ? " " + uiText("ui.keysToCancel", { keys: pendingCancelHint() ?? "" }) : ""}
+                  </text>
+                </Show>
+              }
+            >
+              {/* Only the active parent can be interrupted, even when its subagent keeps this row visible. */}
+              <FooterStatusRow
+                width={promptContentWidth()}
+                interrupt={status().type !== "idle" ? uiText("ui.interrupt") : undefined}
+              >
+                <box flexShrink={0} flexDirection="row" gap={1}>
+                  <box marginLeft={1} flexDirection="row" gap={1}>
+                    <Show
+                      when={livenessIndicator().type === "native-spinner"}
+                      fallback={
+                        <text fg={busyStatus()?.stale ? theme.warning : theme.textMuted}>
+                          {footerLivenessTextFrame(livenessIndicator())}
+                        </text>
+                      }
+                    >
+                      <FooterAnimationSpinner />
+                    </Show>
+                    <Show when={busyStatus()?.stale}>
+                      <text fg={theme.warning}>!</text>
+                    </Show>
+                  </box>
+                  <box flexDirection="row" gap={1} flexShrink={0}>
+                    <Show when={busyStatus()?.label}>
+                      <text fg={busyStatus()?.tone === "warning" ? theme.warning : theme.textMuted}>
+                        {busyStatus()?.label}
+                      </text>
+                    </Show>
+                    <Show when={tokenChipView()} keyed>
+                      {(chip) => (
+                        <text fg={theme.textMuted}>
+                          {uiText("ui.inputTokens")} {chip.input} {uiText("ui.outputTokens")} {chip.output}
+                          <Show when={chip.rate}>
+                            <span style={{ fg: theme.textMuted }}> - {chip.rate}</span>
+                          </Show>
+                        </text>
+                      )}
+                    </Show>
+                    {(() => {
+                      const retry = createMemo(() => {
+                        const s = status()
+                        if (s.type !== "retry") return
+                        return s
+                      })
+                      const message = createMemo(() => {
+                        const r = retry()
+                        if (!r) return
+                        if (r.message.includes("exceeded your current quota") && r.message.includes("gemini"))
+                          return "Gemini API quota exceeded"
+                        if (r.message.length > 120) return r.message.slice(0, 120) + "..."
+                        return r.message
+                      })
+                      const isTruncated = createMemo(() => {
+                        const r = retry()
+                        if (!r) return false
+                        return r.message.length > 120
+                      })
+                      const [seconds, setSeconds] = createSignal(0)
+                      onMount(() => {
+                        const cancel = scheduleTuiInterval(
+                          () => {
+                            const next = retry()?.next
+                            if (next) setSeconds(Math.round((next - Date.now()) / 1000))
+                          },
+                          {
+                            name: "prompt-retry-countdown",
+                            delayMs: 1000,
+                            unref: true,
+                          },
+                        )
+
+                        onCleanup(cancel)
+                      })
+                      const handleMessageClick = () => {
+                        const r = retry()
+                        if (!r) return
+                        if (r.message) {
+                          DialogAlert.show(dialog, "Retry Error", r.message)
+                        }
+                      }
+
+                      const retryText = () => {
+                        const r = retry()
+                        if (!r) return ""
+                        const baseMessage = message()
+                        const truncatedHint = isTruncated() ? " (click to expand)" : ""
+                        const duration = formatDuration(seconds())
+                        const retryInfo = ` [retrying ${duration ? `in ${duration} ` : ""}attempt #${r.attempt}]`
+                        return baseMessage + truncatedHint + retryInfo
+                      }
+
+                      return (
+                        <Show when={retry()}>
+                          <box onMouseUp={handleMessageClick}>
+                            <text fg={theme.error} wrapMode="none">
+                              {retryText()}
+                            </text>
+                          </box>
+                        </Show>
+                      )
+                    })()}
+                  </box>
+                </box>
+              </FooterStatusRow>
+            </Show>
+            <Show when={status().type !== "retry"}>
+              <box
+                gap={footerLayout().stacked ? 0 : 1}
+                flexDirection={footerLayout().stacked ? "column" : "row"}
+                flexShrink={0}
+              >
+                <Show when={contextGauge()}>
+                  <box
+                    flexDirection="row"
+                    flexShrink={0}
+                    paddingRight={1}
+                    onSizeChange={function (this: BoxRenderable) {
+                      setFooterGaugeWidth(this.width)
+                    }}
+                  >
+                    <Gauge
+                      view={contextGauge()}
+                      label={
+                        compactionCount() > 0 ? uiText("ui.compactedXCount", { count: compactionCount() }) : undefined
+                      }
+                    />
+                  </box>
+                </Show>
+                <Show
+                  when={
+                    props.footerRight ||
+                    footerLayout().showVariants ||
+                    footerLayout().showShellHint ||
+                    footerLayout().showClearHint
+                  }
+                >
+                  <box gap={2} flexDirection="row" flexShrink={0}>
+                    <Show when={props.footerRight}>
+                      <box
+                        flexDirection="row"
+                        flexShrink={0}
+                        gap={2}
+                        onSizeChange={function (this: BoxRenderable) {
+                          setFooterExtraWidth(this.width)
+                        }}
+                      >
+                        {props.footerRight}
+                      </box>
+                    </Show>
+                    <Switch>
+                      <Match when={store.mode === "normal"}>
+                        <Show when={footerLayout().showClearHint}>
+                          <KeyHint keys={footerClearHint().keys} label={footerClearHint().label} />
+                        </Show>
+                        <Show when={footerLayout().showVariants}>
+                          <KeyHint keys={keybind.print("variant_cycle")} label={uiText("ui.effort")} />
+                        </Show>
+                      </Match>
+                      <Match when={store.mode === "shell"}>
+                        <Show when={footerLayout().showShellHint}>
+                          <KeyHint keys="esc" label={uiText("ui.exitShellMode")} />
+                        </Show>
+                      </Match>
+                    </Switch>
+                  </box>
+                </Show>
+              </box>
+            </Show>
+          </box>
+        </Show>
       </box>
     </>
   )

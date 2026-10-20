@@ -16,7 +16,14 @@ import {
   TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE,
   TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE,
 } from "./terminal-cleanup"
-import { resolveTuiScreen, type TuiScreen, type TuiScreenResolution, type TuiScreenSource } from "./inline/screen"
+import { inlineRenderOptions } from "./inline/lifecycle"
+import {
+  resolveTuiScreen,
+  tuiScreenModeFor,
+  type TuiScreen,
+  type TuiScreenResolution,
+  type TuiScreenSource,
+} from "./inline/screen"
 
 const log = Log.create({ service: "tui.renderer" })
 
@@ -35,8 +42,6 @@ export type TuiRenderProfile = {
   useModifyOtherKeys: boolean
   screenMode: "alternate-screen" | "main-screen" | "split-footer"
   // Resolved screen selection and the layer that decided it (ADR-261).
-  // "split-footer" is reserved for the inline frontend (slice 2); until then
-  // every selection mounts the full-screen renderer.
   screen: TuiScreen
   screenSource: TuiScreenSource
   allowTerminalTitle: boolean
@@ -90,7 +95,7 @@ export function resolveTuiRenderProfile(input: {
     // (Fast-model, Autonomous, Sandbox) are clickable in all terminal
     // profiles; `tui.json` `mouse: false` opts out, and AX_CODE_DISABLE_MOUSE
     // is a hard disable that untrusted project config cannot override.
-    useMouse: !input.disableMouse && (input.mouse ?? true),
+    useMouse: !input.disableMouse && (input.mouse ?? screen.screen !== "inline"),
     // Kitty keyboard is likewise probe-free (a single fire-and-forget flags
     // push), so it is decoupled from the advanced profile and enabled by
     // default — Shift+Enter/Ctrl+Enter newline bindings depend on it.
@@ -98,10 +103,7 @@ export function resolveTuiRenderProfile(input: {
     // Keep whether AX Code enabled xterm's complementary keyboard protocol
     // so teardown never resets inherited state when the user opted out.
     useModifyOtherKeys: input.modifyOtherKeys ?? true,
-    // Until the inline frontend lands (ADR-261 slice 2), an inline request is
-    // recorded in `screen` but still mounts the full-screen renderer, so every
-    // teardown path keeps resetting the screen mode it actually entered.
-    screenMode: fullScreenMode,
+    screenMode: tuiScreenModeFor(screen.screen, fullScreenMode),
     screen: screen.screen,
     screenSource: screen.source,
     // Terminal title/progress are fire-and-forget OSC escapes written
@@ -159,6 +161,7 @@ export function createTuiRenderOptionsFromProfile(
     useThread: profile.useThread,
     useMouse: profile.useMouse,
     screenMode: profile.screenMode,
+    ...(profile.screenMode === "split-footer" ? inlineRenderOptions() : {}),
     useKittyKeyboard: profile.useKittyKeyboard ? {} : null,
     autoFocus: false,
     openConsoleOnError: false,

@@ -837,6 +837,16 @@ export const messages = {
   "ui.failedToLoadEarlierMessages": "\u00d6nceki iletiler y\u00fcklenemedi",
   "ui.transcriptLoadLimitReached":
     "\u25b2 {count} ileti g\u00f6steriliyor, bu g\u00f6r\u00fcn\u00fcm\u00fcn tuttu\u011fu en fazla say\u0131.",
+  "ui.inlinePromptPlaceholder": "\u0130stedi\u011fini sor...",
+  "ui.inlineDialogNeedsFullScreen": "Bu ileti\u015fim kutusu tam ekran modu gerektirir: ax-code --screen full",
+  "ui.inlinePermissionPending":
+    "\u0130zin iste\u011fi bekliyor: ax-code --screen full i\u00e7inde yan\u0131tlay\u0131n",
+  "ui.inlineQuestionPending": "Soru bekliyor: ax-code --screen full i\u00e7inde yan\u0131tlay\u0131n",
+  "ui.inlineSessionMarker": "--- Oturum {id} ---",
+  "ui.inlineRevertMarker":
+    "--- {id} konumuna geri al\u0131nd\u0131 (\u00f6nceki kayd\u0131rma ge\u00e7mi\u015fi korundu) ---",
+  "ui.inlineCompactionMarker":
+    "--- Ba\u011flam s\u0131k\u0131\u015ft\u0131r\u0131ld\u0131 (\u00f6nceki kayd\u0131rma ge\u00e7mi\u015fi korundu) ---",
   "ui.in": "i\u00e7inde",
   "ui.out": "\u00e7\u0131k\u0131\u015f",
   "ui.messageCopiedToClipboard": "\u0130leti panoya kopyaland\u0131!",

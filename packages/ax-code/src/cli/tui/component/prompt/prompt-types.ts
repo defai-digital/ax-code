@@ -2,6 +2,9 @@ import type { Accessor, JSX } from "solid-js"
 import type { PromptInfo } from "./history"
 
 export type PromptProps = {
+  inline?: boolean
+  maxInputRows?: number
+  onDraftRows?: (rows: number) => void
   sessionID?: string
   workspaceID?: string
   visible?: boolean

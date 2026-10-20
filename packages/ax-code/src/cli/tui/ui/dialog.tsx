@@ -90,7 +90,7 @@ function Dialog(
   )
 }
 
-function init() {
+function init(onUnavailable?: () => void) {
   const [store, setStore] = createStore({
     stack: [] as {
       element: JSX.Element
@@ -191,6 +191,11 @@ function init() {
       refocus()
     },
     replace(input: any, onClose?: () => void) {
+      if (onUnavailable) {
+        onUnavailable()
+        onClose?.()
+        return
+      }
       contextMenu.close()
       if (store.stack.length === 0) {
         focus = renderer.currentFocusedRenderable
@@ -224,8 +229,8 @@ export type DialogContext = ReturnType<typeof init>
 
 const ctx = createContext<DialogContext>()
 
-export function DialogProvider(props: ParentProps) {
-  const value = init()
+export function DialogProvider(props: ParentProps<{ onUnavailable?: () => void }>) {
+  const value = init(props.onUnavailable)
   return (
     <ctx.Provider value={value}>
       <ContextMenuProvider value={value.contextMenu}>{props.children}</ContextMenuProvider>

@@ -87,6 +87,7 @@ import { Log } from "@/util/log"
 import { GITHUB_NEW_ISSUE_URL } from "@/constants/project"
 import { AX_CODE_TERMINAL_TITLE } from "@/util/terminal-title"
 import {
+  type TuiRenderProfile,
   clearTuiTerminalTitle,
   destroyTuiRenderer,
   getTuiRenderProfile,
@@ -130,6 +131,9 @@ import {
   digitalCodeOverlayActive,
 } from "./component/digital-code-view-model"
 
+import { InlineRoot } from "./inline"
+import { setTuiTerminalProfile } from "./util/lifecycle"
+
 const FALLBACK_COLOR_MODE = "dark" as const
 
 export type TuiInput = {
@@ -165,6 +169,7 @@ export function tui(input: TuiInput) {
           screen: input.screen,
           screenConfig: input.config.screen,
         })
+        setTuiTerminalProfile(renderProfile)
         // Claim the terminal tab title before the renderer mounts (kimi-code
         // style: one fire-and-forget OSC 0 write at startup). Entry already
         // wrote this for the default TUI path; repeating it here covers attach
@@ -193,14 +198,23 @@ export function tui(input: TuiInput) {
 
         renderTui(
           () => {
+            if (renderProfile.screenMode === "split-footer") {
+              return <InlineRoot input={input} profile={renderProfile} onExit={onExit} />
+            }
             return (
               <ErrorBoundary
                 fallback={(error, reset) => (
-                  <ErrorComponent error={error} reset={reset} onExit={onExit} mode={FALLBACK_COLOR_MODE} />
+                  <ErrorComponent
+                    error={error}
+                    reset={reset}
+                    onExit={onExit}
+                    mode={FALLBACK_COLOR_MODE}
+                    profile={renderProfile}
+                  />
                 )}
               >
                 <ArgsProvider {...input.args}>
-                  <ExitProvider onExit={onExit}>
+                  <ExitProvider onExit={onExit} profile={renderProfile}>
                     <KVProvider>
                       <ToastProvider>
                         <RouteProvider>
@@ -1544,6 +1558,7 @@ function ErrorComponent(props: {
   reset: () => void
   onExit: () => Promise<void>
   mode?: "dark" | "light"
+  profile: TuiRenderProfile
 }) {
   const uiText = useLanguage().t
 
@@ -1558,7 +1573,7 @@ function ErrorComponent(props: {
   const handleExit = async () => {
     if (exiting) return
     exiting = true
-    await destroyTuiRenderer(renderer)
+    await destroyTuiRenderer(renderer, props.profile)
     win32FlushInputBuffer()
     await props.onExit()
   }

@@ -72,11 +72,18 @@ export namespace FileWatcher {
   // and falling through to the 100ms polling path with no warning.
   // Matches the pattern used in native/addon.ts.
   const nativeRequire = createRequire(import.meta.url)
+
+  // AX_CODE_LIBC is a build-time define. Source mode and tests do not define
+  // it, so read it through typeof: a bare reference throws ReferenceError on
+  // Linux and silently disables the parcel binding.
+  export function parcelBindingName(platform: string = process.platform, arch: string = process.arch) {
+    const libc = typeof AX_CODE_LIBC === "string" && AX_CODE_LIBC ? AX_CODE_LIBC : "glibc"
+    return `@parcel/watcher-${platform}-${arch}${platform === "linux" ? `-${libc}` : ""}`
+  }
+
   const watcher = lazy((): typeof import("@parcel/watcher") | undefined => {
     try {
-      const binding = nativeRequire(
-        `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${AX_CODE_LIBC || "glibc"}` : ""}`,
-      )
+      const binding = nativeRequire(parcelBindingName())
       return createWrapper(binding) as typeof import("@parcel/watcher")
     } catch (error) {
       log.error("failed to load watcher binding", { error })
