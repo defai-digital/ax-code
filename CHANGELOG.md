@@ -8,6 +8,7 @@ changes belong to AX Coder.
 
 ### Changed
 
+- Prepare SDK 2.6.39 with the TUI debug client and current server contract.
 - Upgrade ax-tui to 2.1.4: the inline TUI now writes fewer bytes per streamed token than the full-screen renderer, including during resize storms.
 
 ### Fixed
