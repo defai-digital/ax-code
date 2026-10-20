@@ -398,6 +398,66 @@ describe.skipIf(process.platform === "win32")("native TUI developer transports",
     expect(h.element("screen").textContent).toBe("New frame")
     expect(h.element("click-submit").disabled).toBe(false)
   })
+  test("an older transport failure cannot invalidate a newer successful screen read", async () => {
+    const f = fixture()
+    let delay = false
+    let release: (() => void) | undefined
+    await using h = await browserFixture(f, async (name, next) => {
+      const response = await next()
+      if (delay && name === "get_tui_snapshot") {
+        delay = false
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+        throw new Error("Delayed disconnected read")
+      }
+      return response
+    })
+    const read = h.registered.find((tool) => tool.name === "get_tui_snapshot")!
+    delay = true
+    const old = read.execute(f.target())
+    await h.until(() => !!release)
+    f.screen.frameId = 2
+    f.screen.text = "Fresh screen"
+    await read.execute(f.target())
+    release!()
+    await expect(old).rejects.toThrow("Delayed disconnected read")
+    expect(h.element("meta").textContent).toContain("frame 2")
+    expect(h.element("click-submit").disabled).toBe(false)
+    delay = true
+    release = undefined
+    const newest = read.execute(f.target())
+    await h.until(() => !!release)
+    release!()
+    await expect(newest).rejects.toThrow("Delayed disconnected read")
+    expect(h.element("meta").textContent).toContain("Stale preview")
+    expect(h.element("click-submit").disabled).toBe(true)
+  })
+  test("a native revocation observed by an older request still invalidates the preview", async () => {
+    const f = fixture()
+    let delay = false
+    let release: (() => void) | undefined
+    await using h = await browserFixture(f, async (name, next) => {
+      if (delay && name === "get_tui_snapshot") {
+        delay = false
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+      }
+      return next()
+    })
+    const read = h.registered.find((tool) => tool.name === "get_tui_snapshot")!
+    delay = true
+    const old = read.execute(f.target())
+    await h.until(() => !!release)
+    f.screen.frameId = 2
+    await read.execute(f.target())
+    f.controller.dispose()
+    release!()
+    expect(parseJsonStrict(await old)).toMatchObject({ code: "revoked" })
+    expect(h.element("meta").textContent).toContain("Stale preview")
+    expect(h.element("click-submit").disabled).toBe(true)
+  })
   test("failed post-input observation preserves known success and structured HTTP errors", async () => {
     const f = fixture()
     await using h = await browserFixture(f, async (name, next) =>

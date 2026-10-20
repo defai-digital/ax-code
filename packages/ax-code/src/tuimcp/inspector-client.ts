@@ -10,6 +10,7 @@ let pendingInputs = 0
 let minimumFrame
 let activeMutation
 let previewFloor = 0
+let previewSequence = 0
 const receipts = []
 function uncertain(result) {
   return result.status === "rejected" && ["timeout_unknown", "outcome_unknown", "internal_error"].includes(result.code)
@@ -42,6 +43,7 @@ function show(result, requestSequence, requestEpoch, present, mutation = false) 
       (minimumFrame === undefined || result.screen.frameId > minimumFrame)) {
     if (!lastScreen || result.screen.frameId >= lastScreen.screen.frameId) {
       lastScreen = result
+      previewSequence = Math.max(previewSequence, requestSequence)
       minimumFrame = undefined
       el("screen").textContent = result.screen.text
       el("meta").textContent = result.screen.width + " × " + result.screen.height +
@@ -76,7 +78,8 @@ async function rpc(name, args = {}, present = true) {
     return show(result, requestSequence, requestEpoch, present, name === "tui_input" || name === "select_session")
   } catch (error) {
     if (requestEpoch === epoch) {
-      invalidate(error.message)
+      // A failed older read cannot supersede a newer successfully observed screen.
+      if (requestSequence >= previewSequence) invalidate(error.message)
       if (present && requestSequence >= presented) {
         presented = requestSequence
         el("status").textContent = error.message
