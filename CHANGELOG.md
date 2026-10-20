@@ -21,6 +21,7 @@ changes belong to AX Coder.
 ### Fixed
 
 - Bound TUI inspector browser requests, including stalled response bodies, without automatically replaying uncertain input.
+- Preserve newer stream connection and backend-exit states when an older startup status reply arrives late.
 - Wait for worktree readiness before the sandbox reset regression commits, avoiding a Windows bootstrap race.
 - Allow slow JSR processing to finish before the SDK publisher's job deadline interrupts provenance attachment.
 - Edit and write tools update a symlink's target instead of replacing the link (for example `CLAUDE.md -> AGENTS.md`).

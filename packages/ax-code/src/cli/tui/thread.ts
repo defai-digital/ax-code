@@ -539,18 +539,23 @@ export function createWorkerFetch(client: RpcClient): typeof fetch {
 
 export function createEventSource(client: RpcClient, wire?: RpcWireTarget): EventSource {
   let lastStatus: StreamConnectionStatus | undefined
+  let statusVersion = 0
   const statusListeners = new Set<(status: StreamConnectionStatus) => void>()
   const emitStatus = (status: StreamConnectionStatus) => {
+    statusVersion++
     lastStatus = status
     for (const handler of statusListeners) handler(status)
   }
   client.on<StreamConnectionStatus>("event.status", (status) => {
     emitStatus(status)
   })
+  const snapshotVersion = statusVersion
   void client
     .call("eventStatus", undefined)
     .then((status) => {
-      if (!status) return
+      // A batched wire read can deliver a live status before this RPC's
+      // promise continuation runs. Never replace it with the older snapshot.
+      if (!status || statusVersion !== snapshotVersion) return
       emitStatus(status)
     })
     .catch(() => undefined)

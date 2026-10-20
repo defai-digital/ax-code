@@ -20,6 +20,39 @@ function fakeWire(overrides: Partial<{ onWireDeath: (() => void) | null; wireClo
 }
 
 describe("createEventSource wire death propagation", () => {
+  test("uses the initial status snapshot when no newer status has arrived", async () => {
+    const initial: StreamConnectionStatus = { connected: true, phase: "connected", attempt: 1 }
+    const client = { ...fakeClient(), call: vi.fn(async () => initial) }
+    const events = createEventSource(client as any)
+    await Promise.resolve()
+    expect(events.status!()).toBe(initial)
+  })
+
+  test.each(["connected", "stopped"] as const)("ignores an initial snapshot after a newer %s status", async (phase) => {
+    const channels = new Map<string, (status: StreamConnectionStatus) => void>()
+    const snapshot = Promise.withResolvers<StreamConnectionStatus>()
+    const client = {
+      on: (channel: string, handler: (status: StreamConnectionStatus) => void) => {
+        channels.set(channel, handler)
+        return () => channels.delete(channel)
+      },
+      call: () => snapshot.promise,
+    }
+    const wire = fakeWire()
+    const events = createEventSource(client as any, wire)
+    const statuses: StreamConnectionStatus[] = []
+    events.onStatus!((status) => statuses.push(status))
+    if (phase === "stopped") wire.onWireDeath!()
+    else channels.get("event.status")!({ connected: true, phase: "connected", attempt: 1 })
+    const latest = events.status!()
+    snapshot.resolve({ connected: false, phase: "connecting", attempt: 1 })
+    await snapshot.promise
+    await Promise.resolve()
+    expect(events.status!()).toBe(latest)
+    expect(statuses).toHaveLength(1)
+    expect(statuses[0].phase).toBe(phase)
+  })
+
   test("emits a terminal backend-exited status when the wire dies, after the previous handler", () => {
     const previous = vi.fn()
     const wire = fakeWire({ onWireDeath: previous })
