@@ -1,4 +1,14 @@
 {
   "version": 1,
-  "mirrors": []
+  "mirrors": [
+    {
+      "repo": "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP",
+      "revision": "f05ba22fbfe32fe696d8af8c7f5eb5cdd170ef29",
+      "manifestUrl": "https://models.ax-code.app/AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP/f05ba22fbfe32fe696d8af8c7f5eb5cdd170ef29/mirror-manifest.json",
+      "signatureUrl": "https://models.ax-code.app/AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP/f05ba22fbfe32fe696d8af8c7f5eb5cdd170ef29/mirror-manifest.json.minisig",
+      "manifestSha256": "5e1d5d33874c24b60b2dc73ebcb2c04d8e5b6f7b441d0caf9f246288bc32a131",
+      "verificationReceipt": "https://models.ax-code.app/AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP/f05ba22fbfe32fe696d8af8c7f5eb5cdd170ef29/mirror-receipt.json",
+      "verifiedAt": "2026-10-20T00:56:50.381Z"
+    }
+  ]
 }
