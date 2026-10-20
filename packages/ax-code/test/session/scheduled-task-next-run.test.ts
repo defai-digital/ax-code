@@ -212,6 +212,12 @@ describe("ScheduledTask.nextRunAt", () => {
     expect(() => ScheduledTask.validateSchedule({ type: "cron", expression: "not a cron" })).toThrow(
       ScheduledTask.InvalidSchedule,
     )
+    // Number() would accept these as 10, 16, and 5; cron fields are decimal.
+    for (const expression of ["1e1 * * * *", "0x10 * * * *", "+5 * * * *"]) {
+      expect(() => ScheduledTask.validateSchedule({ type: "cron", expression })).toThrow(
+        ScheduledTask.InvalidSchedule,
+      )
+    }
     // a valid, realizable expression passes
     expect(() => ScheduledTask.validateSchedule({ type: "cron", expression: "0 9 1 * *" })).not.toThrow()
   })

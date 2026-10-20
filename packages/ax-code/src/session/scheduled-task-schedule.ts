@@ -337,8 +337,11 @@ export function parseCronField(value: string, min: number, max: number): Set<num
       for (let v = lo; v <= hi; v++) result.add(v)
       continue
     }
+    // A bare field must be decimal digits. Number() alone would accept
+    // "1e1", "0x10" and "+5" as valid cron values.
+    if (!/^\d+$/.test(part)) return undefined
     const number = Number(part)
-    if (!Number.isInteger(number) || number < min || number > max) return undefined
+    if (number < min || number > max) return undefined
     result.add(number)
   }
   return result.size > 0 ? result : undefined
