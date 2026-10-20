@@ -45,6 +45,15 @@
       "manifestSha256": "088e6f7238bc82675eb5603d7fa017f74e03ffcfd2e211093ddc907adb51247a",
       "verificationReceipt": "https://models.ax-code.app/AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP/edae19529e9a41d34573f913e5d07374aa65781a/mirror-receipt.json",
       "verifiedAt": "2026-10-20T03:28:52.080Z"
+    },
+    {
+      "repo": "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP",
+      "revision": "56cfbbc4b64a6067ab44036af6adaa5c59adfd10",
+      "manifestUrl": "https://models.ax-code.app/AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP/56cfbbc4b64a6067ab44036af6adaa5c59adfd10/mirror-manifest.json",
+      "signatureUrl": "https://models.ax-code.app/AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP/56cfbbc4b64a6067ab44036af6adaa5c59adfd10/mirror-manifest.json.minisig",
+      "manifestSha256": "eae1848a5c3e22509465a24ef80506b317bf32944cd2b2960fe9c2f38f36b2c8",
+      "verificationReceipt": "https://models.ax-code.app/AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP/56cfbbc4b64a6067ab44036af6adaa5c59adfd10/mirror-receipt.json",
+      "verifiedAt": "2026-10-20T04:11:27.439Z"
     }
   ]
 }
