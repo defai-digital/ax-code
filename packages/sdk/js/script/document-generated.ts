@@ -3,8 +3,8 @@ import path from "node:path"
 
 /**
  * Injects JSDoc comments into the hey-api generated sources under `src/gen`
- * and `src/v2/gen`. The generator does not document its output, which used to
- * leave the published JSR package with ~1% symbol documentation. This pass
+ * and `src/v2/gen`. The generator does not document its output, which would
+ * leave the published SDK with sparse symbol documentation. This pass
  * runs after code generation, patching and Prettier, before tsc, and is
  * deterministic so regeneration always yields the same docs.
  *

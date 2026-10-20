@@ -446,7 +446,7 @@ const tuiDistManifest = toTuiDistPackageJson(
 await writeText(tuiDistManifestPath, JSON.stringify(tuiDistManifest, null, 2) + "\n")
 console.log("Copied ax-tui into the distribution")
 
-// The framework owns native delivery for both linked and JSR packages.
+// The framework owns native delivery for both linked and registry packages.
 // Stage only the build target's library into the
 // distribution (every archive must not ship all ~30 MB of binaries) and
 // verify it against the committed manifest BEFORE codesigning — signing

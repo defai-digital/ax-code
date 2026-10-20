@@ -3,7 +3,7 @@
  *
  * This was the default export in the private workspace package
  * `@ax-code/sdk@1.4.0`. It moved to the internal `@ax-code/sdk/http` path in
- * 2.0.0. The public JSR package does not export this legacy surface; app
+ * 2.0.0. The public SDK package does not export this legacy surface; app
  * integrations use its headless or gRPC entry point.
  */
 

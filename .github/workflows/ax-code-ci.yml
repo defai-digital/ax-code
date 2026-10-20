@@ -490,7 +490,7 @@ jobs:
           path: .internal/reports/testing/junit/*.xml
           if-no-files-found: ignore
 
-  # Exercise the pinned JSR framework from a clean checkout with no sibling.
+  # Exercise the pinned registry framework from a clean checkout with no sibling.
   # Native delivery and its integrity checks belong to the installed package.
   tui-node26-smoke:
     runs-on: ubuntu-latest

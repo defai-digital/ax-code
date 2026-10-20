@@ -37,7 +37,7 @@ describe("script.workspace-metadata", () => {
     const dependencies = packageJson.dependencies ?? {}
     const devDependencies = packageJson.devDependencies ?? {}
 
-    // Framework edits belong in ax-tui; consumers pin an actual JSR artifact.
+    // Framework edits belong in ax-tui; consumers pin an actual registry artifact.
     const workspace = await readFile(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8")
     const lockfile = await readFile(path.join(repoRoot, "pnpm-lock.yaml"), "utf8")
     expect(dependencies["ax-tui"]).toBe("catalog:")

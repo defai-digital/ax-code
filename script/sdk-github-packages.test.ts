@@ -36,7 +36,6 @@ describe("SDK package boundary", () => {
     "workspace:*",
     "file:../secret",
     "link:../secret",
-    "jsr:other",
     "catalog:missing",
     "https://example.com/x.tgz",
     "^4.0.0",

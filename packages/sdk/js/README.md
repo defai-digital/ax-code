@@ -21,7 +21,7 @@ pnpm add @defai-digital/ax-code-sdk@2.6.40
 
 For GitHub Actions, declare `permissions: packages: read` and pass `${{ secrets.GITHUB_TOKEN }}` as `NODE_AUTH_TOKEN` for the install step. Public npm packages on GitHub Packages still require registry authentication; they do not require a private-package access grant. Publication uses the dedicated `SDK_PACKAGES_TOKEN` secret and verifies that package visibility remains public.
 
-SDK release assets include the tarball, its SHA-512 integrity receipt, and a detached Sigstore provenance bundle. Publication verifies authenticated registry bytes and a separate job installs the package with read-only credentials. These assets describe the SDK source tag and the publisher revision separately. Historical JSR versions remain historical; new SDK releases use GitHub Packages.
+SDK release assets include the tarball, its SHA-512 integrity receipt, and a detached Sigstore provenance bundle. Publication verifies authenticated registry bytes and a separate job installs the package with read-only credentials. These assets describe the SDK source tag and the publisher revision separately.
 
 Requires **Node.js 26+** (or Deno with Node compatibility). Older Node.js versions are unsupported. Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`. SDK and runtime versions are independent. Check the runtime capability protocol before enabling app features; an SDK version check alone does not establish runtime compatibility.
 
