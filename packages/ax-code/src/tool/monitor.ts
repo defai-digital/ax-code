@@ -38,14 +38,17 @@ function compileFilter(pattern: string | undefined): RegExp | undefined {
 // reject with the same DeniedError BashTool would throw (filtered ruleset) so
 // the run's blocked-run accounting counts it. The `monitor` ask is preserved
 // for the allow/ask cases below.
-async function assertBashAllowed(command: string, ctx: Tool.Context): Promise<void> {
+async function assertBashPatternsAllowed(patterns: readonly string[], ctx: Tool.Context): Promise<void> {
   const session = await Session.get(ctx.sessionID).catch((error) => {
     if (NotFoundError.isInstance(error)) return undefined
     throw error
   })
   const ruleset = session?.permission ?? []
-  const rule = Permission.evaluate("bash", command, ruleset)
-  if (rule.action !== "deny") return
+  // BashTool asks with one pattern per parsed command, not the raw pipeline.
+  // Evaluating only the raw command lets `echo hi && rm -rf x` bypass a
+  // `rm *` deny rule when monitor renames the ask.
+  const denied = patterns.some((pattern) => Permission.evaluate("bash", pattern, ruleset).action === "deny")
+  if (!denied) return
   throw new Permission.DeniedError({
     ruleset: ruleset.filter((candidate) => Wildcard.match("bash", candidate.permission)),
   })
@@ -77,7 +80,7 @@ export const MonitorTool = Tool.define("monitor", {
 
     // A deny rule for `bash` must also deny the command monitor runs. Check it
     // before delegating to BashTool so a denied monitor never spawns a shell.
-    await assertBashAllowed(params.command, ctx)
+    await assertBashPatternsAllowed([params.command], ctx)
 
     const persistent = params.persistent === true
     const timeoutMs = persistent ? undefined : (params.timeout_ms ?? DEFAULT_TIMEOUT_MS)
@@ -95,8 +98,9 @@ export const MonitorTool = Tool.define("monitor", {
       },
       {
         ...ctx,
-        ask: (request) =>
-          ctx.ask(
+        ask: async (request) => {
+          if (request.permission === "bash") await assertBashPatternsAllowed(request.patterns, ctx)
+          return ctx.ask(
             request.permission === "bash"
               ? {
                   ...request,
@@ -104,7 +108,8 @@ export const MonitorTool = Tool.define("monitor", {
                   metadata: { ...request.metadata, description: params.description },
                 }
               : request,
-          ),
+          )
+        },
       },
     )
     const background = (bashResult.metadata as { background?: { shellID?: string; pid?: number | null } }).background

@@ -54,6 +54,23 @@ describe("tool.monitor permission", () => {
     })
   })
 
+  test("rejects a denied subcommand inside a compound monitor command", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({
+          permission: [{ permission: "bash", pattern: "sleep *", action: "deny" }],
+        })
+        const monitor = await MonitorTool.init()
+        await expect(
+          monitor.execute({ command: "echo hi && sleep 30", description: "denied subcommand" }, context(session.id)),
+        ).rejects.toBeInstanceOf(Permission.DeniedError)
+        expect(BackgroundShell.list(session.id)).toEqual([])
+      },
+    })
+  })
+
   test("reaches BashTool with the ask renamed to monitor when bash is allowed", async () => {
     // username keeps this test hermetic where os.userInfo() is unavailable.
     await using tmp = await tmpdir({ git: true, config: { username: "test" } })
