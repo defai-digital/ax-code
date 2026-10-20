@@ -22,7 +22,7 @@ permissions:
 
 env:
   AX_CODE_SDK_RELEASE_TAG: ${{ inputs.tag || github.event.client_payload.tag || github.ref_name }}
-  SDK_ARTIFACT_DIR: packages/sdk/js/.tmp/github-package
+  SDK_ARTIFACT_DIR: .tmp/sdk-github-package
 
 jobs:
   publish:
@@ -166,7 +166,7 @@ jobs:
       - name: Verify registry tarball declarations and runtime contracts
         run: pnpm --dir packages/sdk/js run test:tarball
         env:
-          AX_CODE_SDK_CONSUMER_ARTIFACT: ${{ github.workspace }}/packages/sdk/js/.tmp/github-package/registry-readback.tgz
+          AX_CODE_SDK_CONSUMER_ARTIFACT: ${{ github.workspace }}/.tmp/sdk-github-package/registry-readback.tgz
 
   release:
     needs: consumer

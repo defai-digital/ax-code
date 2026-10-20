@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 import { describe, expect, test, vi } from "vitest"
-import { publicManifest } from "../packages/sdk/js/script/github-package.mjs"
+import path from "node:path"
+import { artifactDir, packageRoot, publicManifest } from "../packages/sdk/js/script/github-package.mjs"
 import { registryRequest, validateTag, verifyRegistry } from "../.github/scripts/sdk-package-registry.mjs"
 
 const source = {
@@ -116,4 +117,12 @@ test("repository dispatch carries only a tag into the same source validation gat
   expect(workflow).toContain("inputs.tag || github.event.client_payload.tag || github.ref_name")
   expect(workflow).not.toMatch(/run:.*client_payload/)
   expect(workflow).toContain("node .github/scripts/sdk-package-registry.mjs source")
+})
+
+test("release evidence stays outside the SDK build scratch directory", () => {
+  const sdkScratch = path.join(packageRoot, ".tmp")
+  expect(path.relative(sdkScratch, artifactDir).startsWith(`..${path.sep}`)).toBe(true)
+  const workflow = readFileSync(".github/workflows/sdk-github-packages.yml", "utf8")
+  expect(workflow).toContain("SDK_ARTIFACT_DIR: .tmp/sdk-github-package")
+  expect(workflow).not.toContain("packages/sdk/js/.tmp/github-package")
 })

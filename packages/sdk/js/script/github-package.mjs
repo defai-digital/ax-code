@@ -10,7 +10,8 @@ export const publicName = "@defai-digital/ax-code-sdk"
 export const registry = "https://npm.pkg.github.com"
 export const packageRoot = fileURLToPath(new URL("..", import.meta.url))
 const repoRoot = path.resolve(packageRoot, "../../..")
-export const artifactDir = path.join(packageRoot, ".tmp/github-package")
+// SDK generation removes packages/sdk/js/.tmp. Release evidence must survive it.
+export const artifactDir = path.join(repoRoot, ".tmp/sdk-github-package")
 export const tarballName = (version) => `defai-digital-ax-code-sdk-${version}.tgz`
 
 export function publicManifest(workspace, catalog) {
