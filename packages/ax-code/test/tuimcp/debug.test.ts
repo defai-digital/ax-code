@@ -427,6 +427,19 @@ describe.skipIf(process.platform === "win32")("native TUI developer transports",
     expect(h.element("status").textContent).toContain("stale_revision")
     expect(h.element("receipts").textContent).toContain("stale_revision")
   })
+  test("a refused input does not require a nonexistent new frame before refreshing", async () => {
+    const f = fixture()
+    await using h = await browserFixture(f)
+    const { operation: _, ...args } = f.input()
+    f.changeFocus()
+    const mutate = h.registered.find((tool) => tool.name === "tui_input")!
+    expect(parseJsonStrict(await mutate.execute(args))).toMatchObject({ code: "stale_revision" })
+    const read = h.registered.find((tool) => tool.name === "get_tui_snapshot")!
+    await read.execute(f.target())
+    expect(h.element("meta").textContent).toContain("frame 1")
+    expect(h.element("click-submit").disabled).toBe(false)
+    expect(f.actions).toHaveLength(0)
+  })
   test("manual transport failure retains the explicit unknown-outcome warning", async () => {
     const f = fixture()
     await using h = await browserFixture(f, async (name, next) => {
@@ -439,6 +452,46 @@ describe.skipIf(process.platform === "win32")("native TUI developer transports",
     expect(h.element("status").textContent).toContain("Input outcome unknown; reconcile before retrying")
     expect(h.element("click-submit").disabled).toBe(true)
     expect(f.actions).toHaveLength(0)
+  })
+  test.each(["timeout_unknown", "outcome_unknown", "internal_error"])(
+    "structured %s retains the reconciliation warning without hiding the receipt",
+    async (code) => {
+      const f = fixture(true, { deferPaint: true })
+      await using h = await browserFixture(f, async (name, next) => {
+        const response = await next()
+        return name === "tui_input" ? Response.json({ status: "rejected", code }) : response
+      })
+      const { operation: _, ...args } = f.input()
+      const mutate = h.registered.find((tool) => tool.name === "tui_input")!
+      expect(parseJsonStrict(await mutate.execute(args))).toMatchObject({ status: "rejected", code })
+      expect(h.element("status").textContent).toContain("Input outcome unknown; reconcile before retrying")
+      expect(h.element("receipts").textContent).toContain(code)
+      const read = h.registered.find((tool) => tool.name === "get_tui_snapshot")!
+      await read.execute(f.target())
+      expect(h.element("click-submit").disabled).toBe(true)
+      expect(f.actions).toHaveLength(1)
+    },
+  )
+  test("an uncertain receipt reconciles with the same request id without repeating native input", async () => {
+    const f = fixture(true, { deferPaint: true })
+    let loseReply = true
+    await using h = await browserFixture(f, async (name, next) => {
+      const response = await next()
+      if (name === "tui_input" && loseReply) {
+        loseReply = false
+        return Response.json({ status: "rejected", code: "timeout_unknown" })
+      }
+      return response
+    })
+    const { operation: _, ...args } = f.input({ kind: "paste", text: "Applied once" })
+    const mutate = h.registered.find((tool) => tool.name === "tui_input")!
+    expect(parseJsonStrict(await mutate.execute(args))).toMatchObject({ code: "timeout_unknown" })
+    f.paint()
+    expect(parseJsonStrict(await mutate.execute(args))).toMatchObject({ status: "applied" })
+    expect(f.actions).toHaveLength(1)
+    expect(h.element("screen").textContent).toBe("Applied once")
+    expect(h.element("click-submit").disabled).toBe(false)
+    expect(h.element("receipts").textContent).toContain('"status": "applied"')
   })
   test("overlapping browser mutations are fenced while identical in-flight calls share a receipt", async () => {
     const f = fixture(true, { deferPaint: true })

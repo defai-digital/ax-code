@@ -11,6 +11,9 @@ let minimumFrame
 let activeMutation
 let previewFloor = 0
 const receipts = []
+function uncertain(result) {
+  return result.status === "rejected" && ["timeout_unknown", "outcome_unknown", "internal_error"].includes(result.code)
+}
 function controls() {
   document.querySelectorAll("button").forEach((button) => { button.disabled = busy || !!activeMutation })
   el("click-submit").disabled = busy || !!activeMutation || pendingInputs > 0 || !lastScreen
@@ -33,7 +36,7 @@ function receipt(name, args, result) {
   if (receipts.length > 8) receipts.shift()
   el("receipts").textContent = JSON.stringify(receipts, null, 2)
 }
-function show(result, requestSequence, requestEpoch, present) {
+function show(result, requestSequence, requestEpoch, present, mutation = false) {
   if (requestEpoch !== epoch) return result
   if (result.status === "snapshot" && requestSequence >= previewFloor && pendingInputs === 0 &&
       (minimumFrame === undefined || result.screen.frameId > minimumFrame)) {
@@ -50,7 +53,11 @@ function show(result, requestSequence, requestEpoch, present) {
   if (present && requestSequence >= presented) {
     presented = requestSequence
     el("details").textContent = JSON.stringify(result, null, 2)
-    el("status").textContent = result.status === "rejected" ? "Rejected: " + result.code : "Connected · " + result.status
+    el("status").textContent = result.status === "rejected"
+      ? mutation && uncertain(result)
+        ? "Input outcome unknown; reconcile before retrying. " + result.code
+        : "Rejected: " + result.code
+      : "Connected · " + result.status
   }
   return result
 }
@@ -66,7 +73,7 @@ async function rpc(name, args = {}, present = true) {
     try { result = await response.json() } catch { throw new Error("Inspector returned an invalid response (HTTP " + response.status + ")") }
     if (!response.ok) throw new Error("Inspector request failed: " + (result.code ?? "HTTP " + response.status))
     if (result.status === "rejected" && requestEpoch === epoch) invalidate(result.code)
-    return show(result, requestSequence, requestEpoch, present)
+    return show(result, requestSequence, requestEpoch, present, name === "tui_input" || name === "select_session")
   } catch (error) {
     if (requestEpoch === epoch) {
       invalidate(error.message)
@@ -134,6 +141,8 @@ async function mutate(name, args) {
     pendingInputs--
     controls()
   }
+  // A confirmed refusal emits no input frame. Retain only an older unresolved paint fence.
+  if (result.status === "rejected" && !uncertain(result) && ownEpoch === epoch) minimumFrame = previousMinimum
   if (result.status === "applied" && ownEpoch === epoch) {
     try {
       if (before === undefined) throw new Error("No pre-input frame is available")
