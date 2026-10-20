@@ -24,7 +24,7 @@ test("domes-snow paints falling snow from elapsed time", () => {
   expect(pane[0]!).toBeGreaterThan(pane[2]! + 40)
 })
 
-test("domes-clear shows a blue dome over a green meadow and animates only its smoke and bell", () => {
+test("domes-clear shows a blue dome over a green meadow and animates its sky", () => {
   const first = renderDomesPixels(WIDTH, HEIGHT, "domes-clear", 0)
   const moving = renderDomesPixels(WIDTH, HEIGHT, "domes-clear", 900)
   expect(moving.equals(renderDomesPixels(WIDTH, HEIGHT, "domes-clear", 900))).toBe(true)
@@ -35,6 +35,26 @@ test("domes-clear shows a blue dome over a green meadow and animates only its sm
   expect(dome[2]!).toBeGreaterThan(dome[0]!)
   const meadow = pixel(first, 650, 470)
   expect(meadow[1]!).toBeGreaterThan(meadow[2]!)
+})
+
+test("domes-clear keeps visible motion", () => {
+  let best = 0
+  let prev = renderDomesPixels(WIDTH, HEIGHT, "domes-clear", 0)
+  for (let t = 100; t <= 3000; t += 100) {
+    const frame = renderDomesPixels(WIDTH, HEIGHT, "domes-clear", t)
+    let changed = 0
+    for (let i = 0; i < frame.length; i += 3) {
+      const d = Math.abs(
+        0.299 * (frame[i]! - prev[i]!) +
+          0.587 * (frame[i + 1]! - prev[i + 1]!) +
+          0.114 * (frame[i + 2]! - prev[i + 2]!),
+      )
+      if (d > 8) changed++
+    }
+    best = Math.max(best, changed / (frame.length / 3))
+    prev = frame
+  }
+  expect(best).toBeGreaterThan(0.015)
 })
 
 test.each(["domes-snow", "domes-clear"] as const)("%s renders at any size", (style) => {

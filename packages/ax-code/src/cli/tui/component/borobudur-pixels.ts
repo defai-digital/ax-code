@@ -72,17 +72,31 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
   hd.disk(sunX, sunY, coreR, sun)
   if (!misty) {
     const bank = (cx: number, cy: number, span: number) => {
-      for (let k = 0; k < 7; k++) {
-        const ox = (k - 3) * span * 0.14
+      for (let k = 0; k < 8; k++) {
+        const ox = (k - 3.5) * span * 0.14
         const oy = -Math.sin(k * 1.3) * ch * 0.25
-        const rr = ch * (0.8 + 0.25 * Math.sin(k * 2.2 + 1))
-        softBlob(cx + ox, cy + oy, rr * 1.6, rr, WHITE, 0.9, 0.55)
-        softBlob(cx + ox, cy + oy + rr * 0.35, rr * 1.4, rr * 0.55, [186, 204, 224], 0.35, 0.7)
+        const rr = ch * (0.95 + 0.3 * Math.sin(k * 2.2 + 1))
+        const bx = cx + ox
+        const by = cy + oy
+        const rx = rr * 1.7
+        const ry = rr
+        // Clouds never stamp the pinned sky corner.
+        if (Math.hypot(0.5 - bx, 0.5 - by) < Math.max(rx, ry) + 2) continue
+        softBlob(bx, by, rx, ry, WHITE, 0.88, 0.55)
+        softBlob(bx, by + rr * 0.35, rr * 1.45, rr * 0.55, [186, 204, 224], 0.35, 0.7)
       }
     }
-    bank(hd.X(10 + loop * 3), hd.Y(3.2), cw * 12)
-    bank(hd.X(48 - loop * 2), hd.Y(1.6), cw * 10)
-    bank(hd.X(24), hd.Y(6.4), cw * 8)
+    const wrap = (x: number) => {
+      const span = w + cw * 16
+      return (((x % span) + span) % span) - cw * 8
+    }
+    bank(wrap(cw * 8 + t * 0.11), hd.Y(3.0), cw * 13)
+    bank(wrap(cw * 40 - t * 0.08), hd.Y(1.95), cw * 11)
+    bank(wrap(cw * 22 + t * 0.06), hd.Y(5.4), cw * 9)
+    bank(wrap(cw * 58 + t * 0.09), hd.Y(4.1), cw * 10)
+    // Restore the sun disk so drifting banks cannot tint the pinned pixel.
+    hd.disk(sunX, sunY, coreR * 1.7, hdMix(sun, borobudurSkyRgb(style, 0.1), 0.7))
+    hd.disk(sunX, sunY, coreR, sun)
   } else {
     // Overcast streaks. The `sin(y*0.05)*2` term is y-invariant; inline the
     // blend with a direct buffer write so the inner x loop is one sin and
@@ -418,11 +432,65 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
     }
   }
   if (misty) {
-    for (const band of BOROBUDUR_MIST_BANDS) fog(band + 0.5, 0.62, 1, 0.33)
-    fog(BOROBUDUR_GROUND_TOP - 0.3, 0.55, 1, 0.21)
+    // Terrace bands keep the original density so stone stays darker than the sky
+    // at rest; extra parallax veils drift through the forest and upper terraces.
+    for (const band of BOROBUDUR_MIST_BANDS) fog(band + 0.5, 0.62, 1.35, 0.33)
+    fog(BOROBUDUR_GROUND_TOP - 0.3, 0.55, 1.15, 0.21)
+    const veilTop = Math.max(1, Math.floor(hd.Y(5.2)))
+    const veilBot = Math.min(h, Math.floor(hd.Y(13.05)))
+    const vR = mist[0]
+    const vG = mist[1]
+    const vB = mist[2]
+    for (let y = veilTop; y < veilBot; y++) {
+      let i = y * w * 3
+      for (let x = 0; x < w; x++) {
+        const a =
+          0.16 * (0.5 + 0.5 * Math.sin(x * 0.018 + t * 0.016 + y * 0.012)) +
+          0.12 * (0.5 + 0.5 * Math.sin(x * 0.033 - t * 0.024 + y * 0.02)) +
+          0.08 * (0.5 + 0.5 * Math.sin(x * 0.009 + t * 0.011 + y * 0.007))
+        bPx[i] = Math.round(bPx[i]! + (vR - bPx[i]!) * a)
+        bPx[i + 1] = Math.round(bPx[i + 1]! + (vG - bPx[i + 1]!) * a)
+        bPx[i + 2] = Math.round(bPx[i + 2]! + (vB - bPx[i + 2]!) * a)
+        i += 3
+      }
+    }
+    for (let layer = 0; layer < 3; layer++) {
+      const speed = 0.09 + layer * 0.05
+      const span = w + cw * 22
+      const ry = ch * (1.45 + layer * 0.25)
+      const rx = cw * (11 + layer * 2.2)
+      for (let i = 0; i < 6; i++) {
+        const cx = ((((t * speed + i * (span / 6) + layer * 48) % span) + span) % span) - cw * 11
+        const cy = hd.Y(6.2 + layer * 2.6 + (i % 2) * 0.55)
+        if (Math.hypot(0.5 - cx, 0.5 - cy) < Math.max(rx, ry) + 4) continue
+        if (Math.hypot(sunX - cx, sunY - cy) < Math.max(rx, ry) + coreR * 2) continue
+        if (cy + ry > hd.Y(13.4)) continue
+        softBlob(cx, cy, rx, ry, mist, 0.3 - layer * 0.05, 0.6)
+      }
+    }
   } else {
     fog(BOROBUDUR_MIST_BANDS[1]! + 1.1, 0.16, 1, 0.27)
     fog(BOROBUDUR_GROUND_TOP - 0.4, 0.28, 1, 0.19)
+  }
+  if (misty) {
+    const lamp: RGB = [255, 208, 150]
+    const lamps: readonly (readonly [number, number])[] = [
+      [17.5, 13.15],
+      [24.5, 13.15],
+      [51.5, 13.15],
+      [58.5, 13.15],
+      [25.5, 10.15],
+      [33, 10.15],
+      [44, 10.15],
+      [51.5, 10.15],
+      [32.5, 7.2],
+      [38.5, 7.2],
+      [44.5, 7.2],
+    ]
+    lamps.forEach(([lx, ly], i) => {
+      const pulse = 0.4 + 0.12 * Math.sin(t / 420 + i * 1.3)
+      softBlob(hd.X(lx), hd.Y(ly), cw * 2.8, ch * 1.2, lamp, pulse, 0.85)
+    })
   }
 
   // Flanking coconut palms, curved trunks with drooping fronds.
@@ -496,18 +564,32 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
     hd.disk(hd.X(bloom + 0.5), hd.Y(BOROBUDUR_TIERS[2]![3] + 0.45), Math.max(1.5, cw * 0.12), hdHex(c.offer))
   }
 
-  // Swifts.
-  for (const swift of borobudurBirds(elapsedMs)) {
-    const bx = hd.X(swift.x + 0.5)
-    const by = hd.Y(swift.y + 0.5)
-    const flap = Math.floor(t / 180) % 2 === 0 ? -ch * 0.25 : ch * 0.2
-    const bird = hdHex(c.bird)
+  // Swifts; noon adds a small flock that stays in the sky above the terraces.
+  const paintBird = (bx: number, by: number, flap: number, bird: RGB) => {
+    if (bx * bx + by * by < 40) return
+    if (Math.hypot(bx - sunX, by - sunY) < coreR * 2.2) return
     for (const side of [-1, 1]) {
       const steps = Math.ceil(cw * 0.7)
       for (let s = 0; s <= steps; s++) {
         const q = s / steps
         hd.disk(bx + side * q * cw * 0.7, by + flap * q * (1 - q * 0.3), Math.max(0.8, cw * 0.05), bird)
       }
+    }
+  }
+  const bird = hdHex(c.bird)
+  for (const swift of borobudurBirds(elapsedMs)) {
+    const bx = hd.X(swift.x + 0.5)
+    const by = hd.Y(swift.y + 0.5)
+    const flap = Math.floor(t / 180) % 2 === 0 ? -ch * 0.25 : ch * 0.2
+    paintBird(bx, by, flap, bird)
+  }
+  if (!misty) {
+    for (let i = 0; i < 8; i++) {
+      const col = (((t / 90 + i * 9.4) % BOROBUDUR_COLUMNS) + BOROBUDUR_COLUMNS) % BOROBUDUR_COLUMNS
+      const bx = hd.X(col)
+      const by = hd.Y(2.6 + (i % 4) * 1.05)
+      const flap = Math.sin(t / 160 + i) * ch * 0.28
+      paintBird(bx, by, flap, bird)
     }
   }
   return hd.pixels

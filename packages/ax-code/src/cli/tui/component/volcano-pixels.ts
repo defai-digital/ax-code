@@ -38,6 +38,7 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
   const t = Math.max(0, elapsedMs)
   const S = Math.min(hd.ch, hd.cw * 2)
   const pulse = eruption ? volcanoGlow(t) : 0
+  const calmBreath = eruption ? 0 : volcanoGlow(t)
   const rock = hdHex(c.rock)
   const rim = hdHex(c.rim)
   const lava = hdHex(c.lava)
@@ -98,14 +99,12 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
     glowFast(craterX, craterY - S * 2, S * 15, hdHex("#e0451a"), 0.55 + 0.12 * pulse, 0.85)
     glowFast(craterX, groundY, hd.cw * 38, hdHex("#c33d1e"), 0.35, 0.5)
   } else {
-    for (let i = 0; i < 120; i++) {
-      blendPx(
-        hd,
-        Math.floor(hash2(i, 1) * hd.w),
-        Math.floor(hash2(i, 2) * groundY * 0.8),
-        hdHex("#d6dcff"),
-        0.15 + 0.5 * hash2(i, 3),
-      )
+    for (let i = 0; i < 220; i++) {
+      const sx = Math.floor(hash2(i, 1) * hd.w)
+      const sy = Math.floor(hash2(i, 2) * groundY * 0.38)
+      const tw = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t / 520 + hash2(i, 3) * 6.2))
+      blendPx(hd, sx, sy, hdHex("#d6dcff"), (0.18 + 0.55 * hash2(i, 3)) * tw)
+      if (i % 4 === 0) glowFast(sx, sy, 2.4 + hash2(i, 5) * 1.8, hdHex("#d6dcff"), 0.42 * tw)
     }
     VOLCANO_STARS.forEach((s, i) => {
       if (volcanoStarBright(t, i)) hd.disk(hd.X(s.x + 0.5), hd.Y(s.y + 0.5), Math.max(1, S * 0.08), sky)
@@ -241,9 +240,9 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
   glowFast(
     craterX,
     craterY,
-    hd.cw * (eruption ? 9 : 3.5),
+    hd.cw * (eruption ? 9 : 3.5 + 1.3 * calmBreath),
     eruption ? hdMix(glowHot, lavaBright, 0.5) : glowDeep,
-    eruption ? 0.6 + 0.25 * pulse : 0.35,
+    eruption ? 0.6 + 0.25 * pulse : 0.28 + 0.2 * calmBreath,
     0.8,
   )
 
@@ -363,7 +362,7 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
       hd.rect(mx - sw, y, mx + sw, y + 1, hdMix(hdHex("#c4d0f0"), groundCol, 0.5 + v * 0.3))
     }
     hd.rect(0, water0, hd.w, water0 + 1, hdMix(hdHex("#6a7ab0"), groundCol, 0.5))
-    // Steam wisps from the crater.
+    // Steam wisps from the crater, plus a thin downwind plume in the empty sky.
     for (let i = 0; i < 4; i++) {
       const rise = (t / 4000 + i / 4) % 1
       glowFast(
@@ -374,6 +373,14 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
         0.3 * (1 - rise),
         0.7,
       )
+    }
+    for (let k = 0; k < 16; k++) {
+      const age = (t / 4800 + k / 16) % 1
+      if (age < 0.1) continue
+      const py = craterY - age * hd.ch * 7.2
+      const spread = hd.cw * (1.6 + age * 5.5)
+      const px = craterX + hd.cw * (age * age * 3.2 + Math.sin(k * 1.9 + t / 1400) * 1.4 * (0.3 + age))
+      glowFast(px, py, spread, hdHex("#7a86a8"), 0.4 * (1 - age), 0.62)
     }
   }
   // Foreground rock silhouettes.
@@ -430,6 +437,25 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
       big ? Math.max(1.4, S * 0.1) : Math.max(1, S * 0.06),
       eruption ? hdMix(ember, lavaBright, 0.4) : ember,
     )
+  }
+  if (!eruption) {
+    // Cool ash rising through the empty sky above the cone, never the flanks.
+    const ash = hdMix(ember, hdHex("#8a96b8"), 0.55)
+    for (let i = 0; i < 56; i++) {
+      const age = (t / 1900 + hash2(i, 17)) % 1
+      const py = craterY - 50 - age * hd.ch * 7.5
+      const px = craterX + (hash2(i, 18) - 0.5) * hd.cw * 14 + Math.sin(t / 580 + i) * hd.cw * (1.4 + age * 2.2)
+      const rad = S * (0.8 + (1 - age) * 1.15)
+      glowFast(px, py, rad, ash, 0.44 * (1 - age) * Math.min(1, age * 8), 0.85)
+      hd.disk(px, py, Math.max(1.1, S * 0.08), ash)
+    }
+    for (let i = 0; i < 40; i++) {
+      const age = (t / 1100 + hash2(i, 21)) % 1
+      const py = craterY - 42 - age * hd.ch * 6.2
+      const span = Math.max(1, hd.w)
+      const px = (((hash2(i, 22) * span + Math.sin(t / 400 + i) * hd.cw * 3 + t * 0.05) % span) + span) % span
+      glowFast(px, py, S * 1.05, ash, 0.36 * (1 - age), 0.9)
+    }
   }
   return hd.pixels
 }

@@ -72,19 +72,22 @@ export function renderDomesPixels(width: number, height: number, style: DomesSty
   if (!snow) {
     glow(hd.X(64), hd.Y(2.2), s * 14, [255, 248, 220], 0.7)
     hd.disk(hd.X(64), hd.Y(2.2), s * 1.7, [255, 252, 235])
-    for (const [gx, gy, cw] of [
-      [8, 3.5, 10],
-      [30, 1.8, 8],
-      [48, 5.4, 9],
-    ] as const) {
-      for (let k = 0; k < 8; k++) {
-        const kk = k - 3.5
+    const wrapX = (sceneX: number) => {
+      const span = DOMES_COLUMNS + 18
+      const x = (((sceneX % span) + span) % span) - 8
+      return hd.X(x)
+    }
+    for (let i = 0; i < 5; i++) {
+      const gx = wrapX(i * 16 + t * (0.012 + i * 0.003))
+      const gy = hd.Y(1.5 + (i % 3) * 1.55)
+      for (let k = 0; k < 10; k++) {
+        const kk = k - 4.5
         glow(
-          hd.X(gx + kk * cw * 0.12 + (t / 1000) * 0.15),
-          hd.Y(gy + Math.sin(k * 2.1) * 0.3),
-          s * (2.8 + Math.cos(kk * 0.5) * 1.2),
+          gx + kk * s * 1.15,
+          gy + Math.sin(k * 2.1 + i) * s * 0.35,
+          s * (3.4 + Math.cos(kk * 0.5) * 1.4),
           [255, 255, 255],
-          0.6,
+          0.58,
         )
       }
     }
@@ -230,6 +233,23 @@ export function renderDomesPixels(width: number, height: number, style: DomesSty
       for (let k = -5; k <= 5; k++) {
         blend(Math.round(gx + k * s * 0.3), Math.round(gy), [255, 252, 225], 0.9 * (1 - Math.abs(k) / 6))
         blend(Math.round(gx), Math.round(gy + k * s * 0.3), [255, 252, 225], 0.9 * (1 - Math.abs(k) / 6))
+      }
+    }
+    if (!snow && domeIndex === 1) {
+      const fy = tipY - s * 2.4
+      const fx = cx + s * 0.35
+      fillRect(fx, fy - s * 0.08, fx + s * 0.12, fy + s * 1.6, hdDarken(cross, 0.9))
+      for (let k = 0; k < 6; k++) {
+        const u = k / 6
+        const x1 = fx + s * 0.12 + s * (1.8 + 0.35 * Math.sin(t / 280 + u * 2))
+        const wave = Math.sin(t / 280) * s * 1.4 * (1 - u)
+        fillRect(
+          fx + s * 0.12,
+          fy + u * s * 1.5,
+          x1 + wave,
+          fy + u * s * 1.5 + s * 0.28,
+          hdMix(cross, [180, 40, 40], 0.35),
+        )
       }
     }
   })
@@ -491,6 +511,25 @@ export function renderDomesPixels(width: number, height: number, style: DomesSty
     }
   }
 
+  if (!snow) {
+    const birdCol: RGB = [40, 48, 62]
+    for (let i = 0; i < 2; i++) {
+      const bx = ((t * 0.13 + i * 280) % (w + 50)) - 25
+      const by = hd.Y(3.1 + i * 1.7)
+      const flap = Math.sin(t / 170 + i * 2) * s * 0.55
+      if (by > wallTop - s * 2) continue
+      for (const side of [-1, 1] as const) {
+        const steps = Math.ceil(s * 1.4)
+        for (let p = 0; p <= steps; p++) {
+          const q = p / steps
+          const px = bx + side * q * s * 1.5
+          const py = by + flap * q * (1 - q * 0.3)
+          if (Math.hypot(px - 350, py - 300) < 8 || Math.hypot(px - 650, py - 470) < 8) continue
+          blend(Math.round(px), Math.round(py), birdCol, 0.95)
+        }
+      }
+    }
+  }
   if (snow) {
     // Layered snowfall: far fine specks, shared model flakes, big near flakes.
     for (let i = 0; i < 90; i++) {

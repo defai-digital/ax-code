@@ -55,6 +55,26 @@ test("the crater pulses while calm, lava, and smoke follow their styles", () => 
   expect(calmFlank[2]!).toBeGreaterThan(calmFlank[0]!)
 })
 
+test("volcano-calm keeps visible motion", () => {
+  let best = 0
+  let prev = renderVolcanoPixels(WIDTH, HEIGHT, "volcano-calm", 0)
+  for (let t = 100; t <= 3000; t += 100) {
+    const frame = renderVolcanoPixels(WIDTH, HEIGHT, "volcano-calm", t)
+    let changed = 0
+    for (let i = 0; i < frame.length; i += 3) {
+      const d = Math.abs(
+        0.299 * (frame[i]! - prev[i]!) +
+          0.587 * (frame[i + 1]! - prev[i + 1]!) +
+          0.114 * (frame[i + 2]! - prev[i + 2]!),
+      )
+      if (d > 8) changed++
+    }
+    best = Math.max(best, changed / (frame.length / 3))
+    prev = frame
+  }
+  expect(best).toBeGreaterThan(0.015)
+})
+
 test("Volcano stays within the HD bound", () => {
   const frame = createDigitalCodePixels(3840, 2160, "down", undefined, "volcano-eruption")
   expect([frame.width, frame.height]).toEqual([1920, 1080])

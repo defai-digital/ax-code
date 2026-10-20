@@ -138,7 +138,12 @@ export function renderToriiPixels(width: number, height: number, style: ToriiSty
       lowerB = lower[2]
     for (let x = 0; x < hd.w; x++) {
       const nx = x / hd.w
-      const y = yTop + hd.ch * amp * (0.5 + 0.3 * Math.sin(nx * 6.3 + seed) + 0.16 * Math.sin(nx * 15 + seed * 1.9))
+      const wind = night ? 0 : t / 800
+      const y =
+        yTop +
+        hd.ch *
+          amp *
+          (0.5 + 0.3 * Math.sin(nx * 6.3 + seed + wind) + 0.16 * Math.sin(nx * 15 + seed * 1.9 + wind * 0.62))
       for (let py = Math.max(0, Math.floor(y)); py < groundY; py++) {
         const t = (py - y) / band
         const u = t < 0 ? 0 : t > 1 ? 1 : t
@@ -197,8 +202,8 @@ export function renderToriiPixels(width: number, height: number, style: ToriiSty
   }
   // Sakura at the edges: pink canopies in day, muted at night.
   for (const treeX of [6, 10, 66, 70]) {
-    const tx = hd.X(treeX + 0.7)
-    const ty = hd.Y(12.1)
+    const tx = hd.X(treeX + 0.7) + (night ? 0 : Math.sin(t / 800 + treeX) * hd.cw * 0.35)
+    const ty = hd.Y(12.1) + (night ? 0 : Math.cos(t / 920 + treeX * 0.4) * hd.ch * 0.08)
     hd.rect(
       hd.X(treeX + 0.45),
       hd.Y(12.6),
@@ -539,6 +544,18 @@ export function renderToriiPixels(width: number, height: number, style: ToriiSty
     const fy = hd.Y(flake.y + 0.5)
     const r = dot * (0.45 + (flake.x % 3) * 0.12)
     hd.blob(fx, fy, r * 1.4, r * 0.8, petal, hdMix(petal, hdHex("#ffffff"), night ? 0.05 : 0.5))
+  }
+  if (!night) {
+    const blush = hdMix(petal, hdHex("#ffffff"), 0.45)
+    for (let i = 0; i < 84; i++) {
+      const origin = [6, 10, 66, 70][i & 3]!
+      const fall = (t * (0.16 + hash2(i, 4) * 0.08) + hash2(i, 5) * hd.h) % (hd.h * 0.84)
+      const sway = Math.sin(t / 480 + i * 0.7) * hd.cw * 2.4
+      const fx = hd.X(origin + 0.7) + (hash2(i, 6) - 0.35) * hd.w * 0.55 + sway
+      const fy = hd.Y(8.2) + fall
+      const r = Math.min(7.5, dot * (1.3 + hash2(i, 7) * 1.4))
+      hd.blob(fx, fy, r * 1.5, r * 0.7, petal, blush)
+    }
   }
   drawShrine()
   return hd.pixels
