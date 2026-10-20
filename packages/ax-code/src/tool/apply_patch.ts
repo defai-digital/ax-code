@@ -384,8 +384,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           if (change.type === "move" && change.movePath) {
             const dest = change.movePath
             const [first, second] = [change.filePath, dest].sort()
-            if (first === second) {
-              await FileTime.withLock(first, async () => {
+            const restoreMove = async () => {
+              // A case-only rename names one inode twice; the existing
+              // restore is already the only sane one and has no external
+              // second path to reconcile.
+              if (change.moveSameFile) {
                 await fs.mkdir(path.dirname(change.filePath), { recursive: true })
                 await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
                 if (change.moveExisted) {
@@ -394,21 +397,35 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                   return
                 }
                 await fs.unlink(dest).catch(() => undefined)
-              })
-            } else {
-              await FileTime.withLock(first, async () => {
-                await FileTime.withLock(second, async () => {
-                  await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-                  await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
-                  if (change.moveExisted) {
-                    await fs.mkdir(path.dirname(dest), { recursive: true })
-                    await Filesystem.write(dest, change.moveOldContent ?? "", change.moveMode, { followSymlink: true })
-                    return
-                  }
-                  await fs.unlink(dest).catch(() => undefined)
-                })
-              })
+                return
+              }
+              const sourceCurrent = await readFileIfExists(change.filePath)
+              const destCurrent = await readFileIfExists(dest)
+              if (sourceCurrent !== undefined && sourceCurrent !== change.oldContent)
+                throw new Error(`Cannot roll back apply_patch: ${change.filePath} was modified externally`)
+              const destStates = change.moveExisted
+                ? [change.newContent, change.moveOldContent ?? ""]
+                : [change.newContent]
+              if (destCurrent !== undefined && !destStates.includes(destCurrent))
+                throw new Error(`Cannot roll back apply_patch: ${dest} was modified externally`)
+
+              if (sourceCurrent === undefined) {
+                await fs.mkdir(path.dirname(change.filePath), { recursive: true })
+                await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
+              }
+              if (change.moveExisted) {
+                // moveOldContent means the move never landed; newContent means
+                // it did and the pre-move destination must come back.
+                if (destCurrent === change.newContent) {
+                  await fs.mkdir(path.dirname(dest), { recursive: true })
+                  await Filesystem.write(dest, change.moveOldContent ?? "", change.moveMode, { followSymlink: true })
+                }
+              } else if (destCurrent === change.newContent) {
+                await fs.unlink(dest).catch(() => undefined)
+              }
             }
+            if (first === second) await FileTime.withLock(first, restoreMove)
+            else await FileTime.withLock(first, () => FileTime.withLock(second, restoreMove))
             continue
           }
           await FileTime.withLock(change.filePath, async () => {

@@ -898,6 +898,44 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("rollback preserves a modified move destination", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const source = path.join(fixture.path, "a.txt")
+        const dest = path.join(fixture.path, "b.txt")
+        const second = path.join(fixture.path, "c.txt")
+        await writeAndTrack(source, "one\n")
+        await writeAndTrack(second, "three\n")
+
+        const originalWrite = Filesystem.write.bind(Filesystem)
+        const writeSpy = vi.spyOn(Filesystem, "write").mockImplementation(async (p: string, c: any, m?: number) => {
+          if (p === second) {
+            // The moved destination is edited before the later hunk fails.
+            await fs.writeFile(dest, "user edit\n", "utf-8")
+            throw new Error("disk full")
+          }
+          await originalWrite(p, c, m)
+        })
+
+        try {
+          const patchText =
+            "*** Begin Patch\n*** Update File: a.txt\n*** Move to: b.txt\n@@\n-one\n+ONE\n*** Update File: c.txt\n@@\n-three\n+THREE\n*** End Patch"
+
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("rollback was incomplete")
+          await expect(fs.stat(source)).rejects.toThrow()
+          expect(await fs.readFile(dest, "utf-8")).toBe("user edit\n")
+          expect(await fs.readFile(second, "utf-8")).toBe("three\n")
+        } finally {
+          writeSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("rollback recreates a deleted symlink instead of materializing its target", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
