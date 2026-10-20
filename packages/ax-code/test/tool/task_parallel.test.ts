@@ -1077,6 +1077,27 @@ describe("task_parallel swarm scale (item: swarm)", () => {
       },
     })
   })
+  test("an @agent bypass cannot start a swarm for an agent without an explicit task allow", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { agent: { "no-fanout": { mode: "subagent", description: "No fan-out" } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const tool = await TaskParallelTool.init()
+        await expect(
+          tool.execute(
+            { items: ["one"], prompt_template: "check {{item}}", subagent_type: "explore" } as any,
+            { ...ctx, agent: "no-fanout", extra: { ...ctx.extra, bypassAgentCheck: true } } as any,
+          ),
+        ).rejects.toThrow("not permitted to fan out")
+        expect(await Session.children(ctx.sessionID)).toEqual([])
+      },
+    })
+  })
+
   test("a 16-member swarm asks for permission exactly once", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

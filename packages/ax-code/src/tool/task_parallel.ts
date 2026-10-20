@@ -649,6 +649,14 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
             parallel: true,
           },
         })
+      } else {
+        // An @agent mention bypasses the interactive ask. Fan-out still
+        // requires the caller's own explicit task allow (ADR-005); otherwise
+        // an explicitly mentioned subagent could start a nested swarm.
+        const caller = await Agent.get(toolCtx.agent)
+        if (!caller || !taskFanOutAllowed(caller)) {
+          throw new Error("This agent is not permitted to fan out into parallel subagents.")
+        }
       }
 
       const resolved = await Promise.all(

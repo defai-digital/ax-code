@@ -7,7 +7,18 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { MessageID } from "../../src/session/schema"
 import { TaskTool } from "../../src/tool/task"
 import { TaskParallelTool } from "../../src/tool/task_parallel"
+import { subagentSessionPermissions, subagentToolGates } from "../../src/tool/task-shared"
 import { tmpdir } from "../fixture/fixture"
+
+test("a child that cannot fan out has neither task nor task_parallel", () => {
+  const permissions = subagentSessionPermissions({ canFanOut: false, inherited: [] })
+  for (const tool of ["task", "task_parallel"]) {
+    expect(permissions).toContainEqual({ permission: tool, pattern: "*", action: "deny" })
+  }
+  const gates = subagentToolGates({ constraints: {}, canFanOut: false })
+  expect(gates.task).toBe(false)
+  expect(gates.task_parallel).toBe(false)
+})
 
 afterEach(() => vi.restoreAllMocks())
 

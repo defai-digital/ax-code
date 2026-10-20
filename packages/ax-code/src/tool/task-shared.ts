@@ -54,7 +54,12 @@ export function subagentSessionPermissions(input: {
     { permission: "todowrite", pattern: "*", action: "deny" },
     { permission: "todoread", pattern: "*", action: "deny" },
     ...(input.extraDeny ?? []).map((tool) => ({ permission: tool, pattern: "*", action: "deny" as const })),
-    ...(input.canFanOut ? [] : [{ permission: "task", pattern: "*", action: "deny" as const }]),
+    ...(input.canFanOut
+      ? []
+      : [
+          { permission: "task", pattern: "*", action: "deny" as const },
+          { permission: "task_parallel", pattern: "*", action: "deny" as const },
+        ]),
     ...(input.primaryTools?.map((tool) => ({ permission: tool, pattern: "*", action: "deny" as const })) ?? []),
     ...input.inherited,
   ]
@@ -76,7 +81,13 @@ export function subagentToolGates(input: {
     // they have nothing to wait on — hide waitfor alongside task.
     ...(input.canFanOut
       ? {}
-      : { task: false, waitfor: false, list_background_tasks: false, message_background_task: false }),
+      : {
+          task: false,
+          task_parallel: false,
+          waitfor: false,
+          list_background_tasks: false,
+          message_background_task: false,
+        }),
     ...Object.fromEntries((input.primaryTools ?? []).map((tool) => [tool, false])),
   }
 }
