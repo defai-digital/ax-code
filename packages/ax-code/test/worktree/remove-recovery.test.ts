@@ -146,9 +146,8 @@ test("reset from inside a sandbox targets the primary checkout's branch", async 
 
   const info = await Instance.provide({
     directory: tmp.path,
-    fn: () => Worktree.create({ name: "inner-reset" }),
+    fn: () => Worktree.createReady({ name: "inner-reset" }),
   })
-  await vi.waitFor(async () => expect(await fs.stat(path.join(info.directory, ".git"))).toBeTruthy())
   run(info.directory, "commit", "--allow-empty", "-m", "sandbox work")
   expect(run(info.directory, "rev-parse", "HEAD").trim()).not.toBe(trunk)
 

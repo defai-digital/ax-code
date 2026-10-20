@@ -92,7 +92,8 @@ type BrowserTool = {
 }
 async function browserFixture(
   f: ReturnType<typeof fixture>,
-  intercept?: (name: string, next: () => Promise<Response>) => Promise<Response>,
+  intercept?: (name: string, next: () => Promise<Response>, init: RequestInit) => Promise<Response>,
+  deadline?: (ms: number) => AbortSignal,
 ) {
   const endpoint = await startTuiMcpEndpoint(f.controller)
   const inspector = await startTuiInspector(endpoint.filename)
@@ -117,6 +118,7 @@ async function browserFixture(
     },
     navigator: {},
     crypto: { randomUUID },
+    AbortSignal: { timeout: deadline ?? AbortSignal.timeout },
     setInterval: (callback: () => void) => {
       tick = callback
       return 0
@@ -128,7 +130,7 @@ async function browserFixture(
           headers: { ...init.headers, Origin: new URL(inspector.url).origin },
         })
       const body = parseJsonStrict(String(init.body)) as { name: string }
-      return intercept ? intercept(body.name, next) : next()
+      return intercept ? intercept(body.name, next, init) : next()
     },
   })
   const until = async (condition: () => boolean) => {
@@ -150,6 +152,55 @@ async function browserFixture(
 }
 
 describe("native TUI debugging fences", () => {
+  test.each(["request", "body"])("a stalled inspector %s times out without replaying input", async (phase) => {
+    const f = fixture()
+    let blocked = false
+    let latestDeadline: AbortController | undefined
+    await using h = await browserFixture(
+      f,
+      async (name, next, init) => {
+        if (name !== "tui_input" || blocked) return next()
+        if (phase === "body") await next()
+        blocked = true
+        const signal = init.signal!
+        if (phase === "request")
+          return new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener("abort", () => reject(signal.reason), { once: true })
+          })
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              signal.addEventListener("abort", () => controller.error(signal.reason), { once: true })
+            },
+          }),
+        )
+      },
+      (ms) => {
+        expect(ms).toBe(15_000)
+        latestDeadline = new AbortController()
+        return latestDeadline.signal
+      },
+    )
+    const mutate = h.registered.find((tool) => tool.name === "tui_input")!
+    const read = h.registered.find((tool) => tool.name === "get_tui_snapshot")!
+    const { operation: _, ...args } = f.input({ kind: "paste", text: "Uncertain input" })
+    const pending = mutate.execute(args)
+    const failed = expect(pending).rejects.toThrow("Input outcome unknown; reconcile before retrying")
+    await h.until(() => blocked)
+    expect(latestDeadline).toBeDefined()
+    latestDeadline!.abort(new DOMException("Inspector request timed out", "TimeoutError"))
+    await failed
+    expect(h.element("receipts").textContent).toContain("outcome_unknown")
+    expect(h.element("click-submit").disabled).toBe(true)
+    expect(f.actions).toHaveLength(phase === "body" ? 1 : 0)
+    f.paint()
+    await read.execute(f.target())
+    expect(h.element("click-submit").disabled).toBe(false)
+    const { operation: __, ...retry } = f.input({ kind: "paste", text: "New explicit input" })
+    expect(parseJsonStrict(await mutate.execute(retry))).toMatchObject({ status: "applied" })
+    expect(f.actions).toHaveLength(phase === "body" ? 2 : 1)
+  })
+
   test("debug remains opt-in even for a valid shared capability", async () => {
     const f = fixture(false)
     expect(await f.controller.dispatch({ operation: "get_tui_snapshot", ...f.target() }, f.signal)).toMatchObject({

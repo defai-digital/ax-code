@@ -70,6 +70,7 @@ async function rpc(name, args = {}, present = true) {
     const response = await fetch("/rpc", {
       method: "POST", headers: { "Content-Type": "application/json", "X-AX-TUI-Debug": boot.capability },
       body: JSON.stringify({ name, args }),
+      signal: AbortSignal.timeout(15_000),
     })
     let result
     try { result = await response.json() } catch { throw new Error("Inspector returned an invalid response (HTTP " + response.status + ")") }

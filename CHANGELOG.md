@@ -12,6 +12,9 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Bound TUI inspector browser requests, including stalled response bodies, without automatically replaying uncertain input.
+- Wait for worktree readiness before the sandbox reset regression commits, avoiding a Windows bootstrap race.
+- Allow slow JSR processing to finish before the SDK publisher's job deadline interrupts provenance attachment.
 - Edit and write tools update a symlink's target instead of replacing the link (for example `CLAUDE.md -> AGENTS.md`).
 - Close a Parcel watcher subscription that resolves after the polling fallback started, and stop polling after disposal.
 - Load the Parcel watcher binding on Linux when running from source; a missing build-time libc define made it fall back to polling.

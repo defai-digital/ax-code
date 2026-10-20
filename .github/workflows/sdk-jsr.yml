@@ -25,7 +25,9 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # JSR processing has exceeded 50 minutes. Keep the OIDC publisher alive
+    # so it can attach provenance within JSR's short post-publication window.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
         with:

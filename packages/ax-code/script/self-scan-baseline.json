@@ -3,7 +3,7 @@
   "scope": "packages/ax-code/src, packages/util/src, packages/ax-code-intel/src, packages/ax-code-reason/src",
   "scanners": {
     "race_scan": {
-      "count": 56,
+      "count": 61,
       "findings": [
         {
           "fingerprint": "06f87a1f14481b595da798d0184f8ce120d3e0ff858065f7e48ca62e2c8c57cd",
@@ -471,11 +471,51 @@
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
+        },
+        {
+          "fingerprint": "0c25cf99b9d502068ec6d73cf994365a7cd0956565518cd3af3bb653c1032fd7",
+          "file": "src/tuimcp/inspector.ts",
+          "line": 72,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "stale_listener"
+        },
+        {
+          "fingerprint": "5336a1208c3fd18647b6cf5d357d2e63dfc655ebf64e74d126bd16bad35b2732",
+          "file": "src/tuimcp/inspector.ts",
+          "line": 78,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "stale_listener"
+        },
+        {
+          "fingerprint": "8f9de55565e5d0c2685351c9adc5a5c7cc6fd52755d49b7668d5bb2fee671b0c",
+          "file": "src/tuimcp/inspector.ts",
+          "line": 79,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "stale_listener"
+        },
+        {
+          "fingerprint": "003d49cb2826a52fffab6866d9f65cf54ff6432189c2e33dcf266e6794bcf38e",
+          "file": "src/tuimcp/inspector.ts",
+          "line": 90,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "stale_listener"
+        },
+        {
+          "fingerprint": "d7eaf7fdcf07f086a5b6b359026ac2f12c4a54f2e705bb51080e41ffcd1ae21d",
+          "file": "src/tuimcp/inspector.ts",
+          "line": 120,
+          "severity": "medium",
+          "kind": "stale_listener",
+          "summary": "stale_listener"
         }
       ]
     },
     "lifecycle_scan": {
-      "count": 227,
+      "count": 228,
       "findings": [
         {
           "fingerprint": "a7c13622ba7e0d28b7440aa5beab525b97481bf7e13bbae3815fdbbbd7e01e47",
@@ -2292,6 +2332,14 @@
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "7854b8933ef119e043b8ebe526b62bf8ebcbabe0dbe2c535f070d0f2851db169",
+          "file": "src/tuimcp/inspector-client.ts",
+          "line": 216,
+          "severity": "high",
+          "kind": "timer:no_cleanup",
+          "summary": "timer:no_cleanup"
         }
       ]
     },
