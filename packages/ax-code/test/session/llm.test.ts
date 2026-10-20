@@ -239,16 +239,18 @@ async function loadFixture(providerID: string, modelID: string) {
     throw new Error(`Missing model in fixture: ${modelID}`)
   }
   // Keep transport tests independent of the rotating picker catalog while
-  // still applying production model-support filtering to the fixture.
+  // still applying production model-support filtering to the fixture. A
+  // catalog retirement must not disable a synthetic transport fixture.
+  const fixtureModel = { ...model, status: "active" as const }
   const catalog = await ModelsDev.get()
   vi.spyOn(ModelsDev, "get").mockResolvedValue({
     ...catalog,
     [providerID]: {
       ...(provider ?? fallbackProvider!),
-      models: { ...catalog[providerID]?.models, [modelID]: model },
+      models: { ...catalog[providerID]?.models, [modelID]: fixtureModel },
     },
   })
-  return { provider: provider ?? fallbackProvider!, model }
+  return { provider: provider ?? fallbackProvider!, model: fixtureModel }
 }
 
 function createEventStream(chunks: unknown[], includeDone = false) {

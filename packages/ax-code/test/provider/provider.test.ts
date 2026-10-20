@@ -184,7 +184,9 @@ test("MiniMax Token Plan providers use the Anthropic endpoint and expose M3", as
       expect(intl?.key).toBe("sk-cp-test-intl")
       expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.url).toBe("https://api.minimax.io/anthropic/v1")
       expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.npm).toBe("@ai-sdk/anthropic")
-      expect(intl?.models[ModelID.make("MiniMax-M2.7")]).toBeDefined()
+      expect(intl?.models[ModelID.make("MiniMax-M3.1-Flash")]).toBeDefined()
+      expect(intl?.models[ModelID.make("MiniMax-M2.7")]).toBeUndefined()
+      expect(intl?.models[ModelID.make("MiniMax-M3.1-Flash-Preview")]).toBeUndefined()
       expect(intl?.models[ModelID.make("MiniMax-M2.7-highspeed")]).toBeUndefined()
       expect(intl?.models[ModelID.make("MiniMax-M2")]).toBeUndefined()
       expect(intl?.models[ModelID.make("MiniMax-M2.1")]).toBeUndefined()
@@ -194,7 +196,9 @@ test("MiniMax Token Plan providers use the Anthropic endpoint and expose M3", as
       expect(cn?.name).toBe("MiniMax Token Plan (China)")
       expect(cn?.key).toBe("sk-cp-test-cn")
       expect(cn?.models[ModelID.make("MiniMax-M3")]?.api.url).toBe("https://api.minimaxi.com/anthropic/v1")
-      expect(cn?.models[ModelID.make("MiniMax-M2.7")]).toBeDefined()
+      expect(cn?.models[ModelID.make("MiniMax-M3.1-Flash")]).toBeDefined()
+      expect(cn?.models[ModelID.make("MiniMax-M2.7")]).toBeUndefined()
+      expect(cn?.models[ModelID.make("MiniMax-M3.1-Flash-Preview")]).toBeUndefined()
       expect(cn?.models[ModelID.make("MiniMax-M2.5")]).toBeUndefined()
     },
   })
@@ -2806,10 +2810,11 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       expect(tokenPlanCn.key).toBe("test-token-plan-cn-key")
       // Catalogs follow Alibaba's official exact-string allowlists, which
       // differ per plan (verified 2026-08-18, see script/update-models.ts):
-      // coding plans carry the qwen3.x-plus/coder SKUs plus glm-5/MiniMax,
+      // coding plans carry qwen3.7-plus and glm-5; retired coder SKUs
+      // remain in the snapshot but are excluded from the runtime picker,
       // token plans carry curated Qwen + image models (DeepSeek/GLM/MiniMax/
       // Kimi, qwen3.6-plus/qwen3.7-max, and preview SKUs are hidden).
-      const expectedCodingPlanModels = ["glm-5", "qwen3-coder-next", "qwen3-coder-plus", "qwen3.7-plus"]
+      const expectedCodingPlanModels = ["glm-5", "qwen3.7-plus"]
       const expectedTokenPlanModels = [
         "qwen-image-2.0",
         "qwen-image-2.0-pro",
@@ -2821,6 +2826,10 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       ]
       expect(Object.keys(codingPlan.models).sort()).toEqual(expectedCodingPlanModels)
       expect(Object.keys(codingPlanCn.models).sort()).toEqual(expectedCodingPlanModels)
+      for (const provider of [codingPlan, codingPlanCn]) {
+        expect(provider.models["qwen3-coder-next"]).toBeUndefined()
+        expect(provider.models["qwen3-coder-plus"]).toBeUndefined()
+      }
       expect(Object.keys(tokenPlan.models).sort()).toEqual(expectedTokenPlanModels)
       expect(Object.keys(tokenPlanCn.models).sort()).toEqual(expectedTokenPlanModels)
       expect(tokenPlan.models["qwen3.8-max"].capabilities.input.image).toBe(true)
