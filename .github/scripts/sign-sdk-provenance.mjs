@@ -27,7 +27,7 @@ export async function signSdkProvenance({ version, digest, predicate, workflowRe
   const policy = signingPolicy(workflowRef)
   const statement = {
     _type: "https://in-toto.io/Statement/v1",
-    subject: [{ name: `pkg:npm/%40defai-digital/ax-code-sdk@${version}`, digest: { sha256: digest } }],
+    subject: [{ name: `pkg:npm/%40defai-digital/ax-code-sdk-internal@${version}`, digest: { sha256: digest } }],
     predicateType: "https://slsa.dev/provenance/v1",
     predicate,
   }

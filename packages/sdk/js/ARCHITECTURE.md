@@ -3,7 +3,7 @@
 ## Purpose
 
 `packages/sdk/js` contains the TypeScript SDK and programmatic, headless, and gRPC/native entry points. The private
-workspace identity is `@ax-code/sdk`; the distribution identity is `@defai-digital/ax-code-sdk`.
+workspace identity is `@ax-code/sdk`; the distribution identity is `@defai-digital/ax-code-sdk-internal`.
 
 ## Allowed Dependencies
 

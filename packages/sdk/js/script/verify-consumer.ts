@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { artifactDir, pack, tarballName } from "./github-package.mjs"
+import { artifactDir, pack, packageName, tarballName } from "./github-package.mjs"
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url))
 const repoRoot = path.resolve(packageRoot, "../../..")
@@ -74,7 +74,8 @@ try {
     installedRoot,
   ])
   const packed = JSON.parse(await fs.readFile(path.join(installedRoot, "package.json"), "utf8"))
-  if (packed.name !== publicName || packed.version !== manifest.version) throw new Error("Packed SDK identity mismatch")
+  if (packed.name !== packageName || packed.version !== manifest.version)
+    throw new Error("Packed SDK identity mismatch")
   for (const name of Object.keys(manifest.dependencies)) await copyDependency(name, packageRoot)
   await copyDependency("@types/node", packageRoot)
   await fs.writeFile(path.join(consumerRoot, "package.json"), JSON.stringify({ type: "module" }))

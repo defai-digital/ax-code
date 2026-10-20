@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
-      packages: write
+      packages: read
       id-token: write
     steps:
       # Checkout the publisher revision. A manual registry cutover can use a
@@ -50,6 +50,10 @@ jobs:
           scan-args: |-
             --lockfile=pnpm-lock.yaml
             --format=table
+      - name: Verify private publication target
+        run: node .github/scripts/sdk-package-registry.mjs visibility --allow-missing
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SDK_PACKAGES_TOKEN }}
       - name: Validate immutable SDK source and release tag
         run: node .github/scripts/sdk-package-registry.mjs source
       - name: Regenerate SDK
@@ -66,11 +70,14 @@ jobs:
         run: |
           node .github/scripts/sdk-provenance.mjs sign
           node .github/scripts/sdk-provenance.mjs verify
-      - name: Preserve signed candidate before upload
+      - name: Preserve signed receipts before upload
         uses: actions/upload-artifact@v7
         with:
           name: sdk-candidate
-          path: ${{ env.SDK_ARTIFACT_DIR }}
+          path: |
+            ${{ env.SDK_ARTIFACT_DIR }}/package-receipt.json
+            ${{ env.SDK_ARTIFACT_DIR }}/source-receipt.json
+            ${{ env.SDK_ARTIFACT_DIR }}/provenance.sigstore.json
           if-no-files-found: error
           retention-days: 14
           include-hidden-files: true
@@ -85,7 +92,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.SDK_PACKAGES_TOKEN }}
           NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/sdk.npmrc
         run: |
           set -euo pipefail
@@ -94,13 +101,18 @@ jobs:
       # A duplicate or disconnected upload only succeeds if exact candidate
       # bytes and SHA-512 integrity can be read back with authentication.
       - name: Verify published SDK bytes and integrity
-        run: node .github/scripts/sdk-package-registry.mjs verify
+        run: |
+          node .github/scripts/sdk-package-registry.mjs visibility
+          node .github/scripts/sdk-package-registry.mjs verify
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.SDK_PACKAGES_TOKEN }}
       - uses: actions/upload-artifact@v7
         with:
           name: sdk-github-package
-          path: ${{ env.SDK_ARTIFACT_DIR }}
+          path: |
+            ${{ env.SDK_ARTIFACT_DIR }}/package-receipt.json
+            ${{ env.SDK_ARTIFACT_DIR }}/source-receipt.json
+            ${{ env.SDK_ARTIFACT_DIR }}/provenance.sigstore.json
           if-no-files-found: error
           retention-days: 14
           include-hidden-files: true
@@ -127,7 +139,7 @@ jobs:
       - name: Verify signed candidate and authenticated registry readback
         run: |
           node .github/scripts/sdk-provenance.mjs verify
-          node .github/scripts/sdk-package-registry.mjs verify
+          node .github/scripts/sdk-package-registry.mjs verify --receipt-only
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify private package visibility
@@ -136,7 +148,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          VISIBILITY="$(gh api orgs/defai-digital/packages/npm/ax-code-sdk --jq .visibility)"
+          VISIBILITY="$(gh api orgs/defai-digital/packages/npm/ax-code-sdk-internal --jq .visibility)"
           test "$VISIBILITY" = private
       - name: Install SDK from registry with read-only package access
         shell: bash
@@ -154,7 +166,7 @@ jobs:
           //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
           NPMRC
           printf '{"type":"module","private":true}\n' > "$CONSUMER_DIR/package.json"
-          pnpm --dir "$CONSUMER_DIR" add --ignore-scripts --save-exact "@defai-digital/ax-code-sdk@$SDK_VERSION"
+          pnpm --dir "$CONSUMER_DIR" add --ignore-scripts --save-exact "@defai-digital/ax-code-sdk@npm:@defai-digital/ax-code-sdk-internal@$SDK_VERSION"
           pnpm --dir "$CONSUMER_DIR" install --frozen-lockfile --ignore-scripts
           cd "$CONSUMER_DIR"
           node --input-type=module <<'NODE'
@@ -187,7 +199,7 @@ jobs:
         with:
           name: sdk-github-package
           path: sdk-package
-      - name: Preserve SDK tarball and detached provenance
+      - name: Preserve SDK receipts and detached provenance
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}

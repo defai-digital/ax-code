@@ -63,7 +63,7 @@ describe("free SDK provenance signing", () => {
     const [{ data: bytes, type }] = create.mock.lastCall!
     const statement = await new Response(bytes).json()
     expect(statement.subject).toEqual([
-      { name: "pkg:npm/%40defai-digital/ax-code-sdk@2.6.7", digest: { sha256: input.digest } },
+      { name: "pkg:npm/%40defai-digital/ax-code-sdk-internal@2.6.7", digest: { sha256: input.digest } },
     ])
     expect(statement.predicateType).toBe("https://slsa.dev/provenance/v1")
     expect(type).toBe("application/vnd.in-toto+json")

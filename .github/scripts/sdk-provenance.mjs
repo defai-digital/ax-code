@@ -57,7 +57,7 @@ if (process.argv[2] === "sign") {
   assert.equal(statement._type, "https://in-toto.io/Statement/v1")
   assert.equal(statement.predicateType, "https://slsa.dev/provenance/v1")
   assert.deepEqual(statement.subject, [
-    { name: `pkg:npm/%40defai-digital/ax-code-sdk@${receipt.version}`, digest: { sha256: receipt.sha256 } },
+    { name: `pkg:npm/%40defai-digital/ax-code-sdk-internal@${receipt.version}`, digest: { sha256: receipt.sha256 } },
   ])
   assert.deepEqual(statement.predicate, predicate)
   console.log("SDK provenance signature, identity, subject, source and publisher verified")
