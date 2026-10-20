@@ -48,8 +48,9 @@ describe("isSDKVersionCompatible", () => {
     expect(isSDKVersionCompatible("")).toBe(false)
   })
 
-  test("prerelease suffixes are stripped so major.minor.patch still matches", () => {
-    expect(isSDKVersionCompatible(`${current}-rc.1`)).toBe(true)
-    expect(isSDKVersionCompatible(`^${major}.0.0-beta.1`)).toBe(true)
+  test("unsupported prerelease ranges fail closed instead of matching a stable release", () => {
+    expect(isSDKVersionCompatible(`${current}-rc.1`)).toBe(false)
+    expect(isSDKVersionCompatible(`^${major}.0.0-beta.1`)).toBe(false)
+    expect(isSDKVersionCompatible(`~${current}-rc.1`)).toBe(false)
   })
 })

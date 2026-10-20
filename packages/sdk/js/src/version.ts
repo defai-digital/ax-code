@@ -19,7 +19,7 @@ export const SDK_VERSION = "2.6.40"
  * Check whether the current SDK version satisfies a semver range.
  * Uses a simple major.minor.patch check — does NOT pull in the full
  * `semver` package. Supports `^X.Y.Z` (caret), `~X.Y.Z` (tilde), and
- * `X.Y.Z` (exact) patterns.
+ * `X.Y.Z` (exact) patterns. Unsupported patterns return false.
  *
  * For full semver range evaluation (hyphen ranges, pre-release tags,
  * OR operators), use the `semver` package directly against `SDK_VERSION`.
@@ -54,7 +54,7 @@ export function isSDKVersionCompatible(required: string): boolean {
 }
 
 function parseVersion(v: string): { major: number; minor: number; patch: number } | undefined {
-  const match = v.match(/^(\d+)\.(\d+)\.(\d+)(?:-[\w.]+)?$/)
+  const match = v.match(/^(\d+)\.(\d+)\.(\d+)$/)
   if (!match) return undefined
   return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) }
 }
