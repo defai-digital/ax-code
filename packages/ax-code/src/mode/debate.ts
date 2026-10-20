@@ -71,6 +71,17 @@ export namespace Debate {
   }
 
   /**
+   * Shared identity masker for model-facing anonymous text (debate synthesis
+   * and the chairman brief). Member-authored prose can name a vendor or model
+   * even though the structured memberIds are removed, so every rendered line
+   * passes through this.
+   */
+  export function identityRedactor(report: Council.CouncilReport, allMemberIds: readonly string[] = []) {
+    const patterns = memberIdentities(report, allMemberIds).map(identityPattern)
+    return (text: string) => redactIdentities(text, patterns)
+  }
+
+  /**
    * Build an anonymous synthesis block for the next debate round.
    * Strips member ids so models cannot anchor on brand prestige.
    */
@@ -79,23 +90,21 @@ export namespace Debate {
     round: number,
     allMemberIds: readonly string[] = [],
   ): RoundSummary {
-    const identityPatterns = memberIdentities(report, allMemberIds).map(identityPattern)
+    const redact = identityRedactor(report, allMemberIds)
     const issuesRaised: string[] = []
     for (const item of [...report.consensus, ...report.majority, ...report.minority, ...report.singleton]) {
       const loc = item.location ? ` @ ${item.location}` : ""
-      issuesRaised.push(
-        redactIdentities(`[${item.severity}/${item.tier}] ${item.category}${loc}: ${item.summary}`, identityPatterns),
-      )
+      issuesRaised.push(redact(`[${item.severity}/${item.tier}] ${item.category}${loc}: ${item.summary}`))
     }
 
     const pointsOfAgreement = report.consensus.map((item) => {
       const loc = item.location ? ` @ ${item.location}` : ""
-      return redactIdentities(`${item.category}${loc}: ${item.summary}`, identityPatterns)
+      return redact(`${item.category}${loc}: ${item.summary}`)
     })
 
     const openQuestions = [...report.minority, ...report.singleton]
       .filter((item) => item.severity === "high" || item.severity === "medium")
-      .map((item) => redactIdentities(item.summary, identityPatterns))
+      .map((item) => redact(item.summary))
       .slice(0, 8)
 
     return {

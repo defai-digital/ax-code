@@ -422,15 +422,19 @@ function clampChairmanOutput(output: z.infer<typeof ChairmanOutputSchema>): z.in
 }
 
 /** Anonymized findings text for the chairman: tiers and counts, no memberIds. */
-export function chairmanBrief(report: Council.CouncilReport): string {
+export function chairmanBrief(report: Council.CouncilReport, allMemberIds: readonly string[] = []): string {
+  // Member-authored summaries can name a vendor or model even though the
+  // structured memberIds are omitted; blind the rendered prose too.
+  const redact = Debate.identityRedactor(report, allMemberIds)
   const section = (title: string, items: Council.AggregatedIssue[]) => {
     if (!items.length) return []
     return [
       `## ${title}`,
-      ...items.map(
-        (item) =>
+      ...items.map((item) =>
+        redact(
           `- [${item.severity}] ${item.category}${item.location ? ` @ ${item.location}` : ""}: ${item.summary} (${item.supportCount}/${item.totalMembers} members)` +
-          (item.suggestedFix ? ` Suggested: ${item.suggestedFix}` : ""),
+            (item.suggestedFix ? ` Suggested: ${item.suggestedFix}` : ""),
+        ),
       ),
     ]
   }
@@ -826,7 +830,10 @@ export const CouncilTool = Tool.define("council", async () => {
         const chairmanUser =
           CouncilContext.userPrompt({ kind, question: args.question, context: args.context }) +
           `\n\nReport status: ${report.successfulMembers}/${report.totalMembers} members succeeded (quorum ${report.quorum}).\n\n` +
-          chairmanBrief(report)
+          chairmanBrief(
+            report,
+            resolvedMembers.map((resolved) => resolved.member.memberId),
+          )
         if (!checkPrompt(chairmanUser).ok) {
           chairmanStatus = "skipped"
           chairmanError = "chairman prompt rejected by the input budget"

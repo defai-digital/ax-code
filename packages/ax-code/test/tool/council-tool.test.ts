@@ -65,7 +65,7 @@ vi.mock("@/mode/memory", () => ({
   },
 }))
 
-import { CouncilTool, DEFAULT_REASONING_TIMEOUT_SCALE, DEFAULT_TIMEOUT_MS } from "../../src/tool/council"
+import { CouncilTool, chairmanBrief, DEFAULT_REASONING_TIMEOUT_SCALE, DEFAULT_TIMEOUT_MS } from "../../src/tool/council"
 import { Config } from "../../src/config/config"
 import { EnsembleShared } from "../../src/mode/ensemble-shared"
 import { Provider } from "../../src/provider/provider"
@@ -611,6 +611,39 @@ describe("council chairman (ADR-102)", () => {
     expect(result.output).toContain("deterministic tiers above remain the primary output")
     // 2 member calls + 1 chairman call
     expect(generateObject).toHaveBeenCalledTimes(3)
+  })
+
+  test("chairman brief redacts identities named inside member prose", () => {
+    const report = {
+      totalMembers: 2,
+      successfulMembers: 2,
+      failedMembers: 0,
+      quorum: 2,
+      incomplete: false,
+      consensus: [
+        {
+          key: "k",
+          tier: "consensus",
+          severity: "high",
+          category: "security",
+          summary: "anthropic/claude-sonnet-5 missed the null check",
+          suggestedFix: "ask a/m to recheck",
+          memberIds: ["a/m"],
+          supportCount: 2,
+          totalMembers: 2,
+        },
+      ],
+      majority: [],
+      minority: [],
+      singleton: [],
+      memberErrors: [],
+    } as any
+
+    const brief = chairmanBrief(report, ["anthropic/claude-sonnet-5", "a/m"])
+    expect(brief).toContain("[member]")
+    expect(brief).not.toContain("anthropic")
+    expect(brief).not.toContain("claude-sonnet-5")
+    expect(brief).not.toContain("a/m")
   })
 
   test("chairman is off by default and the deterministic report is unchanged", async () => {
