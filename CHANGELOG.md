@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Upgrade ax-tui to 2.1.4: the inline TUI now writes fewer bytes per streamed token than the full-screen renderer, including during resize storms.
+
 ### Fixed
 
 - Edit and write tools update a symlink's target instead of replacing the link (for example `CLAUDE.md -> AGENTS.md`).
