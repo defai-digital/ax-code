@@ -158,6 +158,9 @@ export function classifyReadOnlyCommand(parts: readonly string[]): string | unde
   if (name === "uniq" && uniqWrites(args)) return "uniq with a second operand writes its output to a file"
   if (name === "tree" && treeWrites(args)) return "tree -o writes its output to a file"
   if (name === "rg" && rgExecutes(args)) return "rg --pre runs an external program"
+  if (name === "file" && args.some((arg) => arg === "--compile" || /^-[^-]*C/.test(arg))) {
+    return "file -C compiles a magic database"
+  }
 
   if (READ_COMMANDS.has(name)) return undefined
 

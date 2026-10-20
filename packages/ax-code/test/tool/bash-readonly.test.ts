@@ -123,6 +123,8 @@ describe("classifyReadOnlyCommand", () => {
       [["uniq", "in.txt", "out.txt"], /uniq/],
       [["tree", "-o", "out.txt"], /tree/],
       [["rg", "--pre=evil", "pattern"], /rg --pre/],
+      [["file", "-C", "-m", "magic"], /file -C/],
+      [["file", "-bC", "magic"], /file -C/],
     ]
     for (const [parts, pattern] of cases) {
       const reason = classifyReadOnlyCommand(parts)
