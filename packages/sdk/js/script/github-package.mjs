@@ -6,13 +6,13 @@ import os from "node:os"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
-export const packageName = "@defai-digital/ax-code-sdk-internal"
+export const publicName = "@defai-digital/ax-code-sdk"
 export const registry = "https://npm.pkg.github.com"
 export const packageRoot = fileURLToPath(new URL("..", import.meta.url))
 const repoRoot = path.resolve(packageRoot, "../../..")
 // SDK generation removes packages/sdk/js/.tmp. Release evidence must survive it.
 export const artifactDir = path.join(repoRoot, ".tmp/sdk-github-package")
-export const tarballName = (version) => `defai-digital-ax-code-sdk-internal-${version}.tgz`
+export const tarballName = (version) => `defai-digital-ax-code-sdk-${version}.tgz`
 
 export function publicManifest(workspace, catalog) {
   assert.equal(workspace.name, "@ax-code/sdk")
@@ -39,14 +39,14 @@ export function publicManifest(workspace, catalog) {
   )
   assert(exports["."], "Missing root export")
   return {
-    name: packageName,
+    name: publicName,
     version: workspace.version,
     description: "Typed AX Code runtime client for internal applications",
     type: "module",
     license: "Apache-2.0",
     engines: { node: ">=26" },
     repository: { type: "git", url: "https://github.com/defai-digital/ax-code.git", directory: "packages/sdk/js" },
-    publishConfig: { registry, access: "restricted" },
+    publishConfig: { registry, access: "public" },
     types: "./dist/index.d.ts",
     exports,
     dependencies,

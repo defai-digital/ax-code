@@ -7,7 +7,7 @@ Owner: ax-code sdk
 
 AX Code has two integration paths:
 
-Install the private `@defai-digital/ax-code-sdk-internal` package from GitHub Packages through its compatibility alias with package read access. See [SDK installation](../../packages/sdk/js/README.md#install) for scoped registry and authentication setup.
+Install `@defai-digital/ax-code-sdk` from GitHub Packages with package read access. See [SDK installation](../../packages/sdk/js/README.md#install) for scoped registry and authentication setup.
 
 - Use [`@defai-digital/ax-code-sdk`](../../packages/sdk/js/README.md) for first-party TypeScript and JavaScript app integration.
 - Use `@defai-digital/ax-code-sdk/headless` or `@defai-digital/ax-code-sdk/grpc` for first-party app and desktop GUI work.

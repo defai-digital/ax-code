@@ -15,7 +15,7 @@ This directory owns the SDK and OpenAPI integration surfaces for AX Code. Use it
 | [`openapi.json`](openapi.json) | OpenAPI snapshot for HTTP clients and generated cross-language integrations                                             |
 | [`proto/`](proto/)             | Optional gRPC/native headless contract for first-party desktop GUI integrations                                         |
 
-The first-party package is `@defai-digital/ax-code-sdk-internal` on the authenticated GitHub Packages registry (`https://npm.pkg.github.com`). See [SDK installation](js/README.md#install) for credentials and repository access. Other
+The first-party package is `@defai-digital/ax-code-sdk` on the authenticated GitHub Packages registry (`https://npm.pkg.github.com`). See [SDK installation](js/README.md#install) for credentials and repository access. Other
 languages should integrate through `ax-code serve` and generated clients based on `openapi.json` until a language has
 an owner, tests, and a release workflow.
 

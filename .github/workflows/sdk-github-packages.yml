@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing immutable SDK tag, for example sdk-v2.6.39
+        description: Existing immutable SDK tag, for example sdk-v2.6.40
         required: true
         type: string
 
@@ -50,8 +50,8 @@ jobs:
           scan-args: |-
             --lockfile=pnpm-lock.yaml
             --format=table
-      - name: Verify private publication target
-        run: node .github/scripts/sdk-package-registry.mjs visibility --allow-missing
+      - name: Verify public publication target
+        run: node .github/scripts/sdk-package-registry.mjs visibility
         env:
           NODE_AUTH_TOKEN: ${{ secrets.SDK_PACKAGES_TOKEN }}
       - name: Validate immutable SDK source and release tag
@@ -70,14 +70,11 @@ jobs:
         run: |
           node .github/scripts/sdk-provenance.mjs sign
           node .github/scripts/sdk-provenance.mjs verify
-      - name: Preserve signed receipts before upload
+      - name: Preserve signed candidate before upload
         uses: actions/upload-artifact@v7
         with:
           name: sdk-candidate
-          path: |
-            ${{ env.SDK_ARTIFACT_DIR }}/package-receipt.json
-            ${{ env.SDK_ARTIFACT_DIR }}/source-receipt.json
-            ${{ env.SDK_ARTIFACT_DIR }}/provenance.sigstore.json
+          path: ${{ env.SDK_ARTIFACT_DIR }}
           if-no-files-found: error
           retention-days: 14
           include-hidden-files: true
@@ -97,7 +94,7 @@ jobs:
         run: |
           set -euo pipefail
           SDK_TARBALL="$(node -p "JSON.parse(require('fs').readFileSync(process.env.SDK_ARTIFACT_DIR + '/package-receipt.json')).filename")"
-          pnpm publish "$SDK_ARTIFACT_DIR/$SDK_TARBALL" --registry https://npm.pkg.github.com --access restricted --ignore-scripts --no-git-checks
+          pnpm publish "$SDK_ARTIFACT_DIR/$SDK_TARBALL" --registry https://npm.pkg.github.com --access public --ignore-scripts --no-git-checks
       # A duplicate or disconnected upload only succeeds if exact candidate
       # bytes and SHA-512 integrity can be read back with authentication.
       - name: Verify published SDK bytes and integrity
@@ -109,10 +106,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: sdk-github-package
-          path: |
-            ${{ env.SDK_ARTIFACT_DIR }}/package-receipt.json
-            ${{ env.SDK_ARTIFACT_DIR }}/source-receipt.json
-            ${{ env.SDK_ARTIFACT_DIR }}/provenance.sigstore.json
+          path: ${{ env.SDK_ARTIFACT_DIR }}
           if-no-files-found: error
           retention-days: 14
           include-hidden-files: true
@@ -139,17 +133,17 @@ jobs:
       - name: Verify signed candidate and authenticated registry readback
         run: |
           node .github/scripts/sdk-provenance.mjs verify
-          node .github/scripts/sdk-package-registry.mjs verify --receipt-only
+          node .github/scripts/sdk-package-registry.mjs verify
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Verify private package visibility
+      - name: Verify public package visibility
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          VISIBILITY="$(gh api orgs/defai-digital/packages/npm/ax-code-sdk-internal --jq .visibility)"
-          test "$VISIBILITY" = private
+          VISIBILITY="$(gh api orgs/defai-digital/packages/npm/ax-code-sdk --jq .visibility)"
+          test "$VISIBILITY" = public
       - name: Install SDK from registry with read-only package access
         shell: bash
         env:
@@ -166,7 +160,7 @@ jobs:
           //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
           NPMRC
           printf '{"type":"module","private":true}\n' > "$CONSUMER_DIR/package.json"
-          pnpm --dir "$CONSUMER_DIR" add --ignore-scripts --save-exact "@defai-digital/ax-code-sdk@npm:@defai-digital/ax-code-sdk-internal@$SDK_VERSION"
+          pnpm --dir "$CONSUMER_DIR" add --ignore-scripts --save-exact "@defai-digital/ax-code-sdk@$SDK_VERSION"
           pnpm --dir "$CONSUMER_DIR" install --frozen-lockfile --ignore-scripts
           cd "$CONSUMER_DIR"
           node --input-type=module <<'NODE'
@@ -199,7 +193,7 @@ jobs:
         with:
           name: sdk-github-package
           path: sdk-package
-      - name: Preserve SDK receipts and detached provenance
+      - name: Preserve SDK tarball and detached provenance
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -207,7 +201,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh release view "$AX_CODE_SDK_RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$AX_CODE_SDK_RELEASE_TAG" --verify-tag --latest=false --title "SDK ${AX_CODE_SDK_RELEASE_TAG#sdk-v}" --notes "Private GitHub Packages SDK. Source and publisher revisions are recorded in source-receipt.json. Authenticated registry bytes, SHA-512 integrity, detached Sigstore provenance, and a read-only consumer were verified by this workflow."
+            gh release create "$AX_CODE_SDK_RELEASE_TAG" --verify-tag --latest=false --title "SDK ${AX_CODE_SDK_RELEASE_TAG#sdk-v}" --notes "Public GitHub Packages SDK. Source and publisher revisions are recorded in source-receipt.json. Authenticated registry bytes, SHA-512 integrity, detached Sigstore provenance, and a read-only consumer were verified by this workflow."
           fi
           # Refuse to overwrite evidence from an existing publication. A rerun
           # may only retain identical immutable release assets.

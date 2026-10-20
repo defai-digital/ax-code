@@ -8,7 +8,7 @@ import {
   registryRequest,
   validateTag,
   verifyRegistry,
-  verifyPrivatePackage,
+  verifyPublicPackage,
 } from "../.github/scripts/sdk-package-registry.mjs"
 
 const source = {
@@ -25,10 +25,10 @@ const catalog = 'catalog:\n  "zod": "4.4.3"\n'
 describe("SDK package boundary", () => {
   test("ships a private-workspace-safe typed package with resolved pinned runtime dependencies", () => {
     const manifest = publicManifest(source, catalog)
-    expect(manifest.name).toBe("@defai-digital/ax-code-sdk-internal")
+    expect(manifest.name).toBe("@defai-digital/ax-code-sdk")
     expect(manifest.dependencies).toEqual({ zod: "4.4.3" })
     expect(manifest.exports["."]).toEqual({ types: "./dist/index.d.ts", import: "./dist/index.js" })
-    expect(manifest.publishConfig).toEqual({ registry: "https://npm.pkg.github.com", access: "restricted" })
+    expect(manifest.publishConfig).toEqual({ registry: "https://npm.pkg.github.com", access: "public" })
     for (const key of ["scripts", "devDependencies", "private", "packageManager"])
       expect(manifest).not.toHaveProperty(key)
   })
@@ -60,7 +60,7 @@ describe("authenticated SDK readback", () => {
   const bytes = Buffer.from("candidate tarball")
   const receipt = {
     registry: "https://npm.pkg.github.com",
-    name: "@defai-digital/ax-code-sdk-internal",
+    name: "@defai-digital/ax-code-sdk",
     version: "2.6.39",
     integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
     sha256: createHash("sha256").update(bytes).digest("hex"),
@@ -76,7 +76,7 @@ describe("authenticated SDK readback", () => {
       .mockResolvedValueOnce(Response.json({ name: receipt.name, versions: { [receipt.version]: metadata() } }))
       .mockResolvedValueOnce(new Response(bytes))
     expect(await verifyRegistry(receipt, bytes, "fixture-token", fetcher)).toEqual(bytes)
-    expect(new URL(fetcher.mock.calls[0][0]).pathname).toBe("/%40defai-digital%2Fax-code-sdk-internal")
+    expect(new URL(fetcher.mock.calls[0][0]).pathname).toBe("/%40defai-digital%2Fax-code-sdk")
     expect(fetcher.mock.calls[0][1]).toMatchObject({
       redirect: "error",
       headers: { authorization: "Bearer fixture-token" },
@@ -95,18 +95,6 @@ describe("authenticated SDK readback", () => {
       .mockResolvedValueOnce(Response.json({ name: receipt.name, versions: { [receipt.version]: metadata() } }))
       .mockResolvedValueOnce(new Response("different bytes"))
     await expect(verifyRegistry(receipt, bytes, "fixture-token", wrongBytes)).rejects.toThrow()
-  })
-  test("a fresh consumer verifies signed receipt digests without a public candidate tarball", async () => {
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(Response.json({ name: receipt.name, versions: { [receipt.version]: metadata() } }))
-      .mockResolvedValueOnce(new Response(bytes))
-    await expect(verifyRegistry(receipt, undefined, "fixture-token", fetcher)).resolves.toEqual(bytes)
-    const corrupted = vi
-      .fn()
-      .mockResolvedValueOnce(Response.json({ name: receipt.name, versions: { [receipt.version]: metadata() } }))
-      .mockResolvedValueOnce(new Response("corrupted"))
-    await expect(verifyRegistry(receipt, undefined, "fixture-token", corrupted)).rejects.toThrow()
   })
   test.each([401, 403, 404, 500])("rejects registry failure HTTP %s", async (status) => {
     await expect(
@@ -188,58 +176,28 @@ test.each(["https://example.com/package", "http://pkg-npm.githubusercontent.com/
   },
 )
 
-test("private publication rejects public packages and inaccessible visibility metadata", async () => {
-  for (const visibility of ["public", "internal"]) {
+test("public publication rejects other visibility and inaccessible metadata", async () => {
+  for (const visibility of ["private", "internal"]) {
     await expect(
-      verifyPrivatePackage("fixture-token", {
-        fetcher: async () => Response.json({ name: "ax-code-sdk-internal", visibility }),
-      }),
-    ).rejects.toThrow("remain private")
+      verifyPublicPackage("fixture-token", async () => Response.json({ name: "ax-code-sdk", visibility })),
+    ).rejects.toThrow("remain public")
   }
   await expect(
-    verifyPrivatePackage("fixture-token", {
-      fetcher: async () => Response.json({ name: "ax-code-sdk-internal", visibility: "private" }),
-    }),
-  ).resolves.toEqual({ exists: true, visibility: "private" })
-  await expect(
-    verifyPrivatePackage("fixture-token", {
-      allowMissing: true,
-      fetcher: async () => new Response(null, { status: 404 }),
-    }),
-  ).resolves.toEqual({ exists: false })
-  await expect(
-    verifyPrivatePackage("fixture-token", {
-      allowMissing: true,
-      fetcher: async () => new Response(null, { status: 403 }),
-    }),
-  ).rejects.toThrow("HTTP 403")
+    verifyPublicPackage("fixture-token", async () => Response.json({ name: "ax-code-sdk", visibility: "public" })),
+  ).resolves.toEqual({ visibility: "public" })
+  await expect(verifyPublicPackage("fixture-token", async () => new Response(null, { status: 403 }))).rejects.toThrow(
+    "HTTP 403",
+  )
 })
 
-test("publishing uses the dedicated package credential instead of inheriting public repository visibility", () => {
+test("the requested package token publishes while the independent consumer remains read-only", () => {
   const workflow = readFileSync(".github/workflows/sdk-github-packages.yml", "utf8")
-  const publish = workflow.slice(
-    workflow.indexOf("      - name: Publish SDK tarball"),
-    workflow.indexOf("\n  consumer:"),
-  )
-  expect(publish).toContain("secrets.SDK_PACKAGES_TOKEN")
-  expect(publish).not.toContain("secrets.GITHUB_TOKEN")
-  expect(publish).toContain("sdk-package-registry.mjs visibility")
+  const publisher = workflow.slice(0, workflow.indexOf("\n  consumer:"))
   const consumer = workflow.slice(workflow.indexOf("\n  consumer:"), workflow.indexOf("\n  release:"))
+  expect(publisher).toContain("secrets.SDK_PACKAGES_TOKEN")
+  expect(publisher).not.toContain("secrets.GITHUB_TOKEN")
+  expect(publisher).toContain("--access public")
   expect(consumer).not.toContain("secrets.SDK_PACKAGES_TOKEN")
   expect(consumer).toContain("secrets.GITHUB_TOKEN")
-})
-
-test("public release artifacts contain only signed receipts, never private package bytes", () => {
-  const workflow = readFileSync(".github/workflows/sdk-github-packages.yml", "utf8")
-  const uploads = workflow.split("uses: actions/upload-artifact@v7").slice(1)
-  expect(uploads).toHaveLength(2)
-  for (const upload of uploads) {
-    const settings = upload.split("      - ")[0]
-    expect(settings).toContain("/package-receipt.json")
-    expect(settings).toContain("/source-receipt.json")
-    expect(settings).toContain("/provenance.sigstore.json")
-    expect(settings).not.toMatch(/path: \$\{\{ env.SDK_ARTIFACT_DIR \}\}\s*$/m)
-    expect(settings).not.toContain("*.tgz")
-  }
-  expect(workflow).toContain("sdk-package-registry.mjs verify --receipt-only")
+  expect(consumer).toContain('test "$VISIBILITY" = public')
 })

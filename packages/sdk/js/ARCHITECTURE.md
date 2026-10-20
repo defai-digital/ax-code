@@ -3,7 +3,7 @@
 ## Purpose
 
 `packages/sdk/js` contains the TypeScript SDK and programmatic, headless, and gRPC/native entry points. The private
-workspace identity is `@ax-code/sdk`; the distribution identity is `@defai-digital/ax-code-sdk-internal`.
+workspace identity is `@ax-code/sdk`; the distribution identity is `@defai-digital/ax-code-sdk`.
 
 ## Allowed Dependencies
 
@@ -14,7 +14,7 @@ workspace identity is `@ax-code/sdk`; the distribution identity is `@defai-digit
 
 - keep consumer-facing APIs stable and explicit
 - generated code belongs under generated folders, not mixed into handwritten client logic
-- GitHub Packages publication stages regenerated ESM and declarations in a private npm-compatible package; authenticated tarball readback and an isolated consumer are required
+- GitHub Packages publication stages regenerated ESM and declarations in the public npm-compatible package; authenticated tarball readback and an isolated consumer are required
 
 ## Testing
 

@@ -1,4 +1,4 @@
-# @defai-digital/ax-code-sdk-internal
+# @defai-digital/ax-code-sdk
 
 TypeScript SDK for integrating the [AX Code](https://ax-code.app/en/docs/) coding-agent runtime into your own applications.
 
@@ -6,7 +6,7 @@ Use it to supervise a compatible signed AX Code runtime through typed **headless
 
 ## Install
 
-The SDK is distributed through **GitHub Packages** as a private package for internal projects. Configure the consuming project's `.npmrc` with a scoped registry and an environment placeholder:
+The SDK is distributed through **GitHub Packages** as the public `@defai-digital/ax-code-sdk` package. Configure the consuming project's `.npmrc` with a scoped registry and an environment placeholder:
 
 ```ini
 @defai-digital:registry=https://npm.pkg.github.com
@@ -16,18 +16,16 @@ The SDK is distributed through **GitHub Packages** as a private package for inte
 Set `NODE_AUTH_TOKEN` through your secret manager to a classic GitHub PAT with `read:packages` and access to the package. Never commit a token. Other npm scopes continue to use their existing registry.
 
 ```bash
-pnpm add @defai-digital/ax-code-sdk@npm:@defai-digital/ax-code-sdk-internal@2.6.39
+pnpm add @defai-digital/ax-code-sdk@2.6.40
 ```
 
-The npm alias preserves existing `@defai-digital/ax-code-sdk` imports while installing the private `@defai-digital/ax-code-sdk-internal` package. The previous public SDK package and its immutable versions remain historical; new internal releases use the private identity.
+For GitHub Actions, declare `permissions: packages: read` and pass `${{ secrets.GITHUB_TOKEN }}` as `NODE_AUTH_TOKEN` for the install step. Public npm packages on GitHub Packages still require registry authentication; they do not require a private-package access grant. Publication uses the dedicated `SDK_PACKAGES_TOKEN` secret and verifies that package visibility remains public.
 
-For GitHub Actions, grant the consuming repository access in the package's **Manage Actions access** settings, declare `permissions: packages: read`, and pass `${{ secrets.GITHUB_TOKEN }}` as `NODE_AUTH_TOKEN` for the install step. A token from another repository has no implicit package access. Verify package access before switching a consumer's lockfile. Publishing uses a dedicated package PAT: publishing with the public repository's `GITHUB_TOKEN` would inherit public visibility.
-
-Public SDK release assets contain only integrity and source receipts plus a detached Sigstore provenance bundle. Private package bytes are available only through authenticated GitHub Packages downloads. Publication verifies authenticated registry bytes and a separate job installs the package with read-only credentials. These assets describe the SDK source tag and the publisher revision separately. Historical JSR versions remain historical; new SDK releases use GitHub Packages.
+SDK release assets include the tarball, its SHA-512 integrity receipt, and a detached Sigstore provenance bundle. Publication verifies authenticated registry bytes and a separate job installs the package with read-only credentials. These assets describe the SDK source tag and the publisher revision separately. Historical JSR versions remain historical; new SDK releases use GitHub Packages.
 
 Requires **Node.js 26+** (or Deno with Node compatibility). Older Node.js versions are unsupported. Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`. SDK and runtime versions are independent. Check the runtime capability protocol before enabling app features; an SDK version check alone does not establish runtime compatibility.
 
-The workspace package name `@ax-code/sdk` is private to this monorepo. Consumers install the private `@defai-digital/ax-code-sdk-internal` package through the alias above with authentication.
+The workspace package name `@ax-code/sdk` is private to this monorepo. Consumers install `@defai-digital/ax-code-sdk` from GitHub Packages with authentication.
 
 ## Report API migration
 
@@ -283,7 +281,7 @@ This package is the first-party TypeScript/JavaScript SDK. For Python, Go, Java,
 
 ## Migration from `@ax-code/sdk` 1.4.0
 
-| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.6.39)                                  |
+| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.6.40)                                  |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `import { createAxCode } from "@ax-code/sdk"`             | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"` |
 | `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createHeadlessClient } from "@defai-digital/ax-code-sdk/headless"` |

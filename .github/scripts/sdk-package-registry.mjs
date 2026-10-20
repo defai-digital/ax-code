@@ -88,24 +88,23 @@ export async function downloadPackage(url, token, fetcher = fetch) {
   throw new Error("Package redirect limit exceeded")
 }
 
-export async function verifyPrivatePackage(token, { allowMissing = false, fetcher = fetch } = {}) {
+export async function verifyPublicPackage(token, fetcher = fetch) {
   assert(token, "A package credential is required")
-  const response = await fetcher("https://api.github.com/orgs/defai-digital/packages/npm/ax-code-sdk-internal", {
+  const response = await fetcher("https://api.github.com/orgs/defai-digital/packages/npm/ax-code-sdk", {
     headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
     redirect: "error",
     signal: AbortSignal.timeout(30_000),
   })
-  if (response.status === 404 && allowMissing) return { exists: false }
   assert(response.ok, `Package visibility read failed: HTTP ${response.status}`)
   const metadata = await response.json()
-  assert.equal(metadata.name, "ax-code-sdk-internal")
-  assert.equal(metadata.visibility, "private", "SDK package must remain private")
-  return { exists: true, visibility: metadata.visibility }
+  assert.equal(metadata.name, "ax-code-sdk")
+  assert.equal(metadata.visibility, "public", "SDK package must remain public")
+  return { visibility: metadata.visibility }
 }
 
 export async function verifyRegistry(receipt, candidate, token, fetcher = fetch) {
   assert.equal(receipt.registry, registry)
-  assert.equal(receipt.name, "@defai-digital/ax-code-sdk-internal")
+  assert.equal(receipt.name, "@defai-digital/ax-code-sdk")
   validateTag(`sdk-v${receipt.version}`, receipt.version)
   const metadata = await registryRequest(`${registry}/${encodeURIComponent(receipt.name)}`, token, fetcher)
   assert(metadata.ok, `Package metadata read failed: HTTP ${metadata.status}`)
@@ -122,17 +121,14 @@ export async function verifyRegistry(receipt, candidate, token, fetcher = fetch)
   const bytes = Buffer.from(await response.arrayBuffer())
   assert.equal(`sha512-${createHash("sha512").update(bytes).digest("base64")}`, receipt.integrity)
   assert.equal(createHash("sha256").update(bytes).digest("hex"), receipt.sha256)
-  if (candidate !== undefined) assert(bytes.equals(candidate), "Registry tarball differs from candidate bytes")
+  assert(bytes.equals(candidate), "Registry tarball differs from candidate bytes")
   return bytes
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const command = process.argv[2]
   if (command === "visibility") {
-    const result = await verifyPrivatePackage(process.env.NODE_AUTH_TOKEN, {
-      allowMissing: process.argv.includes("--allow-missing"),
-    })
-    console.log(JSON.stringify(result))
+    console.log(JSON.stringify(await verifyPublicPackage(process.env.NODE_AUTH_TOKEN)))
   } else if (command === "source") {
     const receipt = await sourceReceipt(process.env.AX_CODE_SDK_RELEASE_TAG)
     await fs.mkdir(artifactDir, { recursive: true })
@@ -141,7 +137,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     const receipt = JSON.parse(await fs.readFile(path.join(artifactDir, "package-receipt.json"), "utf8"))
     const bytes = await verifyRegistry(
       receipt,
-      process.argv.includes("--receipt-only") ? undefined : await fs.readFile(path.join(artifactDir, receipt.filename)),
+      await fs.readFile(path.join(artifactDir, receipt.filename)),
       process.env.NODE_AUTH_TOKEN,
     )
     await fs.writeFile(path.join(artifactDir, "registry-readback.tgz"), bytes)

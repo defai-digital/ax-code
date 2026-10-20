@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Publish SDK 2.6.40 as the public `@defai-digital/ax-code-sdk` package on GitHub Packages. Preserve existing SDK versions and use a dedicated package publication credential.
+
 ## [7.27.8] - 2026-10-20
 
 ### Changed
