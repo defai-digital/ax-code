@@ -221,6 +221,28 @@ describe("ops.strict bash integration", () => {
     )
   }, 30_000)
 
+  test("classifies a destructive command nested in busybox sh -c", async () => {
+    // BusyBox/ToyBox expose their shell as an applet; the wrapper must be
+    // resolved before the -c inner scan or the destructive gate is skipped.
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+    await withTrustedProjectConfig(() =>
+      Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const asks: PermissionRequest[] = []
+          await bash.execute(
+            { command: `busybox sh -c "rm -rf ./busybox-target"`, description: "Remove busybox target" },
+            makeCtx(asks),
+          )
+          const destructive = asks.filter((ask) => ask.permission === "bash_destructive")
+          expect(destructive).toHaveLength(1)
+          expect(destructive[0]!.patterns.join(" ")).toContain("rm -rf ./busybox-target")
+        },
+      }),
+    )
+  }, 30_000)
+
   test("ops_apply does not consult the bash strict flag", async () => {
     const source = await fs.readFile(path.join(__dirname, "../../src/tool/ops_apply.ts"), "utf-8")
     expect(source).not.toContain("bash-strict")

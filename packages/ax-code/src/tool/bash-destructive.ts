@@ -99,6 +99,9 @@ const COMMAND_WRAPPERS: ReadonlyMap<string, WrapperSpec> = new Map([
   ["nice", { valueFlags: new Set(["-n", "--adjustment"]) }],
   ["timeout", { valueFlags: new Set(["-k", "-s", "--kill-after", "--signal"]), positionalArgs: 1 }],
   ["setsid", { valueFlags: new Set() }],
+  // Minimal Linux images ship their shell as a BusyBox/ToyBox applet.
+  ["busybox", { valueFlags: new Set() }],
+  ["toybox", { valueFlags: new Set() }],
   ["stdbuf", { valueFlags: new Set(["-e", "-i", "-o", "--error", "--input", "--output"]) }],
   [
     "ionice",
