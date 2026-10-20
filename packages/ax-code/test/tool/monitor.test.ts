@@ -134,6 +134,36 @@ describe("tool.monitor", () => {
     })
   })
 
+  test("bounds an unterminated line instead of retaining it whole", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const lines: string[] = []
+        const unsubscribe = Bus.subscribe(NotificationEvent.MonitorLine, (event) => {
+          lines.push(event.properties.line)
+        })
+        try {
+          const monitor = await MonitorTool.init()
+          await monitor.execute(
+            {
+              command: `node -e "process.stdout.write('x'.repeat(200000))"`,
+              description: "long line",
+            },
+            context([], isolation),
+          )
+          await waitFor(() => lines.length >= 1)
+          expect(lines).toHaveLength(1)
+          expect(lines[0]!.length).toBeLessThan(70_000)
+          expect(lines[0]).toContain("[monitor line truncated]")
+        } finally {
+          unsubscribe()
+        }
+      },
+    })
+  })
+
   test("kills non-persistent monitors at their deadline", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

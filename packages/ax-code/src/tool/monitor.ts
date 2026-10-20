@@ -17,6 +17,9 @@ const log = Log.create({ service: "tool.monitor" })
 
 const MAX_LINES_PER_SECOND = 100
 const DEFAULT_TIMEOUT_MS = 300_000
+// An unterminated line is still held until its newline (or exit). Bound that
+// buffer so `yes | tr -d '\n'` cannot grow the agent process without limit.
+const MAX_PARTIAL_LINE_CHARS = 64 * 1024
 
 function compileFilter(pattern: string | undefined): RegExp | undefined {
   if (pattern === undefined) return undefined
@@ -125,6 +128,10 @@ export const MonitorTool = Tool.define("monitor", {
       stdout: "",
       stderr: "",
     }
+    const partialTruncated: Record<BackgroundShell.OutputStream, boolean> = {
+      stdout: false,
+      stderr: false,
+    }
 
     const emitLine = (line: string) => {
       const trimmed = line.trimEnd()
@@ -169,8 +176,18 @@ export const MonitorTool = Tool.define("monitor", {
 
     const appendOutput = (stream: BackgroundShell.OutputStream, text: string) => {
       partial[stream] += text
+      if (partial[stream].length > MAX_PARTIAL_LINE_CHARS) {
+        partial[stream] = partial[stream].slice(-MAX_PARTIAL_LINE_CHARS)
+        partialTruncated[stream] = true
+      }
       const lines = partial[stream].split("\n")
       partial[stream] = lines.pop() ?? ""
+      // Only the first completed line can be the retained tail of an
+      // oversized line; later entries were already newline-delimited.
+      if (partialTruncated[stream] && lines.length > 0) {
+        lines[0] = `[monitor line truncated] ${lines[0]}`
+        partialTruncated[stream] = false
+      }
       for (const line of lines) emitLine(line)
     }
 
@@ -182,8 +199,12 @@ export const MonitorTool = Tool.define("monitor", {
         finished = true
         if (timer) clearTimeout(timer)
         for (const stream of ["stdout", "stderr"] as const) {
-          if (partial[stream].trimEnd()) emitLine(partial[stream])
+          if (partial[stream].trimEnd()) {
+            const prefix = partialTruncated[stream] ? "[monitor line truncated] " : ""
+            emitLine(prefix + partial[stream])
+          }
           partial[stream] = ""
+          partialTruncated[stream] = false
         }
         try {
           BackgroundNotification.recordMonitorExit({
