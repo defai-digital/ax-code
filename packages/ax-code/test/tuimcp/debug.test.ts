@@ -88,7 +88,7 @@ type BrowserElement = {
 type BrowserTool = {
   name: string
   annotations: { readOnlyHint: boolean; consequentialHint: boolean; untrustedContentHint: boolean }
-  execute: (args: unknown) => Promise<string>
+  execute: (args: unknown, options?: { signal?: AbortSignal }) => Promise<string>
 }
 async function browserFixture(
   f: ReturnType<typeof fixture>,
@@ -118,7 +118,10 @@ async function browserFixture(
     },
     navigator: {},
     crypto: { randomUUID },
-    AbortSignal: { timeout: deadline ?? AbortSignal.timeout },
+    AbortSignal: {
+      timeout: deadline ?? AbortSignal.timeout,
+      any: AbortSignal.any.bind(AbortSignal),
+    },
     setInterval: (callback: () => void) => {
       tick = callback
       return 0
@@ -449,6 +452,31 @@ describe.skipIf(process.platform === "win32")("native TUI developer transports",
     expect(parseJsonStrict(await action)).toMatchObject({ status: "applied" })
     expect(h.element("screen").textContent).toBe("New frame")
     expect(h.element("click-submit").disabled).toBe(false)
+  })
+  test("WebMCP cancellation before dispatch does not send native input", async () => {
+    const f = fixture()
+    let delay = false
+    let release: (() => void) | undefined
+    await using h = await browserFixture(f, async (name, next) => {
+      const response = await next()
+      if (delay && name === "get_tui_snapshot") {
+        delay = false
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+      }
+      return response
+    })
+    const mutate = h.registered.find((tool) => tool.name === "tui_input")!
+    delay = true
+    const controller = new AbortController()
+    const { operation: _, ...args } = f.input({ kind: "key", key: "enter" })
+    const pending = mutate.execute(args, { signal: controller.signal })
+    await h.until(() => !!release)
+    controller.abort()
+    release!()
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" })
+    expect(f.actions).toEqual([])
   })
   test("an older transport failure cannot invalidate a newer successful screen read", async () => {
     const f = fixture()

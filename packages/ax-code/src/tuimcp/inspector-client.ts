@@ -63,19 +63,21 @@ function show(result, requestSequence, requestEpoch, present, mutation = false) 
   }
   return result
 }
-async function rpc(name, args = {}, present = true) {
+async function rpc(name, args = {}, present = true, signal) {
   const requestSequence = ++sequence
   const requestEpoch = epoch
   const deadline = AbortSignal.timeout(15_000)
+  const requestSignal = signal ? AbortSignal.any([deadline, signal]) : deadline
   try {
     const response = await fetch("/rpc", {
       method: "POST", headers: { "Content-Type": "application/json", "X-AX-TUI-Debug": boot.capability },
       body: JSON.stringify({ name, args }),
-      signal: deadline,
+      signal: requestSignal,
     })
     let result
     try { result = await response.json() } catch {
       deadline.throwIfAborted()
+      signal?.throwIfAborted()
       throw new Error("Inspector returned an invalid response (HTTP " + response.status + ")")
     }
     if (!response.ok) throw new Error("Inspector request failed: " + (result.code ?? "HTTP " + response.status))
@@ -105,8 +107,9 @@ async function refresh(present = true) {
   const ctx = await context()
   return rpc("get_tui_snapshot", target(ctx), present)
 }
-async function execute(name, args = {}) {
-  if (name !== "tui_input" && name !== "select_session") return rpc(name, args)
+async function execute(name, args = {}, signal) {
+  signal?.throwIfAborted()
+  if (name !== "tui_input" && name !== "select_session") return rpc(name, args, true, signal)
   const signature = JSON.stringify({ name, args }, (_key, value) =>
     value && typeof value === "object" && !Array.isArray(value)
       ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, value[key]])) : value)
@@ -119,18 +122,21 @@ async function execute(name, args = {}) {
   const operation = { requestId: args.requestId, signature, promise: undefined }
   activeMutation = operation
   controls()
-  operation.promise = Promise.resolve().then(() => mutate(name, args)).finally(() => {
+  operation.promise = Promise.resolve().then(() => mutate(name, args, signal)).finally(() => {
     if (activeMutation === operation) activeMutation = undefined
     controls()
   })
   return operation.promise
 }
-async function mutate(name, args) {
+async function mutate(name, args, signal) {
   // A displayed frame can predate unrelated native rendering. Sample immediately before dispatch.
   // Sampling aids visual confirmation; the native controller remains the mutation authority.
   // A rejected sample must not replace reconciliation of a cached mutation receipt.
   const previousMinimum = minimumFrame
-  const baseline = await rpc("get_tui_snapshot", target(args), false)
+  const baseline = await rpc("get_tui_snapshot", target(args), false, signal)
+  // The caller may have cancelled while the pre-dispatch snapshot was in
+  // flight. Nothing has been sent yet, so abort without a receipt or input.
+  signal?.throwIfAborted()
   const before = baseline.status === "snapshot" ? baseline.screen.frameId : undefined
   const ownEpoch = ++epoch
   minimumFrame = before === undefined ? previousMinimum : Math.max(previousMinimum ?? before, before)
@@ -138,7 +144,7 @@ async function mutate(name, args) {
   invalidate("input dispatch in progress")
   let result
   try {
-    result = await rpc(name, args)
+    result = await rpc(name, args, true, signal)
     receipt(name, args, result)
   } catch (error) {
     receipt(name, args, { status: "rejected", code: "outcome_unknown" })
@@ -233,7 +239,8 @@ if (modelContext && typeof modelContext.registerTool === "function") {
           consequentialHint: tool.annotations?.readOnlyHint !== true,
           untrustedContentHint: tool.name === "get_tui_snapshot" || tool.name === "wait_for_tui",
         },
-        execute: async (args) => JSON.stringify(await execute(tool.name, args)),
+        execute: async (args, options) =>
+          JSON.stringify(await execute(tool.name, args, options?.signal)),
       })
     el("webmcp").textContent = "WebMCP ready · " + boot.tools.length + " native TUI tools"
   })().catch(() => {
