@@ -16,6 +16,19 @@ vi.mock("@parcel/watcher/wrapper", () => ({
   }),
 }))
 
+// The platform binding package may be absent (CI runners install only some),
+// and the watcher requires it before calling createWrapper. Resolve it to an
+// empty stub; every other require keeps the real implementation.
+vi.mock("node:module", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:module")>()
+  const createRequire: typeof actual.createRequire = (from) => {
+    const real = actual.createRequire(from)
+    const stubbed = ((id: string) => (id.startsWith("@parcel/watcher-") ? {} : real(id))) as NodeJS.Require
+    return Object.assign(stubbed, real)
+  }
+  return { ...actual, default: { ...actual, createRequire }, createRequire }
+})
+
 // Expire the first 10 s subscribe deadline (the parcel attempt) immediately;
 // every other caller keeps the real implementation.
 vi.mock("@/util/timeout", async (importOriginal) => {
