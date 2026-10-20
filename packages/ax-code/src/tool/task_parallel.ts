@@ -54,6 +54,11 @@ const DEFAULT_CONCURRENCY = 4
  * cancels the ones in flight, and the call returns partial results.
  */
 const SWARM_DEADLINE_MS = 30 * 60 * 1000
+
+/** Test seam: production keeps the documented 30-minute whole-call deadline. */
+export const TaskParallelInternals = {
+  deadlineMs: SWARM_DEADLINE_MS,
+}
 /** Characters of one member's final text inlined into the parent's context. */
 const MEMBER_TEXT_INLINE_LIMIT = 4_000
 /** Literal placeholder one `prompt_template` fans out over `items`. */
@@ -737,7 +742,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       // order. A member that throws stops the pool from starting new work and
       // cancels the siblings that already started (unchanged contract).
       const concurrency = Math.min(params.concurrency ?? DEFAULT_CONCURRENCY, resolved.length)
-      const deadlineAt = Date.now() + SWARM_DEADLINE_MS
+      const deadlineAt = Date.now() + TaskParallelInternals.deadlineMs
       const outcomes: Array<Awaited<ReturnType<typeof runOneTask>> | undefined> = []
       let deadlineHit = false
       let failure: { index: number; reason: unknown } | undefined
@@ -806,9 +811,25 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
           }
         }
       }
+      // The loop only checks the deadline when it starts a member. Without a
+      // timer, a pool whose workers are all awaiting members never observes
+      // expiry: in-flight members run to their own timeout and the call
+      // silently overruns its wall clock. Cancel them at the deadline instead.
+      const deadlineTimer = setTimeout(
+        () => {
+          if (deadlineHit) return
+          deadlineHit = true
+          void cancelStarted()
+        },
+        Math.max(0, deadlineAt - Date.now()),
+      )
       // Whatever stopped the pool, let the members still in flight settle before
       // reporting: an unawaited promise would keep running past the response.
-      await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => runPool()))
+      try {
+        await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => runPool()))
+      } finally {
+        clearTimeout(deadlineTimer)
+      }
 
       // ADR-231: per-writer worktree cleanup. For every writer that
       // successfully created a worktree, compute a short diff stat against
@@ -880,7 +901,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
             "error" in report && report.error
               ? report.error
               : report.status === "deadline_cancelled"
-                ? `not started before the call's ${Math.round(SWARM_DEADLINE_MS / 60_000)}-minute deadline; run it as its own swarm or task`
+                ? `not started before the call's ${Math.round(TaskParallelInternals.deadlineMs / 60_000)}-minute deadline; run it as its own swarm or task`
                 : "not started"
           return [header, `status: ${report.status}`, `task_id: -`, "", "<task_result>", reason, "</task_result>"].join(
             "\n",
@@ -983,7 +1004,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
           `Parallel explore finished: ${okCount}/${reports.length} succeeded.`,
           ...(deadlineHit
             ? [
-                `The call reached its ${Math.round(SWARM_DEADLINE_MS / 60_000)}-minute deadline: members still running were cancelled and the rest were not started. Re-run the unfinished items.`,
+                `The call reached its ${Math.round(TaskParallelInternals.deadlineMs / 60_000)}-minute deadline: members still running were cancelled and the rest were not started. Re-run the unfinished items.`,
               ]
             : []),
           isolation.mode === "worktree"

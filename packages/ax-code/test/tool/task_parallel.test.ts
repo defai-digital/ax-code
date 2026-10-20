@@ -5,7 +5,12 @@ import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { MessageID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
-import { MAX_PARALLEL, TaskParallelTool, expandTaskParallelInput } from "../../src/tool/task_parallel"
+import {
+  MAX_PARALLEL,
+  TaskParallelInternals,
+  TaskParallelTool,
+  expandTaskParallelInput,
+} from "../../src/tool/task_parallel"
 import { WriteIsolation } from "../../src/session/write-isolation"
 import { tmpdir } from "../fixture/fixture"
 
@@ -1077,6 +1082,37 @@ describe("task_parallel swarm scale (item: swarm)", () => {
       },
     })
   })
+  test("cancels in-flight members at the whole-call deadline", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const cancelled = Promise.withResolvers<void>()
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+          await cancelled.promise
+          throw new DOMException("cancelled", "AbortError")
+        }) as any)
+        const cancel = vi.spyOn(SessionPrompt, "cancel").mockImplementation((async () => {
+          cancelled.resolve()
+        }) as any)
+        const previousDeadline = TaskParallelInternals.deadlineMs
+        TaskParallelInternals.deadlineMs = 100
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute({ tasks: [{ description: "slow member", prompt: "do work", subagent_type: "explore" }] }, ctx)
+          expect(result.metadata.deadlineReached).toBe(true)
+          expect(cancel).toHaveBeenCalled()
+          expect(result.output).toContain("deadline")
+        } finally {
+          TaskParallelInternals.deadlineMs = previousDeadline
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+
   test("an @agent bypass cannot start a swarm for an agent without an explicit task allow", async () => {
     await using tmp = await tmpdir({
       git: true,
