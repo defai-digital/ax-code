@@ -6,14 +6,25 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.28.0] - 2026-10-20
+
 ### Changed
 
-- Publish SDK 2.6.40 as the public `@defai-digital/ax-code-sdk` package on GitHub Packages. Preserve existing SDK versions and use a dedicated package publication credential.
+- Publish SDK 2.6.41 as the public `@defai-digital/ax-code-sdk` package on GitHub Packages, with signed provenance and independently verified registry consumers.
 - Consume AX TUI 2.1.5 from GitHub Packages with authenticated CI installs.
 
 ### Fixed
 
 - Preload the ESM-only TUI renderer before installing the source-mode Bun compatibility shim.
+- Preserve external edits during patch rollback and refuse multiedit rollback through symlinks that escape the project.
+- Stop cancelled multiedit writes and WebMCP TUI input before dispatch.
+- Apply shell deny rules to monitor subcommands, classify destructive commands inside shell `-c` wrappers, and recognize BusyBox and ToyBox shell entrypoints.
+- Reject magic-database writes in plan mode and close the `task_parallel` no-fan-out permission bypass.
+- Cancel swarm members at the whole-call deadline and avoid nudging queued or paused background tasks.
+- Bound unterminated monitor lines and avoid spilling tool results when the truncation notice would increase their size.
+- Reject non-decimal cron fields and keep member identities out of blinded chairman briefs.
+- Reject unsupported prerelease SDK compatibility ranges instead of treating them as exact stable versions.
+- Authenticate native Linux qualification installs with scoped, read-only GitHub Packages access.
 
 ## [7.27.8] - 2026-10-20
 
