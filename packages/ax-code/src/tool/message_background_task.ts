@@ -17,6 +17,12 @@ const log = Log.create({ service: "message-background-task-tool" })
 // instead of injecting.
 const TERMINAL_STATUSES: TaskQueue.Status[] = ["completed", "failed", "cancelled"]
 
+// Only a task that is already executing may be woken. Queued and
+// waiting-for-idle rows are owned by the task queue; nudging them would start
+// the child ahead of its admission gate and leave the queue's row behind. A
+// paused row must stay paused.
+const NUDGE_STATUSES: TaskQueue.Status[] = ["running", "blocked_permission", "blocked_question"]
+
 // Test seam (same pattern as WaitForInternals): tests stub the nudge so no
 // provider loop runs offline. Production nudge = wake the child session's
 // prompt loop, the same mechanism the completion-handoff path uses to wake
@@ -211,11 +217,14 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
 
     // Nudge the child's prompt loop. If the child is mid-turn, loop() joins
     // the active run's queue and the persisted message is picked up as
-    // follow-up input; if the child is idle, a fresh loop starts on it.
+    // follow-up input; if the child just finished, a fresh loop starts on it.
+    // Queued/paused rows are not nudged: the queue owns their start.
     // Fire-and-forget with a logged catch, same as wakeParent.
-    void MessageBackgroundTaskInternals.nudge(childSessionID).catch((error) => {
-      log.warn("failed to nudge background task prompt loop", { sessionID: childSessionID, error })
-    })
+    if (NUDGE_STATUSES.includes(item.status)) {
+      void MessageBackgroundTaskInternals.nudge(childSessionID).catch((error) => {
+        log.warn("failed to nudge background task prompt loop", { sessionID: childSessionID, error })
+      })
+    }
 
     return controlResult(
       item.title,

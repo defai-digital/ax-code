@@ -286,6 +286,35 @@ describe("tool.message_background_task", () => {
     })
   })
 
+  test.each(["queued", "waiting_for_idle", "paused"] as const)(
+    "delivers to a %s task without starting it early",
+    async (status) => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          stubNudge()
+          const parent = await Session.create({})
+          const { child, item } = await enqueueBackgroundSubagent({
+            parent: parent.id,
+            status,
+            initialPrompt: "do the original task",
+          })
+
+          const result = await (
+            await MessageBackgroundTaskTool.init()
+          ).execute({ task_id: item.id, message: "wait for the queue" }, toolContext(parent.id))
+
+          expect(result.metadata.delivered).toBe(true)
+          expect(nudge).not.toHaveBeenCalled()
+          expect(controlTexts(await Session.messages({ sessionID: child.id }), "wait for the queue")).toHaveLength(1)
+          expect((await TaskQueue.get(TaskQueueID.make(item.id))).status).toBe(status)
+        },
+      })
+    },
+  )
+
   test("redelivery after a mid-flight crash converges to exactly one message", async () => {
     await using tmp = await tmpdir({ git: true })
 
