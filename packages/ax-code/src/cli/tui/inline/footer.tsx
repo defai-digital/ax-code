@@ -2,7 +2,8 @@ import { PermissionPrompt } from "../routes/session/permission"
 import { QuestionPrompt } from "../routes/session/question"
 import { useDialog } from "../ui/dialog"
 import type { JSX } from "solid-js"
-import { Show } from "solid-js"
+import { createMemo, Show } from "solid-js"
+import { useTerminalDimensions } from "ax-tui/solid"
 import { useLanguage } from "../context/language"
 import { useLocal } from "../context/local"
 import { useSync } from "../context/sync"
@@ -11,11 +12,13 @@ import { durableFollowUps } from "../component/prompt/durable-follow-up"
 import type { PromptRef } from "../component/prompt"
 import { FooterPrompt } from "./footer-prompt"
 import { singleLine } from "./block-format"
+import { truncateToCellWidth } from "../routes/session/last-input-view-model"
 
 export function InlineFooter(props: {
   onDecision: (id: string, text: string) => void
   sessionID?: string
   preview: string
+  previewReserved?: boolean
   height: number
   onRows: (rows: number) => void
   promptRef?: (ref: PromptRef) => void
@@ -27,6 +30,10 @@ export function InlineFooter(props: {
   const local = useLocal()
   const sync = useSync()
   const { theme } = useTheme()
+  const dimensions = useTerminalDimensions()
+  // Text outside this single row cannot change the visible footer. Memoize
+  // the fitted text so an invisible suffix does not dirty the renderable.
+  const preview = createMemo(() => truncateToCellWidth(singleLine(props.preview), dimensions().width))
   const busy = () => (sync.data.session_status[props.sessionID ?? ""]?.type ?? "idle") !== "idle"
   return (
     <box flexDirection="column" height={props.height} overflow="hidden">
@@ -76,15 +83,15 @@ export function InlineFooter(props: {
         )}
       </Show>
       <box visible={!permission() && !question() && dialog.stack.length === 0}>
-        <Show when={props.preview}>
+        <Show when={props.previewReserved}>
           <text height={1} wrapMode="none" fg={theme.textMuted}>
-            {singleLine(props.preview)}
+            {preview()}
           </text>
         </Show>
         <FooterPrompt
           disabled={!!permission() || !!question() || dialog.stack.length > 0}
           sessionID={props.sessionID}
-          rows={Math.max(1, props.height - 3 - Number(!!props.preview))}
+          rows={Math.max(1, props.height - 3 - Number(!!props.previewReserved))}
           onRows={props.onRows}
           ref={props.promptRef}
         />

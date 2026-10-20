@@ -38,6 +38,8 @@ import type { PromptRef } from "../component/prompt"
 import { createCommitQueue } from "./commit-queue"
 import { createTranscriptProjector } from "./transcript-projector"
 import { createScrollbackStream, settledTextLength } from "./scrollback-stream"
+import { createInlinePreview } from "./preview"
+import { STREAM_PAINT_MAX_MS } from "../routes/session/stream-paint"
 import { createInlineLifecycle, inlineFooterHeight } from "./lifecycle"
 import { InlineFooter } from "./footer"
 import { singleLine, type TranscriptBlock } from "./block-format"
@@ -53,6 +55,7 @@ export function InlineRoot(props: { input: TuiInput; profile: TuiRenderProfile; 
   const queue = createCommitQueue<TranscriptBlock>(
     (block) => stream.write(block),
     (error) => Log.Default.warn("inline scrollback write failed", { error }),
+    { progressBatchMs: STREAM_PAINT_MAX_MS },
   )
   const lifecycle = createInlineLifecycle(renderer, props.profile, () => queue.close())
   onCleanup(() => {
@@ -182,7 +185,8 @@ function InlineSession(props: {
     imagePlaceholder: (name) => t("ui.inlineImagePlaceholder", { name }),
     compactionMarker: () => t("ui.inlineCompactionMarker"),
   })
-  const [preview, setPreview] = createSignal("")
+  const preview = createInlinePreview()
+  const [previewReserved, reservePreview] = createSignal(false)
   const [rows, setRows] = createSignal(1)
   const sessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
   const expanded = () =>
@@ -195,7 +199,9 @@ function InlineSession(props: {
     if (dialog.stack.length || sync.data.question[sessionID() ?? ""]?.length) return 20
     const permission = sync.data.permission[sessionID() ?? ""]?.[0]
     if (permission) return permission.metadata?.hookRewritten ? 18 : 13
-    return rows() + Number(!!preview())
+    // Keep one preview row available, including between paragraphs and at
+    // finalize. Preview presence must not resize/reposition the prompt.
+    return rows() + Number(previewReserved())
   }
   const height = createMemo(() => {
     dimensions() // Resize notifications carry footer geometry, not physical terminal height.
@@ -263,7 +269,7 @@ function InlineSession(props: {
   createEffect(() => {
     const id = sessionID()
     if (!id) {
-      setPreview("")
+      untrack(() => preview.update("", 0, true))
       return
     }
     const blocks = projector.project({
@@ -275,11 +281,18 @@ function InlineSession(props: {
       revert: sync.data.session.find((item) => item.id === id)?.revert?.messageID,
     })
     let tail = ""
+    let length = 0
+    let streaming = false
     for (const block of blocks) {
       props.queue.enqueue(block)
-      if (block.progress) tail = block.text.slice(settledTextLength(block.text))
+      if (block.progress) {
+        tail = block.text.slice(settledTextLength(block.text))
+        length = block.text.length
+        streaming = true
+        if (tail) reservePreview(true)
+      }
     }
-    setPreview(tail)
+    untrack(() => preview.update(tail, length, !streaming))
   })
   let initialPrompt = false
   createEffect(() => {
@@ -294,7 +307,8 @@ function InlineSession(props: {
     <InlineFooter
       onDecision={(id, text) => props.queue.enqueue({ key: `decision:${id}`, kind: "notice", text })}
       sessionID={sessionID()}
-      preview={preview()}
+      preview={preview.text()}
+      previewReserved={previewReserved()}
       height={height()}
       onRows={setRows}
       promptRef={(ref) => {

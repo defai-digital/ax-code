@@ -1,16 +1,22 @@
+import { scheduleTuiTimeout } from "../util/timer"
+
 export type Commit = { key: string; progress?: boolean }
 
 /** Only adjacent, not-yet-started progress snapshots may replace each other. */
 export function createCommitQueue<T extends Commit>(
   write: (block: T) => void | Promise<void>,
   onError: (error: unknown) => void = () => {},
+  options: { progressBatchMs?: number } = {},
 ) {
   const pending: T[] = []
   let chain = Promise.resolve()
   let scheduled = false
   let closed = false
   let active = false
+  let cancelBatch: (() => void) | undefined
   const flush = (): Promise<void> => {
+    cancelBatch?.()
+    cancelBatch = undefined
     if (!scheduled) {
       scheduled = true
       chain = chain.then(async () => {
@@ -43,7 +49,17 @@ export function createCommitQueue<T extends Commit>(
       const last = pending.at(-1)
       if (last?.progress && block.progress && last.key === block.key) pending[pending.length - 1] = block
       else pending.push(block)
-      void flush()
+      // Only progress may wait. A final block, decision, error or close drains
+      // the whole FIFO immediately, so batching cannot reorder the transcript.
+      if (block.progress && options.progressBatchMs && !scheduled) {
+        cancelBatch ??= scheduleTuiTimeout(
+          () => {
+            cancelBatch = undefined
+            return flush()
+          },
+          { name: "inline.scrollback-batch", delayMs: options.progressBatchMs, unref: true },
+        )
+      } else void flush()
       return true
     },
     flush,

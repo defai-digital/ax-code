@@ -17,7 +17,8 @@ export function createInlineLifecycle(renderer: CliRenderer, profile: TuiRenderP
   let rows = 1
   let expanded = false
   const resize = () => {
-    if (!renderer.isDestroyed) renderer.footerHeight = inlineFooterHeight(rows, renderer.terminalHeight, expanded)
+    const height = inlineFooterHeight(rows, renderer.terminalHeight, expanded)
+    if (!renderer.isDestroyed && renderer.footerHeight !== height) renderer.footerHeight = height
   }
   renderer.on("resize", resize)
   const close = () =>

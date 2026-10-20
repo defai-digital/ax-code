@@ -41,7 +41,7 @@ export function createScrollbackStream(renderer: Pick<CliRenderer, "createScroll
             new TextRenderable(surface.renderContext, { content: text, width: "100%", wrapMode: "word" }),
           )
           await surface.settle()
-          for (let row = 0; row < surface.height; row++) surface.commitRows(row, row + 1, { trailingNewline: true })
+          surface.commitRows(0, surface.height, { trailingNewline: true })
         } finally {
           surface.destroy()
         }
