@@ -163,6 +163,7 @@ const { createSyncContextValue } = await import("../src/cli/tui/context/sync-res
 const { SessionRouteContext } = await import("../src/cli/tui/routes/session/context")
 const { UserMessage, AssistantMessage } = await import("../src/cli/tui/routes/session/transcript")
 const { PermissionPrompt } = await import("../src/cli/tui/routes/session/permission")
+const { TranscriptHistoryNotice } = await import("../src/cli/tui/routes/session/transcript-history-notice")
 const { DialogModel } = await import("../src/cli/tui/component/dialog-model")
 const { Home } = await import("../src/cli/tui/routes/home")
 const { appCommands } = await import("../src/cli/tui/app-commands")
@@ -821,6 +822,30 @@ const SCENES: Scene[] = [
     sync: permissionFixture,
     body: (scene) => <Transcript width={scene.width} permission />,
     expect: ["Clean and rebuild the package", "rm -rf dist"],
+  },
+  {
+    name: "history-notice-truncated-dark-80x24",
+    width: 80,
+    height: 24,
+    mode: "dark",
+    body: () => <TranscriptHistoryNotice count={100} max={300} loading={false} onLoad={() => {}} />,
+    expect: ["Showing the latest 100 messages.", "Load earlier messages"],
+  },
+  {
+    name: "history-notice-loading-dark-80x24",
+    width: 80,
+    height: 24,
+    mode: "dark",
+    body: () => <TranscriptHistoryNotice count={100} max={300} loading={true} onLoad={() => {}} />,
+    expect: ["Showing the latest 100 messages.", "Loading earlier messages"],
+  },
+  {
+    name: "history-notice-limit-dark-80x24",
+    width: 80,
+    height: 24,
+    mode: "dark",
+    body: () => <TranscriptHistoryNotice count={300} max={300} loading={false} onLoad={() => {}} />,
+    expect: ["Showing 300 messages, the most this view keeps loaded."],
   },
 ]
 

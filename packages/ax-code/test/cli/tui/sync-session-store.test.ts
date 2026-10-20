@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { MAX_TRANSCRIPT_BYTES } from "../../../src/runtime/headless/projection-retention"
 import {
   applyEarlierMessagePage,
   applySessionDeleteCleanup,
@@ -154,10 +155,10 @@ describe("tui sync session store", () => {
       session: [{ id: "ses_1", title: "old" }],
       todo: { ses_1: [{ id: "todo_old" }] },
       message: {
-        ses_1: [{ id: "msg_old" }, { id: "msg_keep" }],
+        ses_1: [{ id: "msg_keep" }, { id: "msg_mid" }, { id: "msg_new" }],
       },
       part: {
-        msg_old: [{ id: "part_old", text: "remove" }],
+        msg_mid: [{ id: "part_old", text: "remove" }],
         msg_keep: [{ id: "part_keep_old", text: "replace" }],
         msg_new: [{ id: "part_new_old", text: "replace" }],
       },
@@ -574,6 +575,42 @@ describe("admitted transcript history", () => {
     }
   }
 
+  test.each(["C0", undefined])("a stale forced snapshot keeps the earlier page and cursor %s", (cursor) => {
+    const store = state()
+    // The forced fetch starts with the original 100-message window.
+    const snapshot = {
+      session: { id: "session" },
+      todo: [],
+      messages: page(100, 100),
+      diff: [],
+      history: { cursor: "C1" },
+    }
+    applyEarlierMessagePage(store, "session", page(0, 100), cursor, { maxMessages: 300 })
+    expect(store.message.session).toHaveLength(200)
+
+    applySessionSyncSnapshot(store, "session", snapshot)
+
+    expect(store.message.session).toEqual(page(0, 200).map((item) => item.info))
+    for (const item of page(0, 200)) expect(store.part[item.info.id]).toEqual(item.parts)
+    expect(store.message_window.session).toBe(200)
+    expect(store.message_cursor.session).toBe(cursor)
+    expect(store.message_truncated.session).toBe(!!cursor)
+  })
+
+  test("a routine full-window resync does not grow the window from an overlapping prefix", () => {
+    const store = state()
+    applySessionSyncSnapshot(store, "session", {
+      session: { id: "session" },
+      todo: [],
+      messages: page(101, 100),
+      diff: [],
+      history: { cursor: "before-msg_0101" },
+    })
+    expect(store.message.session).toEqual(page(101, 100).map((item) => item.info))
+    expect(store.message_window.session).toBe(100)
+    expect(store.message_cursor.session).toBe("before-msg_0101")
+  })
+
   test("a forced snapshot keeps the admitted 200-message window and adopts its cursor", () => {
     const store = state()
     store.message_window.session = 200
@@ -588,6 +625,68 @@ describe("admitted transcript history", () => {
     expect(store.part.msg_0000).toEqual(page(0, 1)[0].parts)
     expect(store.message_cursor.session).toBe("next-page")
     expect(store.message_truncated.session).toBe(true)
+  })
+
+  test("a snapshot with an absent oldest message replaces the prefix and adopts its cursor", () => {
+    const store = state()
+    store.message.session.unshift(page(0, 1)[0].info)
+    store.part.msg_0000 = page(0, 1)[0].parts
+    store.message_window.session = 200
+    applySessionSyncSnapshot(store, "session", {
+      session: { id: "session" },
+      todo: [],
+      messages: page(90, 110),
+      diff: [],
+      history: { cursor: "before-msg_0090" },
+    })
+    expect(store.message.session).toEqual(page(90, 110).map((item) => item.info))
+    expect(store.part.msg_0000).toBeUndefined()
+    expect(store.message_cursor.session).toBe("before-msg_0090")
+    expect(store.message_truncated.session).toBe(true)
+    expect(store.message_window.session).toBe(110)
+  })
+
+  test.each(["count", "bytes"])("eviction of a kept prefix by the %s budget drops its cursor", (budget) => {
+    const store = state()
+    applyEarlierMessagePage(store, "session", page(0, 100), "C0", { maxMessages: 300 })
+    if (budget === "count") {
+      store.message.session.push(...page(200, 101).map((item) => item.info))
+    } else {
+      store.part.msg_0000 = [{ id: "large", text: "x".repeat(MAX_TRANSCRIPT_BYTES) }]
+    }
+    applySessionSyncSnapshot(store, "session", {
+      session: { id: "session" },
+      todo: [],
+      messages: page(100, 100),
+      diff: [],
+      history: { cursor: "C1" },
+    })
+    const length = budget === "count" ? 300 : 199
+    expect(store.message.session).toHaveLength(length)
+    expect(store.message.session[0].id).toBe("msg_0001")
+    expect(store.part.msg_0000).toBeUndefined()
+    expect(store.part.msg_0001).toEqual(page(1, 1)[0].parts)
+    expect(store.message_cursor.session).toBeUndefined()
+    expect(store.message_truncated.session).toBe(true)
+    expect(store.message_window.session).toBe(length)
+  })
+
+  test("an active revert retains the existing snapshot replacement behavior", () => {
+    const store = state()
+    applyEarlierMessagePage(store, "session", page(0, 100), "C0", { maxMessages: 300 })
+    const session = { id: "session", revert: { messageID: "msg_0050" } }
+    store.session[0] = session
+    applySessionSyncSnapshot(store, "session", {
+      session,
+      todo: [],
+      messages: page(100, 100),
+      diff: [],
+      history: { cursor: "C1" },
+    })
+    expect(store.message.session).toEqual(page(100, 100).map((item) => item.info))
+    expect(store.part.msg_0000).toBeUndefined()
+    expect(store.message_cursor.session).toBe("C1")
+    expect(store.message_window.session).toBe(200)
   })
 
   test("a snapshot whose oldest messages are evicted by live arrivals drops its cursor", () => {

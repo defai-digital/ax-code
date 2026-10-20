@@ -1,6 +1,8 @@
 import { MAX_LOADED_SESSION_MESSAGES, MAX_SESSION_MESSAGES } from "./sync-message-window"
 import type { SyncedMessageParts } from "./sync-session-store"
 
+const idOf = (message: unknown) => (message as { id?: string }).id
+
 export type LoadEarlierResult = "loaded" | "exhausted" | "limit" | "busy" | "stale"
 
 export function createEarlierMessageLoader<TMessage, TPart>(input: {
@@ -75,7 +77,11 @@ export function createEarlierMessageLoader<TMessage, TPart>(input: {
         }
         if (!Array.isArray(result.data)) throw new Error("Invalid message history response")
         input.applyPage(sessionID, result.data, result.response.headers.get("X-Next-Cursor") || undefined)
-        return "loaded"
+        // The retention budget can evict the whole page it was just given.
+        const held = new Set((input.store.message[sessionID] ?? []).map((message) => idOf(message)))
+        return result.data.length > 0 && !result.data.some((message) => held.has(idOf(message.info)))
+          ? "limit"
+          : "loaded"
       } catch (error) {
         if (controller.signal.aborted && !timedOut) return "stale"
         throw error

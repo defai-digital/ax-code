@@ -336,9 +336,13 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           return result
         // Truncated without a usable cursor (a live update evicted the oldest
         // loaded message): widen the window and refetch it from the newest end.
+        const oldestBefore = store.message[sessionID]?.[0]?.id
         setStore("message_window", sessionID, Math.min(loaded + MAX_SESSION_MESSAGES, MAX_LOADED_SESSION_MESSAGES))
         await sessionSync.sync(sessionID, { force: true })
-        return "loaded"
+        // No older message survived the reload because the byte budget evicted
+        // it again: report the limit so the action does not loop silently.
+        const oldestAfter = store.message[sessionID]?.[0]?.id
+        return oldestAfter && oldestBefore && oldestAfter >= oldestBefore ? "limit" : "loaded"
       },
       sessionAdoptHistoryCursor(sessionID, cursor) {
         setStore(produce((draft) => adoptHistoryCursor(draft, sessionID, cursor)))

@@ -4,7 +4,13 @@ import {
   enforceTranscriptBudget,
   forgetProjectionMessage,
 } from "@/runtime/headless/projection-retention"
-import { adoptHistoryCursor, invalidateCursorOnEviction, sessionMessageLimit } from "./sync-message-window"
+import {
+  adoptHistoryCursor,
+  invalidateCursorOnEviction,
+  MAX_LOADED_SESSION_MESSAGES,
+  MAX_SESSION_MESSAGES,
+  sessionMessageLimit,
+} from "./sync-message-window"
 import { mergeSorted, removeByID, upsert } from "./sync-util"
 
 export interface SyncedMessageParts<TMessage, TPart> {
@@ -91,6 +97,15 @@ export function applySessionSyncSnapshot<
   const existingMessages = store.message[sessionID] ?? []
   const previousMessageIDs = new Set(existingMessages.map((message) => message.id))
   const nextMessages = snapshot.messages.map((message) => message.info)
+  const preserve = !!(snapshot.session as { revert?: unknown }).revert
+  const oldestSnapshotIndex = existingMessages.findIndex((message) => message.id === nextMessages[0]?.id)
+  // A smaller in-flight snapshot can finish after an earlier page was loaded.
+  // Overlap at its oldest message anchors the prefix and its existing cursor.
+  // Only a snapshot smaller than the admitted window qualifies; a full-window
+  // snapshot is authoritative, so routine resyncs do not grow the window.
+  const keepHistory =
+    !preserve && oldestSnapshotIndex > 0 && nextMessages.length < sessionMessageLimit(store, sessionID)
+  const olderPrefix = keepHistory ? existingMessages.slice(0, oldestSnapshotIndex) : []
   const snapshotMessageIDs = new Set(nextMessages.map((message) => message.id))
   const lastSnapshotMatchIndex = existingMessages.reduce((index, message, currentIndex) => {
     return snapshotMessageIDs.has(message.id) ? currentIndex : index
@@ -99,7 +114,7 @@ export function applySessionSyncSnapshot<
     lastSnapshotMatchIndex >= 0
       ? existingMessages.slice(lastSnapshotMatchIndex + 1).filter((message) => !snapshotMessageIDs.has(message.id))
       : existingMessages.filter((message) => !snapshotMessageIDs.has(message.id))
-  const mergedMessages = mergeSorted(nextMessages, liveTail)
+  const mergedMessages = [...olderPrefix, ...mergeSorted(nextMessages, liveTail)]
   const nextMessageIDs = new Set(mergedMessages.map((message) => message.id))
 
   store.todo[sessionID] = snapshot.todo
@@ -117,22 +132,37 @@ export function applySessionSyncSnapshot<
   }
   store.session_diff[sessionID] = snapshot.diff
   if (snapshot.goal !== undefined) store.session_goal[sessionID] = snapshot.goal
-  if (snapshot.history) {
+  if (snapshot.history && !keepHistory) {
     if (store.message_cursor) {
       if (snapshot.history.cursor) store.message_cursor[sessionID] = snapshot.history.cursor
       else delete store.message_cursor[sessionID]
     }
     if (store.message_truncated) store.message_truncated[sessionID] = !!snapshot.history.cursor
   }
+  if (olderPrefix.length && store.message_window) {
+    store.message_window[sessionID] = Math.min(
+      Math.max(sessionMessageLimit(store, sessionID), mergedMessages.length),
+      MAX_LOADED_SESSION_MESSAGES,
+    )
+  }
+  const oldestKept = mergedMessages[0]?.id
   refreshProjectionSizes(store, sessionID)
   enforceTranscriptBudget(store, sessionID, {
     maxMessages: sessionMessageLimit(store, sessionID),
-    preserve: !!(snapshot.session as { revert?: unknown }).revert,
+    preserve,
   })
-  // Live messages that arrived during the fetch can push the snapshot's oldest
-  // messages out; the cursor was minted for those, so it would now skip them.
-  const snapshotOldest = nextMessages[0]?.id
-  if (snapshot.history?.cursor && snapshotOldest) invalidateCursorOnEviction(store, sessionID, snapshotOldest)
+  if (!preserve && store.message_window) {
+    store.message_window[sessionID] = Math.max(
+      MAX_SESSION_MESSAGES,
+      Math.min(store.message[sessionID].length, MAX_LOADED_SESSION_MESSAGES),
+    )
+  }
+  // Either the kept prefix or the snapshot owns the cursor. If the budget
+  // evicts that boundary, paging from its cursor would skip the evicted rows.
+  const cursorOldest = keepHistory ? oldestKept : nextMessages[0]?.id
+  if ((keepHistory || snapshot.history?.cursor) && cursorOldest) {
+    invalidateCursorOnEviction(store, sessionID, cursorOldest)
+  }
 }
 
 /**
@@ -360,6 +390,10 @@ export function applyEarlierMessagePage<TMessage extends { id: string }, TPart>(
   if (evicted && page.some((message) => !store.message[sessionID].some((item) => item.id === message.info.id))) {
     delete store.message_cursor[sessionID]
     store.message_truncated[sessionID] = true
+    // The budget evicted part of the page just fetched: more history cannot
+    // be held, so surface the memory notice instead of offering a retry loop.
+    const limited = (store as { message_memory_limited?: Record<string, boolean> }).message_memory_limited
+    if (limited) limited[sessionID] = true
   }
   return { added: older.length, evicted }
 }

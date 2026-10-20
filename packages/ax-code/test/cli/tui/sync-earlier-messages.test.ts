@@ -51,6 +51,23 @@ describe("load earlier message flights", () => {
     expect(f.store.message_window.session).toBe(251)
   })
 
+  test("reports limit when the byte budget evicts the page it was just given", async () => {
+    const f = fixture(100)
+    const store = f.store as typeof f.store & { message_memory_limited: Record<string, boolean> }
+    store.message_memory_limited = {}
+    const loader = createEarlierMessageLoader<Message, Part>({
+      store,
+      createFetchPage: () => async () => f.response,
+      applyPage: (id, page, cursor) => {
+        applyEarlierMessagePage(store, id, page, cursor, { maxMessages: 300, maxBytes: 1 })
+      },
+    })
+    expect(await loader.loadEarlier("session")).toBe("limit")
+    expect(store.message.session.some((message) => message.id === "msg_0000")).toBe(false)
+    expect(store.message_cursor.session).toBeUndefined()
+    expect(store.message_memory_limited.session).toBe(true)
+  })
+
   test.each(["exhausted", "limit", "stale"] as const)("returns %s without starting a request", async (result) => {
     const f = fixture(result === "limit" ? 300 : 100)
     if (result === "exhausted") delete f.store.message_cursor.session
