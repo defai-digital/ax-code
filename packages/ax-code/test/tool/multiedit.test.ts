@@ -27,6 +27,54 @@ afterEach(async () => {
 })
 
 describe("tool.multiedit", () => {
+  test.skipIf(process.platform === "win32")("does not follow a swapped external symlink during rollback", async () => {
+    await using tmp = await tmpdir()
+    await using outside = await tmpdir()
+    const first = path.join(tmp.path, "a.txt")
+    const second = path.join(tmp.path, "b.txt")
+    const external = path.join(outside.path, "external.txt")
+    await fs.writeFile(first, "one\n")
+    await fs.writeFile(second, "two\n")
+    await fs.writeFile(external, "ONE\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await FileTime.read(ctx.sessionID, first)
+        await FileTime.read(ctx.sessionID, second)
+        const tool = await MultiEditTool.init()
+        const write = Filesystem.write.bind(Filesystem)
+        const spy = vi.spyOn(Filesystem, "write").mockImplementation(async (file, ...args) => {
+          if (file === second) {
+            await fs.unlink(first)
+            await fs.symlink(external, first)
+            throw new Error("Second write failed")
+          }
+          return write(file, ...args)
+        })
+        try {
+          await expect(
+            tool.execute(
+              {
+                filePath: first,
+                edits: [
+                  { filePath: first, oldString: "one", newString: "ONE" },
+                  { filePath: second, oldString: "two", newString: "TWO" },
+                ],
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("rollback also failed")
+          expect(await fs.readFile(external, "utf8")).toBe("ONE\n")
+          expect(await fs.readFile(second, "utf8")).toBe("two\n")
+          expect((await fs.lstat(first)).isSymbolicLink()).toBe(true)
+        } finally {
+          spy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("rolls back earlier written files when a later write fails", async () => {
     await using tmp = await tmpdir()
     const first = path.join(tmp.path, "a.txt")

@@ -142,6 +142,7 @@ export const MultiEditTool = Tool.define("multiedit", {
 
         await FileTime.withLock(file, async () => {
           ctx.abort.throwIfAborted()
+          await assertSymlinkInsideProject(file)
           await FileTime.assert(ctx.sessionID, file)
           const latest = await Filesystem.readText(file)
           if (latest !== prev) {
@@ -172,6 +173,7 @@ export const MultiEditTool = Tool.define("multiedit", {
           }
 
           return FileTime.withLock(file, async () => {
+            await assertSymlinkInsideProject(file)
             const latest = await Filesystem.readText(file)
             if (latest !== next) {
               throw new Error(`Cannot roll back multiedit: ${file} was modified externally`)
