@@ -170,9 +170,6 @@ export function shouldCopyTuiDistPath(src: string, packageRoot: string) {
     (parts[0] === "spinner" || parts[0] === "chart") &&
     parts.length > 1 &&
     parts[1] !== "dist" &&
-    // JSR emits TypeScript entrypoints as JavaScript at the same src/ path.
-    // Keep that runtime closure, not the original TypeScript or source maps.
-    !(parts[1] === "src" && (parts.length === 2 || (parts.length === 3 && rel.endsWith(".js")))) &&
     !(parts.length === 2 && parts[1] === "LICENSE")
   ) {
     return false

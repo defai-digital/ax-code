@@ -101,12 +101,14 @@ registerHooks({
 // tsx (already registered) — import it dynamically after our hooks are in place.
 // ax-tui decides at module load whether it runs under Bun (`globalThis.Bun`)
 // and then loads its tree-sitter wasm and queries with Bun-only import
-// attributes, so evaluate it before the shim defines `Bun`. Workers inherit
+// attributes. Preload its Solid entry, whose default export condition is also
+// resolvable through createRequire when the root entry is ESM-only, before
+// the shim defines `Bun`. Workers inherit
 // this preload; like src/index-node-tui.ts, only the main thread gets the shim,
 // which keeps the tree-sitter parser worker on its Node path.
 if (isMainThread) {
   try {
-    await import(pathToFileURL(pkgRequire.resolve("ax-tui")).href)
+    await import(pathToFileURL(pkgRequire.resolve("ax-tui/solid")).href)
   } catch {
     // Non-TUI source commands still run where ax-tui is not installed.
   }

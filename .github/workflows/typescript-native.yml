@@ -75,6 +75,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: typescript-native-${{ github.event.pull_request.number || github.ref }}

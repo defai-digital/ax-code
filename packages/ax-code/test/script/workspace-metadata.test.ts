@@ -41,8 +41,9 @@ describe("script.workspace-metadata", () => {
     const workspace = await readFile(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8")
     const lockfile = await readFile(path.join(repoRoot, "pnpm-lock.yaml"), "utf8")
     expect(dependencies["ax-tui"]).toBe("catalog:")
-    expect(workspace).toMatch(/^  "ax-tui": "jsr:@defai-digital\/ax-tui@\d+\.\d+\.\d+"$/m)
+    expect(workspace).toMatch(/^  "ax-tui": "npm:@defai-digital\/ax-tui@\d+\.\d+\.\d+"$/m)
     expect(lockfile).not.toMatch(/link:[^\n]*ax-tui/)
+    expect(lockfile).not.toMatch(/npm\.jsr\.io|@jsr\/|jsr:/)
     expect(dependencies["ax-tui/solid"]).toBeUndefined()
     expect(dependencies["@ax-code/opentui-keymap"]).toBeUndefined()
     expect(dependencies["ax-tui/spinner"]).toBeUndefined()
@@ -87,7 +88,7 @@ describe("script.workspace-metadata", () => {
     // Resolve through node_modules so a local sibling cannot hide registry defects.
     const tuiDir = await realpath(path.join(repoRoot, "packages/ax-code/node_modules/ax-tui"))
     const tuiPackage = JSON.parse(await readFile(path.join(tuiDir, "package.json"), "utf8"))
-    expect(tuiPackage.name).toBe("@jsr/defai-digital__ax-tui")
+    expect(tuiPackage.name).toBe("@defai-digital/ax-tui")
     expect(tuiPackage.dependencies?.["ax-tui"]).toBeUndefined()
 
     expect(tuiPackage.exports["./solid/transform"]).toMatchObject({

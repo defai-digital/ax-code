@@ -12,10 +12,6 @@ inputs:
     description: pnpm version
     required: false
     default: "10.33.4"
-  registry-url:
-    description: Node.js npm registry URL
-    required: false
-    default: "https://registry.npmjs.org"
   cache:
     description: pnpm cache strategy; set empty to disable caching
     required: false
@@ -42,6 +38,17 @@ runs:
       uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
-        registry-url: ${{ inputs.registry-url }}
+        registry-url: https://npm.pkg.github.com
+        scope: "@defai-digital"
         cache: ${{ inputs.cache }}
         cache-dependency-path: pnpm-lock.yaml
+
+    - name: Configure read-only GitHub Packages authentication
+      shell: bash
+      env:
+        PACKAGE_READ_TOKEN: ${{ github.token }}
+      run: |
+        umask 077
+        config="$RUNNER_TEMP/ax-code-packages.npmrc"
+        printf '//npm.pkg.github.com/:_authToken=%s\n' "$PACKAGE_READ_TOKEN" > "$config"
+        printf 'NPM_CONFIG_USERCONFIG=%s\n' "$config" >> "$GITHUB_ENV"

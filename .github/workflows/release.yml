@@ -22,6 +22,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
 
 # Channel policy: stable semver tags (for example `v3.1.4`) create the
 # GitHub release on the `latest` channel. Prerelease tags (for example
@@ -91,6 +92,7 @@ jobs:
     permissions:
       contents: read
       checks: read
+      packages: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -253,6 +255,7 @@ jobs:
     needs: [guard, validate]
     permissions:
       contents: write
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -549,6 +552,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: write
+      packages: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -811,6 +815,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      packages: read
     steps:
       - uses: actions/checkout@v7
 

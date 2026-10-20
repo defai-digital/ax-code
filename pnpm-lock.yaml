@@ -70,7 +70,7 @@ catalogs:
       specifier: 6.0.146
       version: 6.0.146
     ax-tui:
-      specifier: jsr:@defai-digital/ax-tui@2.1.4
+      specifier: npm:@defai-digital/ax-tui@2.1.4
       version: 2.1.4
     d3-force:
       specifier: 3.0.0
@@ -407,7 +407,7 @@ importers:
         version: 3.1.3(@ai-sdk/openai-compatible@2.0.38(zod@4.3.6))(@ai-sdk/provider-utils@4.0.33(zod@4.3.6))(@ai-sdk/provider@3.0.8)(ai@6.0.146(zod@4.3.6))(zod@4.3.6)
       ax-tui:
         specifier: 'catalog:'
-        version: '@jsr/defai-digital__ax-tui@2.1.4(@typescript/typescript6@6.0.2)'
+        version: '@defai-digital/ax-tui@2.1.4(@typescript/typescript6@6.0.2)(solid-js@1.9.17)(web-tree-sitter@0.25.10)'
       bonjour-service:
         specifier: 1.4.4
         version: 1.4.4
@@ -1407,6 +1407,13 @@ packages:
     resolution: {integrity: sha512-OoKoR0f76dCY666JlcbhmVTs2drYj1GUXZTYTcbUgJjh9Nv41aFfZ21bPQTERm5+L5cBDo466NltB2lplS5GBw==}
     engines: {node: '>=20.19.0'}
 
+  '@defai-digital/ax-tui@2.1.4':
+    resolution: {integrity: sha512-r1PjSvZ9pXiKN4QLhsRbDGb2yYzOmT1RZxLiJh7YnkR6zTs7tYVSb2pcZ8L/2BjsnqD3M2F2+Dt/GIrI0EOsvQ==, tarball: https://npm.pkg.github.com/download/@defai-digital/ax-tui/2.1.4/4a8b8083c48b3635fa186a5b90ab83966560e83b}
+    engines: {node: '>=26'}
+    peerDependencies:
+      solid-js: 1.9.17
+      web-tree-sitter: 0.25.10
+
   '@drizzle-team/brocli@0.11.0':
     resolution: {integrity: sha512-hD3pekGiPg0WPCCGAZmusBBJsDqGUR66Y452YgQsZOnkdQ7ViEPKuyP4huUGEZQefp8g34RRodXYmJ2TbCH+tg==}
 
@@ -1813,9 +1820,6 @@ packages:
 
   '@jsdevtools/ono@7.1.3':
     resolution: {integrity: sha512-4JQNk+3mVzK3xh2rqd6RB4J46qUR19azEHBneZyTZM+c456qOrbbM/5xcR8huNCCcbVt7+UmizG6GuUvPvKUYg==}
-
-  '@jsr/defai-digital__ax-tui@2.1.4':
-    resolution: {integrity: sha512-nHY5xnsvNiHkxbMpzvrYWaasnU+ZjTwRT5BLdLZU4okbnu0KwvTBoAqhh6MWMMzoL6nqb9woMOznC4SBbeVFhw==, tarball: https://npm.jsr.io/~/11/@jsr/defai-digital__ax-tui/2.1.4.tgz}
 
   '@leichtgewicht/ip-codec@2.0.5':
     resolution: {integrity: sha512-Vo+PSpZG2/fmgmiNzYK9qWRh8h/CHrwD0mo1h1DzL4yzHNSfWYujGTYsWGreD000gcgmZ7K4Ys6Tx9TxtsKdDw==}
@@ -3085,21 +3089,6 @@ packages:
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
-
-  '@types/babel__core@7.20.5':
-    resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
-
-  '@types/babel__generator@7.27.0':
-    resolution: {integrity: sha512-ufFd2Xi92OAVPYsy+P4n7/U7e68fex0+Ee8gSG9KX7eo084CWiQ4sdxktvdl0bOPupXtVJPY19zk6EwWqUQ8lg==}
-
-  '@types/babel__template@7.4.4':
-    resolution: {integrity: sha512-h/NUaSyG5EyxBIp8YRxo4RMe2/qQgvyowRwVMzhYhBCONbW8PUsg4lkFMrhgZhUe5z3L3MiLDuvyJ/CaPa2A8A==}
-
-  '@types/babel__traverse@7.28.0':
-    resolution: {integrity: sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q==}
-
-  '@types/bun@1.4.3':
-    resolution: {integrity: sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -6709,6 +6698,24 @@ snapshots:
   '@csstools/css-tokenizer@4.0.2':
     optional: true
 
+  '@defai-digital/ax-tui@2.1.4(@typescript/typescript6@6.0.2)(solid-js@1.9.17)(web-tree-sitter@0.25.10)':
+    dependencies:
+      '@babel/core': 7.29.7
+      '@babel/preset-typescript': 7.29.7(@babel/core@7.29.7)
+      babel-plugin-module-resolver: 5.0.3
+      babel-preset-solid: 1.9.16(@babel/core@7.29.7)(solid-js@1.9.17)
+      bun-ffi-structs: 0.2.4(@typescript/typescript6@6.0.2)
+      diff: 9.0.0
+      entities: 7.0.1
+      marked: 17.0.6
+      solid-js: 1.9.17
+      string-width: 7.2.0
+      strip-ansi: 7.2.0
+      web-tree-sitter: 0.25.10
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
+
   '@drizzle-team/brocli@0.11.0': {}
 
   '@emnapi/core@1.10.0':
@@ -7065,27 +7072,6 @@ snapshots:
       jsbi: 4.3.2
 
   '@jsdevtools/ono@7.1.3': {}
-
-  '@jsr/defai-digital__ax-tui@2.1.4(@typescript/typescript6@6.0.2)':
-    dependencies:
-      '@babel/core': 7.29.7
-      '@babel/preset-typescript': 7.29.7(@babel/core@7.29.7)
-      '@types/babel__core': 7.20.5
-      '@types/bun': 1.4.3
-      babel-plugin-module-resolver: 5.0.3
-      babel-preset-solid: 1.9.16(@babel/core@7.29.7)(solid-js@1.9.17)
-      bun-ffi-structs: 0.2.4(@typescript/typescript6@6.0.2)
-      diff: 9.0.0
-      entities: 7.0.1
-      marked: 17.0.6
-      solid-js: 1.9.17
-      string-width: 7.2.0
-      strip-ansi: 7.2.0
-      web-tree-sitter: 0.25.10
-    transitivePeerDependencies:
-      - '@types/emscripten'
-      - supports-color
-      - typescript
 
   '@leichtgewicht/ip-codec@2.0.5': {}
 
@@ -8107,31 +8093,6 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@types/babel__core@7.20.5':
-    dependencies:
-      '@babel/parser': 7.29.8
-      '@babel/types': 7.29.8
-      '@types/babel__generator': 7.27.0
-      '@types/babel__template': 7.4.4
-      '@types/babel__traverse': 7.28.0
-
-  '@types/babel__generator@7.27.0':
-    dependencies:
-      '@babel/types': 7.29.8
-
-  '@types/babel__template@7.4.4':
-    dependencies:
-      '@babel/parser': 7.29.8
-      '@babel/types': 7.29.8
-
-  '@types/babel__traverse@7.28.0':
-    dependencies:
-      '@babel/types': 7.29.8
-
-  '@types/bun@1.4.3':
-    dependencies:
-      bun-types: 1.4.3
-
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -8617,6 +8578,7 @@ snapshots:
     dependencies:
       '@types/node': 26.6.5
       undici-types: 8.9.0
+    optional: true
 
   bundle-name@4.1.0:
     dependencies:

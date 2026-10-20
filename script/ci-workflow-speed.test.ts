@@ -24,6 +24,35 @@ function githubAutomationSources(directory = ".github"): string[] {
 }
 
 describe("CI workflow speed policy", () => {
+  test("registry authentication stays scoped to GitHub Packages", () => {
+    const npmrc = readFileSync(".npmrc", "utf8")
+    expect(npmrc).toContain("@defai-digital:registry=https://npm.pkg.github.com")
+    expect(npmrc).not.toContain("_authToken")
+    expect(toolchain).toContain("registry-url: https://npm.pkg.github.com")
+    expect(toolchain).toContain('scope: "@defai-digital"')
+    expect(toolchain).toContain("PACKAGE_READ_TOKEN: ${{ github.token }}")
+    expect(toolchain).toContain("umask 077")
+    expect(toolchain).toContain("//npm.pkg.github.com/:_authToken=%s")
+    expect(toolchain).toContain('"$PACKAGE_READ_TOKEN" > "$config"')
+    expect(toolchain).toContain("NPM_CONFIG_USERCONFIG=%s")
+    expect(toolchain).not.toContain("NODE_AUTH_TOKEN=%s")
+    expect(toolchain).not.toContain("SDK_PACKAGES_TOKEN")
+  })
+
+  test("every registry-consuming CI job has effective read-only package access", () => {
+    for (const file of readdirSync(".github/workflows").filter((name) => name.endsWith(".yml"))) {
+      const workflow = readFileSync(path.join(".github/workflows", file), "utf8")
+      const jobsStart = workflow.indexOf("\njobs:")
+      const defaults = workflow.slice(0, jobsStart).match(/^permissions:\n((?:  [^\n]+\n)+)/m)?.[1] ?? ""
+      const jobs = workflow.slice(jobsStart).split(/(?=^  [A-Za-z_][\w-]*:\n)/m)
+      for (const job of jobs) {
+        if (!job.includes("uses: ./.github/actions/setup-ax-code-toolchain")) continue
+        const permissions = job.match(/^    permissions:\n((?:      [^\n]+\n)+)/m)?.[1] ?? defaults
+        expect(permissions, `${file}: ${job.split("\n")[0]}`).toMatch(/^ +packages: read$/m)
+      }
+    }
+  })
+
   test("AX Code and SDK automation enforce the Node 26 support floor", () => {
     for (const source of githubAutomationSources()) {
       for (const match of source.matchAll(/node-version:\s*["']?(\d+)/g)) {

@@ -69,6 +69,7 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+  packages: read
 
 jobs:
   # One Ubuntu job decides. Unchanged pushes must not take four native runners.
