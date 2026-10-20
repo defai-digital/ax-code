@@ -105,6 +105,19 @@ describe("ToolResultBudget.plan", () => {
     expect(plan.spill).toEqual([2])
   })
 
+  test("does not spill a result whose preview plus note would grow it", () => {
+    const plan = ToolResultBudget.plan({
+      results: [{ bytes: 20_000 }, { bytes: ToolResultBudget.PREVIEW_FLOOR_BYTES + 1 }],
+      budgetBytes: 2_500,
+      previewFloorBytes: ToolResultBudget.PREVIEW_FLOOR_BYTES,
+    })
+    // Spilling the 2,049-byte result would emit a 2,304-byte preview plus
+    // note, so only the 20,000-byte result is a useful candidate.
+    expect(plan.spill).toEqual([0])
+    expect(plan.projectedBytes).toBe(ToolResultBudget.PREVIEW_FLOOR_BYTES + 256 + 2_049)
+    expect(plan.overBudget).toBe(true)
+  })
+
   test("reports overBudget when even spilling everything cannot fit", () => {
     const plan = ToolResultBudget.plan({
       results: [{ bytes: 50 * KB }, { bytes: 40 * KB }],

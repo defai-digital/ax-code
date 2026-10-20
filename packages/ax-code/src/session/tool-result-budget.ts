@@ -74,13 +74,15 @@ export namespace ToolResultBudget {
 
     const candidates = input.results
       .map((result, index) => ({ index, bytes: result.bytes, error: result.error === true }))
-      .filter((result) => !result.error && result.bytes > floor)
+      // Spilling replaces the result with its preview plus the truncation
+      // note. A result below that combined size would grow, not shrink.
+      .filter((result) => !result.error && result.bytes > floor + SPILL_NOTE_ALLOWANCE_BYTES)
       .sort((a, b) => b.bytes - a.bytes || a.index - b.index)
 
     const spill: number[] = []
     for (const candidate of candidates) {
       if (projected <= input.budgetBytes) break
-      projected -= candidate.bytes - (floor + SPILL_NOTE_ALLOWANCE_BYTES)
+      projected -= Math.max(0, candidate.bytes - (floor + SPILL_NOTE_ALLOWANCE_BYTES))
       spill.push(candidate.index)
     }
     return { spill, projectedBytes: projected, overBudget: projected > input.budgetBytes }
