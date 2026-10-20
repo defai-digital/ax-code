@@ -33,7 +33,7 @@ Page publication does not change the runtime download source. Review mirror avai
 
 ## One-way R2 folder
 
-Published collection revisions are copied from Hugging Face into the `ax-code-models/` prefix of the public download bucket. Release archives stay outside that prefix. The public base URL is `https://download.ax-code.com/ax-code-models/<repository>/<revision>/`.
+Published collection revisions are copied from Hugging Face into the `ax-code-models` R2 bucket. Release archives stay in the release bucket. The public model link is `https://models.ax-code.app/<repository>/<revision>/`.
 
 The copy is one way. It does not write to Hugging Face, and it does not delete or replace an object that is already stored. A newer Hugging Face revision is a new prefix; the previous prefix stays in place.
 
