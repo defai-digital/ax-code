@@ -847,6 +847,17 @@ export const messages = {
   "ui.failedToLoadEarlierMessages": "\u7121\u6cd5\u8f09\u5165\u8f03\u65e9\u7684\u8a0a\u606f",
   "ui.transcriptLoadLimitReached":
     "\u25b2 \u6b63\u5728\u986f\u793a {count} \u5247\u8a0a\u606f\uff0c\u5df2\u9054\u6b64\u6aa2\u8996\u7684\u8f09\u5165\u4e0a\u9650\u3002",
+  "ui.inlinePromptPlaceholder": "\u6709\u554f\u984c\u5118\u7ba1\u554f...",
+  "ui.inlineDialogNeedsFullScreen":
+    "\u6b64\u5c0d\u8a71\u65b9\u584a\u9700\u8981\u5168\u87a2\u5e55\u6a21\u5f0f: ax-code --screen full",
+  "ui.inlinePermissionPending":
+    "\u6b0a\u9650\u8981\u6c42\u5f85\u8655\u7406: \u8acb\u5728 ax-code --screen full \u4e2d\u56de\u7b54",
+  "ui.inlineQuestionPending": "\u554f\u984c\u5f85\u8655\u7406: \u8acb\u5728 ax-code --screen full \u4e2d\u56de\u7b54",
+  "ui.inlineSessionMarker": "--- \u5c0d\u8a71 {id} ---",
+  "ui.inlineRevertMarker":
+    "--- \u5df2\u9084\u539f\u81f3 {id} (\u8f03\u65e9\u7684\u6372\u52d5\u7d00\u9304\u5df2\u4fdd\u7559) ---",
+  "ui.inlineCompactionMarker":
+    "--- \u4e0a\u4e0b\u6587\u5df2\u58d3\u7e2e (\u8f03\u65e9\u7684\u6372\u52d5\u7d00\u9304\u5df2\u4fdd\u7559) ---",
   "ui.in": "\u65bc",
   "ui.out": "\u8f38\u51fa",
   "ui.messageCopiedToClipboard": "\u8a0a\u606f\u5df2\u8907\u88fd\u5230\u526a\u8cbc\u7c3f\uff01",

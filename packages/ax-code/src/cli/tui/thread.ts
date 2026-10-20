@@ -23,14 +23,19 @@ import { internalBaseUrl } from "@/util/internal-url"
 import { TUI_BACKEND_EXITED, type StreamConnectionStatus } from "./util/resilient-stream"
 import { runtimeMode } from "@/installation/runtime-mode"
 import { spawn } from "node:child_process"
-import { drainTuiStdin, flushTuiStdout, resetTuiTerminalState } from "./terminal-cleanup"
+import { drainTuiStdin, flushTuiStdout } from "./terminal-cleanup"
 import { parseIntegerEnv } from "./util/env"
 import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
 import { hasExplicitNetworkBindFlag } from "./util/network-flags"
 import { Flag } from "@/flag/flag"
 import { confirmDirectoryScope } from "@/cli/directory-scope-prompt"
-import { createTuiRejectionHandler, registerTuiCrashHandlers, registerTuiProcessHandler } from "./util/lifecycle"
+import {
+  createTuiRejectionHandler,
+  registerTuiCrashHandlers,
+  registerTuiProcessHandler,
+  exitTuiAfterCrash,
+} from "./util/lifecycle"
 import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
@@ -666,9 +671,6 @@ export const TuiThreadCommand = cmd({
       .option("screen", {
         type: "string",
         choices: ["auto", "full", "inline"] as const,
-        // Hidden until the inline frontend ships (ADR-261 slice 2); the value is
-        // already resolved and reported by doctor / debug explain.
-        hidden: true,
         describe:
           "terminal screen mode (default auto). 'inline' opts into the inline split-footer renderer; overrides AX_CODE_TUI_SCREEN and tui.json `screen`",
       }),
@@ -881,15 +883,9 @@ export const TuiThreadCommand = cmd({
         DiagnosticLog.recordProcess("tui.threadError", { error: e })
         Log.Default.error(e)
         process.exitCode = 1
-        resetTuiTerminalState()
         if (threadErrorExitScheduled) return
         threadErrorExitScheduled = true
-        const timer = setTimeout(() => process.exit(1), 100)
-        timer.unref?.()
-        void flushTuiStdout().finally(() => {
-          clearTimeout(timer)
-          process.exit(1)
-        })
+        exitTuiAfterCrash()
       }
       const reload = () => {
         client.call("reload", undefined).catch((err) => {

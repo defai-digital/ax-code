@@ -206,10 +206,9 @@ describe("AX Code TUI stability guardrails", () => {
     expect(renderer).toContain("exitOnCtrlC: false")
     expect(renderer).not.toContain("testing:")
     expect(renderer).toContain("useThread: advancedTerminal")
-    // Every screen selection mounts the full-screen mapping until the inline
-    // frontend lands (ADR-261 slice 2).
+    // Auto/full retain the full-screen mapping; explicit inline selects split-footer.
     expect(renderer).toContain('const fullScreenMode = advancedTerminal ? "alternate-screen" : "main-screen"')
-    expect(renderer).toContain("screenMode: fullScreenMode,")
+    expect(renderer).toContain("screenMode: tuiScreenModeFor(screen.screen, fullScreenMode),")
     // Terminal title is decoupled from the advanced profile (probe-free OSC
     // escape); only AX_CODE_DISABLE_TERMINAL_TITLE disables it.
     expect(renderer).toContain("allowTerminalTitle: !terminalTitleDisabled")
@@ -217,7 +216,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(renderer).toContain("openConsoleOnError: false")
     // Mouse capture is on by default but configurable: tui.json `mouse` opts
     // out, and AX_CODE_DISABLE_MOUSE hard-disables it and wins over config.
-    expect(renderer).toContain("useMouse: !input.disableMouse && (input.mouse ?? true)")
+    expect(renderer).toContain('useMouse: !input.disableMouse && (input.mouse ?? screen.screen !== "inline")')
     // Kitty keyboard is decoupled from the advanced profile (probe-free
     // flags push) and on by default; the opt-out flag disables it.
     expect(renderer).toContain("useKittyKeyboard: input.kittyKeyboard ?? true")
@@ -232,10 +231,26 @@ describe("AX Code TUI stability guardrails", () => {
 
     expect(renderer).toContain("disableTuiMouseTracking()")
     expect(renderer).toContain("await flushTuiStdout()")
-    expect(exitContext).toContain("await destroyTuiRenderer(renderer)")
-    expect(app).toContain("await destroyTuiRenderer(renderer)")
+    expect(exitContext).toContain("await destroyTuiRenderer(renderer, input.profile)")
+    expect(app).toContain("await destroyTuiRenderer(renderer, props.profile)")
     expect(thread).toContain("await flushTuiStdout()")
     expect(thread).toContain("process.exit(process.exitCode ?? 0)")
+  })
+
+  test("inline mounts its own root without full-screen overlays and exposes screen selection", async () => {
+    const [app, inline] = await Promise.all([
+      fs.readFile(APP_SRC, "utf8"),
+      fs.readFile(path.join(TUI_ROOT, "inline/index.tsx"), "utf8"),
+    ])
+    expect(app).toContain('if (renderProfile.screenMode === "split-footer")')
+    expect(app).toContain("<InlineRoot")
+    expect(inline).not.toMatch(/<App\b|<DialogStack\b|<VisualCapabilityProvider\b/)
+    for (const file of [THREAD_SRC, path.join(TUI_ROOT, "attach.ts"), path.join(TUI_ROOT, "../cmd/runtime.ts")]) {
+      const source = await fs.readFile(file, "utf8")
+      const option = source.slice(source.indexOf('.option("screen", {')).split("})")[0]
+      expect(option).toContain('choices: ["auto", "full", "inline"]')
+      expect(option).not.toContain("hidden: true")
+    }
   })
 
   test("keeps passthrough external output enabled in the app runtime", async () => {
@@ -292,7 +307,7 @@ describe("AX Code TUI stability guardrails", () => {
     // process name ("node") even if mount is slow or crashes. Lowercase
     // "ax-code" remains the machine process title (util/process-title.ts).
     expect(app).toContain("setTuiTerminalTitle(AX_CODE_TERMINAL_TITLE, renderProfile)")
-    expect(exitContext).toContain("await destroyTuiRenderer(renderer)")
+    expect(exitContext).toContain("await destroyTuiRenderer(renderer, input.profile)")
   })
 
   test("gates OSC progress on terminal support and TTY stdout", async () => {

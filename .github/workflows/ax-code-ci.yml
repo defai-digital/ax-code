@@ -566,6 +566,7 @@ jobs:
           pnpm --dir packages/ax-code run check:session-tree-memo
           pnpm --dir packages/ax-code run check:webmcp-allowlist
           pnpm --dir packages/ax-code run check:history-scroll-anchor
+          pnpm --dir packages/ax-code run check:inline-frontend
 
       - name: TUI startup smoke
         run: pnpm --dir packages/ax-code run tui:startup-smoke -- --bin "$GITHUB_WORKSPACE/.tmp/tui-smoke-bin/ax-code"

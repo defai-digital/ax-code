@@ -3,7 +3,7 @@ import { onCleanup } from "solid-js"
 import { createSimpleContext } from "./helper"
 import { FormatError, FormatUnknownError } from "@/cli/error"
 import { win32FlushInputBuffer } from "../win32"
-import { destroyTuiRenderer } from "../renderer"
+import { destroyTuiRenderer, type TuiRenderProfile } from "../renderer"
 import { registerShutdownSignals } from "@/util/signals"
 import { Log } from "@/util/log"
 import { captureTuiInput } from "../util/capture-input"
@@ -27,7 +27,7 @@ const TUI_EXIT_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQ
 
 export const { use: useExit, provider: ExitProvider } = createSimpleContext({
   name: "Exit",
-  init: (input: { onExit?: () => Promise<void> }) => {
+  init: (input: { onExit?: () => Promise<void>; destroy?: () => Promise<void>; profile?: TuiRenderProfile }) => {
     const renderer = useRenderer()
     let message: string | undefined
     let task: Promise<void> | undefined
@@ -105,7 +105,8 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
             // Each cleanup stage is independent: renderer failure must not leave
             // queued input for the shell, hide the exit reason or strand a backend.
             try {
-              await destroyTuiRenderer(renderer)
+              if (input.destroy) await input.destroy()
+              else await destroyTuiRenderer(renderer, input.profile)
             } catch (error) {
               recordFailure(error)
             }

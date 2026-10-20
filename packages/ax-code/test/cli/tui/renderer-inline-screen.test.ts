@@ -65,13 +65,13 @@ describe("resolveTuiRenderProfile screen selection", () => {
     expect(screenSource).toBe("default")
   })
 
-  test("an inline request is recorded but still mounts the full-screen renderer until slice 2", () => {
+  test("inline selects split-footer with mouse off by default", () => {
     for (const input of EXAMPLES) {
       const profile = resolveTuiRenderProfile({ ...input, screen: resolveTuiScreenFor({ flag: "inline" }) })
       const { screen, screenSource, ...rest } = profile
       expect(screen).toBe("inline")
       expect(screenSource).toBe("flag")
-      expect(rest).toEqual(legacyProfile(input))
+      expect(rest).toEqual({ ...legacyProfile(input), screenMode: "split-footer", useMouse: false })
     }
   })
 
@@ -89,7 +89,7 @@ describe("resolveTuiRenderProfile screen selection", () => {
     expect(resolveTuiRenderProfile({ ...base, screenConfig: "inline" })).toMatchObject({
       screen: "inline",
       screenSource: "config",
-      screenMode: "main-screen",
+      screenMode: "split-footer",
     })
   })
 
@@ -139,21 +139,18 @@ describe("createTuiRenderOptionsFromProfile screen mapping", () => {
     }
   })
 
-  test("an inline request still mounts the existing full-screen renderer in slice 1", () => {
-    const legacy = createTuiRenderOptionsFromProfile(
-      resolveTuiRenderProfile({ advancedTerminal: true, terminalTitleDisabled: false }),
-    )
-    const inline = createTuiRenderOptionsFromProfile(
-      resolveTuiRenderProfile({
-        advancedTerminal: true,
-        terminalTitleDisabled: false,
-        screen: resolveTuiScreenFor({ flag: "inline" }),
-      }),
-    )
-    // The inline frontend lands in slice 2; until then the renderer options
-    // are identical, including the screen mode every teardown path resets.
-    expect(inline.screenMode).toBe("alternate-screen")
-    expect(stableOptions(inline)).toEqual(stableOptions(legacy))
+  test("inline opts into scrollback capture and an uncluttered footer", () => {
+    const base = { advancedTerminal: true, terminalTitleDisabled: false, screenFlag: "inline" }
+    const inline = createTuiRenderOptionsFromProfile(resolveTuiRenderProfile(base))
+    expect(inline).toMatchObject({
+      screenMode: "split-footer",
+      footerHeight: 4,
+      externalOutputMode: "capture-stdout",
+      useMouse: false,
+      clearOnShutdown: false,
+    })
+    expect(resolveTuiRenderProfile({ ...base, mouse: true }).useMouse).toBe(true)
+    expect(resolveTuiRenderProfile({ ...base, mouse: true, disableMouse: true }).useMouse).toBe(false)
   })
 })
 

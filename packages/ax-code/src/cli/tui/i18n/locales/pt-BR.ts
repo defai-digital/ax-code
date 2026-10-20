@@ -812,6 +812,13 @@ export const messages = {
   "ui.failedToLoadEarlierMessages": "Falha ao carregar mensagens anteriores",
   "ui.transcriptLoadLimitReached":
     "\u25b2 Mostrando {count} mensagens, o m\u00e1ximo que esta exibi\u00e7\u00e3o mant\u00e9m.",
+  "ui.inlinePromptPlaceholder": "Pergunte qualquer coisa...",
+  "ui.inlineDialogNeedsFullScreen": "Esta caixa de di\u00e1logo requer o modo de tela cheia: ax-code --screen full",
+  "ui.inlinePermissionPending": "Solicita\u00e7\u00e3o de permiss\u00e3o pendente: responda em ax-code --screen full",
+  "ui.inlineQuestionPending": "Pergunta pendente: responda em ax-code --screen full",
+  "ui.inlineSessionMarker": "--- Sess\u00e3o {id} ---",
+  "ui.inlineRevertMarker": "--- Revertido para {id} (hist\u00f3rico anterior mantido) ---",
+  "ui.inlineCompactionMarker": "--- Contexto compactado (hist\u00f3rico anterior mantido) ---",
   "ui.in": "em",
   "ui.out": "sa\u00edda",
   "ui.messageCopiedToClipboard": "Mensagem copiada para a \u00e1rea de transfer\u00eancia!",

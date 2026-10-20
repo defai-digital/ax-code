@@ -898,6 +898,18 @@ export const messages = {
     "\uc774\uc804 \uba54\uc2dc\uc9c0\ub97c \ubd88\ub7ec\uc624\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4",
   "ui.transcriptLoadLimitReached":
     "\u25b2 \uba54\uc2dc\uc9c0 {count}\uac1c \ud45c\uc2dc \uc911, \uc774 \ubcf4\uae30\uc758 \ucd5c\ub300 \uac1c\uc218\uc785\ub2c8\ub2e4.",
+  "ui.inlinePromptPlaceholder": "\ubb34\uc5c7\uc774\ub4e0 \ubb3c\uc5b4\ubcf4\uc138\uc694...",
+  "ui.inlineDialogNeedsFullScreen":
+    "\uc774 \ub300\ud654 \uc0c1\uc790\uc5d0\ub294 \uc804\uccb4 \ud654\uba74 \ubaa8\ub4dc\uac00 \ud544\uc694\ud569\ub2c8\ub2e4: ax-code --screen full",
+  "ui.inlinePermissionPending":
+    "\uad8c\ud55c \uc694\uccad \ub300\uae30 \uc911: ax-code --screen full\uc5d0\uc11c \ub2f5\ubcc0\ud558\uc138\uc694",
+  "ui.inlineQuestionPending":
+    "\uc9c8\ubb38 \ub300\uae30 \uc911: ax-code --screen full\uc5d0\uc11c \ub2f5\ubcc0\ud558\uc138\uc694",
+  "ui.inlineSessionMarker": "--- \uc138\uc158 {id} ---",
+  "ui.inlineRevertMarker":
+    "--- {id}(\uc73c)\ub85c \ub418\ub3cc\ub9bc (\uc774\uc804 \uc2a4\ud06c\ub864\ubc31 \uc720\uc9c0\ub428) ---",
+  "ui.inlineCompactionMarker":
+    "--- \ucee8\ud14d\uc2a4\ud2b8 \uc555\ucd95\ub428 (\uc774\uc804 \uc2a4\ud06c\ub864\ubc31 \uc720\uc9c0\ub428) ---",
   "ui.in": "\uc704\uce58",
   "ui.out": "\ucd9c\ub825",
   "ui.messageCopiedToClipboard":

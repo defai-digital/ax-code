@@ -874,6 +874,17 @@ export const messages = {
     "Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c tin nh\u1eafn tr\u01b0\u1edbc \u0111\u00f3",
   "ui.transcriptLoadLimitReached":
     "\u25b2 \u0110ang hi\u1ec3n th\u1ecb {count} tin nh\u1eafn, t\u1ed1i \u0111a ch\u1ebf \u0111\u1ed9 xem n\u00e0y gi\u1eef l\u1ea1i.",
+  "ui.inlinePromptPlaceholder": "H\u1ecfi b\u1ea5t c\u1ee9 \u0111i\u1ec1u g\u00ec...",
+  "ui.inlineDialogNeedsFullScreen":
+    "H\u1ed9p tho\u1ea1i n\u00e0y c\u1ea7n ch\u1ebf \u0111\u1ed9 to\u00e0n m\u00e0n h\u00ecnh: ax-code --screen full",
+  "ui.inlinePermissionPending":
+    "Y\u00eau c\u1ea7u quy\u1ec1n \u0111ang ch\u1edd: tr\u1ea3 l\u1eddi trong ax-code --screen full",
+  "ui.inlineQuestionPending": "C\u00e2u h\u1ecfi \u0111ang ch\u1edd: tr\u1ea3 l\u1eddi trong ax-code --screen full",
+  "ui.inlineSessionMarker": "--- Phi\u00ean {id} ---",
+  "ui.inlineRevertMarker":
+    "--- \u0110\u00e3 ho\u00e0n t\u00e1c v\u1ec1 {id} (l\u1ecbch s\u1eed cu\u1ed9n tr\u01b0\u1edbc \u0111\u00f3 \u0111\u01b0\u1ee3c gi\u1eef l\u1ea1i) ---",
+  "ui.inlineCompactionMarker":
+    "--- \u0110\u00e3 n\u00e9n ng\u1eef c\u1ea3nh (l\u1ecbch s\u1eed cu\u1ed9n tr\u01b0\u1edbc \u0111\u00f3 \u0111\u01b0\u1ee3c gi\u1eef l\u1ea1i) ---",
   "ui.in": "trong",
   "ui.out": "ra",
   "ui.messageCopiedToClipboard": "\u0110\u00e3 sao ch\u00e9p tin nh\u1eafn v\u00e0o b\u1ed9 nh\u1edb t\u1ea1m!",

@@ -1,6 +1,7 @@
 import { Log } from "@/util/log"
 import { toErrorMessage } from "@/util/error-message"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
+import type { TuiTerminalScreenMode } from "../terminal-cleanup"
 import { flushTuiStdout, resetTuiTerminalState } from "../terminal-cleanup"
 
 const log = Log.create({ service: "tui.lifecycle" })
@@ -68,6 +69,66 @@ export function registerTuiProcessHandler(
   }
 }
 
+type TerminalProfile = { screenMode: TuiTerminalScreenMode; useKittyKeyboard: boolean }
+let terminalProfile: TerminalProfile | undefined
+let terminalLifecycle: { profile: TerminalProfile; close: () => Promise<void> } | undefined
+
+export function setTuiTerminalProfile(profile: TerminalProfile) {
+  terminalProfile = profile
+}
+
+export function registerTuiTerminalLifecycle(lifecycle: NonNullable<typeof terminalLifecycle>) {
+  terminalLifecycle = lifecycle
+  terminalProfile = lifecycle.profile
+  return () => {
+    if (terminalLifecycle === lifecycle) terminalLifecycle = undefined
+  }
+}
+
+export function resetActiveTuiTerminal() {
+  const profile = terminalProfile
+  const reset = () =>
+    resetTuiTerminalState({ screenMode: profile?.screenMode, kittyKeyboard: profile?.useKittyKeyboard })
+  if (!terminalLifecycle) {
+    reset()
+    return
+  }
+  return terminalLifecycle.close().finally(() => {
+    reset()
+  })
+}
+
+/**
+ * Restore the terminal for the screen mode that is actually mounted, flush
+ * stdout, then exit non-zero. A deadline forces the exit if cleanup stalls.
+ */
+export function exitTuiAfterCrash() {
+  const deadline = tuiCrashExitDeadline()
+  const timer = setTimeout(() => {
+    deadline.onDeadline()
+    process.exit(1)
+  }, deadline.delayMs)
+  timer.unref?.()
+  const cleanup = resetActiveTuiTerminal()
+  const flushed = cleanup ? cleanup.then(() => flushTuiStdout()) : flushTuiStdout()
+  void flushed.finally(() => {
+    clearTimeout(timer)
+    process.exit(1)
+  })
+}
+
+// Inline surfaces can be settling across several queued blocks when a fault arrives.
+// Keep the legacy full-screen deadline, allowing inline commits a bounded drain.
+function tuiCrashExitDeadline() {
+  const profile = terminalProfile
+  if (profile?.screenMode !== "split-footer") return { delayMs: 100, onDeadline: () => {} }
+  return {
+    delayMs: 2_000,
+    onDeadline: () =>
+      resetTuiTerminalState({ screenMode: profile.screenMode, kittyKeyboard: profile.useKittyKeyboard }),
+  }
+}
+
 // Default crash response for a TUI foreground process (thread / attach):
 // restore the terminal out of raw / mouse-tracking / alternate-screen mode so
 // the shell prompt is usable again, flush stdout, then exit non-zero. Without
@@ -87,15 +148,9 @@ export function createTuiCrashHandler(input: { onError?: (error: unknown) => voi
     input.onError?.(error)
     log.error("tui crashed", { error: toErrorMessage(error) })
     process.exitCode = 1
-    resetTuiTerminalState()
     if (scheduled) return
     scheduled = true
-    const timer = setTimeout(() => process.exit(1), 100)
-    timer.unref?.()
-    void flushTuiStdout().finally(() => {
-      clearTimeout(timer)
-      process.exit(1)
-    })
+    exitTuiAfterCrash()
   }
 }
 
