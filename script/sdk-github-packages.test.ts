@@ -109,3 +109,11 @@ test("publication requires readback and a separate consumer with read-only packa
   expect(consumer).toContain("sdk-package-registry.mjs verify")
   expect(workflow).not.toContain("--clobber")
 })
+
+test("repository dispatch carries only a tag into the same source validation gate", () => {
+  const workflow = readFileSync(".github/workflows/sdk-github-packages.yml", "utf8")
+  expect(workflow).toContain("types: [publish-sdk]")
+  expect(workflow).toContain("inputs.tag || github.event.client_payload.tag || github.ref_name")
+  expect(workflow).not.toMatch(/run:.*client_payload/)
+  expect(workflow).toContain("node .github/scripts/sdk-package-registry.mjs source")
+})

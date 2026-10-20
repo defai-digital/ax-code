@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "sdk-v*"
+  repository_dispatch:
+    types: [publish-sdk]
   workflow_dispatch:
     inputs:
       tag:
@@ -12,14 +14,14 @@ on:
         type: string
 
 concurrency:
-  group: sdk-github-packages-${{ inputs.tag || github.ref_name }}
+  group: sdk-github-packages-${{ inputs.tag || github.event.client_payload.tag || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 env:
-  AX_CODE_SDK_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  AX_CODE_SDK_RELEASE_TAG: ${{ inputs.tag || github.event.client_payload.tag || github.ref_name }}
   SDK_ARTIFACT_DIR: packages/sdk/js/.tmp/github-package
 
 jobs:
