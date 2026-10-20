@@ -1,3 +1,4 @@
+import { truncateDetail } from "../../inline/prompt-detail"
 import { useLanguage } from "@tui/context/language"
 import { createStore, produce } from "solid-js/store"
 import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js"
@@ -23,7 +24,11 @@ const log = Log.create({ service: "tui.question" })
 // permission.tsx (see #341).
 const QUESTION_REPLY_TIMEOUT_MS = 20_000
 
-export function QuestionPrompt(props: { request: QuestionRequest }) {
+export function QuestionPrompt(props: {
+  request: QuestionRequest
+  surface?: "full" | "footer"
+  onDecision?: (id: string, rejected: boolean) => void
+}) {
   const uiText = useLanguage().t
 
   const sdk = useSDK()
@@ -94,7 +99,12 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     return store.answers[store.tab]?.includes(value) ?? false
   })
 
-  function submitQuestionRequest(run: () => Promise<unknown>, failureLabel: string, failureMessage: string) {
+  function submitQuestionRequest(
+    run: () => Promise<unknown>,
+    failureLabel: string,
+    failureMessage: string,
+    rejected = false,
+  ) {
     // Idempotent guard: ignore further submissions once a reply for this
     // request is already in flight. See #241.
     if (store.submitting) return
@@ -113,6 +123,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
         // server-side ask stays pending. Route real failures into `.catch`.
         const error = (result as { error?: unknown } | undefined)?.error
         if (error) throw replyError(error, failureMessage)
+        props.onDecision?.(id, rejected)
         removeRequestLocally(sessionID, id)
       })
       .catch((error) => {
@@ -150,6 +161,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
         }),
       "question prompt reject failed",
       "Failed to reject question",
+      true,
     )
   }
 
@@ -363,6 +375,14 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     }
   })
 
+  const detail = (value: string) =>
+    props.surface === "footer"
+      ? truncateDetail(value, 3, (count) => uiText("ui.inlineMoreLines", { count: String(count) }))
+      : value
+  const optionStart = createMemo(() => (props.surface === "footer" ? Math.max(0, store.selected - 2) : 0))
+  const visibleOptions = createMemo(() =>
+    props.surface === "footer" ? options().slice(optionStart(), optionStart() + 4) : options(),
+  )
   return (
     <box
       backgroundColor={theme.backgroundPanel}
@@ -430,26 +450,27 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
         <Show when={!confirm()}>
           <box paddingLeft={1} gap={1}>
             <box>
-              <text fg={theme.text}>
-                {question()?.question}
+              <text fg={theme.text} wrapMode={props.surface === "footer" ? "none" : "word"}>
+                {detail(question()?.question ?? "")}
                 {multi() ? " (select all that apply)" : ""}
               </text>
             </box>
             <box>
-              <For each={options()}>
+              <For each={visibleOptions()}>
                 {(opt, i) => {
-                  const active = () => i() === store.selected
+                  const index = () => i() + optionStart()
+                  const active = () => index() === store.selected
                   const picked = () => store.answers[store.tab]?.includes(opt.label) ?? false
                   return (
                     <box
-                      onMouseOver={() => moveTo(i())}
-                      onMouseDown={() => moveTo(i())}
+                      onMouseOver={() => moveTo(index())}
+                      onMouseDown={() => moveTo(index())}
                       onMouseUp={() => selectOption()}
                     >
                       <box flexDirection="row">
                         <box backgroundColor={active() ? theme.backgroundElement : undefined} paddingRight={1}>
                           <text fg={active() ? tint(theme.textMuted, theme.secondary, 0.6) : theme.textMuted}>
-                            {`${i() + 1}.`}
+                            {`${index() + 1}.`}
                           </text>
                         </box>
                         <box backgroundColor={active() ? theme.backgroundElement : undefined}>
@@ -463,12 +484,23 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                       </box>
 
                       <box paddingLeft={3}>
-                        <text fg={theme.textMuted}>{opt.description}</text>
+                        <text fg={theme.textMuted} wrapMode={props.surface === "footer" ? "none" : "word"}>
+                          {props.surface === "footer"
+                            ? truncateDetail(opt.description, 1, (count) =>
+                                uiText("ui.inlineMoreLines", { count: String(count) }),
+                              )
+                            : opt.description}
+                        </text>
                       </box>
                     </box>
                   )
                 }}
               </For>
+              <Show when={props.surface === "footer" && options().length > visibleOptions().length}>
+                <text fg={theme.textMuted}>
+                  {uiText("ui.inlineMoreLines", { count: String(options().length - visibleOptions().length) })}
+                </text>
+              </Show>
               <Show when={custom()}>
                 <box
                   onMouseOver={() => moveTo(options().length)}
@@ -507,7 +539,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                         initialValue={input()}
                         placeholder={uiText("ui.typeYourOwnAnswer")}
                         minHeight={1}
-                        maxHeight={6}
+                        maxHeight={props.surface === "footer" ? 2 : 6}
                         textColor={theme.text}
                         focusedTextColor={theme.text}
                         cursorColor={theme.primary}

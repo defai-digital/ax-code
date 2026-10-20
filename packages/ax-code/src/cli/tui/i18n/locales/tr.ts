@@ -1174,4 +1174,11 @@ export const messages = {
   "ui.firstToken": "ilk token",
   "ui.queuedCommandBehindTurn":
     "{command} \u00e7al\u0131\u015fmakta olan turun arkas\u0131na kuyru\u011fa al\u0131nd\u0131 \u2014 y\u00f6netmek i\u00e7in /queue komutunu a\u00e7\u0131n",
+  "ui.inlineAllowedOnce": "{permission} bir kez izin verildi",
+  "ui.inlineAllowedAlways": "{permission} her zaman izin verildi",
+  "ui.inlineDenied": "{permission} reddedildi",
+  "ui.inlineQuestionAnswered": "Soru yan\u0131tland\u0131",
+  "ui.inlineQuestionDismissed": "Soru kapat\u0131ld\u0131",
+  "ui.inlineMoreLines": "... {count} sat\u0131r daha",
+  "ui.inlineImagePlaceholder": "[resim: {name}]",
 } satisfies Dictionary

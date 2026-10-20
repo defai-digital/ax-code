@@ -429,7 +429,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   const pasteSubmitGate = createPromptPasteSubmitGate({ submit: submitSafely })
 
   useKeyboard((evt) => {
-    if (evt.defaultPrevented) return
+    if (evt.defaultPrevented || props.disabled) return
     if (dialog.stack.length > 0) return
     if (!isRenderableAlive(input) || !input.focused) return
     const submitKind = isPromptSubmitKey(evt)
@@ -787,8 +787,8 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   }
 
   createEffect(() => {
-    if (props.visible !== false) focusRenderable(input, { name: "prompt-visible-focus" })
-    if (props.visible === false) blurRenderable(input, { name: "prompt-hidden-blur" })
+    if (props.visible !== false && !props.disabled) focusRenderable(input, { name: "prompt-visible-focus" })
+    if (props.visible === false || props.disabled) blurRenderable(input, { name: "prompt-hidden-blur" })
   })
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {

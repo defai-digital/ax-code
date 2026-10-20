@@ -1140,4 +1140,11 @@ export const messages = {
   "ui.firstToken": "primo token",
   "ui.queuedCommandBehindTurn":
     "{command} \u00e8 stato accodato dietro il turno in esecuzione \u2014 apri /queue per gestirlo",
+  "ui.inlineAllowedOnce": "{permission} consentito una volta",
+  "ui.inlineAllowedAlways": "{permission} sempre consentito",
+  "ui.inlineDenied": "{permission} negato",
+  "ui.inlineQuestionAnswered": "Domanda risposta",
+  "ui.inlineQuestionDismissed": "Domanda chiusa",
+  "ui.inlineMoreLines": "... altre {count} righe",
+  "ui.inlineImagePlaceholder": "[immagine: {name}]",
 }

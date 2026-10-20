@@ -1,3 +1,4 @@
+import { compactDetail, truncateDetail } from "../../inline/prompt-detail"
 import { useLanguage } from "@tui/context/language"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { canPersistPermission, canConfirmPersistentPermission } from "@/permission/interaction"
@@ -217,7 +218,11 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
   )
 }
 
-export function PermissionPrompt(props: { request: PermissionRequest }) {
+export function PermissionPrompt(props: {
+  request: PermissionRequest
+  surface?: "full" | "footer"
+  onDecision?: (id: string, decision: "once" | "always" | "reject", permission: string) => void
+}) {
   const uiText = useLanguage().t
 
   const { t } = useLanguage()
@@ -347,7 +352,12 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     return opts
   })
 
-  function submitPermissionReply(run: () => Promise<unknown>, failureLabel: string, failureMessage: string) {
+  function submitPermissionReply(
+    run: () => Promise<unknown>,
+    failureLabel: string,
+    failureMessage: string,
+    decision: "once" | "always" | "reject" = "once",
+  ) {
     // Idempotent guard: ignore further submissions once a reply for this
     // request is already in flight. See #241.
     const next = tryBeginPermissionSubmit(store.latch, props.request.id)
@@ -355,7 +365,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     setStore("latch", next)
     // Capture the reply target now: by the time the reply resolves,
     // props.request may already be the next queued request.
-    const { sessionID, id } = props.request
+    const { sessionID, id, permission } = props.request
     void Promise.resolve()
       .then(() => withTimeout(run(), PERMISSION_REPLY_TIMEOUT_MS, t("permission.timeout")))
       .then((result) => {
@@ -365,6 +375,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
         // server-side ask stays pending. Route real failures into `.catch`.
         const error = (result as { error?: unknown } | undefined)?.error
         if (error) throw replyError(error, failureMessage)
+        props.onDecision?.(id, decision, permission)
         removeRequestLocally(sessionID, id)
       })
       .catch((error) => {
@@ -384,6 +395,12 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   const permissionInfo = createMemo(() => {
     const permission = props.request.permission
     const data = input()
+    if (props.surface === "footer")
+      return {
+        icon: "?",
+        title: t("permission.tool", { tool: permission }),
+        body: null,
+      }
 
     if (permission === "edit") {
       // DRE refactor_apply hijacks the "edit" policy key so it
@@ -656,10 +673,20 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     <Switch>
       <Match when={store.stage === "webmcp-allowlist"}>
         <PermissionChoicePrompt
+          surface={props.surface}
           title="Add to WebMCP allowlist"
           body={
             <box paddingLeft={1} flexDirection="column">
-              <For each={props.request.webmcpAllowlist ? webMcpAllowlistPreview(props.request.webmcpAllowlist) : []}>
+              <For
+                each={
+                  props.request.webmcpAllowlist
+                    ? webMcpAllowlistPreview(props.request.webmcpAllowlist).slice(
+                        0,
+                        props.surface === "footer" ? 4 : undefined,
+                      )
+                    : []
+                }
+              >
                 {(line) => <text fg={theme.textMuted}>{line}</text>}
               </For>
             </box>
@@ -684,6 +711,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       </Match>
       <Match when={store.stage === "always"}>
         <PermissionChoicePrompt
+          surface={props.surface}
           title={t("permission.alwaysTitle")}
           body={
             <Switch>
@@ -694,7 +722,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                 <box paddingLeft={1} gap={1}>
                   <text fg={theme.textMuted}>{t("permission.patternsWarning")}</text>
                   <box>
-                    <For each={props.request.always}>
+                    <For each={props.surface === "footer" ? props.request.always.slice(0, 4) : props.request.always}>
                       {(pattern) => (
                         <text fg={theme.text}>
                           {"- "}
@@ -702,6 +730,11 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                         </text>
                       )}
                     </For>
+                    <Show when={props.surface === "footer" && props.request.always.length > 4}>
+                      <text fg={theme.textMuted}>
+                        {t("ui.inlineMoreLines", { count: String(props.request.always.length - 4) })}
+                      </text>
+                    </Show>
                   </box>
                 </box>
               </Match>
@@ -723,12 +756,14 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                 }),
               "permission prompt always-reply failed",
               t("permission.failAlways"),
+              "always",
             )
           }}
         />
       </Match>
       <Match when={store.stage === "reject"}>
         <RejectPrompt
+          surface={props.surface}
           onConfirm={(message) => {
             submitPermissionReply(
               () =>
@@ -739,6 +774,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                 }),
               "permission prompt reject failed",
               t("permission.failReject"),
+              "reject",
             )
           }}
           onCancel={() => {
@@ -748,6 +784,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       </Match>
       <Match when={store.stage === "permission"}>
         <PermissionChoicePrompt
+          surface={props.surface}
           title={t("permission.required")}
           header={
             <box flexDirection="column" gap={0}>
@@ -772,12 +809,31 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           }
           body={
             <box flexDirection="column" gap={1}>
-              {permissionInfo().body}
+              <Show when={props.surface === "footer"} fallback={permissionInfo().body}>
+                <text fg={theme.textMuted} height={5} wrapMode="none">
+                  {compactDetail({ ...input(), ...props.request.metadata }, props.request.patterns, (count) =>
+                    t("ui.inlineMoreLines", { count: String(count) }),
+                  )}
+                </text>
+              </Show>
               <Show when={rewriteView()}>
                 {(rewrite) => (
                   <box paddingLeft={1} flexDirection="column">
-                    <text fg={theme.textMuted}>{"Rewritten by hook: " + rewrite().changedFields.join(", ")}</text>
-                    <For each={rewrite().values}>{(line) => <text fg={theme.text}>{line}</text>}</For>
+                    <text fg={theme.textMuted}>
+                      {props.surface === "footer"
+                        ? uiText("ui.toolRewrittenByHook")
+                        : "Rewritten by hook: " + rewrite().changedFields.join(", ")}
+                    </text>
+                    <Show
+                      when={props.surface === "footer"}
+                      fallback={<For each={rewrite().values}>{(line) => <text fg={theme.text}>{line}</text>}</For>}
+                    >
+                      <text height={3} wrapMode="none" fg={theme.text}>
+                        {truncateDetail(rewrite().values.join("\n"), 2, (count) =>
+                          t("ui.inlineMoreLines", { count: String(count) }),
+                        )}
+                      </text>
+                    </Show>
                   </box>
                 )}
               </Show>
@@ -786,7 +842,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           options={baseOptions()}
           dangerOption="allowlist"
           escapeKey="reject"
-          fullscreen
+          fullscreen={props.surface !== "footer"}
           onFullscreenChange={setExpanded}
           onSelect={(option) => {
             if (option === "allowlist") {
@@ -812,6 +868,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   }),
                 "permission prompt reject failed",
                 t("permission.failReject"),
+                "reject",
               )
               return
             }
@@ -831,7 +888,11 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   )
 }
 
-function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: () => void }) {
+function RejectPrompt(props: {
+  surface?: "full" | "footer"
+  onConfirm: (message: string) => void
+  onCancel: () => void
+}) {
   const { t } = useLanguage()
   let input: TextareaRenderable
   const { theme } = useTheme()
@@ -887,6 +948,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
         <textarea
           ref={(val: TextareaRenderable) => (input = val)}
           focused
+          maxHeight={props.surface === "footer" ? 2 : undefined}
           textColor={theme.text}
           focusedTextColor={theme.text}
           cursorColor={theme.primary}
@@ -906,6 +968,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
 }
 
 export function PermissionChoicePrompt<const T extends Record<string, string>>(props: {
+  surface?: "full" | "footer"
   title: string
   header?: JSX.Element
   body: JSX.Element
@@ -985,7 +1048,7 @@ export function PermissionChoicePrompt<const T extends Record<string, string>>(p
         ? { top: dimensions().height * -1 + 1, bottom: 1, left: 2, right: 2, position: "absolute" }
         : {
             top: 0,
-            maxHeight: 15,
+            maxHeight: props.surface === "footer" ? undefined : 15,
             bottom: 0,
             left: 0,
             right: 0,

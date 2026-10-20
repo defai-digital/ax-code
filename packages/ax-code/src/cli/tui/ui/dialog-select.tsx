@@ -24,7 +24,7 @@ import {
   untrack,
 } from "solid-js"
 import { createStore } from "solid-js/store"
-import { useKeyboard, useTerminalDimensions, VirtualList } from "ax-tui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions, VirtualList } from "ax-tui/solid"
 import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
@@ -212,8 +212,17 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       options().every((option) => !option.gutter && (option.footer == null || typeof option.footer === "string")),
   )
 
+  const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
-  const height = createMemo(() => dialogSelectVisibleHeight(rows(), dimensions().height))
+  const height = createMemo(() => {
+    const viewport = dimensions()
+    // A newly mounted footer dialog can subscribe after the expansion resize.
+    // Use the physical terminal bound so its first frame is not stuck at the
+    // previous four-row editor geometry.
+    const available =
+      renderer.screenMode === "split-footer" ? Math.min(23, renderer.terminalHeight - 1) : viewport.height
+    return dialogSelectVisibleHeight(rows(), available)
+  })
   // Show the vertical scrollbar only when the list is taller than the viewport.
   const overflow = createMemo(() => rows() > height())
 

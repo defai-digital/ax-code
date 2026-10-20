@@ -1127,4 +1127,11 @@ export const messages = {
   "ui.steerIntoRunningTurn": "Steer into running turn",
   "ui.firstToken": "first token",
   "ui.queuedCommandBehindTurn": "Queued {command} behind the running turn \u2014 open /queue to manage it",
+  "ui.inlineAllowedOnce": "Allowed {permission} once",
+  "ui.inlineAllowedAlways": "Allowed {permission} always",
+  "ui.inlineDenied": "Denied {permission}",
+  "ui.inlineQuestionAnswered": "Answered question",
+  "ui.inlineQuestionDismissed": "Dismissed question",
+  "ui.inlineMoreLines": "... {count} more lines",
+  "ui.inlineImagePlaceholder": "[image: {name}]",
 } as const

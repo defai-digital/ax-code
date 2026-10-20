@@ -53,13 +53,6 @@ export function createTranscriptProjector(text: InlineText = DEFAULT_INLINE_TEXT
           text: text.revertMarker(input.revert ?? "current head"),
         })
       }
-      for (const request of input.requests ?? []) {
-        add({
-          key: `${sid}:request:${request.id}`,
-          kind: "notice",
-          text: text.pending(request.kind),
-        })
-      }
       let blocked = false
       for (const message of input.messages) {
         if (input.revert && message.id >= input.revert) break
@@ -92,6 +85,8 @@ export function createTranscriptProjector(text: InlineText = DEFAULT_INLINE_TEXT
             })
           } else if (part.type === "compaction") {
             add({ key, kind: "marker", text: text.compactionMarker() })
+          } else if (part.type === "file" && part.mime.startsWith("image/")) {
+            add({ key, kind: "notice", text: text.imagePlaceholder(singleLine(part.filename ?? part.mime)) })
           } else if (part.type === "file" && message.role === "user") {
             add({ key, kind: "user", text: `[file: ${singleLine(part.filename ?? part.mime)}]` })
           }

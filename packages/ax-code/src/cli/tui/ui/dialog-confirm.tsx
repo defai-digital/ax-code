@@ -123,6 +123,7 @@ DialogConfirm.show = (dialog: DialogContext, title: string, message: string, lab
         />
       ),
       () => resolve(undefined),
+      "confirm",
     )
   })
 }

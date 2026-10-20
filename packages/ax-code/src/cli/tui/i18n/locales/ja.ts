@@ -1314,4 +1314,11 @@ export const messages = {
   "ui.firstToken": "\u6700\u521d\u306e\u30c8\u30fc\u30af\u30f3",
   "ui.queuedCommandBehindTurn":
     "{command} \u3092\u5b9f\u884c\u4e2d\u306e\u30bf\u30fc\u30f3\u306e\u5f8c\u308d\u306b\u30ad\u30e5\u30fc\u3057\u307e\u3057\u305f \u2014 /queue \u3092\u958b\u3044\u3066\u7ba1\u7406\u3057\u3066\u304f\u3060\u3055\u3044",
+  "ui.inlineAllowedOnce": "{permission} \u3092\u4e00\u5ea6\u8a31\u53ef",
+  "ui.inlineAllowedAlways": "{permission} \u3092\u5e38\u306b\u8a31\u53ef",
+  "ui.inlineDenied": "{permission} \u3092\u62d2\u5426",
+  "ui.inlineQuestionAnswered": "\u8cea\u554f\u306b\u56de\u7b54\u3057\u307e\u3057\u305f",
+  "ui.inlineQuestionDismissed": "\u8cea\u554f\u3092\u9589\u3058\u307e\u3057\u305f",
+  "ui.inlineMoreLines": "... \u6b8b\u308a {count} \u884c",
+  "ui.inlineImagePlaceholder": "[\u753b\u50cf: {name}]",
 } satisfies Dictionary

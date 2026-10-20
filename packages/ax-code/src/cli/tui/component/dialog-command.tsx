@@ -243,13 +243,17 @@ function init() {
     },
     suspended,
     show() {
-      dialog.replace(() => (
-        <DialogCommand
-          options={visibleOptions()}
-          suggestedOptions={suggestedOptions()}
-          recentOptions={recentOptions()}
-        />
-      ))
+      dialog.replace(
+        () => (
+          <DialogCommand
+            options={visibleOptions()}
+            suggestedOptions={suggestedOptions()}
+            recentOptions={recentOptions()}
+          />
+        ),
+        undefined,
+        "command",
+      )
     },
     register(cb: () => CommandOption[]) {
       const registration = { read: createMemo(cb), owner: {} }
