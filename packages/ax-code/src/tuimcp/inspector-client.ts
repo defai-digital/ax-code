@@ -66,14 +66,18 @@ function show(result, requestSequence, requestEpoch, present, mutation = false) 
 async function rpc(name, args = {}, present = true) {
   const requestSequence = ++sequence
   const requestEpoch = epoch
+  const deadline = AbortSignal.timeout(15_000)
   try {
     const response = await fetch("/rpc", {
       method: "POST", headers: { "Content-Type": "application/json", "X-AX-TUI-Debug": boot.capability },
       body: JSON.stringify({ name, args }),
-      signal: AbortSignal.timeout(15_000),
+      signal: deadline,
     })
     let result
-    try { result = await response.json() } catch { throw new Error("Inspector returned an invalid response (HTTP " + response.status + ")") }
+    try { result = await response.json() } catch {
+      deadline.throwIfAborted()
+      throw new Error("Inspector returned an invalid response (HTTP " + response.status + ")")
+    }
     if (!response.ok) throw new Error("Inspector request failed: " + (result.code ?? "HTTP " + response.status))
     if (result.status === "rejected" && requestEpoch === epoch) invalidate(result.code)
     return show(result, requestSequence, requestEpoch, present, name === "tui_input" || name === "select_session")

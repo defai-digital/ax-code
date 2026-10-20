@@ -190,6 +190,7 @@ describe("native TUI debugging fences", () => {
     expect(latestDeadline).toBeDefined()
     latestDeadline!.abort(new DOMException("Inspector request timed out", "TimeoutError"))
     await failed
+    expect(h.element("status").textContent).toContain("Inspector request timed out")
     expect(h.element("receipts").textContent).toContain("outcome_unknown")
     expect(h.element("click-submit").disabled).toBe(true)
     expect(f.actions).toHaveLength(phase === "body" ? 1 : 0)
