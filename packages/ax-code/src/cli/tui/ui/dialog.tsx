@@ -1,3 +1,4 @@
+import { footerDialogPolicy } from "../inline/footer-dialogs"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { batch, createContext, onCleanup, Show, useContext, type JSX, type ParentProps } from "solid-js"
 import { useTheme } from "@tui/context/theme"
@@ -190,8 +191,8 @@ function init(onUnavailable?: () => void) {
       })
       refocus()
     },
-    replace(input: any, onClose?: () => void) {
-      if (onUnavailable) {
+    replace(input: any, onClose?: () => void, footerKind?: string) {
+      if (onUnavailable && footerDialogPolicy(footerKind) === "hint") {
         onUnavailable()
         onClose?.()
         return

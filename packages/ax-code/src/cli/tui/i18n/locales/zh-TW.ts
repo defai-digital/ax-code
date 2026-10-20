@@ -1194,4 +1194,11 @@ export const messages = {
   "ui.firstToken": "\u9996\u500b token",
   "ui.queuedCommandBehindTurn":
     "\u5df2\u5c07 {command} \u6392\u5165\u57f7\u884c\u4e2d\u7684\u56de\u5408\u5f8c\u65b9 \u2014 \u958b\u555f /queue \u4ee5\u7ba1\u7406",
+  "ui.inlineAllowedOnce": "\u5df2\u5141\u8a31 {permission} \u4e00\u6b21",
+  "ui.inlineAllowedAlways": "\u5df2\u6c38\u9060\u5141\u8a31 {permission}",
+  "ui.inlineDenied": "\u5df2\u62d2\u7d55 {permission}",
+  "ui.inlineQuestionAnswered": "\u5df2\u56de\u7b54\u554f\u984c",
+  "ui.inlineQuestionDismissed": "\u5df2\u7565\u904e\u554f\u984c",
+  "ui.inlineMoreLines": "... \u5c1a\u6709 {count} \u884c",
+  "ui.inlineImagePlaceholder": "[\u5716\u7247: {name}]",
 } satisfies Dictionary

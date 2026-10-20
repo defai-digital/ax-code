@@ -125,6 +125,8 @@ describe("recover undo history", () => {
     const body = transformSync(source.slice(start, end), { loader: "ts" }).code
     let handler!: (event: any) => void
     const dialog = { stack: [{}] }
+    // A footer permission/question prompt disables the editor (inline mode).
+    const props = { disabled: false }
     let submitted = 0
     let steered = 0
     let consumed = 0
@@ -139,6 +141,7 @@ describe("recover undo history", () => {
       "autocomplete",
       "submitSafely",
       "steerSafely",
+      "props",
       body,
     )(
       (fn: typeof handler) => {
@@ -153,6 +156,7 @@ describe("recover undo history", () => {
       undefined,
       () => submitted++,
       () => steered++,
+      props,
     )
     const key = { name: "return", preventDefault: () => consumed++, stopPropagation: () => consumed++ }
     handler(key)
@@ -160,6 +164,12 @@ describe("recover undo history", () => {
     expect(steered).toBe(0)
     expect(consumed).toBe(0)
     dialog.stack = []
+    props.disabled = true
+    handler(key)
+    expect(submitted).toBe(0)
+    expect(steered).toBe(0)
+    expect(consumed).toBe(0)
+    props.disabled = false
     handler(key)
     expect(submitted).toBe(kind === "submit" ? 1 : 0)
     expect(steered).toBe(kind === "steer" ? 1 : 0)

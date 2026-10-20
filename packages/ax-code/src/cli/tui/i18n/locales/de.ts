@@ -1141,4 +1141,11 @@ export const messages = {
   "ui.firstToken": "erstes Token",
   "ui.queuedCommandBehindTurn":
     "{command} wurde hinter dem laufenden Turn eingeplant \u2014 \u00f6ffne /queue zum Verwalten",
+  "ui.inlineAllowedOnce": "{permission} einmal erlaubt",
+  "ui.inlineAllowedAlways": "{permission} immer erlaubt",
+  "ui.inlineDenied": "{permission} abgelehnt",
+  "ui.inlineQuestionAnswered": "Frage beantwortet",
+  "ui.inlineQuestionDismissed": "Frage geschlossen",
+  "ui.inlineMoreLines": "... {count} weitere Zeilen",
+  "ui.inlineImagePlaceholder": "[Bild: {name}]",
 } satisfies Dictionary

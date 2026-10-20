@@ -9,7 +9,7 @@ type Toast = {
 
 type DialogHost = {
   stack: unknown[]
-  replace: (view: () => JSX.Element) => void
+  replace: (view: () => JSX.Element, onClose?: () => void, footerKind?: string) => void
 }
 
 export type TuiDialogLoaders = ReturnType<typeof createTuiDialogLoaders>
@@ -20,6 +20,7 @@ export async function replaceLazyDialog(input: {
   dialog: DialogHost
   toast: Toast
   load: () => Promise<(() => JSX.Element) | undefined>
+  footerKind?: string
   warn: string
   fail: string
 }) {
@@ -32,7 +33,8 @@ export async function replaceLazyDialog(input: {
   try {
     const view = await input.load()
     if (!view || !current()) return
-    input.dialog.replace(view)
+    if (input.footerKind) input.dialog.replace(view, undefined, input.footerKind)
+    else input.dialog.replace(view)
   } catch (error) {
     Log.Default.warn(input.warn, { error })
     if (!current()) return
@@ -84,6 +86,7 @@ export function createTuiDialogLoaders(input: {
     showModelDialog: () =>
       replaceLazyDialog({
         ...host,
+        footerKind: "model",
         warn: "failed to load model dialog",
         fail: "Failed to open model dialog",
         load: async () => {
@@ -195,6 +198,7 @@ export function createTuiDialogLoaders(input: {
     showAgentDialog: () =>
       replaceLazyDialog({
         ...host,
+        footerKind: "agent",
         warn: "failed to load agent dialog",
         fail: "Failed to open agent list",
         load: async () => {

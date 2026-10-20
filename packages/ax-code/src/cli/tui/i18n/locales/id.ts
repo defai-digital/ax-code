@@ -1129,4 +1129,11 @@ export const messages = {
   "ui.firstToken": "token pertama",
   "ui.queuedCommandBehindTurn":
     "{command} diantrekan di belakang giliran yang sedang berjalan \u2014 buka /queue untuk mengelolanya",
+  "ui.inlineAllowedOnce": "Izinkan {permission} sekali",
+  "ui.inlineAllowedAlways": "Selalu izinkan {permission}",
+  "ui.inlineDenied": "Tolak {permission}",
+  "ui.inlineQuestionAnswered": "Pertanyaan dijawab",
+  "ui.inlineQuestionDismissed": "Pertanyaan ditutup",
+  "ui.inlineMoreLines": "... {count} baris lagi",
+  "ui.inlineImagePlaceholder": "[gambar: {name}]",
 } satisfies Dictionary

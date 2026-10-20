@@ -61,6 +61,7 @@ registerHooks({
           `export function useSync() {`,
           `  const value = globalThis.__AX_INLINE_SYNC__`,
           `  if (!value) throw new Error("inline-frontend: no sync fixture installed")`,
+          `  globalThis.__AX_INLINE_CAPTURE__?.()`,
           `  return value`,
           `}`,
         ].join("\n"),
@@ -79,6 +80,18 @@ const { resetActiveTuiTerminal } = await import("../src/cli/tui/util/lifecycle")
 const { createInitialSyncState } = await import("../src/cli/tui/context/sync-state")
 const { createSyncContextValue } = await import("../src/cli/tui/context/sync-result")
 import type { Agent, Model, Provider, Message, Part } from "@ax-code/sdk/v2"
+
+const { useDialog } = await import("../src/cli/tui/ui/dialog")
+const { DialogConfirm } = await import("../src/cli/tui/ui/dialog-confirm")
+const { DialogAlert } = await import("../src/cli/tui/ui/dialog-alert")
+let footerDialog: ReturnType<typeof useDialog> | undefined
+;(globalThis as { __AX_INLINE_CAPTURE__?: () => void }).__AX_INLINE_CAPTURE__ = () => {
+  try {
+    footerDialog = useDialog()
+  } catch {
+    /* Sync also runs above the dialog provider. */
+  }
+}
 
 function agent(name: string, extra: Partial<Agent> = {}): Agent {
   return { name, mode: "primary", native: true, tier: "core", permission: [], options: {}, ...extra } as Agent
@@ -233,6 +246,45 @@ try {
   await until(() => setup.captureCharFrame().includes("Ask anything"), "Prompt did not mount")
   assert.equal(setup.renderer.footerHeight, 4)
   assert(setup.captureCharFrame().includes("queued 0"), "Status row is clipped")
+  setup.mockInput.pressKey("p", { ctrl: true })
+  await until(() => setup.captureCharFrame().includes("Commands"), "Footer command palette missing")
+  await setup.mockInput.typeText("Switch model")
+  setup.mockInput.pressEnter()
+  await until(() => setup.captureCharFrame().includes("Coder"), "Footer model picker missing")
+  setup.mockInput.pressEscape()
+  await until(() => setup.captureCharFrame().includes("Ask anything"), "Dialog did not restore Prompt")
+  setup.mockInput.pressKey("p", { ctrl: true })
+  await until(() => setup.captureCharFrame().includes("Commands"), "Command palette did not reopen")
+  await setup.mockInput.typeText("Switch agent")
+  setup.mockInput.pressEnter()
+  await until(
+    () => setup.captureCharFrame().includes("build") && !setup.captureCharFrame().includes("Switch agent"),
+    "Footer agent picker missing",
+  )
+  setup.mockInput.pressKey("c", { ctrl: true })
+  await until(() => setup.captureCharFrame().includes("Ask anything"), "Ctrl+C did not close dialog")
+  assert(footerDialog, "Inline dialog context was not captured")
+  const confirmation = DialogConfirm.show(footerDialog, "Footer confirm check", "A small confirmation")
+  await until(() => setup.captureCharFrame().includes("Footer confirm check"), "Footer confirmation missing")
+  setup.mockInput.pressEnter()
+  assert.equal(await confirmation, true)
+  const alert = DialogAlert.show(footerDialog, "Footer alert check", "A small alert")
+  await until(() => setup.captureCharFrame().includes("Footer alert check"), "Footer alert missing")
+  setup.mockInput.pressEnter()
+  await alert
+  let unsupportedMounted = false
+  let unavailableClosed = false
+  footerDialog.replace(
+    () => {
+      unsupportedMounted = true
+      throw new Error("Unsupported overlay mounted")
+    },
+    () => {
+      unavailableClosed = true
+    },
+  )
+  await until(() => committed.includes("full-screen"), "Unsupported dialog hint missing")
+  assert(!unsupportedMounted && unavailableClosed, "Unsupported dialog bypassed admission policy")
   setStore("message", sid, [user])
   setStore("part", user.id, [
     { id: "prt_user", sessionID: sid, messageID: user.id, type: "text", text: "Explain inline mode" },
@@ -251,6 +303,51 @@ try {
   setStore("message", sid, [user, { ...answer, time: { created: 2, completed: 5 } } as Message])
   setStore("session_status", sid, { type: "idle" })
   await until(() => committed.includes("Tokens:"), "Turn did not finish")
+  // Real permission/question components own focus, submit once, and remove locally.
+  await setup.mockInput.typeText("Saved draft")
+  for (const [id, permission, deny] of [
+    ["per_allow", "bash", false],
+    ["per_deny", "edit", true],
+  ] as const) {
+    setStore("permission", sid, [{ id, sessionID: sid, permission, patterns: ["demo"], always: [], metadata: {} }])
+    await until(() => setup.captureCharFrame().includes("Permission"), "Permission footer missing")
+    if (!deny) {
+      setup.mockInput.pressKey("ARROW_RIGHT")
+      await until(() => setup.captureCharFrame().includes("\u203a Reject"), "Permission selection did not move")
+      const nested = DialogAlert.show(footerDialog, "Nested alert", "Keep permission state")
+      await until(() => setup.captureCharFrame().includes("Nested alert"), "Nested footer dialog missing")
+      setup.mockInput.pressEnter()
+      await nested
+      await until(() => setup.captureCharFrame().includes("\u203a Reject"), "Dialog reset permission state")
+      setup.mockInput.pressKey("ARROW_LEFT")
+    }
+    await setup.mockInput.typeText("x")
+    if (deny) setup.mockInput.pressKey("c", { ctrl: true })
+    else setup.mockInput.pressEnter()
+    await until(() => committed.includes(deny ? "Denied edit" : "Allowed bash once"), "Decision record missing")
+    assert.equal(store.permission[sid]?.length ?? 0, 0)
+  }
+  setStore("question", sid, [
+    {
+      id: "que_check",
+      sessionID: sid,
+      questions: [
+        {
+          header: "Pick",
+          question: "Choose safely",
+          options: [{ label: "Yes", description: "Continue" }],
+          custom: false,
+        },
+      ],
+    },
+  ])
+  await until(() => setup.captureCharFrame().includes("Choose safely"), "Question footer missing")
+  setup.mockInput.pressKey("RETURN")
+  await until(() => committed.includes("Answered question"), "Question record missing")
+  assert(setup.captureCharFrame().includes("Saved draft"), "Modal input changed the saved draft")
+  assert(!setup.captureCharFrame().includes("Saved draftx"), "Permission leaked input to Prompt")
+  // Clear the saved draft before checking multi-line growth.
+  setup.mockInput.pressKey("c", { ctrl: true })
   // Replayed store snapshots must not replay already-committed blocks.
   for (let i = 0; i < 3; i++) {
     setStore("part", answer.id, [part(full, true), tool("prt_tool1", "First tool"), tool("prt_tool2", "Second tool")])

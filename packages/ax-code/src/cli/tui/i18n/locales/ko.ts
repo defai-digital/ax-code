@@ -1250,4 +1250,11 @@ export const messages = {
   "ui.firstToken": "\uccab \ud1a0\ud070",
   "ui.queuedCommandBehindTurn":
     "{command}\uc744(\ub97c) \uc2e4\ud589 \uc911\uc778 \ud134 \ub4a4 \ub300\uae30\uc5f4\uc5d0 \ub123\uc5c8\uc2b5\ub2c8\ub2e4 \u2014 /queue\ub97c \uc5f4\uc5b4 \uad00\ub9ac\ud558\uc138\uc694",
+  "ui.inlineAllowedOnce": "{permission} \ud55c \ubc88 \ud5c8\uc6a9",
+  "ui.inlineAllowedAlways": "{permission} \ud56d\uc0c1 \ud5c8\uc6a9",
+  "ui.inlineDenied": "{permission} \uac70\ubd80",
+  "ui.inlineQuestionAnswered": "\uc9c8\ubb38\uc5d0 \ub2f5\ubcc0\ud568",
+  "ui.inlineQuestionDismissed": "\uc9c8\ubb38 \ub2eb\uc74c",
+  "ui.inlineMoreLines": "... {count}\uc904 \ub354 \uc788\uc74c",
+  "ui.inlineImagePlaceholder": "[\uc774\ubbf8\uc9c0: {name}]",
 } satisfies Dictionary

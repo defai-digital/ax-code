@@ -1,22 +1,23 @@
 import type { CliRenderer, CliRendererConfig } from "ax-tui"
 import type { TuiRenderProfile } from "../renderer"
 import { destroyTuiRenderer } from "../renderer"
-import { flushTuiStdout, restoreTuiStdinMode } from "../terminal-cleanup"
+import { flushTuiStdout, restoreTuiStdinMode, resetTuiTerminalState } from "../terminal-cleanup"
 import { registerTuiTerminalLifecycle } from "../util/lifecycle"
 
-export function inlineFooterHeight(draftRows: number, terminalHeight: number) {
-  return Math.max(1, Math.min(Math.max(4, Math.min(6, draftRows + 3)), terminalHeight - 1))
+export function inlineFooterHeight(draftRows: number, terminalHeight: number, expanded = false) {
+  return Math.max(1, Math.min(Math.max(4, Math.min(expanded ? terminalHeight : 6, draftRows + 3)), terminalHeight - 1))
 }
 
 export function inlineRenderOptions(): Partial<CliRendererConfig> {
-  return { footerHeight: 4, externalOutputMode: "capture-stdout", clearOnShutdown: false }
+  return { exitSignals: [], footerHeight: 4, externalOutputMode: "capture-stdout", clearOnShutdown: false }
 }
 
 export function createInlineLifecycle(renderer: CliRenderer, profile: TuiRenderProfile, flush: () => Promise<void>) {
   let task: Promise<void> | undefined
   let rows = 1
+  let expanded = false
   const resize = () => {
-    if (!renderer.isDestroyed) renderer.footerHeight = inlineFooterHeight(rows, renderer.terminalHeight)
+    if (!renderer.isDestroyed) renderer.footerHeight = inlineFooterHeight(rows, renderer.terminalHeight, expanded)
   }
   renderer.on("resize", resize)
   const close = () =>
@@ -40,11 +41,16 @@ export function createInlineLifecycle(renderer: CliRenderer, profile: TuiRenderP
           renderer.screenMode = "main-screen"
         })
         await attempt(() => destroyTuiRenderer(renderer, profile))
-        await attempt(() => {
-          process.stdout.write("\r\n")
-        })
-        await attempt(() => flushTuiStdout())
       }
+      // Native signal handlers may destroy the renderer before our async drain.
+      // Restore protocols even when destruction has already happened.
+      await attempt(() => {
+        resetTuiTerminalState({ screenMode: "split-footer", kittyKeyboard: profile.useKittyKeyboard })
+      })
+      await attempt(() => {
+        process.stdout.write("\r\n")
+      })
+      await attempt(() => flushTuiStdout())
       restoreTuiStdinMode()
       unregister()
       if (failure) throw failure
@@ -52,7 +58,8 @@ export function createInlineLifecycle(renderer: CliRenderer, profile: TuiRenderP
   const unregister = registerTuiTerminalLifecycle({ profile, close })
   return {
     close,
-    resize(draftRows: number) {
+    resize(draftRows: number, expand = false) {
+      expanded = expand
       rows = draftRows
       resize()
     },

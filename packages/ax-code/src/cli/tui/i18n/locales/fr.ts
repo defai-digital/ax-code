@@ -1164,4 +1164,11 @@ export const messages = {
   "ui.firstToken": "premier token",
   "ui.queuedCommandBehindTurn":
     "{command} a \u00e9t\u00e9 mis en file d\u2019attente derri\u00e8re le tour en cours \u2014 ouvrez /queue pour le g\u00e9rer",
+  "ui.inlineAllowedOnce": "{permission} autoris\u00e9 une fois",
+  "ui.inlineAllowedAlways": "{permission} toujours autoris\u00e9",
+  "ui.inlineDenied": "{permission} refus\u00e9",
+  "ui.inlineQuestionAnswered": "Question r\u00e9pondue",
+  "ui.inlineQuestionDismissed": "Question ferm\u00e9e",
+  "ui.inlineMoreLines": "... {count} lignes de plus",
+  "ui.inlineImagePlaceholder": "[illustration : {name}]",
 } satisfies Dictionary

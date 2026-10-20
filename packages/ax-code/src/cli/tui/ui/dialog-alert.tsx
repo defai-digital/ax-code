@@ -57,6 +57,7 @@ DialogAlert.show = (dialog: DialogContext, title: string, message: string) => {
     dialog.replace(
       () => <DialogAlert title={title} message={message} onConfirm={() => resolve()} />,
       () => resolve(),
+      "alert",
     )
   })
 }

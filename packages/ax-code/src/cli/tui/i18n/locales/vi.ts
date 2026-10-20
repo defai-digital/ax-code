@@ -1223,4 +1223,11 @@ export const messages = {
   "ui.firstToken": "token \u0111\u1ea7u ti\u00ean",
   "ui.queuedCommandBehindTurn":
     "{command} \u0111\u00e3 \u0111\u01b0\u1ee3c x\u1ebfp h\u00e0ng sau l\u01b0\u1ee3t \u0111ang ch\u1ea1y \u2014 m\u1edf /queue \u0111\u1ec3 qu\u1ea3n l\u00fd",
+  "ui.inlineAllowedOnce": "\u0110\u00e3 cho ph\u00e9p {permission} m\u1ed9t l\u1ea7n",
+  "ui.inlineAllowedAlways": "Lu\u00f4n cho ph\u00e9p {permission}",
+  "ui.inlineDenied": "\u0110\u00e3 t\u1eeb ch\u1ed1i {permission}",
+  "ui.inlineQuestionAnswered": "\u0110\u00e3 tr\u1ea3 l\u1eddi c\u00e2u h\u1ecfi",
+  "ui.inlineQuestionDismissed": "\u0110\u00e3 \u0111\u00f3ng c\u00e2u h\u1ecfi",
+  "ui.inlineMoreLines": "... c\u00f2n {count} d\u00f2ng",
+  "ui.inlineImagePlaceholder": "[h\u00ecnh \u1ea3nh: {name}]",
 } satisfies Dictionary

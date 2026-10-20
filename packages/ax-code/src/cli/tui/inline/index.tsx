@@ -27,8 +27,10 @@ import { LocalProvider, useLocal } from "../context/local"
 import { KeybindProvider } from "../context/keybind"
 import { PromptStashProvider } from "../component/prompt/stash"
 import { AxEngineDownloadsProvider } from "../context/ax-engine-downloads"
-import { DialogProvider } from "../ui/dialog"
-import { CommandProvider } from "../component/dialog-command"
+import { DialogProvider, useDialog } from "../ui/dialog"
+import { createTuiDialogLoaders } from "../tui-dialogs"
+import { useToast } from "../ui/toast"
+import { CommandProvider, useCommandDialog } from "../component/dialog-command"
 import { FrecencyProvider } from "../component/prompt/frecency"
 import { PromptHistoryProvider } from "../component/prompt/history"
 import { PromptRefProvider } from "../context/prompt"
@@ -119,7 +121,7 @@ export function InlineRoot(props: { input: TuiInput; profile: TuiRenderProfile; 
   )
 }
 
-/** Dialogs do not fit the footer yet; each attempt leaves a translated hint in scrollback. */
+/** Unsupported dialogs leave a translated hint without mounting an overlay. */
 function InlineDialogProvider(props: { onUnavailable: (text: string) => void; children: JSX.Element }) {
   const t = useLanguage().t
   return (
@@ -133,6 +135,7 @@ function InlineSession(props: {
   queue: ReturnType<typeof createCommitQueue<TranscriptBlock>>
   lifecycle: ReturnType<typeof createInlineLifecycle>
 }) {
+  const dialog = useDialog()
   const sync = useSync()
   const args = useArgs()
   const route = useRoute()
@@ -146,18 +149,57 @@ function InlineSession(props: {
     onCleanup(sdk.event.on(event, () => refreshQueue((value) => value + 1)))
   }
   const t = useLanguage().t
+  const commands = useCommandDialog()
+  const dialogs = createTuiDialogLoaders({
+    dialog,
+    toast: useToast(),
+    variantCount: () => 0,
+    currentModelName: () => local.model.current()?.modelID,
+  })
+  commands.register(() => [
+    {
+      title: t("command.switchModel"),
+      value: "model.list",
+      keybind: "model_list",
+      slash: { name: "model" },
+      onSelect: () => {
+        void dialogs.showModelDialog()
+      },
+    },
+    {
+      title: t("command.switchAgent"),
+      value: "agent.list",
+      keybind: "agent_list",
+      slash: { name: "agent" },
+      onSelect: () => {
+        void dialogs.showAgentDialog()
+      },
+    },
+  ])
   const projector = createTranscriptProjector({
     sessionMarker: (id) => t("ui.inlineSessionMarker", { id: singleLine(id) }),
     revertMarker: (id) => t("ui.inlineRevertMarker", { id: singleLine(id) }),
+    imagePlaceholder: (name) => t("ui.inlineImagePlaceholder", { name }),
     compactionMarker: () => t("ui.inlineCompactionMarker"),
-    pending: (kind) => t(kind === "permission" ? "ui.inlinePermissionPending" : "ui.inlineQuestionPending"),
   })
   const [preview, setPreview] = createSignal("")
   const [rows, setRows] = createSignal(1)
   const sessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
+  const expanded = () =>
+    !!(
+      sync.data.permission[sessionID() ?? ""]?.length ||
+      sync.data.question[sessionID() ?? ""]?.length ||
+      dialog.stack.length
+    )
+  const footerRows = () => {
+    if (dialog.stack.length || sync.data.question[sessionID() ?? ""]?.length) return 20
+    const permission = sync.data.permission[sessionID() ?? ""]?.[0]
+    if (permission) return permission.metadata?.hookRewritten ? 18 : 13
+    return rows() + Number(!!preview())
+  }
   const height = createMemo(() => {
     dimensions() // Resize notifications carry footer geometry, not physical terminal height.
-    return inlineFooterHeight(rows() + Number(!!preview()), renderer.terminalHeight)
+    return inlineFooterHeight(footerRows(), renderer.terminalHeight, expanded())
   })
   // Reconnect/attach needs the durable snapshot as well as live queue events.
   createEffect(() => {
@@ -216,7 +258,7 @@ function InlineSession(props: {
     }),
   )
   createEffect(() => {
-    props.lifecycle.resize(rows() + Number(!!preview()))
+    props.lifecycle.resize(footerRows(), expanded())
   })
   createEffect(() => {
     const id = sessionID()
@@ -231,10 +273,6 @@ function InlineSession(props: {
       status: sync.data.session_status[id],
       error: sync.data.session_error[id],
       revert: sync.data.session.find((item) => item.id === id)?.revert?.messageID,
-      requests: [
-        ...(sync.data.permission[id] ?? []).map((request) => ({ id: request.id, kind: "permission" as const })),
-        ...(sync.data.question[id] ?? []).map((request) => ({ id: request.id, kind: "question" as const })),
-      ],
     })
     let tail = ""
     for (const block of blocks) {
@@ -254,6 +292,7 @@ function InlineSession(props: {
   onMount(() => prompt?.focus())
   return (
     <InlineFooter
+      onDecision={(id, text) => props.queue.enqueue({ key: `decision:${id}`, kind: "notice", text })}
       sessionID={sessionID()}
       preview={preview()}
       height={height()}

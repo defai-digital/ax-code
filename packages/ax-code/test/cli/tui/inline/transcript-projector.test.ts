@@ -98,7 +98,7 @@ describe("inline transcript projection", () => {
     expect(back[0].text).toContain("Session s")
   })
 
-  test("pending requests are noticed once and remain pending", () => {
+  test("pending requests belong to the footer and never append a full-screen notice", () => {
     const projector = createTranscriptProjector()
     const input = {
       ...snapshot(),
@@ -112,10 +112,7 @@ describe("inline transcript projection", () => {
         .project(input)
         .filter((block) => block.kind === "notice")
         .map((block) => block.text),
-    ).toEqual([
-      "Permission request pending: answer it in ax-code --screen full",
-      "Question pending: answer it in ax-code --screen full",
-    ])
+    ).toEqual([])
     expect(projector.project(input)).toEqual([])
     expect(input.requests).toHaveLength(2)
   })

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import type { CliRenderer } from "ax-tui"
-import { createInlineLifecycle, inlineFooterHeight } from "../../../../src/cli/tui/inline/lifecycle"
+import {
+  createInlineLifecycle,
+  inlineFooterHeight,
+  inlineRenderOptions,
+} from "../../../../src/cli/tui/inline/lifecycle"
 import { resolveTuiRenderProfile } from "../../../../src/cli/tui/renderer"
 import { resetActiveTuiTerminal, setTuiTerminalProfile } from "../../../../src/cli/tui/util/lifecycle"
 
@@ -45,6 +49,10 @@ function fixture(failCapture = false) {
 }
 
 describe("inline lifecycle", () => {
+  test("app owns signal teardown so native destruction cannot preempt drain", () => {
+    expect(inlineRenderOptions().exitSignals).toEqual([])
+  })
+
   test("flushes before capture stop, mode transition, destruction and a fresh line", async () => {
     const { renderer, events, bytes, listeners } = fixture()
     const barrier = Promise.withResolvers<void>()

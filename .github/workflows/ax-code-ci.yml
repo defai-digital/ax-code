@@ -568,6 +568,12 @@ jobs:
           pnpm --dir packages/ax-code run check:history-scroll-anchor
           pnpm --dir packages/ax-code run check:inline-frontend
 
+      # PTY signal delivery and multiplexer availability vary across hosted runners.
+      # Keep evidence visible without blocking until the Linux matrix is qualified.
+      - name: Inline TUI PTY verification
+        continue-on-error: true
+        run: pnpm --dir packages/ax-code run check:inline-pty
+
       - name: TUI startup smoke
         run: pnpm --dir packages/ax-code run tui:startup-smoke -- --bin "$GITHUB_WORKSPACE/.tmp/tui-smoke-bin/ax-code"
 
