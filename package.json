@@ -28,8 +28,6 @@
     "check:no-cost": "tsx script/check-no-cost.ts",
     "precheck:openapi": "node script/only-allow-pnpm.mjs",
     "check:openapi": "pnpm --dir packages/sdk/js run validate:openapi",
-    "precheck:sdk-jsr": "node script/only-allow-pnpm.mjs",
-    "check:sdk-jsr": "pnpm --dir packages/sdk/js run build && pnpm --dir packages/sdk/js run check:jsr",
     "precheck:self-scan": "node script/only-allow-pnpm.mjs",
     "check:self-scan": "pnpm --dir packages/ax-code run check:self-scan",
     "precheck:migrations": "node script/only-allow-pnpm.mjs",
@@ -63,7 +61,9 @@
     "pretest:scripts": "node script/only-allow-pnpm.mjs",
     "test:scripts": "vitest run",
     "pretest": "node script/only-allow-pnpm.mjs",
-    "test": "echo 'do not run tests from root (use test:scripts for root script suites)' && exit 1"
+    "test": "echo 'do not run tests from root (use test:scripts for root script suites)' && exit 1",
+    "precheck:sdk-package": "node script/only-allow-pnpm.mjs",
+    "check:sdk-package": "pnpm --dir packages/sdk/js run build && pnpm --dir packages/sdk/js run pack:github && pnpm --dir packages/sdk/js run test:tarball"
   },
   "devDependencies": {
     "@actions/artifact": "5.0.1",

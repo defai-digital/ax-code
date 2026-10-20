@@ -1,9 +1,11 @@
-import { spawn } from "node:child_process"
+import { execFileSync, spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+
+import { artifactDir, pack, tarballName } from "./github-package.mjs"
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url))
 const repoRoot = path.resolve(packageRoot, "../../..")
@@ -62,20 +64,19 @@ async function copyDependency(name: string, from: string): Promise<string> {
 
 try {
   await fs.mkdir(installedRoot, { recursive: true })
-  await fs.cp(path.join(packageRoot, "dist"), path.join(installedRoot, "dist"), { recursive: true })
-  const dependencies: Record<string, string> = {}
-  for (const name of Object.keys(manifest.dependencies)) dependencies[name] = await copyDependency(name, packageRoot)
+  const artifact = process.env.AX_CODE_SDK_CONSUMER_ARTIFACT
+  if (!artifact) await pack()
+  execFileSync("tar", [
+    "-xzf",
+    artifact ?? path.join(artifactDir, tarballName(manifest.version)),
+    "--strip-components=1",
+    "-C",
+    installedRoot,
+  ])
+  const packed = JSON.parse(await fs.readFile(path.join(installedRoot, "package.json"), "utf8"))
+  if (packed.name !== publicName || packed.version !== manifest.version) throw new Error("Packed SDK identity mismatch")
+  for (const name of Object.keys(manifest.dependencies)) await copyDependency(name, packageRoot)
   await copyDependency("@types/node", packageRoot)
-  await fs.writeFile(
-    path.join(installedRoot, "package.json"),
-    JSON.stringify({
-      name: publicName,
-      version: manifest.version,
-      type: "module",
-      exports: manifest.exports,
-      dependencies,
-    }),
-  )
   await fs.writeFile(path.join(consumerRoot, "package.json"), JSON.stringify({ type: "module" }))
   await fs.writeFile(
     path.join(consumerRoot, "consumer.ts"),

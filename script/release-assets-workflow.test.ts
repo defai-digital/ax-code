@@ -104,11 +104,11 @@ describe("release asset workflow", () => {
   })
 
   test("blocks SDK publication on dependency vulnerabilities", () => {
-    const sdk = readFileSync(".github/workflows/sdk-jsr.yml", "utf8")
+    const sdk = readFileSync(".github/workflows/sdk-github-packages.yml", "utf8")
     const install = sdk.indexOf("pnpm install --frozen-lockfile")
     const scan = sdk.indexOf("- name: Security scan")
     const next = sdk.indexOf("- name:", scan + 1)
-    const publish = sdk.indexOf("pnpm --dir packages/sdk/js run publish:jsr")
+    const publish = sdk.indexOf("pnpm publish")
     expect(install).toBeGreaterThan(-1)
     expect(scan).toBeGreaterThan(install)
     expect(next).toBeGreaterThan(scan)
@@ -120,14 +120,14 @@ describe("release asset workflow", () => {
   })
 
   test("requires registry verification after a possibly partial SDK publication", () => {
-    const sdk = readFileSync(".github/workflows/sdk-jsr.yml", "utf8")
-    const publish = sdk.indexOf("- name: Publish JSR package with provenance")
-    const verify = sdk.indexOf("- name: Verify published SDK and provenance")
+    const sdk = readFileSync(".github/workflows/sdk-github-packages.yml", "utf8")
+    const publish = sdk.indexOf("- name: Publish SDK tarball")
+    const verify = sdk.indexOf("- name: Verify published SDK bytes and integrity")
     expect(publish).toBeGreaterThan(-1)
     expect(verify).toBeGreaterThan(publish)
     expect(sdk.slice(publish, verify)).toContain("continue-on-error: true")
-    expect(sdk.slice(verify)).toContain("uses: ./.github/actions/sdk-publication")
-    expect(sdk.slice(verify)).not.toMatch(/continue-on-error:|if:/)
+    expect(sdk.slice(verify)).toContain("node .github/scripts/sdk-package-registry.mjs verify")
+    expect(sdk.slice(verify, sdk.indexOf("\n  consumer:"))).not.toMatch(/continue-on-error:|if:/)
   })
 
   test("requires every supported archive and detached signature before publication", () => {

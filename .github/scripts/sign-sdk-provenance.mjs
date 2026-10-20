@@ -2,12 +2,12 @@ import assert from "node:assert/strict"
 import { verify } from "sigstore"
 import { bundleToJSON } from "@sigstore/bundle"
 import { DSSEBundleBuilder, FulcioSigner, RekorWitness } from "@sigstore/sign"
-import { toJsrBundle, versionFromTag } from "./jsr-provenance-recovery.mjs"
+import { validateTag } from "./sdk-package-registry.mjs"
 
 export function signingPolicy(workflowRef) {
   assert.match(
     workflowRef,
-    /^defai-digital\/ax-code\/\.github\/workflows\/(?:sdk-jsr|sdk-provenance-qualification)\.yml@refs\/(?:heads\/main|tags\/sdk-v\d+\.\d+\.\d+)$/,
+    /^defai-digital\/ax-code\/\.github\/workflows\/sdk-github-packages\.yml@refs\/(?:heads\/main|tags\/sdk-v\d+\.\d+\.\d+)$/,
     "Unexpected SDK signing workflow identity",
   )
   const identity = `https://github.com/${workflowRef}`
@@ -17,17 +17,17 @@ export function signingPolicy(workflowRef) {
   }
 }
 
-// Use the same public Fulcio/Rekor trust services as normal JSR publication.
+// Use public Fulcio/Rekor trust services for detached SDK provenance.
 // This does not depend on GitHub's paid private-repository attestation storage.
 // Only package digests and workflow provenance enter the transparency log.
-export async function signJsrProvenance({ version, digest, predicate, workflowRef, identityToken }) {
-  versionFromTag(`sdk-v${version}`)
+export async function signSdkProvenance({ version, digest, predicate, workflowRef, identityToken }) {
+  validateTag(`sdk-v${version}`, version)
   assert.match(digest, /^[0-9a-f]{64}$/)
   assert(predicate && typeof predicate === "object" && !Array.isArray(predicate))
   const policy = signingPolicy(workflowRef)
   const statement = {
     _type: "https://in-toto.io/Statement/v1",
-    subject: [{ name: `pkg:jsr/@defai-digital/ax-code-sdk@${version}`, digest: { sha256: digest } }],
+    subject: [{ name: `pkg:npm/%40defai-digital/ax-code-sdk@${version}`, digest: { sha256: digest } }],
     predicateType: "https://slsa.dev/provenance/v1",
     predicate,
   }
@@ -55,7 +55,5 @@ export async function signJsrProvenance({ version, digest, predicate, workflowRe
   )
   // For DSSE bundles the verification options are the second argument.
   await verify(bundle, policy)
-  // Validate the exact package subject and legacy conversion before upload.
-  await toJsrBundle(bundle, version, digest)
   return bundle
 }

@@ -2,12 +2,12 @@ import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import { describe, expect, test } from "vitest"
 
-type JsrManifest = {
+type SdkManifest = {
   exports: Record<string, string>
 }
 
 const packageRoot = resolve(import.meta.dirname, "..")
-const jsrJson = JSON.parse(readFileSync(resolve(packageRoot, "jsr.json"), "utf8")) as JsrManifest
+const sdkManifest = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as SdkManifest
 
 const EXPORT_RE =
   /^export (?:declare )?(?:async )?(?:abstract class|class|interface|type|const|let|var|enum|function|namespace) ([A-Za-z0-9_]+)/
@@ -88,10 +88,10 @@ function analyzeFile(file: string, seen = new Set<string>()): SymbolRecord[] {
   return out
 }
 
-describe("JSR documentation score contract", () => {
+describe("SDK documentation contract", () => {
   test("every named entrypoint has a module doc with @module", () => {
     const missing: string[] = []
-    for (const [entry, target] of Object.entries(jsrJson.exports)) {
+    for (const [entry, target] of Object.entries(sdkManifest.exports)) {
       if (entry === ".") continue
       const source = sourceForExport(target)
       expect(existsSync(source), `missing source for ${entry}: ${source}`).toBe(true)
@@ -102,17 +102,17 @@ describe("JSR documentation score contract", () => {
     expect(missing, `entrypoints missing @module: ${missing.join(", ")}`).toEqual([])
   })
 
-  test("keeps the default entrypoint free of @module so JSR Overview shows README.md", () => {
-    const source = sourceForExport(jsrJson.exports["."])
+  test("keeps the default entrypoint free of @module and documents its public surface", () => {
+    const source = sourceForExport(sdkManifest.exports["."])
     const header = readFileSync(source, "utf8").slice(0, 1200)
     expect(header).not.toMatch(/@module\b/)
     expect(header.startsWith("/**")).toBe(true)
   })
 
-  test("documents at least 80% of exported symbols across JSR entrypoints", () => {
+  test("documents at least 80% of exported symbols across SDK entrypoints", () => {
     const documented: SymbolRecord[] = []
     const undocumented: SymbolRecord[] = []
-    for (const target of Object.values(jsrJson.exports)) {
+    for (const target of Object.values(sdkManifest.exports)) {
       for (const symbol of analyzeFile(sourceForExport(target))) {
         if (symbol.documented) documented.push(symbol)
         else undocumented.push(symbol)
@@ -133,7 +133,7 @@ describe("JSR documentation score contract", () => {
   test("documents every handwritten public export", () => {
     const generated = new Set(["./v2", "./v2/client", "./v2/gen/client"])
     const missing: string[] = []
-    for (const [entry, target] of Object.entries(jsrJson.exports)) {
+    for (const [entry, target] of Object.entries(sdkManifest.exports)) {
       if (generated.has(entry)) continue
       for (const symbol of analyzeFile(sourceForExport(target))) {
         if (!symbol.documented) missing.push(`${entry} ${symbol.file}#${symbol.name}`)
@@ -142,16 +142,17 @@ describe("JSR documentation score contract", () => {
     expect(missing, `undocumented handwritten exports:\n${missing.join("\n")}`).toEqual([])
   })
 
-  test("README is the public JSR overview and contains an install example", () => {
+  test("README documents authenticated package installation and contains an install example", () => {
     const readme = readFileSync(resolve(packageRoot, "README.md"), "utf8")
     expect(readme).toContain("# @defai-digital/ax-code-sdk")
-    expect(readme).toContain("pnpm add jsr:@defai-digital/ax-code-sdk@")
+    expect(readme).toContain("pnpm add @defai-digital/ax-code-sdk@")
     expect(readme).toContain("```ts")
     expect(readme).not.toMatch(/first public version has not been published/i)
     expect(readme).not.toMatch(/^Status:/m)
     expect(readme).toContain("https://ax-code.app/docs-assets/sdk/examples/headless-app.ts")
     expect(readme).toContain("https://ax-code.app/docs-assets/sdk/examples/programmatic.ts")
     expect(readme).toContain("https://ax-code.app/docs-assets/sdk/headless.proto")
-    expect(readme).not.toContain("https://github.com/defai-digital/ax-code")
+    expect(readme).toContain("npm.pkg.github.com")
+    expect(readme).toContain("read:packages")
   })
 })

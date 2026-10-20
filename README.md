@@ -541,7 +541,7 @@ pnpm + Turbo monorepo.
 | `packages/ax-wiki/`  | Wiki compiler; keep publishable (no `"private": true`)                                                              |
 | `docs/`              | Public, user-facing documentation only — PRDs/ADRs/specs belong in `.internal/`                                     |
 | `script/`            | Repo scripts: format, structure, release, SDK generation, repo-structure checks                                     |
-| `.github/workflows/` | CI: `ax-code-ci`, `release`, `repo-structure`, `codeql`, `models-drift`, `sdk-jsr`, and more                        |
+| `.github/workflows/` | CI: `ax-code-ci`, `release`, `repo-structure`, `codeql`, `models-drift`, `sdk-github-packages`, and more            |
 
 ### Verify before claiming done
 

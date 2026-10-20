@@ -41,7 +41,6 @@ catalog:
   "fuzzysort": "3.1.0"
   "hono": "4.13.13"
   "hono-openapi": "1.1.2"
-  "jsr": "0.14.3"
   "luxon": "3.6.1"
   "remeda": "2.50.0"
   "semver": "7.8.5"

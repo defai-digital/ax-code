@@ -79,6 +79,6 @@ JavaScript is readable and is not a confidentiality boundary.
 
 Signed installers, archives and updates use `download.ax-code.com`; the shared
 public Homebrew tap is `defai-digital/tap`. The public TypeScript SDK remains
-`@defai-digital/ax-code-sdk` on JSR. See the [installation guide](install-runtime.md),
+`@defai-digital/ax-code-sdk` on GitHub Packages (authentication required). See the [installation guide](install-runtime.md),
 [upgrade guide](upgrade.md) and [public documentation](https://ax-code.app/en/docs/).
 Source-build instructions require an authorized checkout.

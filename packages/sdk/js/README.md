@@ -6,21 +6,26 @@ Use it to supervise a compatible signed AX Code runtime through typed **headless
 
 ## Install
 
-```bash
-pnpm add jsr:@defai-digital/ax-code-sdk@2.6.39
+The SDK is distributed through **GitHub Packages** as a private package for internal projects. Configure the consuming project's `.npmrc` with a scoped registry and an environment placeholder:
+
+```ini
+@defai-digital:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
 ```
 
-```bash
-deno add jsr:@defai-digital/ax-code-sdk@2.6.39
-```
+Set `NODE_AUTH_TOKEN` through your secret manager to a classic GitHub PAT with `read:packages` and access to the package. Never commit a token. Other npm scopes continue to use their existing registry.
 
 ```bash
-npx jsr add @defai-digital/ax-code-sdk@2.6.39
+pnpm add @defai-digital/ax-code-sdk@2.6.39
 ```
+
+For GitHub Actions, grant the consuming repository access in the package's **Manage Actions access** settings, declare `permissions: packages: read`, and pass `${{ secrets.GITHUB_TOKEN }}` as `NODE_AUTH_TOKEN` for the install step. A token from another repository has no implicit package access. New packages inherit access from this private source repository by default; verify access before switching a consumer's lockfile.
+
+SDK release assets include the tarball, its SHA-512 integrity receipt, and a detached Sigstore provenance bundle. Publication verifies authenticated registry bytes and a separate job installs the package with read-only credentials. These assets describe the SDK source tag and the publisher revision separately. Historical JSR versions remain historical; new SDK releases use GitHub Packages.
 
 Requires **Node.js 26+** (or Deno with Node compatibility). Older Node.js versions are unsupported. Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`. SDK and runtime versions are independent. Check the runtime capability protocol before enabling app features; an SDK version check alone does not establish runtime compatibility.
 
-The workspace package name `@ax-code/sdk` is private to this monorepo. Public consumers always install `@defai-digital/ax-code-sdk` from JSR.
+The workspace package name `@ax-code/sdk` is private to this monorepo. Consumers install `@defai-digital/ax-code-sdk` from GitHub Packages with authentication.
 
 ## Report API migration
 
@@ -41,7 +46,7 @@ Upgrade the report integration and runtime together. Other integration surfaces 
 
 Public applications should use `headless` or `grpc` with a compatible signed AX Code runtime. HTTP/OpenAPI stays behind those SDKs as a fallback and diagnostics layer. Legacy `@defai-digital/ax-code-sdk/v2` subpaths remain for runtime compatibility; new integrations should not start there.
 
-`createAgent()` loads the private `ax-code` source package at call time. The runtime is **not** published on JSR.
+`createAgent()` loads the private `ax-code` source package at call time. The runtime is distributed as a signed executable; its source package remains private.
 
 ## Quick start (headless)
 

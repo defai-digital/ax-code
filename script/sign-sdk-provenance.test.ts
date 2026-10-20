@@ -27,14 +27,9 @@ vi.mock("@sigstore/sign", () => ({
     }
   },
 }))
-vi.mock("../.github/scripts/jsr-provenance-recovery.mjs", async (original) => ({
-  ...(await original<object>()),
-  toJsrBundle: vi.fn(),
-}))
-import { signJsrProvenance, signingPolicy } from "../.github/scripts/sign-jsr-provenance.mjs"
-import { toJsrBundle } from "../.github/scripts/jsr-provenance-recovery.mjs"
+import { signSdkProvenance, signingPolicy } from "../.github/scripts/sign-sdk-provenance.mjs"
 
-const workflowRef = "defai-digital/ax-code/.github/workflows/sdk-jsr.yml@refs/tags/sdk-v2.6.7"
+const workflowRef = "defai-digital/ax-code/.github/workflows/sdk-github-packages.yml@refs/tags/sdk-v2.6.7"
 const input = {
   version: "2.6.7",
   digest: "a".repeat(64),
@@ -55,20 +50,20 @@ describe("free SDK provenance signing", () => {
       cause: { statusCode },
     })
     create.mockRejectedValue(failure)
-    await expect(signJsrProvenance(input)).rejects.toBe(failure)
+    await expect(signSdkProvenance(input)).rejects.toBe(failure)
     expect(create).toHaveBeenCalledTimes(1)
     expect(verify).not.toHaveBeenCalled()
   })
 
-  test("verifies a logged JSR-compatible signature against the exact workflow identity", async () => {
+  test("verifies a logged SDK signature against the exact workflow identity", async () => {
     const bundle = { dsseEnvelope: {} }
     create.mockResolvedValue(bundle)
     verify.mockResolvedValue({})
-    expect(await signJsrProvenance(input)).toBe(bundle)
+    expect(await signSdkProvenance(input)).toBe(bundle)
     const [{ data: bytes, type }] = create.mock.lastCall!
     const statement = await new Response(bytes).json()
     expect(statement.subject).toEqual([
-      { name: "pkg:jsr/@defai-digital/ax-code-sdk@2.6.7", digest: { sha256: input.digest } },
+      { name: "pkg:npm/%40defai-digital/ax-code-sdk@2.6.7", digest: { sha256: input.digest } },
     ])
     expect(statement.predicateType).toBe("https://slsa.dev/provenance/v1")
     expect(type).toBe("application/vnd.in-toto+json")
@@ -76,22 +71,20 @@ describe("free SDK provenance signing", () => {
     expect(await signerOptions.mock.lastCall![0].identityProvider.getToken()).toBe("fixture")
     expect(witnessOptions.mock.lastCall![0]).toMatchObject({ entryType: "intoto", fetchOnConflict: true })
     expect(verify).toHaveBeenLastCalledWith(bundle, signingPolicy(workflowRef))
-    expect(toJsrBundle).toHaveBeenLastCalledWith(bundle, input.version, input.digest)
     const identity = new RegExp(signingPolicy(workflowRef).certificateIdentityURI)
     expect(identity.test(`https://github.com/${workflowRef}`)).toBe(true)
     expect(identity.test(`https://github.com/${workflowRef}-other`)).toBe(false)
   })
   test("fails closed on signature verification and untrusted workflow identities", async () => {
     verify.mockRejectedValueOnce(new Error("identity mismatch"))
-    await expect(signJsrProvenance(input)).rejects.toThrow("identity mismatch")
-    expect(toJsrBundle).not.toHaveBeenCalled()
+    await expect(signSdkProvenance(input)).rejects.toThrow("identity mismatch")
     for (const ref of [
       workflowRef.replace("defai-digital", "other"),
-      workflowRef.replace("sdk-jsr", "release"),
+      workflowRef.replace("sdk-github-packages", "release"),
       workflowRef.replace("tags/sdk-v2.6.7", "heads/feature"),
     ]) {
       expect(() => signingPolicy(ref)).toThrow("Unexpected SDK signing workflow")
     }
-    await expect(signJsrProvenance({ ...input, digest: "bad" })).rejects.toThrow()
+    await expect(signSdkProvenance({ ...input, digest: "bad" })).rejects.toThrow()
   })
 })

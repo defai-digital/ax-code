@@ -1,0 +1,193 @@
+name: Publish SDK to GitHub Packages
+
+on:
+  push:
+    tags:
+      - "sdk-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing immutable SDK tag, for example sdk-v2.6.39
+        required: true
+        type: string
+
+concurrency:
+  group: sdk-github-packages-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AX_CODE_SDK_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  SDK_ARTIFACT_DIR: packages/sdk/js/.tmp/github-package
+
+jobs:
+  publish:
+    if: github.repository == 'defai-digital/ax-code' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/sdk-v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      # Checkout the publisher revision. A manual registry cutover can use a
+      # newer publisher while the API source remains bound to an existing tag.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Setup AX Code JavaScript toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+      - run: pnpm install --frozen-lockfile
+      - name: Security scan
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --format=table
+      - name: Validate immutable SDK source and release tag
+        run: node .github/scripts/sdk-package-registry.mjs source
+      - name: Regenerate SDK
+        run: pnpm --dir packages/sdk/js run build
+      - name: Reject generated SDK drift
+        run: git diff --exit-code -- packages/sdk/openapi.json packages/sdk/js/src/gen packages/sdk/js/src/v2/gen
+      - name: Typecheck SDK
+        run: pnpm --dir packages/sdk/js run typecheck
+      - name: Test SDK
+        run: pnpm --dir packages/sdk/js run test
+      - name: Pack allowlisted SDK and verify isolated tarball consumer
+        run: pnpm --dir packages/sdk/js run test:tarball
+      - name: Sign and verify detached SDK provenance
+        run: |
+          node .github/scripts/sdk-provenance.mjs sign
+          node .github/scripts/sdk-provenance.mjs verify
+      - name: Configure scoped package credentials
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/sdk.npmrc" <<'NPMRC'
+          @defai-digital:registry=https://npm.pkg.github.com
+          //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+          NPMRC
+      - name: Publish SDK tarball
+        continue-on-error: true
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/sdk.npmrc
+        run: |
+          set -euo pipefail
+          SDK_TARBALL="$(node -p "JSON.parse(require('fs').readFileSync(process.env.SDK_ARTIFACT_DIR + '/package-receipt.json')).filename")"
+          pnpm publish "$SDK_ARTIFACT_DIR/$SDK_TARBALL" --registry https://npm.pkg.github.com --access restricted --ignore-scripts --no-git-checks
+      # A duplicate or disconnected upload only succeeds if exact candidate
+      # bytes and SHA-512 integrity can be read back with authentication.
+      - name: Verify published SDK bytes and integrity
+        run: node .github/scripts/sdk-package-registry.mjs verify
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdk-github-package
+          path: ${{ env.SDK_ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: true
+
+  consumer:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdk-github-package
+          path: ${{ env.SDK_ARTIFACT_DIR }}
+      - name: Verify signed candidate and authenticated registry readback
+        run: |
+          node .github/scripts/sdk-provenance.mjs verify
+          node .github/scripts/sdk-package-registry.mjs verify
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install SDK from registry with read-only package access
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SDK_VERSION="$(node -p "require('./packages/sdk/js/package.json').version")"
+          CONSUMER_DIR="$(mktemp -d "$RUNNER_TEMP/sdk-consumer.XXXXXX")"
+          export CONSUMER_DIR
+          export NPM_CONFIG_USERCONFIG="$CONSUMER_DIR/.npmrc"
+          trap 'rm -rf "$CONSUMER_DIR"' EXIT
+          cat > "$CONSUMER_DIR/.npmrc" <<'NPMRC'
+          @defai-digital:registry=https://npm.pkg.github.com
+          //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+          NPMRC
+          printf '{"type":"module","private":true}\n' > "$CONSUMER_DIR/package.json"
+          pnpm --dir "$CONSUMER_DIR" add --ignore-scripts --save-exact "@defai-digital/ax-code-sdk@$SDK_VERSION"
+          pnpm --dir "$CONSUMER_DIR" install --frozen-lockfile --ignore-scripts
+          cd "$CONSUMER_DIR"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs/promises'
+          import assert from 'node:assert/strict'
+          const workspace = JSON.parse(await fs.readFile(process.env.GITHUB_WORKSPACE + '/packages/sdk/js/package.json', 'utf8'))
+          const { SDK_VERSION } = await import('@defai-digital/ax-code-sdk')
+          assert.equal(SDK_VERSION, workspace.version)
+          for (const entry of Object.keys(workspace.exports)) {
+            const spec = '@defai-digital/ax-code-sdk' + (entry === '.' ? '' : entry.slice(1))
+            await import(spec)
+          }
+          const { resolveAxCodeGrpcProtoUrl } = await import('@defai-digital/ax-code-sdk/grpc')
+          assert((await fs.readFile(resolveAxCodeGrpcProtoUrl(), 'utf8')).includes('syntax ='))
+          console.log('Authenticated registry install and frozen lockfile passed')
+          NODE
+      - name: Verify registry tarball declarations and runtime contracts
+        run: pnpm --dir packages/sdk/js run test:tarball
+        env:
+          AX_CODE_SDK_CONSUMER_ARTIFACT: ${{ github.workspace }}/packages/sdk/js/.tmp/github-package/registry-readback.tgz
+
+  release:
+    needs: consumer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdk-github-package
+          path: sdk-package
+      - name: Preserve SDK tarball and detached provenance
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$AX_CODE_SDK_RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$AX_CODE_SDK_RELEASE_TAG" --verify-tag --latest=false --title "SDK ${AX_CODE_SDK_RELEASE_TAG#sdk-v}" --notes "Private GitHub Packages SDK. Source and publisher revisions are recorded in source-receipt.json. Authenticated registry bytes, SHA-512 integrity, detached Sigstore provenance, and a read-only consumer were verified by this workflow."
+          fi
+          # Refuse to overwrite evidence from an existing publication. A rerun
+          # may only retain identical immutable release assets.
+          for asset in sdk-package/*; do
+            name="${asset##*/}"
+            existing="$(mktemp -d)"
+            if gh release download "$AX_CODE_SDK_RELEASE_TAG" --pattern "$name" --dir "$existing" 2>/dev/null; then
+              cmp "$asset" "$existing/$name"
+            else
+              gh release upload "$AX_CODE_SDK_RELEASE_TAG" "$asset"
+            fi
+            rm -rf "$existing"
+          done

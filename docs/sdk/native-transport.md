@@ -28,7 +28,7 @@ The transport is not the dominant latency source for normal agent turns. LLM cal
 ## Contract Shape
 
 The language-neutral contract lives at
-[`packages/sdk/proto/ax_code/v1/headless.proto`](../../packages/sdk/proto/ax_code/v1/headless.proto). The JSR package
+[`packages/sdk/proto/ax_code/v1/headless.proto`](../../packages/sdk/proto/ax_code/v1/headless.proto). The GitHub Packages SDK
 also contains that proto as an asset. TypeScript hosts locate it with `resolveAxCodeGrpcProtoUrl()`; non-JavaScript
 generators should use the canonical repository contract.
 
