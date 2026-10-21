@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.28.2] - 2026-10-21
+
+### Changed
+
+- Publish SDK 2.6.43 with the current server contract.
+- Show redacted WebMCP invocation previews, stable failure reasons, and schema-based invocation templates.
+
+### Fixed
+
+- Reject page-schema regular expressions hidden behind local references or schema dependencies before compilation and approval.
+- Verify browser enrollment against an existing session and its project boundary, including moved sessions and sandboxes.
+- Archive historical sessions without bootstrapping an unavailable project directory.
+
 ## [7.28.1] - 2026-10-21
 
 ### Changed
