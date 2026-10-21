@@ -428,7 +428,7 @@ export namespace SessionRevert {
       partID: session.revert.partID,
     })
     const files = [...new Set(planned.patches.flatMap((patch) => patch.files))]
-    const before = await Snapshot.track()
+    const before = files.length > 0 ? await Snapshot.track({ requireFresh: true }) : undefined
     // Restore only this undo's paths. Snapshot.revert also removes paths absent
     // from the target tree, while a whole-tree checkout leaves deleted files.
     await Snapshot.revert([{ hash: session.revert.snapshot, files }])
