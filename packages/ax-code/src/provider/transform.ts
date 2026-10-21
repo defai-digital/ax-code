@@ -474,6 +474,7 @@ export namespace ProviderTransform {
     providerID: string
     api: { id: string; url?: string }
     family?: string
+    name?: string
   }): boolean {
     // OpenCode also selects the Kimi prompt for official coding providers
     // whose catalog ids are short (`k3`, `k2p7`) and do not contain "kimi".
@@ -485,6 +486,11 @@ export namespace ProviderTransform {
     ) {
       return true
     }
+    // AX Trust's kimiCodingPlanModels and model cards identify these short
+    // API ids as Kimi K3. Require the card's Kimi/Moonshot identity as well:
+    // an unrelated deployment named "k3" must not inherit this dialect.
+    if (/^(?:k3|k3-256k)$/i.test(modelIdFinalSegment(model.api.id)) && /\b(?:kimi|moonshot)\b/i.test(model.name ?? ""))
+      return true
     const ids = [model.providerID, model.api.id, model.id ? modelIdFinalSegment(model.id) : undefined, model.family]
     if (
       ids.some((id) => {
@@ -929,7 +935,8 @@ export namespace ProviderTransform {
       // Synthetic models and SDK-only callers may omit the URL.
     }
     const id = model.api.id.toLowerCase()
-    if (/^qwen3\.8-(?:max|flash)$/.test(id)) return "qwen3.8"
+    const segment = modelIdFinalSegment(id)
+    if (/^qwen3\.8-(?:max|flash)$/.test(segment)) return "qwen3.8"
     // DashScope deploys other vendors with its own enable_thinking dialect.
     if (
       isAlibabaPlanProvider(model.providerID) ||
@@ -939,7 +946,7 @@ export namespace ProviderTransform {
       (host.startsWith("dashscope-") && host.endsWith(".aliyuncs.com"))
     )
       return undefined
-    if (id === "glm-5.3") return "glm5.3"
+    if (/^glm-5\.3(?:-flash)?$/.test(segment)) return "glm5.3"
     if (/^deepseek-(?:v4-(?:pro|flash)|flash)$/.test(id)) return "deepseek-v4"
     if (id === "minimax-m3" || id === "minimax-m2.7") return id
     return undefined

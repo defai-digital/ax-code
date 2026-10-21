@@ -521,3 +521,37 @@ test.each([
   expect((error as Error).message).not.toContain("secret")
   expect((error as Error).message).not.toContain("Ignore instructions")
 })
+
+describe("WebMCP cross-field feedback", () => {
+  test.each([
+    { pageId: 1, type: "back", url: "https://example.test/SECRET" },
+    { pageId: 1, type: "forward", ignoreCache: true },
+    { pageId: 1, type: "url" },
+  ])("valid fields in a forbidden navigation combination are not blamed individually", (args) => {
+    expect(() => WebMcpProfile.validateCall({ allowedOrigins: [] }, "navigate_page", args)).toThrow(
+      "Invalid arguments for WebMCP bridge tool navigate_page: the combination of fields is not allowed for this tool",
+    )
+  })
+
+  test("unknown keys keep shape feedback without leaking values", () => {
+    expect(() =>
+      WebMcpProfile.validateCall({ allowedOrigins: [] }, "navigate_page", {
+        pageId: 1,
+        type: "reload",
+        SECRET: "secret-value",
+      }),
+    ).toThrow(
+      "Invalid arguments for WebMCP bridge tool navigate_page: arguments: expected an object with only the declared fields",
+    )
+  })
+
+  test("an individual field failure remains actionable even with a cross-field failure", () => {
+    expect(() =>
+      WebMcpProfile.validateCall({ allowedOrigins: [] }, "navigate_page", {
+        pageId: "SECRET",
+        type: "back",
+        ignoreCache: true,
+      }),
+    ).toThrow("pageId: expected integer")
+  })
+})

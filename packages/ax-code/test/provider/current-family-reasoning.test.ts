@@ -160,7 +160,7 @@ describe("current-family effort contracts", () => {
     },
   )
 
-  test.each(["zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Flash", "Qwen/Qwen3.8-Flash", "MiniMaxAI/MiniMax-M3"])(
+  test.each(["deepseek-ai/DeepSeek-V4-Flash", "MiniMaxAI/MiniMax-M3"])(
     "%s repository IDs do not imply native Chat contracts",
     (id) => {
       const m = model(id)
@@ -316,4 +316,87 @@ describe("reasoning continuity", () => {
       thinking: { type: "disabled" },
     })
   })
+})
+
+describe("gateway model family robustness", () => {
+  test.each(["qwen/qwen3.8-flash", "qwen3.8-flash", "Qwen/Qwen3.8-Max"])(
+    "%s disables Qwen thinking only for required tools",
+    async (id) => {
+      const m = model(id)
+      const options = { enable_thinking: true, reasoningEffort: "high", thinking_budget: 4096 }
+      const required = T.sanitizeOptions(m, options, "required")
+      expect(required).toEqual({ enable_thinking: false })
+      expect(await wire(m, required)).toMatchObject({ enable_thinking: false })
+      expect(T.sanitizeOptions(m, options, "auto")).toEqual({ enable_thinking: true, reasoningEffort: "xhigh" })
+      expect(T.smallOptions(m)).toEqual({ enable_thinking: false })
+    },
+  )
+
+  test.each(["glm-5.3", "glm-5.3-flash", "zai-org/GLM-5.3-Flash"])(
+    "%s retains GLM effort and preservation",
+    async (id) => {
+      const m = model(id)
+      expect(T.variants(m).max).toEqual({ reasoningEffort: "max" })
+      expect(await wire(m, T.variants(m).max)).toMatchObject({ reasoning_effort: "max" })
+      expect(
+        T.options({ model: m, sessionID: "test", longAgent: true, providerOptions: { preserveThinking: true } })
+          .thinking,
+      ).toEqual({ type: "enabled", clear_thinking: false })
+    },
+  )
+
+  test.each(["glm-5.30", "vendor/glm-5.30", "other-model", "qwen3.80-flash", "glm-5.3-proxy", "qwen3.8-flash-gguf"])(
+    "%s does not inherit the native family contract",
+    (id) => {
+      expect(T.sanitizeOptions(model(id), { enable_thinking: true }, "required").enable_thinking).toBe(true)
+      expect(T.variants(model(id)).max).toBeUndefined()
+      expect(T.variants(model(id)).xhigh).toBeUndefined()
+    },
+  )
+
+  test.each(["qwen/qwen3.8-flash", "zai-org/glm-5.3-flash"])("%s still honors nativeReasoning opt-out", (id) => {
+    const m = model(id)
+    m.options = { nativeReasoning: false }
+    expect(T.variants(m).xhigh).toBeUndefined()
+    expect(T.variants(m).max).toBeUndefined()
+    expect(T.sanitizeOptions(m, { enable_thinking: true }, "required").enable_thinking).toBe(true)
+  })
+
+  test.each(["k3", "k3-256k", "gateway/k3-256k"])("%s uses the gateway Kimi model card identity", (id) => {
+    const m = { ...model(id), name: "Kimi K3-256K" }
+    expect(T.isKimiFamily(m)).toBe(true)
+    expect(T.options({ model: m, sessionID: "test" }).promptCacheKey).toBe("test")
+    expect(T.isKimiFamily({ ...m, name: "Unrelated model" })).toBe(false)
+    expect(T.isKimiFamily({ ...m, name: undefined })).toBe(false)
+  })
+
+  test.each(["k30", "k3-custom", "k3-256k-other"])("%s does not infer Kimi from an ambiguous short id", (id) => {
+    expect(T.isKimiFamily({ ...model(id), name: "Kimi-style custom model" })).toBe(false)
+  })
+})
+
+describe("GPT-OSS existing gateway rejection evidence", () => {
+  // 23a94b95a and e8fd3d121 record Groq and AX Trust rejections.
+  // Discovery does not retain upstream host identity; do not regress the
+  // opaque gateway while that missing routing metadata is unresolved.
+  test.each(["groq", "defai-01-ax-trust-com"])(
+    "%s keeps rejected reasoning fields off the SDK wire",
+    async (provider) => {
+      const m = model("openai/gpt-oss-120b", provider)
+      const history: any[] = [
+        {
+          role: "assistant",
+          content: [
+            { type: "reasoning", text: "private reasoning" },
+            { type: "text", text: "answer" },
+          ],
+        },
+      ]
+      const body = await wire(m, { reasoningEffort: "high", reasoning_effort: "high" }, history)
+      expect(body.messages[0].reasoning_content).toBeUndefined()
+      expect(body.messages[0].content).toBe("answer")
+      expect(body.reasoning_effort).toBeUndefined()
+      expect(T.variants(m)).toEqual({})
+    },
+  )
 })
