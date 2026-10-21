@@ -111,6 +111,45 @@ const COMMAND_WORD_NODE_TYPES = new Set([
 const SHELL_COMMAND_INTERPRETERS = new Set(["bash", "sh", "zsh", "dash", "ksh", "mksh", "ash", "fish"])
 
 /**
+ * Locate the shell option that makes the interpreter run a command string
+ * (`-c`, or fish's `--command`). POSIX shells accept clustered short options
+ * (`sh -ec '...'`), so matching only the literal "-c" word leaves the inner
+ * command unparsed, skipping the destructive/read-only scans. Options are only
+ * scanned before the first operand; `-o`/`-O` and a few long options consume
+ * the following word.
+ */
+function shellCommandOption(
+  parts: readonly string[],
+  decode: (value: string) => string | undefined = (value) => value,
+): { index: number; attached?: string } | undefined {
+  let skipValue = false
+  for (let index = 1; index < parts.length; index++) {
+    const part = decode(parts[index]!)
+    if (part === undefined) return undefined
+    if (skipValue) {
+      skipValue = false
+      continue
+    }
+    if (part === "--") return undefined
+    if (part === "-" || (!part.startsWith("-") && !part.startsWith("+"))) return undefined
+    if (part.startsWith("--")) {
+      const separator = part.indexOf("=")
+      const name = separator >= 0 ? part.slice(0, separator) : part
+      // fish accepts `--command <cmds>` and `--command=<cmds>`.
+      if (name === "--command") {
+        return separator >= 0 ? { index, attached: part.slice(separator + 1) } : { index }
+      }
+      if (separator < 0 && (name === "--rcfile" || name === "--init-file")) skipValue = true
+      continue
+    }
+    const letters = part.slice(1)
+    if (part.startsWith("-") && letters.includes("c")) return { index }
+    if (letters.endsWith("o") || letters.endsWith("O")) skipValue = true
+  }
+  return undefined
+}
+
+/**
  * Returns the target argument if the command is a browser-open call targeting
  * a local HTML file or localhost URL that should be intercepted. Returns null
  * for OAuth flows, the run report, MCP auth, or non-local targets.
@@ -1085,32 +1124,46 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           executable === "source" ||
           executable === "."
         ) {
-          const isShellWithC = SHELL_COMMAND_INTERPRETERS.has(executable) && scanParts.includes("-c")
+          const shellCommand = SHELL_COMMAND_INTERPRETERS.has(executable) ? shellCommandOption(scanParts) : undefined
+          const isShellWithC = shellCommand !== undefined
           const isEval = executable === "eval"
 
           // Collect the inner command string for eval / shell -c
           let innerCmd: string | undefined
-          if (isShellWithC) {
-            const cIdx = scanParts.indexOf("-c")
-            if (cIdx >= 0 && cIdx + 1 < scanParts.length) {
-              // scanParts (decoded words) and rawScanParts (raw words) can
-              // split differently when quote-sensitive wrapper skipping
-              // disagrees: `env "-u" NAME sh -c ...` sees through to sh on
-              // the decoded view but stops at the quoted flag on the raw
-              // view. Never index one view with an index from the other —
-              // that silently parses the wrong word as the inner command.
-              // Locate -c by decoded value in raw space, and fail closed
-              // when the two views disagree on the unwrapped command.
-              if (
-                (unwrappedCommand === undefined) !== (rawUnwrapped === undefined) ||
-                unwrappedCommand?.name !== rawUnwrapped?.name
-              ) {
-                dynamicPathAccess = true
-              }
-              const rawCIdx = rawScanParts.findIndex((word, index) => index > 0 && decodeShellLiteral(word) === "-c")
-              const rawArg = rawCIdx >= 0 ? rawScanParts[rawCIdx + 1] : undefined
+          if (isShellWithC && shellCommand !== undefined) {
+            // scanParts (decoded words) and rawScanParts (raw words) can
+            // split differently when quote-sensitive wrapper skipping
+            // disagrees: `env "-u" NAME sh -c ...` sees through to sh on
+            // the decoded view but stops at the quoted flag on the raw
+            // view. Never index one view with an index from the other —
+            // that silently parses the wrong word as the inner command.
+            // Locate the option by decoded value in raw space, and fail
+            // closed when the two views disagree on the unwrapped command.
+            if (
+              (unwrappedCommand === undefined) !== (rawUnwrapped === undefined) ||
+              unwrappedCommand?.name !== rawUnwrapped?.name
+            ) {
+              dynamicPathAccess = true
+            }
+            if (shellCommand.attached !== undefined) {
+              innerCmd = shellCommand.attached
+            } else if (shellCommand.index + 1 < scanParts.length) {
+              // The raw view may split differently, so locate the option by
+              // decoded value anywhere in the raw words instead of reusing
+              // the decoded index (see the view-disagreement note above).
+              const rawIndex = rawScanParts.findIndex((word, index) => {
+                if (index === 0) return false
+                const decoded = decodeShellLiteral(word)
+                if (decoded === undefined) return false
+                if (decoded === "--command") return true
+                if (decoded === "-" || decoded.startsWith("--") || !decoded.startsWith("-")) return false
+                return decoded.slice(1).includes("c")
+              })
+              const rawArg = rawIndex >= 0 ? rawScanParts[rawIndex + 1] : undefined
               innerCmd = rawArg === undefined ? undefined : decodeShellLiteral(rawArg)
               if (innerCmd === undefined) dynamicPathAccess = true
+            } else {
+              dynamicPathAccess = true
             }
           } else if (isEval) {
             // eval concatenates all its arguments into a single command

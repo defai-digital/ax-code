@@ -221,6 +221,30 @@ describe("ops.strict bash integration", () => {
     )
   }, 30_000)
 
+  test("classifies a destructive command nested in a clustered -c shell flag", async () => {
+    // POSIX shells accept clustered short options: `sh -ec '...'` executes the
+    // next word exactly like `sh -c '...'`. Only matching the literal "-c"
+    // word skipped the nested scan and the interactive bash_destructive ask.
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+    await withTrustedProjectConfig(() =>
+      Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const asks: PermissionRequest[] = []
+          const result = await bash.execute(
+            { command: `sh -ec "rm -rf ./cluster-target"`, description: "Remove cluster target" },
+            makeCtx(asks),
+          )
+          expect(result.metadata.exit).toBe(0)
+          const destructive = asks.filter((ask) => ask.permission === "bash_destructive")
+          expect(destructive).toHaveLength(1)
+          expect(destructive[0]!.patterns.join(" ")).toContain("rm -rf ./cluster-target")
+        },
+      }),
+    )
+  }, 30_000)
+
   test("classifies a destructive command nested in busybox sh -c", async () => {
     // BusyBox/ToyBox expose their shell as an applet; the wrapper must be
     // resolved before the -c inner scan or the destructive gate is skipped.
