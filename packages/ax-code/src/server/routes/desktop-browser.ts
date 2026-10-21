@@ -59,6 +59,8 @@ export const DesktopBrowserRoutes = lazy(() => {
           },
         }),
         validator("json", DesktopBrowser.Enrollment),
+        // DesktopBrowser.enroll rejects a missing session, another project, and any
+        // directory outside the project boundary. A subdirectory inside it is accepted.
         async (c) => c.json(await DesktopBrowser.enroll(c.req.valid("json"))),
       )
       .delete(
@@ -121,7 +123,7 @@ export const DesktopBrowserRoutes = lazy(() => {
             // Cancellation/navigation may win the network race. Discard the reply without retiring a live provider.
             if (
               error instanceof DesktopBrowser.Failure &&
-              error.data.reason === "Response belongs to an expired browser request"
+              error.data.message === "Response belongs to an expired browser request"
             )
               return c.json(false)
             throw error

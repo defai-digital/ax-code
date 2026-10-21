@@ -333,7 +333,14 @@ describe("private desktop WebMCP provider", () => {
         status: "Completed",
         snapshot: state,
       })
-      expect(await result).toEqual([{ ...state.tools[0], digest: DesktopBrowser.digest(state.tools[0]!) }])
+      const definitionDigest = DesktopBrowser.digest(state.tools[0]!)
+      expect(await result).toEqual([
+        {
+          ...state.tools[0],
+          digest: definitionDigest,
+          invoke: { action: "invoke", toolName: "echo", digest: definitionDigest, input: {} },
+        },
+      ])
     })
   })
   test("denial uses the existing permission engine and never dispatches", async () => {
@@ -419,7 +426,9 @@ describe("private desktop WebMCP provider", () => {
           {},
           new AbortController().signal,
         ),
-      ).rejects.toMatchObject({ data: { reason: expect.stringContaining("Tool definition changed") } })
+      ).rejects.toMatchObject({
+        data: { reason: "definition-changed", message: expect.stringContaining("Tool definition changed") },
+      })
       DesktopBrowser.disconnect(connection.providerID)
     })
   })
@@ -577,7 +586,7 @@ describe("desktop WebMCP failure messages", () => {
   test("tells the model that only the user can enable the project browser, before any approval", async () => {
     await fixture(async (session) => {
       const tool = await DesktopWebMcpTool.init()
-      expect(tool.description).toContain('action=navigate')
+      expect(tool.description).toContain("action=navigate")
       expect(tool.description).toContain("never invent a URL")
       expect(tool.description).toContain("an empty catalog is a normal result")
       const ask = vi.fn(async () => {})
@@ -597,7 +606,9 @@ describe("desktop WebMCP failure messages", () => {
       })
       const error = caught(() => DesktopBrowser.forSession(session.id))
       expect(DesktopBrowser.Failure.isInstance(error)).toBe(true)
-      expect(error.message).toBe(error.data.reason)
+      expect(error.data.reason).toBe("no-page")
+      expect(error.message).toBe(error.data.message)
+      expect(error.data.nextAction).toContain("action=navigate")
       expect(error.message).toContain("open the exact https:// or loopback http:// URL")
       expect(error.message).toContain("action=navigate")
       // The recorded body round-trips the sentence, so event readers never see the bare name.
@@ -644,7 +655,9 @@ describe("desktop WebMCP failure messages", () => {
       DesktopBrowser.disconnect(connection.providerID)
       const unconfirmed = await pending
       expect(DesktopBrowser.Failure.isInstance(unconfirmed)).toBe(true)
-      expect(unconfirmed.message).toBe(unconfirmed.data.reason)
+      expect(unconfirmed.data.reason).toBe("provider-gone")
+      expect(unconfirmed.message).toBe(unconfirmed.data.message)
+      expect(unconfirmed.data.nextAction.length).toBeGreaterThan(0)
       expect(unconfirmed.message).toContain("completion is unconfirmed")
       const gone = caught(() => DesktopBrowser.forSession(session.id))
       expect(gone.message).toContain("Ask the user to enable agent access")
@@ -712,7 +725,11 @@ describe("desktop WebMCP page interaction", () => {
           status: "Completed",
           output: { done: true, how: "type", navigated: false },
         })
-        expect(JSON.parse((await typing).output).result).toMatchObject({ done: true, navigated: false, originChanged: false })
+        expect(JSON.parse((await typing).output).result).toMatchObject({
+          done: true,
+          navigated: false,
+          originChanged: false,
+        })
 
         // Reading was admitted live; the action was the only prompt, and it names the element.
         expect(asked).toHaveLength(1)
