@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.28.3] - 2026-10-21
+
+### Changed
+
+- Publish SDK 2.6.44 with the current server contract and verified GitHub Packages distribution.
+
+### Fixed
+
+- Require fresh rollback snapshots before file undo and unrevert while keeping transcript-only undo available when capture fails.
+- Preserve transcript history when an undo boundary part is missing.
+- Stop cancelled queue executions, preserve settled outcomes, and keep later timeout cleanup scoped to the cancelled task.
+- Preserve blanket permission prompts across configuration merges and honor current denies when promoting pending requests.
+- Recheck patch write and rollback symlink containment inside file locks.
+
 ## [7.28.2] - 2026-10-21
 
 ### Changed
