@@ -491,6 +491,46 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("cancelForSession keeps a task completed while cancelling another", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Queue cancel race" })
+        const first = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "First child",
+          payload: { source: "task" },
+        })
+        const second = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Second child",
+          payload: { source: "task" },
+        })
+        await TaskQueue.setStatus({ id: first.id, status: "running" })
+        await TaskQueue.setStatus({ id: second.id, status: "running" })
+
+        // Settle the second row after cancelForSession snapshotted the list.
+        const stop = Bus.subscribe(TaskQueue.Event.Updated, (event) => {
+          if (event.properties.item.id !== first.id || event.properties.item.status !== "cancelled") return
+          Database.use((db) => {
+            db.update(TaskQueueTable).set({ status: "completed" }).where(eq(TaskQueueTable.id, second.id)).run()
+          })
+        })
+        try {
+          const cancelled = await TaskQueue.cancelForSession(session.id)
+          expect(cancelled.map((item) => item.id)).toEqual([first.id])
+          expect((await TaskQueue.get(second.id)).status).toBe("completed")
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
   test("cancelForSession reaches active items hidden behind a full window of finished rows", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -1315,6 +1355,58 @@ describe("TaskQueue", () => {
       if (previousAutonomous === undefined) delete process.env.AX_CODE_AUTONOMOUS
       else process.env.AX_CODE_AUTONOMOUS = previousAutonomous
     }
+  })
+
+  test("cancelling a blocked task stops its live execution", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.useFakeTimers()
+        try {
+          const session = await Session.create({})
+          let release!: () => void
+          const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(
+            () =>
+              new Promise((resolve) => {
+                release = () =>
+                  resolve({
+                    info: { id: MessageID.ascending(), sessionID: session.id, role: "assistant" },
+                    parts: [],
+                  } as any)
+              }),
+          )
+          const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue()
+          try {
+            const item = await TaskQueue.enqueue({
+              sessionID: session.id,
+              kind: "prompt",
+              title: "Blocked item",
+              payload: { text: "continue" },
+            })
+            await TaskQueueExecutor.start(item)
+            await vi.advanceTimersByTimeAsync(0)
+            // The block observer writes this status while the prompt waits on
+            // a permission or question. The execution itself is still live.
+            await TaskQueue.setStatus({ id: item.id, status: "blocked_permission" })
+
+            await TaskQueue.cancel(item.id)
+            await vi.advanceTimersByTimeAsync(30_000)
+            expect(cancel).toHaveBeenCalledWith(session.id, { cancelQueueItems: false })
+
+            release()
+            await vi.advanceTimersByTimeAsync(0)
+            expect((await TaskQueue.get(item.id)).status).toBe("cancelled")
+          } finally {
+            prompt.mockRestore()
+            cancel.mockRestore()
+          }
+        } finally {
+          vi.useRealTimers()
+        }
+      },
+    })
   })
 
   test("marks prompt queue items failed when the prompt loop ends with a replay error", async () => {

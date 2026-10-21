@@ -1495,13 +1495,16 @@ export namespace TaskQueue {
       // caller is honoring the abort-pauses-followups contract: resume stays
       // explicit, and the row must survive to be resumed later.
       if (options?.preservePausedFollowups && item.kind === "followup" && item.status === "paused") continue
-      cancelled.push(
-        await setStatus({
-          id: item.id,
-          status: "cancelled",
-          error: error ?? "Cancelled because the parent session stopped.",
-        }),
-      )
+      // The row may have settled between the list() snapshot and this write.
+      // onlyFromActive keeps a completed/failed outcome authoritative instead
+      // of rewriting it as cancelled.
+      const result = await setStatus({
+        id: item.id,
+        status: "cancelled",
+        error: error ?? "Cancelled because the parent session stopped.",
+        onlyFromActive: true,
+      })
+      if (result.status === "cancelled") cancelled.push(result)
     }
     return cancelled
   }

@@ -294,9 +294,26 @@ async function deliverLiveTaskSubagent(
 async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueExecution): Promise<unknown> {
   const timeoutMs = item.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS
   let timeout: ReturnType<typeof setTimeout> | undefined
+  let abandoned = false
   const heartbeat = setInterval(() => {
     try {
-      TaskQueue.heartbeat(item.id)
+      // A row that left the active statuses (for example a blocked task the
+      // user cancelled) must stop its live execution, not only change its row.
+      if (TaskQueue.heartbeat(item.id) || abandoned) return
+      abandoned = true
+      log.warn("task queue item is no longer active; cancelling its execution", {
+        taskID: item.id,
+        sessionID: item.sessionID,
+      })
+      void Promise.resolve()
+        .then(() => (execution.cancel ? execution.cancel() : cancelAbandonedExecution(item)))
+        .catch((error) => {
+          log.warn("failed to cancel abandoned task queue execution", {
+            taskID: item.id,
+            sessionID: item.sessionID,
+            error,
+          })
+        })
     } catch (error) {
       log.warn("task queue heartbeat failed", { taskID: item.id, sessionID: item.sessionID, error })
     }
@@ -364,6 +381,13 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
 async function cancelTimedOutExecution(item: TaskQueue.Info) {
   const current = await TaskQueue.get(item.id).catch(() => item)
   if (current.sessionID) await SessionPrompt.cancel(current.sessionID)
+}
+
+// The queue row already carries the cancellation; only stop the live run and
+// leave other queue items for that session alone.
+async function cancelAbandonedExecution(item: TaskQueue.Info) {
+  const current = await TaskQueue.get(item.id).catch(() => item)
+  if (current.sessionID) await SessionPrompt.cancel(current.sessionID, { cancelQueueItems: false })
 }
 
 async function syncScheduledTaskOutcome(item: TaskQueue.Info, error?: unknown) {
