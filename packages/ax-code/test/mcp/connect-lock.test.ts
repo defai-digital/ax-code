@@ -522,11 +522,12 @@ test("connect({ force: true }) replaces a connected client", async () => {
       const initialClients = MCP.clients()
       await connectStarted
       releaseConnect()
-      const first = (await initialClients).reconnect as unknown as MockClientState
+      const failedClient = (await initialClients).reconnect!
+      const first = failedClient as unknown as MockClientState
       expect((await MCP.status()).reconnect).toEqual({ status: "connected" })
 
       resetConnectGate()
-      const forced = MCP.connect("reconnect", { force: true })
+      const forced = MCP.connect("reconnect", { force: true, failedClient })
       await expect(Promise.race([connectStarted.then(() => "started"), sleep(200).then(() => "no-op")])).resolves.toBe(
         "started",
       )
@@ -534,8 +535,15 @@ test("connect({ force: true }) replaces a connected client", async () => {
       await forced
 
       expect(first.closed).toBe(true)
-      expect((await MCP.clients()).reconnect).not.toBe(first)
+      const replacement = (await MCP.clients()).reconnect!
+      expect(replacement).not.toBe(first)
       expect((await MCP.status()).reconnect).toEqual({ status: "connected" })
+
+      // A late tool closure still carries the old client after the shared
+      // preflight settled. It must reuse the replacement, not close it.
+      await MCP.connect("reconnect", { force: true, failedClient })
+      expect((await MCP.clients()).reconnect).toBe(replacement)
+      expect((replacement as unknown as MockClientState).closed).toBe(false)
     },
   })
 })

@@ -417,7 +417,7 @@ export async function convertMcpTool(
           const mod = await import("./impl")
           // The ping proved this client dead while its status still says
           // "connected"; force a replacement instead of taking the no-op path.
-          await mod.MCP.connect(serverName, { force: true })
+          await mod.MCP.connect(serverName, { force: true, failedClient: client })
           const live = mod.MCP.liveClient(serverName)
           if (!live) throw new Error(`MCP reconnect produced no live client for ${serverName}`)
           return live

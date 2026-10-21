@@ -91,18 +91,57 @@ describe("SessionHealth", () => {
     SessionHealth._resetForTests(freshClient)
   })
 
-  test("does not retry again when the reconnect thunk also fails", async () => {
+  test("rejects before dispatch when reconnect fails after an idle ping failure", async () => {
     const fake = new FakeClient()
     fake.pingResult = { ok: false, error: new Error("ping failed") }
     const client = asClient(fake)
     SessionHealth.attachClient(client, "test")
     vi.advanceTimersByTime(SessionHealth.MCP_IDLE_THRESHOLD_MS + 1_000)
-    const result = await SessionHealth.preflightCall(client, async () => {
-      throw new Error("reconnect failed too")
+    const failure = new Error("reconnect failed too")
+    const reconnect = vi.fn(async () => {
+      // The failed connection attempt may already have closed the old client.
+      fake.onclose?.()
+      throw failure
     })
-    expect(result.retried).toBe(false)
-    expect(result.client).toBe(client)
+    const dispatch = SessionHealth.preflightCall(client, reconnect).then(({ client }) =>
+      client.callTool({ name: "write", arguments: {} }),
+    )
+    await expect(dispatch).rejects.toBe(failure)
+    expect(reconnect).toHaveBeenCalledTimes(1)
+    expect(fake.callToolCalls).toBe(0)
     SessionHealth._resetForTests(client)
+  })
+
+  test("shares an idle recovery across concurrent calls and releases a failed recovery", async () => {
+    const fake = new FakeClient()
+    fake.pingResult = { ok: false }
+    const client = asClient(fake)
+    const freshClient = asClient(new FakeClient())
+    SessionHealth.attachClient(client, "test")
+    vi.advanceTimersByTime(SessionHealth.MCP_IDLE_THRESHOLD_MS + 1_000)
+    const failure = new Error("reconnect failed")
+    const reconnect = vi.fn<() => Promise<Client>>().mockRejectedValueOnce(failure).mockResolvedValue(freshClient)
+    const failed = await Promise.allSettled([
+      SessionHealth.preflightCall(client, reconnect),
+      SessionHealth.preflightCall(client, reconnect),
+    ])
+    expect(failed).toEqual([
+      { status: "rejected", reason: failure },
+      { status: "rejected", reason: failure },
+    ])
+    expect(reconnect).toHaveBeenCalledTimes(1)
+    const results = await Promise.all([
+      SessionHealth.preflightCall(client, reconnect),
+      SessionHealth.preflightCall(client, reconnect),
+    ])
+    expect(results).toEqual([
+      { client: freshClient, retried: true },
+      { client: freshClient, retried: true },
+    ])
+    expect(reconnect).toHaveBeenCalledTimes(2)
+    expect(fake.pingCalls).toBe(2)
+    SessionHealth._resetForTests(client)
+    SessionHealth._resetForTests(freshClient)
   })
 
   test("transport close rejects tracked in-flight calls immediately", async () => {

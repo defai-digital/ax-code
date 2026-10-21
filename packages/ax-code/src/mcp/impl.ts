@@ -1595,11 +1595,13 @@ export namespace MCP {
     })
     return next
   }
-  export async function connect(name: string, options: { force?: boolean } = {}) {
-    return withConnectLock(name, "MCP connect failed", (s) => connectImpl(name, s, options.force === true))
+  export async function connect(name: string, options: { force?: boolean; failedClient?: Client } = {}) {
+    return withConnectLock(name, "MCP connect failed", (s) =>
+      connectImpl(name, s, options.force === true, options.failedClient),
+    )
   }
 
-  async function connectImpl(name: string, s: McpState, force = false) {
+  async function connectImpl(name: string, s: McpState, force = false, failedClient?: Client) {
     invalidateTools(s)
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
@@ -1627,7 +1629,11 @@ export namespace MCP {
     if (s.disposed) return
     // `force` is the idle-ping recovery path: the status still says connected,
     // but the client failed to answer, so it must be replaced.
-    if (!force && s.status[name]?.status === "connected" && s.clients[name]) return
+    if (s.status[name]?.status === "connected" && s.clients[name]) {
+      // A late call can still hold the failed client after another preflight
+      // replaced it. Recheck identity under the lock before closing anything.
+      if (!force || (failedClient && s.clients[name] !== failedClient)) return
+    }
 
     const result = await create(name, { ...mcp, enabled: true }, s).catch(async (error) => {
       if (s.disposed) throw error

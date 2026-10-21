@@ -34,6 +34,9 @@ export namespace SessionHealth {
    */
   const lastActivityAt = new WeakMap<Client, number>()
 
+  /** Concurrent callers share one probe/reconnect for an idle client. */
+  const preflights = new WeakMap<Client, Promise<Preflight>>()
+
   /**
    * In-flight trackers per client. Each entry holds the reject function for
    * the promise returned to the caller; the onclose fast-fail calls every
@@ -185,6 +188,18 @@ export namespace SessionHealth {
       stamp(client)
       return { client, retried: false }
     }
+    const pending = preflights.get(client)
+    if (pending) return pending
+    const recovery = probeIdleClient(client, reconnect)
+    preflights.set(client, recovery)
+    try {
+      return await recovery
+    } finally {
+      preflights.delete(client)
+    }
+  }
+
+  async function probeIdleClient(client: Client, reconnect: () => Promise<Client>): Promise<Preflight> {
     // The ping is the fast probe: a healthy server answers within the 2s
     // budget and we continue with the existing client. A failed ping
     // (timeout or thrown error before the SDK sent anything) triggers a
@@ -206,12 +221,11 @@ export namespace SessionHealth {
       stamp(next)
       return { client: next, retried: true }
     } catch (error) {
-      // Reconnect failed; surface the original ping failure to the caller
-      // by returning the dead client. The callTool wrapper will track it
-      // and the onclose fast-fail will reject in flight when the transport
-      // does eventually close.
+      // The old transport may have closed before the caller could arm its
+      // tracker. Never dispatch on that failed client or wait for another
+      // close notification that cannot arrive.
       log.warn("mcp reconnect after idle-ping failure also failed", { error: String(error) })
-      return { client, retried: false }
+      throw error
     }
   }
 
@@ -222,6 +236,7 @@ export namespace SessionHealth {
    */
   export function _resetForTests(client: Client): void {
     lastActivityAt.delete(client)
+    preflights.delete(client)
     inFlight.delete(client)
   }
 }
