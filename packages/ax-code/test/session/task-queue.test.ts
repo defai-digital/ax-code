@@ -1463,6 +1463,68 @@ describe("TaskQueue", () => {
     })
   })
 
+  test.each([10_000, 60_000])(
+    "a cancelled automation keeps its %i ms timeout cancellation scoped",
+    async (timeoutMs) => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          vi.useFakeTimers()
+          try {
+            const session = await Session.create({})
+            let release!: () => void
+            const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(
+              () =>
+                new Promise((resolve) => {
+                  release = () => resolve(undefined as never)
+                }),
+            )
+            const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue()
+            try {
+              const blocked = await TaskQueue.enqueue({
+                sessionID: session.id,
+                kind: "automation",
+                title: "Blocked automation",
+                executionTimeoutMs: timeoutMs,
+                payload: { scheduledTaskID: "sch_blocked_automation", prompt: "run" },
+              })
+              const waiting = await TaskQueue.enqueue({
+                sessionID: session.id,
+                kind: "subagent",
+                title: "Waiting child",
+                payload: { source: "task" },
+              })
+              await TaskQueueExecutor.start(blocked)
+              await vi.advanceTimersByTimeAsync(0)
+              await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission" })
+
+              await TaskQueue.cancel(blocked.id)
+              await vi.advanceTimersByTimeAsync(Math.min(timeoutMs, 30_000))
+              // The automation has a cancel handler; it must receive the scoped
+              // option instead of falling back to the session-wide cascade.
+              expect(cancel).toHaveBeenCalledWith(session.id, { cancelQueueItems: false })
+              expect(["queued", "waiting_for_idle"]).toContain((await TaskQueue.get(waiting.id)).status)
+              await vi.advanceTimersByTimeAsync(Math.max(0, timeoutMs - 30_000))
+              expect(cancel).toHaveBeenCalledTimes(timeoutMs > 30_000 ? 2 : 1)
+              expect(cancel.mock.calls.every((call) => call[1]?.cancelQueueItems === false)).toBe(true)
+              expect(["queued", "waiting_for_idle"]).toContain((await TaskQueue.get(waiting.id)).status)
+
+              release()
+              await vi.advanceTimersByTimeAsync(0)
+            } finally {
+              prompt.mockRestore()
+              cancel.mockRestore()
+            }
+          } finally {
+            vi.useRealTimers()
+          }
+        },
+      })
+    },
+  )
+
   test("marks prompt queue items failed when the prompt loop ends with a replay error", async () => {
     await using tmp = await tmpdir({ git: true })
 

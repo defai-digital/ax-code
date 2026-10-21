@@ -341,7 +341,18 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
       // but that late result must never win over the expired deadline.
       reject(error)
       const cancellation = Promise.resolve()
-        .then(() => (execution.cancel ? execution.cancel() : cancelTimedOutExecution(item)))
+        .then(async () => {
+          // A user cancellation can outlive its first cleanup attempt, or
+          // arrive before the first heartbeat. Keep the deadline's retry
+          // scoped too, so it cannot cascade into unrelated queued work.
+          const current = await TaskQueue.get(item.id).catch(() => item)
+          const options =
+            abandoned || !activeStatuses.some((status) => status === current.status)
+              ? { cancelQueueItems: false }
+              : undefined
+          if (execution.cancel) return options ? execution.cancel(options) : execution.cancel()
+          return cancelTimedOutExecution(item, options)
+        })
         .catch((error) => {
           log.warn("failed to cancel timed-out task queue execution", {
             taskID: item.id,
