@@ -53,6 +53,29 @@ const READ_COMMANDS: ReadonlySet<string> = new Set([
 /** git subcommands that never write, regardless of flags. */
 const GIT_READ_SUBCOMMANDS: ReadonlySet<string> = new Set(["status", "log", "diff", "show", "rev-parse", "ls-files"])
 
+/**
+ * git global switches that inject configuration or an executable path.
+ * `-c`, `--config-env=...` and environment variables such as
+ * `GIT_EXTERNAL_DIFF` / `GIT_CONFIG_*` let git run an arbitrary helper
+ * (`diff.external`, `core.fsmonitor`, ...) from an otherwise read-only
+ * subcommand, so the plan classifier must refuse them.
+ */
+const GIT_EXECUTION_GLOBAL = new Set(["-c", "--config-env", "--exec-path"])
+const GIT_EXECUTION_GLOBAL_PREFIXES = ["--config-env=", "--exec-path="]
+/** Read-only subcommand flags that ask git to run a configured external helper. */
+const GIT_EXECUTION_READ_FLAGS = new Set(["--ext-diff", "--textconv", "--paginate"])
+const GIT_EXECUTION_ENV = /^(?:GIT_CONFIG_[A-Z0-9_]*|GIT_EXTERNAL_DIFF)$/i
+
+function gitEnvironmentOverride(parts: readonly string[]): string | undefined {
+  for (const part of parts) {
+    const separator = part.indexOf("=")
+    if (separator <= 0) continue
+    const name = part.slice(0, separator)
+    if (GIT_EXECUTION_ENV.test(name)) return name
+  }
+  return undefined
+}
+
 /** `find` flags that hand matched paths to a command or write a listing file. */
 const FIND_MUTATING_FLAG = /^-(?:exec|execdir|ok|okdir|delete|fls|fprint0?|fprintf)$/
 
@@ -128,9 +151,18 @@ export function classifyReadOnlyCommand(parts: readonly string[]): string | unde
   const { name, args } = resolved
 
   if (name === "git") {
+    const environment = gitEnvironmentOverride(parts)
+    if (environment) return `git with ${environment} can run an external command`
     const sub = gitSubcommand(args)
     if (!sub) return "git without a subcommand"
+    const globalArgs = args.slice(0, args.length - sub.rest.length - 1)
+    const override = globalArgs.find(
+      (arg) => GIT_EXECUTION_GLOBAL.has(arg) || GIT_EXECUTION_GLOBAL_PREFIXES.some((prefix) => arg.startsWith(prefix)),
+    )
+    if (override) return `git ${override} can run an external command`
     if (GIT_READ_SUBCOMMANDS.has(sub.subcommand)) {
+      const helper = sub.rest.find((arg) => GIT_EXECUTION_READ_FLAGS.has(arg))
+      if (helper) return `git ${sub.subcommand} ${helper} runs a configured external helper`
       // `git log/show/diff --output=<file>` writes the diff to that file.
       if (sub.rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) {
         return `git ${sub.subcommand} --output writes to a file`

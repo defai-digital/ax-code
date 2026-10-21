@@ -133,6 +133,31 @@ describe("classifyReadOnlyCommand", () => {
     }
   })
 
+  test("denies git config and env overrides that can run an external command", () => {
+    const denied: string[][] = [
+      ["git", "-c", "diff.external=sh -c 'touch pwned'", "diff", "--no-index", "a", "b"],
+      ["git", "-C", "sub", "-c", "diff.external=sh", "diff", "a", "b"],
+      ["git", "--config-env=diff.external=GIT_EXT", "diff", "a", "b"],
+      ["git", "diff", "--ext-diff", "a", "b"],
+      ["git", "log", "--textconv", "-p"],
+      ["git", "show", "--paginate", "HEAD"],
+      ["GIT_EXTERNAL_DIFF=sh", "git", "diff", "a", "b"],
+      ["GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=diff.external", "GIT_CONFIG_VALUE_0=sh", "git", "diff", "a", "b"],
+    ]
+    for (const parts of denied) {
+      expect(classifyReadOnlyCommand(parts), parts.join(" ")).toMatch(/external|override/)
+    }
+    const allowed: string[][] = [
+      ["git", "-C", "sub", "status"],
+      ["env", "GIT_PAGER=cat", "git", "log"],
+      ["git", "diff", "-c"],
+      ["git", "log", "--no-ext-diff", "-p"],
+    ]
+    for (const parts of allowed) {
+      expect(classifyReadOnlyCommand(parts), parts.join(" ")).toBeUndefined()
+    }
+  })
+
   test("fails closed for unclassified commands", () => {
     const cases: string[][] = [
       ["npm", "install"],
