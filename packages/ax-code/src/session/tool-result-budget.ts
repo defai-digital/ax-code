@@ -25,9 +25,12 @@ export namespace ToolResultBudget {
   /**
    * Headroom added to the preview floor when projecting a spilled result's
    * emitted size: the truncation note appended by `Truncate.output` is not
-   * part of the preview bytes but does reach the request.
+   * part of the preview bytes but does reach the request. The note is the
+   * marker plus one of two hints (the task hint is longer) and the absolute
+   * spill path; measure at ~350 bytes for a typical Unix path, so the
+   * allowance keeps headroom for longer data directories.
    */
-  const SPILL_NOTE_ALLOWANCE_BYTES = 256
+  export const SPILL_NOTE_ALLOWANCE_BYTES = 512
 
   export interface ResultSize {
     /** Emitted byte length of one tool result (already per-tool truncated results count by their emitted size). */

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { ToolResultBudget } from "../../src/session/tool-result-budget"
+import { Truncate } from "../../src/tool/truncate"
 
 const KB = 1024
 
@@ -111,11 +112,26 @@ describe("ToolResultBudget.plan", () => {
       budgetBytes: 2_500,
       previewFloorBytes: ToolResultBudget.PREVIEW_FLOOR_BYTES,
     })
-    // Spilling the 2,049-byte result would emit a 2,304-byte preview plus
-    // note, so only the 20,000-byte result is a useful candidate.
+    // Spilling the 2,049-byte result cannot even cover the preview floor plus
+    // the note allowance, so only the 20,000-byte result is a useful candidate.
     expect(plan.spill).toEqual([0])
-    expect(plan.projectedBytes).toBe(ToolResultBudget.PREVIEW_FLOOR_BYTES + 256 + 2_049)
+    expect(plan.projectedBytes).toBe(
+      ToolResultBudget.PREVIEW_FLOOR_BYTES + ToolResultBudget.SPILL_NOTE_ALLOWANCE_BYTES + 2_049,
+    )
     expect(plan.overBudget).toBe(true)
+  })
+
+  test("the spill note allowance covers the note Truncate.output actually appends", async () => {
+    const text = Array.from({ length: 1024 }, (_, index) => `line ${index} ${"x".repeat(8)}`).join("\n")
+    const result = await Truncate.output(text, { maxBytes: ToolResultBudget.PREVIEW_FLOOR_BYTES }, {
+      permission: [],
+    } as never)
+    expect(result.truncated).toBe(true)
+    const marker = result.content.indexOf("\n\n...")
+    expect(marker).toBeGreaterThanOrEqual(0)
+    expect(Buffer.byteLength(result.content.slice(marker), "utf-8")).toBeLessThanOrEqual(
+      ToolResultBudget.SPILL_NOTE_ALLOWANCE_BYTES,
+    )
   })
 
   test("reports overBudget when even spilling everything cannot fit", () => {
