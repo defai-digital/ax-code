@@ -66,6 +66,7 @@ export function normalizeMiniMaxReasoning(response: Response, enabled: boolean):
     )
     .pipeThrough(new TextEncoderStream())
   const headers = new Headers(response.headers)
+  // @scan-suppress security_scan - Headers.delete removes stale length metadata; this is not an HTTP route.
   headers.delete("content-length")
   return new Response(body, { status: response.status, statusText: response.statusText, headers })
 }
