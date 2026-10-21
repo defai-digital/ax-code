@@ -1,3 +1,4 @@
+import { isMiniMaxM3ChatRequest, normalizeMiniMaxReasoning } from "./minimax-reasoning"
 import { RoutePolicy } from "./route-policy"
 import z from "zod"
 import fuzzysort from "fuzzysort"
@@ -1228,6 +1229,8 @@ export namespace Provider {
             if (dispatcher) opts.dispatcher = dispatcher
           }
 
+          const minimaxReasoning = isMiniMaxM3ChatRequest(model.api.npm, opts.body)
+
           // ADR-247: optional request-body gzip. The helper is the same one
           // the test suite calls — kept in one place to avoid drift. The
           // function returns false when nothing was changed, so the
@@ -1244,8 +1247,8 @@ export namespace Provider {
             if (firstByteTimer) clearTimeout(firstByteTimer)
           }
 
-          if (!chunkAbortCtl) return res
-          return wrapSSE(res, chunkTimeout, chunkAbortCtl, (opts.signal as AbortSignal) ?? undefined)
+          if (chunkAbortCtl) res = wrapSSE(res, chunkTimeout, chunkAbortCtl, (opts.signal as AbortSignal) ?? undefined)
+          return normalizeMiniMaxReasoning(res, minimaxReasoning)
         }
 
         // ADR-246: resolve a `credential_source` reference for this provider, if

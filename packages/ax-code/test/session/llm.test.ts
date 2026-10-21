@@ -4283,3 +4283,117 @@ describe("session.llm.streamIdleWatchdog", () => {
     }
   })
 })
+
+describe("session.llm gateway robustness integration", () => {
+  test("extracts MiniMax reasoning and returns unavailable-tool suggestions without running a substitute", async () => {
+    const providerID = ProviderID.make("robustness-gateway")
+    const modelID = ModelID.make("MiniMax-M3")
+    await using tmp = await tmpdir({
+      config: {
+        enabled_providers: [providerID],
+        provider: {
+          [providerID]: {
+            npm: "@ai-sdk/openai-compatible",
+            options: { apiKey: "test", baseURL: `${state.server.url.origin}/v1` },
+            models: {
+              [modelID]: {
+                name: "MiniMax M3",
+                reasoning: true,
+                tool_call: true,
+                limit: { context: 131072, output: 8192 },
+              },
+            },
+          },
+        },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.getModel(providerID, modelID)
+        const sessionID = SessionID.make("session-robustness")
+        waitRequest(
+          "/chat/completions",
+          createEventResponse(
+            [
+              {
+                id: "completion-robustness",
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      role: "assistant",
+                      reasoning_details: [{ type: "reasoning.text", text: "Inspect the output." }],
+                    },
+                  },
+                ],
+              },
+              {
+                id: "completion-robustness",
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      tool_calls: [
+                        {
+                          index: 0,
+                          id: "call-unknown",
+                          type: "function",
+                          function: { name: "bash", arguments: '{"command":"pwd"}' },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+              { id: "completion-robustness", choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] },
+            ],
+            true,
+          ),
+        )
+        const substitute = vi.fn(async () => "must not execute")
+        const invalid = vi.fn(async (input: { tool: string; error: string }) => input.error)
+        const output = await LLM.stream({
+          sessionID,
+          model,
+          user: {
+            id: MessageID.make("user-robustness"),
+            sessionID,
+            role: "user",
+            time: { created: 1 },
+            agent: "test",
+            model: { providerID, modelID },
+          },
+          agent: { name: "test", mode: "primary", options: {}, permission: [] },
+          messages: [{ role: "user", content: "Inspect the output" }],
+          system: [],
+          abort: new AbortController().signal,
+          tools: {
+            bash_output: tool({
+              description: "Read existing output",
+              inputSchema: z.object({ id: z.string() }),
+              execute: substitute,
+            }),
+            invalid: tool({
+              description: "Invalid tool",
+              inputSchema: z.object({ tool: z.string(), error: z.string() }),
+              execute: invalid,
+            }),
+          },
+        })
+        let reasoning = ""
+        for await (const part of output.fullStream) {
+          if (part.type === "reasoning-delta") reasoning += part.text
+        }
+        expect(LLM.lastStreamError(output)).toBeUndefined()
+        expect(reasoning).toBe("Inspect the output.")
+        expect(substitute).not.toHaveBeenCalled()
+        expect(invalid).toHaveBeenCalledTimes(1)
+        expect(invalid.mock.calls[0][0]).toEqual({
+          tool: "bash",
+          error: LLM.unavailableToolMessage("bash", ["bash_output"]),
+        })
+      },
+    })
+  })
+})

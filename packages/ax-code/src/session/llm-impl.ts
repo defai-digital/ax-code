@@ -50,6 +50,8 @@ import { isRetiredProviderID } from "@/provider/retired-providers"
 import { applyAxTrustPromptCacheHeader, shouldSendAxTrustPromptCacheKey } from "@/provider/ax-trust-cache"
 import { isLocalInferenceConnection } from "@/provider/local-runtime"
 
+import { levenshtein } from "@/util/levenshtein"
+
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 import { RequestProvenance } from "./request-provenance"
 import { RequestTiming } from "./request-timing"
@@ -146,9 +148,40 @@ export namespace LLM {
 
     for (const candidate of candidates) {
       if (!candidate || candidate === toolName) continue
-      if (tools[candidate]) return candidate
+      if (Object.hasOwn(tools, candidate)) return candidate
     }
     return undefined
+  }
+
+  /** Suggestions are feedback only: never substitute a different tool or its arguments. */
+  export function unavailableToolMessage(toolName: string, available: string[]): string {
+    const query = toolName.toLowerCase().slice(0, 128)
+    const synonyms = /^(bash|shell|sh)$/.test(query)
+      ? /^(bash|shell|sh)(?:$|[_-])/
+      : /^repo_browser\.(search|grep)$/.test(query)
+        ? /^(grep|glob)$/
+        : /^repo_browser\.(open_file|read)$/.test(query)
+          ? /^read$/
+          : undefined
+    const ranked = [...new Set(available)]
+      .filter((name) => name !== "invalid")
+      .map((name) => {
+        const candidate = name.toLowerCase().slice(0, 128)
+        let prefix = 0
+        while (prefix < Math.min(query.length, candidate.length) && query[prefix] === candidate[prefix]) prefix++
+        return { name, synonym: synonyms?.test(candidate) ? 1 : 0, score: levenshtein(query, candidate) - prefix }
+      })
+      .sort((a, b) => b.synonym - a.synonym || a.score - b.score || a.name.localeCompare(b.name))
+    const names = ranked.slice(0, 8).map(({ name }) => name)
+    return `Tool ${JSON.stringify(toolName)} is not available in this turn. ${
+      names.length
+        ? `Available tools (closest matches first): ${names.join(", ")}. Choose an available tool and use its declared arguments.`
+        : "No tools are available in this turn."
+    }`
+  }
+
+  export function toolCallError(toolName: string, error: string, available: string[]): string {
+    return available.includes(toolName) ? error : unavailableToolMessage(toolName, available)
   }
 
   export type ProviderSetup = Promise<
@@ -737,7 +770,7 @@ export namespace LLM {
             ...failed.toolCall,
             input: JSON.stringify({
               tool: failed.toolCall.toolName,
-              error: failed.error.message,
+              error: toolCallError(failed.toolCall.toolName, failed.error.message, activeToolNames),
             }),
             toolName: "invalid",
           }

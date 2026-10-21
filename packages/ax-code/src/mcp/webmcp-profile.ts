@@ -1495,8 +1495,12 @@ export namespace WebMcpProfile {
           const types = json.anyOf?.map((option) => option.type).filter(Boolean)
           return `${field}: expected ${types?.join(" or ") || json.type || "valid value"}`
         })
+      const combination =
+        isRecord(args) &&
+        Object.keys(args).every((field) => Object.hasOwn(schema.shape, field)) &&
+        parsed.error.issues.some((issue) => issue.code === "custom")
       throw new Error(
-        `Invalid arguments for WebMCP bridge tool ${name}: ${fields.join("; ") || "arguments: expected an object with only the declared fields"}`,
+        `Invalid arguments for WebMCP bridge tool ${name}: ${fields.join("; ") || (combination ? "the combination of fields is not allowed for this tool" : "arguments: expected an object with only the declared fields")}`,
       )
     }
     const call: Record<string, unknown> = parsed.data
