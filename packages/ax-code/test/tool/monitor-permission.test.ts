@@ -71,6 +71,31 @@ describe("tool.monitor permission", () => {
     })
   })
 
+  test("rejects before delegating when a configured bash rule denies", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    try {
+      await using tmp = await tmpdir({ git: true, config: { permission: { bash: "deny" }, username: "test" } })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const init = vi.spyOn(BashTool, "init")
+          const monitor = await MonitorTool.init()
+          await expect(
+            monitor.execute(
+              { command: "printf monitor-config-probe", description: "denied by config" },
+              context(session.id),
+            ),
+          ).rejects.toBeInstanceOf(Permission.DeniedError)
+          expect(init).not.toHaveBeenCalled()
+          expect(BackgroundShell.list(session.id)).toEqual([])
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   test("reaches BashTool with the ask renamed to monitor when bash is allowed", async () => {
     // username keeps this test hermetic where os.userInfo() is unavailable.
     await using tmp = await tmpdir({ git: true, config: { username: "test" } })

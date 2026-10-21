@@ -9,6 +9,7 @@ import { BashTool } from "./bash"
 import { BackgroundShell } from "./bash-background"
 import { BackgroundNotification } from "../session/background-notification"
 import { Permission } from "@/permission"
+import { Agent } from "@/agent/agent"
 import { Session } from "../session"
 import { NotFoundError } from "../storage/db"
 import { Wildcard } from "@/util/wildcard"
@@ -46,7 +47,12 @@ async function assertBashPatternsAllowed(patterns: readonly string[], ctx: Tool.
     if (NotFoundError.isInstance(error)) return undefined
     throw error
   })
-  const ruleset = session?.permission ?? []
+  // The tool ask evaluates the same layers as resolveTools: the active agent
+  // (which already carries the configured permission rules) and the session.
+  // Checking session rules alone let a configured `bash: deny` through,
+  // because the monitor ask is renamed and never evaluates the bash key.
+  const agent = await Agent.get(ctx.agent)
+  const ruleset = Permission.merge(agent?.permission ?? [], session?.permission ?? [])
   // BashTool asks with one pattern per parsed command, not the raw pipeline.
   // Evaluating only the raw command lets `echo hi && rm -rf x` bypass a
   // `rm *` deny rule when monitor renames the ask.
