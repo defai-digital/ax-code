@@ -647,3 +647,19 @@ test("local schema references validate extension schemas without scanning unrela
     DesktopBrowser.disconnect(connection.providerID)
   })
 })
+
+test("local schema references accept definition maps with a property named $id", async () => {
+  await withSession(async (session, state) => {
+    state.tools[0]!.inputSchema = {
+      type: "object",
+      properties: { query: { $ref: "#/definitions/query" } },
+      definitions: { $id: { type: "string" }, query: { type: "string" } },
+    }
+    const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+    const binding = DesktopBrowser.forSession(session.id)
+    const digest = DesktopBrowser.digest(state.tools[0]!)
+    expect(DesktopBrowser.prepareInvocation(binding, "echo", digest, { query: "ok" }).input).toEqual({ query: "ok" })
+    expect(() => DesktopBrowser.prepareInvocation(binding, "echo", digest, { query: 42 })).toThrow(/\/query/)
+    DesktopBrowser.disconnect(connection.providerID)
+  })
+})

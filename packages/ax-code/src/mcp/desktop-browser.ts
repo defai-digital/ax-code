@@ -942,7 +942,7 @@ export namespace DesktopBrowser {
       const key = part.replace(/~1/g, "/").replace(/~0/g, "~")
       if (!target || typeof target !== "object" || !Object.hasOwn(target, key)) return undefined
       // A pointer can cross a nested resource without visiting its root as a schema.
-      if (Object.hasOwn(target, "$id")) return undefined
+      if (Object.hasOwn(target, "$id") && typeof (target as Record<string, unknown>).$id === "string") return undefined
       target = (target as Record<string, unknown>)[key]
     }
     return target
