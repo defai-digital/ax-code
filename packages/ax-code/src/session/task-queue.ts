@@ -1427,7 +1427,10 @@ export namespace TaskQueue {
     const after = await get(id)
     if (after.status === "completed" || after.status === "failed" || after.status === "cancelled") return after
     if (after.status === "running") {
-      return setStatus({ id, status: "cancelled", error: "Stopped by operator." })
+      // The executor can still settle between the re-read above and this write.
+      // Guard the terminal target so a concurrent completion or failure wins
+      // over the operator cancel instead of being overwritten.
+      return setStatus({ id, status: "cancelled", error: "Stopped by operator.", onlyFromActive: true })
     }
     return cancel(id)
   }
