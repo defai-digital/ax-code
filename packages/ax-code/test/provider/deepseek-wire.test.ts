@@ -234,11 +234,11 @@ describe("DeepSeek request wire contract", () => {
     expect(ProviderTransform.disableDeepSeekThinkingForToolHistory(target, original, messages, false)).toEqual(original)
   })
 
-  test.each([false, true])("logs one bounded diagnostic per request (first missing in current turn: %s)", (current) => {
+  test("logs one bounded diagnostic per request that disables thinking", () => {
     const info = vi.spyOn(Log.create({ service: "provider.transform" }), "info").mockImplementation(() => {})
     try {
       const messages: ModelMessage[] = [
-        ...(current ? [] : [{ role: "assistant" as const, content: "private old answer" }]),
+        { role: "assistant", content: "private old answer" },
         { role: "user", content: "private prompt" },
         { role: "assistant", content: "private answer" },
         { role: "assistant", content: "another private answer" },
@@ -248,9 +248,8 @@ describe("DeepSeek request wire contract", () => {
       expect(info).toHaveBeenCalledTimes(1)
       expect(info).toHaveBeenCalledWith("DeepSeek thinking disabled for assistant history without reasoning", {
         modelID: target.id,
-        missingReasoningCount: current ? 2 : 3,
-        firstMissingReasoningIndex: current ? 1 : 0,
-        firstMissingInCurrentUserTurn: current,
+        missingReasoningCount: 2,
+        firstMissingReasoningIndex: 2,
       })
       expect(JSON.stringify(info.mock.calls)).not.toContain("private")
       ProviderTransform.disableDeepSeekThinkingForToolHistory(target, {}, messages, false)
@@ -262,6 +261,83 @@ describe("DeepSeek request wire contract", () => {
     } finally {
       info.mockRestore()
     }
+  })
+
+  test("keeps thinking when only an earlier completed turn lacks the reasoning field", () => {
+    const info = vi.spyOn(Log.create({ service: "provider.transform" }), "info").mockImplementation(() => {})
+    try {
+      const target = model("deepseek-flash")
+      const original = { reasoningEffort: "high", thinking: { type: "enabled" } }
+      const messages: ModelMessage[] = [
+        { role: "user", content: "First request" },
+        { role: "assistant", content: [{ type: "tool-call", toolCallId: "call-1", toolName: "read", input: {} }] },
+        {
+          role: "tool",
+          content: [
+            { type: "tool-result", toolCallId: "call-1", toolName: "read", output: { type: "text", value: "ok" } },
+          ],
+        },
+        { role: "assistant", content: [{ type: "text", text: "Done." }] },
+        { role: "user", content: "Second request" },
+        {
+          role: "assistant",
+          content: [{ type: "tool-call", toolCallId: "call-2", toolName: "read", input: {} }],
+          providerOptions: { openaiCompatible: { reasoning_content: "Need the file." } },
+        },
+        {
+          role: "tool",
+          content: [
+            { type: "tool-result", toolCallId: "call-2", toolName: "read", output: { type: "text", value: "ok" } },
+          ],
+        },
+      ]
+      expect(ProviderTransform.disableDeepSeekThinkingForToolHistory(target, original, messages, true)).toBe(original)
+      expect(info).not.toHaveBeenCalled()
+    } finally {
+      info.mockRestore()
+    }
+  })
+
+  test.each([
+    ["an empty provider-metadata string", { openaiCompatible: { reasoning_content: "" } }],
+    ["a nonblank provider-metadata string", { openaiCompatible: { reasoning_content: "Plan." } }],
+  ])("keeps thinking when the current tool loop sends %s", (_name, providerOptions) => {
+    const target = model("deepseek-flash")
+    const original = { reasoningEffort: "high", thinking: { type: "enabled" } }
+    const messages: ModelMessage[] = [
+      { role: "user", content: "Read the file" },
+      {
+        role: "assistant",
+        content: [{ type: "tool-call", toolCallId: "call-1", toolName: "read", input: {} }],
+        providerOptions,
+      },
+      {
+        role: "tool",
+        content: [
+          { type: "tool-result", toolCallId: "call-1", toolName: "read", output: { type: "text", value: "ok" } },
+        ],
+      },
+    ]
+    expect(ProviderTransform.disableDeepSeekThinkingForToolHistory(target, original, messages, true)).toBe(original)
+  })
+
+  test("disables thinking when the current loop only has an empty reasoning part, which the SDK omits", () => {
+    const target = model("deepseek-flash")
+    const messages: ModelMessage[] = [
+      { role: "user", content: "Read the file" },
+      {
+        role: "assistant",
+        content: [
+          { type: "reasoning", text: "" },
+          { type: "tool-call", toolCallId: "call-1", toolName: "read", input: {} },
+        ],
+      },
+    ]
+    expect(
+      ProviderTransform.disableDeepSeekThinkingForToolHistory(target, { reasoningEffort: "high" }, messages, true),
+    ).toEqual({
+      thinking: { type: "disabled" },
+    })
   })
 
   test("keeps thinking when every prior assistant message has reasoning", () => {

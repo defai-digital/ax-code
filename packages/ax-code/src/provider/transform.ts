@@ -1428,10 +1428,14 @@ export namespace ProviderTransform {
     return result
   }
 
-  // Thinking mode plus tools requires every prior assistant message to carry
-  // the reasoning DeepSeek actually produced. An empty pad, or reasoning from
-  // another model that never reached the wire as nonblank reasoning_content,
-  // is still a 400. Disable thinking for that one request and keep the tools.
+  // Thinking mode plus tools returns HTTP 400 when an assistant message from the
+  // current tool loop (everything after the last user message) reaches the wire
+  // without a reasoning_content field. Measured against deepseek-flash: the
+  // field only has to be present, so an empty string is accepted, and earlier
+  // completed turns may omit it. DeepSeek often answers a tool-only step with
+  // empty reasoning, so requiring nonblank text, or scanning the whole history,
+  // would switch thinking off for the rest of the session. Disable thinking for
+  // one request only when the current loop would send a message without the field.
   export function disableDeepSeekThinkingForToolHistory(
     model: Provider.Model,
     options: Record<string, any>,
@@ -1439,8 +1443,9 @@ export namespace ProviderTransform {
     hasTools: boolean,
   ): Record<string, any> {
     if (!hasTools || !isDeepSeekV4ToolModel(model)) return options
+    const turnStart = messages.findLastIndex((message) => message.role === "user") + 1
     const missing = messages.flatMap((message, index) =>
-      message.role === "assistant" && !assistantHasDeepSeekReasoning(message) ? [index] : [],
+      index >= turnStart && message.role === "assistant" && !assistantCarriesReasoningField(message) ? [index] : [],
     )
     if (missing.length === 0) return options
     // This transform runs once at request preparation, not once per message.
@@ -1448,7 +1453,6 @@ export namespace ProviderTransform {
       modelID: model.id,
       missingReasoningCount: missing.length,
       firstMissingReasoningIndex: missing[0],
-      firstMissingInCurrentUserTurn: missing[0]! > messages.findLastIndex((message) => message.role === "user"),
     })
     return disableDeepSeekThinking(options)
   }
@@ -1461,9 +1465,10 @@ export namespace ProviderTransform {
     )
   }
 
-  function assistantHasDeepSeekReasoning(message: ModelMessage): boolean {
-    const carried = message.providerOptions?.openaiCompatible?.reasoning_content
-    if (typeof carried === "string" && carried.trim().length > 0) return true
+  // Mirrors what the compatible SDK sends: a provider-metadata string is always
+  // emitted, even when empty, while a reasoning part is emitted only when nonblank.
+  function assistantCarriesReasoningField(message: ModelMessage): boolean {
+    if (typeof message.providerOptions?.openaiCompatible?.reasoning_content === "string") return true
     if (!Array.isArray(message.content)) return false
     return message.content.some((part) => part.type === "reasoning" && part.text.trim().length > 0)
   }

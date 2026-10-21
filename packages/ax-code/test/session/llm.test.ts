@@ -911,7 +911,7 @@ describe("session.llm.stream", () => {
     },
   )
 
-  test("disables DeepSeek thinking when tool history has no reasoning", async () => {
+  test("keeps DeepSeek thinking when only an earlier turn had no reasoning", async () => {
     const providerID = ProviderID.make("deepseek-review-gateway")
     const modelID = ModelID.make("deepseek-flash")
     const request = waitRequest(
@@ -988,9 +988,14 @@ describe("session.llm.stream", () => {
         const capture = await request
         expect(capture.body.tool_choice).toBe("auto")
         expect(capture.body.tools).toHaveLength(1)
-        expect(capture.body.thinking).toEqual({ type: "disabled" })
-        expect(capture.body).not.toHaveProperty("reasoning_effort")
-        expect(capture.body).not.toHaveProperty("reasoningEffort")
+        // The earlier turn is padded with an explicit empty field, which the upstream
+        // accepts, so one reasoning-free step must not switch thinking off for good.
+        expect(capture.body.thinking).toEqual({ type: "enabled" })
+        expect(capture.body.reasoning_effort).toBe("high")
+        const earlier = (capture.body.messages as Array<Record<string, unknown>>).find(
+          (message) => message.role === "assistant",
+        )
+        expect(earlier).toHaveProperty("reasoning_content", "")
         expect(JSON.stringify(capture.body.messages)).toContain("call-click")
       },
     })
