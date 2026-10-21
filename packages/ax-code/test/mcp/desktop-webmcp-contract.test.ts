@@ -502,6 +502,45 @@ test("pattern and patternProperties fail closed before Ajv compiles them", async
           },
           input: { query: "ok" },
         },
+        {
+          inputSchema: {
+            type: "object",
+            dependencies: {
+              query: { properties: { query: { type: "string", pattern: "^(a+)+$" } } },
+            },
+          },
+          input: { query: "ok" },
+        },
+        {
+          inputSchema: {
+            type: "object",
+            dependencies: {
+              query: { patternProperties: { "^q$": { type: "string" } } },
+            },
+          },
+          input: { query: "ok" },
+        },
+        {
+          inputSchema: {
+            type: "object",
+            properties: { query: { $id: "nested.json", $ref: "#/extension" } },
+            extension: { type: "string" },
+          },
+          input: { query: "ok" },
+        },
+        {
+          inputSchema: {
+            type: "object",
+            properties: { query: { $ref: "#/extension/inner" } },
+            extension: {
+              $id: "nested.json",
+              inner: { $ref: "#/hidden" },
+              hidden: { type: "string", pattern: "^(a+)+$" },
+            },
+            hidden: { type: "string" },
+          },
+          input: { query: "ok" },
+        },
       ]
       for (const item of cases) {
         state.tools[0]!.inputSchema = item.inputSchema
@@ -541,6 +580,7 @@ test("pattern and patternProperties fail closed before Ajv compiles them", async
         },
         required: ["pattern"],
         default: { pattern: "floral" },
+        dependencies: { pattern: ["patternProperties"] },
       }
       DesktopBrowser.update(connection.providerID, state)
       const binding = DesktopBrowser.forSession(session.id)
@@ -554,4 +594,56 @@ test("pattern and patternProperties fail closed before Ajv compiles them", async
   } finally {
     compile.mockRestore()
   }
+})
+
+test.each(["#/extension", "#/x~1y~0z", "#/%65xtension"])(
+  "local schema reference %s cannot hide regular expressions",
+  async ($ref) => {
+    const compile = vi.spyOn(Ajv.prototype, "compile")
+    try {
+      await withSession(async (session, state) => {
+        state.tools[0]!.inputSchema = {
+          type: "object",
+          properties: { query: { $ref } },
+          extension: { type: "string", pattern: "^(a+)+$" },
+          "x/y~z": { type: "string", pattern: "^(a+)+$" },
+        }
+        const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+        const before = compile.mock.calls.length
+        const error = await rejection(
+          Promise.resolve().then(() =>
+            DesktopBrowser.prepareInvocation(
+              DesktopBrowser.forSession(session.id),
+              "echo",
+              DesktopBrowser.digest(state.tools[0]!),
+              { query: "ok" },
+            ),
+          ),
+        )
+        expect(error.data.reason).toBe("native-failure")
+        expect(error.data.message).toBe("The tool schema could not be checked")
+        expect(compile.mock.calls.length).toBe(before)
+        DesktopBrowser.disconnect(connection.providerID)
+      })
+    } finally {
+      compile.mockRestore()
+    }
+  },
+)
+
+test("local schema references validate extension schemas without scanning unrelated data", async () => {
+  await withSession(async (session, state) => {
+    state.tools[0]!.inputSchema = {
+      type: "object",
+      properties: { query: { $ref: "#/extension" } },
+      extension: { type: "string" },
+      default: { pattern: "floral", $ref: "not-a-schema" },
+    }
+    const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+    const binding = DesktopBrowser.forSession(session.id)
+    const digest = DesktopBrowser.digest(state.tools[0]!)
+    expect(DesktopBrowser.prepareInvocation(binding, "echo", digest, { query: "ok" }).input).toEqual({ query: "ok" })
+    expect(() => DesktopBrowser.prepareInvocation(binding, "echo", digest, { query: 42 })).toThrow(/\/query/)
+    DesktopBrowser.disconnect(connection.providerID)
+  })
 })

@@ -911,7 +911,7 @@ export namespace DesktopBrowser {
     if (error.keyword === "additionalProperties" && typeof additional === "string") return `${base}/${additional}`
     return base || "/"
   }
-  const NESTED_SCHEMA_MAPS = new Set(["properties", "$defs", "definitions", "dependentSchemas"])
+  const NESTED_SCHEMA_MAPS = new Set(["properties", "$defs", "definitions", "dependentSchemas", "dependencies"])
   const SCHEMA_ARRAY_KEYS = new Set(["allOf", "anyOf", "oneOf", "prefixItems"])
   const SCHEMA_VALUE_KEYS = new Set([
     "additionalProperties",
@@ -926,9 +926,31 @@ export namespace DesktopBrowser {
     "unevaluatedItems",
     "contentSchema",
   ])
+  function referencedSchema(root: unknown, ref: string): unknown {
+    if (!ref.startsWith("#")) return undefined
+    let pointer: string
+    try {
+      pointer = decodeURIComponent(ref.slice(1))
+    } catch {
+      return undefined
+    }
+    if (!pointer) return root
+    if (!pointer.startsWith("/")) return undefined
+    let target = root
+    for (const part of pointer.slice(1).split("/")) {
+      if (/~(?![01])/.test(part)) return undefined
+      const key = part.replace(/~1/g, "/").replace(/~0/g, "~")
+      if (!target || typeof target !== "object" || !Object.hasOwn(target, key)) return undefined
+      // A pointer can cross a nested resource without visiting its root as a schema.
+      if (Object.hasOwn(target, "$id")) return undefined
+      target = (target as Record<string, unknown>)[key]
+    }
+    return target
+  }
   // `pattern` / `patternProperties` are regexes Ajv would run on the event loop.
-  // Only schema keywords count: a property or default named "pattern" is not one.
-  function schemaHasUnsafePattern(schema: unknown) {
+  // Follow local refs even into extension fields; unreferenced data is not a schema.
+  // Nested resource IDs and non-pointer refs cannot be resolved by this guard.
+  function schemaIsUnsafe(schema: unknown) {
     const pending = [schema]
     const seen = new Set<object>()
     while (pending.length) {
@@ -939,6 +961,18 @@ export namespace DesktopBrowser {
       const record = current as Record<string, unknown>
       if (Object.hasOwn(record, "pattern") && typeof record.pattern === "string") return true
       if (Object.hasOwn(record, "patternProperties")) return true
+      if (
+        Object.hasOwn(record, "$id") ||
+        Object.hasOwn(record, "$dynamicRef") ||
+        Object.hasOwn(record, "$recursiveRef")
+      )
+        return true
+      if (Object.hasOwn(record, "$ref")) {
+        if (typeof record.$ref !== "string") return true
+        const target = referencedSchema(schema, record.$ref)
+        if (typeof target !== "boolean" && (!target || typeof target !== "object" || Array.isArray(target))) return true
+        pending.push(target)
+      }
       for (const [key, value] of Object.entries(record)) {
         if (key === "items") {
           if (Array.isArray(value)) for (const child of value) pending.push(child)
@@ -1000,7 +1034,7 @@ export namespace DesktopBrowser {
     }
     delete document.$schema
     delete document.$id
-    if (schemaHasUnsafePattern(document)) return fail("The tool schema could not be checked")
+    if (schemaIsUnsafe(document)) return fail("The tool schema could not be checked")
     let validate: InputValidator
     try {
       validate = new Ajv({ strict: false, allErrors: false, validateSchema: false, validateFormats: false }).compile(
