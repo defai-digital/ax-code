@@ -84,10 +84,16 @@ export namespace SessionSteering {
     const current = state().get(sessionID)
     if (!current) return
     const aborted = options.interrupted === true
+    const endingGeneration = current.active?.generation
     current.active = undefined
     const discarded: Receipt[] = []
     for (const pending of current.receipts.values()) {
-      pending.endedInterrupted = aborted
+      // Only the generation being ended may rewrite its own receipts' interrupt
+      // marker. begin() calls finish() for the next turn; clearing an older
+      // receipt here would unpark a follow-up whose steer was interrupted.
+      if (endingGeneration !== undefined && pending.receipt.generation === endingGeneration)
+        pending.endedInterrupted = aborted
+      else if (aborted) pending.endedInterrupted = true
       if (pending.receipt.status === "accepted") {
         pending.receipt.status = "rejected"
         pending.receipt.reason = "generation_ended_before_application"

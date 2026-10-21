@@ -55,6 +55,32 @@ describe("generation-scoped steering", () => {
     })
   })
 
+  test("a later generation does not clear an interrupted receipt marker", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const id = SessionID.ascending()
+        const first = new AbortController()
+        SessionSteering.begin(id, first.signal)
+        const input = {
+          expectedGeneration: SessionSteering.view(id).generation!,
+          clientID: "interrupted_marker",
+          text: "Keep the parked follow-up parked",
+        }
+        await SessionSteering.submit(id, input, async () => {})
+        SessionSteering.finish(id, { interrupted: true })
+        expect(SessionSteering.admissionState({ sessionID: id, clientID: input.clientID })?.interrupted).toBe(true)
+
+        // A new turn begins: begin() calls finish() without the interrupt hint.
+        // The older receipt must keep its marker so its follow-up stays parked.
+        const second = new AbortController()
+        SessionSteering.begin(id, second.signal)
+        expect(SessionSteering.admissionState({ sessionID: id, clientID: input.clientID })?.interrupted).toBe(true)
+      },
+    })
+  })
+
   test("keeps an applied receipt when post-commit notification throws", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
