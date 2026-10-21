@@ -1595,11 +1595,11 @@ export namespace MCP {
     })
     return next
   }
-  export async function connect(name: string) {
-    return withConnectLock(name, "MCP connect failed", (s) => connectImpl(name, s))
+  export async function connect(name: string, options: { force?: boolean } = {}) {
+    return withConnectLock(name, "MCP connect failed", (s) => connectImpl(name, s, options.force === true))
   }
 
-  async function connectImpl(name: string, s: McpState) {
+  async function connectImpl(name: string, s: McpState, force = false) {
     invalidateTools(s)
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
@@ -1625,7 +1625,9 @@ export namespace MCP {
     }
 
     if (s.disposed) return
-    if (s.status[name]?.status === "connected" && s.clients[name]) return
+    // `force` is the idle-ping recovery path: the status still says connected,
+    // but the client failed to answer, so it must be replaced.
+    if (!force && s.status[name]?.status === "connected" && s.clients[name]) return
 
     const result = await create(name, { ...mcp, enabled: true }, s).catch(async (error) => {
       if (s.disposed) throw error
@@ -1672,6 +1674,10 @@ export namespace MCP {
     // synchronously. Commit the replacement status last so that stale close
     // handling cannot downgrade a successful reconnect.
     s.status[name] = result.status
+    // A concurrent tools() call can run while create() is in flight and cache
+    // the server's absence (the old client was already removed). Invalidate
+    // after the outcome so the next enumeration sees the replacement client.
+    invalidateTools(s)
     // ADR-170: the chip gesture persists to user-level config so the choice
     // survives restarts. Scoped to webmcp-profiled entries owned by the user —
     // the injected product default has no recorded source and resolves to

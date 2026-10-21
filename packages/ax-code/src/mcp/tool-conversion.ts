@@ -415,7 +415,9 @@ export async function convertMcpTool(
         const preflight = await SessionHealth.preflightCall(client, async () => {
           if (!serverName) throw new Error("MCP reconnect requested without a server name")
           const mod = await import("./impl")
-          await mod.MCP.connect(serverName)
+          // The ping proved this client dead while its status still says
+          // "connected"; force a replacement instead of taking the no-op path.
+          await mod.MCP.connect(serverName, { force: true })
           const live = mod.MCP.liveClient(serverName)
           if (!live) throw new Error(`MCP reconnect produced no live client for ${serverName}`)
           return live

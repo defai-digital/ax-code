@@ -459,6 +459,87 @@ test("a stale client close cannot downgrade a successful reconnect", async () =>
   })
 })
 
+test("a tools() snapshot taken during a reconnect cannot hide the replacement client", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      mcp: {
+        reconnect: { type: "local", command: ["reconnect"] },
+      },
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entry = await Config.mcpEntry("reconnect")
+      if (!entry || !("type" in entry.config)) throw new Error("missing reconnect MCP fixture")
+      await McpTrust.trust("reconnect", entry.config, entry.source)
+      exposeToolNames = true
+
+      const initialClients = MCP.clients()
+      await connectStarted
+      releaseConnect()
+      const first = (await initialClients).reconnect as unknown as MockClientState
+      expect(Object.keys(await MCP.tools())).toEqual(["reconnect_tool_reconnect"])
+
+      first.onclose?.()
+      await sleep(0)
+      expect((await MCP.status()).reconnect?.status).toBe("failed")
+
+      // Reconnect is in flight. A concurrent enumeration sees no client and
+      // caches an empty tool set for this generation.
+      resetConnectGate()
+      const reconnect = MCP.connect("reconnect")
+      await connectStarted
+      await expect(MCP.tools()).resolves.toEqual({})
+      releaseConnect()
+      await reconnect
+
+      expect((await MCP.clients()).reconnect).not.toBe(first)
+      expect(Object.keys(await MCP.tools())).toEqual(["reconnect_tool_reconnect"])
+    },
+  })
+})
+
+test("connect({ force: true }) replaces a connected client", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      mcp: {
+        reconnect: { type: "local", command: ["reconnect"] },
+      },
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entry = await Config.mcpEntry("reconnect")
+      if (!entry || !("type" in entry.config)) throw new Error("missing reconnect MCP fixture")
+      await McpTrust.trust("reconnect", entry.config, entry.source)
+
+      const initialClients = MCP.clients()
+      await connectStarted
+      releaseConnect()
+      const first = (await initialClients).reconnect as unknown as MockClientState
+      expect((await MCP.status()).reconnect).toEqual({ status: "connected" })
+
+      resetConnectGate()
+      const forced = MCP.connect("reconnect", { force: true })
+      await expect(Promise.race([connectStarted.then(() => "started"), sleep(200).then(() => "no-op")])).resolves.toBe(
+        "started",
+      )
+      releaseConnect()
+      await forced
+
+      expect(first.closed).toBe(true)
+      expect((await MCP.clients()).reconnect).not.toBe(first)
+      expect((await MCP.status()).reconnect).toEqual({ status: "connected" })
+    },
+  })
+})
+
 test("MCP client teardown kills process trees before closing clients", async () => {
   const source = await readFile(new URL("../../src/mcp/impl.ts", import.meta.url), "utf-8")
 
