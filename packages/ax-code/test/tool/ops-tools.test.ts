@@ -80,6 +80,10 @@ describe("ops read-only commands", () => {
     )
     expect(() => OpsExec.assertReadOnly("sudo cat /etc/shadow")).toThrow(OpsReadOnlyCommandError)
     expect(() => OpsExec.assertReadOnly("echo ok; touch changed")).toThrow(OpsReadOnlyCommandError)
+    expect(() => OpsExec.assertReadOnly("git log -5")).not.toThrow()
+    expect(() => OpsExec.assertReadOnly("git -c diff.external=sh diff")).toThrow(OpsReadOnlyCommandError)
+    expect(() => OpsExec.assertReadOnly("git --config-env=diff.external=GIT_EXT diff")).toThrow(OpsReadOnlyCommandError)
+    expect(() => OpsExec.assertReadOnly("git diff --ext-diff")).toThrow(OpsReadOnlyCommandError)
   })
 })
 

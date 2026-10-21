@@ -128,6 +128,40 @@ function rgExecutes(args: readonly string[]): boolean {
 const DISCARD_TARGET = "/dev/null"
 
 /**
+ * Classifies a resolved `git` invocation for a read-only phase. Shared by the
+ * plan agent and the Cloud Operations read-only guard so both reject the same
+ * config/env overrides that make an otherwise read-only subcommand execute an
+ * external helper.
+ */
+export function classifyReadOnlyGit(parts: readonly string[], args: readonly string[]): string | undefined {
+  const environment = gitEnvironmentOverride(parts)
+  if (environment) return `git with ${environment} can run an external command`
+  const sub = gitSubcommand([...args])
+  if (!sub) return "git without a subcommand"
+  const globalArgs = args.slice(0, args.length - sub.rest.length - 1)
+  const override = globalArgs.find(
+    (arg) => GIT_EXECUTION_GLOBAL.has(arg) || GIT_EXECUTION_GLOBAL_PREFIXES.some((prefix) => arg.startsWith(prefix)),
+  )
+  if (override) return `git ${override} can run an external command`
+  if (GIT_READ_SUBCOMMANDS.has(sub.subcommand)) {
+    const helper = sub.rest.find((arg) => GIT_EXECUTION_READ_FLAGS.has(arg))
+    if (helper) return `git ${sub.subcommand} ${helper} runs a configured external helper`
+    // `git log/show/diff --output=<file>` writes the diff to that file.
+    if (sub.rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) {
+      return `git ${sub.subcommand} --output writes to a file`
+    }
+    return undefined
+  }
+  if (sub.subcommand === "branch") {
+    // `git branch` and `git branch --list` only list; any operand or
+    // non-list flag may create, delete, or rename a branch.
+    const listOnly = sub.rest.every((arg) => arg === "--list" || arg === "-l")
+    return listOnly ? undefined : "git branch only lists with --list or no arguments"
+  }
+  return `git ${sub.subcommand} is not a read-only git command`
+}
+
+/**
  * Classifies one parsed command argv (command name first, quotes as produced
  * by bash-impl.ts's tree-sitter scan). Returns undefined when the command is
  * read-only, or a human-readable reason when the plan agent must not run it.
@@ -150,33 +184,7 @@ export function classifyReadOnlyCommand(parts: readonly string[]): string | unde
   if (!resolved) return "the command could not be classified"
   const { name, args } = resolved
 
-  if (name === "git") {
-    const environment = gitEnvironmentOverride(parts)
-    if (environment) return `git with ${environment} can run an external command`
-    const sub = gitSubcommand(args)
-    if (!sub) return "git without a subcommand"
-    const globalArgs = args.slice(0, args.length - sub.rest.length - 1)
-    const override = globalArgs.find(
-      (arg) => GIT_EXECUTION_GLOBAL.has(arg) || GIT_EXECUTION_GLOBAL_PREFIXES.some((prefix) => arg.startsWith(prefix)),
-    )
-    if (override) return `git ${override} can run an external command`
-    if (GIT_READ_SUBCOMMANDS.has(sub.subcommand)) {
-      const helper = sub.rest.find((arg) => GIT_EXECUTION_READ_FLAGS.has(arg))
-      if (helper) return `git ${sub.subcommand} ${helper} runs a configured external helper`
-      // `git log/show/diff --output=<file>` writes the diff to that file.
-      if (sub.rest.some((arg) => arg === "--output" || arg.startsWith("--output="))) {
-        return `git ${sub.subcommand} --output writes to a file`
-      }
-      return undefined
-    }
-    if (sub.subcommand === "branch") {
-      // `git branch` and `git branch --list` only list; any operand or
-      // non-list flag may create, delete, or rename a branch.
-      const listOnly = sub.rest.every((arg) => arg === "--list" || arg === "-l")
-      return listOnly ? undefined : "git branch only lists with --list or no arguments"
-    }
-    return `git ${sub.subcommand} is not a read-only git command`
-  }
+  if (name === "git") return classifyReadOnlyGit(parts, args)
 
   if (name === "find") {
     if (args.some((arg) => FIND_MUTATING_FLAG.test(arg))) {

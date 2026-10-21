@@ -5,6 +5,7 @@ import { Shell } from "@/shell/shell"
 import { Instance } from "@/project/instance"
 import { parseShellArgs } from "@/util/shell-args"
 import { findWrappedCommand, classifyDestructiveCommand, gitSubcommand } from "./bash-destructive"
+import { classifyReadOnlyGit } from "./bash-readonly"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
 
@@ -86,7 +87,11 @@ export function assertOpsReadOnlyCommand(command: string): void {
   if (LOCAL_READ_ONLY.has(name)) return
   if (name === "git") {
     const subcommand = gitSubcommand(args)?.subcommand
-    if (subcommand && new Set(["diff", "log", "rev-parse", "show", "status"]).has(subcommand)) return
+    if (subcommand && new Set(["diff", "log", "rev-parse", "show", "status"]).has(subcommand)) {
+      const denial = classifyReadOnlyGit(parts, args)
+      if (denial) deny(denial)
+      return
+    }
   }
   if (name === "terraform") {
     const subcommand = args.find((arg) => !arg.startsWith("-"))?.toLowerCase()
