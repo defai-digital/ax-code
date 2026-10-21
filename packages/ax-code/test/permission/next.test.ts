@@ -2,6 +2,8 @@ import { afterEach, beforeEach, test, expect, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { writeFile, mkdir } from "node:fs/promises"
 import os from "os"
+import path from "node:path"
+import { Config } from "../../src/config/config"
 import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"
 import { PermissionID } from "../../src/permission/schema"
@@ -547,6 +549,44 @@ test("a persisted always grant cannot hide a current deny in the ruleset", async
       await expect(ask([{ permission: "bash", pattern: "git push *", action: "deny" }])).rejects.toBeInstanceOf(
         Permission.DeniedError,
       )
+    },
+  })
+})
+
+test("a deny added while prompts are open blocks the always-reply promotion", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const sessionID = SessionID.make("ses_always_current_deny")
+      const ask = () =>
+        Permission.ask({
+          sessionID,
+          permission: "bash",
+          patterns: ["curl example.com"],
+          metadata: {},
+          always: ["curl example.com"],
+          ruleset: [],
+        })
+      const first = ask()
+      const second = ask()
+      const [a, b] = await waitForPending(2)
+
+      // The user tightens the config while both prompts are waiting.
+      await writeFile(
+        path.join(tmp.path, "ax-code.json"),
+        JSON.stringify({ permission: { bash: { "curl example.com": "deny" } } }),
+      )
+      await Config.invalidate()
+
+      expect(await Permission.reply({ requestID: a!.id, reply: "always" })).toBe(true)
+      await first
+      // The new deny must keep the second prompt interactive instead of
+      // letting the first reply's persisted allow rule promote it.
+      expect((await Permission.list()).map((item) => item.id)).toEqual([b!.id])
+      const rejection = expect(second).rejects.toBeInstanceOf(Permission.RejectedError)
+      await Permission.reply({ requestID: b!.id, reply: "reject" })
+      await rejection
     },
   })
 })

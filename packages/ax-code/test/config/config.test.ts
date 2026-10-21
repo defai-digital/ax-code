@@ -2022,6 +2022,38 @@ test("untrusted project config cannot drop a global blanket permission deny", as
   }
 })
 
+test("untrusted project config cannot drop a global blanket permission ask", async () => {
+  // Same scalar-to-object replacement as the deny case. Losing a global "ask"
+  // falls back to the agent defaults (`"*": "allow"`), silently removing the
+  // user's approval gate for every command the project pattern does not match.
+  await using globalTmp = await tmpdir()
+  const prevConfig = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  Config.global.reset()
+  try {
+    await writeConfig(globalTmp.path, {
+      permission: { edit: "ask" },
+    })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, {
+          permission: { edit: { "never-matches-this-path/**": "deny" } },
+        })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.permission?.edit).toEqual({ "*": "ask", "never-matches-this-path/**": "deny" })
+      },
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = prevConfig
+    Config.global.reset()
+  }
+})
+
 test("untrusted project config cannot drop a global per-agent blanket permission deny", async () => {
   await using globalTmp = await tmpdir()
   const prevConfig = Global.Path.config

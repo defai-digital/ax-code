@@ -983,11 +983,17 @@ export namespace Permission {
       publishReply(existing, reply)
       existing.deferred.resolve(undefined)
 
+      // An "always" reply promotes other pending asks for the same session.
+      // Re-read the current config: a deny added while those prompts were open
+      // must not be bypassed by the promotion, matching the idle-once timer.
+      // Only denies are appended so a current config allow cannot override a
+      // stricter rule the ask was created with.
+      const configDenies = fromConfig((await Config.get()).permission ?? {}).filter((rule) => rule.action === "deny")
       for (const [id, item] of pending.entries()) {
         if (item.info.sessionID !== existing.info.sessionID || item.saving) continue
         const ok = item.info.patterns.every((pattern) => {
           if (isInteractiveOnly(item.info.permission, item.info.metadata)) return false
-          return evaluate(item.info.permission, pattern, item.ruleset, approved).action === "allow"
+          return evaluate(item.info.permission, pattern, item.ruleset, approved, configDenies).action === "allow"
         })
         if (!ok) continue
         clearIdleOnceTimer(item)
