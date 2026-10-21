@@ -65,13 +65,14 @@ const GIT_EXECUTION_GLOBAL_PREFIXES = ["--config-env=", "--exec-path="]
 /** Read-only subcommand flags that ask git to run a configured external helper. */
 const GIT_EXECUTION_READ_FLAGS = new Set(["--ext-diff", "--textconv", "--paginate"])
 const GIT_EXECUTION_ENV = /^(?:GIT_CONFIG_[A-Z0-9_]*|GIT_EXTERNAL_DIFF)$/i
+const GIT_TRACE_ENV = /^GIT_TRACE[A-Z0-9_]*$/i
 
 function gitEnvironmentOverride(parts: readonly string[]): string | undefined {
   for (const part of parts) {
     const separator = part.indexOf("=")
     if (separator <= 0) continue
     const name = part.slice(0, separator)
-    if (GIT_EXECUTION_ENV.test(name)) return name
+    if (GIT_EXECUTION_ENV.test(name) || GIT_TRACE_ENV.test(name)) return name
   }
   return undefined
 }
@@ -85,16 +86,17 @@ const UNIQ_VALUE_OPTIONS = new Set(["-f", "--skip-fields", "-s", "--skip-chars",
 
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 
+/** getopt_long accepts unique prefixes; conservatively deny write-option prefixes. */
+function longOptionMatches(arg: string, options: readonly string[]): boolean {
+  const option = arg.split("=", 1)[0]!
+  return option.startsWith("--") && option.length > 2 && options.some((name) => name.startsWith(option))
+}
+
 function sortWrites(args: readonly string[]): boolean {
   return args.some(
     (arg) =>
       SORT_WRITING_FLAG.test(arg) ||
-      arg === "--output" ||
-      arg.startsWith("--output=") ||
-      arg === "--temporary-directory" ||
-      arg.startsWith("--temporary-directory=") ||
-      arg === "--compress-program" ||
-      arg.startsWith("--compress-program="),
+      longOptionMatches(arg, ["--output", "--temporary-directory", "--compress-program"]),
   )
 }
 
@@ -122,7 +124,14 @@ function treeWrites(args: readonly string[]): boolean {
 }
 
 function rgExecutes(args: readonly string[]): boolean {
-  return args.some((arg) => arg === "--pre" || arg.startsWith("--pre=") || arg.startsWith("--pre-glob"))
+  return args.some(
+    (arg) =>
+      arg === "--pre" ||
+      arg.startsWith("--pre=") ||
+      arg.startsWith("--pre-glob") ||
+      arg === "--hostname-bin" ||
+      arg.startsWith("--hostname-bin="),
+  )
 }
 
 const DISCARD_TARGET = "/dev/null"
@@ -135,7 +144,7 @@ const DISCARD_TARGET = "/dev/null"
  */
 export function classifyReadOnlyGit(parts: readonly string[], args: readonly string[]): string | undefined {
   const environment = gitEnvironmentOverride(parts)
-  if (environment) return `git with ${environment} can run an external command`
+  if (environment) return `git with ${environment} can write files or run an external command`
   const sub = gitSubcommand([...args])
   if (!sub) return "git without a subcommand"
   const globalArgs = args.slice(0, args.length - sub.rest.length - 1)
@@ -197,8 +206,8 @@ export function classifyReadOnlyCommand(parts: readonly string[]): string | unde
   if (name === "sort" && sortWrites(args)) return "sort with an output or temporary directory writes to disk"
   if (name === "uniq" && uniqWrites(args)) return "uniq with a second operand writes its output to a file"
   if (name === "tree" && treeWrites(args)) return "tree -o writes its output to a file"
-  if (name === "rg" && rgExecutes(args)) return "rg --pre runs an external program"
-  if (name === "file" && args.some((arg) => arg === "--compile" || /^-[^-]*C/.test(arg))) {
+  if (name === "rg" && rgExecutes(args)) return "rg --pre/--hostname-bin runs an external program"
+  if (name === "file" && args.some((arg) => longOptionMatches(arg, ["--compile"]) || /^-[^-]*C/.test(arg))) {
     return "file -C compiles a magic database"
   }
 

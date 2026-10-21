@@ -133,6 +133,29 @@ describe("classifyReadOnlyCommand", () => {
     }
   })
 
+  test("denies abbreviated writing flags and auxiliary command execution", () => {
+    for (const parts of [
+      ["sort", "--out=result", "input"],
+      ["sort", "--out", "result", "input"],
+      ["sort", "--temporary=/tmp"],
+      ["sort", "--compress=helper"],
+      ["file", "--comp", "-m", "magic"],
+      ["rg", "--hostname-bin=helper", "--hyperlink-format=default", "pattern"],
+      ["rg", "--hostname-bin", "helper", "pattern"],
+      ["GIT_TRACE=/tmp/trace", "git", "status"],
+      ["env", "GIT_TRACE2_EVENT=/tmp/events", "git", "log"],
+    ]) {
+      expect(classifyReadOnlyCommand(parts), parts.join(" ")).toBeDefined()
+    }
+    for (const parts of [
+      ["sort", "--check", "input"],
+      ["file", "--mime-type", "input"],
+      ["rg", "--hyperlink-format=default", "pattern"],
+    ]) {
+      expect(classifyReadOnlyCommand(parts), parts.join(" ")).toBeUndefined()
+    }
+  })
+
   test("denies git config and env overrides that can run an external command", () => {
     const denied: string[][] = [
       ["git", "-c", "diff.external=sh -c 'touch pwned'", "diff", "--no-index", "a", "b"],
