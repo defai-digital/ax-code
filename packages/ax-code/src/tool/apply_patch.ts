@@ -212,6 +212,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             throw new Error(`apply_patch verification failed: Failed to read file to update: ${filePath}`)
           }
           const sourceMode = await fileMode(filePath)
+          // A move unlinks the source and writes a regular file at the
+          // destination, so rollback must know whether the source was a
+          // symlink; writing its target's text would not restore the link.
+          const sourceLink = hunk.move_path ? await fileSymlink(filePath) : undefined
           let newContent: string
 
           // Apply the update chunks to get new content
@@ -273,6 +277,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             moveExisted,
             moveSameFile,
             sourceMode,
+            sourceLink,
             moveMode,
             diff,
             additions,
@@ -385,15 +390,19 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             const dest = change.movePath
             const [first, second] = [change.filePath, dest].sort()
             const restoreMove = async () => {
-              // A case-only rename names one inode twice; the existing
-              // restore is already the only sane one and has no external
-              // second path to reconcile.
+              // A case-only rename names one inode twice, so there is no
+              // second path to reconcile — but the shared file can still be
+              // edited externally after the move landed. Refuse to overwrite
+              // that edit, then restore the original entry spelling.
               if (change.moveSameFile) {
+                const current = await readFileIfExists(change.filePath)
+                if (current !== undefined && current !== change.oldContent && current !== change.newContent)
+                  throw new Error(`Cannot roll back apply_patch: ${change.filePath} was modified externally`)
                 await fs.mkdir(path.dirname(change.filePath), { recursive: true })
                 await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
                 if (change.moveExisted) {
-                  await fs.mkdir(path.dirname(dest), { recursive: true })
-                  await Filesystem.write(dest, change.moveOldContent ?? "", change.moveMode, { followSymlink: true })
+                  // Writing content does not undo the case-only rename.
+                  if (current !== undefined) await fs.rename(dest, change.filePath)
                   return
                 }
                 await fs.unlink(dest).catch(() => undefined)
@@ -411,7 +420,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
               if (sourceCurrent === undefined) {
                 await fs.mkdir(path.dirname(change.filePath), { recursive: true })
-                await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
+                // A moved symlink must come back as a link; writing the old
+                // target text would materialize a regular file.
+                if (change.sourceLink !== undefined) await fs.symlink(change.sourceLink, change.filePath)
+                else
+                  await Filesystem.write(change.filePath, change.oldContent, change.sourceMode, { followSymlink: true })
               }
               if (change.moveExisted) {
                 // moveOldContent means the move never landed; newContent means

@@ -975,6 +975,128 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("rollback restores the name and content of a case-only rename", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const source = path.join(fixture.path, "readme.md")
+        const dest = path.join(fixture.path, "README.md")
+        const second = path.join(fixture.path, "second.txt")
+        await writeAndTrack(source, "old content\n")
+        await writeAndTrack(second, "second\n")
+        // The case-only branch only exists on a case-insensitive volume.
+        if (
+          !(await fs
+            .stat(dest)
+            .then(() => true)
+            .catch(() => false))
+        )
+          return
+
+        const originalWrite = Filesystem.write.bind(Filesystem)
+        const writeSpy = vi.spyOn(Filesystem, "write").mockImplementation(async (p: string, c: any, m?: number) => {
+          if (p === second) throw new Error("injected failure")
+          return originalWrite(p, c, m)
+        })
+        try {
+          const patchText =
+            "*** Begin Patch\n*** Update File: readme.md\n*** Move to: README.md\n@@\n-old content\n+new content\n*** Update File: second.txt\n@@\n-second\n+SECOND\n*** End Patch"
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("injected failure")
+          const names = await fs.readdir(fixture.path)
+          expect(names).not.toContain("README.md")
+          expect(names).toContain("readme.md")
+          expect(await fs.readFile(source, "utf-8")).toBe("old content\n")
+        } finally {
+          writeSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("rollback does not overwrite an external edit of a case-only rename", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const source = path.join(fixture.path, "readme.md")
+        const dest = path.join(fixture.path, "README.md")
+        const second = path.join(fixture.path, "second.txt")
+        await writeAndTrack(source, "old content\n")
+        await writeAndTrack(second, "second\n")
+        if (
+          !(await fs
+            .stat(dest)
+            .then(() => true)
+            .catch(() => false))
+        )
+          return
+
+        const originalWrite = Filesystem.write.bind(Filesystem)
+        const writeSpy = vi.spyOn(Filesystem, "write").mockImplementation(async (p: string, c: any, m?: number) => {
+          if (p === second) {
+            await fs.writeFile(dest, "user edit\n", "utf-8")
+            throw new Error("injected failure")
+          }
+          return originalWrite(p, c, m)
+        })
+        try {
+          const patchText =
+            "*** Begin Patch\n*** Update File: readme.md\n*** Move to: README.md\n@@\n-old content\n+new content\n*** Update File: second.txt\n@@\n-second\n+SECOND\n*** End Patch"
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("rollback was incomplete")
+          expect(await fs.readFile(dest, "utf-8")).toBe("user edit\n")
+        } finally {
+          writeSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("rollback restores a moved symlink instead of materializing its target", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "target.txt")
+        const link = path.join(fixture.path, "link.txt")
+        const moved = path.join(fixture.path, "moved.txt")
+        const second = path.join(fixture.path, "second.txt")
+        await writeAndTrack(target, "target\n")
+        await fs.symlink("target.txt", link)
+        await FileTime.read(SESSION, link)
+        await writeAndTrack(second, "second\n")
+
+        const originalWrite = Filesystem.write.bind(Filesystem)
+        const writeSpy = vi.spyOn(Filesystem, "write").mockImplementation(async (p: string, c: any, m?: number) => {
+          if (p === second) throw new Error("injected failure")
+          return originalWrite(p, c, m)
+        })
+        try {
+          const patchText =
+            "*** Begin Patch\n*** Update File: link.txt\n*** Move to: moved.txt\n@@\n-target\n+new\n*** Update File: second.txt\n@@\n-second\n+SECOND\n*** End Patch"
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("injected failure")
+          expect((await fs.lstat(link)).isSymbolicLink()).toBe(true)
+          expect(await fs.readlink(link)).toBe("target.txt")
+          expect(
+            await fs
+              .stat(moved)
+              .then(() => true)
+              .catch(() => false),
+          ).toBe(false)
+          expect(await fs.readFile(target, "utf8")).toBe("target\n")
+        } finally {
+          writeSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("supports end of file anchor", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
