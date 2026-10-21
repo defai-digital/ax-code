@@ -1048,6 +1048,7 @@ export namespace LLM {
               return
             }
             settled = true
+            clearTimers()
             options.idleAbort.abort()
             reject(
               new Error(
@@ -1063,6 +1064,7 @@ export namespace LLM {
             () => {
               if (settled) return
               settled = true
+              clearTimers()
               options.idleAbort.abort()
               reject(
                 new Error(

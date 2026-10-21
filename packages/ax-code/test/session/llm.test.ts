@@ -4025,6 +4025,33 @@ describe("session.llm.streamIdleWatchdog", () => {
     expect(idleAbort.signal.aborted).toBe(true)
   })
 
+  test("the idle timeout clears the duration watchdog too", async () => {
+    vi.useFakeTimers()
+    try {
+      const never = new Promise<IteratorResult<unknown>>(() => {})
+      const iterator: AsyncIterator<unknown> = { next: () => never }
+      const idleAbort = new AbortController()
+      const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
+        idleAbort,
+        idleTimeoutMs: 20,
+        maxDurationMs: 60_000,
+        providerID: "test",
+        modelID: "timer-cleanup",
+      })
+      const pump = (async () => {
+        for await (const _ of guarded.fullStream) {
+          // no chunks ever arrive
+        }
+      })()
+      const rejection = expect(pump).rejects.toThrow(/stream stalled/)
+      await vi.advanceTimersByTimeAsync(25)
+      await rejection
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("watchdog timer resets on every chunk", async () => {
     let yielded = 0
     const iterator: AsyncIterator<unknown> = {
