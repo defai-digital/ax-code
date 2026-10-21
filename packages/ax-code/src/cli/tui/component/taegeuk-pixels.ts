@@ -36,13 +36,29 @@ export function renderTaegeukPixels(width: number, height: number, style: Taegeu
   const blue = hdHex(c.blue)
 
   hd.sky((t) => taegeukSkyRgb(style, t))
+  const elapsed = Math.max(0, elapsedMs)
+  const speck = Math.max(2.2, Math.min(hd.cw, hd.ch) * 0.24)
   // Confetti and sparks stay behind the flag so the field is never marked.
   for (const bit of taegeukConfetti(elapsedMs)) {
-    hd.disk(hd.X(bit.x + 0.5), hd.Y(bit.y + 0.5), Math.max(1.5, Math.min(hd.cw, hd.ch) * 0.16), bit.red ? red : blue)
+    hd.disk(hd.X(bit.x + 0.5), hd.Y(bit.y + 0.5), speck, bit.red ? red : blue)
+  }
+  // Extra bits stay in the left/right margins so they cannot stamp the field.
+  const step = Math.floor(elapsed / 120)
+  for (let i = 0; i < 72; i++) {
+    const left = i % 2 === 0
+    const x = left ? (i * 3 + step * 2) % 11 : 65 + ((i * 5 + step * 3) % 11)
+    const y = (step * 2 + i * 3) % (TAEGEUK_GROUND_TOP - 1)
+    hd.disk(hd.X(x + 0.5), hd.Y(y + 0.5), speck, i % 2 === 0 ? red : blue)
   }
   const spark = hdHex(c.spark)
   for (const star of taegeukSparks(elapsedMs)) {
-    hd.disk(hd.X(star.x + 0.5), hd.Y(star.y + 0.5), Math.max(1.8, Math.min(hd.cw, hd.ch) * 0.2), spark)
+    hd.disk(hd.X(star.x + 0.5), hd.Y(star.y + 0.5), Math.max(2.2, Math.min(hd.cw, hd.ch) * 0.26), spark)
+  }
+  for (let i = 0; i < 24; i++) {
+    const x = i % 2 === 0 ? 2 + ((i * 3) % 8) : 66 + ((i * 2) % 8)
+    const y = 1 + ((i * 5) % 12)
+    const pulse = 0.65 + 0.55 * (0.5 + 0.5 * Math.sin(elapsed / 160 + i))
+    hd.disk(hd.X(x + 0.5), hd.Y(y + 0.5), Math.max(2.0, Math.min(hd.cw, hd.ch) * 0.22 * pulse), spark)
   }
 
   // The field keeps 3:2 whatever the cell shape. `unit` is pixels per flag unit.
@@ -87,12 +103,12 @@ export function renderTaegeukPixels(width: number, height: number, style: Taegeu
   hd.rect(0, hd.Y(TAEGEUK_GROUND_TOP), hd.w, hd.h, hdHex(c.ground))
   const crowd = hdHex(c.crowd)
   const wave = taegeukWave(elapsedMs)
-  for (let x = 0; x < TAEGEUK_COLUMNS; x++) {
-    if ((x + wave) % 4 === 0) {
-      hd.disk(hd.X(x + 0.5), hd.Y(TAEGEUK_GROUND_TOP + 0.5), Math.max(1.6, hd.cw * 0.18), crowd)
-    }
-    if ((x + wave + 2) % 4 === 0) {
-      hd.disk(hd.X(x + 0.5), hd.Y(TAEGEUK_GROUND_TOP + 1.5), Math.max(1.6, hd.cw * 0.18), crowd)
+  for (let row = 0; row < 4; row++) {
+    for (let x = 0; x < TAEGEUK_COLUMNS; x++) {
+      if (x <= 2 || x >= 73) continue
+      if ((x + wave + row * 2) % 4 !== 0) continue
+      const bob = Math.sin(elapsed / 220 + x * 0.45 + row) * hd.ch * 0.16
+      hd.disk(hd.X(x + 0.5), hd.Y(TAEGEUK_GROUND_TOP + 0.55 + row * 0.7) + bob, Math.max(2.4, hd.cw * 0.3), crowd)
     }
   }
   return hd.pixels

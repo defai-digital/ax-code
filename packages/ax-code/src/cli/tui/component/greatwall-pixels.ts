@@ -89,25 +89,54 @@ export function renderGreatwallPixels(width: number, height: number, style: Grea
     const f = 1 - Math.abs(y - hd.Y(9)) / hd.Y(3)
     for (let x = 0; x < w; x++) blend(x, y, warm, clamp01(f) * (0.18 + 0.2 * sunward(x)))
   }
-  // Clouds with a lit underside facing the sun.
-  for (const puff of greatwallClouds(elapsedMs)) {
-    const cx0 = hd.X(puff.x)
-    const cy = hd.Y(puff.y)
-    for (let k = 0; k < 8; k++) {
-      const kk = k - 3.5
-      const r = s * (1.7 + 0.9 * Math.cos(kk * 0.5)) * 1.3
-      glow(cx0 + kk * s * 1.15, cy + Math.sin(k * 2.2) * s * 0.3, r, hdDarken(cloud, 0.88), 0.7)
-      glow(cx0 + kk * s * 1.15, cy - s * 0.3, r * 0.7, hdMix(cloud, [255, 255, 255], 0.35), 0.55)
+  // Clouds with a lit underside facing the sun. Dawn uses larger, faster banks
+  // so the sky actually drifts across 100ms frames; dusk keeps the original puffs.
+  if (dusk) {
+    for (const puff of greatwallClouds(elapsedMs)) {
+      const cx0 = hd.X(puff.x)
+      const cy = hd.Y(puff.y)
+      for (let k = 0; k < 8; k++) {
+        const kk = k - 3.5
+        const r = s * (1.7 + 0.9 * Math.cos(kk * 0.5)) * 1.3
+        glow(cx0 + kk * s * 1.15, cy + Math.sin(k * 2.2) * s * 0.3, r, hdDarken(cloud, 0.88), 0.7)
+        glow(cx0 + kk * s * 1.15, cy - s * 0.3, r * 0.7, hdMix(cloud, [255, 255, 255], 0.35), 0.55)
+      }
+    }
+  } else {
+    for (let i = 0; i < 8; i++) {
+      const span = GREATWALL_COLUMNS + 22
+      const cx0 = hd.X(((((i * 13 + t * (0.018 + (i % 3) * 0.004)) % span) + span) % span) - 10)
+      const cy = hd.Y(1.15 + (i % 4) * 1.2)
+      for (let k = 0; k < 10; k++) {
+        const kk = k - 4.5
+        const r = s * (3.0 + 1.1 * Math.cos(kk * 0.45))
+        glow(cx0 + kk * s * 1.35, cy + Math.sin(k * 2.2) * s * 0.35, r, hdDarken(cloud, 0.92), 0.62)
+        glow(cx0 + kk * s * 1.35, cy - s * 0.35, r * 0.72, hdMix(cloud, [255, 255, 255], 0.4), 0.5)
+      }
     }
   }
   for (const flyer of greatwallBirds(elapsedMs)) {
     const bx = hd.X(flyer.x + 0.5)
     const by = hd.Y(flyer.y + 0.5)
-    const flap = Math.sin((t / 300) * Math.PI) * s * 0.35
+    const wing = dusk ? s * 0.9 : s * 1.45
+    const flap = Math.sin((t / (dusk ? 300 : 180)) * Math.PI) * s * (dusk ? 0.35 : 0.55)
     for (let k = 0; k <= 8; k++) {
       const f = k / 8
-      hd.disk(bx - f * s * 0.9, by - Math.sin(f * 2) * s * 0.2 - flap * f, Math.max(0.9, s * 0.11), bird)
-      hd.disk(bx + f * s * 0.9, by - Math.sin(f * 2) * s * 0.2 - flap * f, Math.max(0.9, s * 0.11), bird)
+      hd.disk(bx - f * wing, by - Math.sin(f * 2) * s * 0.2 - flap * f, Math.max(0.9, s * 0.11), bird)
+      hd.disk(bx + f * wing, by - Math.sin(f * 2) * s * 0.2 - flap * f, Math.max(0.9, s * 0.11), bird)
+    }
+  }
+  if (!dusk) {
+    for (let i = 0; i < 10; i++) {
+      const span = GREATWALL_COLUMNS + 12
+      const bx = hd.X(((((i * 11 + t * 0.012) % span) + span) % span) - 5)
+      const by = hd.Y(1.1 + (i % 5) * 0.95)
+      const flap = Math.sin(t / 180 + i) * s * 0.5
+      for (let k = 0; k <= 10; k++) {
+        const f = k / 10
+        hd.disk(bx - f * s * 1.35, by - Math.sin(f * 2) * s * 0.22 - flap * f, Math.max(1, s * 0.13), bird)
+        hd.disk(bx + f * s * 1.35, by - Math.sin(f * 2) * s * 0.22 - flap * f, Math.max(1, s * 0.13), bird)
+      }
     }
   }
 
@@ -354,6 +383,23 @@ export function renderGreatwallPixels(width: number, height: number, style: Grea
     const sceneX = (x + 0.5) / hd.cw
     const base = hd.Y(greatwallRidgeF(sceneX)) + merlonH + bodyH
     for (let k = 0; k < s * 1.6; k++) blend(x, Math.floor(base + k), [10, 20, 10], 0.3 * (1 - k / (s * 1.6)))
+  }
+  // Morning mist rolling through the passes below the rampart, above the meadow.
+  if (!dusk) {
+    const mist = hdMix(horizon, [255, 248, 235], 0.55)
+    for (let x = 0; x < w; x++) {
+      const sceneX = (x + 0.5) / hd.cw
+      const wallBot = hd.Y(greatwallRidgeF(sceneX)) + merlonH + bodyH
+      const y0 = Math.max(0, Math.floor(wallBot + s * 0.15))
+      const y1 = Math.min(Math.floor(groundY), Math.ceil(wallBot + hd.ch * 2.2))
+      const spanY = Math.max(1, y1 - y0)
+      for (let y = y0; y < y1; y++) {
+        const fall = 1 - (y - y0) / spanY
+        const band = 0.5 + 0.5 * Math.sin(x / (s * 6.5) - (t / 700) * Math.PI * 2 + y * 0.012)
+        const a = 0.42 * fall * band
+        if (a > 0.02) blend(x, y, mist, a)
+      }
+    }
   }
 
   // Watchtower straddling the dip, with a gate, windows, and a tiled pagoda roof.

@@ -37,7 +37,7 @@ export const TAEGEUK_GROUND_TOP = 20
 /** Four twinkle frames on a 1200ms round. */
 export const TAEGEUK_FRAME_MS = 300
 /** One eased turn of the emblem before it rests in the official orientation. */
-export const TAEGEUK_SPIN_MS = 1500
+export const TAEGEUK_SPIN_MS = 900
 export const TAEGEUK_CONFETTI_COUNT = 12
 /** Floodlight pylon masts outside the flag field. */
 export const TAEGEUK_PYLONS = [1, 74] as const

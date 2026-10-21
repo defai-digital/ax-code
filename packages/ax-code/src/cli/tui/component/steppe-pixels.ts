@@ -65,7 +65,12 @@ export function renderSteppePixels(width: number, height: number, style: SteppeS
   const groundY = hd.Y(STEPPE_GROUND_TOP)
   const coreR = Math.max(3, S * 0.5)
 
-  hd.sky((t) => steppeSkyRgb(style, t))
+  hd.sky((t) => {
+    const base = steppeSkyRgb(style, t)
+    if (!night) return base
+    // Lift the lower sky toward navy; the top 1.5% stays the zenith color.
+    return hdMix(base, hdHex("#1a2c5c"), clamp01((t - 0.015) * 1.6))
+  })
   // Sun glare low in the west by day; moon and Milky Way by night.
   if (night) {
     const moon = hdMix(hdHex(c.smoke), hdHex(c.glow), 0.72)
@@ -79,11 +84,21 @@ export function renderSteppePixels(width: number, height: number, style: SteppeS
     for (let k = 0; k < 6; k++)
       glow(hd, hd.w * (0.1 + k * 0.17), hd.Y(7 - k * 1.1), hd.cw * 14, hdHex("#5a6ab0"), 0.12, 0.25)
     hd.stars(STEPPE_STARS, moon, (index) => (Math.floor(elapsed / 400) + index) % 3 === 0)
+    // Slow twinkle across the sky; skip the zenith sample at scene (38, 0).
+    for (let i = 0; i < 96; i++) {
+      const sx = Math.floor(hash2(i, 11) * hd.w)
+      const sy = Math.floor(hash2(i, 12) * hd.Y(8.5))
+      if (Math.abs(sx - hd.X(38)) < hd.cw * 3 && sy < hd.Y(0.45)) continue
+      const tw = 0.28 + 0.72 * (0.5 + 0.5 * Math.sin(theta * (1 + (i % 3)) + i * 0.7))
+      blendPx(hd, sx, sy, hdHex("#e4ecff"), tw)
+    }
     const mx = hd.X(STEPPE_MOON.x)
     const my = hd.Y(STEPPE_MOON.y)
-    glow(hd, mx, my, coreR * 10, hdHex("#8fa0e0"), 0.4)
-    hd.disk(mx, my, coreR, moon)
-    hd.disk(mx + coreR * 0.38, my - coreR * 0.18, coreR * 0.86, steppeSkyRgb(style, my / hd.h))
+    glow(hd, mx, my, coreR * 14, hdHex("#9aacd8"), 0.55)
+    glow(hd, mx, my, coreR * 5, hdHex("#e8eeff"), 0.45)
+    hd.disk(mx, my, coreR * 1.35, hdHex("#f4f7ff"))
+    hd.disk(mx - coreR * 0.28, my - coreR * 0.16, coreR * 0.32, hdMix(hdHex("#d5def0"), moon, 0.4))
+    hd.disk(mx + coreR * 0.3, my + coreR * 0.28, coreR * 0.22, hdMix(hdHex("#c9d4ee"), moon, 0.35))
   } else {
     glow(hd, hd.X(14), groundY - hd.ch * 4, hd.cw * 26, hdHex("#fff2c8"), 0.5, 0.9)
     glow(hd, hd.X(14), groundY - hd.ch * 4, coreR * 6, hdHex("#ffffff"), 0.5)
@@ -111,6 +126,27 @@ export function renderSteppePixels(width: number, height: number, style: SteppeS
       [2.2, -0.2, 1.2],
     ] as const) {
       glow(hd, px + dx * hd.cw, py + dy * hd.ch, hd.cw * r * 1.8, body, 0.95, 0.4)
+    }
+  }
+  // Moonlit cloud band drifting west, looping with the 2400ms cycle. Kept below
+  // the zenith row so (380, 2) stays dark.
+  if (night) {
+    const moonlit = hdMix(hdHex("#d4def6"), around, 0.15)
+    const moonlitBelly = hdMix(moonlit, hdHex("#8a9cc8"), 0.45)
+    for (let i = 0; i < 5; i++) {
+      const x = (((18 + i * 16 - phase * STEPPE_COLUMNS) % STEPPE_COLUMNS) + STEPPE_COLUMNS) % STEPPE_COLUMNS
+      const px = hd.X(x)
+      const py = hd.Y(3.8 + (i % 3) * 1.35)
+      for (const [dx, dy, r] of [
+        [-3.2, 0.1, 2.2],
+        [-1.4, -0.35, 2.8],
+        [0.6, -0.5, 3.1],
+        [2.6, -0.15, 2.5],
+        [4.0, 0.2, 1.8],
+      ] as const) {
+        glow(hd, px + dx * hd.cw, py + dy * hd.ch + hd.ch * 0.2, hd.cw * r * 2.4, moonlitBelly, 0.72, 0.42)
+        glow(hd, px + dx * hd.cw, py + dy * hd.ch, hd.cw * r * 2.1, moonlit, 0.85, 0.4)
+      }
     }
   }
 

@@ -31,6 +31,26 @@ test.each(["greatwall-dawn", "greatwall-dusk"] as const)("%s paints deterministi
   ).toBe(true)
 })
 
+test("greatwall-dawn keeps visible motion", () => {
+  let best = 0
+  let prev = renderGreatwallPixels(WIDTH, HEIGHT, "greatwall-dawn", 0)
+  for (let t = 100; t <= 3000; t += 100) {
+    const frame = renderGreatwallPixels(WIDTH, HEIGHT, "greatwall-dawn", t)
+    let changed = 0
+    for (let i = 0; i < frame.length; i += 3) {
+      const d = Math.abs(
+        0.299 * (frame[i]! - prev[i]!) +
+          0.587 * (frame[i + 1]! - prev[i + 1]!) +
+          0.114 * (frame[i + 2]! - prev[i + 2]!),
+      )
+      if (d > 8) changed++
+    }
+    best = Math.max(best, changed / (frame.length / 3))
+    prev = frame
+  }
+  expect(best).toBeGreaterThan(0.015)
+})
+
 test.each(["greatwall-dawn", "greatwall-dusk"] as const)("%s renders at any size", (style) => {
   for (const [width, height] of [
     [0, 0],

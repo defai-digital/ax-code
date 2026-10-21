@@ -94,6 +94,25 @@ export function renderBrandenburgPixels(
     const sunY = GY(brandenburgSun(elapsedMs))
     const core = hdHex("#fff6d4")
     hd.halo(cx, sunY, unit * 3.1, core, hdMix(core, skyAt(sunY), 0.45), skyAt(sunY))
+    // Drifting dawn clouds stay in the upper sky, above the openings, so the
+    // sun core at gate-unit (0, 9) is never covered.
+    const cloudLit = hdMix(hdHex("#fff6ea"), skyAt(hd.Y(2)), 0.18)
+    for (let i = 0; i < 5; i++) {
+      const span = BRANDENBURG_COLUMNS + 18
+      const gx = ((((i * 17 + t * (0.014 + i * 0.003)) % span) + span) % span) - 8
+      const cloudX = hd.X(gx)
+      const cloudY = hd.Y(1.1 + (i % 3) * 1.5)
+      for (let k = 0; k < 8; k++) {
+        const kk = k - 3.5
+        hd.blob(
+          cloudX + kk * unit * 2.1,
+          cloudY + Math.sin(k * 1.7 + i) * unit * 0.4,
+          unit * (2.8 + Math.cos(kk * 0.45) * 1.1),
+          unit * 1.15,
+          cloudLit,
+        )
+      }
+    }
   }
   for (const bird of brandenburgBirds(elapsedMs)) {
     const bx = hd.X(bird.x + 0.5)
@@ -103,6 +122,19 @@ export function renderBrandenburgPixels(
     const r = Math.max(1, unit * 0.12)
     line(bx - wing, by - lift, bx, by, r, hdHex(c.bird))
     line(bx, by, bx + wing, by - lift, r, hdHex(c.bird))
+  }
+  if (!night) {
+    const birdRgb = hdHex(c.bird)
+    for (let i = 0; i < 14; i++) {
+      const span = BRANDENBURG_COLUMNS + 14
+      const bx = hd.X(((((t * (0.016 + (i % 5) * 0.002) + i * 7) % span) + span) % span) - 6)
+      const by = hd.Y(0.7 + (i % 5) * 0.95)
+      const wing = unit * (2.0 + (i % 3) * 0.35)
+      const lift = Math.sin(t / 140 + i * 0.9) * unit * 1.1
+      const r = Math.max(1.2, unit * 0.16)
+      line(bx - wing, by - lift, bx, by, r, birdRgb)
+      line(bx, by, bx + wing, by - lift, r, birdRgb)
+    }
   }
 
   // Tiergarten tree line, low on the avenue so the horizon glows through the center.
@@ -202,6 +234,31 @@ export function renderBrandenburgPixels(
     const fx = -6.2 + k * 0.89
     hd.blob(GX(fx + 0.3), GY(25.4 + ((k * 7) % 3) * 0.3), unit * 0.3, unit * 0.55, sandHi)
     stroke(fx, 24.4, fx + 0.4, 25.4, 0.1, sandHi)
+  }
+  // Dawn flags on the attic flanks, beside the quadriga rather than over it.
+  if (!night) {
+    const cloth = hdHex("#d8c45a")
+    const clothDark = hdHex("#8a6a28")
+    for (const side of [-1, 1]) {
+      const poleX = GX(side * 7.8)
+      const top = GY(gate.centerAtticTop + 4.2)
+      const bot = GY(gate.centerAtticTop + 0.4)
+      line(poleX, top, poleX, bot, Math.max(0.8, unit * 0.08), sandDeep)
+      const clothW = unit * 2.8
+      const clothH = unit * 1.6
+      for (let i = 0; i < clothW; i++) {
+        const u = i / Math.max(1, clothW)
+        const wave = Math.sin(u * 5.2 - t / 260) * unit * 0.45 * u
+        for (let j = 0; j < clothH; j++) {
+          const shade = 0.55 + 0.45 * (0.5 + 0.5 * Math.cos(u * 5.2 - t / 260))
+          hd.set(
+            Math.round(poleX + side * (2 + i)),
+            Math.round(top + unit * 0.15 + j + wave),
+            hdMix(cloth, clothDark, shade),
+          )
+        }
+      }
+    }
   }
 
   // Cornice with dentils, frieze, and architrave.
