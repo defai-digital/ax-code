@@ -1,14 +1,18 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto"
+import { Ajv } from "@modelcontextprotocol/client/validators/ajv"
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { Instance } from "../project/instance"
 import { Session } from "../session"
+import { SessionMove } from "../session/move"
 import { SessionID } from "../session/schema"
 import { Config } from "../config/config"
 import { exactOrigin } from "./webmcp-origin"
 import { WebMcpProfile } from "./webmcp-profile"
 import { parseJsonStrict } from "../util/json-value"
 import { BrowserRouting } from "./browser-routing"
+import { Filesystem } from "../util/filesystem"
+import { NotFoundError } from "../storage/db"
 
 // Captured from the trusted launcher once, never from project configuration.
 const hostToken = process.env.AX_CODE_DESKTOP_BROWSER_TOKEN
@@ -16,16 +20,121 @@ const hostToken = process.env.AX_CODE_DESKTOP_BROWSER_TOKEN
 export namespace DesktopBrowser {
   export const CAPABILITY = "desktop.webmcp.v1"
   export const HEADER = "x-ax-desktop-browser-token"
-  // `message` mirrors `reason` so the model-facing tool error, the log line and the recorded
-  // event all carry the actionable sentence instead of the bare error name (NamedError only
-  // promotes `data.message`). Every construction goes through `failure` to keep them in sync.
+  // Closed set from ADR-266. `message` stays the human sentence NamedError promotes to
+  // Error.message; `reason` is the stable code and `nextAction` is the single next step.
+  // Unknown failures map to native-failure. Every construction goes through `failure`.
+  export const Reasons = [
+    "no-page",
+    "page-changed",
+    "tool-not-found",
+    "definition-changed",
+    "invalid-input",
+    "provider-gone",
+    "timeout",
+    "session-rejected",
+    "native-failure",
+  ] as const
+  export type Reason = (typeof Reasons)[number]
   export const Failure = NamedError.create(
     "DesktopBrowserUnavailable",
-    z.object({ reason: z.string(), message: z.string() }),
+    z.object({
+      reason: z.enum(Reasons),
+      message: z.string(),
+      nextAction: z.string(),
+      path: z.string().optional(),
+    }),
   )
-  const failure = (reason: string) => new Failure({ reason, message: reason })
-  const fail = (reason: string): never => {
-    throw failure(reason)
+  type FailureExtra = { reason?: Reason; nextAction?: string; path?: string }
+  function failure(message: string, extra?: FailureExtra) {
+    const classified = classify(message)
+    const path = extra?.path
+    return new Failure({
+      reason: extra?.reason ?? classified.reason,
+      message,
+      nextAction: extra?.nextAction ?? classified.nextAction,
+      ...(path ? { path } : {}),
+    })
+  }
+  function fail(message: string, extra?: FailureExtra): never {
+    throw failure(message, extra)
+  }
+  function classify(message: string): { reason: Reason; nextAction: string } {
+    if (
+      message.includes("is not a valid URL") ||
+      message.startsWith("Only https://") ||
+      message === "Credentials in a URL are not accepted" ||
+      message === "Input must be a JSON object of at most 64 KiB" ||
+      message === "Text of at most 2000 characters is required" ||
+      message === "Credential fields are not accepted in agent input" ||
+      message === "Enter credentials manually in the browser" ||
+      message === "Enter credentials and payment details manually in the browser" ||
+      message.startsWith("There is no element ") ||
+      message.includes(" is disabled") ||
+      message.includes(" is not a selector") ||
+      message.startsWith("Input does not match the tool schema")
+    ) {
+      if (message.startsWith("Input does not match the tool schema"))
+        return {
+          reason: "invalid-input",
+          nextAction: "Fix the input at the reported path so it matches the tool schema, then invoke again.",
+        }
+      if (message === "Credential fields are not accepted in agent input" || message.startsWith("Enter credentials"))
+        return {
+          reason: "invalid-input",
+          nextAction: "Ask the user to enter credentials in the browser; do not type them.",
+        }
+      if (message.startsWith("There is no element ") || message.includes(" is disabled") || message.includes(" is not a selector"))
+        return { reason: "invalid-input", nextAction: "Read the page again and use a ref from that outline." }
+      if (message.includes("URL") || message.startsWith("Only https://") || message === "Credentials in a URL are not accepted")
+        return {
+          reason: "invalid-input",
+          nextAction: "Pass an https:// URL, or http:// on loopback, with no credentials in the URL.",
+        }
+      return { reason: "invalid-input", nextAction: "Correct the arguments and call the tool again." }
+    }
+    if (message.startsWith("The project browser is enrolled but no page"))
+      return { reason: "no-page", nextAction: "Call action=navigate with the https:// or loopback http:// URL to open." }
+    if (
+      message === "Browser document changed; authorize a fresh operation" ||
+      message.startsWith("The project browser landed on a different origin") ||
+      message === "Element references are stale; read the page again" ||
+      message === "Response belongs to an expired browser request" ||
+      message === "Browser connection or document changed; completion is unconfirmed"
+    )
+      return { reason: "page-changed", nextAction: "List again: the page changed." }
+    if (message.startsWith("Tool was not in the latest listing"))
+      return { reason: "tool-not-found", nextAction: "List tools, then invoke a toolName from that listing." }
+    if (message === "Tool definition changed; list tools and authorize again" || message === "Tool catalog changed during listing")
+      return {
+        reason: "definition-changed",
+        nextAction: "List again, then invoke with the toolName and digest from that listing.",
+      }
+    if (
+      message.startsWith("No project browser is enrolled") ||
+      message.startsWith("The project browser is disconnected") ||
+      message === "Desktop browser provider is not enabled by the launcher" ||
+      message === "Provider stream closed"
+    )
+      return {
+        reason: "provider-gone",
+        nextAction: "Ask the user to enable agent access in the project browser pane.",
+      }
+    if (message === "Browser request was aborted" || message === "Browser request canceled or timed out; completion is unconfirmed")
+      return {
+        reason: "timeout",
+        nextAction: "Do not retry automatically; list again only if the user asks you to continue.",
+      }
+    if (message === "No coding session exists for this browser enrollment")
+      return {
+        reason: "session-rejected",
+        nextAction: "Enroll with a session from this project; the supplied session does not exist.",
+      }
+    if (message === "Session belongs to another project")
+      return {
+        reason: "session-rejected",
+        nextAction: "Enroll with a session whose directory is inside this project; the supplied session is not.",
+      }
+    return { reason: "native-failure", nextAction: "Stop and report the failure; do not retry automatically." }
   }
   export const ID = z.string().uuid()
   export const ToolDefinition = z
@@ -175,6 +284,12 @@ export namespace DesktopBrowser {
     .strict()
     .meta({ ref: "DesktopWebMcpConnection" })
 
+  // Ajv's compiled check. `errors` is read synchronously after a call.
+  type InputValidator = ((data: unknown) => boolean) & {
+    errors?: { instancePath?: string; keyword?: string; params?: Record<string, unknown> }[] | null
+  }
+  /** Compiled page-schema validators kept per provider. Evicts the oldest digest. */
+  export const VALIDATOR_CACHE_LIMIT = 32
   type Pending = {
     request: Request
     resolve: (reply: Reply) => void
@@ -190,6 +305,8 @@ export namespace DesktopBrowser {
     canceled: string[]
     pending: Map<string, Pending>
     touched: number
+    /** Compiled validators keyed by tool-definition digest. Cleared on catalog update. */
+    validators: Map<string, InputValidator>
     /** The latest page read; element references from any other read are refused. */
     lastRead?: { readId: string; generation: string; refs: Map<string, OutlineEntry> }
     wake?: () => void
@@ -198,7 +315,7 @@ export namespace DesktopBrowser {
   const state = Instance.state(
     () => new Map<string, Provider>(),
     async (providers) => {
-      for (const provider of providers.values()) retire(provider)
+      for (const provider of providers.values()) retire(provider, { reason: "provider-gone" })
       providers.clear()
     },
   )
@@ -268,7 +385,13 @@ export namespace DesktopBrowser {
     const actual = Buffer.from(value)
     return expected.length === actual.length && timingSafeEqual(expected, actual)
   }
-  function retire(provider: Provider, { keepNavigate = false } = {}) {
+  function retire(provider: Provider, options?: { keepNavigate?: boolean; reason?: "page-changed" | "provider-gone" }) {
+    const keepNavigate = options?.keepNavigate === true
+    const reason = options?.reason ?? "page-changed"
+    const nextAction =
+      reason === "provider-gone"
+        ? "Ask the user to enable agent access again; the previous operation was not confirmed."
+        : "List again: the page changed, and the previous operation was not confirmed."
     for (const pending of [...provider.pending.values()]) {
       // A document change is the *result* a navigation request is waiting for, so
       // it must survive the retire that the new snapshot triggers. Any other
@@ -277,7 +400,9 @@ export namespace DesktopBrowser {
       if (keepNavigate && (pending.request.operation === "navigate" || pending.request.operation === "act")) continue
       provider.canceled.push(pending.request.requestID)
       pending.cleanup()
-      pending.reject(failure("Browser connection or document changed; completion is unconfirmed"))
+      pending.reject(
+        failure("Browser connection or document changed; completion is unconfirmed", { reason, nextAction }),
+      )
     }
     provider.queue = keepNavigate
       ? provider.queue.filter((request) => request.operation === "navigate" || request.operation === "act")
@@ -289,7 +414,7 @@ export namespace DesktopBrowser {
     const found = state().get(id)
     if (!found || Date.now() - found.touched > 45000) {
       if (found) {
-        retire(found)
+        retire(found, { reason: "provider-gone" })
         state().delete(id)
       }
       return fail(
@@ -298,11 +423,31 @@ export namespace DesktopBrowser {
     }
     return found
   }
+  /**
+   * The session must exist (Session.get, the same lookup as requireCurrentProjectSession),
+   * belong to this project, and sit inside the project boundary SessionMove uses
+   * (instance directory, worktree, sandboxes) after Filesystem.resolve. Another project,
+   * a parent path, and a prefixed sibling are rejected. A moved subdirectory is accepted.
+   */
+  function ownsEnrollingDirectory(directory: string) {
+    return SessionMove.directoryWithinProject(directory)
+  }
   export async function enroll(input: z.infer<typeof Enrollment>) {
     if (!enabled()) return fail("Desktop browser provider is not enabled by the launcher")
-    const info = await Session.get(input.sessionID)
-    if (info.projectID !== Instance.project.id || info.directory !== Instance.directory)
-      return fail("Session belongs to another project")
+    const info = await Session.get(input.sessionID).catch((error: unknown) => {
+      if (NotFoundError.isInstance(error)) return undefined
+      throw error
+    })
+    if (!info)
+      return fail("No coding session exists for this browser enrollment", {
+        reason: "session-rejected",
+        nextAction: `Enroll with a session from this project; ${input.sessionID} does not exist.`,
+      })
+    if (info.projectID !== Instance.project.id || !(await ownsEnrollingDirectory(info.directory)))
+      return fail("Session belongs to another project", {
+        reason: "session-rejected",
+        nextAction: `Enroll with a session whose directory is inside this project; ${input.sessionID} is not.`,
+      })
     const policy = (await Config.get()).webmcp
     if (policy?.allow === false) return fail("WebMCP is disabled by managed policy")
     const providers = state()
@@ -310,7 +455,7 @@ export namespace DesktopBrowser {
       // Providers that stopped polling are only evicted lazily by provider(); sweep them here so
       // dead connections cannot fill the table and block every later enrollment.
       if (old.sessionID === input.sessionID || Date.now() - old.touched > 45000) {
-        retire(old)
+        retire(old, { reason: "provider-gone" })
         providers.delete(old.id)
       }
     }
@@ -324,6 +469,7 @@ export namespace DesktopBrowser {
       canceled: [],
       pending: new Map(),
       touched: Date.now(),
+      validators: new Map(),
       polling: false,
     }
     providers.set(entry.id, entry)
@@ -332,7 +478,7 @@ export namespace DesktopBrowser {
   export function disconnect(id: string) {
     const entry = state().get(id)
     if (!entry) return
-    retire(entry)
+    retire(entry, { reason: "provider-gone" })
     state().delete(id)
   }
   export function update(id: string, snapshot: Snapshot) {
@@ -342,8 +488,10 @@ export namespace DesktopBrowser {
     if (next.generation !== entry.snapshot.generation) entry.lastRead = undefined
     // Catalog changes retire already-approved calls even within the same document,
     // except a navigation that is waiting for exactly this document.
-    if (canonical(next) !== canonical(entry.snapshot)) retire(entry, { keepNavigate: true })
+    if (canonical(next) !== canonical(entry.snapshot)) retire(entry, { keepNavigate: true, reason: "page-changed" })
     entry.snapshot = next
+    // A catalog update retires compiled validators even when a digest is reused.
+    entry.validators.clear()
     entry.touched = Date.now()
   }
   export async function poll(id: string, signal: AbortSignal) {
@@ -473,7 +621,8 @@ export namespace DesktopBrowser {
     // The catalog can change within the same document while the policy check was awaited.
     if (operation === "invoke") {
       const tool = entry.snapshot.tools.find((item) => item.name === extra.toolName)
-      if (!tool || digest(tool) !== extra.digest) return fail("Tool definition changed; list tools and authorize again")
+      if (!tool) return fail("Tool was not in the latest listing; list tools and choose a listed name")
+      if (digest(tool) !== extra.digest) return fail("Tool definition changed; list tools and authorize again")
     }
     if (entry.pending.size !== 0) return fail("Another browser invocation is in progress")
     return enqueue(
@@ -630,25 +779,241 @@ export namespace DesktopBrowser {
     // A fresh catalog must match the identity that was approved before listing.
     if (canonical(reply.snapshot) !== canonical(bound(binding).snapshot))
       return fail("Tool catalog changed during listing")
-    return reply.snapshot.tools.map((tool) => ({ ...tool, digest: digest(tool) }))
+    return reply.snapshot.tools.map((tool) => {
+      const definitionDigest = digest(tool)
+      return {
+        ...tool,
+        digest: definitionDigest,
+        invoke: {
+          action: "invoke" as const,
+          toolName: tool.name,
+          digest: definitionDigest,
+          input: exampleInput(tool.inputSchema),
+        },
+      }
+    })
+  }
+  /** Minimal object derived from a page tool schema. Required properties only. */
+  export function exampleInput(schema: unknown): Record<string, unknown> {
+    const value = exampleValue(schema, 0)
+    if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>
+    return {}
+  }
+  function exampleValue(schema: unknown, depth: number): unknown {
+    if (depth > 6 || !schema || typeof schema !== "object" || Array.isArray(schema)) return {}
+    const record = schema as Record<string, unknown>
+    if (Array.isArray(record.enum) && record.enum.length > 0) return jsonLiteral(record.enum[0])
+    if ("const" in record) return jsonLiteral(record.const)
+    if (Array.isArray(record.oneOf) && record.oneOf.length > 0) return exampleValue(record.oneOf[0], depth + 1)
+    if (Array.isArray(record.anyOf) && record.anyOf.length > 0) return exampleValue(record.anyOf[0], depth + 1)
+    const type = Array.isArray(record.type) ? record.type.find((item) => item !== "null") : record.type
+    if (type === "string") return ""
+    if (type === "number" || type === "integer") return 0
+    if (type === "boolean") return false
+    if (type === "array") return []
+    if (type === "null") return null
+    const properties =
+      record.properties && typeof record.properties === "object" && !Array.isArray(record.properties)
+        ? (record.properties as Record<string, unknown>)
+        : {}
+    const required = Array.isArray(record.required) ? record.required.filter((key): key is string => typeof key === "string") : []
+    const input: Record<string, unknown> = {}
+    for (const key of required) {
+      if (!Object.prototype.hasOwnProperty.call(properties, key)) continue
+      input[key] = exampleValue(properties[key], depth + 1)
+    }
+    return input
+  }
+  function jsonLiteral(value: unknown) {
+    if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value
+    return {}
+  }
+  const PREVIEW_MAX_BYTES = 2048
+  /**
+   * JSON view of the detached input for the permission prompt. Secret-like keys are
+   * replaced at any depth. When the encoding exceeds 2 KiB, the result is a UTF-8-safe
+   * prefix of what will be sent plus `… (N bytes, M not shown)`. Never log the input
+   * or this preview. Value-level secrets under innocuous keys are not redacted.
+   */
+  export function inputPreview(input: Record<string, unknown>) {
+    let json = "{}"
+    try {
+      json = JSON.stringify(redactSecrets(input)) ?? "{}"
+    } catch {
+      return "{}"
+    }
+    const total = Buffer.byteLength(json, "utf8")
+    if (total <= PREVIEW_MAX_BYTES) return json
+    // The marker is widest when nothing is shown (dropped has the most digits).
+    const widest = Buffer.byteLength(previewMarker(total, 0), "utf8")
+    const budget = PREVIEW_MAX_BYTES - widest
+    if (budget <= 0) return previewMarker(total, 0)
+    const head = truncateUtf8(json, budget)
+    return head + previewMarker(total, Buffer.byteLength(head, "utf8"))
+  }
+  function previewMarker(total: number, shown: number) {
+    return `… (${total} bytes, ${total - shown} not shown)`
+  }
+  function truncateUtf8(json: string, maxBytes: number) {
+    const buf = Buffer.from(json, "utf8")
+    let end = Math.min(Math.max(maxBytes, 0), buf.length)
+    while (end > 0 && (buf[end - 1]! & 0xc0) === 0x80) end--
+    if (end > 0 && (buf[end - 1]! & 0xc0) === 0xc0) end--
+    return buf.subarray(0, end).toString("utf8")
+  }
+  // Whole-token or suffix for `key`, so `keyboard` stays visible. Other secret words
+  // match anywhere in the folded token (`accesstoken`, `clientsecret`, `pässword`).
+  const SECRET_WORDS = ["password", "passwd", "secret", "token", "authorization", "cookie", "apikey"]
+  function secretLikeKey(key: string) {
+    const tokens = key
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean)
+    return tokens.some((token) => token.endsWith("key") || SECRET_WORDS.some((word) => token.includes(word)))
+  }
+  function redactSecrets(value: unknown, depth = 0): unknown {
+    if (depth > 32) return null
+    if (Array.isArray(value)) return value.map((item) => redactSecrets(item, depth + 1))
+    if (!value || typeof value !== "object") return value
+    const redacted: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value)) {
+      redacted[key] = secretLikeKey(key) ? "[redacted]" : redactSecrets(item, depth + 1)
+    }
+    return redacted
+  }
+  function schemaPointer(error: { instancePath?: string; keyword?: string; params?: Record<string, unknown> }) {
+    const base = error.instancePath && error.instancePath.length > 0 ? error.instancePath : ""
+    const missing = error.params?.missingProperty
+    if (error.keyword === "required" && typeof missing === "string") return `${base}/${missing}`
+    const additional = error.params?.additionalProperty
+    if (error.keyword === "additionalProperties" && typeof additional === "string") return `${base}/${additional}`
+    return base || "/"
+  }
+  const NESTED_SCHEMA_MAPS = new Set(["properties", "$defs", "definitions", "dependentSchemas"])
+  const SCHEMA_ARRAY_KEYS = new Set(["allOf", "anyOf", "oneOf", "prefixItems"])
+  const SCHEMA_VALUE_KEYS = new Set([
+    "additionalProperties",
+    "unevaluatedProperties",
+    "additionalItems",
+    "contains",
+    "not",
+    "if",
+    "then",
+    "else",
+    "propertyNames",
+    "unevaluatedItems",
+    "contentSchema",
+  ])
+  // `pattern` / `patternProperties` are regexes Ajv would run on the event loop.
+  // Only schema keywords count: a property or default named "pattern" is not one.
+  function schemaHasUnsafePattern(schema: unknown) {
+    const pending = [schema]
+    const seen = new Set<object>()
+    while (pending.length) {
+      const current = pending.pop()
+      if (!current || typeof current !== "object" || Array.isArray(current)) continue
+      if (seen.has(current)) continue
+      seen.add(current)
+      const record = current as Record<string, unknown>
+      if (Object.hasOwn(record, "pattern") && typeof record.pattern === "string") return true
+      if (Object.hasOwn(record, "patternProperties")) return true
+      for (const [key, value] of Object.entries(record)) {
+        if (key === "items") {
+          if (Array.isArray(value)) for (const child of value) pending.push(child)
+          else pending.push(value)
+          continue
+        }
+        if (NESTED_SCHEMA_MAPS.has(key) && value && typeof value === "object" && !Array.isArray(value)) {
+          for (const child of Object.values(value)) pending.push(child)
+          continue
+        }
+        if (SCHEMA_ARRAY_KEYS.has(key) && Array.isArray(value)) {
+          for (const child of value) pending.push(child)
+          continue
+        }
+        if (SCHEMA_VALUE_KEYS.has(key)) pending.push(value)
+      }
+    }
+    return false
+  }
+  function takeValidator(cache: Map<string, InputValidator>, key: string) {
+    const found = cache.get(key)
+    if (!found) return undefined
+    cache.delete(key)
+    cache.set(key, found)
+    return found
+  }
+  function rememberValidator(cache: Map<string, InputValidator>, key: string, validate: InputValidator) {
+    cache.delete(key)
+    cache.set(key, validate)
+    while (cache.size > VALIDATOR_CACHE_LIMIT) {
+      const oldest = cache.keys().next().value
+      if (oldest === undefined) break
+      cache.delete(oldest)
+    }
+  }
+  function rejectSchema(validate: InputValidator, input: Record<string, unknown>) {
+    if (validate(input)) return
+    const path = schemaPointer(validate.errors?.[0] ?? {})
+    return fail(`Input does not match the tool schema at ${path}`, { path, reason: "invalid-input" })
+  }
+  // Page schemas are untrusted and may repeat $id values. Validators are cached per digest.
+  function assertInputSchema(
+    schema: unknown,
+    input: Record<string, unknown>,
+    digestKey: string,
+    cache: Map<string, InputValidator>,
+  ) {
+    if (schema === undefined) return
+    const cached = takeValidator(cache, digestKey)
+    if (cached) return rejectSchema(cached, input)
+    let document: Record<string, unknown>
+    try {
+      const parsed = parseJsonStrict(JSON.stringify(schema))
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fail("The tool schema could not be checked")
+      document = parsed as Record<string, unknown>
+    } catch {
+      return fail("The tool schema could not be checked")
+    }
+    delete document.$schema
+    delete document.$id
+    if (schemaHasUnsafePattern(document)) return fail("The tool schema could not be checked")
+    let validate: InputValidator
+    try {
+      validate = new Ajv({ strict: false, allErrors: false, validateSchema: false, validateFormats: false }).compile(
+        document,
+      )
+    } catch {
+      return fail("The tool schema could not be checked")
+    }
+    rememberValidator(cache, digestKey, validate)
+    return rejectSchema(validate, input)
   }
   export function prepareInvocation(binding: Binding, toolName: string, expectedDigest: string, input: unknown) {
     const entry = bound(binding)
     const tool = entry.snapshot.tools.find((tool) => tool.name === toolName)
-    if (!tool || digest(tool) !== expectedDigest) return fail("Tool definition changed; list tools and authorize again")
+    if (!tool) return fail("Tool was not in the latest listing; list tools and choose a listed name")
+    if (digest(tool) !== expectedDigest) return fail("Tool definition changed; list tools and authorize again")
     if (bytes(input) > 65536 || !input || typeof input !== "object" || Array.isArray(input))
       return fail("Input must be a JSON object of at most 64 KiB")
     const frozenInput = parseJsonStrict(JSON.stringify(input)) as Record<string, unknown>
-    const values = [frozenInput] as unknown[]
-    while (values.length) {
-      const value = values.pop()
-      if (typeof value === "string" && WebMcpProfile.maskedValue(value))
-        return fail("Enter credentials manually in the browser")
-      if (value && typeof value === "object") {
-        for (const [key, item] of Object.entries(value)) {
+    // Schema check happens before permission is asked. The failing path is the JSON pointer.
+    // The approval callback calls prepareInvocation again and reuses this provider's cache.
+    assertInputSchema(tool.inputSchema, frozenInput, expectedDigest, entry.validators)
+    const pending = [{ value: frozenInput as unknown, path: "" }]
+    while (pending.length) {
+      const current = pending.pop()!
+      if (typeof current.value === "string" && WebMcpProfile.maskedValue(current.value))
+        return fail("Enter credentials manually in the browser", { path: current.path || "/" })
+      if (current.value && typeof current.value === "object") {
+        for (const [key, item] of Object.entries(current.value)) {
+          const path = `${current.path}/${key}`
           if (/^(password|passwd|secret|token|api[_-]?key|authorization|cookie)$/i.test(key))
-            return fail("Credential fields are not accepted in agent input")
-          values.push(item)
+            return fail("Credential fields are not accepted in agent input", { path })
+          pending.push({ value: item, path })
         }
       }
     }

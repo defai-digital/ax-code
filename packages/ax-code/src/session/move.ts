@@ -81,6 +81,19 @@ export namespace SessionMove {
     return roots.some((root) => Filesystem.contains(root, target))
   }
 
+  /**
+   * True when `directory` resolves inside the project boundary. Resolve failures
+   * are outside. Callers that already compared `projectID` still need this:
+   * session move accepts a subdirectory or sandbox, not only the instance root.
+   */
+  export async function directoryWithinProject(directory: string) {
+    try {
+      return withinProjectBoundary(Filesystem.resolve(directory), await projectBoundaryRoots())
+    } catch {
+      return false
+    }
+  }
+
   async function readGitContext(directory: string): Promise<GitContext> {
     const topLevel = await git(["rev-parse", "--show-toplevel"], { cwd: directory })
     if (topLevel.exitCode !== 0) return { worktree: null, branch: null, dirty: null }

@@ -4,6 +4,50 @@ import { DesktopBrowser } from "../mcp/desktop-browser"
 import { WebMcpAutoApproval } from "../mcp/webmcp-auto-approval"
 import DESCRIPTION from "./desktop_webmcp.txt"
 
+function permissionError(error: unknown) {
+  if (!(error instanceof Error)) return false
+  return (
+    error.name === "PermissionRejectedError" ||
+    error.name === "PermissionCorrectedError" ||
+    error.name === "PermissionDeniedError" ||
+    error.name === "QuestionRejectedError"
+  )
+}
+
+function toolFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : ""
+  if (message.startsWith("Navigate requires"))
+    return new DesktopBrowser.Failure({
+      reason: "invalid-input",
+      message,
+      nextAction: "Pass action=navigate with an https:// or loopback http:// URL.",
+    })
+  if (message.startsWith("Wait requires"))
+    return new DesktopBrowser.Failure({
+      reason: "invalid-input",
+      message,
+      nextAction: "Pass waitText, the text to wait for.",
+    })
+  if (message.startsWith("Act requires"))
+    return new DesktopBrowser.Failure({
+      reason: "invalid-input",
+      message,
+      nextAction: "Pass readId and ref from the latest read, and how set to click, type, or select.",
+    })
+  if (message.startsWith("Invoke requires"))
+    return new DesktopBrowser.Failure({
+      reason: "invalid-input",
+      message,
+      nextAction: "List tools, then invoke with the toolName and digest from that listing.",
+    })
+  // Unknown failures stay native-failure. Do not copy the caught message: it may contain input.
+  return new DesktopBrowser.Failure({
+    reason: "native-failure",
+    message: "The project browser operation failed.",
+    nextAction: "Stop and report the failure; do not retry automatically.",
+  })
+}
+
 export const DesktopWebMcpTool = Tool.define("desktop_webmcp", {
   description: DESCRIPTION,
   parameters: z
@@ -30,6 +74,45 @@ export const DesktopWebMcpTool = Tool.define("desktop_webmcp", {
   async execute(params, ctx) {
     // Kept as one variable so every return path carries the same metadata type.
     const operation = params.action
+    try {
+      return await executeDesktopWebMcp(params, ctx, operation)
+    } catch (error) {
+      if (permissionError(error)) throw error
+      const failure = error instanceof DesktopBrowser.Failure ? error : toolFailure(error)
+      try {
+        await ctx.metadata({
+          metadata: {
+            operation,
+            reason: failure.data.reason,
+            nextAction: failure.data.nextAction,
+            ...(failure.data.path ? { path: failure.data.path } : {}),
+          },
+        })
+      } catch {
+        // The error data still carries reason and nextAction when metadata cannot be recorded.
+      }
+      throw failure
+    }
+  },
+})
+
+async function executeDesktopWebMcp(
+  params: {
+    action: "list" | "invoke" | "navigate" | "read" | "act" | "wait"
+    url?: string
+    toolName?: string
+    digest?: string
+    input?: Record<string, unknown>
+    readId?: string
+    ref?: string
+    how?: "click" | "type" | "select"
+    text?: string
+    waitText?: string
+    timeoutMs?: number
+  },
+  ctx: Tool.Context,
+  operation: "list" | "invoke" | "navigate" | "read" | "act" | "wait",
+) {
     // Navigation is the one action that works before a page is granted: the pane
     // may be blank, and opening the URL is exactly what the user would otherwise
     // have to type. It is approved against the target origin instead of a page.
@@ -140,12 +223,15 @@ export const DesktopWebMcpTool = Tool.define("desktop_webmcp", {
       providerID: binding.providerID,
       generation: binding.generation,
       definitionDigest: params.digest,
+      // Display copy of the detached input. always stays empty: there is no standing grant.
+      ...(invocation ? { inputPreview: DesktopBrowser.inputPreview(invocation.input) } : {}),
     }
     WebMcpAutoApproval.bindDesktop(
       metadata,
       { permission: "webmcp", patterns: [binding.origin] },
       async () => {
         await DesktopBrowser.checkPolicy(binding)
+        // Same prepareInvocation as before the prompt, so the cached validator is reused.
         if (invocation)
           DesktopBrowser.prepareInvocation(binding, invocation.toolName, invocation.digest, invocation.input)
         return true
@@ -172,5 +258,4 @@ export const DesktopWebMcpTool = Tool.define("desktop_webmcp", {
         operation: params.action,
       },
     }
-  },
-})
+}
