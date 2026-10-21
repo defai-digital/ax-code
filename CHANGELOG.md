@@ -16,6 +16,7 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Update the Vite development dependency to 8.1.6 to include the patched editor launcher.
 - Share idle MCP recovery across concurrent calls, fail before dispatch when reconnecting fails, and prevent late calls from closing a replacement client.
 - Reject writing option abbreviations, Git trace output, ripgrep helper execution, and Git execution overrides in read-only command paths.
 - Apply configured shell denies to monitor commands and detect destructive commands inside clustered shell flags.
