@@ -741,7 +741,7 @@ describe("wiki page generation budget", () => {
   test("asks a GLM flash gateway for low reasoning effort", () => {
     expect(wikiPageProviderOptions(wikiModel({ id: "glm-5.3-flash" }))).toEqual({
       openaiCompatible: { reasoningEffort: "low" },
-      "defai-01-ax-trust-com": { reasoningEffort: "low" },
+      "defai-01-ax-trust-com": { reasoningEffort: "low", thinking: { type: "enabled" } },
     })
   })
 

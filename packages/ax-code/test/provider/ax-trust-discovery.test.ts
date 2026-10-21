@@ -500,7 +500,8 @@ test("fills a namespaced Qwen card from the vendor catalog", async () => {
         expect(model.variants).toMatchObject({
           low: { reasoningEffort: "low" },
           medium: { reasoningEffort: "medium" },
-          high: { reasoningEffort: "high" },
+          high: { reasoningEffort: "xhigh" },
+          xhigh: { reasoningEffort: "xhigh" },
         })
       },
     })
