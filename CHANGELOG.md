@@ -6,6 +6,25 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.28.1] - 2026-10-21
+
+### Changed
+
+- Publish SDK 2.6.42 with the current server contract and verified GitHub Packages distribution.
+- Animate the volcano, Borobudur, torii, domes, steppe, Brandenburg, Great Wall, and taegeuk TUI scenes.
+- Add an opt-in SQLite write-stall performance harness for runtime diagnosis.
+
+### Fixed
+
+- Share idle MCP recovery across concurrent calls, fail before dispatch when reconnecting fails, and prevent late calls from closing a replacement client.
+- Reject writing option abbreviations, Git trace output, ripgrep helper execution, and Git execution overrides in read-only command paths.
+- Apply configured shell denies to monitor commands and detect destructive commands inside clustered shell flags.
+- Restore moved files and symlinks faithfully during patch rollback.
+- Keep sessions idle after cancellation during a busy-state write, retain interrupted steering markers, and clear both stream watchdogs on timeout.
+- Guard operator stop against concurrent terminal settlement and account for the full truncation notice before spilling tool output.
+- Preserve DeepSeek thinking after empty reasoning steps, recognize qualified Qwen/GLM and Kimi model identities, and normalize MiniMax M3 split reasoning streams.
+- Give actionable unavailable-tool suggestions without substituting tools or arguments, and clarify WebMCP validation and approval feedback.
+
 ## [7.28.0] - 2026-10-20
 
 ### Changed
