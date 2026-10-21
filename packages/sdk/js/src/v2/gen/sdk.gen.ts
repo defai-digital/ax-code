@@ -68,6 +68,8 @@ import type {
   FormatterStatusResponses,
   GetRunReportSessionSessionIdFingerprintResponses,
   GetRunReportSessionSessionIdResponses,
+  GlobalArchiveSessionErrors,
+  GlobalArchiveSessionResponses,
   GlobalCapabilitiesResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
@@ -531,6 +533,45 @@ export class Upgrade extends HeyApiClient {
 
 /** AX Code API schema `Global` (auto-generated from the OpenAPI contract). */
 export class Global extends HeyApiClient {
+  /**
+   * Update global session archive state
+   *
+   * Archive or restore a stored session without bootstrapping its project directory or executing lifecycle hooks. Uses the server authentication policy; execution and transcript routes remain project scoped.
+   */
+  public archiveSession<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      archived: number | null
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "body", key: "archived" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      GlobalArchiveSessionResponses,
+      GlobalArchiveSessionErrors,
+      ThrowOnError
+    >({
+      url: "/global/session/{sessionID}/archive",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
   /**
    * Get managed runtime identity
    */

@@ -2,6 +2,7 @@ import { Slug } from "@ax-code/util/slug"
 import path from "path"
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
+import { GlobalBus } from "@/bus/global"
 import z from "zod"
 import { type ProviderMetadata } from "ai"
 import { Installation } from "../installation"
@@ -631,12 +632,21 @@ export namespace Session {
     return next
   })
 
-  function updateAndPublish(sessionID: SessionID, fields: Record<string, unknown>): Info {
+  function updateAndPublish(sessionID: SessionID, fields: Record<string, unknown>, global = false): Info {
     return Database.use((db) => {
       const row = db.update(SessionTable).set(fields).where(eq(SessionTable.id, sessionID)).returning().get()
       if (!row) throw new NotFoundError({ message: `Session not found: ${sessionID}` })
       const info = fromRow(row)
-      Database.effect(() => Bus.publishDetached(Event.Updated, { info }))
+      Database.effect(() => {
+        if (global) {
+          GlobalBus.emit("event", {
+            directory: info.directory,
+            payload: { type: Event.Updated.type, properties: { info } },
+          })
+        } else {
+          Bus.publishDetached(Event.Updated, { info })
+        }
+      })
       return info
     })
   }
@@ -671,6 +681,13 @@ export namespace Session {
       }
       return info
     },
+  )
+
+  // Portfolio housekeeping must work for removed worktrees and historical project
+  // identities. This metadata-only operation never boots a project or runs hooks.
+  export const setArchivedGlobally = fn(
+    z.object({ sessionID: SessionID.zod, time: z.number().int().min(0).nullable() }),
+    async (input) => updateAndPublish(input.sessionID, { time_archived: input.time, time_updated: Date.now() }, true),
   )
 
   export const setMetadata = fn(

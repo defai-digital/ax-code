@@ -5666,6 +5666,44 @@ export type WorktreeResetInput = {
   directory: string
 }
 
+/** Request payload shape for `PATCH /global/session/{sessionID}/archive` — Update global session archive state */
+export type GlobalArchiveSessionData = {
+  body?: {
+    archived: number | null
+  }
+  path: {
+    sessionID: string
+  }
+  query?: never
+  url: "/global/session/{sessionID}/archive"
+}
+
+/** Error response payloads for `PATCH /global/session/{sessionID}/archive` — Update global session archive state */
+export type GlobalArchiveSessionErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `PATCH /global/session/{sessionID}/archive` — Update global session archive state */
+export type GlobalArchiveSessionError = GlobalArchiveSessionErrors[keyof GlobalArchiveSessionErrors]
+
+/** Success response payloads for `PATCH /global/session/{sessionID}/archive` — Update global session archive state */
+export type GlobalArchiveSessionResponses = {
+  /**
+   * Updated session archive state
+   */
+  200: Session
+}
+
+/** Successful response payload for `PATCH /global/session/{sessionID}/archive` — Update global session archive state */
+export type GlobalArchiveSessionResponse = GlobalArchiveSessionResponses[keyof GlobalArchiveSessionResponses]
+
 /** Request payload shape for `GET /global/runtime` — Get managed runtime identity */
 export type GlobalRuntimeData = {
   body?: never

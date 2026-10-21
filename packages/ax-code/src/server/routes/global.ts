@@ -19,6 +19,8 @@ import { Filesystem } from "@/util/filesystem"
 import { EventStream } from "../event-stream"
 import { ManagedRuntime } from "@/runtime/managed-runtime"
 import { ServerRuntimeAuth } from "../runtime-auth"
+import { Session } from "@/session"
+import { SESSION_ID_PARAM, parseSessionID } from "./route-params"
 
 const log = Log.create({ service: "server" })
 const SERVER_STARTED_AT = Date.now()
@@ -233,6 +235,26 @@ function getGlobalCapabilitiesInfo(): z.infer<typeof GlobalCapabilitiesInfo> {
 
 export const GlobalRoutes = lazy(() =>
   new Hono()
+    .patch(
+      "/session/:sessionID/archive",
+      describeRoute({
+        summary: "Update global session archive state",
+        description:
+          "Archive or restore a stored session without bootstrapping its project directory or executing lifecycle hooks. Uses the server authentication policy; execution and transcript routes remain project scoped.",
+        operationId: "global.archiveSession",
+        responses: {
+          200: {
+            description: "Updated session archive state",
+            content: { "application/json": { schema: resolver(Session.Info) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      validator("json", z.strictObject({ archived: z.number().int().min(0).nullable() })),
+      async (c) =>
+        c.json(await Session.setArchivedGlobally({ sessionID: parseSessionID(c), time: c.req.valid("json").archived })),
+    )
     .get(
       "/runtime",
       describeRoute({

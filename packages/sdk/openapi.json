@@ -6,6 +6,89 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/global/session/{sessionID}/archive": {
+      "patch": {
+        "operationId": "global.archiveSession",
+        "summary": "Update global session archive state",
+        "description": "Archive or restore a stored session without bootstrapping its project directory or executing lifecycle hooks. Uses the server authentication policy; execution and transcript routes remain project scoped.",
+        "responses": {
+          "200": {
+            "description": "Updated session archive state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses_.*"
+            },
+            "required": true
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "archived": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "archived"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.global.archiveSession({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/global/runtime": {
       "get": {
         "operationId": "global.runtime",
