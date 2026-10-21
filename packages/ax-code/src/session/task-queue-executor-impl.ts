@@ -43,7 +43,7 @@ type WorkflowRunApi = typeof import("../workflow/run").WorkflowRun
 type QueueExecution = {
   sessionID?: SessionID
   run: () => Promise<unknown>
-  cancel?: () => Promise<unknown>
+  cancel?: (options?: { cancelQueueItems?: boolean }) => Promise<unknown>
 }
 
 const activeStatuses = ["running", "blocked_permission", "blocked_question"] as const
@@ -306,7 +306,7 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
         sessionID: item.sessionID,
       })
       void Promise.resolve()
-        .then(() => (execution.cancel ? execution.cancel() : cancelAbandonedExecution(item)))
+        .then(() => (execution.cancel ? execution.cancel({ cancelQueueItems: false }) : cancelAbandonedExecution(item)))
         .catch((error) => {
           log.warn("failed to cancel abandoned task queue execution", {
             taskID: item.id,
@@ -378,9 +378,11 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
   }
 }
 
-async function cancelTimedOutExecution(item: TaskQueue.Info) {
+async function cancelTimedOutExecution(item: TaskQueue.Info, options?: { cancelQueueItems?: boolean }) {
   const current = await TaskQueue.get(item.id).catch(() => item)
-  if (current.sessionID) await SessionPrompt.cancel(current.sessionID)
+  if (!current.sessionID) return
+  if (options) await SessionPrompt.cancel(current.sessionID, options)
+  else await SessionPrompt.cancel(current.sessionID)
 }
 
 // The queue row already carries the cancellation; only stop the live run and
@@ -879,8 +881,8 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
   let workflowRunID: WorkflowRunID | undefined
   const execution: QueueExecution = {
     sessionID: item.sessionID,
-    cancel: async () => {
-      if (!workflowRunID) return cancelTimedOutExecution(item)
+    cancel: async (options) => {
+      if (!workflowRunID) return cancelTimedOutExecution(item, options)
       const { WorkflowScheduler } = await import("../workflow/scheduler")
       return WorkflowScheduler.cancel(workflowRunID)
     },

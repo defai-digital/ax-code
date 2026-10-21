@@ -10,6 +10,48 @@ import type { MessageV2 } from "../../src/session/message-v2"
 import { tmpdir } from "../fixture/fixture"
 
 test.skipIf(process.platform === "win32")(
+  "a transcript-only revert still works when the snapshot cannot be captured",
+  async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const messageID = MessageID.ascending()
+        await Session.updateMessage({
+          id: messageID,
+          sessionID: session.id,
+          role: "user",
+          agent: "build",
+          model: { providerID: "test", modelID: "test" },
+          time: { created: Date.now() },
+        } as MessageV2.User)
+        await Session.updatePart({
+          id: PartID.ascending(),
+          messageID,
+          sessionID: session.id,
+          type: "text",
+          text: "undo this transcript",
+        } as MessageV2.TextPart)
+
+        expect(await Snapshot.track()).toBeDefined()
+        const blocked = path.join(tmp.path, "blocked.txt")
+        await fs.writeFile(blocked, "unreadable")
+        await fs.chmod(blocked, 0o000)
+        try {
+          // No patch parts means no file writes and no rollback baseline, so
+          // the transcript undo must keep the fail-open snapshot behavior.
+          const next = await SessionRevert.revert({ sessionID: session.id, messageID })
+          expect(next.revert?.messageID).toBe(messageID)
+        } finally {
+          await fs.chmod(blocked, 0o644)
+        }
+      },
+    })
+  },
+)
+
+test.skipIf(process.platform === "win32")(
   "a revert that cannot capture its pre-revert snapshot leaves user edits intact",
   async () => {
     await using tmp = await tmpdir({ git: true })

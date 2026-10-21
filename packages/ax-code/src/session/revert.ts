@@ -355,20 +355,27 @@ export namespace SessionRevert {
 
   async function revertUnlocked(input: RevertInput) {
     const planned = await plan(input)
-    // Undo must restore the real pre-revert tree. A stale fallback baseline
-    // would overwrite edits made after it when the revert rolls back.
-    const before = await Snapshot.track({ requireFresh: true })
-    planned.revert.snapshot = planned.session.revert?.snapshot ?? before
     const files = [...new Set(planned.patches.flatMap((patch) => patch.files))]
+    // A file undo must restore the real pre-revert tree; a stale fallback
+    // baseline would overwrite edits made after it when the revert rolls back.
+    // A transcript-only undo writes nothing and keeps the fail-open behavior.
+    const before = await Snapshot.track(files.length > 0 ? { requireFresh: true } : undefined)
+    planned.revert.snapshot = planned.session.revert?.snapshot ?? before
     let applied = false
     let diffs: Snapshot.FileDiff[] = []
     let next: Session.Info
     try {
       await Snapshot.revert(planned.patches)
       applied = true
-      const after = await Snapshot.track()
+      const after = files.length > 0 ? await Snapshot.track() : undefined
       diffs = before && after ? await Snapshot.diffFull(after, before) : []
-      if (planned.revert.snapshot) planned.revert.diff = await Snapshot.diff(planned.revert.snapshot)
+      if (files.length > 0 && planned.revert.snapshot) {
+        planned.revert.diff = await Snapshot.diff(planned.revert.snapshot)
+      } else if (files.length === 0 && planned.session.revert?.diff !== undefined) {
+        // A transcript-only boundary move does not touch the worktree, so the
+        // previous undo's file summary still describes the reverted state.
+        planned.revert.diff = planned.session.revert.diff
+      }
       next = await Session.setRevert({
         sessionID: input.sessionID,
         revert: planned.revert,

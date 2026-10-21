@@ -1409,6 +1409,60 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("cancelling a blocked automation leaves other queue items queued", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.useFakeTimers()
+        try {
+          const session = await Session.create({})
+          let release!: () => void
+          const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(
+            () =>
+              new Promise((resolve) => {
+                release = () => resolve(undefined as never)
+              }),
+          )
+          const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue()
+          try {
+            const blocked = await TaskQueue.enqueue({
+              sessionID: session.id,
+              kind: "automation",
+              title: "Blocked automation",
+              payload: { scheduledTaskID: "sch_blocked_automation", prompt: "run" },
+            })
+            const waiting = await TaskQueue.enqueue({
+              sessionID: session.id,
+              kind: "subagent",
+              title: "Waiting child",
+              payload: { source: "task" },
+            })
+            await TaskQueueExecutor.start(blocked)
+            await vi.advanceTimersByTimeAsync(0)
+            await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission" })
+
+            await TaskQueue.cancel(blocked.id)
+            await vi.advanceTimersByTimeAsync(30_000)
+            // The automation has a cancel handler; it must receive the scoped
+            // option instead of falling back to the session-wide cascade.
+            expect(cancel).toHaveBeenCalledWith(session.id, { cancelQueueItems: false })
+            expect((await TaskQueue.get(waiting.id)).status).toBe("queued")
+
+            release()
+            await vi.advanceTimersByTimeAsync(0)
+          } finally {
+            prompt.mockRestore()
+            cancel.mockRestore()
+          }
+        } finally {
+          vi.useRealTimers()
+        }
+      },
+    })
+  })
+
   test("marks prompt queue items failed when the prompt loop ends with a replay error", async () => {
     await using tmp = await tmpdir({ git: true })
 
