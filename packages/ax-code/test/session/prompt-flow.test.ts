@@ -269,6 +269,41 @@ describe("session.prompt flow", () => {
     }
   })
 
+  test("an abort that lands during the busy write leaves the session idle", async () => {
+    await using tmp = await tmpdir({ git: true })
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    const originalSet = SessionStatus.set
+    let cancelled = false
+    const setSpy = vi.spyOn(SessionStatus, "set").mockImplementation(async (sessionID, status) => {
+      // Cancel while the loop's busy write is in flight, then let that write
+      // land: the abort must still leave the session idle afterwards.
+      if (!cancelled && status.type === "busy") {
+        cancelled = true
+        await SessionPrompt.cancel(sessionID)
+      }
+      return originalSet(sessionID, status)
+    })
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "Do work" }],
+          }).catch(() => undefined)
+          expect(cancelled).toBe(true)
+          expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+        },
+      })
+    } finally {
+      setSpy.mockRestore()
+    }
+  })
+
   test("persists text reply and survives instance reload", async () => {
     await using tmp = await tmpdir({ git: true })
 

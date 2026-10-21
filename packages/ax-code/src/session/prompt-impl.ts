@@ -58,6 +58,7 @@ import {
 } from "./prompt/prompt-loop-recording"
 import { resolvePromptLoopResult } from "./prompt/prompt-loop-result"
 import { markPromptLoopBusy } from "./prompt/prompt-loop-status"
+import { SessionStatus } from "./status"
 import { handlePromptLoopGlobalStepLimit } from "./prompt/prompt-loop-step-limit"
 import { handlePromptLoopTotalStepLimit } from "./prompt/prompt-loop-total-step-limit"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt/prompt-request-build"
@@ -739,8 +740,16 @@ export namespace SessionPrompt {
     let mediaProjection: MediaProjection.Mode = "normal"
     let mediaProjectionUserID: MessageID | undefined
     while (true) {
+      if (abort.aborted) {
+        reason = "aborted"
+        break
+      }
       await markPromptLoopBusy({ sessionID, step, maxSteps: sessionStepLimit, consecutiveErrors })
       if (abort.aborted) {
+        // A cancel that landed while the busy write was in flight already set
+        // the session idle. Repair that only when this aborted generation still
+        // owns the run state; a successor's busy must not be cleared.
+        if (runState.resume(sessionID) === undefined) await SessionStatus.set(sessionID, { type: "idle" })
         reason = "aborted"
         break
       }
