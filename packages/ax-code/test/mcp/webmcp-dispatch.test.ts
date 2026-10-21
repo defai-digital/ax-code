@@ -40,7 +40,7 @@ test("an exhausted dispatch budget fails before dispatching and clears the basel
   })
 })
 
-test("a healthy dispatch keeps one shared deadline across preflight and main call", async () => {
+test.each([{}, "{}"])("a healthy dispatch serializes input %j and keeps one shared deadline", async (input) => {
   const current = profile()
   const timeouts: (number | undefined)[] = []
   const client = {
@@ -75,7 +75,11 @@ test("a healthy dispatch keeps one shared deadline across preflight and main cal
     5000,
     { server: "bridge", toolName: "execute_webmcp_tool", profile: current },
   )
-  await execute.execute!({ pageId: 1, toolName: "a", input: "{}" }, { toolCallId: "call_exec", messages: [] } as never)
+  await execute.execute!({ pageId: 1, toolName: "a", input }, { toolCallId: "call_exec", messages: [] } as never)
+  expect(client.callTool).toHaveBeenCalledWith(
+    { name: "execute_webmcp_tool", arguments: { pageId: 1, toolName: "a", input: "{}" } },
+    expect.any(Object),
+  )
   // Three list-flow calls plus four execute-flow calls, each within its own dispatch budget.
   expect(timeouts).toHaveLength(7)
   for (const timeout of timeouts) {

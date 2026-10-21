@@ -287,9 +287,9 @@ describe("WebMCP T2 asks through the session layer", () => {
           expect(client.calls.filter((name) => name === "take_snapshot")).toHaveLength(1)
           // A successful read replaces the snapshot; bind the fixture's target again.
           WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
-          await expect(tools.bridge_click!.execute!({ pageId: 1, uid: "1_1" }, execOptions())).rejects.toThrow(
-            "allowed for this session",
-          )
+          await expect(tools.bridge_click!.execute!({ pageId: 1, uid: "1_1" }, execOptions())).resolves.toMatchObject({
+            output: expect.stringContaining("call bridge_click again once with the same arguments"),
+          })
           expect(client.calls).not.toContain("click")
           expect(grants.interact.get(ORIGIN)).toBe(20)
           await tools.bridge_click!.execute!({ pageId: 1, uid: "1_1" }, execOptions())
@@ -405,9 +405,11 @@ describe("WebMCP T2 asks through the session layer", () => {
       fn: async () => {
         const tools = await resolveTools(resolveInput("msg_turn_1"))
         // Grant-covered click: the dispatch raises the grant error, the prompt is the grant prompt.
-        await expect((tools.bridge_click.execute as any)({ pageId: 1, uid: "1_1" }, execOptions())).rejects.toThrow(
-          "allowed for this session",
-        )
+        await expect(
+          (tools.bridge_click.execute as any)({ pageId: 1, uid: "1_1" }, execOptions()),
+        ).resolves.toMatchObject({
+          output: expect.stringContaining("call bridge_click again once with the same arguments"),
+        })
         expect(ask).toHaveBeenCalledTimes(1)
         expect(ask.mock.calls[0]?.[0]).toMatchObject({
           permission: "webmcp",
@@ -463,6 +465,115 @@ describe("WebMCP T2 asks through the session layer", () => {
         expect(ask).not.toHaveBeenCalled()
         expect(grant).not.toHaveBeenCalled()
         expect(client.calls).not.toContain("fill")
+      },
+    })
+  })
+
+  test.each(["neither", "read", "interact", "expired"])(
+    "wait_for collects missing grants in one call (%s) and dispatches only on the single retry",
+    async (existing) => {
+      await using tmp = await tmpdir()
+      const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+      const grants: GrantState = {
+        read: new Set(existing === "read" ? [ORIGIN] : []),
+        interact: new Map(
+          existing === "interact" || existing === "expired" ? [[ORIGIN, existing === "expired" ? 0 : 20]] : [],
+        ),
+      }
+      const client = fakeClient()
+      vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+      vi.spyOn(MCP, "tools").mockResolvedValue(await bridgeTools(profile, grants, client))
+      vi.spyOn(MCP, "checkWebMcpReadGrant").mockResolvedValue({ ok: true })
+      vi.spyOn(MCP, "checkWebMcpInteractGrant").mockResolvedValue({ ok: true })
+      vi.spyOn(MCP, "grantWebMcpReadOrigin").mockImplementation(async () => {
+        grants.read.add(ORIGIN)
+        return { ok: true }
+      })
+      vi.spyOn(MCP, "grantWebMcpInteractOrigin").mockImplementation(async () => {
+        grants.interact.set(ORIGIN, 20)
+        return { ok: true }
+      })
+      const ask = vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const tools = await resolveTools(resolveInput("msg_wait_grants"))
+          const wait = () =>
+            tools.bridge_wait_for!.execute!({ pageId: 1, text: ["Saved"], timeout: 30_000 }, execOptions())
+          const result = await wait()
+          expect(result).toMatchObject({
+            output: expect.stringContaining("call bridge_wait_for again once with the same arguments"),
+          })
+          expect(result).not.toHaveProperty("metadata.isError", true)
+          expect(client.calls).not.toContain("wait_for")
+          expect(grants.read.has(ORIGIN)).toBe(true)
+          expect(grants.interact.get(ORIGIN)).toBe(20)
+          const prompts = ask.mock.calls.length
+          expect(prompts).toBe(existing === "neither" || existing === "expired" ? 2 : 1)
+          // Grant feedback refunded its wait reservation: all four waits fit.
+          for (let i = 0; i < 4; i++) await wait()
+          expect(client.calls.filter((name) => name === "wait_for")).toHaveLength(4)
+          expect(ask).toHaveBeenCalledTimes(prompts)
+        },
+      })
+    },
+  )
+
+  test.each(["read", "interact"])("a denied wait_for %s grant remains an error without dispatch", async (denied) => {
+    await using tmp = await tmpdir()
+    const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
+    const grants: GrantState = { read: new Set(), interact: new Map() }
+    const client = fakeClient()
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue(await bridgeTools(profile, grants, client))
+    vi.spyOn(MCP, "checkWebMcpReadGrant").mockResolvedValue({ ok: true })
+    vi.spyOn(MCP, "checkWebMcpInteractGrant").mockResolvedValue({ ok: true })
+    vi.spyOn(MCP, "grantWebMcpInteractOrigin").mockImplementation(async () => {
+      grants.interact.set(ORIGIN, 20)
+      return { ok: true }
+    })
+    const readGrant = vi.spyOn(MCP, "grantWebMcpReadOrigin")
+    vi.spyOn(Permission, "ask").mockImplementation(async (request) => {
+      if (request.metadata?.[`${denied}Grant`]) throw new Permission.RejectedError()
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools(resolveInput("msg_wait_denied"))
+        await expect(
+          tools.bridge_wait_for!.execute!({ pageId: 1, text: ["Saved"] }, execOptions()),
+        ).rejects.toBeInstanceOf(Permission.RejectedError)
+        expect(client.calls).not.toContain("wait_for")
+        expect(readGrant).not.toHaveBeenCalled()
+        if (denied === "interact") expect(grants.interact.size).toBe(0)
+      },
+    })
+  })
+
+  test("an origin grant returns success with page recovery guidance", async () => {
+    await using tmp = await tmpdir()
+    const profile = WebMcpProfile.config(
+      { allowedOrigins: ["https://old.test"], read: true, interact: true },
+      true,
+    ).webmcp
+    const client = fakeClient()
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue(
+      await bridgeTools(profile, { read: new Set(), interact: new Map() }, client),
+    )
+    vi.spyOn(MCP, "checkWebMcpOriginGrant").mockResolvedValue({ ok: true })
+    vi.spyOn(MCP, "checkWebMcpOriginGrants").mockResolvedValue({ ok: false, error: "no twin" })
+    vi.spyOn(MCP, "grantWebMcpOrigin").mockResolvedValue({ ok: true })
+    vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools(resolveInput("msg_origin_grant"))
+        const result = await tools.bridge_new_page!.execute!({ url: PAGE }, execOptions())
+        expect(result).toMatchObject({
+          output: expect.stringContaining("Inspect list_pages and re-establish the target"),
+        })
+        expect(client.calls).not.toContain("new_page")
       },
     })
   })

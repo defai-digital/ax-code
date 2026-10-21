@@ -9,7 +9,7 @@ Use the browser capability this session actually exposes for the task in $ARGUME
 
 ## Desktop project browser (embedded mode)
 
-When `desktop_webmcp` is the only browser tool, this session runs inside the AX Coder desktop app. The bridge tools described below (`list_pages`, `new_page`, `navigate_page`, `list_webmcp_tools`, `execute_webmcp_tool`, `browser_workflow`) do not exist there; do not search for them.
+When `desktop_webmcp` is the only browser tool, this session runs inside the AX Code desktop app. The bridge tools described below (`list_pages`, `new_page`, `navigate_page`, `list_webmcp_tools`, `execute_webmcp_tool`, `browser_workflow`) do not exist there; do not search for them.
 
 - `desktop_webmcp` lists and invokes the tools the open page registered through native WebMCP (`input` is a JSON object, not a string), and for pages that register none it can `read`, `act` and `wait` on the enrolled page.
 - `action: "read"` returns the page's visible text and an outline of its controls, each with a reference (`e1`, `e2`, ...) and one `readId`. `action: "act"` takes that `readId`, a `ref` and `how`: `click`, `type` (with `text`) or `select` (with the option text). `action: "wait"` takes `waitText` and an optional `timeoutMs`. References belong to the latest read of the current document, so read again after any navigation. Every `act` asks the user. Never type passwords, card numbers or other credentials, and never press a `submit` control for a purchase, payment or account change the user did not request. If an act reports `originChanged`, stop and tell the user before reading the new page.

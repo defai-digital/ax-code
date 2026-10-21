@@ -1,9 +1,10 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { generateText, type ModelMessage } from "ai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import type { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { ProviderTransform } from "../../src/provider/transform"
+import { Log } from "../../src/util/log"
 import { parseJsonRecord } from "../../src/util/json-record"
 
 function model(id: string, interleaved: Provider.Model["capabilities"]["interleaved"] = false): Provider.Model {
@@ -231,6 +232,36 @@ describe("DeepSeek request wire contract", () => {
     })
     expect(original.thinking.type).toBe("enabled")
     expect(ProviderTransform.disableDeepSeekThinkingForToolHistory(target, original, messages, false)).toEqual(original)
+  })
+
+  test.each([false, true])("logs one bounded diagnostic per request (first missing in current turn: %s)", (current) => {
+    const info = vi.spyOn(Log.create({ service: "provider.transform" }), "info").mockImplementation(() => {})
+    try {
+      const messages: ModelMessage[] = [
+        ...(current ? [] : [{ role: "assistant" as const, content: "private old answer" }]),
+        { role: "user", content: "private prompt" },
+        { role: "assistant", content: "private answer" },
+        { role: "assistant", content: "another private answer" },
+      ]
+      const target = model("deepseek-flash")
+      ProviderTransform.disableDeepSeekThinkingForToolHistory(target, {}, messages, true)
+      expect(info).toHaveBeenCalledTimes(1)
+      expect(info).toHaveBeenCalledWith("DeepSeek thinking disabled for assistant history without reasoning", {
+        modelID: target.id,
+        missingReasoningCount: current ? 2 : 3,
+        firstMissingReasoningIndex: current ? 1 : 0,
+        firstMissingInCurrentUserTurn: current,
+      })
+      expect(JSON.stringify(info.mock.calls)).not.toContain("private")
+      ProviderTransform.disableDeepSeekThinkingForToolHistory(target, {}, messages, false)
+      ProviderTransform.disableDeepSeekThinkingForToolHistory(target, {}, [{ role: "user", content: "Hello" }], true)
+      expect(info).toHaveBeenCalledTimes(1)
+      // A new request with the same history still gets its own diagnostic.
+      ProviderTransform.disableDeepSeekThinkingForToolHistory(target, {}, messages, true)
+      expect(info).toHaveBeenCalledTimes(2)
+    } finally {
+      info.mockRestore()
+    }
   })
 
   test("keeps thinking when every prior assistant message has reasoning", () => {

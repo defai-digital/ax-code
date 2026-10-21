@@ -416,12 +416,17 @@ describe("WebMCP read grants and bounded output (ADR-171)", () => {
     expect(result.content[1]).toEqual({ type: "text", text: "page text" })
   })
 
-  test("boundReadResult rejects an oversize snapshot with narrowing guidance, not truncation", () => {
-    const big = "x".repeat(33 * 1024)
-    expect(() =>
-      WebMcpProfile.boundReadResult("take_snapshot", { content: [{ type: "text", text: big }] }, "https://a.test"),
-    ).toThrow("exceeded the 32 KiB read budget")
-  })
+  test.each(["take_snapshot", "wait_for"])(
+    "oversized %s gives actionable guidance without narrowing or replay",
+    (tool) => {
+      const big = "x".repeat(33 * 1024)
+      expect(() =>
+        WebMcpProfile.boundReadResult(tool, { content: [{ type: "text", text: big }] }, "https://a.test"),
+      ).toThrow(
+        `Do not retry ${tool}; use take_screenshot${tool === "take_snapshot" ? ", wait_for specific text" : ""} if available, or report BLOCKED`,
+      )
+    },
+  )
 
   test("boundReadResult fails closed on the upstream auto-saved screenshot response", () => {
     const result = {

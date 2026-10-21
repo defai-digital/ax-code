@@ -949,7 +949,10 @@ export async function resolveTools(input: ResolveToolsInput) {
           // bridge blocked). Both paths offer the same session-only grant; the
           // tool objects of this step hold the pre-relaunch client, so the
           // model retries on the next step.
-          const grantOrigin = async (grantPolicy: WebMcpProfile.Policy, error: unknown): Promise<never> => {
+          const grantRetry = (detail = "Access granted for this session") => ({
+            content: [{ type: "text" as const, text: `${detail}; call ${key} again once with the same arguments.` }],
+          })
+          const grantOrigin = async (grantPolicy: WebMcpProfile.Policy, error: unknown) => {
             if (!(error instanceof WebMcpProfile.OriginNotGrantedError)) throw error
             // A managed or schema refusal fails here without a prompt.
             const allowed = await MCP.checkWebMcpOriginGrant(grantPolicy.server, error.origin)
@@ -981,9 +984,15 @@ export async function resolveTools(input: ResolveToolsInput) {
             ctx.abort.throwIfAborted()
             const granted = await MCP.grantWebMcpOrigin(grantPolicy.server, error.origin, alsoOrigin)
             if (!granted.ok) throw new Error(granted.error)
-            throw new Error(
-              `WebMCP origin ${alsoOrigin ? `${error.origin} and ${alsoOrigin}` : error.origin} was allowed for this session and the browser bridge was restarted; open pages were closed. Retry the call.`,
-            )
+            // A restart closes pages, so replaying an old pageId is unsafe.
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `Access granted for this session. The browser bridge restarted and closed open pages. Inspect list_pages and re-establish the target before calling ${key} again once.`,
+                },
+              ],
+            }
           }
           // The read grant refusal precedes content dispatch. T1 can continue
           // once after approval with fresh origin/policy checks (ADR-176).
@@ -1020,11 +1029,8 @@ export async function resolveTools(input: ResolveToolsInput) {
               if (!granted.ok) throw new Error(granted.error)
             }
             if (!WebMcpProfile.READ_SCOPE_TOOLS.some((name) => name === readPolicy.toolName)) {
-              // wait_for belongs to T2 and retains its explicit retry and
-              // per-turn reservation semantics.
-              throw new Error(
-                `WebMCP read access to ${error.origin} ${saved ? "was saved for this project" : "was allowed for this session"}. Retry the call.`,
-              )
+              // wait_for retains its explicit retry and per-turn reservation.
+              return
             }
             WebMcpApprovals.bindReadContinuation(call as object, error.origin, async () => {
               ctx.abort.throwIfAborted()
@@ -1092,7 +1098,7 @@ export async function resolveTools(input: ResolveToolsInput) {
             try {
               call = WebMcpProfile.validateCall(policy.profile, policy.toolName, args)
             } catch (error) {
-              await grantOrigin(policy, error)
+              return await grantOrigin(policy, error)
             }
           }
           // Capture the approval-time origin/descriptor binding before the
@@ -1299,6 +1305,20 @@ export async function resolveTools(input: ResolveToolsInput) {
               if (policy) {
                 if (error instanceof WebMcpProfile.ReadNotGrantedError) {
                   await grantRead(policy, error)
+                  if (policy.toolName === "wait_for") {
+                    const remaining = policy.interactGrants?.().get(error.origin)
+                    if (remaining === undefined || remaining <= 0) {
+                      await grantInteract(
+                        policy,
+                        new WebMcpProfile.InteractNotGrantedError(error.origin, remaining !== undefined),
+                        breaker,
+                      )
+                    }
+                    await checkWebMcpDenials()
+                    if (nestedBrowser) throw new WebMcpProfile.GrantRetryError("Access granted; continue once")
+                    refundIfNotDispatched(call)
+                    return grantRetry()
+                  }
                   await checkWebMcpDenials()
                   ctx.abort.throwIfAborted()
                   await WebMcpApprovals.checkReadContinuation(call as object, error.origin)
@@ -1309,14 +1329,21 @@ export async function resolveTools(input: ResolveToolsInput) {
                   // The dispatch stopped before the bridge acted; the grant
                   // is recorded now and the model retries the same call.
                   await grantInteract(policy, error, breaker)
-                  throw new WebMcpProfile.GrantRetryError(
-                    `WebMCP interaction with ${error.origin} was ${error.renewal ? "renewed" : "allowed"} for this session (${WebMcpProfile.INTERACT_BUDGET} grant-covered actions). Retry the call.`,
-                  )
+                  // Collect both wait_for grants before asking for a single retry.
+                  if (policy.toolName === "wait_for" && !policy.readGrants?.().has(error.origin)) {
+                    await grantRead(policy, new WebMcpProfile.ReadNotGrantedError(error.origin))
+                  }
+                  await checkWebMcpDenials()
+                  // The workflow runner already handles this internal signal with
+                  // one continuation; model-facing tools receive a successful result.
+                  if (nestedBrowser) throw new WebMcpProfile.GrantRetryError("Access granted; continue once")
+                  refundIfNotDispatched(call)
+                  return grantRetry()
                 } else {
                   if (breaker && error instanceof WebMcpProfile.TargetBindingError) {
                     breaker.failed(webmcpTargetSummary(webmcp))
                   }
-                  await grantOrigin(policy, error)
+                  return await grantOrigin(policy, error)
                 }
               }
               throw error

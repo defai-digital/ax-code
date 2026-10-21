@@ -1,4 +1,4 @@
-Discover and invoke native WebMCP tools in the AX Coder project browser enrolled for this coding session.
+Discover and invoke native WebMCP tools in the AX Code project browser enrolled for this coding session.
 Use action=navigate with a https:// (or loopback http://) URL to have the app open that page in the project
 browser pane, which lists it in the same call. This is the only way you can put a page in front of the agent:
 the pane shows the load, the user can stop it, and the page itself stays untrusted.
