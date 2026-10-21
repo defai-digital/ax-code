@@ -4,6 +4,7 @@ import type { JSONSchema } from "zod/v4/core"
 import { mergeDeep } from "remeda"
 import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
+import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { isRecord } from "@/util/record"
 import { isQwen37MaxOrPlusModel } from "./model-capabilities"
@@ -25,6 +26,7 @@ function mimeToModality(mime: string): Modality | undefined {
 }
 
 export namespace ProviderTransform {
+  const log = Log.create({ service: "provider.transform" })
   export const OUTPUT_TOKEN_MAX = Flag.AX_CODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
   // Qwen 3.7 Max's documented output limit is 65 536 tokens across all
   // non-Alibaba routes (TogetherAI, Vercel). We raise the cap
@@ -1437,9 +1439,17 @@ export namespace ProviderTransform {
     hasTools: boolean,
   ): Record<string, any> {
     if (!hasTools || !isDeepSeekV4ToolModel(model)) return options
-    if (!messages.some((message) => message.role === "assistant" && !assistantHasDeepSeekReasoning(message))) {
-      return options
-    }
+    const missing = messages.flatMap((message, index) =>
+      message.role === "assistant" && !assistantHasDeepSeekReasoning(message) ? [index] : [],
+    )
+    if (missing.length === 0) return options
+    // This transform runs once at request preparation, not once per message.
+    log.info("DeepSeek thinking disabled for assistant history without reasoning", {
+      modelID: model.id,
+      missingReasoningCount: missing.length,
+      firstMissingReasoningIndex: missing[0],
+      firstMissingInCurrentUserTurn: missing[0]! > messages.findLastIndex((message) => message.role === "user"),
+    })
     return disableDeepSeekThinking(options)
   }
 

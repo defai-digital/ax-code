@@ -83,7 +83,7 @@ describe("webmcp system-prompt block", () => {
     expect(client.callTool).not.toHaveBeenCalled()
   })
 
-  test("converted page-tool input documents a JSON string without widening its wire contract", async () => {
+  test("converted page-tool input accepts objects or JSON strings with a string wire contract", async () => {
     const current = profile({})
     const tool = await convertMcpTool(
       { name: "execute_webmcp_tool", inputSchema: { type: "object" } } as never,
@@ -93,16 +93,16 @@ describe("webmcp system-prompt block", () => {
     )
     const schema = await asSchema(tool.inputSchema).jsonSchema
     expect(schema.properties?.input).toMatchObject({
-      type: "string",
-      description: expect.stringContaining("JSON-encoded string"),
+      anyOf: [expect.objectContaining({ type: "object" }), expect.objectContaining({ type: "string" })],
+      description: expect.stringContaining("JSON-encoded object string"),
     })
     const args = { pageId: 1, toolName: "search", input: JSON.stringify({ query: "example" }) }
     expect(WebMcpProfile.validateCall(current, "execute_webmcp_tool", args)).toEqual(args)
-    expect(() =>
+    expect(
       WebMcpProfile.validateCall(current, "execute_webmcp_tool", { ...args, input: { query: "example" } }),
-    ).toThrow()
+    ).toEqual(args)
     expect(tool.description).toContain("list_webmcp_tools")
-    expect(tool.description).toContain('"{\\"query\\":\\"example\\"}"')
+    expect(tool.description).toContain("input is an object or a JSON-encoded object string")
   })
 
   test("descriptions cover admitted tools while keeping ordinary MCP metadata intact", async () => {

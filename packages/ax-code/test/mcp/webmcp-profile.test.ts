@@ -154,6 +154,70 @@ describe("WebMCP profile", () => {
     expect(JSON.stringify(metadata)).not.toContain("private search")
   })
 
+  test("execute input accepts objects and strings and serializes objects before dispatch", () => {
+    const profile = { allowedOrigins: origins }
+    const input = { query: "private search", nested: { ids: [1, 2] } }
+    const object = WebMcpProfile.validateCall(profile, "execute_webmcp_tool", { pageId: 1, toolName: "search", input })
+    const string = WebMcpProfile.validateCall(profile, "execute_webmcp_tool", {
+      pageId: 1,
+      toolName: "search",
+      input: JSON.stringify(input),
+    })
+    expect(object).toEqual(string)
+    expect(object.input).toBe(JSON.stringify(input))
+    input.query = "changed"
+    expect(JSON.parse(object.input as string).query).toBe("private search")
+    expect(() =>
+      WebMcpProfile.validateCall(profile, "execute_webmcp_tool", {
+        pageId: 1,
+        toolName: "search",
+        input: { value: "界".repeat(30_000) },
+      }),
+    ).toThrow("64 KiB")
+  })
+
+  test("argument feedback names fields and expected types without echoing values or unknown keys", () => {
+    try {
+      WebMcpProfile.validateCall({ allowedOrigins: origins }, "execute_webmcp_tool", {
+        pageId: "secret-page",
+        toolName: 123,
+        input: [],
+        "secret-key": "secret-value",
+      })
+      throw new Error("validation unexpectedly succeeded")
+    } catch (error) {
+      const message = String(error)
+      expect(message).toContain("pageId: expected integer")
+      expect(message).toContain("toolName: expected string")
+      expect(message).toContain("input: expected object or string")
+      expect(message).not.toMatch(/secret|123/)
+    }
+  })
+
+  test.each([
+    ["Timeout while loading https://a.test/?token=SECRET", "timeout"],
+    ["No dialog is open: SECRET", "no dialog"],
+    ["Page detached: SECRET", "detached page"],
+    ["Element not found: SECRET", "element not found"],
+    ["Navigation failed https://a.test/?token=SECRET", "navigation failed"],
+    ["SECRET private page text", "other"],
+  ])("bridge failure gives a bounded category: %s", (detail, category) => {
+    for (const result of [
+      { isError: true, content: [{ type: "text", text: detail }] },
+      { content: [], structuredContent: { errorMessage: detail } },
+    ]) {
+      try {
+        WebMcpProfile.validateResult("click", result)
+        throw new Error("validation unexpectedly succeeded")
+      } catch (error) {
+        const message = (error as Error).message
+        expect(message).toBe(`WebMCP bridge operation failed; do not retry automatically (category: ${category})`)
+        expect(message.length).toBeLessThanOrEqual(120)
+        expect(message).not.toMatch(/SECRET|https:/)
+      }
+    }
+  })
+
   test("approval metadata never attaches page annotations to bridge operations", () => {
     const profile = WebMcpProfile.config({ allowedOrigins: origins }).webmcp
     const state = WebMcpProfile.stateFor(profile)
