@@ -949,8 +949,15 @@ export async function resolveTools(input: ResolveToolsInput) {
           // bridge blocked). Both paths offer the same session-only grant; the
           // tool objects of this step hold the pre-relaunch client, so the
           // model retries on the next step.
+          // A grant records access only; the call itself did not run. Say so plainly so a model does not report
+          // the action as done, and make the host origin of the message explicit.
           const grantRetry = (detail = "Access granted for this session") => ({
-            content: [{ type: "text" as const, text: `${detail}; call ${key} again once with the same arguments.` }],
+            content: [
+              {
+                type: "text" as const,
+                text: `[AX Code host] ${detail}. The requested action was NOT performed yet; call ${key} again once with the same arguments.`,
+              },
+            ],
           })
           const grantOrigin = async (grantPolicy: WebMcpProfile.Policy, error: unknown) => {
             if (!(error instanceof WebMcpProfile.OriginNotGrantedError)) throw error
@@ -989,7 +996,7 @@ export async function resolveTools(input: ResolveToolsInput) {
               content: [
                 {
                   type: "text" as const,
-                  text: `Access granted for this session. The browser bridge restarted and closed open pages. Inspect list_pages and re-establish the target before calling ${key} again once.`,
+                  text: `[AX Code host] Access granted for this session. The requested action was NOT performed: the browser bridge restarted and closed open pages. Inspect list_pages and re-establish the target before calling ${key} again once.`,
                 },
               ],
             }

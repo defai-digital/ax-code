@@ -288,7 +288,7 @@ describe("WebMCP T2 asks through the session layer", () => {
           // A successful read replaces the snapshot; bind the fixture's target again.
           WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
           await expect(tools.bridge_click!.execute!({ pageId: 1, uid: "1_1" }, execOptions())).resolves.toMatchObject({
-            output: expect.stringContaining("call bridge_click again once with the same arguments"),
+            output: expect.stringMatching(/\[AX Code host\].*NOT performed.*call bridge_click again once with the same arguments/),
           })
           expect(client.calls).not.toContain("click")
           expect(grants.interact.get(ORIGIN)).toBe(20)
