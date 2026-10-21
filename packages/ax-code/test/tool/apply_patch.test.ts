@@ -1533,3 +1533,84 @@ describe("patch content worker authority", () => {
     })
   })
 })
+
+describe("tool.apply_patch symlink swaps", () => {
+  test.skipIf(process.platform === "win32")(
+    "does not create parent directories through a symlink swapped during approval",
+    async () => {
+      await using fixture = await tmpdir()
+      await Instance.provide({
+        directory: fixture.path,
+        fn: async () => {
+          const outside = path.join(fixture.path, "..", `apply-patch-mkdir-outside-${Date.now()}`)
+          const parent = path.join(fixture.path, "swap-parent")
+          await fs.mkdir(outside, { recursive: true })
+          await fs.mkdir(parent)
+          const ctx: ToolCtx = {
+            ...baseCtx,
+            ask: async () => {
+              await fs.rm(parent, { recursive: true, force: true })
+              await fs.symlink(outside, parent)
+            },
+          }
+          try {
+            await expect(
+              execute(
+                { patchText: "*** Begin Patch\n*** Add File: swap-parent/nested/new.txt\n+hello\n*** End Patch" },
+                ctx,
+              ),
+            ).rejects.toThrow("Access denied: parent directory escapes project directory")
+            await expect(fs.readdir(path.join(outside, "nested"))).rejects.toThrow()
+          } finally {
+            await fs.rm(parent, { force: true }).catch(() => undefined)
+            await fs.rm(outside, { recursive: true, force: true })
+          }
+        },
+      })
+    },
+  )
+
+  test.skipIf(process.platform === "win32")(
+    "rollback does not write through a symlink swapped in after the failure",
+    async () => {
+      await using fixture = await tmpdir()
+      await Instance.provide({
+        directory: fixture.path,
+        fn: async () => {
+          const a = path.join(fixture.path, "a.txt")
+          const b = path.join(fixture.path, "b.txt")
+          const outside = path.join(fixture.path, "..", `apply-patch-rollback-outside-${Date.now()}.txt`)
+          await writeAndTrack(a, "old-a\n")
+          await writeAndTrack(b, "old-b\n")
+          await fs.writeFile(outside, "new-a\n")
+          const originalWrite = Filesystem.write
+          const spy = vi.spyOn(Filesystem, "write").mockImplementation(async (target, content, mode, options) => {
+            if (String(target) === b) {
+              await fs.rm(a, { force: true })
+              await fs.symlink(outside, a)
+              throw new Error("disk full")
+            }
+            return originalWrite(target, content, mode, options)
+          })
+          const { ctx } = makeCtx()
+          try {
+            await expect(
+              execute(
+                {
+                  patchText:
+                    "*** Begin Patch\n*** Update File: a.txt\n@@\n-old-a\n+new-a\n*** Update File: b.txt\n@@\n-old-b\n+new-b\n*** End Patch",
+                },
+                ctx,
+              ),
+            ).rejects.toThrow(/rollback was incomplete for: .*a\.txt.*Original error: disk full/)
+            expect(await fs.readFile(outside, "utf8")).toBe("new-a\n")
+          } finally {
+            spy.mockRestore()
+            await fs.rm(a, { force: true }).catch(() => undefined)
+            await fs.rm(outside, { force: true }).catch(() => undefined)
+          }
+        },
+      })
+    },
+  )
+})

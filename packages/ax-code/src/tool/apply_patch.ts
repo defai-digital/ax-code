@@ -390,6 +390,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             const dest = change.movePath
             const [first, second] = [change.filePath, dest].sort()
             const restoreMove = async () => {
+              // Re-check both endpoints inside the lock; a symlink swapped in
+              // after the failure must not redirect the rollback outside the
+              // project.
+              await assertSymlinkInsideProject(change.filePath)
+              await assertSymlinkInsideProject(dest)
               // A case-only rename names one inode twice, so there is no
               // second path to reconcile — but the shared file can still be
               // edited externally after the move landed. Refuse to overwrite
@@ -442,6 +447,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             continue
           }
           await FileTime.withLock(change.filePath, async () => {
+            // A symlink swapped in after the failure must not redirect the
+            // rollback outside the project. Refuse and report the partial rollback.
+            await assertSymlinkInsideProject(change.filePath)
             const current = await readFileIfExists(change.filePath)
             if (!change.existed && change.type === "add") {
               if (current === undefined) return
@@ -492,7 +500,6 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         const edited = change.movePath ?? change.filePath
         switch (change.type) {
           case "add":
-            await fs.mkdir(path.dirname(change.filePath), { recursive: true })
             await FileTime.withLock(change.filePath, async () => {
               await assertSymlinkInsideProject(change.filePath)
 
@@ -503,6 +510,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               if (change.existed && current !== change.oldContent) {
                 throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
               }
+              // Create parents only after the containment re-check: a symlinked
+              // parent swapped during approval must not be followed outside.
+              await fs.mkdir(path.dirname(change.filePath), { recursive: true })
               activeDirty = true
               await Filesystem.write(change.filePath, change.newContent, undefined, { followSymlink: true })
             })
@@ -531,7 +541,6 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           case "move":
             if (change.movePath) {
               const dest = change.movePath
-              await fs.mkdir(path.dirname(dest), { recursive: true })
               const [first, second] = [change.filePath, dest].sort()
               if (first === second) {
                 await FileTime.withLock(first, async () => {
@@ -553,6 +562,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                   await FileTime.withLock(second, async () => {
                     await assertSymlinkInsideProject(change.filePath)
                     await assertSymlinkInsideProject(dest)
+                    await fs.mkdir(path.dirname(dest), { recursive: true })
 
                     const currentSource = await readFileIfExists(change.filePath)
                     if (currentSource !== change.oldContent) {
