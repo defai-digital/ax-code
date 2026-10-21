@@ -814,7 +814,7 @@ export namespace Snapshot {
     )
   }
 
-  async function captureOnce(current: State) {
+  async function captureOnce(current: State, options?: { requireFresh?: boolean }) {
     if (!(await enabled())) return
 
     await ensureRepo(current)
@@ -867,6 +867,7 @@ export namespace Snapshot {
       if (isCaptureCollision(error)) throw error
       const message = error instanceof Error ? error.message : String(error)
       if (!message.startsWith("Snapshot staging failed")) throw error
+      if (options?.requireFresh) throw error
       warnCoverageOff(
         current.worktree,
         "staging-failed",
@@ -910,7 +911,13 @@ export namespace Snapshot {
     return hash
   }
 
-  export async function track() {
+  /**
+   * Capture the worktree as a rollback baseline. Normal turns fail open: a
+   * staging failure keeps the previous baseline so chat continues. Destructive
+   * callers pass `requireFresh` because restoring from a stale baseline would
+   * overwrite edits made after that baseline.
+   */
+  export async function track(options?: { requireFresh?: boolean }) {
     // A disabled snapshot must not create even the operation-lock directory.
     if (!(await enabled())) return
     const current = await state()
@@ -928,7 +935,7 @@ export namespace Snapshot {
         await writeCaptureMarker(current.gitdir, { pid: process.pid, startedAt: Date.now() })
         // A failed attempt leaves the marker in place on purpose: if the
         // process dies next, the following run discards its partial state.
-        const hash = await withCaptureRetry(() => captureOnce(current))
+        const hash = await withCaptureRetry(() => captureOnce(current, options))
         await removeCaptureMarker(current.gitdir)
         if (packer.recordSuccess()) {
           capturing.delete(key)

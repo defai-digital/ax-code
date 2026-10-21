@@ -355,7 +355,9 @@ export namespace SessionRevert {
 
   async function revertUnlocked(input: RevertInput) {
     const planned = await plan(input)
-    const before = await Snapshot.track()
+    // Undo must restore the real pre-revert tree. A stale fallback baseline
+    // would overwrite edits made after it when the revert rolls back.
+    const before = await Snapshot.track({ requireFresh: true })
     planned.revert.snapshot = planned.session.revert?.snapshot ?? before
     const files = [...new Set(planned.patches.flatMap((patch) => patch.files))]
     let applied = false
@@ -466,20 +468,27 @@ export namespace SessionRevert {
     preserve.push(...msgs.slice(0, targetIndex))
     if (session.revert.partID) {
       target = msgs[targetIndex]
-      preserve.push(target)
-      remove.push(...msgs.slice(targetIndex + 1))
-    } else {
-      remove.push(...msgs.slice(targetIndex))
-    }
-    if (session.revert.partID && target) {
       const partID = session.revert.partID
       const removeStart = target.parts.findIndex((part) => part.id === partID)
-      if (removeStart >= 0) {
-        const preserveParts = target.parts.slice(0, removeStart)
-        const removeParts = target.parts.slice(removeStart)
-        target.parts = preserveParts
-        removedParts.push(...removeParts)
+      if (removeStart < 0) {
+        // The boundary part is gone, so the cut point is unknown. Deleting
+        // trailing messages here would be a guess; keep the transcript and
+        // drop the bookkeeping, mirroring the missing-message branch above.
+        log.warn("revert boundary part is missing during cleanup, clearing revert state", {
+          sessionID,
+          messageID,
+          partID,
+        })
+        await Session.clearRevert(sessionID)
+        return
       }
+      preserve.push(target)
+      remove.push(...msgs.slice(targetIndex + 1))
+      const removeParts = target.parts.slice(removeStart)
+      target.parts = target.parts.slice(0, removeStart)
+      removedParts.push(...removeParts)
+    } else {
+      remove.push(...msgs.slice(targetIndex))
     }
     const store = SessionShard.storeFor(sessionID, { write: true })
     store.transaction((db) => {

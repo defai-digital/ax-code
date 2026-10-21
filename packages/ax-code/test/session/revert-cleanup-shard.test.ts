@@ -58,3 +58,43 @@ test("revert cleanup deletes the parts of whole removed messages in a shard stor
     },
   })
 })
+
+test("revert cleanup keeps the transcript when the boundary part is missing", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      const ids = [MessageID.ascending(), MessageID.ascending()]
+      for (const id of ids) {
+        await Session.updateMessage({
+          id,
+          sessionID: session.id,
+          role: "user",
+          agent: "build",
+          model: { providerID: "test", modelID: "test" },
+          time: { created: Date.now() },
+        } as MessageV2.User)
+        await Session.updatePart({
+          id: PartID.ascending(),
+          messageID: id,
+          sessionID: session.id,
+          type: "text",
+          text: "body",
+        } as MessageV2.TextPart)
+      }
+
+      await Session.setRevert({
+        sessionID: session.id,
+        revert: { messageID: ids[0], partID: PartID.ascending() },
+        summary: undefined,
+      })
+      await SessionRevert.cleanup(await Session.get(session.id))
+
+      const messages = await Session.messages({ sessionID: session.id })
+      expect(messages).toHaveLength(2)
+      expect(messages.flatMap((message) => message.parts)).toHaveLength(2)
+      expect((await Session.get(session.id)).revert).toBeUndefined()
+    },
+  })
+})
