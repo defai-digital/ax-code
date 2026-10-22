@@ -81,9 +81,17 @@ export function sanitizeUntrustedSource(source: string): string {
   return cleaned.length > 0 ? cleaned : "unknown"
 }
 
-/** True when `text` already is a complete untrusted-content envelope. */
+/**
+ * True when `text` already is a complete untrusted-content envelope.
+ *
+ * The outer shape alone is not enough: a hostile payload can copy it and
+ * embed an early close tag followed by its own instructions. Only a single
+ * live opening and closing tag is an envelope this module produced; anything
+ * else goes through defang/wrap again.
+ */
 export function isWrappedUntrustedContent(text: string): boolean {
-  return text.startsWith("<untrusted_content ") && text.endsWith("</untrusted_content>")
+  if (!text.startsWith("<untrusted_content ") || !text.endsWith("</untrusted_content>")) return false
+  return text.match(ENVELOPE_TAG_PATTERN)?.length === 2
 }
 
 /**
