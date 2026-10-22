@@ -89,11 +89,11 @@ export namespace SessionSteering {
     const discarded: Receipt[] = []
     for (const pending of current.receipts.values()) {
       // Only the generation being ended may rewrite its own receipts' interrupt
-      // marker. begin() calls finish() for the next turn; clearing an older
-      // receipt here would unpark a follow-up whose steer was interrupted.
-      if (endingGeneration !== undefined && pending.receipt.generation === endingGeneration)
-        pending.endedInterrupted = aborted
-      else if (aborted) pending.endedInterrupted = true
+      // marker. A later generation's interrupt must not park an older steer:
+      // that steer belongs to its own generation's lifecycle.
+      if (endingGeneration !== undefined) {
+        if (pending.receipt.generation === endingGeneration) pending.endedInterrupted = aborted
+      } else if (aborted) pending.endedInterrupted = true
       if (pending.receipt.status === "accepted") {
         pending.receipt.status = "rejected"
         pending.receipt.reason = "generation_ended_before_application"
