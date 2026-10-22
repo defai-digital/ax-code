@@ -710,6 +710,9 @@ export namespace MCP {
     // any prior onclose so the bookkeeping still runs on this client.
     SessionHealth.attachClient(client, name)
     client.onclose = Instance.bind(() => {
+      // This assignment replaces the wrapper attachClient installed above, so
+      // the in-flight rejection must be called here or the tracker leaks.
+      SessionHealth.failInFlight(client, name)
       if (registryPid !== undefined) void ProcessRegistry.unregister(registryPid, "mcp")
       void Promise.resolve()
         .then(() => {
