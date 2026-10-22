@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.28.4] - 2026-10-22
+
+### Changed
+
+- Publish SDK 2.6.45 with the current server contract and verified GitHub Packages distribution.
+
+### Fixed
+
+- Keep stale workflow outcomes from changing a newer occurrence's summary, retry policy, or paused state while preserving historical outcomes.
+- Sanitize copied content envelopes with hidden Unicode or extra attributes before accepting their wrapped form.
+- Reject tracked MCP calls immediately when their client closes.
+- Keep interruption state scoped to the steering receipt's own generation.
+- Bound shard orphan-sweep parameters for projects with long session histories.
+
 ## [7.28.3] - 2026-10-21
 
 ### Changed
