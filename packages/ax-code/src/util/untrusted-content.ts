@@ -90,8 +90,11 @@ export function sanitizeUntrustedSource(source: string): string {
  * else goes through defang/wrap again.
  */
 export function isWrappedUntrustedContent(text: string): boolean {
-  if (!text.startsWith("<untrusted_content ") || !text.endsWith("</untrusted_content>")) return false
-  return text.match(ENVELOPE_TAG_PATTERN)?.length === 2
+  // Only the canonical header and body emitted below may bypass sanitization.
+  // Copied envelopes with extra attributes or hidden characters are still
+  // external content and must pass through stripping and defanging again.
+  if (!/^<untrusted_content source="[a-zA-Z0-9_.:@/-]{1,64}">\n[\s\S]*\n<\/untrusted_content>$/.test(text)) return false
+  return detectHiddenUnicode(text) === 0 && text.match(ENVELOPE_TAG_PATTERN)?.length === 2
 }
 
 /**
