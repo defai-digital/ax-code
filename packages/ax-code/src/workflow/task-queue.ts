@@ -120,7 +120,7 @@ export namespace WorkflowTaskQueue {
       const sourceTaskID = run.sourceTaskID
       if (sourceTaskID?.startsWith("sch_")) {
         const { ScheduledTask } = await import("../session/scheduled-task")
-        await ScheduledTask.recordWorkflowOutcome(ScheduledTaskID.make(sourceTaskID), run.status, run.error)
+        await ScheduledTask.recordWorkflowOutcome(ScheduledTaskID.make(sourceTaskID), run.status, run.error, run.id)
       }
     }
 

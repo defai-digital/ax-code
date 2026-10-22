@@ -132,6 +132,47 @@ describe("ScheduledTask workflow outcome recording", () => {
     })
   })
 
+  test("an old workflow outcome does not terminate a newer running occurrence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const task = await createWorkflowTask()
+        const now = Date.now()
+        const oldRun = ScheduledTaskRunID.ascending()
+        const newRun = ScheduledTaskRunID.ascending()
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          for (const [id, workflowRunID, offset] of [
+            [oldRun, "wfr_old", 0],
+            [newRun, "wfr_new", 1],
+          ] as const) {
+            db.insert(ScheduledTaskRunTable)
+              .values({
+                id,
+                task_id: task.id,
+                project_id: Instance.project.id,
+                trigger_type: "scheduled",
+                status: "running",
+                occurrence_at: now + offset,
+                time_started: now + offset,
+                time_created: now + offset,
+                time_updated: now + offset,
+                workflow_run_id: workflowRunID,
+              })
+              .run()
+          }
+        })
+
+        await ScheduledTask.recordWorkflowOutcome(task.id, "failed", new Error("old workflow failed"), "wfr_old")
+        const runs = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(runs.find((run) => run.workflowRunID === "wfr_old")?.status).toBe("failed")
+        // The new occurrence's workflow is still executing; the old outcome
+        // must not finalize its row or release overlap protection.
+        expect(runs.find((run) => run.workflowRunID === "wfr_new")?.status).toBe("running")
+      },
+    })
+  })
+
   test("a run-now whose workflow start fails cancels the pre-created run", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

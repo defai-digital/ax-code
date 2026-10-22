@@ -846,7 +846,7 @@ export namespace ScheduledTask {
       // The run row is claimed and `running`: finalize it through the
       // workflow outcome path so a start failure cannot wedge overlap
       // protection until orphan reconciliation or bypass the failure policy.
-      await recordWorkflowOutcome(current.id, "failed", error).catch((recordError) => {
+      await recordWorkflowOutcome(current.id, "failed", error, run.id).catch((recordError) => {
         log.warn("scheduled workflow dispatch failure record failed", { taskID: current.id, error: recordError })
       })
       throw new WorkflowDispatchRecorded(error)
@@ -1497,13 +1497,27 @@ export namespace ScheduledTask {
   // must leave the row untouched, because the workflow bridge re-reports a
   // terminal run on every later sibling sync and each repeat would push
   // next_run_at further out under the failure policy.
-  function claimWorkflowOutcomeRun(taskID: ScheduledTaskID, status: RunStatus, error?: string): RunInfo | undefined {
+  function claimWorkflowOutcomeRun(
+    taskID: ScheduledTaskID,
+    status: RunStatus,
+    error?: string,
+    workflowRunID?: string,
+  ): RunInfo | undefined {
     const now = Date.now()
     return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      // Bind the claim to the reporting workflow run when the caller knows it:
+      // a late outcome from an older occurrence must not terminate the row of
+      // a newer one that is still executing.
       const open = db
         .update(ScheduledTaskRunTable)
         .set({ status, error, time_completed: now, time_updated: now })
-        .where(and(eq(ScheduledTaskRunTable.task_id, taskID), eq(ScheduledTaskRunTable.status, "running")))
+        .where(
+          and(
+            eq(ScheduledTaskRunTable.task_id, taskID),
+            eq(ScheduledTaskRunTable.status, "running"),
+            ...(workflowRunID ? [eq(ScheduledTaskRunTable.workflow_run_id, workflowRunID)] : []),
+          ),
+        )
         .returning()
         .get()
       if (open) return runFromRow(open)
@@ -1511,7 +1525,12 @@ export namespace ScheduledTask {
       const latest = db
         .select({ id: ScheduledTaskRunTable.id })
         .from(ScheduledTaskRunTable)
-        .where(eq(ScheduledTaskRunTable.task_id, taskID))
+        .where(
+          and(
+            eq(ScheduledTaskRunTable.task_id, taskID),
+            ...(workflowRunID ? [eq(ScheduledTaskRunTable.workflow_run_id, workflowRunID)] : []),
+          ),
+        )
         .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
         .limit(1)
         .get()
@@ -1536,13 +1555,14 @@ export namespace ScheduledTask {
     id: ScheduledTaskID,
     status: "completed" | "failed" | "cancelled",
     error?: unknown,
+    workflowRunID?: string,
   ): Promise<Info> {
     const fallback = status === "cancelled" ? "Scheduled workflow was cancelled." : "Scheduled workflow failed."
     const runStatus: RunStatus = status === "completed" ? "completed" : "failed"
     const errorMessage = status === "completed" ? undefined : toErrorMessage(error ?? fallback)
     // Without this the run row inserted at claim/dispatch would stay `running`
     // until orphan reconciliation mislabeled a finished workflow as failed.
-    const run = claimWorkflowOutcomeRun(id, runStatus, errorMessage)
+    const run = claimWorkflowOutcomeRun(id, runStatus, errorMessage, workflowRunID)
     // No run owed this outcome: it was already recorded (or the task never
     // dispatched one), so a repeated report is a no-op rather than another
     // failure-policy application.
