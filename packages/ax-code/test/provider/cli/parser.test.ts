@@ -57,9 +57,69 @@ describe("provider CLI parser nested content", () => {
     expect(codexCliParser.parseStreamLine('{"type":"item.completed","item":{"text":123,"content":"OK"}}')).toBe("OK")
   })
 
-  test("codex parser surfaces JSON error events instead of treating them as assistant text", () => {
+  test("codex parser keeps non-fatal error items and returns the completed turn", () => {
     const output = [
-      '{"type":"item.completed","item":{"type":"error","message":"Model metadata is unavailable"}}',
+      '{"type":"thread.started","thread_id":"t1"}',
+      '{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Under-development features enabled: chronicle. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/example/.codex/config.toml."}}',
+      '{"type":"turn.started"}',
+      '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Hello"}}',
+      '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}',
+    ].join("\n")
+
+    expect(codexCliParser.parseComplete(output)).toEqual({ text: "Hello" })
+    expect(codexCliParser.parseStreamLine(output.split("\n")[1]!)).toBeNull()
+
+    const trailing = [
+      '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Hello"}}',
+      '{"type":"item.completed","item":{"id":"item_2","type":"error","message":"model rerouted: a -> b"}}',
+      '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}',
+    ].join("\n")
+    expect(codexCliParser.parseComplete(trailing)).toEqual({ text: "Hello" })
+  })
+
+  test("codex parser prefers a completed turn over an error Codex retried", () => {
+    const output = [
+      '{"type":"error","message":"stream disconnected before completion"}',
+      '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Hello"}}',
+      '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}',
+    ].join("\n")
+
+    expect(codexCliParser.parseComplete(output)).toEqual({ text: "Hello" })
+  })
+
+  test("codex parser fails a transcript that never completes", () => {
+    const output = [
+      '{"type":"item.completed","item":{"id":"item_0","type":"error","message":"config warning"}}',
+      '{"type":"error","message":"stream disconnected before completion"}',
+    ].join("\n")
+
+    expect(() => codexCliParser.parseComplete(output)).toThrow(CliOutputError)
+    expect(() => codexCliParser.parseComplete(output)).toThrow("stream disconnected before completion")
+  })
+
+  test("codex parser fails a completed transcript that also reports a failed turn", () => {
+    const output = [
+      '{"type":"item.completed","item":{"id":"item_0","type":"error","message":"config warning"}}',
+      '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Hello"}}',
+      '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}',
+      '{"type":"turn.failed","error":{"message":"turn failed"}}',
+    ].join("\n")
+
+    expect(() => codexCliParser.parseComplete(output)).toThrow(CliOutputError)
+    expect(() => codexCliParser.parseComplete(output)).toThrow("turn failed")
+  })
+
+  test("codex parser does not expose a warning-only JSONL transcript as assistant text", () => {
+    const output = [
+      '{"type":"item.completed","item":{"id":"item_0","type":"error","message":"config warning"}}',
+      '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0}}',
+    ].join("\n")
+
+    expect(codexCliParser.parseComplete(output)).toEqual({ text: "" })
+  })
+
+  test("codex parser surfaces terminal JSON error events instead of treating them as assistant text", () => {
+    const output = [
       '{"type":"error","message":"{\\"type\\":\\"error\\",\\"error\\":{\\"message\\":\\"The selected model requires a newer Codex CLI\\"}}"}',
       '{"type":"turn.failed","error":{"message":"{\\"type\\":\\"error\\",\\"error\\":{\\"message\\":\\"The selected model requires a newer Codex CLI\\"}}"}}',
     ].join("\n")

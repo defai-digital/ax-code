@@ -792,6 +792,96 @@ describe("CliLanguageModel", () => {
     expect(String(error.error)).toContain("command permission denied")
   })
 
+  test("doStream completes when a codex warning item precedes assistant output", async () => {
+    const transcript =
+      [
+        '{"type":"thread.started","thread_id":"t1"}',
+        '{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Under-development features enabled: chronicle. Under-development features are incomplete and may behave unpredictably."}}',
+        '{"type":"turn.started"}',
+        '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"done"}}',
+        '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}',
+      ].join("\n") + "\n"
+    const model = makeModel({
+      binary: process.execPath,
+      args: ["-e", `process.stdout.write(${JSON.stringify(transcript)})`, "--"],
+      promptMode: "stdin",
+      parser: CLI_PROVIDER_DEFINITIONS["codex-cli"]!.parser,
+    })
+
+    const { stream } = await model.doStream({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    })
+
+    const parts: any[] = []
+    const reader = stream.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+    }
+
+    const text = parts
+      .filter((part) => part.type === "text-delta")
+      .map((part) => part.delta)
+      .join("")
+    expect(text).toBe("done")
+    expect(parts.find((part) => part.type === "error")).toBeUndefined()
+    expect(parts.find((part) => part.type === "finish")).toBeDefined()
+  })
+
+  test("doGenerate returns assistant output when a codex warning item is present", async () => {
+    const transcript =
+      [
+        '{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Under-development features enabled: chronicle."}}',
+        '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"done"}}',
+        '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}',
+      ].join("\n") + "\n"
+    const model = makeModel({
+      binary: process.execPath,
+      args: ["-e", `process.stdout.write(${JSON.stringify(transcript)})`, "--"],
+      promptMode: "stdin",
+      parser: CLI_PROVIDER_DEFINITIONS["codex-cli"]!.parser,
+    })
+
+    const result = await model.doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    })
+
+    expect(result.content).toEqual([{ type: "text", text: "done" }])
+    expect(result.finishReason).toEqual({ unified: "stop", raw: undefined })
+  })
+
+  test("doStream still fails on a terminal codex turn even after assistant text", async () => {
+    const transcript =
+      [
+        '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"partial"}}',
+        '{"type":"turn.failed","error":{"message":"stream disconnected"}}',
+      ].join("\n") + "\n"
+    const model = makeModel({
+      binary: process.execPath,
+      args: ["-e", `process.stdout.write(${JSON.stringify(transcript)})`, "--"],
+      promptMode: "stdin",
+      parser: CLI_PROVIDER_DEFINITIONS["codex-cli"]!.parser,
+    })
+
+    const { stream } = await model.doStream({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    })
+
+    const parts: any[] = []
+    const reader = stream.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+    }
+
+    expect(parts.find((part) => part.type === "finish")).toBeUndefined()
+    const error = parts.find((part) => part.type === "error")
+    expect(error).toBeDefined()
+    expect(String(error.error)).toContain("stream disconnected")
+  })
+
   test("doStream does not leak kimi meta JSONL as assistant text", async () => {
     const model = makeModel({
       binary: process.execPath,

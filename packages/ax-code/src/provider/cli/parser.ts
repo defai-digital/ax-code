@@ -68,13 +68,13 @@ function cliErrorText(value: string) {
 }
 
 function codexEventError(event: CliJsonObject) {
-  const item = recordField(event, "item")
+  // Codex's exec protocol reserves `error` and `turn.failed` for terminal
+  // stream failures. Completed items with `item.type === "error"` describe
+  // non-fatal conditions (config warnings, deprecation notices, model
+  // reroutes), so treating them as fatal aborts turns that finish normally.
+  if (event.type !== "error" && event.type !== "turn.failed") return undefined
   const error = recordField(event, "error")
-  const direct = stringField(event, "message")
-  const nested = stringField(error, "message")
-  const itemMessage = stringField(item, "message")
-  if (event.type !== "error" && event.type !== "turn.failed" && item?.type !== "error") return undefined
-  const message = direct ?? nested ?? itemMessage
+  const message = stringField(event, "message") ?? stringField(error, "message")
   return message ? cliErrorText(message) : "Codex CLI reported an unknown error"
 }
 
@@ -109,9 +109,18 @@ export const codexCliParser: CliOutputParser = {
     const lines = output.split("\n")
     const parts: string[] = []
     const errors: string[] = []
+    let structured = false
+    let completed = false
+    let failed = false
     for (const line of lines) {
       const event = parseCliJsonEventLine(line)
       if (!event) continue
+      structured = true
+      // Codex also emits a stream-level `error` for failures it retries; only
+      // a `turn.failed` or a transcript that never reaches `turn.completed`
+      // makes those errors terminal.
+      if (event.type === "turn.completed") completed = true
+      if (event.type === "turn.failed") failed = true
       const error = codexEventError(event)
       if (error) {
         errors.push(error)
@@ -135,8 +144,12 @@ export const codexCliParser: CliOutputParser = {
       if (typeof event.content === "string") parts.push(event.content)
       if (typeof event.text === "string") parts.push(event.text)
     }
-    if (errors.length) throw new CliOutputError(errors.at(-1)!)
-    return { text: parts.join("\n") || rawCompleteText(output) }
+    if (errors.length && (failed || !completed)) throw new CliOutputError(errors.at(-1)!)
+    // Fall back to raw stdout only for plain-text CLIs. A structured transcript
+    // without assistant text (for example warnings plus turn.completed) must
+    // stay empty so callers report "no assistant output" instead of showing
+    // the JSONL transport as the model reply.
+    return { text: parts.join("\n") || (structured ? "" : rawCompleteText(output)) }
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
