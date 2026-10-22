@@ -417,6 +417,7 @@ export namespace SessionShard {
     const sessionIDs = Database.use((db) =>
       db.select({ id: SessionTable.id }).from(SessionTable).where(eq(SessionTable.project_id, projectID)).all(),
     ).map((row) => row.id)
+    const registry = new Set<string>(sessionIDs)
 
     Shard.handle(projectID).transaction((db) => {
       if (sessionIDs.length === 0) {
@@ -435,27 +436,92 @@ export namespace SessionShard {
         db.update(WorkflowChildTable).set({ session_id: null }).where(isNotNull(WorkflowChildTable.session_id)).run()
         return
       }
-      db.delete(PartTable).where(notInArray(PartTable.session_id, sessionIDs)).run()
-      db.delete(MessageTable).where(notInArray(MessageTable.session_id, sessionIDs)).run()
-      db.delete(TodoTable).where(notInArray(TodoTable.session_id, sessionIDs)).run()
-      db.delete(SessionGoalTable).where(notInArray(SessionGoalTable.session_id, sessionIDs)).run()
-      db.delete(EventLogTable).where(notInArray(EventLogTable.session_id, sessionIDs)).run()
-      db.delete(TaskQueueTable)
-        .where(and(isNotNull(TaskQueueTable.session_id), notInArray(TaskQueueTable.session_id, sessionIDs)))
-        .run()
-      db.update(WorkflowRunTable)
-        .set({ parent_session_id: null })
-        .where(
-          and(
-            isNotNull(WorkflowRunTable.parent_session_id),
-            notInArray(WorkflowRunTable.parent_session_id, sessionIDs),
-          ),
-        )
-        .run()
-      db.update(WorkflowChildTable)
-        .set({ session_id: null })
-        .where(and(isNotNull(WorkflowChildTable.session_id), notInArray(WorkflowChildTable.session_id, sessionIDs)))
-        .run()
+      // Never pass every registry session id to NOT IN: SQLite caps bound
+      // parameters (32,766 in stock builds), and an unchunked list on a
+      // long-lived project throws inside the state="backfilling" pass, which
+      // then retries and bricks every later write. Read only the distinct ids
+      // that are actually absent and delete those in bounded chunks.
+      const stale = (rows: { id: string | null }[]): SessionID[] =>
+        rows
+          .map((row) => row.id)
+          .filter((id): id is string => id !== null && !registry.has(id))
+          .map((id) => SessionID.make(id))
+
+      const partSessions = stale(
+        db.selectDistinct({ id: PartTable.session_id }).from(PartTable).where(isNotNull(PartTable.session_id)).all(),
+      )
+      for (const group of chunk(partSessions)) db.delete(PartTable).where(inArray(PartTable.session_id, group)).run()
+
+      const messageSessions = stale(
+        db
+          .selectDistinct({ id: MessageTable.session_id })
+          .from(MessageTable)
+          .where(isNotNull(MessageTable.session_id))
+          .all(),
+      )
+      for (const group of chunk(messageSessions))
+        db.delete(MessageTable).where(inArray(MessageTable.session_id, group)).run()
+
+      const todoSessions = stale(
+        db.selectDistinct({ id: TodoTable.session_id }).from(TodoTable).where(isNotNull(TodoTable.session_id)).all(),
+      )
+      for (const group of chunk(todoSessions)) db.delete(TodoTable).where(inArray(TodoTable.session_id, group)).run()
+
+      const goalSessions = stale(
+        db
+          .selectDistinct({ id: SessionGoalTable.session_id })
+          .from(SessionGoalTable)
+          .where(isNotNull(SessionGoalTable.session_id))
+          .all(),
+      )
+      for (const group of chunk(goalSessions))
+        db.delete(SessionGoalTable).where(inArray(SessionGoalTable.session_id, group)).run()
+
+      const eventSessions = stale(
+        db
+          .selectDistinct({ id: EventLogTable.session_id })
+          .from(EventLogTable)
+          .where(isNotNull(EventLogTable.session_id))
+          .all(),
+      )
+      for (const group of chunk(eventSessions))
+        db.delete(EventLogTable).where(inArray(EventLogTable.session_id, group)).run()
+
+      const queueSessions = stale(
+        db
+          .selectDistinct({ id: TaskQueueTable.session_id })
+          .from(TaskQueueTable)
+          .where(isNotNull(TaskQueueTable.session_id))
+          .all(),
+      )
+      for (const group of chunk(queueSessions))
+        db.delete(TaskQueueTable).where(inArray(TaskQueueTable.session_id, group)).run()
+
+      const runSessions = stale(
+        db
+          .selectDistinct({ id: WorkflowRunTable.parent_session_id })
+          .from(WorkflowRunTable)
+          .where(isNotNull(WorkflowRunTable.parent_session_id))
+          .all(),
+      )
+      for (const group of chunk(runSessions))
+        db.update(WorkflowRunTable)
+          .set({ parent_session_id: null })
+          .where(inArray(WorkflowRunTable.parent_session_id, group))
+          .run()
+
+      const childSessions = stale(
+        db
+          .selectDistinct({ id: WorkflowChildTable.session_id })
+          .from(WorkflowChildTable)
+          .where(isNotNull(WorkflowChildTable.session_id))
+          .all(),
+      )
+      for (const group of chunk(childSessions))
+        db.update(WorkflowChildTable)
+          .set({ session_id: null })
+          .where(inArray(WorkflowChildTable.session_id, group))
+          .run()
     })
   }
 }

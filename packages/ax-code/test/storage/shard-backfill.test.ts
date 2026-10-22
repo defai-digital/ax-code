@@ -17,6 +17,7 @@ import { Shard } from "../../src/storage/shard"
 import { Database, eq } from "../../src/storage/db"
 import {
   MessageTable,
+  SessionTable,
   TodoTable,
   SessionGoalTable,
   TaskQueueTable,
@@ -708,6 +709,40 @@ describe("AX_CODE_SHARD_SESSIONS=1", () => {
         // The next write reconciles the orphans instead of blocking.
         await Session.updateMessage(userMessage(MessageID.ascending(), session.id))
         expect(shardTodoCount(projectID, orphanSession)).toBe(0)
+      },
+    })
+  })
+
+  test("sweepOrphans stays under SQLite's bound-parameter cap on a large registry", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const now = Date.now()
+        // More registry sessions than SQLite's stock 32,766 bound-parameter
+        // cap. The unchunked NOT IN sweep threw here, leaving the shard state
+        // at "backfilling" and bricking every later write.
+        Database.use((db) => {
+          for (let offset = 0; offset < 33_000; offset += 500) {
+            const values = Array.from({ length: Math.min(500, 33_000 - offset) }, (_, index) => ({
+              id: `ses_bulk_${offset + index}`,
+              project_id: projectID,
+              slug: `bulk-${offset + index}`,
+              directory: tmp.path,
+              title: "bulk",
+              version: "1",
+              time_created: now,
+              time_updated: now,
+            }))
+            db.insert(SessionTable)
+              .values(values as never)
+              .run()
+          }
+        })
+
+        expect(() => SessionShard.storeForProject(projectID, { write: true })).not.toThrow()
+        expect(shardState(projectID)).toBe("active")
       },
     })
   })
