@@ -139,11 +139,11 @@
       "diagnosticEditLine": "const PERF_PROBE: i64 = \"nope\";",
       "files": {
         "Cargo.toml": "0c22a811181636b3f5928d5cce455ef0c21dc62a0e7f5e18edac8ca72a3dcf37",
-        "crate_a/Cargo.toml": "49a6ca47fd9b7b173790c219ee8d3f6e838728d532c32e791d4584e1479d5fe8",
+        "crate_a/Cargo.toml": "1e5bbffa9308b29059a3239566d3407af50b75266b533c4e6c6fe099498fd568",
         "crate_a/src/lib.rs": "f0c2384c3c0d785a4e9d61d9dd42d05568f907ce98990aded4a98dd169714fdd",
         "crate_a/src/math.rs": "0c4e8a70cd32e943df14fbee2ed3110776d2f6bbc49bd080488d2f702310c2eb",
         "crate_a/src/text.rs": "62ac859c5c2a608ee2a4c187b8db486c7771218f64a3c23af8a67c6708a8d2fb",
-        "crate_b/Cargo.toml": "99870c746a774af8448c91c3e5786d4b05f1932dc4d46458421c6bcac79d8e4a",
+        "crate_b/Cargo.toml": "77c0b4ed45283285962854b75813def03b500f0d3d3c49c38486c9a6b6fbe207",
         "crate_b/src/lib.rs": "047d3366717064dc6eba4f69b93b049c271b4483ace3fed2264f85a106ca730a",
         "crate_b/src/main.rs": "f1a0e8ef470ae588cb7e57ce66d1787d5d27a260c1deca9d2e86bd4a37372ea4"
       },
