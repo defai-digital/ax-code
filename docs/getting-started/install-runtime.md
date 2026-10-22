@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-17
+Last reviewed: 2026-10-22
 Owner: ax-code runtime
 
 Choose the Desktop app for a graphical workspace, or CLI-only for terminal, SSH, and CI workflows. The commands below follow the Desktop and CLI READMEs. Later sections cover CLI runtime labels from `ax-code doctor`, manual verification, upgrades, and contributor launchers.
@@ -86,9 +86,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.aut
 
 ### Ubuntu 24.04+
 
+Install the system dependencies first, including `libatomic1` for the bundled Node runtime:
+
 ```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl libatomic1
 curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
+
+Minimal Ubuntu images may omit `libatomic1`. If installation reports that `libatomic.so.1` is missing, install `libatomic1` with the command above and rerun the installer. The installer verifies that the bundled runtime starts before activating it.
 
 If `download.automatosx.com` does not resolve, check your network and DNS settings. For CLI-only installation, the original host serves the same signed files:
 

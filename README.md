@@ -63,7 +63,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.aut
 
 ### Ubuntu 24.04+
 
+Install the system dependencies first, including `libatomic1` for the bundled Node runtime:
+
 ```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl libatomic1
 curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
@@ -354,7 +358,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.aut
 
 ### Ubuntu 24.04+
 
+Install the system dependencies first, including `libatomic1` for the bundled Node runtime:
+
 ```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl libatomic1
 curl -fsSL https://download.automatosx.com/ax-code/install | bash
 ```
 
