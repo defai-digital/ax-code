@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { ScheduledTaskRunID, type ScheduledTaskID } from "../../src/session/schema"
-import { ScheduledTaskRunTable } from "../../src/session/session.sql"
+import { ScheduledTaskRunTable, ScheduledTaskTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { and, eq } from "../../src/storage/db"
 import { WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
@@ -169,6 +169,83 @@ describe("ScheduledTask workflow outcome recording", () => {
         // The new occurrence's workflow is still executing; the old outcome
         // must not finalize its row or release overlap protection.
         expect(runs.find((run) => run.workflowRunID === "wfr_new")?.status).toBe("running")
+      },
+    })
+  })
+
+  test.each(["completed", "failed"] as const)(
+    "a stale %s workflow outcome preserves the current task summary",
+    async (status) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const task = await createWorkflowTask()
+          const now = Date.now()
+          const oldRun = ScheduledTaskRunID.ascending()
+          const newRun = ScheduledTaskRunID.ascending()
+          SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+            for (const [id, workflowRunID, offset] of [
+              [oldRun, "wfr_old", 0],
+              [newRun, "wfr_new", 1],
+            ] as const) {
+              db.insert(ScheduledTaskRunTable)
+                .values({
+                  id,
+                  task_id: task.id,
+                  project_id: Instance.project.id,
+                  trigger_type: "scheduled",
+                  status: "running",
+                  occurrence_at: now + offset,
+                  time_started: now + offset,
+                  time_created: now + offset,
+                  time_updated: now + offset,
+                  workflow_run_id: workflowRunID,
+                })
+                .run()
+            }
+          })
+
+          seedPriorFailures(task.id, 4)
+          SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+            db.update(ScheduledTaskTable)
+              .set({ last_workflow_run_id: "wfr_new", error: "current occurrence state" })
+              .where(eq(ScheduledTaskTable.id, task.id))
+              .run()
+          })
+          const before = await ScheduledTask.get(task.id)
+          await ScheduledTask.recordWorkflowOutcome(task.id, status, new Error("old workflow failed"), "wfr_old")
+          const after = await ScheduledTask.get(task.id)
+          expect(after.error).toBe(before.error)
+          expect(after.status).toBe(before.status)
+          expect(after.nextRunAt).toBe(before.nextRunAt)
+          const runs = await ScheduledTask.listRuns({ taskID: task.id })
+          expect(runs.find((run) => run.workflowRunID === "wfr_old")?.status).toBe(status)
+          // The new occurrence's workflow is still executing; the old outcome
+          // must not finalize its row or release overlap protection.
+          expect(runs.find((run) => run.workflowRunID === "wfr_new")?.status).toBe("running")
+        },
+      })
+    },
+  )
+
+  test.each(["completed", "failed"] as const)("a current %s workflow outcome updates its task", async (status) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await mockWorkflowDispatch("wfr_current")
+        const task = await createWorkflowTask()
+        await ScheduledTask.runNow(task.id)
+        seedPriorFailures(task.id, 4)
+        await ScheduledTask.recordWorkflowOutcome(task.id, status, new Error("current workflow failed"), "wfr_current")
+        const current = await ScheduledTask.get(task.id)
+        expect(current.status).toBe(status === "failed" ? "paused" : "active")
+        expect(current.error).toBe(
+          status === "failed" ? "auto-paused after 5 consecutive failures: current workflow failed" : undefined,
+        )
+        const runs = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(runs.find((run) => run.workflowRunID === "wfr_current")?.status).toBe(status)
       },
     })
   })

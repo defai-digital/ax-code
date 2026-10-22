@@ -1335,6 +1335,7 @@ export namespace ScheduledTask {
     status: "completed" | "failed",
     error?: unknown,
     queueID?: TaskQueueID,
+    workflowRunID?: string,
   ): Promise<Info> {
     const now = Date.now()
     const runStatus: RunStatus = status === "completed" ? "completed" : isTimeoutError(error) ? "timeout" : "failed"
@@ -1359,13 +1360,14 @@ export namespace ScheduledTask {
       if (!run) return get(id)
     }
 
-    // Guarded summary write: only update the task row if this queue id is still
-    // the most recent one, so a late outcome from a superseded run cannot
+    // Guarded summary write: only update the task row if this queue or workflow
+    // id is still the most recent one, so an outcome from a superseded run cannot
     // overwrite a newer run's state. The pre-read happens inside the same store
     // block so the one-shot disable decision and the write stay consistent.
     const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const conditions = [eq(ScheduledTaskTable.id, id)]
       if (queueID) conditions.push(eq(ScheduledTaskTable.last_queue_id, queueID))
+      if (workflowRunID) conditions.push(eq(ScheduledTaskTable.last_workflow_run_id, workflowRunID))
       const current = db
         .select()
         .from(ScheduledTaskTable)
@@ -1398,7 +1400,7 @@ export namespace ScheduledTask {
     if (!task) {
       // Superseded or vanished — nothing to update; keep the run row as the record.
       if (run) emitRunEvents(id, runStatus, run, errorMessage)
-      throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+      return get(id)
     }
 
     if (status === "failed" && task.status === "active") {
@@ -1568,7 +1570,13 @@ export namespace ScheduledTask {
     // failure-policy application.
     if (!run) return get(id)
     emitRunEvents(id, runStatus, run, errorMessage)
-    return recordQueueOutcome(id, status === "completed" ? "completed" : "failed", error ?? fallback)
+    return recordQueueOutcome(
+      id,
+      status === "completed" ? "completed" : "failed",
+      error ?? fallback,
+      undefined,
+      workflowRunID,
+    )
   }
 
   function normalizeSchedulerPollMs(value: number | undefined) {
