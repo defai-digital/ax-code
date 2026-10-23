@@ -1202,37 +1202,52 @@ export namespace Session {
     //      context anyway, so `Database.effect` would fall through to
     //      immediate execution; calling Bus directly is clearer.
     const items = [...allDescendants, session]
-    const inOwningContexts = async (fn: () => unknown) => {
+    const ownersBySession = new Map<string, Array<{ directory: string; context: typeof Instance.current }>>()
+    const inOwningContexts = async (info: Info, fn: () => unknown) => {
       if (!options.global) {
         await fn()
         return
       }
-      for (const directory of Instance.list()) {
-        await Instance.withExisting(directory, async () => {
-          if (Instance.project.id !== session.projectID) return
-          // The historical/unborn global ID is shared by unrelated roots.
-          // Never forward private lifecycle metadata across those roots.
-          if (
-            session.projectID === ProjectID.global &&
-            Instance.directory !== Filesystem.resolve(session.directory) &&
-            (Instance.worktree === "/" || !Filesystem.contains(Instance.worktree, session.directory))
-          )
-            return
-          await fn()
+      let owners = ownersBySession.get(info.id)
+      if (!owners) {
+        const candidates: Array<{ directory: string; context: typeof Instance.current; knownOwner: boolean }> = []
+        for (const directory of Instance.list()) {
+          await Instance.withExisting(directory, () => {
+            if (Instance.project.id !== info.projectID) return
+            candidates.push({
+              directory,
+              context: Instance.current,
+              knownOwner: Instance.directory === Filesystem.resolve(info.directory) || SessionPrompt.isRunning(info.id),
+            })
+          })
+        }
+        owners = candidates.filter((candidate) => candidate.knownOwner)
+        // Historical paths can move while the original instance remains live.
+        // A unique non-placeholder project context is unambiguous. Multiple
+        // checkouts with the same root commit must not receive each other's
+        // private local events; unknown ownership uses only the global event.
+        if (!owners.length && info.projectID !== ProjectID.global && candidates.length === 1) owners = candidates
+        ownersBySession.set(info.id, owners)
+      }
+      for (const owner of owners) {
+        await Instance.withExisting(owner.directory, async () => {
+          if (Instance.current === owner.context) await fn()
         })
       }
     }
     for (const item of items) {
       const cancel = () =>
-        SessionPrompt.cancel(item.id).catch((e) => log.warn("session cancel failed", { sessionID: item.id, error: e }))
-      await inOwningContexts(cancel)
+        (options.global ? SessionPrompt.cancel(item.id, { silent: true }) : SessionPrompt.cancel(item.id)).catch((e) =>
+          log.warn("session cancel failed", { sessionID: item.id, error: e }),
+        )
+      await inOwningContexts(item, cancel)
     }
     for (const item of items) {
       // These registries are process-owned, not Instance.state. They must be
       // cleared even when the recorded directory has no cached runtime.
       SelfCorrection.reset(item.id)
       BlastRadius.reset(item.id)
-      await inOwningContexts(() => SessionStatus.clear(item.id))
+      await inOwningContexts(item, () => SessionStatus.clear(item.id))
       await BackgroundShell.killForSession(item.id).catch((e) =>
         log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
       )
@@ -1246,7 +1261,7 @@ export namespace Session {
     }
     const publishLifecycle = async (event: typeof Event.Deleted | typeof Event.Updated, info: Info) => {
       if (options.global) {
-        await inOwningContexts(() => Bus.publishDetached(event, { info }, { localOnly: true }))
+        await inOwningContexts(info, () => Bus.publishDetached(event, { info }, { localOnly: true }))
         GlobalBus.emit("event", { directory: info.directory, payload: { type: event.type, properties: { info } } })
       } else {
         Bus.publishDetached(event, { info })

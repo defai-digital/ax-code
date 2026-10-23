@@ -183,6 +183,11 @@ export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
   const runState = createPromptRunState()
 
+  /** Inspect this already-entered instance's live prompt ownership. */
+  export function isRunning(sessionID: SessionID) {
+    return Boolean(runState.resume(sessionID))
+  }
+
   export function assertNotBusy(sessionID: SessionID) {
     runState.assertNotBusy(sessionID)
     SessionExecution.assertAvailable(sessionID)
@@ -313,7 +318,11 @@ export namespace SessionPrompt {
   // item is still `running` and owned by the queue executor, which records
   // the terminal outcome itself. Cancelling it here would race the executor
   // and turn every successful run into "cancelled".
-  export async function cancel(sessionID: SessionID, opts?: { interrupt?: boolean; cancelQueueItems?: boolean }) {
+  // Archived-history maintenance clears status without idle events or user hooks.
+  export async function cancel(
+    sessionID: SessionID,
+    opts?: { interrupt?: boolean; cancelQueueItems?: boolean; silent?: boolean },
+  ) {
     log.info("cancel", { command: "session.prompt.cancel", status: "started", sessionID })
     const isGenuineInterrupt = opts?.interrupt === true
     // Pause remaining followup rows BEFORE runState.cancel marks the session
@@ -322,7 +331,7 @@ export namespace SessionPrompt {
     // free to admit a waiting followup; pausing after that point would race a
     // followup starting during the very abort meant to stop it.
     if (isGenuineInterrupt) await pausePendingFollowups(sessionID)
-    await runState.cancel(sessionID, { interrupted: isGenuineInterrupt })
+    await runState.cancel(sessionID, { interrupted: isGenuineInterrupt, silent: opts?.silent })
     await cancelDescendantSessions(sessionID, {
       cancelQueueItems: opts?.cancelQueueItems,
       preservePausedFollowups: isGenuineInterrupt,

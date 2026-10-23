@@ -102,9 +102,38 @@ test("cleans live process state without running user lifecycle hooks", async () 
   GlobalBus.on("event", listener)
   try {
     expect((await remove(session.id, tmp.path)).status).toBe(200)
-    expect(cancel).toHaveBeenCalledWith(session.id)
+    expect(cancel).toHaveBeenCalledWith(session.id, { silent: true })
     expect(hook).not.toHaveBeenCalled()
     expect(events).toContain(session.id)
+  } finally {
+    GlobalBus.off("event", listener)
+  }
+})
+
+test("silently clears a busy archived session without idle notifications or hooks", async () => {
+  const { SessionStatus } = await import("../../src/session/status")
+  const { LifecycleHooks } = await import("../../src/hooks/lifecycle")
+  const { GlobalBus } = await import("../../src/bus/global")
+  await using tmp = await tmpdir({ git: true })
+  const session = await Instance.provide({ directory: tmp.path, fn: () => Session.create({}) })
+  await Session.setArchivedGlobally({ sessionID: session.id, time: 123 })
+  await Instance.provide({ directory: tmp.path, fn: () => SessionStatus.set(session.id, { type: "busy" }) })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const hook = vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+  const events: string[] = []
+  const listener = (event: { payload?: { type?: string; properties?: { sessionID?: string } } }) => {
+    if (event.payload?.properties?.sessionID === session.id) events.push(event.payload.type ?? "")
+  }
+  GlobalBus.on("event", listener)
+  try {
+    expect((await remove(session.id, tmp.path)).status).toBe(200)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(hook).not.toHaveBeenCalled()
+    expect(events).not.toContain("session.idle")
+    expect(events).not.toContain("session.status")
+    await Instance.provide({ directory: tmp.path, fn: async () => {
+      expect((await SessionStatus.list()).has(session.id)).toBe(false)
+    } })
   } finally {
     GlobalBus.off("event", listener)
   }
@@ -201,6 +230,32 @@ test("does not send private lifecycle metadata to an unrelated unborn repository
     directory: unrelated.path,
     fn: () => {
       expect(Instance.project.id).toBe(ProjectID.global)
+      return Bus.subscribe(Session.Event.Deleted, ({ properties }) => {
+        seen.push(properties.info.id)
+      })
+    },
+  })
+  try {
+    await Session.setArchivedGlobally({ sessionID: session.id, time: 123 })
+    expect((await remove(session.id, original.path)).status).toBe(200)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(seen).toEqual([])
+  } finally {
+    off()
+  }
+})
+
+test("does not forward private local events to a separate checkout with the same root commit", async () => {
+  const { Bus } = await import("../../src/bus")
+  await using original = await tmpdir({ git: true })
+  await using clone = await tmpdir()
+  await fs.cp(original.path, clone.path, { recursive: true })
+  const seen: string[] = []
+  const session = await Instance.provide({ directory: original.path, fn: () => Session.create({}) })
+  const off = await Instance.provide({
+    directory: clone.path,
+    fn: () => {
+      expect(Instance.project.id).toBe(session.projectID)
       return Bus.subscribe(Session.Event.Deleted, ({ properties }) => {
         seen.push(properties.info.id)
       })

@@ -99,7 +99,7 @@ export function createPromptRunState() {
       return state()[sessionID]?.callbacks.shift()
     },
 
-    async cancel(sessionID: SessionID, options: { interrupted?: boolean } = {}) {
+    async cancel(sessionID: SessionID, options: { interrupted?: boolean; silent?: boolean } = {}) {
       // Pass the interrupt intent along: steered follow-ups recovered from
       // this generation must be parked, not auto-started, when the user
       // asked the turn to stop.
@@ -107,7 +107,8 @@ export function createPromptRunState() {
       const s = state()
       const match = s[sessionID]
       if (!match) {
-        await SessionStatus.set(sessionID, { type: "idle" })
+        if (options.silent) SessionStatus.clear(sessionID)
+        else await SessionStatus.set(sessionID, { type: "idle" })
         return
       }
       // Snapshot the callbacks list and delete the state entry BEFORE
@@ -123,7 +124,8 @@ export function createPromptRunState() {
       for (const cb of callbacks) {
         cb.reject(new Error("Session ended"))
       }
-      await SessionStatus.set(sessionID, { type: "idle" })
+      if (options.silent) SessionStatus.clear(sessionID)
+      else await SessionStatus.set(sessionID, { type: "idle" })
     },
   }
 }
