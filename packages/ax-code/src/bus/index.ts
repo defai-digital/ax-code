@@ -119,9 +119,12 @@ export namespace Bus {
   export function publishDetached<Definition extends BusEvent.Definition>(
     def: Definition,
     properties: z.output<Definition["properties"]>,
+    options?: { localOnly?: boolean },
   ) {
     const { payload, pending } = prepare(def, properties)
-    emitGlobal(payload)
+    // Global maintenance publishes once with the record's stored directory,
+    // while each owning instance still receives its local journal event.
+    if (!options?.localOnly) emitGlobal(payload)
     void Promise.all(pending).catch((err) => {
       log.warn("subscriber failed during detached publish", {
         event: def.type,

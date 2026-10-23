@@ -147,3 +147,77 @@ describe("Instance context extensions", () => {
     expect(ServiceManager.peek(tmp.path)).toBeUndefined()
   })
 })
+
+test("maintenance skips a cached instance whose pending bootstrap fails", async () => {
+  await using tmp = await tmpdir()
+  let reject!: (error: Error) => void
+  let started!: () => void
+  const ready = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const boot = Instance.provide({
+    directory: tmp.path,
+    init: () => {
+      started()
+      return new Promise<void>((_resolve, fail) => {
+        reject = fail
+      })
+    },
+    fn: () => undefined,
+  })
+  const failed = expect(boot).rejects.toThrow("Bootstrap refused")
+  await ready
+  let called = false
+  const maintenance = Instance.withExisting(tmp.path, () => {
+    called = true
+  })
+  const result = expect(maintenance).resolves.toBeUndefined()
+  reject(new Error("Bootstrap refused"))
+  await failed
+  await result
+  expect(called).toBe(false)
+})
+
+test("maintenance does not enter an instance while state disposal is pending", async () => {
+  await using tmp = await tmpdir()
+  let release!: () => void
+  let entered!: () => void
+  const ready = new Promise<void>((resolve) => {
+    entered = resolve
+  })
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const state = Instance.state(
+    () => true,
+    async () => {
+      entered()
+      await gate
+    },
+  )
+  await Instance.provide({ directory: tmp.path, fn: () => state() })
+  const disposing = Instance.provide({ directory: tmp.path, fn: () => Instance.dispose() })
+  await ready
+  let called = false
+  try {
+    await Instance.withExisting(tmp.path, () => {
+      called = true
+    })
+    expect(called).toBe(false)
+  } finally {
+    release()
+    await disposing
+  }
+})
+
+test("maintenance preserves callback failures in a ready instance", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({ directory: tmp.path, fn: () => undefined })
+  const failure = new Error("Maintenance failed")
+  await expect(
+    Instance.withExisting(tmp.path, () => {
+      throw failure
+    }),
+  ).rejects.toBe(failure)
+  await Instance.provide({ directory: tmp.path, fn: () => Instance.dispose() })
+})

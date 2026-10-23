@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.28.5] - 2026-10-23
+
+### Fixed
+
+- Clean archived history from retired project directories without deleting active children or bootstrapping project code.
+- Release process-owned cleanup state and background shells even when a historical project's runtime is absent, and notify existing owning instances without duplicate global events.
+- Keep completed Codex turns from failing on recoverable stream errors and non-terminal diagnostic items.
+
+### Changed
+
+- Publish SDK 2.6.46 with the archived-history maintenance operation and the current generated server contract.
+
 ## [7.28.4] - 2026-10-22
 
 ### Changed

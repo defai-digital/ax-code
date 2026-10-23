@@ -35,6 +35,7 @@ const lifecycle = {
 const runtimeLog = Log.create({ service: "runtime.snapshot" })
 
 const disposal = {
+  directories: new Set<string>(),
   all: undefined as Promise<void> | undefined,
 }
 
@@ -220,9 +221,20 @@ export const Instance = {
   },
   /** Run maintenance against an existing context without bootstrapping a directory. */
   async withExisting<R>(directory: string, fn: () => R): Promise<R | undefined> {
-    const existing = cache.get(Filesystem.resolve(directory))
+    const key = Filesystem.resolve(directory)
+    if (disposal.directories.has(key)) return undefined
+    const existing = cache.get(key)
     if (!existing) return undefined
-    return context.provide(await existing, fn)
+    let current: Shape
+    try {
+      current = await existing
+    } catch {
+      // A failed boot is no longer an existing runtime. Do not let its
+      // rejected cache entry abort maintenance after storage was committed.
+      return undefined
+    }
+    if (disposal.directories.has(key) || cache.get(key) !== existing) return undefined
+    return context.provide(current, fn)
   },
   get current() {
     return context.use()
@@ -292,6 +304,7 @@ export const Instance = {
       worktree: input.worktree,
       projectID: input.project?.id,
     })
+    disposal.directories.add(directory)
     emitLifecycle({
       kind: "reload.start",
       directory,
@@ -317,6 +330,8 @@ export const Instance = {
         ...errorMetadata(error),
       })
       throw error
+    } finally {
+      disposal.directories.delete(directory)
     }
   },
   async dispose() {
@@ -328,6 +343,7 @@ export const Instance = {
       worktree: Instance.worktree,
       projectID: Instance.project.id,
     })
+    disposal.directories.add(directory)
     emitLifecycle({
       kind: "dispose.start",
       directory,
@@ -351,6 +367,8 @@ export const Instance = {
         ...errorMetadata(error),
       })
       throw error
+    } finally {
+      disposal.directories.delete(directory)
     }
   },
   async disposeAll() {

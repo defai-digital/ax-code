@@ -109,3 +109,109 @@ test("cleans live process state without running user lifecycle hooks", async () 
     GlobalBus.off("event", listener)
   }
 })
+
+test("clears process-owned resources even after the project instance is disposed", async () => {
+  const { SelfCorrection } = await import("../../src/session/correction")
+  const { BlastRadius } = await import("../../src/session/blast-radius")
+  const { BackgroundShell } = await import("../../src/tool/bash-background")
+  const { BackgroundNotification } = await import("../../src/session/background-notification")
+  await using tmp = await tmpdir({ git: true })
+  const session = await Instance.provide({ directory: tmp.path, fn: () => Session.create({}) })
+  await Session.setArchivedGlobally({ sessionID: session.id, time: 123 })
+  await Instance.provide({ directory: tmp.path, fn: () => Instance.dispose() })
+  const reset = vi.spyOn(SelfCorrection, "reset")
+  const blast = vi.spyOn(BlastRadius, "reset")
+  const kill = vi.spyOn(BackgroundShell, "killForSession").mockResolvedValue(undefined)
+  const forget = vi.spyOn(BackgroundNotification, "forgetSession")
+  expect((await remove(session.id, tmp.path)).status).toBe(200)
+  expect(reset).toHaveBeenCalledWith(session.id)
+  expect(blast).toHaveBeenCalledWith(session.id)
+  expect(kill).toHaveBeenCalledWith(session.id)
+  expect(forget).toHaveBeenCalledWith(session.id)
+  expect(Instance.list()).not.toContain(tmp.path)
+})
+
+test("notifies the original owning instance after a historical directory change", async () => {
+  const { Bus } = await import("../../src/bus")
+  const { SessionPrompt } = await import("../../src/session/prompt")
+  await using original = await tmpdir({ git: true })
+  await using current = await tmpdir({ git: true })
+  const deleted: string[] = []
+  const globalDirectories: string[] = []
+  const { GlobalBus } = await import("../../src/bus/global")
+  const listener = (event: {
+    directory?: string
+    payload?: { type?: string; properties?: { info?: { id?: string } } }
+  }) => {
+    if (event.payload?.type === "session.deleted" && event.payload.properties?.info?.id === session.id)
+      globalDirectories.push(event.directory ?? "")
+  }
+  let off = () => {}
+  const session = await Instance.provide({
+    directory: original.path,
+    fn: async () => {
+      const session = await Session.create({})
+      off = Bus.subscribe(Session.Event.Deleted, ({ properties }) => {
+        deleted.push(properties.info.id)
+      })
+      return session
+    },
+  })
+  Database.use((db) =>
+    db
+      .update(SessionTable)
+      .set({ directory: current.path, time_archived: 123 })
+      .where(eq(SessionTable.id, session.id))
+      .run(),
+  )
+  GlobalBus.on("event", listener)
+  const contexts: string[] = []
+  vi.spyOn(SessionPrompt, "cancel").mockImplementation(async (id) => {
+    if (id === session.id) contexts.push(Instance.directory)
+  })
+  try {
+    expect((await remove(session.id, current.path)).status).toBe(200)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(contexts).toContain(original.path)
+    expect(deleted).toEqual([session.id])
+    expect(globalDirectories).toEqual([current.path])
+    expect(Instance.list()).not.toContain(current.path)
+  } finally {
+    off()
+    GlobalBus.off("event", listener)
+  }
+})
+
+test("does not send private lifecycle metadata to an unrelated unborn repository", async () => {
+  const { execFileSync } = await import("node:child_process")
+  const { Bus } = await import("../../src/bus")
+  const { ProjectID } = await import("../../src/project/schema")
+  await using original = await tmpdir()
+  await using unrelated = await tmpdir()
+  for (const directory of [original.path, unrelated.path]) execFileSync("git", ["init", "-q", directory])
+  const seen: string[] = []
+  const session = await Instance.provide({
+    directory: original.path,
+    fn: async () => {
+      expect(Instance.project.id).toBe(ProjectID.global)
+      return Session.create({})
+    },
+  })
+  const off = await Instance.provide({
+    directory: unrelated.path,
+    fn: () => {
+      expect(Instance.project.id).toBe(ProjectID.global)
+      return Bus.subscribe(Session.Event.Deleted, ({ properties }) => {
+        seen.push(properties.info.id)
+      })
+    },
+  })
+  try {
+    await Session.setArchivedGlobally({ sessionID: session.id, time: 123 })
+    expect((await remove(session.id, original.path)).status).toBe(200)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(seen).toEqual([])
+  } finally {
+    off()
+  }
+})

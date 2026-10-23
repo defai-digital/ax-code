@@ -1202,28 +1202,41 @@ export namespace Session {
     //      context anyway, so `Database.effect` would fall through to
     //      immediate execution; calling Bus directly is clearer.
     const items = [...allDescendants, session]
+    const inOwningContexts = async (fn: () => unknown) => {
+      if (!options.global) {
+        await fn()
+        return
+      }
+      for (const directory of Instance.list()) {
+        await Instance.withExisting(directory, async () => {
+          if (Instance.project.id !== session.projectID) return
+          // The historical/unborn global ID is shared by unrelated roots.
+          // Never forward private lifecycle metadata across those roots.
+          if (
+            session.projectID === ProjectID.global &&
+            Instance.directory !== Filesystem.resolve(session.directory) &&
+            (Instance.worktree === "/" || !Filesystem.contains(Instance.worktree, session.directory))
+          )
+            return
+          await fn()
+        })
+      }
+    }
     for (const item of items) {
       const cancel = () =>
         SessionPrompt.cancel(item.id).catch((e) => log.warn("session cancel failed", { sessionID: item.id, error: e }))
-      if (options.global) await Instance.withExisting(item.directory, cancel)
-      else await cancel()
+      await inOwningContexts(cancel)
     }
     for (const item of items) {
-      const cleanup = async () => {
-        SelfCorrection.reset(item.id)
-        BlastRadius.reset(item.id)
-        SessionStatus.clear(item.id)
-        // Kill any background shells the session (or a descendant) started —
-        // without this a deleted session's dev server keeps running with no
-        // surviving session able to see or kill it.
-        await BackgroundShell.killForSession(item.id).catch((e) =>
-          log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
-        )
-        // Pending background-work notifications die with the session too.
-        BackgroundNotification.forgetSession(item.id)
-      }
-      if (options.global) await Instance.withExisting(item.directory, cleanup)
-      else await cleanup()
+      // These registries are process-owned, not Instance.state. They must be
+      // cleared even when the recorded directory has no cached runtime.
+      SelfCorrection.reset(item.id)
+      BlastRadius.reset(item.id)
+      await inOwningContexts(() => SessionStatus.clear(item.id))
+      await BackgroundShell.killForSession(item.id).catch((e) =>
+        log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
+      )
+      BackgroundNotification.forgetSession(item.id)
       // Drop the out-of-band session_diff blob written by revert/summary.
       // CASCADE only covers DB rows, so without this every session that ever
       // recorded a diff would leak its file on delete.
@@ -1231,29 +1244,24 @@ export namespace Session {
         log.warn("session_diff cleanup failed", { sessionID: item.id, error: e }),
       )
     }
-    const publishDeleted = (info: Info) => {
+    const publishLifecycle = async (event: typeof Event.Deleted | typeof Event.Updated, info: Info) => {
       if (options.global) {
-        GlobalBus.emit("event", {
-          directory: info.directory,
-          payload: { type: Event.Deleted.type, properties: { info } },
-        })
+        await inOwningContexts(() => Bus.publishDetached(event, { info }, { localOnly: true }))
+        GlobalBus.emit("event", { directory: info.directory, payload: { type: event.type, properties: { info } } })
       } else {
-        Bus.publishDetached(Event.Deleted, { info })
+        Bus.publishDetached(event, { info })
       }
     }
     for (const desc of allDescendants) {
-      publishDeleted(desc)
+      await publishLifecycle(Event.Deleted, desc)
       // Per-session derived state (token ledger, revision counter) dies with
       // the session (ADR-139 D2); it is keyed by content, never persisted.
       TokenLedger.disposeSession(desc.id)
     }
-    publishDeleted(session)
+    await publishLifecycle(Event.Deleted, session)
     TokenLedger.disposeSession(sessionID)
     for (const info of retainedDescendants) {
-      GlobalBus.emit("event", {
-        directory: info.directory,
-        payload: { type: Event.Updated.type, properties: { info } },
-      })
+      await publishLifecycle(Event.Updated, info)
     }
     // User lifecycle hooks (SessionEnd, reason "remove") — observation-only,
     // fire-and-forget; fired once for the removed session after deletion.
