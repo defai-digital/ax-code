@@ -74,6 +74,8 @@ import type {
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
+  GlobalDeleteArchivedSessionErrors,
+  GlobalDeleteArchivedSessionResponses,
   GlobalDisposeResponses,
   GlobalEventResponse,
   GlobalEventResponses,
@@ -533,6 +535,29 @@ export class Upgrade extends HeyApiClient {
 
 /** AX Code API schema `Global` (auto-generated from the OpenAPI contract). */
 export class Global extends HeyApiClient {
+  /**
+   * Delete archived session history
+   *
+   * Permanently delete archived session history without bootstrapping its stored project directory or executing lifecycle hooks. Active roots are rejected and active descendants are retained as independent sessions; execution and transcript routes remain project scoped.
+   */
+  public deleteArchivedSession<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "sessionID" }] }])
+    return (options?.client ?? this.client).delete<
+      GlobalDeleteArchivedSessionResponses,
+      GlobalDeleteArchivedSessionErrors,
+      ThrowOnError
+    >({
+      url: "/global/session/{sessionID}/archived",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Update global session archive state
    *

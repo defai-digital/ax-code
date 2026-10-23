@@ -1,4 +1,5 @@
 import { Hono } from "hono"
+import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import { streamSSE } from "hono/streaming"
@@ -235,6 +236,36 @@ function getGlobalCapabilitiesInfo(): z.infer<typeof GlobalCapabilitiesInfo> {
 
 export const GlobalRoutes = lazy(() =>
   new Hono()
+    .delete(
+      "/session/:sessionID/archived",
+      describeRoute({
+        summary: "Delete archived session history",
+        description:
+          "Permanently delete archived session history without bootstrapping its stored project directory or executing lifecycle hooks. Active roots are rejected and active descendants are retained as independent sessions; execution and transcript routes remain project scoped.",
+        operationId: "global.deleteArchivedSession",
+        responses: {
+          200: {
+            description: "Archived session deleted",
+            content: { "application/json": { schema: resolver(z.boolean()) } },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      async (c) => {
+        try {
+          await Session.removeArchivedGlobally(parseSessionID(c))
+        } catch (error) {
+          if (Session.ArchivedRemovalConflictError.isInstance(error)) {
+            throw new HTTPException(409, {
+              message: "History is no longer archived; refresh before deleting.",
+            })
+          }
+          throw error
+        }
+        return c.json(true)
+      },
+    )
     .patch(
       "/session/:sessionID/archive",
       describeRoute({

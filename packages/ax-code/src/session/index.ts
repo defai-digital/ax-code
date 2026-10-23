@@ -1055,9 +1055,20 @@ export namespace Session {
   export type RemovalGuard = (subtree: readonly RemovalSession[]) => boolean
   export const RemovalGuardError = NamedError.create("SessionRemovalGuardError", z.object({ sessionID: SessionID.zod }))
 
+  export const ArchivedRemovalConflictError = NamedError.create(
+    "ArchivedSessionRemovalConflictError",
+    z.object({ sessionID: SessionID.zod }),
+  )
+
   async function removeInternal(
     sessionID: SessionID,
-    options: { updatedBefore?: number; guard?: RemovalGuard } = {},
+    options: {
+      updatedBefore?: number
+      guard?: RemovalGuard
+      archivedOnly?: boolean
+      directory?: string
+      global?: boolean
+    } = {},
   ): Promise<number> {
     const session = await get(sessionID)
     // Collect descendants and delete them inside the same transaction to
@@ -1065,6 +1076,7 @@ export namespace Session {
     // collection and deletion becomes an orphan.
     const allDescendants: Info[] = []
     const allDescendantIDs = new Set<SessionID>()
+    const retainedDescendants: Info[] = []
     let protectedByRecentSession = false
     let rootMissing = false
     Database.transaction((db) => {
@@ -1076,6 +1088,16 @@ export namespace Session {
       if (!root) {
         rootMissing = true
         return
+      }
+      // Archived-history cleanup must not delete a restored root. Check the
+      // live rows in the same transaction as deletion, including a
+      // directory move that raced the route's historical-identity check.
+      if (
+        options.archivedOnly &&
+        (!root.time_archived ||
+          (options.directory !== undefined && Filesystem.resolve(root.directory) !== options.directory))
+      ) {
+        throw new ArchivedRemovalConflictError({ sessionID })
       }
       if (options.updatedBefore !== undefined && root.time_updated >= options.updatedBefore) {
         protectedByRecentSession = true
@@ -1096,6 +1118,19 @@ export namespace Session {
           .all()
         for (const row of rows) {
           if (allDescendantIDs.has(row.id)) continue
+          if (options.archivedOnly && !row.time_archived) {
+            // Keep active children and their subtrees. Reparent in the same
+            // transaction instead of letting an archived ancestor delete them.
+            const retained = db
+              .update(SessionTable)
+              .set({ parent_id: null, time_updated: Date.now() })
+              .where(eq(SessionTable.id, row.id))
+              .returning()
+              .get()
+            const info = retained && parseRow(retained)
+            if (info) retainedDescendants.push(info)
+            continue
+          }
           allDescendantIDs.add(row.id)
           subtree.push({ id: row.id, projectID: row.project_id, metadata: row.metadata ?? undefined })
           // Automatic retention must treat a recent descendant as protection
@@ -1168,22 +1203,27 @@ export namespace Session {
     //      immediate execution; calling Bus directly is clearer.
     const items = [...allDescendants, session]
     for (const item of items) {
-      await SessionPrompt.cancel(item.id).catch((e) =>
-        log.warn("session cancel failed", { sessionID: item.id, error: e }),
-      )
+      const cancel = () =>
+        SessionPrompt.cancel(item.id).catch((e) => log.warn("session cancel failed", { sessionID: item.id, error: e }))
+      if (options.global) await Instance.withExisting(item.directory, cancel)
+      else await cancel()
     }
     for (const item of items) {
-      SelfCorrection.reset(item.id)
-      BlastRadius.reset(item.id)
-      SessionStatus.clear(item.id)
-      // Kill any background shells the session (or a descendant) started —
-      // without this a deleted session's dev server keeps running with no
-      // surviving session able to see or kill it.
-      await BackgroundShell.killForSession(item.id).catch((e) =>
-        log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
-      )
-      // Pending background-work notifications die with the session too.
-      BackgroundNotification.forgetSession(item.id)
+      const cleanup = async () => {
+        SelfCorrection.reset(item.id)
+        BlastRadius.reset(item.id)
+        SessionStatus.clear(item.id)
+        // Kill any background shells the session (or a descendant) started —
+        // without this a deleted session's dev server keeps running with no
+        // surviving session able to see or kill it.
+        await BackgroundShell.killForSession(item.id).catch((e) =>
+          log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
+        )
+        // Pending background-work notifications die with the session too.
+        BackgroundNotification.forgetSession(item.id)
+      }
+      if (options.global) await Instance.withExisting(item.directory, cleanup)
+      else await cleanup()
       // Drop the out-of-band session_diff blob written by revert/summary.
       // CASCADE only covers DB rows, so without this every session that ever
       // recorded a diff would leak its file on delete.
@@ -1191,22 +1231,48 @@ export namespace Session {
         log.warn("session_diff cleanup failed", { sessionID: item.id, error: e }),
       )
     }
+    const publishDeleted = (info: Info) => {
+      if (options.global) {
+        GlobalBus.emit("event", {
+          directory: info.directory,
+          payload: { type: Event.Deleted.type, properties: { info } },
+        })
+      } else {
+        Bus.publishDetached(Event.Deleted, { info })
+      }
+    }
     for (const desc of allDescendants) {
-      Bus.publishDetached(Event.Deleted, { info: desc })
+      publishDeleted(desc)
       // Per-session derived state (token ledger, revision counter) dies with
       // the session (ADR-139 D2); it is keyed by content, never persisted.
       TokenLedger.disposeSession(desc.id)
     }
-    Bus.publishDetached(Event.Deleted, { info: session })
+    publishDeleted(session)
     TokenLedger.disposeSession(sessionID)
+    for (const info of retainedDescendants) {
+      GlobalBus.emit("event", {
+        directory: info.directory,
+        payload: { type: Event.Updated.type, properties: { info } },
+      })
+    }
     // User lifecycle hooks (SessionEnd, reason "remove") — observation-only,
     // fire-and-forget; fired once for the removed session after deletion.
-    fireLifecycleHook("SessionEnd", sessionID, { sessionID, reason: "remove" })
+    if (!options.global) fireLifecycleHook("SessionEnd", sessionID, { sessionID, reason: "remove" })
     return allDescendantIDs.size + 1
   }
 
   export async function remove(sessionID: SessionID, guard?: RemovalGuard): Promise<void> {
     await removeInternal(SessionID.zod.parse(sessionID), { guard })
+  }
+
+  /** Stored-history maintenance never boots a retired project or runs its lifecycle hooks. */
+  export async function removeArchivedGlobally(sessionID: SessionID): Promise<void> {
+    const session = await get(SessionID.zod.parse(sessionID))
+    await removeInternal(session.id, {
+      archivedOnly: true,
+      directory: Filesystem.resolve(session.directory),
+      global: true,
+    })
   }
 
   /**

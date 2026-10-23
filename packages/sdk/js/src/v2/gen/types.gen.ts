@@ -5666,6 +5666,48 @@ export type WorktreeResetInput = {
   directory: string
 }
 
+/** Request payload shape for `DELETE /global/session/{sessionID}/archived` — Delete archived session history */
+export type GlobalDeleteArchivedSessionData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: never
+  url: "/global/session/{sessionID}/archived"
+}
+
+/** Error response payloads for `DELETE /global/session/{sessionID}/archived` — Delete archived session history */
+export type GlobalDeleteArchivedSessionErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+/** Error response payload for `DELETE /global/session/{sessionID}/archived` — Delete archived session history */
+export type GlobalDeleteArchivedSessionError =
+  GlobalDeleteArchivedSessionErrors[keyof GlobalDeleteArchivedSessionErrors]
+
+/** Success response payloads for `DELETE /global/session/{sessionID}/archived` — Delete archived session history */
+export type GlobalDeleteArchivedSessionResponses = {
+  /**
+   * Archived session deleted
+   */
+  200: boolean
+}
+
+/** Successful response payload for `DELETE /global/session/{sessionID}/archived` — Delete archived session history */
+export type GlobalDeleteArchivedSessionResponse =
+  GlobalDeleteArchivedSessionResponses[keyof GlobalDeleteArchivedSessionResponses]
+
 /** Request payload shape for `PATCH /global/session/{sessionID}/archive` — Update global session archive state */
 export type GlobalArchiveSessionData = {
   body?: {

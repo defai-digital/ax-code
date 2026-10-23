@@ -218,6 +218,12 @@ export const Instance = {
       return input.fn()
     })
   },
+  /** Run maintenance against an existing context without bootstrapping a directory. */
+  async withExisting<R>(directory: string, fn: () => R): Promise<R | undefined> {
+    const existing = cache.get(Filesystem.resolve(directory))
+    if (!existing) return undefined
+    return context.provide(await existing, fn)
+  },
   get current() {
     return context.use()
   },
