@@ -131,9 +131,12 @@ test("silently clears a busy archived session without idle notifications or hook
     expect(hook).not.toHaveBeenCalled()
     expect(events).not.toContain("session.idle")
     expect(events).not.toContain("session.status")
-    await Instance.provide({ directory: tmp.path, fn: async () => {
-      expect((await SessionStatus.list()).has(session.id)).toBe(false)
-    } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect((await SessionStatus.list()).has(session.id)).toBe(false)
+      },
+    })
   } finally {
     GlobalBus.off("event", listener)
   }
@@ -263,6 +266,31 @@ test("does not forward private local events to a separate checkout with the same
   })
   try {
     await Session.setArchivedGlobally({ sessionID: session.id, time: 123 })
+    expect((await remove(session.id, original.path)).status).toBe(200)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(seen).toEqual([])
+  } finally {
+    off()
+  }
+})
+
+test("does not infer ownership from a sole unrelated checkout after the original instance exits", async () => {
+  const { Bus } = await import("../../src/bus")
+  await using original = await tmpdir({ git: true })
+  await using clone = await tmpdir()
+  await fs.cp(original.path, clone.path, { recursive: true })
+  const session = await Instance.provide({ directory: original.path, fn: () => Session.create({}) })
+  await Session.setArchivedGlobally({ sessionID: session.id, time: 123 })
+  await Instance.provide({ directory: original.path, fn: () => Instance.dispose() })
+  const seen: string[] = []
+  const off = await Instance.provide({
+    directory: clone.path,
+    fn: () =>
+      Bus.subscribe(Session.Event.Deleted, ({ properties }) => {
+        seen.push(properties.info.id)
+      }),
+  })
+  try {
     expect((await remove(session.id, original.path)).status).toBe(200)
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(seen).toEqual([])

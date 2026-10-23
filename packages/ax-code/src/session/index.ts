@@ -566,6 +566,10 @@ export namespace Session {
     })
   })
 
+  // Weak keys retain creation ownership only while that exact instance lives.
+  // A shared Git root commit does not make another checkout a local owner.
+  const createdInInstance = new WeakMap<object, Set<SessionID>>()
+
   export async function createNext(input: {
     id?: SessionID
     title?: string
@@ -605,6 +609,10 @@ export namespace Session {
         { cause: error },
       )
     }
+    const owner = Instance.current
+    const created = createdInInstance.get(owner) ?? new Set<SessionID>()
+    created.add(result.id)
+    createdInInstance.set(owner, created)
     log.info("created", result)
     // Event.Created already fired in the transaction above — skip redundant Updated
     return result
@@ -1217,16 +1225,16 @@ export namespace Session {
             candidates.push({
               directory,
               context: Instance.current,
-              knownOwner: Instance.directory === Filesystem.resolve(info.directory) || SessionPrompt.isRunning(info.id),
+              knownOwner:
+                Instance.directory === Filesystem.resolve(info.directory) ||
+                createdInInstance.get(Instance.current)?.has(info.id) === true ||
+                SessionPrompt.isRunning(info.id),
             })
           })
         }
         owners = candidates.filter((candidate) => candidate.knownOwner)
-        // Historical paths can move while the original instance remains live.
-        // A unique non-placeholder project context is unambiguous. Multiple
-        // checkouts with the same root commit must not receive each other's
-        // private local events; unknown ownership uses only the global event.
-        if (!owners.length && info.projectID !== ProjectID.global && candidates.length === 1) owners = candidates
+        // Historical paths can move while the creating instance remains live.
+        // Unknown checkout ownership uses only the authoritative global event.
         ownersBySession.set(info.id, owners)
       }
       for (const owner of owners) {
@@ -1247,7 +1255,10 @@ export namespace Session {
       // cleared even when the recorded directory has no cached runtime.
       SelfCorrection.reset(item.id)
       BlastRadius.reset(item.id)
-      await inOwningContexts(item, () => SessionStatus.clear(item.id))
+      await inOwningContexts(item, () => {
+        SessionStatus.clear(item.id)
+        createdInInstance.get(Instance.current)?.delete(item.id)
+      })
       await BackgroundShell.killForSession(item.id).catch((e) =>
         log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
       )
