@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { EventEmitter } from "node:events"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { BackgroundNotification } from "../../src/session/background-notification"
 import { SessionPrompt } from "../../src/session/prompt"
 import { MessageID, SessionID, TaskQueueID } from "../../src/session/schema"
 import { TaskTool } from "../../src/tool/task"
+import { BackgroundShell } from "../../src/tool/bash-background"
 import { MessageV2 } from "../../src/session/message-v2"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
@@ -1400,6 +1403,336 @@ describe("tool.task", () => {
         } finally {
           promptSpy.mockRestore()
           cancelSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("foreground task waits for background work before returning", async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const fakeProc = new EventEmitter() as any
+        fakeProc.stdout = new EventEmitter()
+        fakeProc.stderr = new EventEmitter()
+        fakeProc.pid = undefined
+        fakeProc.exitCode = 0
+
+        let shellID: string | undefined
+        let childSessionID: string | undefined
+        let promptCalls = 0
+        let toolSettled = false
+        let closed = false
+
+        const closeShell = () => {
+          if (closed) return
+          closed = true
+          fakeProc.stdout.emit("data", Buffer.from("background shell finished\n"))
+          fakeProc.emit("close")
+        }
+
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          promptCalls++
+          if (promptCalls === 1) {
+            const sessionID = String(input.sessionID)
+            childSessionID = sessionID
+            const info = BackgroundShell.register({
+              sessionID,
+              command: "sleep 60",
+              description: "long running shell",
+              proc: fakeProc,
+            })
+            shellID = info.id
+            return {
+              info: {
+                id: input.messageID ?? MessageID.ascending(),
+                sessionID: input.sessionID,
+                role: "assistant",
+                time: { created: Date.now(), completed: Date.now() },
+              },
+              parts: [{ type: "text", text: "started in background" }],
+            } as any
+          }
+          return {
+            info: {
+              id: input.messageID ?? MessageID.ascending(),
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "completed shell evidence" }],
+          } as any
+        }) as any)
+
+        try {
+          const toolPromise = (await TaskTool.init()).execute(
+            {
+              description: "background work foreground",
+              prompt: "start background work and report",
+              subagent_type: "general",
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+          toolPromise.then(
+            () => {
+              toolSettled = true
+            },
+            () => {
+              toolSettled = true
+            },
+          )
+
+          await vi.waitFor(
+            () => {
+              expect(shellID).toBeTruthy()
+              expect(promptCalls).toBe(1)
+            },
+            { timeout: 2_000, interval: 25 },
+          )
+          expect(BackgroundShell.get(shellID!, childSessionID!)?.status).toBe("running")
+
+          // The child only reported that it started the shell, so the parent
+          // task must stay pending until the shell actually closes.
+          await new Promise((resolve) => setTimeout(resolve, 100))
+          expect(toolSettled).toBe(false)
+          expect(promptCalls).toBe(1)
+
+          closeShell()
+
+          const result = await toolPromise
+          expect(promptCalls).toBe(2)
+          expect(promptSpy).toHaveBeenCalledTimes(2)
+          expect(result.output).toContain("completed shell evidence")
+          await vi.waitFor(
+            () => {
+              expect(BackgroundNotification.pendingCount(childSessionID!)).toBeGreaterThan(0)
+            },
+            { timeout: 2_000, interval: 25 },
+          )
+        } finally {
+          closeShell()
+          promptSpy.mockRestore()
+          BackgroundShell.resetForTests()
+        }
+      },
+    })
+  })
+
+  test("background task waits for background work before delivering handoff", async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const fakeProc = new EventEmitter() as any
+        fakeProc.stdout = new EventEmitter()
+        fakeProc.stderr = new EventEmitter()
+        fakeProc.pid = undefined
+        fakeProc.exitCode = 0
+
+        let shellID: string | undefined
+        let childSessionID: string | undefined
+        let promptCalls = 0
+        let closed = false
+
+        const closeShell = () => {
+          if (closed) return
+          closed = true
+          fakeProc.stdout.emit("data", Buffer.from("background shell finished\n"))
+          fakeProc.emit("close")
+        }
+
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          promptCalls++
+          if (promptCalls === 1) {
+            const sessionID = String(input.sessionID)
+            childSessionID = sessionID
+            const info = BackgroundShell.register({
+              sessionID,
+              command: "sleep 60",
+              description: "background work",
+              proc: fakeProc,
+            })
+            shellID = info.id
+            return {
+              info: {
+                id: input.messageID ?? MessageID.ascending(),
+                sessionID: input.sessionID,
+                role: "assistant",
+                time: { created: Date.now(), completed: Date.now() },
+              },
+              parts: [{ type: "text", text: "background work started; evidence pending" }],
+            } as any
+          }
+          return {
+            info: {
+              id: input.messageID ?? MessageID.ascending(),
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "background child done" }],
+          } as any
+        }) as any)
+        const loopSpy = vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+
+        const parentHandoffText = async () => {
+          const messages = await Session.messages({ sessionID: parent.id })
+          return messages
+            .flatMap((message) => message.parts)
+            .filter((part) => part.type === "text")
+            .map((part) => (part as any).text as string)
+            .find((text) => text.includes("<task id="))
+        }
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "background work queue",
+              prompt: "start background work",
+              subagent_type: "general",
+              background: true,
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          expect(result.metadata.background).toBe(true)
+          const queueID = String(result.metadata.queueID)
+
+          await vi.waitFor(
+            () => {
+              expect(promptCalls).toBe(1)
+              expect(childSessionID).toBeTruthy()
+            },
+            { timeout: 2_000, interval: 25 },
+          )
+          expect(BackgroundShell.get(shellID!, childSessionID!)?.status).toBe("running")
+
+          // The first child turn only started the shell, so no handoff may be
+          // delivered to the parent while that shell is still running.
+          await expect(
+            vi.waitFor(
+              async () => {
+                expect(await parentHandoffText()).toBeDefined()
+              },
+              { timeout: 1_000, interval: 25 },
+            ),
+          ).rejects.toThrow()
+
+          const queuedBeforeClose = await TaskQueue.get(TaskQueueID.make(queueID))
+          expect(queuedBeforeClose.payload["deliveryStatus"]).not.toBe("delivered")
+          expect(promptCalls).toBe(1)
+
+          closeShell()
+
+          await vi.waitFor(
+            () => {
+              expect(promptCalls).toBe(2)
+            },
+            { timeout: 2_000, interval: 25 },
+          )
+          await vi.waitFor(
+            async () => {
+              expect(await parentHandoffText()).toContain("background child done")
+            },
+            { timeout: 2_000, interval: 25 },
+          )
+          expect(promptSpy).toHaveBeenCalledTimes(2)
+          await vi.waitFor(
+            () => {
+              expect(BackgroundNotification.pendingCount(childSessionID!)).toBeGreaterThan(0)
+            },
+            { timeout: 2_000, interval: 25 },
+          )
+        } finally {
+          closeShell()
+          promptSpy.mockRestore()
+          loopSpy.mockRestore()
+          BackgroundShell.resetForTests()
         }
       },
     })

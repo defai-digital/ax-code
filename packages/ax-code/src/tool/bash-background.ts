@@ -414,6 +414,58 @@ export namespace BackgroundShell {
     }
   }
 
+  /**
+   * Resolve once every shell that belongs to `sessionID` and is running at
+   * call time has finished. A session with no running shell resolves
+   * immediately, and a shell that finishes between the snapshot and the
+   * observer attach is settled by observe's initial exit callback. The
+   * observers and the abort listener are always released on completion or
+   * abort.
+   */
+  export async function waitForCompletion(sessionID: string, opts: { signal?: AbortSignal } = {}): Promise<void> {
+    if (opts.signal?.aborted) throw abortError()
+    const running = list(sessionID).filter((entry) => entry.status === "running")
+    if (running.length === 0) return
+
+    await new Promise<void>((resolve, reject) => {
+      let remaining = running.length
+      let settled = false
+      const unsubscribers: Array<() => void> = []
+      const settle = (error?: Error) => {
+        if (settled) return
+        settled = true
+        opts.signal?.removeEventListener("abort", onAbort)
+        for (const unsubscribe of unsubscribers) unsubscribe()
+        if (error) reject(error)
+        else resolve()
+      }
+      const onAbort = () => settle(abortError())
+      opts.signal?.addEventListener("abort", onAbort, { once: true })
+
+      for (const shell of running) {
+        const unsubscribe = observe(shell.id, sessionID, {
+          onExit: () => {
+            remaining -= 1
+            if (remaining <= 0) settle()
+          },
+        })
+        if (unsubscribe) {
+          unsubscribers.push(unsubscribe)
+          // observe can call onExit synchronously for an already-finished
+          // entry, which settles before this unsubscriber is registered.
+          if (settled) unsubscribe()
+        } else {
+          // The shell was forgotten between the snapshot and observe, so it
+          // cannot produce another exit callback.
+          remaining -= 1
+          if (remaining <= 0) settle()
+        }
+      }
+      if (!settled && remaining <= 0) settle()
+    })
+    if (opts.signal?.aborted) throw abortError()
+  }
+
   /** Wait until this shell has unread output, exits, the timeout elapses, or abort fires. Then consume like read(). */
   export async function waitAndRead(
     id: string,

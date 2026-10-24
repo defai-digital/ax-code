@@ -10,6 +10,8 @@ import { uniqueItems, uniqueSortedStrings, uniqueStrings } from "@/util/string-l
 import { voidSafe } from "@/util/void-safe"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
+import { BackgroundShell } from "../tool/bash-background"
+import { assistantError } from "../tool/task-errors"
 import { MessageV2 } from "./message-v2"
 import { SessionPrompt } from "./prompt"
 import { SessionExecution } from "./execution"
@@ -948,18 +950,54 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
   return execution
 }
 
+const BACKGROUND_FINALIZE_PROMPT =
+  `Background shell work started by this task has finished. ` +
+  `Produce the final result for this task now in plain text, using bash_output to read any background output you have not consumed. ` +
+  `Do not start new shells or monitors, and do not delegate further. ` +
+  `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
+
 function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
   if (!item.sessionID) return undefined
+  const sessionID = item.sessionID
+  // One controller per execution: the watchdog's cancel() aborts a pending
+  // background-shell wait as well as the child session prompt. The wait and
+  // the follow-up prompt stay inside the same execution watchdog, so no
+  // additional timeout layer is introduced.
+  const controller = new AbortController()
   return {
-    sessionID: item.sessionID,
+    sessionID,
+    cancel: async (options) => {
+      controller.abort()
+      await SessionPrompt.cancel(sessionID, options)
+    },
     run: () =>
       runInQueueItemInstance(item, async () => {
         const body = promptBodyFromQueueItem(item)
         if (!body) throw new Error(`Subagent queue item ${item.id} has no executable prompt`)
         const next = await applyRestartContinuation(item, body)
-        const result = await SessionPrompt.prompt({ ...next, sessionID: item.sessionID! })
-        if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
-        return result
+        const result = await SessionPrompt.prompt({ ...next, sessionID })
+        // A normal subagent returns on this path; only a child that left shell
+        // work running waits for it and issues the final turn. A turn that
+        // already produced an assistant error is final: matching the
+        // foreground guard, pending shells must not defer or replace it.
+        const pendingShells =
+          !assistantError(result) && BackgroundShell.list(sessionID).some((shell) => shell.status === "running")
+        if (!pendingShells) {
+          if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
+          return result
+        }
+        await BackgroundShell.waitForCompletion(sessionID, { signal: controller.signal })
+        const final = await SessionPrompt.prompt({
+          ...next,
+          sessionID,
+          toolsScope: "turn",
+          tools: { ...next.tools, bash: false, monitor: false, task: false, task_parallel: false },
+          parts: [{ type: "text", text: BACKGROUND_FINALIZE_PROMPT }],
+        })
+        // Only the final result is recorded for workflow usage; the interim
+        // "work started" turn is not the child's deliverable.
+        if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, final)
+        return final
       }),
   }
 }

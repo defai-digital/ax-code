@@ -9,6 +9,7 @@ import {
   taskFanOutAllowed,
 } from "./task-shared"
 import { Tool } from "./tool"
+import { BackgroundShell } from "./bash-background"
 import DESCRIPTION from "./task.txt"
 import { assertPoolAlias, modelPoolParameter, resolvePoolModel } from "./task-model-pool"
 import z from "zod"
@@ -48,6 +49,20 @@ export class BackgroundCapacityError extends Error {
 // this timeout.
 const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
 const SUBAGENT_FINALIZE_TIMEOUT_MS = 2 * 60 * 1000
+
+const EMPTY_FINALIZE_INSTRUCTION =
+  `Your previous subagent turn ended without a usable final response. ` +
+  `Produce the final result for this task now in plain text. ` +
+  `Do not call more tools unless absolutely required. ` +
+  `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
+
+// Sent after the child's background shells finish: the final turn must fold
+// their evidence in without launching more detached work.
+const BACKGROUND_FINALIZE_INSTRUCTION =
+  `Background shell work started by this task has finished. ` +
+  `Produce the final result for this task now in plain text, using bash_output to read any background output you have not consumed. ` +
+  `Do not start new shells or monitors, and do not delegate further. ` +
+  `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
 const log = Log.create({ service: "task-tool" })
 
 const baseParameters = z.object({
@@ -462,6 +477,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>
       let finalizeAttempted = false
       let finalizeError: ReturnType<typeof errorDetails> | undefined
+      let initialEmpty = false
       try {
         ensureNotAborted()
         ctx.metadata({
@@ -491,6 +507,9 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
           })
         }
 
+        // The original 10-minute prompt budget covers both the background
+        // shell wait and the finalization prompt that follows it.
+        const promptStartedAt = Date.now()
         result = await withTimeout(
           SessionPrompt.prompt({
             messageID,
@@ -512,13 +531,32 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         )
 
         ensureNotAborted()
-        let text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
-        const firstError = assistantError(result)
+        const initialText = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+        const initialError = assistantError(result)
+        // Snapshot the FIRST turn's error and emptiness before any
+        // finalization. A finalize forced by finished background work is not
+        // recovery from an empty response.
+        initialEmpty = initialText.trim().length === 0 && TaskOutputSchema.fromResult(result) === undefined
+        const backgroundShellsPending =
+          !initialError && BackgroundShell.list(session.id).some((shell) => shell.status === "running")
+        if (backgroundShellsPending) {
+          await withTimeout(
+            BackgroundShell.waitForCompletion(session.id, { signal: ctx.abort }),
+            Math.max(1, SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt)),
+            `Subagent background work timed out after ${SUBAGENT_TIMEOUT_MS / 60_000} minutes`,
+          )
+          ensureNotAborted()
+        }
         // A child that satisfied output_schema produced usable evidence even
-        // with no prose, so the empty-result finalize retry must not run.
-        if (text.trim().length === 0 && !firstError && TaskOutputSchema.fromResult(result) === undefined) {
+        // with no prose, so the empty-result finalize retry must not run. The
+        // background path still finalizes: its last turn only reported that
+        // the detached work had started.
+        if (backgroundShellsPending || (initialEmpty && !initialError)) {
           finalizeAttempted = true
           const finalizeMessageID = MessageID.ascending()
+          const finalizeTimeoutMs = backgroundShellsPending
+            ? Math.min(SUBAGENT_FINALIZE_TIMEOUT_MS, Math.max(1, SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt)))
+            : SUBAGENT_FINALIZE_TIMEOUT_MS
           try {
             result = await withTimeout(
               SessionPrompt.prompt({
@@ -532,24 +570,19 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
                 agentRouting: "preserve",
                 isolation: constraints.isolation,
                 toolsScope: "turn",
-                tools: {
-                  ...taskTools,
-                  task: false,
-                },
+                tools: backgroundShellsPending
+                  ? { ...taskTools, bash: false, monitor: false, task: false, task_parallel: false }
+                  : { ...taskTools, task: false },
                 format: structuredFormat,
                 parts: [
                   {
                     type: "text",
-                    text:
-                      `Your previous subagent turn ended without a usable final response. ` +
-                      `Produce the final result for this task now in plain text. ` +
-                      `Do not call more tools unless absolutely required. ` +
-                      `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`,
+                    text: backgroundShellsPending ? BACKGROUND_FINALIZE_INSTRUCTION : EMPTY_FINALIZE_INSTRUCTION,
                   },
                 ],
               }),
-              SUBAGENT_FINALIZE_TIMEOUT_MS,
-              `Subagent finalization timed out after ${SUBAGENT_FINALIZE_TIMEOUT_MS / 60_000} minutes`,
+              finalizeTimeoutMs,
+              `Subagent finalization timed out after ${Math.max(1, Math.round(finalizeTimeoutMs / 60_000))} minutes`,
             )
             ensureNotAborted()
           } catch (error) {
@@ -652,7 +685,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       const error = assistantError(result)
       const structured = TaskOutputSchema.fromResult(result)
       const emptyResult = text.trim().length === 0 && structured === undefined
-      const recoveredFromEmpty = finalizeAttempted && !emptyResult
+      const recoveredFromEmpty = finalizeAttempted && initialEmpty && !emptyResult
       const recoveredResultNeedsReview = recoveredFromEmpty && needsRecoveredResultReview(text)
       const finalizeErrorText = finalizeError
         ? `Finalization failed with ${finalizeError.name}: ${finalizeError.message}.`

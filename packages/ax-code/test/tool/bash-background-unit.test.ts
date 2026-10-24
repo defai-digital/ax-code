@@ -78,6 +78,47 @@ describe("BackgroundShell registry", () => {
     expect(later?.output).toContain("after-abort")
   })
 
+  test("waitForCompletion resolves on close and rejects on abort", async () => {
+    const sessionID = "ses_bg_wait_completion"
+    const first = fakeProc()
+    const second = fakeProc()
+    BackgroundShell.register({ sessionID, command: "noop", description: "first", proc: first })
+    BackgroundShell.register({ sessionID, command: "noop", description: "second", proc: second })
+
+    let settled = false
+    const completion = BackgroundShell.waitForCompletion(sessionID).then(() => {
+      settled = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(settled).toBe(false)
+    ;(first as unknown as EventEmitter).emit("close")
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(settled).toBe(false)
+    ;(second as unknown as EventEmitter).emit("close")
+    await completion
+    expect(settled).toBe(true)
+
+    // A shell that already finished before the wait started is not waited on.
+    const finished = fakeProc()
+    BackgroundShell.register({ sessionID, command: "noop", description: "finished", proc: finished })
+    ;(finished as unknown as EventEmitter).emit("close")
+    await expect(BackgroundShell.waitForCompletion(sessionID)).resolves.toBeUndefined()
+
+    // Abort rejects and releases the observer: the later close must not
+    // re-settle the rejected wait or throw.
+    const pending = fakeProc()
+    BackgroundShell.register({ sessionID, command: "noop", description: "pending", proc: pending })
+    const controller = new AbortController()
+    const aborted = BackgroundShell.waitForCompletion(sessionID, { signal: controller.signal })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    controller.abort()
+    await expect(aborted).rejects.toMatchObject({ name: "AbortError" })
+    ;(pending as unknown as EventEmitter).emit("close")
+
+    await expect(BackgroundShell.waitForCompletion(sessionID)).resolves.toBeUndefined()
+    await expect(BackgroundShell.waitForCompletion("ses_bg_wait_completion_none")).resolves.toBeUndefined()
+  })
+
   test("multi-byte UTF-8 characters split across chunks are not corrupted", () => {
     const proc = fakeProc()
     const info = BackgroundShell.register({ sessionID: "ses_bg_utf8", command: "noop", description: "fake", proc })
