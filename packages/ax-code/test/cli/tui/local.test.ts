@@ -17,6 +17,7 @@ import {
   shouldAdoptMessageModelFromHistory,
   solidStoreRecordPatch,
   rememberRecentModel,
+  cycleRecentModel,
   resolveCurrentAgent,
   defaultVisibleAgentName,
   resolvePinnedModelPreference,
@@ -243,6 +244,27 @@ describe("tui local model preferences", () => {
 
     expect(result).toEqual([model(3), model(1), model(2), model(4), model(5)])
     expect(result).toHaveLength(RECENT_MODEL_LIMIT)
+  })
+
+  test("cycleRecentModel enters at the first model forward and the last model backward when the current model is not in the recent list", () => {
+    const recent = [model(1), model(2), model(3)]
+
+    expect(cycleRecentModel(recent, model(9), 1)).toEqual(model(1))
+    expect(cycleRecentModel(recent, model(9), -1)).toEqual(model(3))
+  })
+
+  test("cycleRecentModel returns undefined for an empty recent list", () => {
+    expect(cycleRecentModel([], model(1), 1)).toBeUndefined()
+    expect(cycleRecentModel([], model(1), -1)).toBeUndefined()
+  })
+
+  test("cycleRecentModel wraps forward and backward across the recent list", () => {
+    const recent = [model(1), model(2), model(3)]
+
+    expect(cycleRecentModel(recent, model(2), 1)).toEqual(model(3))
+    expect(cycleRecentModel(recent, model(3), 1)).toEqual(model(1))
+    expect(cycleRecentModel(recent, model(2), -1)).toEqual(model(1))
+    expect(cycleRecentModel(recent, model(1), -1)).toEqual(model(3))
   })
 
   test("pruneModelPreferences removes invalid stored model selections after providers load", () => {

@@ -250,6 +250,20 @@ export function rememberRecentModel(
   return out
 }
 
+export function cycleRecentModel(
+  recent: readonly ProviderModelKeyInput[],
+  current: ProviderModelKeyInput,
+  direction: 1 | -1,
+): ProviderModelKeyInput | undefined {
+  if (recent.length === 0) return undefined
+  const index = recent.findIndex((item) => providerModelKey(item) === providerModelKey(current))
+  if (index === -1) return direction === 1 ? recent[0] : recent[recent.length - 1]
+  let next = index + direction
+  if (next < 0) next = recent.length - 1
+  if (next >= recent.length) next = 0
+  return recent[next]
+}
+
 function parseProviderModelKey(key: string): ProviderModelKeyInput | undefined {
   const idx = key.indexOf("/")
   if (idx <= 0 || idx === key.length - 1) return undefined

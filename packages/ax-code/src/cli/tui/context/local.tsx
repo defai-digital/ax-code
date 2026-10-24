@@ -26,6 +26,7 @@ import {
   agentIcon,
   AGENT_COLOR_THEME_KEYS,
   applyExplicitModelPreference,
+  cycleRecentModel,
   hasSessionModelPreference,
   modelIdentity,
   modelPreferenceStatus as resolveModelPreferenceStatus,
@@ -411,14 +412,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           const current = currentModel()
           if (!current) return
           const recent = modelStore.recent.filter((item) => isModelValid(item))
-          const index = recent.findIndex((x) => providerModelEquals(x, current))
-          if (index === -1) return
-          let next = index + direction
-          if (next < 0) next = recent.length - 1
-          if (next >= recent.length) next = 0
-          const val = recent[next]
-          if (!val) return
-          setUserModel(agent.current().name, val)
+          const next = cycleRecentModel(recent, current, direction)
+          if (!next) return
+          setUserModel(agent.current().name, next)
           save()
         },
         cycleFavorite(direction: 1 | -1) {
