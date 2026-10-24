@@ -1,6 +1,6 @@
 import { createStore, reconcile } from "solid-js/store"
 import { toggleMcpServer } from "./mcp-toggle"
-import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import path from "path"
@@ -37,6 +37,7 @@ import {
   pruneModelPreferences,
   pruneSessionModelPreferences,
   rememberSessionModelPreference,
+  resolveCurrentModelPreference,
   resolvePinnedModelPreference,
   sessionModelPreference,
   solidStoreRecordPatch,
@@ -203,6 +204,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
 
       function setUserModel(agentName: string, model: ProviderModelKeyInput) {
+        // A user pick (dialog, cycle, favorite) outranks the CLI startup pin.
+        setStartupModel(undefined)
         const applied = applyExplicitModelPreference(
           sessionModels(),
           modelStore.model,
@@ -296,8 +299,39 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         })
 
       const args = useArgs()
+
+      // `--model` is a startup pin for this run. Parse it exactly once: a
+      // malformed value reports one warning and leaves no override behind.
+      function parseStartupModel(): ProviderModelKeyInput | undefined {
+        if (!args.model) return undefined
+        try {
+          return Provider.parseModel(args.model)
+        } catch {
+          toast.show({ variant: "warning", message: `Invalid model format: ${args.model}`, duration: 3000 })
+          return undefined
+        }
+      }
+
+      const [startupModel, setStartupModel] = createSignal(parseStartupModel())
+
+      // Remember the startup pin in recents once the persisted store is ready.
+      // This is not a preference: it never writes a session, global, or agent
+      // entry and does not wait for provider/agent/session readiness. If the
+      // user already changed the model, `setUserModel` cleared the signal and
+      // there is nothing to record.
+      let startupModelRemembered = false
+      createEffect(() => {
+        if (startupModelRemembered || !modelStore.ready) return
+        startupModelRemembered = true
+        untrack(() => {
+          const startup = startupModel()
+          if (!startup) return
+          rememberRecentModel(startup)
+          save()
+        })
+      })
+
       const fallbackModel = createMemo(() => {
-        if (args.model) return Provider.parseModel(args.model)
         if (sync.data.config.model) return Provider.parseModel(sync.data.config.model)
         // Persisted preferences load asynchronously. Resolving the implicit
         // catalog default before they arrive would briefly show — and, on an
@@ -316,12 +350,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const currentModel = createMemo(() => {
         const a = agent.current()
         const sessionID = activeSessionID()
-        return (
-          sessionModelPreference(sessionModels(), sessionID, a.name) ??
-          modelStore.model[a.name] ??
-          a.model ??
-          fallbackModel()
-        )
+        return resolveCurrentModelPreference({
+          session: sessionModelPreference(sessionModels(), sessionID, a.name),
+          override: modelStore.model[a.name],
+          agent: a.model,
+          startup: startupModel(),
+          fallback: fallbackModel(),
+        })
       })
 
       // Re-validate stored model preferences when providers finish loading.

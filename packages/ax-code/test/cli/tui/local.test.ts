@@ -19,6 +19,7 @@ import {
   rememberRecentModel,
   cycleRecentModel,
   resolveCurrentAgent,
+  resolveCurrentModelPreference,
   defaultVisibleAgentName,
   resolvePinnedModelPreference,
 } from "../../../src/cli/tui/context/local-util"
@@ -487,5 +488,18 @@ describe("resolvePinnedModelPreference", () => {
 
   test("returns undefined when the SKU is not served by any connected provider", () => {
     expect(resolvePinnedModelPreference(providers, { providerID: "openai", modelID: "gpt-5" })).toBeUndefined()
+  })
+})
+
+describe("resolveCurrentModelPreference", () => {
+  test("startup wins over session, override, agent, and fallback", () => {
+    const session = { providerID: "provider", modelID: "model-session" }
+    const override = { providerID: "provider", modelID: "model-override" }
+    const agent = { providerID: "provider", modelID: "model-agent" }
+    const startup = { providerID: "provider", modelID: "model-startup" }
+    const fallback = { providerID: "provider", modelID: "model-fallback" }
+
+    expect(resolveCurrentModelPreference({ session, override, agent, startup, fallback })).toEqual(startup)
+    expect(resolveCurrentModelPreference({ session, override, agent, fallback })).toEqual(session)
   })
 })

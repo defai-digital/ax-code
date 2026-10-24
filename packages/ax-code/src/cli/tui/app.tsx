@@ -57,7 +57,6 @@ import { NotificationEvent } from "@/notification/events"
 import { KVProvider, useKV } from "./context/kv"
 import { isWindowsTerminal } from "@/util/terminal-program"
 import { NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "./ui/glyphs"
-import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { AxEngineDownloadsProvider } from "./context/ax-engine-downloads"
@@ -1156,15 +1155,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   onMount(() => {
     batch(() => {
       if (args.agent) local.agent.set(args.agent)
-      if (args.model) {
-        let parsed: ReturnType<typeof Provider.parseModel> | undefined
-        try {
-          parsed = Provider.parseModel(args.model)
-        } catch {
-          toast.show({ variant: "warning", message: `Invalid model format: ${args.model}`, duration: 3000 })
-        }
-        if (parsed !== undefined) local.model.set(parsed, { recent: true })
-      }
       // Handle --session without --fork immediately (fork is handled in createEffect below)
       if (args.sessionID && !args.fork) {
         route.navigate({

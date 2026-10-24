@@ -69,6 +69,16 @@ export function resolveCurrentAgent<
   } as T
 }
 
+export function resolveCurrentModelPreference(input: {
+  session?: ProviderModelKeyInput
+  override?: ProviderModelKeyInput
+  agent?: ProviderModelKeyInput
+  startup?: ProviderModelKeyInput
+  fallback?: ProviderModelKeyInput
+}): ProviderModelKeyInput | undefined {
+  return input.startup ?? input.session ?? input.override ?? input.agent ?? input.fallback
+}
+
 /** Configured default when it is still visible, else the first listed primary agent. */
 export function defaultVisibleAgentName(
   agents: readonly { name: string }[],

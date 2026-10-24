@@ -1473,6 +1473,7 @@ describe("AX Code TUI stability guardrails", () => {
 
   test("surfaces local model preference persistence failures instead of silently dropping them", async () => {
     const local = await fs.readFile(LOCAL_SRC, "utf8")
+    const app = await fs.readFile(APP_SRC, "utf8")
 
     expect(local).toContain('const log = Log.create({ service: "tui.local" })')
     expect(local).toContain('log.warn("failed to persist local model preferences"')
@@ -1485,8 +1486,18 @@ describe("AX Code TUI stability guardrails", () => {
     expect(local).toContain("if (state.persistenceBlocked)")
     expect(local).toContain("persistence disabled to avoid overwriting state")
     expect(local).toContain('"Failed to load model preferences"')
-    // Keep an unavailable explicit pin visible until the user changes it.
-    expect(local).toContain("if (args.model) return Provider.parseModel(args.model)")
+    // `--model` is a startup pin for this run, not a stored preference: parse
+    // it once, rank it above every stored layer, and report malformed syntax
+    // once without leaving an override. A user pick clears the pin, and the
+    // app must not seed it through local.model.set on mount.
+    expect(local).toContain("const [startupModel, setStartupModel] = createSignal(parseStartupModel())")
+    expect(local).toContain("return Provider.parseModel(args.model)")
+    expect(local).toContain("Invalid model format: ${args.model}")
+    expect(local).toContain("startup: startupModel()")
+    expect(local).toContain("setStartupModel(undefined)")
+    expect(local).not.toContain("startup: args.model")
+    expect(app).not.toContain("Provider.parseModel(args.model)")
+    expect(app).not.toContain('import { Provider } from "@/provider/provider"')
     expect(local).toContain("sessionModelPreference(sessionModels(), sessionID, a.name)")
     expect(local).toContain("modelStore.model[a.name]")
     expect(local).toContain("const resolved = isModelValid(model) ? model : resolvePin(model)")
