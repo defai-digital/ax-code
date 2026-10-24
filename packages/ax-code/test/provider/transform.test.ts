@@ -878,6 +878,20 @@ describe("ProviderTransform.providerOptions", () => {
       openai: options,
     })
   })
+  test("uses the SDK provider-name namespace for a dotted provider ID", () => {
+    const model = createModel({
+      providerID: "wafer.ai",
+      api: {
+        id: "glm5.2-fast",
+        url: "https://pass.wafer.ai/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    })
+
+    expect(ProviderTransform.providerOptions(model, { reasoningEffort: "high" })).toEqual({
+      wafer: { reasoningEffort: "high" },
+    })
+  })
 })
 
 describe("ProviderTransform.schema - Moonshot / Kimi", () => {

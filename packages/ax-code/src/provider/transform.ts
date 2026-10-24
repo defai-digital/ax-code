@@ -77,6 +77,14 @@ export namespace ProviderTransform {
     return undefined
   }
 
+  // The compatible SDK keys provider options by the provider name it was
+  // constructed with, which stops at the first dot. A dotted config ID such as
+  // `wafer.ai` therefore registers as `wafer`, and reads must use the same
+  // namespace as writes.
+  export function providerOptionsKey(model: Provider.Model): string {
+    return sdkKey(model.api.npm) ?? (model.providerID.split(".")[0]?.trim() || model.providerID)
+  }
+
   function normalizeMessages(
     msgs: ModelMessage[],
     model: Provider.Model,
@@ -1581,7 +1589,7 @@ export namespace ProviderTransform {
   }
 
   export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
-    const key = sdkKey(model.api.npm) ?? model.providerID
+    const key = providerOptionsKey(model)
     return { [key]: options }
   }
 

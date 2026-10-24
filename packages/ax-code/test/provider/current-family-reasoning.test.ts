@@ -68,6 +68,15 @@ describe("current-family effort contracts", () => {
     },
   )
 
+  test("serializes effort for dotted provider IDs", async () => {
+    const m = model("glm5.2-fast", "wafer.ai")
+    const variants = T.variants(m)
+    expect(variants.high).toEqual({ reasoningEffort: "high" })
+
+    const body = await wire(m, variants.high)
+    expect(body.reasoning_effort).toBe("high")
+  })
+
   test("GLM autonomous and recovery requests retain max rather than reducing the upstream default", () => {
     const m = model("glm-5.3")
     m.variants = T.variants(m)

@@ -838,10 +838,14 @@ describe("session.llm.stream", () => {
     },
   )
 
-  test.each(["required", "auto"] as const)(
-    "uses compatible DeepSeek thinking settings for %s tool choice through a gateway",
-    async (toolChoice) => {
-      const providerID = ProviderID.make("deepseek-review-gateway")
+  test.each([
+    ["required", "deepseek-review-gateway"],
+    ["auto", "deepseek-review-gateway"],
+    ["required", "deepseek.review.gateway"],
+  ] as const)(
+    "uses compatible DeepSeek thinking settings for %s tool choice through %s",
+    async (toolChoice, provider) => {
+      const providerID = ProviderID.make(provider)
       const modelID = ModelID.make("deepseek-v4-pro")
       const request = waitRequest(
         "/chat/completions",

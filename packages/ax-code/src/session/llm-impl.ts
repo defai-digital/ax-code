@@ -800,7 +800,7 @@ export namespace LLM {
                 const hasTools = Array.isArray(tools) && tools.length > 0
                 const prompt = args.params?.prompt
                 const wrapped = args.params?.providerOptions
-                const key = input.model.providerID
+                const key = ProviderTransform.providerOptionsKey(input.model)
                 const flat = wrapped?.[key]
                 if (hasTools && Array.isArray(prompt) && flat && typeof flat === "object") {
                   const next = ProviderTransform.disableDeepSeekThinkingForToolHistory(input.model, flat, prompt, true)
