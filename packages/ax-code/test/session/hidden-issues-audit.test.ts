@@ -104,6 +104,76 @@ test("overlapping reverts serialize file and metadata updates", async () => {
   })
 }, 60_000)
 
+test("forked session whole-message undo and redo restore the turn boundary", async () => {
+  await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "state.txt")
+      await fs.writeFile(file, "base")
+      const session = await Session.create({})
+      const turn = async (text: string) => {
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          role: "user",
+          sessionID: session.id,
+          agent: "default",
+          model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test") },
+          time: { created: Date.now() },
+        })
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          role: "assistant",
+          sessionID: session.id,
+          mode: "default",
+          agent: "default",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: ModelID.make("test"),
+          providerID: ProviderID.make("test"),
+          parentID: user.id,
+          time: { created: Date.now() },
+        })
+        const hash = await Snapshot.track()
+        expect(hash).toBeDefined()
+        await Session.updatePart({
+          id: PartID.ascending(),
+          messageID: assistant.id,
+          sessionID: session.id,
+          type: "step-start",
+          snapshot: hash!,
+        })
+        await fs.writeFile(file, text)
+        await Session.updatePart({
+          id: PartID.ascending(),
+          messageID: assistant.id,
+          sessionID: session.id,
+          type: "patch",
+          ...(await Snapshot.patch(hash!)),
+        })
+        return user
+      }
+      await turn("one")
+      await turn("two")
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      const forked = await Session.fork({ sessionID: session.id })
+      const copied = await Session.messages({ sessionID: forked.id })
+      const users = copied.filter((message) => message.info.role === "user")
+      expect(users).toHaveLength(2)
+      await SessionRevert.revert({ sessionID: forked.id, messageID: users[1].info.id })
+      expect(await fs.readFile(file, "utf8")).toBe("one")
+      await SessionRevert.unrevert({ sessionID: forked.id })
+      expect(await fs.readFile(file, "utf8")).toBe("two")
+      const assistants = copied.filter((message) => message.info.role === "assistant")
+      expect(assistants).toHaveLength(2)
+      await SessionRevert.revert({ sessionID: forked.id, messageID: assistants[1].info.id })
+      expect(await fs.readFile(file, "utf8")).toBe("one")
+      await SessionRevert.unrevert({ sessionID: forked.id })
+      expect(await fs.readFile(file, "utf8")).toBe("two")
+    },
+  })
+}, 60_000)
+
 test("closed stdout rejects pending RPC without requiring child exit", async () => {
   const child = new EventEmitter() as any
   for (const key of ["stdin", "stdout", "stderr"])

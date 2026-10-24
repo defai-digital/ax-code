@@ -174,30 +174,46 @@ export namespace SessionRevert {
     throw new Error(`Session revert boundary ${input.messageID} disappeared`)
   }
 
-  function patchEntries(store: SessionShard.Store, sessionIDs: SessionID[], boundary: Position) {
+  function patchEntries(store: SessionShard.Store, sessionIDs: SessionID[], boundary: Position, wholeMessage: boolean) {
     const rows = store.use((db) =>
       db
-        .select()
+        .select({
+          id: PartTable.id,
+          messageID: PartTable.message_id,
+          sessionID: PartTable.session_id,
+          time: PartTable.time_created,
+          data: PartTable.data,
+          messageTime: MessageTable.time_created,
+        })
         .from(PartTable)
+        .leftJoin(MessageTable, eq(MessageTable.id, PartTable.message_id))
         .where(inArray(PartTable.session_id, sessionIDs))
         .orderBy(PartTable.time_created, PartTable.id)
         .all(),
     )
     const result: PatchEntry[] = []
     for (const row of rows) {
-      const position = { time: row.time_created, id: row.id }
-      if (!after(position, boundary)) continue
+      const position = { time: row.time, id: row.id }
+      // A fork re-timestamps every copied part but preserves message times, so a
+      // whole-message boundary must compare by message identity, not part time.
+      // The boundary message's own patches are included; only earlier messages are skipped.
+      if (wholeMessage && row.messageTime !== null) {
+        const messagePosition = { time: row.messageTime, id: row.messageID }
+        if (after(boundary, messagePosition)) continue
+      } else if (!after(position, boundary)) {
+        continue
+      }
       const parsed = MessageV2.Part.safeParse({
         ...row.data,
         id: row.id,
-        messageID: row.message_id,
-        sessionID: row.session_id,
+        messageID: row.messageID,
+        sessionID: row.sessionID,
       })
       if (!parsed.success || parsed.data.type !== "patch") continue
       result.push({
         hash: parsed.data.hash,
         files: parsed.data.files,
-        sessionID: row.session_id,
+        sessionID: row.sessionID,
         position,
       })
     }
@@ -305,6 +321,7 @@ export namespace SessionRevert {
       store,
       scope.sessions.map((session) => session.id),
       boundary,
+      input.partID === undefined,
     )
     const files = [...new Set(entries.flatMap((entry) => entry.files))]
     const patches: Snapshot.Patch[] = entries.map(({ hash, files: changed }) => ({ hash, files: changed }))
@@ -321,6 +338,7 @@ export namespace SessionRevert {
         store,
         scope.sessions.map((session) => session.id),
         boundaryPosition({ sessionID: input.sessionID, messageID: previous.messageID, partID: previous.partID }, store),
+        previous.partID === undefined,
       )
       patches.push({ hash: previous.snapshot, files: [...new Set(previousEntries.flatMap((entry) => entry.files))] })
     }
