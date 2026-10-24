@@ -555,12 +555,14 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         // recovery from an empty response.
         initialEmpty = initialText.trim().length === 0 && TaskOutputSchema.fromResult(result) === undefined
         // Persistent shells (monitors) are expected to keep running; waiting
-        // for one would burn the whole task budget. A queued notification
-        // means work already finished, so it still deserves a final turn.
+        // for one would burn the whole task budget. A queued completion
+        // notification means work already finished, so it still deserves a
+        // final turn. Monitor lines are progress, not completion, and must not
+        // force that final turn.
         backgroundWorkPending =
           !initialError &&
           (BackgroundShell.list(session.id).some((shell) => shell.status === "running" && shell.persistent !== true) ||
-            BackgroundNotification.pendingCount(session.id) > 0)
+            BackgroundNotification.pendingCompletionCount(session.id) > 0)
         if (backgroundWorkPending) {
           // Spend the remaining original budget on the wait, but reserve the
           // finalize window so the final prompt still has time to run.

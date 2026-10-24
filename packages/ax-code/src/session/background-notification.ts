@@ -181,6 +181,17 @@ export namespace BackgroundNotification {
   }
 
   /**
+   * Count only notifications that report finished work. Monitor lines are
+   * progress from a still-running monitor, so they must not be mistaken for a
+   * completed background shell or monitor.
+   */
+  export function pendingCompletionCount(sessionID: string) {
+    const records = pending.get(sessionID)
+    if (!records) return 0
+    return records.filter((record) => record.kind === "shell_exit" || record.kind === "monitor_exit").length
+  }
+
+  /**
    * Claim and format the notifications delivered on the next model step.
    * At-most-once: claimed records are removed even if the request that
    * carries them later fails. Records beyond the per-step caps stay pending

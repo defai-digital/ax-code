@@ -1410,6 +1410,133 @@ describe("tool.task", () => {
     })
   })
 
+  test("does not finalize persistent monitor lines as completed background work", async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const fakeProc = new EventEmitter() as any
+        fakeProc.stdout = new EventEmitter()
+        fakeProc.stderr = new EventEmitter()
+        fakeProc.pid = undefined
+        fakeProc.exitCode = 0
+
+        let calls = 0
+        let shellID: string | undefined
+        let childSessionID: string | undefined
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          calls++
+          if (calls === 1) {
+            const sessionID = String(input.sessionID)
+            childSessionID = sessionID
+            const info = BackgroundShell.register({
+              sessionID,
+              command: "tail -f app.log",
+              description: "persistent monitor",
+              proc: fakeProc,
+            })
+            shellID = info.id
+            BackgroundShell.markPersistent(info.id, sessionID)
+            BackgroundNotification.recordMonitorLine({
+              sessionID,
+              monitorID: info.id,
+              description: "persistent monitor",
+              line: "monitor ready",
+            })
+            return {
+              info: {
+                id: input.messageID ?? MessageID.ascending(),
+                sessionID: input.sessionID,
+                role: "assistant",
+                time: { created: Date.now(), completed: Date.now() },
+                structured: { bugs: ["a"] },
+              },
+              parts: [],
+            } as any
+          }
+          return {
+            info: {
+              id: input.messageID ?? MessageID.ascending(),
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "the persistent monitor is still running" }],
+          } as any
+        }) as any)
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "inspect persistent monitor",
+              prompt: "inspect the persistent monitor",
+              subagent_type: "general",
+              output_schema: { type: "object", properties: { bugs: { type: "array" } } },
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          expect(shellID).toBeTruthy()
+          expect(BackgroundShell.get(shellID!, childSessionID!)?.persistent).toBe(true)
+          // A monitor line for an already-persistent shell is notification
+          // state, not unfinished work: it must not force a finalize prompt
+          // that discards the captured structured result.
+          expect(calls).toBe(1)
+          expect(result.metadata.structuredStatus).toBe("captured")
+          expect(result.metadata.structured).toEqual({ bugs: ["a"] })
+        } finally {
+          promptSpy.mockRestore()
+          cancelSpy.mockRestore()
+          BackgroundShell.resetForTests()
+        }
+      },
+    })
+  })
+
   test("foreground task waits for background work before returning", async () => {
     await using tmp = await tmpdir({ git: true, config: { username: "test" } })
 

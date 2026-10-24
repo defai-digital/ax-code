@@ -994,13 +994,15 @@ function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
         // A normal subagent returns on this path; only a child that left
         // non-persistent shell work pending waits for it and issues the final
         // turn. Persistent shells (monitors) never finish on their own, and a
-        // queued notification still deserves that final turn. A turn that
-        // already produced an assistant error is final: matching the
-        // foreground guard, pending work must not defer or replace it.
+        // queued completion notification still deserves that final turn.
+        // Monitor lines are progress, not completion, and must not count as
+        // pending work. A turn that already produced an assistant error is
+        // final: matching the foreground guard, pending work must not defer or
+        // replace it.
         const pending =
           !assistantError(result) &&
           (BackgroundShell.list(sessionID).some((shell) => shell.status === "running" && shell.persistent !== true) ||
-            BackgroundNotification.pendingCount(sessionID) > 0)
+            BackgroundNotification.pendingCompletionCount(sessionID) > 0)
         if (!pending) {
           if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
           return result

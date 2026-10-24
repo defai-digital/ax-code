@@ -110,6 +110,47 @@ describe("BackgroundNotification", () => {
     expect(block).toContain("watch deploys")
   })
 
+  test("monitor lines are progress, never completion notifications", () => {
+    const sessionID = "ses_bn_completion"
+    BackgroundNotification.recordMonitorLine({
+      sessionID,
+      monitorID: "bash_11",
+      description: "watch logs",
+      line: "still running",
+    })
+    // A monitor line is progress from a live monitor, not finished work.
+    expect(BackgroundNotification.pendingCount(sessionID)).toBe(1)
+    expect(BackgroundNotification.pendingCompletionCount(sessionID)).toBe(0)
+
+    BackgroundNotification.recordMonitorExit({
+      sessionID,
+      monitorID: "bash_11",
+      description: "watch logs",
+      exitCode: 0,
+    })
+    expect(BackgroundNotification.pendingCompletionCount(sessionID)).toBe(1)
+
+    BackgroundNotification.recordShellExit({
+      sessionID,
+      shellID: "bash_12",
+      description: "slow build",
+      status: "completed",
+      exitCode: 0,
+      durationMs: null,
+    })
+    expect(BackgroundNotification.pendingCount(sessionID)).toBe(3)
+    expect(BackgroundNotification.pendingCompletionCount(sessionID)).toBe(2)
+
+    // clearShell drops every record belonging to that id, lines and exits.
+    BackgroundNotification.clearShell(sessionID, "bash_11")
+    expect(BackgroundNotification.pendingCount(sessionID)).toBe(1)
+    expect(BackgroundNotification.pendingCompletionCount(sessionID)).toBe(1)
+
+    BackgroundNotification.clearShell(sessionID, "bash_12")
+    expect(BackgroundNotification.pendingCount(sessionID)).toBe(0)
+    expect(BackgroundNotification.pendingCompletionCount(sessionID)).toBe(0)
+  })
+
   test("per-step delivery caps leave the remainder pending", () => {
     for (let i = 1; i <= 10; i++) {
       BackgroundNotification.recordShellExit({
