@@ -1926,208 +1926,200 @@ describe("session.llm.stream", () => {
     })
   })
 
-  test.skipIf(!!process.env.CI)(
-    "normalizes interleaved reasoning into provider request payload",
-    async () => {
-      const providerID = "zhipuai"
-      const modelID = "glm-5.3"
-      const fixture = await loadFixture(providerID, modelID)
-      const model = fixture.model
+  test("normalizes interleaved reasoning into provider request payload", async () => {
+    const providerID = "zhipuai"
+    const modelID = "glm-5.3"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
 
-      const request = waitRequest(
-        "/chat/completions",
-        new Response(createChatStream("Hello"), {
-          status: 200,
-          headers: { "Content-Type": "text/event-stream" },
-        }),
-      )
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
 
-      await using tmp = await tmpdir({
-        init: async (dir) => {
-          await fs.writeFile(
-            path.join(dir, "ax-code.json"),
-            JSON.stringify({
-              $schema:
-                "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-              enabled_providers: [providerID],
-              provider: {
-                [providerID]: {
-                  options: {
-                    apiKey: "test-key",
-                    baseURL: `${state.server.url.origin}/v1`,
-                  },
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-key",
+                  baseURL: `${state.server.url.origin}/v1`,
                 },
               },
-            }),
-          )
-        },
-      })
+            },
+          }),
+        )
+      },
+    })
 
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
-          const sessionID = SessionID.make("session-test-reasoning")
-          const agent = {
-            name: "test",
-            mode: "primary",
-            options: {},
-            permission: [{ permission: "*", pattern: "*", action: "allow" }],
-          } satisfies Agent.Info
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-test-reasoning")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
 
-          const user = {
-            id: MessageID.make("user-reasoning"),
-            sessionID,
-            role: "user",
-            time: { created: Date.now() },
-            agent: agent.name,
-            model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
-          } satisfies MessageV2.User
+        const user = {
+          id: MessageID.make("user-reasoning"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
 
-          const stream = await LLM.stream({
-            user,
-            sessionID,
-            model: resolved,
-            agent,
-            system: ["Continue from the prior step."],
-            abort: new AbortController().signal,
-            messages: [
-              { role: "user", content: [{ type: "text", text: "Use the previous result." }] },
-              {
-                role: "assistant",
-                content: [
-                  { type: "reasoning", text: "Let me think through the prior tool result." },
-                  { type: "tool-call", toolCallId: "call-1", toolName: "bash", args: { command: "pwd" } },
-                ],
-              },
-              {
-                role: "tool",
-                content: [
-                  {
-                    type: "tool-result",
-                    toolCallId: "call-1",
-                    toolName: "bash",
-                    output: { type: "text", value: "/home/user" },
-                  },
-                ],
-              },
-              { role: "user", content: [{ type: "text", text: "Continue." }] },
-            ] as any,
-            tools: {},
-          })
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["Continue from the prior step."],
+          abort: new AbortController().signal,
+          messages: [
+            { role: "user", content: [{ type: "text", text: "Use the previous result." }] },
+            {
+              role: "assistant",
+              content: [
+                { type: "reasoning", text: "Let me think through the prior tool result." },
+                { type: "tool-call", toolCallId: "call-1", toolName: "bash", input: { command: "pwd" } },
+              ],
+            },
+            {
+              role: "tool",
+              content: [
+                {
+                  type: "tool-result",
+                  toolCallId: "call-1",
+                  toolName: "bash",
+                  output: { type: "text", value: "/home/user" },
+                },
+              ],
+            },
+            { role: "user", content: [{ type: "text", text: "Continue." }] },
+          ] satisfies ModelMessage[],
+          tools: {},
+        })
 
-          for await (const _ of stream.fullStream) {
-          }
+        for await (const part of stream.fullStream) {
+          if (part.type === "error") throw part.error
+        }
 
-          const capture = await request
-          const text = JSON.stringify(capture.body.messages)
-          expect(text).toContain("reasoning_content")
-          expect(text).toContain("Let me think through the prior tool result.")
-          expect(text).not.toContain('"type":"reasoning"')
-        },
-      })
-    },
-    60_000,
-  )
+        const capture = await request
+        const text = JSON.stringify(capture.body.messages)
+        expect(text).toContain("reasoning_content")
+        expect(text).toContain("Let me think through the prior tool result.")
+        expect(text).not.toContain('"type":"reasoning"')
+      },
+    })
+  }, 60_000)
 
-  test.skipIf(!!process.env.CI)(
-    "adds noop tool for LiteLLM-compatible histories with prior tool calls",
-    async () => {
-      const providerID = "alibaba-coding-plan"
-      const modelID = "qwen3-coder-plus"
-      const fixture = await loadFixture(providerID, modelID)
-      const model = fixture.model
+  test("adds noop tool for LiteLLM-compatible histories with prior tool calls", async () => {
+    const providerID = "alibaba-coding-plan"
+    const modelID = "qwen3-coder-plus"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
 
-      const request = waitRequest(
-        "/chat/completions",
-        new Response(createChatStream("Hello"), {
-          status: 200,
-          headers: { "Content-Type": "text/event-stream" },
-        }),
-      )
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
 
-      await using tmp = await tmpdir({
-        init: async (dir) => {
-          await fs.writeFile(
-            path.join(dir, "ax-code.json"),
-            JSON.stringify({
-              $schema:
-                "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-              enabled_providers: [providerID],
-              provider: {
-                [providerID]: {
-                  options: {
-                    apiKey: "test-key",
-                    baseURL: `${state.server.url.origin}/v1`,
-                    litellmProxy: true,
-                  },
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                  litellmProxy: true,
                 },
               },
-            }),
-          )
-        },
-      })
+            },
+          }),
+        )
+      },
+    })
 
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
-          const sessionID = SessionID.make("session-test-image")
-          const agent = {
-            name: "test",
-            mode: "primary",
-            options: {},
-            permission: [{ permission: "*", pattern: "*", action: "allow" }],
-          } satisfies Agent.Info
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-test-image")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
 
-          const user = {
-            id: MessageID.make("user-image"),
-            sessionID,
-            role: "user",
-            time: { created: Date.now() },
-            agent: agent.name,
-            model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
-          } satisfies MessageV2.User
+        const user = {
+          id: MessageID.make("user-image"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
 
-          const stream = await LLM.stream({
-            user,
-            sessionID,
-            model: resolved,
-            agent,
-            system: ["Continue the tool-assisted exchange."],
-            abort: new AbortController().signal,
-            messages: [
-              { role: "user", content: [{ type: "text", text: "Run the command." }] },
-              {
-                role: "assistant",
-                content: [{ type: "tool-call", toolCallId: "call-1", toolName: "bash", args: { command: "pwd" } }],
-              },
-              {
-                role: "tool",
-                content: [
-                  {
-                    type: "tool-result",
-                    toolCallId: "call-1",
-                    toolName: "bash",
-                    output: { type: "text", value: "/home/user" },
-                  },
-                ],
-              },
-            ] as any,
-            tools: {},
-          })
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["Continue the tool-assisted exchange."],
+          abort: new AbortController().signal,
+          messages: [
+            { role: "user", content: [{ type: "text", text: "Run the command." }] },
+            {
+              role: "assistant",
+              content: [{ type: "tool-call", toolCallId: "call-1", toolName: "bash", input: { command: "pwd" } }],
+            },
+            {
+              role: "tool",
+              content: [
+                {
+                  type: "tool-result",
+                  toolCallId: "call-1",
+                  toolName: "bash",
+                  output: { type: "text", value: "/home/user" },
+                },
+              ],
+            },
+          ] satisfies ModelMessage[],
+          tools: {},
+        })
 
-          for await (const _ of stream.fullStream) {
-          }
+        for await (const part of stream.fullStream) {
+          if (part.type === "error") throw part.error
+        }
 
-          const capture = await request
-          const tools = capture.body.tools as Array<{ function?: { name?: string } }> | undefined
-          expect(tools?.some((item) => item.function?.name === "_noop")).toBe(true)
-        },
-      })
-    },
-    60_000,
-  )
+        const capture = await request
+        const tools = capture.body.tools as Array<{ function?: { name?: string } }> | undefined
+        expect(tools?.some((item) => item.function?.name === "_noop")).toBe(true)
+      },
+    })
+  }, 60_000)
 
   test("sends Google API payload for Gemini models", async () => {
     const providerID = "google"
