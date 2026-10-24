@@ -44,6 +44,7 @@ import {
   titleContextMessages,
   zeroTokenUsage,
 } from "../../src/session/prompt/prompt-helpers"
+import { defaultReferenceRunners } from "../../src/session/prompt/prompt-reference-parts"
 
 afterEach(() => vi.unstubAllEnvs())
 
@@ -507,6 +508,31 @@ describe("session.prompt helpers", () => {
         prompt: "look at src/app.ts",
       },
     ])
+  })
+
+  test("preserves text-only expansions and caller text in subtask prompts", async () => {
+    const diff = "diff --git a/x b/x\n+added line"
+    const git = vi.spyOn(defaultReferenceRunners, "runGit").mockResolvedValue(diff)
+    try {
+      const result = await commandParts({
+        agent: { name: "reviewer", mode: "subagent" },
+        command: { description: "Review the diff" },
+        name: "review",
+        model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.2") },
+        template: "review @diff",
+        parts: [{ type: "text", text: "focus on regressions" }],
+      })
+
+      expect(result.subtask).toBe(true)
+      expect(result.parts).toHaveLength(1)
+      expect(result.parts[0]).toMatchObject({
+        type: "subtask",
+        prompt: "review @diff\n\ndiff --git a/x b/x\n+added line\n\nfocus on regressions",
+      })
+      expect(git).toHaveBeenCalledWith(["diff", "--no-color"])
+    } finally {
+      git.mockRestore()
+    }
   })
 
   test("falls back to inline command parts when subtask input includes non-text parts", async () => {

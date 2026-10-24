@@ -10,11 +10,12 @@ export async function commandParts(input: {
   parts?: any[]
 }) {
   const base = await resolvePromptParts(input.template)
-  const hasExtra = [...base, ...(input.parts ?? [])].some((item) => item.type !== "text")
+  const parts = [...base, ...(input.parts ?? [])]
+  const hasExtra = parts.some((item) => item.type !== "text")
   const subtask =
     !hasExtra &&
     ((input.agent.mode === "subagent" && input.command.subtask !== false) || input.command.subtask === true)
-  if (!subtask) return { subtask, parts: [...base, ...(input.parts ?? [])] }
+  if (!subtask) return { subtask, parts }
 
   return {
     subtask,
@@ -28,7 +29,10 @@ export async function commandParts(input: {
           providerID: input.model.providerID,
           modelID: input.model.modelID,
         },
-        prompt: base.find((item) => item.type === "text")?.text ?? "",
+        prompt: parts
+          .filter((item) => item.type === "text")
+          .map((item) => item.text)
+          .join("\n\n"),
       },
     ],
   }
