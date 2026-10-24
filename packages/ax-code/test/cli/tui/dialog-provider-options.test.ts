@@ -24,6 +24,7 @@ import {
   withCustomApiProviderDialogEntry,
   withAxTrustProviderDialogEntry,
 } from "../../../src/cli/tui/component/dialog-provider-options"
+import { hasConnectedProvider } from "../../../src/cli/tui/component/provider-state"
 
 function provider(id: string, name = id) {
   return { id, name, models: {} } as any
@@ -121,6 +122,14 @@ describe("provider dialog options", () => {
         configured: [],
       }),
     ).toBe(true)
+  })
+
+  test.each([
+    { connected: [] as string[], expected: false },
+    { connected: ["opencode"], expected: true },
+    { connected: ["opencode", "deepseek"], expected: true },
+  ])("reports connected=$connected as $expected", ({ connected, expected }) => {
+    expect(hasConnectedProvider(connected)).toBe(expected)
   })
 
   test("does not treat transient ax-engine provider data as connected", () => {
