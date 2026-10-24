@@ -331,8 +331,14 @@ export namespace SessionProcessor {
     const canonicalize = (obj: unknown): string => toolInputFingerprint(obj)
     // Output comparison ignores desktop_webmcp's per-read id: a fresh readId would otherwise
     // make an unchanged page read look like progress. Other ids (jobs, documents) still count.
-    const outputFingerprint = (obj: unknown): string =>
-      canonicalize(obj).replace(/(\\?"readId\\?":\\?")[0-9a-f-]{36}/gi, "$1<id>")
+    const outputFingerprint = (tool: string, obj: unknown): string => {
+      // Normalize before canonicalization adds its whole-output hash for long results.
+      const output =
+        tool === "desktop_webmcp" && typeof obj === "string"
+          ? obj.replace(/("readId":")[0-9a-f-]{36}/gi, "$1<id>")
+          : obj
+      return canonicalize(output)
+    }
     const recentToolRing: RingEntry[] = ensureSessionToolCycleRing(input.sessionID)
     const doomLoopWarnings: Record<string, string> = {}
     // Run-scoped count of autonomous doom-loop detections per tool. The first
@@ -361,7 +367,10 @@ export namespace SessionProcessor {
           (input.eventInput
             ? safeStringify(redactPersistedToolInput(input.tool, jsonSafeInput(input.eventInput)))
             : safeStringify(redactPersistedToolInput(input.tool, jsonSafeInput(input.fallbackInput)))),
-        output: input.output === undefined ? undefined : (input.outputFingerprint ?? outputFingerprint(input.output)),
+        output:
+          input.output === undefined
+            ? undefined
+            : (input.outputFingerprint ?? outputFingerprint(input.tool, input.output)),
       })
       if (recentToolRing.length > recentToolRingLimit) recentToolRing.shift()
       delete toolcalls[input.toolCallId]
@@ -1118,7 +1127,7 @@ export namespace SessionProcessor {
                     // comparisons stay consistent and we avoid a second full
                     // object-graph walk on large tool inputs (PERF-02).
                     const completedInput = toolInputCache[value.toolCallId] ?? canonicalize(storedInput)
-                    const completedOutput = outputFingerprint(value.output.output)
+                    const completedOutput = outputFingerprint(match.tool, value.output.output)
                     const completedCycleLen = detectCycle(
                       [...recentToolRing, { tool: match.tool, input: completedInput, output: completedOutput }],
                       AUTONOMOUS_MAX_CYCLE_LEN,

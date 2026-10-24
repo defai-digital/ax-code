@@ -1091,14 +1091,27 @@ describe("session.processor", () => {
   })
 
   test.each([
-    ["escalates when each repeated call is its own step and returns the same output", () => "[]", 1],
-    ["only warns when the repeated call keeps returning new output", (step: number) => `poll ${step}`, 0],
+    ["escalates when each repeated call is its own step and returns the same output", () => "[]", 1, "glob"],
+    ["only warns when the repeated call keeps returning new output", (step: number) => `poll ${step}`, 0, "glob"],
     [
-      "ignores a fresh id per call when comparing outputs",
+      "ignores a fresh desktop read id when comparing outputs",
       () => `{"readId":"${crypto.randomUUID()}","text":"same page"}`,
       1,
+      "desktop_webmcp",
     ],
-  ])("autonomous doom-loop %s", async (_name, outputFor, minimumAsks) => {
+    [
+      "ignores a fresh desktop read id before hashing a long result",
+      () => JSON.stringify({ readId: crypto.randomUUID(), text: "same page ".repeat(600) }),
+      1,
+      "desktop_webmcp",
+    ],
+    [
+      "preserves read ids from other tools as progress",
+      () => `{"readId":"${crypto.randomUUID()}","text":"same page"}`,
+      0,
+      "glob",
+    ],
+  ])("autonomous doom-loop %s", async (_name, outputFor, minimumAsks, toolName) => {
     await using tmp = await tmpdir({ git: true })
     vi.stubEnv("AX_CODE_AUTONOMOUS", "true")
     const askSpy = vi.spyOn(Permission, "ask").mockResolvedValue(undefined as any)
@@ -1114,8 +1127,8 @@ describe("session.processor", () => {
               fullStream: (async function* () {
                 yield { type: "start" }
                 yield { type: "start-step" }
-                yield { type: "tool-input-start", id, toolName: "glob" }
-                yield { type: "tool-call", toolCallId: id, toolName: "glob", input: { pattern: "**/*" } }
+                yield { type: "tool-input-start", id, toolName }
+                yield { type: "tool-call", toolCallId: id, toolName, input: { pattern: "**/*" } }
                 yield {
                   type: "tool-result",
                   toolCallId: id,
