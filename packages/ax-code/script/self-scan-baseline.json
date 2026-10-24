@@ -782,6 +782,14 @@
           "summary": "timer:no_cleanup"
         },
         {
+          "fingerprint": "6c56dd446e52f5f91453312e878da045445f5e59aba58945e2e0687f742dddee",
+          "file": "src/session/tool-cycle-ring.ts",
+          "line": 51,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
           "fingerprint": "a0a9180c586e30509f1c482768e6186475549a782044bfcf6f43ff875cb61fd8",
           "file": "src/storage/json-migration.ts",
           "line": 6,
@@ -2121,14 +2129,6 @@
           "fingerprint": "602c34114abd339dcea01da3562f1265a95df3d3d98bc0265a9e37ca491ba26c",
           "file": "src/session/prompt/prompt-permission.ts",
           "line": 15,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
-        },
-        {
-          "fingerprint": "ee22b97be3af03da6cd2db05f0e2c48235165022ece2712cf16db0880b90b619",
-          "file": "src/session/prompt/prompt-run-state.ts",
-          "line": 110,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
