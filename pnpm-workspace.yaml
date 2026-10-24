@@ -54,7 +54,6 @@ catalog:
   "typescript": "npm:@typescript/typescript6@6.0.2"
   "ulid": "3.0.2"
   "vitest": "4.1.12"
-  # Qualify datetime acceptance and OpenAPI changes before moving to Zod 4.6.
   "zod": "4.6.6"
   "zod-to-json-schema": "3.25.2"
 

@@ -4484,7 +4484,7 @@ export type SessionRiskDetail = {
     missingVerification: boolean
     verificationPolicyFailed?: boolean
     overrideReason?: string
-    createdAt: string
+    createdAt: string | string
     source: {
       tool: string
       version: string
@@ -4497,7 +4497,7 @@ export type SessionRiskDetail = {
       caseId: string
       problem: string
       status: "open" | "investigating" | "resolved" | "unresolved"
-      createdAt: string
+      createdAt: string | string
       source: {
         tool: string
         version: string
@@ -4509,7 +4509,7 @@ export type SessionRiskDetail = {
       evidenceId: string
       caseId: string
       kind: "log_capture" | "instrumentation_result" | "stack_trace" | "graph_query"
-      capturedAt: string
+      capturedAt: string | string
       content: string
       planId?: string
       source: {
@@ -4533,7 +4533,7 @@ export type SessionRiskDetail = {
         removeInstruction: string
       }>
       status: "planned" | "applied" | "removed"
-      createdAt: string
+      createdAt: string | string
       source: {
         tool: string
         version: string
@@ -4564,7 +4564,7 @@ export type SessionRiskDetail = {
       caseId: string
       problem: string
       status: "open" | "investigating" | "resolved" | "unresolved"
-      createdAt: string
+      createdAt: string | string
       source: {
         tool: string
         version: string

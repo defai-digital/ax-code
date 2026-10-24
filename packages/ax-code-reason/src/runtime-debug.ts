@@ -39,7 +39,7 @@ export const DebugCaseSchema = z.object({
   caseId: z.string().regex(DEBUG_ID_PATTERN, "caseId must be 16-char lowercase hex"),
   problem: z.string().min(1).max(500),
   status: DebugCaseStatus,
-  createdAt: z.string().datetime(),
+  createdAt: z.union([z.string().datetime(), z.string().datetime({ precision: -1 })]),
   source: FindingSource,
 })
 export type DebugCase = z.infer<typeof DebugCaseSchema>
@@ -75,7 +75,7 @@ export const DebugEvidenceSchema = z.object({
   evidenceId: z.string().regex(DEBUG_ID_PATTERN, "evidenceId must be 16-char lowercase hex"),
   caseId: z.string().regex(DEBUG_ID_PATTERN),
   kind: DebugEvidenceKind,
-  capturedAt: z.string().datetime(),
+  capturedAt: z.union([z.string().datetime(), z.string().datetime({ precision: -1 })]),
   // Free-form text. Logs and stack traces are usually multi-line plaintext;
   // graph queries are JSON-serialized payloads. Consumers handle their kind.
   content: z.string().min(1).max(DEBUG_EVIDENCE_CONTENT_MAX),
@@ -110,7 +110,7 @@ export const DebugInstrumentationPlanSchema = z.object({
   purpose: z.string().min(1).max(500),
   targets: z.array(DebugInstrumentationTargetSchema).min(1).max(20),
   status: DebugInstrumentationStatus,
-  createdAt: z.string().datetime(),
+  createdAt: z.union([z.string().datetime(), z.string().datetime({ precision: -1 })]),
   source: FindingSource,
 })
 export type DebugInstrumentationPlan = z.infer<typeof DebugInstrumentationPlanSchema>

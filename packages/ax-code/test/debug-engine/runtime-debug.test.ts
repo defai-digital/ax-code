@@ -231,3 +231,20 @@ describe("computeDebugInstrumentationPlanId", () => {
     expect(computeDebugInstrumentationPlanId(input)).toBe(computeDebugInstrumentationPlanId(input))
   })
 })
+
+test.each([
+  ["2026-10-24T12:34Z", true],
+  ["2026-10-24T12:34:56.123Z", true],
+  ["2026-02-29T12:34Z", false],
+  ["2026-10-24T12:34+01:00", false],
+])("preserves debug artifact timestamp acceptance for %s", (value, accepted) => {
+  for (const schema of [
+    DebugCaseSchema.shape.createdAt,
+    DebugEvidenceSchema.shape.capturedAt,
+    DebugInstrumentationPlanSchema.shape.createdAt,
+  ]) {
+    const result = schema.safeParse(value)
+    expect(result.success).toBe(accepted)
+    if (result.success) expect(result.data).toBe(value)
+  }
+})

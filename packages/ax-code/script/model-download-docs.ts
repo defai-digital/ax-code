@@ -25,7 +25,7 @@ const publicUrl = z.url().refine((value) => {
 })
 export const ModelDownloadSnapshot = z.object({
   version: z.literal(1),
-  checkedAt: z.iso.datetime(),
+  checkedAt: z.union([z.iso.datetime(), z.iso.datetime({ precision: -1 })]),
   models: z
     .array(
       z.object({
@@ -49,7 +49,7 @@ export const ModelMirrorInventory = z.object({
         signatureUrl: publicUrl,
         manifestSha256: digest,
         verificationReceipt: publicUrl,
-        verifiedAt: z.iso.datetime(),
+        verifiedAt: z.union([z.iso.datetime(), z.iso.datetime({ precision: -1 })]),
       }),
     )
     .max(200),

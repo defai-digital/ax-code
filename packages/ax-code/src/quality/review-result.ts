@@ -28,7 +28,7 @@ export const ReviewResultSchema = z.object({
   missingVerification: z.boolean(),
   verificationPolicyFailed: z.boolean().optional(),
   overrideReason: z.string().min(1).max(1000).optional(),
-  createdAt: z.string().datetime(),
+  createdAt: z.union([z.string().datetime(), z.string().datetime({ precision: -1 })]),
   source: FindingSource,
 })
 export type ReviewResult = z.infer<typeof ReviewResultSchema>

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import { computeFindingId, type Finding } from "../../src/quality/finding"
 import {
   createReviewResult,
+  ReviewResultSchema,
   recommendReviewDecision,
   type VerificationEnvelopeWithId,
 } from "../../src/quality/review-result"
@@ -53,6 +54,21 @@ function verification(status: "passed" | "failed" | "skipped"): VerificationEnve
 }
 
 describe("review-result", () => {
+  test.each([
+    ["2026-10-24T12:34Z", true],
+    ["2026-10-24T12:34:56Z", true],
+    ["2026-10-24T12:34:56.123Z", true],
+    ["2024-02-29T12:34Z", true],
+    ["2026-02-29T12:34Z", false],
+    ["2026-10-24T24:00Z", false],
+    ["2026-10-24T12:34:56+01:00", false],
+    ["2026-10-24T12:34", false],
+  ])("preserves review timestamp acceptance for %s", (value, accepted) => {
+    const result = ReviewResultSchema.shape.createdAt.safeParse(value)
+    expect(result.success).toBe(accepted)
+    if (result.success) expect(result.data).toBe(value)
+  })
+
   test("recommends request_changes for blocking findings", () => {
     expect(recommendReviewDecision([finding("HIGH")], [verification("passed")])).toBe("request_changes")
     expect(recommendReviewDecision([finding("CRITICAL")], [verification("passed")])).toBe("request_changes")

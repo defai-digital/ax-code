@@ -4,7 +4,7 @@ import {
   renderModelDownloads,
   refreshModelDownloads,
   ModelMirrorInventory,
-  type ModelDownloadSnapshot,
+  ModelDownloadSnapshot,
 } from "../../script/model-download-docs"
 
 const repo = "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP"
@@ -125,4 +125,16 @@ test("a paginated observation cannot silently replace the complete inventory", a
     ),
   )
   await expect(refreshModelDownloads(snapshot)).rejects.toThrow("Paginated")
+})
+
+test.each([
+  ["2026-10-24T12:34Z", true],
+  ["2026-10-24T12:34:56Z", true],
+  ["2026-02-29T12:34Z", false],
+  ["2026-10-24T12:34+01:00", false],
+])("preserves model observation timestamp acceptance for %s", (value, accepted) => {
+  expect(ModelDownloadSnapshot.shape.checkedAt.safeParse(value).success).toBe(accepted)
+  expect(ModelMirrorInventory.safeParse({ version: 1, mirrors: [{ ...mirror, verifiedAt: value }] }).success).toBe(
+    accepted,
+  )
 })
