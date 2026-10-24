@@ -9,6 +9,16 @@ ignoreUntil = 2026-11-02
 reason = "tools/braces is braces 3.0.3 plus a nesting-depth limit of 128 in parse, compile, expand, and stringify. pnpm overrides every braces <= 3.0.3 to that directory, so the lockfile has no registry 3.0.3. No upstream release exists. CI runs script/check-braces-depth-guard.mjs before this scan. Reassess before expiry."
 
 [[IgnoredVulns]]
+id = "GHSA-mrhx-c7xc-m3w5"
+ignoreUntil = 2026-11-20
+reason = "zod stays on catalog 4.3.6 until datetime acceptance and OpenAPI output are qualified for 4.6. GHSA-mrhx-c7xc-m3w5 is fixed only in 4.6.6. Reassess with that qualification."
+
+[[IgnoredVulns]]
+id = "GHSA-xcx6-jx8p-x3h5"
+ignoreUntil = 2026-11-20
+reason = "@azure/msal-node 6.0.1 is an optional dependency of tedious through @azure/identity 4.14.0, which requires msal-node ^6. No @azure/identity release depends on msal-node >= 7.1.0, and this repository does not call the authorization-code flow. Reassess when identity adopts a patched msal-node."
+
+[[IgnoredVulns]]
 id = "GHSA-grv7-fg5c-xmjg"
 ignoreUntil = 2026-11-02
 reason = "The same tools/braces tree is upstream 3.0.3, which already caps pattern length for GHSA-grv7-fg5c-xmjg, plus the depth guard. osv-scanner reads the lockfile key file:tools/braces as the version, so it cannot see semver 3.0.4 and reports the fixed-in-3.0.3 advisory. Reassess when upstream publishes a release."
