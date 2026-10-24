@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import semver from "semver"
+import * as prompts from "@clack/prompts"
+import { UI } from "../../src/cli/ui"
+import * as RuntimeNotice from "../../src/cli/runtime-upgrade-notice"
 import { Bus } from "../../src/bus"
 import { upgrade } from "../../src/cli/upgrade"
 import {
@@ -7,6 +10,7 @@ import {
   renderUpgradeCheckHuman,
   runUpgradeCheck,
   UpgradeCheckCommand,
+  UpgradeCommand,
 } from "../../src/cli/cmd/upgrade"
 import { Config } from "../../src/config/config"
 import { Flag } from "../../src/flag/flag"
@@ -372,5 +376,49 @@ describe("cli upgrade busy installer", () => {
     await upgrade()
 
     expect(publishSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe("upgrade command failures", () => {
+  test.each([
+    ["version probe", "check", new Error("network unavailable"), 2],
+    ["installer", "install", new Installation.UpgradeFailedError({ stderr: "installer rejected" }), 1],
+    ["installer rejected without a value", "install", undefined, 1],
+  ] as const)("returns a failing exit status for %s", async (_name, phase, failure, expectedCode) => {
+    const previousCode = process.exitCode
+    const errorLog = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const spies = [
+      errorLog,
+      vi.spyOn(UI, "empty").mockImplementation(() => {}),
+      vi.spyOn(UI, "println").mockImplementation(() => {}),
+      vi.spyOn(prompts, "intro").mockImplementation(() => {}),
+      vi.spyOn(prompts, "outro").mockImplementation(() => {}),
+      vi.spyOn(prompts.log, "info").mockImplementation(() => {}),
+      vi.spyOn(prompts.log, "step").mockImplementation(() => {}),
+      vi.spyOn(prompts.log, "success").mockImplementation(() => {}),
+      vi.spyOn(prompts, "spinner").mockReturnValue({
+        start: vi.fn(),
+        stop: vi.fn(),
+        error: vi.fn(),
+        cancel: vi.fn(),
+        message: vi.fn(),
+        clear: vi.fn(),
+        isCancelled: false,
+      }),
+      vi.spyOn(RuntimeNotice, "staleRuntimeNotice").mockResolvedValue([]),
+    ]
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("curl")
+    latestSpy = vi.spyOn(Installation, "latest").mockRejectedValue(failure)
+    installSpy = vi.spyOn(Installation, "upgrade").mockRejectedValue(failure)
+    launcherSpy = vi.spyOn(Installation, "verifyActiveLauncher").mockResolvedValue({ ok: true, launchers: [] })
+    process.exitCode = undefined
+    try {
+      await UpgradeCommand.handler({ method: "curl", ...(phase === "install" ? { target: patch } : {}) })
+      expect(process.exitCode).toBe(expectedCode)
+      expect(errorLog).toHaveBeenCalledWith(expect.stringMatching(/\S/))
+    } finally {
+      process.exitCode = previousCode
+      for (const spy of spies.reverse()) spy.mockRestore()
+    }
   })
 })

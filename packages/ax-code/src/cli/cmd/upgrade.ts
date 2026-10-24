@@ -4,6 +4,7 @@ import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
 import { cmd } from "./cmd"
 import { staleRuntimeNotice } from "../runtime-upgrade-notice"
+import { toErrorMessage } from "../../util/error-message"
 
 export type UpgradeCheckReport = {
   current: string
@@ -245,7 +246,8 @@ export const UpgradeCommand = {
       target = args.target ? args.target.replace(/^v/, "") : await Installation.latest(method)
     } catch (err) {
       checkSpinner.stop("Failed to check for updates")
-      prompts.log.error(err instanceof Error ? err.message : String(err))
+      process.exitCode = 2
+      prompts.log.error(toErrorMessage(err) || "Failed to check for updates")
       prompts.outro("Done")
       return
     }
@@ -260,12 +262,14 @@ export const UpgradeCommand = {
     prompts.log.step(`Upgrading: v${Installation.VERSION} → v${target}`)
     const spinner = prompts.spinner()
     spinner.start("Downloading and installing...")
-    const err = await Installation.upgrade(method, target).catch((err) => err)
-    if (err) {
+    try {
+      await Installation.upgrade(method, target)
+    } catch (err) {
+      process.exitCode = 1
       spinner.error("Upgrade failed")
       if (err instanceof Installation.UpgradeFailedError) {
-        prompts.log.error(err.stderr)
-      } else if (err instanceof Error) prompts.log.error(err.message)
+        prompts.log.error(err.stderr || err.message)
+      } else prompts.log.error(toErrorMessage(err) || "Upgrade failed")
       prompts.outro("Done")
       return
     }

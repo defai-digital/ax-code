@@ -544,7 +544,8 @@ export namespace Installation {
         throw new UpgradeFailedError({ stderr: `Unknown method: ${m}` })
     }
     if (!result || result.code !== 0) {
-      const stderr = result?.stderr || ""
+      const stderr =
+        result?.stderr.trim() || result?.stdout.trim() || `Installer exited with code ${result?.code ?? "unknown"}`
       throw new UpgradeFailedError({ stderr })
     }
     log.info("upgraded", {

@@ -334,6 +334,23 @@ describe("installation", () => {
   })
 
   describe("upgrade", () => {
+    test.each([
+      ["stdout diagnostic", "", "download failed", "download failed"],
+      ["silent installer", "", "", "Installer exited with code 19"],
+    ])("preserves a useful failure for %s", async (_name, stderr, stdout, expected) => {
+      await expect(
+        withTestDependencies(
+          {
+            run: (cmd) => {
+              if (cmd[0] === "brew" && cmd[1] === "upgrade") return { code: 19, stdout, stderr }
+              return { code: 0, stdout: cmd.includes("list") ? "ax-code" : "", stderr: "" }
+            },
+          },
+          () => Installation.upgrade("brew", "7.29.1"),
+        ),
+      ).rejects.toMatchObject({ stderr: expected })
+    })
+
     test("requires a target release installer and digest before invoking bash", async () => {
       const urls: string[] = []
       let invoked = false
