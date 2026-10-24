@@ -17,7 +17,7 @@ const log = Log.create({ service: "session.prompt" })
 
 const PDF_MAGIC = Buffer.from("%PDF-", "latin1")
 
-function isTextualMimeType(mimeType: string): boolean {
+export function isTextualMimeType(mimeType: string): boolean {
   return (
     mimeType.startsWith("text/") ||
     mimeType === "application/json" ||

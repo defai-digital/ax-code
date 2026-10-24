@@ -26,7 +26,7 @@ describe("prompt file attachment", () => {
     expect(normalizeDocumentSymbolEnvelopeData(symbols)).toEqual(symbols)
   })
 
-  async function resolveInvalidAttachment(url: string) {
+  async function resolveAttachment(input: { url: string; mime?: string; filename?: string }) {
     const sessionID = SessionID.make("session_prompt_file_attachment")
     const messageID = MessageID.ascending()
     return resolveFileAttachmentPart({
@@ -35,9 +35,9 @@ describe("prompt file attachment", () => {
       agentName: "test",
       part: {
         type: "file",
-        mime: "text/plain",
-        filename: "bad.txt",
-        url,
+        mime: input.mime ?? "text/plain",
+        filename: input.filename ?? "bad.txt",
+        url: input.url,
       },
       draftSyntheticTextPart: (text) => ({ type: "text", text, sessionID, messageID }),
       attachDraftContext: (part) => ({
@@ -49,14 +49,75 @@ describe("prompt file attachment", () => {
   }
 
   test("invalid file part URLs become synthetic text instead of throwing", async () => {
-    const parts = await resolveInvalidAttachment("not a url")
+    const parts = await resolveAttachment({ url: "not a url" })
     expect(parts).toMatchObject([{ type: "text", text: "Invalid file URL: not a url" }])
   })
 
   test("file URLs that cannot become local paths become synthetic text", async () => {
     const url = "file://remote-host/tmp/bad.txt"
-    const parts = await resolveInvalidAttachment(url)
+    const parts = await resolveAttachment({ url })
     expect(parts).toMatchObject([{ type: "text", text: `Invalid file URL: ${url}` }])
+  })
+
+  test("decodes textual data attachments and rejects other binary data", async () => {
+    const markdown = await resolveAttachment({
+      mime: "text/markdown",
+      filename: "notes.md",
+      url: `data:text/markdown;base64,${Buffer.from("# Notes").toString("base64")}`,
+    })
+    expect(markdown).toMatchObject([{ type: "text" }, { type: "text", text: "# Notes" }, { type: "file" }])
+    expect(markdown[2]).toMatchObject({ mime: "text/plain" })
+
+    const binary = await resolveAttachment({
+      mime: "application/octet-stream",
+      filename: "data.bin",
+      url: "data:application/octet-stream;base64,AAEC",
+    })
+    expect(binary).toMatchObject([{ type: "text", text: "[Binary content: application/octet-stream]" }])
+
+    const pdf = Buffer.from("%PDF-1.4\n%%EOF\n").toString("base64")
+    const supported = await resolveAttachment({
+      mime: "application/pdf",
+      filename: "spec.pdf",
+      url: `data:application/pdf;base64,${pdf}`,
+    })
+    expect(supported).toMatchObject([
+      { type: "file", mime: "application/pdf", url: `data:application/pdf;base64,${pdf}` },
+    ])
+  })
+
+  test("normalizes textual files and rejects binary files without reading them", async () => {
+    await using tmp = await tmpdir()
+    const markdownPath = path.join(tmp.path, "notes.md")
+    const binaryPath = path.join(tmp.path, "data.bin")
+    await fs.writeFile(markdownPath, "# Notes")
+    await fs.writeFile(binaryPath, Buffer.from([0, 1, 2]))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const readBytes = vi.spyOn(Filesystem, "readBytes")
+        try {
+          const markdown = await resolveAttachment({
+            mime: "text/markdown",
+            filename: "notes.md",
+            url: pathToFileURL(markdownPath).href,
+          })
+          expect(markdown.some((part) => part.type === "text" && part.text.includes("# Notes"))).toBe(true)
+          expect(markdown.filter((part) => part.type === "file")).toMatchObject([{ mime: "text/plain" }])
+
+          const binary = await resolveAttachment({
+            mime: "application/octet-stream",
+            filename: "data.bin",
+            url: pathToFileURL(binaryPath).href,
+          })
+          expect(binary).toMatchObject([{ type: "text", text: "[Binary content: application/octet-stream]" }])
+          expect(readBytes).not.toHaveBeenCalled()
+        } finally {
+          readBytes.mockRestore()
+        }
+      },
+    })
   })
 
   test("fails closed when resize leaves an image over the configured limit", async () => {

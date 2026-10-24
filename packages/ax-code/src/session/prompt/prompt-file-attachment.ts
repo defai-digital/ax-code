@@ -15,6 +15,7 @@ import { Log } from "../../util/log"
 import { MessageV2 } from "../message-v2"
 import { MessageID, type SessionID } from "../schema"
 import { attachmentLineRange, readToolCallText } from "./prompt-file-reference"
+import { isTextualMimeType } from "./prompt-mcp-resource"
 import { maybeResizeImage } from "../image-resize"
 import { Config } from "@/config/config"
 
@@ -27,9 +28,13 @@ const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
 
 const UNSUPPORTED_IMAGE_TEXT = (mime: string) => `Unsupported image mime type: ${mime}`
 
+function normalizedMediaType(mime: string): string {
+  return mime.split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
+}
+
 function unsupportedImageMime(mime: string): string | undefined {
-  const mediaType = mime.split(";")[0]?.trim().toLowerCase()
-  if (!mediaType?.startsWith("image/")) return undefined
+  const mediaType = normalizedMediaType(mime)
+  if (!mediaType.startsWith("image/")) return undefined
   return isSupportedImageAttachment(mediaType) ? undefined : mediaType
 }
 
@@ -107,19 +112,23 @@ export async function resolveFileAttachmentPart(input: {
     return [input.draftSyntheticTextPart(`Invalid file URL: ${part.url}`)]
   }
   switch (url.protocol) {
-    case "data:":
-      if (part.mime === "text/plain") {
+    case "data:": {
+      const mime = normalizedMediaType(part.mime)
+      if (isTextualMimeType(mime)) {
+        part.mime = "text/plain"
         return [
           draftReadToolCallPart({ filePath: part.filename }),
           input.draftSyntheticTextPart(decodeDataUrl(part.url)),
           input.attachDraftContext(part),
         ]
       }
-      {
-        const unsupported = unsupportedImageMime(part.mime)
-        if (unsupported) return [input.draftSyntheticTextPart(UNSUPPORTED_IMAGE_TEXT(unsupported))]
+      const unsupported = unsupportedImageMime(mime)
+      if (unsupported) return [input.draftSyntheticTextPart(UNSUPPORTED_IMAGE_TEXT(unsupported))]
+      if (mime !== "application/pdf" && !mime.startsWith("image/")) {
+        return [input.draftSyntheticTextPart(`[Binary content: ${mime}]`)]
       }
       break
+    }
     case "file:":
       log.info("file", {
         command: "session.prompt.fileAttach",
@@ -168,7 +177,9 @@ export async function resolveFileAttachmentPart(input: {
       if (s?.isDirectory()) {
         part.mime = "application/x-directory"
       }
-      if (part.mime === "text/plain") {
+      const mime = normalizedMediaType(part.mime)
+      if (isTextualMimeType(mime)) {
+        part.mime = "text/plain"
         let offset: number | undefined = undefined
         let limit: number | undefined = undefined
         const range = attachmentLineRange({
@@ -258,6 +269,11 @@ export async function resolveFileAttachmentPart(input: {
             return [createReadFailurePart({ error, filepath })]
           })
       }
+
+      if (mime !== "application/pdf" && !mime.startsWith("image/")) {
+        return [input.draftSyntheticTextPart(`[Binary content: ${mime}]`)]
+      }
+      part.mime = mime
 
       try {
         await FileTime.read(input.sessionID, filepath)

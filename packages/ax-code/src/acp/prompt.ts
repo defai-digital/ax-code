@@ -1,5 +1,6 @@
 import type { Role, Usage } from "@agentclientprotocol/sdk"
 import type { AssistantMessage } from "@ax-code/sdk/v2"
+import { isTextualMimeType } from "../session/prompt/prompt-mcp-resource"
 import { isSupportedImageAttachment } from "../tool/file-content"
 import { parseUri } from "./agent-adapter"
 import { isHttpUri } from "./utils"
@@ -100,12 +101,18 @@ export function parsePromptParts(
         } else if (resource && "blob" in resource && resource.blob) {
           const parsed = parseUri(resource.uri ?? "")
           const filename = parsed.type === "file" ? parsed.filename : "file"
-          // mimeType is optional in the protocol; default it like MCP blob
-          // content instead of silently dropping the attachment.
-          const mime = resource.mimeType || "application/octet-stream"
-          const unsupported = unsupportedImageMime(normalizedMediaType(mime))
+          const mime = normalizedMediaType(resource.mimeType) ?? "application/octet-stream"
+          const unsupported = unsupportedImageMime(mime)
           if (unsupported) {
             parts.push({ type: "text", text: UNSUPPORTED_IMAGE_TEXT(unsupported) })
+            break
+          }
+          if (isTextualMimeType(mime)) {
+            parts.push({ type: "text", text: Buffer.from(resource.blob, "base64").toString("utf8") })
+            break
+          }
+          if (mime !== "application/pdf" && !mime.startsWith("image/")) {
+            parts.push({ type: "text", text: `[Binary content: ${mime}]` })
             break
           }
           parts.push({

@@ -20,15 +20,36 @@ describe("ACP prompt parts", () => {
     ])
   })
 
-  test("a blob resource without a mime type is attached, not dropped", () => {
-    const parts = parsePromptParts([{ type: "resource", resource: { uri: "file:///x.bin", blob: "AAEC" } }] as any)
-    expect(parts).toEqual([
+  test("binary resource blobs keep a readable label without an unusable file part", () => {
+    const parts = parsePromptParts([
+      { type: "resource", resource: { uri: "file:///x.bin", blob: "AAEC" } },
       {
-        type: "file",
-        url: "data:application/octet-stream;base64,AAEC",
-        filename: "x.bin",
-        mime: "application/octet-stream",
+        type: "resource",
+        resource: { uri: "file:///y.bin", blob: "AAEC", mimeType: "application/octet-stream" },
       },
+    ] as any)
+    expect(parts).toEqual([
+      { type: "text", text: "[Binary content: application/octet-stream]" },
+      { type: "text", text: "[Binary content: application/octet-stream]" },
+    ])
+  })
+
+  test("decodes textual resource blobs and retains supported PDF media", () => {
+    const pdf = Buffer.from("%PDF-1.4\n%%EOF\n").toString("base64")
+    const parts = parsePromptParts([
+      {
+        type: "resource",
+        resource: {
+          uri: "file:///notes.md",
+          blob: Buffer.from("# Notes").toString("base64"),
+          mimeType: "text/markdown",
+        },
+      },
+      { type: "resource", resource: { uri: "file:///spec.pdf", blob: pdf, mimeType: "application/pdf" } },
+    ] as any)
+    expect(parts).toEqual([
+      { type: "text", text: "# Notes" },
+      { type: "file", url: `data:application/pdf;base64,${pdf}`, filename: "spec.pdf", mime: "application/pdf" },
     ])
   })
 })
