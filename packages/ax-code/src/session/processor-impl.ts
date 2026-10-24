@@ -18,7 +18,7 @@ import { DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/sessi
 import { BlastRadius } from "./blast-radius"
 import { resolveAutonomyBudget } from "./autonomy-budget"
 import { detectCycle, type RingEntry } from "./cycle-detection"
-import { ensureSessionToolCycleRing } from "./tool-cycle-ring"
+import { ensureSessionToolCycleRing, sessionDoomLoopDetections } from "./tool-cycle-ring"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
@@ -26,6 +26,7 @@ import { SessionCompaction } from "./compaction"
 import { Permission } from "@/permission"
 import { Question } from "@/question"
 import { SelfCorrection } from "./correction"
+import { failureDisposition } from "./correction/detector"
 import { ToolErrorPatternTracker } from "./tool-error-pattern"
 import { PartID, TaskQueueID } from "./schema"
 import type { SessionID, MessageID } from "./schema"
@@ -93,12 +94,25 @@ export namespace SessionProcessor {
    */
   function toolErrorText(error: unknown): string {
     const message = toErrorMessage(error)
-    if (!(error instanceof Error) || !("data" in error)) return message
-    const data = error.data
-    if (!data || typeof data !== "object" || !("nextAction" in data)) return message
-    const nextAction = data.nextAction
-    if (typeof nextAction !== "string" || nextAction.length === 0 || message.includes(nextAction)) return message
+    const { nextAction } = toolFailureSignal(error)
+    if (!nextAction || message.includes(nextAction)) return message
     return `${message}\nnextAction: ${nextAction}`
+  }
+
+  /**
+   * The closed `reason` and `nextAction` a structured tool failure carries. They are
+   * persisted on the error state so clients (Desktop's WebMCP rows) can render them;
+   * only these two strings are copied, never the rest of the error data.
+   */
+  function toolFailureSignal(error: unknown): { reason?: string; nextAction?: string } {
+    // Only the desktop browser failure carries this closed contract (ADR-266).
+    if (!(error instanceof Error) || error.name !== "DesktopBrowserUnavailable" || !("data" in error)) return {}
+    const data = error.data
+    if (!data || typeof data !== "object") return {}
+    const reason = "reason" in data && typeof data.reason === "string" && data.reason ? data.reason : undefined
+    const nextAction =
+      "nextAction" in data && typeof data.nextAction === "string" && data.nextAction ? data.nextAction : undefined
+    return { ...(reason ? { reason } : {}), ...(nextAction ? { nextAction } : {}) }
   }
 
   // Tool-input keys whose value is always a URL: a credential in the userinfo
@@ -315,13 +329,17 @@ export namespace SessionProcessor {
       }
     }
     const canonicalize = (obj: unknown): string => toolInputFingerprint(obj)
+    // Output comparison ignores desktop_webmcp's per-read id: a fresh readId would otherwise
+    // make an unchanged page read look like progress. Other ids (jobs, documents) still count.
+    const outputFingerprint = (obj: unknown): string =>
+      canonicalize(obj).replace(/(\\?"readId\\?":\\?")[0-9a-f-]{36}/gi, "$1<id>")
     const recentToolRing: RingEntry[] = ensureSessionToolCycleRing(input.sessionID)
     const doomLoopWarnings: Record<string, string> = {}
-    // Per-turn count of autonomous doom-loop detections per tool. The first
-    // detection warns; a repeat within the same turn means the model saw the
+    // Run-scoped count of autonomous doom-loop detections per tool. The first
+    // detection warns; a repeat in the same prompt run means the model saw the
     // warning in a tool result and re-entered the cycle anyway, so it
     // escalates to the interactive doom_loop permission.
-    const doomLoopDetections = new Map<string, number>()
+    const doomLoopDetections = sessionDoomLoopDetections(input.sessionID)
     // Window large enough to evaluate the longest cycle length plus headroom.
     const recentToolRingLimit = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
     const finishTrackedToolCall = (input: {
@@ -343,7 +361,7 @@ export namespace SessionProcessor {
           (input.eventInput
             ? safeStringify(redactPersistedToolInput(input.tool, jsonSafeInput(input.eventInput)))
             : safeStringify(redactPersistedToolInput(input.tool, jsonSafeInput(input.fallbackInput)))),
-        output: input.output === undefined ? undefined : (input.outputFingerprint ?? canonicalize(input.output)),
+        output: input.output === undefined ? undefined : (input.outputFingerprint ?? outputFingerprint(input.output)),
       })
       if (recentToolRing.length > recentToolRingLimit) recentToolRing.shift()
       delete toolcalls[input.toolCallId]
@@ -986,13 +1004,13 @@ export namespace SessionProcessor {
                       // same call repeated; k>=2 is a multi-step cycle (A->B->A->B).
                       doomLoopWarnings[value.toolCallId] =
                         cycleLen === 1
-                          ? "Doom-loop detection saw this tool call repeat with the same input. The tool was still executed so the conversation history stays consistent. On the next step, change strategy instead of repeating the same call."
-                          : `Doom-loop detection saw this tool call form part of a repeating ${cycleLen}-step cycle. The tool was still executed so the conversation history stays consistent. On the next step, break the cycle and change strategy instead of repeating the same sequence of calls.`
+                          ? "Doom-loop detection saw this tool call repeat with the same input. The tool was still executed so the conversation history stays consistent. On the next step, change strategy instead of repeating the same call. Before another call, state what new information it would give; if none, use what you already have, ask the user, or finish."
+                          : `Doom-loop detection saw this tool call form part of a repeating ${cycleLen}-step cycle. The tool was still executed so the conversation history stays consistent. On the next step, break the cycle and change strategy instead of repeating the same sequence of calls. Before another call, state what new information it would give; if none, use what you already have, ask the user, or finish.`
                       if (autonomous) {
                         // First detection: warn only. The model sees the tool
                         // result plus a reminder in its history, which should
                         // prompt a strategy change.
-                        // Repeat detection for the same tool within this turn:
+                        // Repeat detection for the same tool within this run:
                         // the model ignored the warning and re-entered the
                         // cycle, so warning again would just spin unattended.
                         // Escalate to the same interactive doom_loop
@@ -1000,9 +1018,15 @@ export namespace SessionProcessor {
                         // decides whether the repetition is intentional.
                         // (An explicit user allow rule for doom_loop still
                         // skips the prompt; that is a deliberate opt-out.)
-                        const priorDetections = doomLoopDetections.get(value.toolName) ?? 0
-                        doomLoopDetections.set(value.toolName, priorDetections + 1)
-                        if (priorDetections >= 1) {
+                        // Keyed by call signature, so one tool's earlier loop does not use up
+                        // the warning for a different call. Escalation also needs the earlier
+                        // repeats to have returned the same output: a poll or read whose result
+                        // keeps changing is progress, and only gets the warning.
+                        const signature = `${value.toolName}:${inputStr}`
+                        const priorDetections = doomLoopDetections.get(signature) ?? 0
+                        doomLoopDetections.set(signature, priorDetections + 1)
+                        const stuck = detectCycle(allRecent, AUTONOMOUS_MAX_CYCLE_LEN, { compareOutput: true }) !== null
+                        if (priorDetections >= 1 && stuck) {
                           log.warn("autonomous doom_loop repeated after warning, escalating to permission ask", {
                             tool: value.toolName,
                             sessionID: input.sessionID,
@@ -1094,7 +1118,7 @@ export namespace SessionProcessor {
                     // comparisons stay consistent and we avoid a second full
                     // object-graph walk on large tool inputs (PERF-02).
                     const completedInput = toolInputCache[value.toolCallId] ?? canonicalize(storedInput)
-                    const completedOutput = canonicalize(value.output.output)
+                    const completedOutput = outputFingerprint(value.output.output)
                     const completedCycleLen = detectCycle(
                       [...recentToolRing, { tool: match.tool, input: completedInput, output: completedOutput }],
                       AUTONOMOUS_MAX_CYCLE_LEN,
@@ -1104,8 +1128,8 @@ export namespace SessionProcessor {
                       completedCycleLen === null
                         ? undefined
                         : completedCycleLen === 1
-                          ? "Doom-loop detection saw this tool call repeat with the same input and output. Change strategy instead of repeating the same call."
-                          : `Doom-loop detection saw this tool call form part of a repeating ${completedCycleLen}-step input/output cycle. Break the cycle and change strategy instead of repeating the same sequence of calls.`
+                          ? "Doom-loop detection saw this tool call repeat with the same input and output. Change strategy instead of repeating the same call. Before another call, state what new information it would give; if none, use what you already have, ask the user, or finish."
+                          : `Doom-loop detection saw this tool call form part of a repeating ${completedCycleLen}-step input/output cycle. Break the cycle and change strategy instead of repeating the same sequence of calls. Before another call, state what new information it would give; if none, use what you already have, ask the user, or finish.`
                     const doomLoopWarning = doomLoopWarnings[value.toolCallId] ?? completedLoopWarning
                     const output =
                       doomLoopWarning && typeof value.output.output === "string"
@@ -1234,7 +1258,8 @@ export namespace SessionProcessor {
                       !(value.error instanceof Permission.RejectedError) &&
                       !(value.error instanceof Question.RejectedError)
                     ) {
-                      const correction = SelfCorrection.analyze(input.sessionID, match.tool, errorMsg)
+                      const disposition = failureDisposition(errorMsg, toolFailureSignal(value.error))
+                      const correction = SelfCorrection.analyze(input.sessionID, match.tool, errorMsg, disposition)
                       if (correction) {
                         log.info("self-correction active", {
                           tool: match.tool,
@@ -1256,7 +1281,12 @@ export namespace SessionProcessor {
                         ToolErrorPatternTracker.filePathFromInput(toolInput),
                       )
                       if (patternCount >= 3) {
-                        const guidance = ToolErrorPatternTracker.guidance(input.sessionID, match.tool, errorMsg)
+                        const guidance = ToolErrorPatternTracker.guidance(
+                          input.sessionID,
+                          match.tool,
+                          errorMsg,
+                          disposition,
+                        )
                         if (guidance) {
                           log.info("error pattern guidance triggered", {
                             tool: match.tool,
@@ -1280,9 +1310,15 @@ export namespace SessionProcessor {
                         status: "error",
                         input: toolInput,
                         error: annotatedError,
-                        ...(match.state.metadata?.hookRewrite
-                          ? { metadata: { hookRewrite: match.state.metadata.hookRewrite } }
-                          : {}),
+                        ...(() => {
+                          const metadata = {
+                            ...toolFailureSignal(value.error),
+                            ...(match.state.metadata?.hookRewrite
+                              ? { hookRewrite: match.state.metadata.hookRewrite }
+                              : {}),
+                          }
+                          return Object.keys(metadata).length > 0 ? { metadata } : {}
+                        })(),
                         time: {
                           start: match.state.time.start,
                           end: toolErrorEnd,

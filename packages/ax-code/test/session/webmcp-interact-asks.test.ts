@@ -8,6 +8,7 @@ import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 import { convertMcpTool } from "../../src/mcp/tool-conversion"
 import { resolveTools } from "../../src/session/prompt/prompt-tools"
 import { Bus } from "../../src/bus"
+import { clearSessionToolCycleRing } from "../../src/session/tool-cycle-ring"
 
 /**
  * ADR-174 session-layer wiring: which T2 calls ask, which run under the
@@ -121,7 +122,7 @@ function resolveInput(turn: string) {
     tools: {},
     bypassAgentCheck: false,
     messages: [],
-    processor: { message: { id: turn }, partFromToolCall: () => undefined } as never,
+    processor: { message: { id: turn, sessionID: "ses_webmcp_t2" }, partFromToolCall: () => undefined } as never,
   }
 }
 
@@ -132,6 +133,8 @@ const execOptions = () => ({
 })
 
 afterEach(async () => {
+  // A prompt run ends here; its run-scoped breaker goes with it.
+  clearSessionToolCycleRing("ses_webmcp_t2")
   await Instance.disposeAll()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
@@ -654,14 +657,17 @@ describe("WebMCP T2 asks through the session layer", () => {
         await expect((sameTurn.bridge_click.execute as any)({ pageId: 1, uid: "1_1" }, execOptions())).rejects.toThrow(
           "stopped for this turn",
         )
-        // A new turn resets it.
+        // The next model step runs in a new processor; the breaker still holds until the user writes (rule 11).
+        const nextStep = await resolveTools(resolveInput("msg_turn_1_step_2"))
+        await expect((nextStep.bridge_click.execute as any)({ pageId: 1, uid: "1_1" }, execOptions())).rejects.toThrow(
+          "stopped for this turn",
+        )
+        expect(client.calls).not.toContain("click")
+        // The next user message starts a new prompt run and resets it.
+        clearSessionToolCycleRing("ses_webmcp_t2")
         const next = await resolveTools(resolveInput("msg_turn_2"))
         await (next.bridge_click.execute as any)({ pageId: 1, uid: "1_1" }, execOptions())
         expect(client.calls).toContain("click")
-        // Late calls from an old turn cannot reset its tripped breaker.
-        await expect((tools.bridge_click.execute as any)({ pageId: 1, uid: "1_1" }, execOptions())).rejects.toThrow(
-          "stopped for this turn",
-        )
       },
     })
   })

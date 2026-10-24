@@ -831,6 +831,10 @@ describe("desktop WebMCP page interaction", () => {
         await expect(act({ ref: "e9" })).rejects.toThrow("no element e9")
         await expect(act({ ref: "e2", how: "select", text: "x" })).rejects.toThrow("not a selector")
         await expect(act({ readId: randomUUID(), ref: "e1" })).rejects.toThrow("stale")
+        // Refs come from read; listing cannot refresh them, so the recovery names read.
+        await expect(act({ readId: randomUUID(), ref: "e1" })).rejects.toMatchObject({
+          data: { reason: "page-changed", nextAction: expect.stringContaining("action=read") },
+        })
         expect(asked).toHaveLength(0)
       } finally {
         stop()
@@ -892,6 +896,73 @@ describe("desktop WebMCP page interaction", () => {
     })
   })
 
+  test("keeps the allowlisted reason a provider reports with a failed reply", async () => {
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const { ctx, stop } = ctxFor(session.id, [])
+      const failWith = async (action: "read" | "wait", output: unknown) => {
+        const call = tool.execute(
+          (action === "read" ? { action } : { action, waitText: "Results" }) as never,
+          ctx,
+        )
+        const batch = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: batch.request!.requestID,
+          generation: state.generation,
+          status: "Error",
+          output,
+        })
+        return call
+      }
+      try {
+        await expect(failWith("wait", { reason: "timeout" })).rejects.toMatchObject({
+          data: { reason: "timeout", nextAction: expect.stringContaining("action=read") },
+        })
+        await expect(failWith("read", { reason: "page-changed" })).rejects.toMatchObject({
+          data: { reason: "page-changed", nextAction: expect.stringContaining("action=read") },
+        })
+        // Exception text or an unknown reason never crosses: it stays the generic failure.
+        await expect(failWith("read", { reason: "secret page text" })).rejects.toMatchObject({
+          data: { reason: "native-failure" },
+        })
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("a read cut at the provider caps says so and that scrolling will not help", async () => {
+    await fixture(async (session, state) => {
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
+      const tool = await DesktopWebMcpTool.init()
+      const { ctx, stop } = ctxFor(session.id, [])
+      try {
+        const reading = tool.execute({ action: "read" }, ctx)
+        const batch = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: batch.request!.requestID,
+          generation: state.generation,
+          status: "Completed",
+          output: {
+            readId: randomUUID(),
+            title: "Results",
+            text: "r".repeat(8000),
+            outline: Array.from({ length: 150 }, (_, i) => ({ ref: `e${i + 1}`, kind: "link", name: `Item ${i}` })),
+          },
+        })
+        const read = JSON.parse((await reading).output)
+        expect(read.note).toContain("8000 characters")
+        expect(read.note).toContain("150 controls")
+        expect(read.note).toContain("scrolling")
+      } finally {
+        stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
   test("waits for text and reports whether it appeared", async () => {
     await fixture(async (session, state) => {
       const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: state })
@@ -907,7 +978,19 @@ describe("desktop WebMCP page interaction", () => {
           status: "Completed",
           output: { found: true },
         })
-        expect(JSON.parse((await waiting).output).result).toEqual({ found: true })
+        const found = JSON.parse((await waiting).output)
+        expect(found.result).toEqual({ found: true })
+        expect(found.note).toBeUndefined()
+        // An unmet wait names the next step instead of inviting the same wait again.
+        const missing = tool.execute({ action: "wait", waitText: "Results" }, ctx)
+        const missed = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: missed.request!.requestID,
+          generation: state.generation,
+          status: "Completed",
+          output: { found: false },
+        })
+        expect(JSON.parse((await missing).output).note).toContain("call action=read")
         await expect(tool.execute({ action: "wait" }, ctx)).rejects.toThrow("text to wait for")
       } finally {
         stop()

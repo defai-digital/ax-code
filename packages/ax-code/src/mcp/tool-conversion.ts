@@ -9,6 +9,7 @@ import { WebMcpProfile } from "./webmcp-profile"
 import { redirectOriginOutsideAllowlist } from "./webmcp-redirect"
 import { McpElicitation } from "./elicitation"
 import { SessionHealth } from "./session-health"
+import { isRecord } from "@/util/record"
 
 const log = Log.create({ service: "mcp" })
 const MAX_TOOL_DESCRIPTION = 4_000
@@ -57,7 +58,7 @@ function webmcpInteractPreflight(
     const focused = WebMcpProfile.focusedTargetFor(policy.profile, pageId)
     if (!focused) {
       throw new WebMcpProfile.TargetBindingError(
-        "WebMCP press_key needs a focused control in the latest snapshot; take a new snapshot or click the control first",
+        WebMcpProfile.PRESS_KEY_UNFOCUSED,
       )
     }
     WebMcpProfile.verifyTarget(policy.profile, pageId, focused.uid, pageUrl)
@@ -282,7 +283,8 @@ export async function convertMcpTool(
       // unlisted never takes that fallback: it fails instead of executing a
       // definition written after its approval was requested.
       if (webmcp?.toolName === "execute_webmcp_tool" && WebMcpProfile.approvalDenied(args)) {
-        throw new Error("WebMCP execute requires list_webmcp_tools to be called first")
+        const call = isRecord(args) ? args : {}
+        throw new Error(WebMcpProfile.unlistedExecuteMessage(webmcp.profile, call.pageId, call.toolName))
       }
       const expected = webmcp?.toolName === "execute_webmcp_tool" ? WebMcpProfile.approvalFor(args) : undefined
       // One absolute deadline for every WebMCP sub-call of this dispatch, so
@@ -532,7 +534,8 @@ export async function convertMcpTool(
             // ADR-174 rule 5: the structured snapshot becomes the uid map
             // for later actions, bound to the URL resolved right after it.
             if (webmcp.toolName === "take_snapshot") {
-              const nodes = WebMcpProfile.parseStructuredSnapshot(result)
+              const parsed = WebMcpProfile.parseStructuredSnapshot(result)
+              const nodes = parsed && WebMcpProfile.visibleSnapshotNodes(result, parsed)
               if (nodes && after) WebMcpProfile.recordSnapshot(webmcp.profile, pageId, nodes, after)
               else WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
             }
@@ -551,7 +554,8 @@ export async function convertMcpTool(
                 throw new Error("WebMCP page navigated during the wait; the snapshot is discarded")
               }
               WebMcpProfile.boundReadResult("wait_for", result, interactOrigin)
-              const nodes = WebMcpProfile.parseStructuredSnapshot(result)
+              const parsed = WebMcpProfile.parseStructuredSnapshot(result)
+              const nodes = parsed && WebMcpProfile.visibleSnapshotNodes(result, parsed)
               if (nodes && after) WebMcpProfile.recordSnapshot(webmcp.profile, pageId, nodes, after)
               else WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
             } else {
@@ -589,6 +593,7 @@ export async function convertMcpTool(
               after,
             )
             if (!recorded.ok) throw new Error(recorded.error)
+            if (descriptors.length === 0) WebMcpProfile.annotateEmptyListing(result, webmcp.profile)
           }
         }
         if (webmcp) WebMcpProfile.annotateBlockingDialog(result, webmcp.profile.interact === true)
@@ -607,6 +612,16 @@ export async function convertMcpTool(
         // map: the page was not observed to change and the result says so.
         if (webmcp && (readOrigin !== undefined || interactOrigin !== undefined) && callAccepted && !pageObserved) {
           WebMcpProfile.clearSnapshot(webmcp.profile, (input as Record<string, unknown>).pageId as number)
+        }
+        // Once dispatched, the bridge may have taken a new snapshot even when the call then
+        // failed (error result, transport, origin, parse). Its uids supersede the recorded
+        // ones, so the old map must not keep binding actions the bridge would reject as stale.
+        if (
+          (webmcp?.toolName === "take_snapshot" || webmcp?.toolName === "wait_for") &&
+          (callAccepted || WebMcpProfile.wasDispatched(args))
+        ) {
+          const pageId = (input as Record<string, unknown>).pageId
+          if (typeof pageId === "number") WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
         }
         // ADR-192: a navigation that reached the bridge and then failed its
         // result or landing checks may still have replaced the document (a

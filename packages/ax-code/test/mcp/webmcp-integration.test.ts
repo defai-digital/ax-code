@@ -177,6 +177,41 @@ test("a failed dispatch-time listing invalidates the stored baseline", async () 
   })
 })
 
+test("an execute for a tool the page did not list names what it registered instead of asking to list again", async () => {
+  bridge.names = ["list_webmcp_tools", "execute_webmcp_tool"]
+  bridge.call.mockImplementation(async (request: { name: string }) => {
+    if (request.name === "list_webmcp_tools") return { content: [], structuredContent: { webmcpTools: [] } }
+    if (request.name === "list_pages") {
+      return {
+        content: [{ type: "text", text: "## Pages\n1: App (https://example.test/)" }],
+        structuredContent: { pages: [{ id: 1, url: "https://example.test/", title: "App", selected: true }] },
+      }
+    }
+    throw new Error("must not dispatch")
+  })
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await MCP.add("bridge", profile())
+      const tools = await MCP.tools()
+      const listing = (await tools.bridge_list_webmcp_tools.execute!(
+        { pageId: 1 },
+        { toolCallId: "call_list", messages: [] },
+      )) as { content: Array<{ type: string; text?: string }> }
+      const note = listing.content.map((part) => part.text ?? "").join("\n")
+      expect(note).toContain("currently registers no WebMCP tools")
+      expect(note).toContain("Do not call list_webmcp_tools again")
+      const guessed = { pageId: 1, toolName: "search", input: "{}" }
+      WebMcpProfile.denyApproval(guessed)
+      const failure = tools.bridge_execute_webmcp_tool.execute!(guessed, { toolCallId: "call_exec", messages: [] })
+      await expect(failure).rejects.toThrow('registered no tool named "search"')
+      await expect(failure).rejects.toThrow("registered: none")
+      await expect(failure).rejects.not.toThrow("called first")
+    },
+  })
+})
+
 test("an approval requested without a listing cannot dispatch against a later baseline", async () => {
   bridge.names = ["list_webmcp_tools", "execute_webmcp_tool"]
   const descriptor = { name: "fixture", description: "d", inputSchema: { type: "object" } }

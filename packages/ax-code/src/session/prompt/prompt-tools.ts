@@ -49,6 +49,7 @@ import { isRecord } from "@/util/record"
 import { defer } from "@/util/defer"
 import { wrapUntrustedContent } from "../../util/untrusted-content"
 import { ToolWriteGate } from "../tool-write-gate"
+import { sessionRunValue } from "../tool-cycle-ring"
 import type { SessionProcessor } from "../processor"
 import {
   MAX_MCP_HOOK_FEEDBACK_BYTES,
@@ -63,19 +64,17 @@ import { createHash } from "node:crypto"
 const log = Log.create({ service: "session.prompt.tools" })
 
 /**
- * ADR-174 rule 11: each live assistant-turn processor owns its T2 breaker.
- * Weak keys release completed turns and prevent late calls from replacing
- * another turn's counters.
+ * ADR-174 rule 11: the T2 breaker counts across the prompt run and resets on the
+ * next user message. One processor runs per model step, so a breaker owned by the
+ * processor reset every step and a model making one failing call per step never
+ * tripped it.
  */
-const webmcpBreakers = Instance.state(() => new WeakMap<SessionProcessor.Info, WebMcpProfile.InteractBreaker>())
-
 function webmcpTurnBreaker(processor: SessionProcessor.Info): WebMcpProfile.InteractBreaker {
-  const map = webmcpBreakers()
-  const existing = map.get(processor)
-  if (existing) return existing
-  const fresh = new WebMcpProfile.InteractBreaker(processor.message.id)
-  map.set(processor, fresh) // @scan-suppress lifecycle_scan: weak processor keys are collected after the turn
-  return fresh
+  return sessionRunValue(
+    processor.message.sessionID,
+    "webmcp-interact-breaker",
+    () => new WebMcpProfile.InteractBreaker(processor.message.id),
+  )
 }
 
 function webmcpTargetSummary(metadata: Record<string, unknown> | undefined): string | undefined {
@@ -1179,7 +1178,7 @@ export async function resolveTools(input: ResolveToolsInput) {
               breaker?.failed(webmcpTargetSummary(webmcp))
               throw new WebMcpProfile.TargetBindingError(
                 policy.toolName === "press_key"
-                  ? "WebMCP press_key needs a focused control in the latest snapshot of this page; take a new snapshot or click the control first"
+                  ? WebMcpProfile.PRESS_KEY_UNFOCUSED
                   : "WebMCP target is not in the latest snapshot of this page; take a new snapshot before acting",
               )
             }

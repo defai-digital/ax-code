@@ -51,7 +51,33 @@ function toolFailure(error: unknown) {
 // Ordinary sites register nothing. Some models read a bare [] as "not loaded yet" and
 // list again in a loop, so the runtime names the next step beside the untrusted data.
 const EMPTY_CATALOG_NOTE =
-  "This page registers no WebMCP tools; listing again returns the same empty catalog. Use action=read to see its text and controls."
+  "This page currently registers no WebMCP tools. Do not list it again unless the page changes; use action=read to see its text and controls."
+
+// Desktop caps a read at these sizes (contract v1, DesktopBrowser.ReadOutput) without marking it.
+const READ_TEXT_CAP = 8000
+const READ_OUTLINE_CAP = 150
+
+/**
+ * The runtime's next step for a read or wait result, beside the untrusted data. A read
+ * already covers off-screen content, so a cut read is not fixed by scrolling, and an
+ * unmet wait repeated with the same text was a loop.
+ */
+function observationNote(operation: "read" | "wait" | "act", result: unknown): string | undefined {
+  if (!result || typeof result !== "object") return undefined
+  if (operation === "wait" && "found" in result && result.found === false)
+    return "The text did not appear before the timeout. Do not wait for the same text again; call action=read to see what the page shows now."
+  if (operation !== "read" || !("text" in result) || !("outline" in result)) return undefined
+  const textCut = typeof result.text === "string" && result.text.length >= READ_TEXT_CAP
+  const outlineCut = Array.isArray(result.outline) && result.outline.length >= READ_OUTLINE_CAP
+  if (!textCut && !outlineCut) return undefined
+  const what = [
+    textCut ? `the text at ${READ_TEXT_CAP} characters` : undefined,
+    outlineCut ? `the outline at ${READ_OUTLINE_CAP} controls` : undefined,
+  ]
+    .filter(Boolean)
+    .join(" and ")
+  return `This read was cut: ${what}. It already includes off-screen content, so scrolling or reading again returns the same cut. Use action=wait for specific text, or navigate to a narrower page such as a search or detail URL.`
+}
 
 function listingOutput(listing: Record<string, unknown>, tools: readonly unknown[]) {
   return JSON.stringify({
@@ -209,9 +235,10 @@ async function executeDesktopWebMcp(
         : operation === "wait"
           ? await DesktopBrowser.wait(binding, params.waitText!, params.timeoutMs ?? 5000, ctx.abort)
           : await DesktopBrowser.act(binding, action!, ctx.abort)
+    const note = observationNote(operation, result)
     return {
       title: "Desktop WebMCP",
-      output: JSON.stringify({ untrusted: true, result }),
+      output: JSON.stringify({ untrusted: true, result, ...(note ? { note } : {}) }),
       metadata: {
         truncated: false,
         providerID: binding.providerID,

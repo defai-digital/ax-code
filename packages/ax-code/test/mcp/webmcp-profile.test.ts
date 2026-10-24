@@ -176,6 +176,14 @@ describe("WebMCP profile", () => {
     ).toThrow("64 KiB")
   })
 
+  test("argument feedback names the allowed enum values of a host schema field", () => {
+    const bad = WebMcpProfile.validateCall.bind(undefined, { allowedOrigins: origins, interact: true }, "press_key", {
+      pageId: 1,
+      key: "Ctrl+C",
+    })
+    expect(bad).toThrow(/key: expected one of "Enter", "Tab"/)
+  })
+
   test("argument feedback names fields and expected types without echoing values or unknown keys", () => {
     try {
       WebMcpProfile.validateCall({ allowedOrigins: origins }, "execute_webmcp_tool", {
@@ -188,7 +196,7 @@ describe("WebMCP profile", () => {
     } catch (error) {
       const message = String(error)
       expect(message).toContain("pageId: expected integer")
-      expect(message).toContain("toolName: expected string")
+      expect(message).toContain("toolName: expected a string matching")
       expect(message).toContain("input: expected object or string")
       expect(message).not.toMatch(/secret|123/)
     }

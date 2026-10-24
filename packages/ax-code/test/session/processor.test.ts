@@ -1090,6 +1090,84 @@ describe("session.processor", () => {
     }
   })
 
+  test.each([
+    ["escalates when each repeated call is its own step and returns the same output", () => "[]", 1],
+    ["only warns when the repeated call keeps returning new output", (step: number) => `poll ${step}`, 0],
+    [
+      "ignores a fresh id per call when comparing outputs",
+      () => `{"readId":"${crypto.randomUUID()}","text":"same page"}`,
+      1,
+    ],
+  ])("autonomous doom-loop %s", async (_name, outputFor, minimumAsks) => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "true")
+    const askSpy = vi.spyOn(Permission, "ask").mockResolvedValue(undefined as any)
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { streamInput } = await createProcessorFixture(tmp.path)
+          let step = 0
+          streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
+            const id = `call_step_${++step}`
+            return {
+              fullStream: (async function* () {
+                yield { type: "start" }
+                yield { type: "start-step" }
+                yield { type: "tool-input-start", id, toolName: "glob" }
+                yield { type: "tool-call", toolCallId: id, toolName: "glob", input: { pattern: "**/*" } }
+                yield {
+                  type: "tool-result",
+                  toolCallId: id,
+                  input: { pattern: "**/*" },
+                  output: { output: outputFor(step), title: "Glob", metadata: {}, attachments: [] },
+                }
+                yield {
+                  type: "finish-step",
+                  finishReason: "tool-calls",
+                  usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+                }
+                yield { type: "finish" }
+              })(),
+            } as any
+          })
+
+          // One identical call per model step, as small models loop in practice. The
+          // prompt loop creates a processor (and assistant message) for every step.
+          for (let i = 0; i < 6; i++) {
+            const assistant = await Session.updateMessage({
+              id: MessageID.ascending(),
+              parentID: streamInput.user.id,
+              sessionID: streamInput.sessionID,
+              role: "assistant",
+              mode: "build",
+              agent: "build",
+              path: { cwd: tmp.path, root: tmp.path },
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+              modelID: model.id,
+              providerID: model.providerID,
+              time: { created: Date.now() },
+            } as MessageV2.Assistant)
+            const processor = SessionProcessor.create({
+              assistantMessage: assistant as MessageV2.Assistant,
+              sessionID: streamInput.sessionID,
+              model,
+              abort: AbortSignal.any([]),
+            })
+            await processor.process(streamInput)
+          }
+
+          const doomAsks = askSpy.mock.calls.filter(([request]) => request.permission === "doom_loop")
+          if (minimumAsks === 0) expect(doomAsks).toHaveLength(0)
+          else expect(doomAsks.length).toBeGreaterThanOrEqual(minimumAsks)
+        },
+      })
+    } finally {
+      askSpy.mockRestore()
+      vi.unstubAllEnvs()
+    }
+  })
+
   test("interactive doom-loop detection injects a reminder after the user approves", async () => {
     await using tmp = await tmpdir({ git: true })
     // Not autonomous: the detector asks for permission. Non-Claude providers
@@ -1967,6 +2045,11 @@ describe("session.processor", () => {
         if (part?.type !== "tool" || part.state.status !== "error") return
         expect(part.state.error).toContain("nextAction: Ask the user to enable agent access")
         expect(part.state.error).not.toMatch(/try again|before retrying/i)
+        // Clients render the closed reason and next step from the persisted error state.
+        expect(part.state.metadata).toEqual({
+          reason: "provider-gone",
+          nextAction: "Ask the user to enable agent access in the project browser pane.",
+        })
       },
     })
   })

@@ -10,7 +10,7 @@
  * the next LLM turn, guiding the model to fix its approach.
  */
 
-import { detect, type FailureSignal } from "./detector"
+import { detect, type FailureDisposition, type FailureSignal } from "./detector"
 import { build, quick } from "./reflection"
 import { Log } from "../../util/log"
 
@@ -77,7 +77,10 @@ export namespace SelfCorrection {
     sessionID: string,
     toolName: string,
     error: string,
+    disposition?: FailureDisposition,
   ): { signal: FailureSignal; prompt: string } | null {
+    // A failure that says to stop, or names its own next step, gets no generic retry advice.
+    if (disposition?.stop || disposition?.guided) return null
     const budgets = forSession(sessionID)
     const k = key(toolName, error)
     const budget = budgets.get(k) ?? { remaining: -1, max: 0, failures: [] }

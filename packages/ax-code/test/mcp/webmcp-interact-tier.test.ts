@@ -484,6 +484,23 @@ describe("WebMCP T2 dispatch", () => {
     expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_1")).toBeUndefined()
   })
 
+  test("a dispatched snapshot that fails drops the previous uid map", async () => {
+    const profile = full()
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map([[ORIGIN, 20]]) }
+    const { client } = bridge()
+    const snapshot = await tool("take_snapshot", profile, client, grants)
+    await snapshot.execute!({ pageId: 1 }, options())
+    expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_3")).toBeDefined()
+    client.callTool.mockImplementationOnce(async () => ({
+      content: [],
+      structuredContent: { pages: [{ id: 1, url: PAGE, selected: true }] },
+    }))
+    // The bridge took a new snapshot (new uids) and then reported an error.
+    client.callTool.mockImplementationOnce(async () => ({ isError: true, content: [{ type: "text", text: "boom" }] }))
+    await expect(snapshot.execute!({ pageId: 1 }, options())).rejects.toThrow()
+    expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_3")).toBeUndefined()
+  })
+
   test("wait_for needs the read grant, is bounded like a snapshot, and refreshes the uid map", async () => {
     const profile = full()
     const grants: GrantState = { read: new Set(), interact: new Map([[ORIGIN, 20]]) }
@@ -505,7 +522,11 @@ describe("WebMCP T2 dispatch", () => {
       content: [{ type: "text", text: "x".repeat(33 * 1024) }],
       structuredContent: { snapshot: { id: "4_0", role: "RootWebArea", name: "App" } },
     }))
-    await expect(wait.execute!({ pageId: 1, text: ["Saved"] }, options())).rejects.toThrow("32 KiB read budget")
+    // An oversized snapshot is cut, not refused: the awaited text still counts as found.
+    const cut = (await wait.execute!({ pageId: 1, text: ["Saved"] }, options())) as { content: { text: string }[] }
+    expect(cut.content.map((part) => part.text).join("\n")).toContain("Snapshot truncated to the 32 KiB read budget")
+    // No uid survived in the shown text, so the earlier map no longer binds actions.
+    expect(WebMcpProfile.targetSummaryFor(profile, 1, "1_3")).toBeUndefined()
   })
 
   test("wait_for forwards a page-side timeout inside the remaining dispatch budget", async () => {

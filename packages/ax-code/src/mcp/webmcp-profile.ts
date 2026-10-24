@@ -111,6 +111,13 @@ export namespace WebMcpProfile {
    * out) and no printable characters (`fill` covers text). Every name is in
    * the pinned upstream's `validKeys` set.
    */
+  /**
+   * press_key without a focused control. Weak models press PageDown/End to "scroll";
+   * the snapshot already holds the whole page tree, off-screen nodes included, so
+   * the message says so instead of sending them to snapshot and press again.
+   */
+  export const PRESS_KEY_UNFOCUSED =
+    "WebMCP press_key needs a focused control in the latest snapshot of this page; click or fill that control first. There is no scrolling: take_snapshot already includes off-screen content, so read it there instead of pressing PageDown, End or similar keys."
   export const PRESS_KEYS = [
     "Enter",
     "Tab",
@@ -1481,6 +1488,36 @@ export namespace WebMcpProfile {
     return { isolatedContext: context }
   }
 
+  /**
+   * What a host-schema field accepts, for validation errors. Enum values come from the
+   * host schema, never from the call, so naming them is safe; a bare type ("expected
+   * array") for an array holding one bad enum value sent models back with the same call.
+   */
+  function expectedValue(json: Record<string, unknown>): string {
+    const options = (Array.isArray(json.anyOf) ? json.anyOf : [json]).filter(isRecord)
+    return (
+      options
+        .map((option) => {
+          const values = (list: unknown) =>
+            Array.isArray(list) && list.length > 0
+              ? list
+                  .slice(0, 24)
+                  .map((value) => JSON.stringify(value))
+                  .join(", ") + (list.length > 24 ? ", ..." : "")
+              : undefined
+          const own = values(option.enum)
+          if (own) return `one of ${own}`
+          const items = isRecord(option.items) ? values(option.items.enum) : undefined
+          if (option.type === "array" && items) return `an array of ${items}`
+          if (option.type === "string" && typeof option.pattern === "string")
+            return `a string matching ${option.pattern}`
+          return typeof option.type === "string" ? option.type : undefined
+        })
+        .filter(Boolean)
+        .join(" or ") || "valid value"
+    )
+  }
+
   export function validateCall(profile: Configuration, name: string, args: unknown): Record<string, unknown> {
     const parsed = callSchema(name, profile).safeParse(args)
     // Do not include the page-provided input in validation errors or logs.
@@ -1490,11 +1527,7 @@ export namespace WebMcpProfile {
       const schema = callSchema(name, profile)
       const fields = Object.entries(schema.shape)
         .filter(([field, validator]) => !validator.safeParse(isRecord(args) ? args[field] : undefined).success)
-        .map(([field, validator]) => {
-          const json = z.toJSONSchema(validator)
-          const types = json.anyOf?.map((option) => option.type).filter(Boolean)
-          return `${field}: expected ${types?.join(" or ") || json.type || "valid value"}`
-        })
+        .map(([field, validator]) => `${field}: expected ${expectedValue(z.toJSONSchema(validator))}`)
       const combination =
         isRecord(args) &&
         Object.keys(args).every((field) => Object.hasOwn(schema.shape, field)) &&
@@ -2069,7 +2102,8 @@ export namespace WebMcpProfile {
       // the status alone marks a page-side failure, not a bridge failure.
       if (isRecord(completion) && completion.status === "Error") {
         throw new PageInvocationError(
-          "WebMCP invocation did not confirm completion; page tool reported an execution error",
+          // It may have partly run before failing, so a replay could repeat its effects.
+          "WebMCP invocation did not confirm completion; page tool reported an execution error. Do not retry automatically; check the page state or report the failure.",
         )
       }
       if (!isRecord(completion) || completion.status !== "Completed" || completion.errorText) {
@@ -2087,6 +2121,83 @@ export namespace WebMcpProfile {
   }
 
   const MAX_READ_TEXT_BYTES = 32 * 1024
+  const SNAPSHOT_NOTE_RESERVE = 512
+  const truncatedSnapshots = new WeakSet<object>()
+
+  /**
+   * Cut an oversized snapshot at a line boundary instead of refusing it. Refusing left
+   * the model without any uid on real sites (most large pages pass 32 KiB), and every
+   * binding error then sent it back to a snapshot that overflowed again. Only the uids
+   * left in the text may be recorded afterwards (visibleSnapshotNodes).
+   */
+  function truncateSnapshot(result: Record<string, unknown>, contents: unknown[]): void {
+    let remaining = MAX_READ_TEXT_BYTES - SNAPSHOT_NOTE_RESERVE
+    let omitted = 0
+    for (const part of contents) {
+      if (!isRecord(part) || part.type !== "text" || typeof part.text !== "string") continue
+      const bytes = Buffer.byteLength(part.text, "utf8")
+      if (bytes <= remaining) {
+        remaining -= bytes
+        continue
+      }
+      const lines = part.text.split("\n")
+      let kept = 0
+      for (const line of lines) {
+        const size = Buffer.byteLength(line, "utf8") + 1
+        if (size > remaining) break
+        remaining -= size
+        kept += 1
+      }
+      omitted += lines.length - kept
+      part.text = lines.slice(0, kept).join("\n")
+      remaining = 0
+    }
+    contents.push({
+      type: "text",
+      text: `[AX Code] Snapshot truncated to the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget; ${omitted} lines were omitted. Only uids shown above can be targeted. Another snapshot of the same page is cut the same way: act on what is shown, use wait_for with specific text, or report BLOCKED.`,
+    })
+    result.content = contents
+    truncatedSnapshots.add(result)
+  }
+
+  /**
+   * The snapshot nodes the model can see: all of them, or, for a truncated text, the prefix
+   * of the structured tree (pre-order, the bridge's render order) whose own lines survived.
+   * Each node's line is searched only after the previous node's, and the walk stops at the
+   * first node not found, so a page name holding a newline and "uid=..." cannot make a
+   * node from the cut part look visible (Codex review).
+   */
+  export function visibleSnapshotNodes(
+    result: unknown,
+    nodes: Map<string, SnapshotNode>,
+  ): Map<string, SnapshotNode> | undefined {
+    if (!isRecord(result) || !truncatedSnapshots.has(result)) return nodes
+    const structured = isRecord(result.structuredContent) ? result.structuredContent : undefined
+    if (!structured || !isRecord(structured.snapshot)) return undefined
+    const contents = Array.isArray(result.content) ? result.content : []
+    const text = contents
+      .flatMap((part) => (isRecord(part) && part.type === "text" && typeof part.text === "string" ? [part.text] : []))
+      .join("\n")
+    const visible = new Map<string, SnapshotNode>()
+    const stack: unknown[] = [structured.snapshot]
+    let cursor = 0
+    let visited = 0
+    while (stack.length > 0 && ++visited <= MAX_SNAPSHOT_VISITS) {
+      const raw = stack.pop()
+      if (!isRecord(raw)) continue
+      if (Array.isArray(raw.children)) for (let i = raw.children.length - 1; i >= 0; i--) stack.push(raw.children[i])
+      const node = typeof raw.id === "string" ? nodes.get(raw.id) : undefined
+      if (!node) continue
+      const line = new RegExp(`(?:^|\\n)[ \\t]*uid=${node.uid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[ \\t\\n]|$)`, "g")
+      line.lastIndex = cursor
+      const found = line.exec(text)
+      if (!found) break
+      visible.set(node.uid, node)
+      cursor = found.index + found[0].length
+    }
+    return visible.size > 0 ? visible : undefined
+  }
+
   const CONSOLE_TAIL = 50
 
   /**
@@ -2285,13 +2396,13 @@ export namespace WebMcpProfile {
     if (name === "get_css_styles" || name === "get_console_message") delete result.structuredContent
     // wait_for always carries a fresh snapshot (ADR-174 rule 9), so it is
     // bounded exactly like take_snapshot.
-    if (
-      (name === "take_snapshot" ||
-        name === "list_network_requests" ||
+    if ((name === "take_snapshot" || name === "wait_for") && textBytes > MAX_READ_TEXT_BYTES)
+      truncateSnapshot(result, contents)
+    else if (
+      (name === "list_network_requests" ||
         name === "get_console_message" ||
         name === "get_network_request" ||
-        name === "get_css_styles" ||
-        name === "wait_for") &&
+        name === "get_css_styles") &&
       textBytes > MAX_READ_TEXT_BYTES
     ) {
       const what =
@@ -2301,14 +2412,12 @@ export namespace WebMcpProfile {
             ? "console message"
             : name === "get_network_request"
               ? "network request"
-              : name === "get_css_styles"
-                ? "CSS styles"
-                : "snapshot"
-      if (name === "take_snapshot" || name === "wait_for") {
+              : "CSS styles"
+      // A single console message or request has no narrowing argument, so a retry is identical.
+      if (name === "get_console_message" || name === "get_network_request")
         throw new Error(
-          `WebMCP snapshot exceeded the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget. Do not retry ${name}; use take_screenshot${name === "take_snapshot" ? ", wait_for specific text" : ""} if available, or report BLOCKED.`,
+          `WebMCP ${what} exceeded the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget. Do not retry ${name}; report the size limit.`,
         )
-      }
       throw new Error(
         `WebMCP ${what} exceeded the ${MAX_READ_TEXT_BYTES / 1024} KiB read budget; narrow the request and retry`,
       )
@@ -2399,6 +2508,26 @@ export namespace WebMcpProfile {
    * every bridge call, and handle_dialog is not an admitted tool. Surface that
    * as a plain note so the model stops retrying list/execute against it.
    */
+  /**
+   * An empty listing is a normal page, not a page still loading. Weak models re-listed
+   * an empty catalog dozens of times, so the runtime names the next step by tier:
+   * T1/T2 can read the page through a snapshot; T0 has no page reader.
+   */
+  export function annotateEmptyListing(result: unknown, profile: Configuration): void {
+    if (!isRecord(result)) return
+    const content = Array.isArray(result.content) ? result.content : []
+    result.content = [
+      ...content,
+      {
+        type: "text",
+        text:
+          profile.read === true
+            ? "[AX Code] This page currently registers no WebMCP tools. Do not call list_webmcp_tools again for it unless the page changes; use take_snapshot to read it instead."
+            : "[AX Code] This page currently registers no WebMCP tools, and this bridge cannot read pages. Do not call list_webmcp_tools again for it unless the page changes; use webfetch for public content or report BLOCKED.",
+      },
+    ]
+  }
+
   export function annotateBlockingDialog(result: unknown, interact = false): void {
     if (!isRecord(result) || !Array.isArray(result.content)) return
     const texts = result.content.flatMap((item) =>
@@ -2785,6 +2914,31 @@ export namespace WebMcpProfile {
    */
   export function denyApproval(call: object): void {
     denied.add(call)
+  }
+
+  /**
+   * Why an execute found no approval snapshot. "List first" is only true when the page
+   * has no listing; repeating it after a listing that lacks the tool sent models back
+   * to list -> execute forever.
+   */
+  export function unlistedExecuteMessage(profile: Configuration, pageId: unknown, toolName: unknown): string {
+    const page = typeof pageId === "number" ? listingStates.get(profile)?.pages.get(pageId) : undefined
+    // A listing that holds the tool now was written after this call's approval found none.
+    if (
+      !page ||
+      page.disabled ||
+      page.origin === undefined ||
+      typeof toolName !== "string" ||
+      page.tools.has(toolName)
+    )
+      return "WebMCP execute requires list_webmcp_tools to be called first"
+    // Page-chosen names stay in the untrusted listing; this runtime sentence only counts them.
+    const registered =
+      page.tools.size > 0
+        ? `it registered ${page.tools.size} other tool${page.tools.size === 1 ? "" : "s"}, named in that listing`
+        : "registered: none"
+    const fallback = profile.read === true ? "take_snapshot to read the page" : "webfetch for public content"
+    return `WebMCP page ${pageId} registered no tool named ${JSON.stringify(toolName.slice(0, 64))} in its latest listing (${registered}). Do not execute it again; use a listed tool, ${fallback}, or report BLOCKED.`
   }
 
   /** Whether the approval for a dispatch-time call object found no listing. */

@@ -44,21 +44,39 @@ interface Pattern {
   suggestion: string
 }
 
+/** The structured recovery a tool failure carries (DesktopBrowser.Failure data). */
+export interface FailureSignalData {
+  reason?: string
+  nextAction?: string
+}
+
 /**
- * A tool error that itself says to stop (desktop_webmcp's nextAction, for example).
- * Generic "try again" advice appended after such an error contradicts it, and
- * models that weight the trailing reminder (DeepSeek) then loop on the call.
+ * How the runtime should follow up a tool failure. `stop`: the failure says not to
+ * retry, so no retry advice may follow it. `guided`: it names its own next step,
+ * which is shown to the model; a second, generic instruction would compete with it.
  */
-export const STOP_DIRECTIVE = /\b(?:do not|don't|never) retry\b|\bstop and (?:report|ask|tell)\b|\bask the user to\b/i
+export interface FailureDisposition {
+  stop: boolean
+  guided: boolean
+}
+
+// Closed desktop_webmcp reasons (ADR-266) whose next step is to stop or ask the user.
+const STOP_REASONS = new Set(["provider-gone", "timeout", "native-failure", "session-rejected"])
+// Stop wording in runtime-authored WebMCP bridge errors, which have no structured data.
+const STOP_DIRECTIVE = /\b(?:do not|don't|never) (?:retry|execute it again)\b|\bstop and (?:report|ask|tell)\b/i
+
+/**
+ * Typed data decides first. The text fallback only reads errors the WebMCP bridge
+ * profile wrote itself (they start with "WebMCP "): scanning arbitrary error text
+ * would let a file name or test output that quotes "do not retry" suppress advice.
+ */
+export function failureDisposition(error: string, signal: FailureSignalData = {}): FailureDisposition {
+  if (signal.reason) return { stop: STOP_REASONS.has(signal.reason), guided: signal.nextAction !== undefined }
+  if (signal.nextAction) return { stop: false, guided: true }
+  return { stop: error.startsWith("WebMCP ") && STOP_DIRECTIVE.test(error), guided: false }
+}
 
 const PATTERNS: Pattern[] = [
-  // Checked first so a stop directive outranks the timeout and generic retry advice.
-  {
-    match: STOP_DIRECTIVE,
-    strategy: "escalate",
-    maxRetries: 0,
-    suggestion: "The tool said to stop — report to the user instead of retrying",
-  },
   // File system errors
   {
     match: /ENOENT|file not found|no such file/i,

@@ -10,12 +10,19 @@ describe("ToolErrorPatternTracker", () => {
   })
 
   test("tells the model to stop, not retry, when the repeated error is a stop directive", () => {
-    const error =
-      "No project browser is enrolled for this coding session.\nnextAction: Ask the user to enable agent access in the project browser pane."
+    const error = "No project browser is enrolled for this coding session."
     for (let i = 0; i < 3; i++) ToolErrorPatternTracker.record(sessionID, "desktop_webmcp", error)
-    const guidance = ToolErrorPatternTracker.guidance(sessionID, "desktop_webmcp", error)
+    const guidance = ToolErrorPatternTracker.guidance(sessionID, "desktop_webmcp", error, { stop: true, guided: true })
     expect(guidance).toContain("Stop calling desktop_webmcp")
     expect(guidance).not.toMatch(/before retrying|read the relevant files/)
+  })
+
+  test("points a repeated guided failure at its nextAction, ahead of code-tool category advice", () => {
+    const error = "Element references are stale; read the page again; test failed"
+    for (let i = 0; i < 3; i++) ToolErrorPatternTracker.record(sessionID, "desktop_webmcp", error)
+    const guidance = ToolErrorPatternTracker.guidance(sessionID, "desktop_webmcp", error, { stop: false, guided: true })
+    expect(guidance).toContain("Do its nextAction")
+    expect(guidance).not.toMatch(/Tests have failed|read the relevant files/)
   })
 
   describe("record", () => {

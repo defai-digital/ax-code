@@ -12,7 +12,7 @@
  */
 
 import { Log } from "../util/log"
-import { STOP_DIRECTIVE } from "./correction/detector"
+import type { FailureDisposition } from "./correction/detector"
 
 export namespace ToolErrorPatternTracker {
   const log = Log.create({ service: "tool-error-pattern" })
@@ -128,7 +128,12 @@ export namespace ToolErrorPatternTracker {
 
   /** Return proactive guidance if the current error pattern has recurred
    *  THRESHOLD or more times. Returns null otherwise. */
-  export function guidance(sessionID: string, toolName: string, errorMessage: string): string | null {
+  export function guidance(
+    sessionID: string,
+    toolName: string,
+    errorMessage: string,
+    disposition?: FailureDisposition,
+  ): string | null {
     const s = sessions.get(sessionID)
     if (!s) return null
     const category = errorCategory(toolName, errorMessage)
@@ -139,16 +144,24 @@ export namespace ToolErrorPatternTracker {
     const files = [...entry.filePaths]
     const fileHint = files.length > 0 ? ` (affected files: ${files.slice(0, 3).join(", ")})` : ""
 
-    const categoryGuidance = categoryGuidanceFor(category, entry)
-    if (categoryGuidance) return categoryGuidance
-
-    if (STOP_DIRECTIVE.test(errorMessage))
+    // The failure's own disposition outranks category advice written for code tools.
+    if (disposition?.stop)
       return (
         `<system-reminder>\n` +
         `You have encountered the same ${toolName} error ${entry.count} times in this session, and the error says ` +
         `not to retry. Stop calling ${toolName} for this and tell the user what the error asks for.\n` +
         `</system-reminder>`
       )
+    if (disposition?.guided)
+      return (
+        `<system-reminder>\n` +
+        `You have encountered the same ${toolName} error ${entry.count} times in this session. Do its nextAction ` +
+        `instead of repeating the call that failed; if that does not work either, stop and tell the user.\n` +
+        `</system-reminder>`
+      )
+
+    const categoryGuidance = categoryGuidanceFor(category, entry)
+    if (categoryGuidance) return categoryGuidance
 
     // Generic guidance for uncategorized patterns
     return (

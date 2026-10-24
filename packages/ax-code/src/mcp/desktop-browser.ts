@@ -105,14 +105,20 @@ export namespace DesktopBrowser {
         reason: "no-page",
         nextAction: "Call action=navigate with the https:// or loopback http:// URL to open.",
       }
+    // Refs and readIds come from `read`; listing cannot refresh them (an ordinary site
+    // lists nothing), so stale refs name read as the recovery.
+    if (message === "Element references are stale; read the page again")
+      return { reason: "page-changed", nextAction: "Call action=read and use a ref from that new outline." }
     if (
       message === "Browser document changed; authorize a fresh operation" ||
       message.startsWith("The project browser landed on a different origin") ||
-      message === "Element references are stale; read the page again" ||
       message === "Response belongs to an expired browser request" ||
       message === "Browser connection or document changed; completion is unconfirmed"
     )
-      return { reason: "page-changed", nextAction: "List again: the page changed." }
+      return {
+        reason: "page-changed",
+        nextAction: "The page changed: call action=read (or action=list for page tools) and use that fresh result.",
+      }
     if (message.startsWith("Tool was not in the latest listing"))
       return { reason: "tool-not-found", nextAction: "List tools, then invoke a toolName from that listing." }
     if (
@@ -403,11 +409,15 @@ export namespace DesktopBrowser {
   function retire(provider: Provider, options?: { keepNavigate?: boolean; reason?: "page-changed" | "provider-gone" }) {
     const keepNavigate = options?.keepNavigate === true
     const reason = options?.reason ?? "page-changed"
-    const nextAction =
-      reason === "provider-gone"
-        ? "Ask the user to enable agent access again; the previous operation was not confirmed."
-        : "List again: the page changed, and the previous operation was not confirmed."
+    const nextActionFor = (operation: string) => {
+      if (reason === "provider-gone")
+        return "Ask the user to enable agent access again; the previous operation was not confirmed."
+      if (operation === "list" || operation === "invoke")
+        return "List again: the page changed, and the previous operation was not confirmed."
+      return "Call action=read to see the page now: it changed, and the previous operation was not confirmed. Do not repeat an act before checking."
+    }
     for (const pending of [...provider.pending.values()]) {
+      const nextAction = nextActionFor(pending.request.operation)
       // A document change is the *result* a navigation request is waiting for, so
       // it must survive the retire that the new snapshot triggers. Any other
       // change still retires it (the navigate request was made against the old
@@ -551,9 +561,50 @@ export namespace DesktopBrowser {
     }
     const result = Reply.parse(reply)
     pending.cleanup()
-    if (result.status !== "Completed")
-      pending.reject(failure("Native invocation did not confirm completion; do not retry automatically"))
+    if (result.status !== "Completed") pending.reject(providerFailure(pending.request.operation, result.output))
     else pending.resolve(result)
+  }
+
+  /**
+   * A provider's Error/Canceled reply. Desktop sends only an allowlisted `reason` (never
+   * exception text); keeping it lets the model see a timeout or a page change instead
+   * of one generic failure. Anything else stays the unconfirmed-completion failure.
+   */
+  function providerFailure(operation: Request["operation"], output: unknown) {
+    const reason =
+      output && typeof output === "object" && "reason" in output && typeof output.reason === "string"
+        ? output.reason
+        : undefined
+    if (reason === "timeout")
+      return failure("Browser request canceled or timed out; completion is unconfirmed", {
+        reason,
+        nextAction:
+          operation === "navigate"
+            ? "The page did not finish loading in time. Call action=read to see what loaded, or tell the user; do not navigate again automatically."
+            : "Do not retry automatically; call action=read to check the page, and tell the user.",
+      })
+    if (reason === "page-changed")
+      return failure("Browser document changed; authorize a fresh operation", {
+        reason,
+        nextAction:
+          operation === "list" || operation === "invoke"
+            ? "List again: the page changed, and the previous operation was not confirmed."
+            : "Call action=read to see the page now: it changed, and the previous operation was not confirmed.",
+      })
+    if (reason === "invalid-input")
+      return failure("The project browser refused the request input", {
+        reason,
+        nextAction:
+          operation === "navigate"
+            ? "Pass an https:// URL, or http:// on loopback, with no credentials in the URL."
+            : "Correct the arguments and call the tool again.",
+      })
+    if (reason === "application-error")
+      return failure("The page tool reported an error and may have partly run; do not retry automatically", {
+        reason: "native-failure",
+        nextAction: "Stop and report the failure; do not retry automatically.",
+      })
+    return failure("Native invocation did not confirm completion; do not retry automatically")
   }
   /** The single browser enrolled for this session, whether or not a page is granted. */
   function enrolled(sessionID: SessionID) {
