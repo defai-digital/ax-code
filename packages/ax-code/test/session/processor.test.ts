@@ -19,6 +19,7 @@ import { tmpdir } from "../fixture/fixture"
 import * as ImageResize from "../../src/session/image-resize"
 import { preparePromptRequest } from "../../src/session/prompt/prompt-request-build"
 import { Recorder } from "../../src/replay/recorder"
+import { DesktopBrowser } from "../../src/mcp/desktop-browser"
 
 const model: Provider.Model = {
   id: "test-model" as any,
@@ -1926,6 +1927,46 @@ describe("session.processor", () => {
         const textParts = saved.parts.filter((part) => part.type === "text")
         expect(textParts).toHaveLength(1)
         expect(textParts[0]?.text).toBe(text)
+      },
+    })
+  })
+
+  test("shows the model a tool failure's nextAction and no retry advice when it says to stop", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const failure = new DesktopBrowser.Failure({
+          reason: "provider-gone",
+          message: "No project browser is enrolled for this coding session.",
+          nextAction: "Ask the user to enable agent access in the project browser pane.",
+        })
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "tool-input-start", id: "call_web", toolName: "desktop_webmcp" }
+            yield { type: "tool-call", toolCallId: "call_web", toolName: "desktop_webmcp", input: { action: "list" } }
+            yield { type: "tool-error", toolCallId: "call_web", input: { action: "list" }, error: failure }
+            yield {
+              type: "finish-step",
+              finishReason: "tool-calls",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any)
+
+        await processor.process(streamInput)
+
+        const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+        const part = saved.parts.find((item) => item.type === "tool" && item.tool === "desktop_webmcp")
+        expect(part?.type === "tool" && part.state.status).toBe("error")
+        if (part?.type !== "tool" || part.state.status !== "error") return
+        expect(part.state.error).toContain("nextAction: Ask the user to enable agent access")
+        expect(part.state.error).not.toMatch(/try again|before retrying/i)
       },
     })
   })

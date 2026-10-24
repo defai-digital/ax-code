@@ -12,6 +12,7 @@
  */
 
 import { Log } from "../util/log"
+import { STOP_DIRECTIVE } from "./correction/detector"
 
 export namespace ToolErrorPatternTracker {
   const log = Log.create({ service: "tool-error-pattern" })
@@ -140,6 +141,14 @@ export namespace ToolErrorPatternTracker {
 
     const categoryGuidance = categoryGuidanceFor(category, entry)
     if (categoryGuidance) return categoryGuidance
+
+    if (STOP_DIRECTIVE.test(errorMessage))
+      return (
+        `<system-reminder>\n` +
+        `You have encountered the same ${toolName} error ${entry.count} times in this session, and the error says ` +
+        `not to retry. Stop calling ${toolName} for this and tell the user what the error asks for.\n` +
+        `</system-reminder>`
+      )
 
     // Generic guidance for uncategorized patterns
     return (

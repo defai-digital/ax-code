@@ -44,7 +44,21 @@ interface Pattern {
   suggestion: string
 }
 
+/**
+ * A tool error that itself says to stop (desktop_webmcp's nextAction, for example).
+ * Generic "try again" advice appended after such an error contradicts it, and
+ * models that weight the trailing reminder (DeepSeek) then loop on the call.
+ */
+export const STOP_DIRECTIVE = /\b(?:do not|don't|never) retry\b|\bstop and (?:report|ask|tell)\b|\bask the user to\b/i
+
 const PATTERNS: Pattern[] = [
+  // Checked first so a stop directive outranks the timeout and generic retry advice.
+  {
+    match: STOP_DIRECTIVE,
+    strategy: "escalate",
+    maxRetries: 0,
+    suggestion: "The tool said to stop — report to the user instead of retrying",
+  },
   // File system errors
   {
     match: /ENOENT|file not found|no such file/i,

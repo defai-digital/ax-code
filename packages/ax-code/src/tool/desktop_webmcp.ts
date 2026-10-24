@@ -48,6 +48,20 @@ function toolFailure(error: unknown) {
   })
 }
 
+// Ordinary sites register nothing. Some models read a bare [] as "not loaded yet" and
+// list again in a loop, so the runtime names the next step beside the untrusted data.
+const EMPTY_CATALOG_NOTE =
+  "This page registers no WebMCP tools; listing again returns the same empty catalog. Use action=read to see its text and controls."
+
+function listingOutput(listing: Record<string, unknown>, tools: readonly unknown[]) {
+  return JSON.stringify({
+    untrusted: true,
+    ...listing,
+    result: tools,
+    ...(tools.length === 0 ? { note: EMPTY_CATALOG_NOTE } : {}),
+  })
+}
+
 export const DesktopWebMcpTool = Tool.define("desktop_webmcp", {
   description: DESCRIPTION,
   parameters: z
@@ -138,7 +152,7 @@ async function executeDesktopWebMcp(
     const tools = await DesktopBrowser.list(binding, ctx.abort)
     return {
       title: "Desktop WebMCP",
-      output: JSON.stringify({ untrusted: true, navigated, result: tools }),
+      output: listingOutput({ navigated }, tools),
       metadata: {
         truncated: false,
         providerID: binding.providerID,
@@ -244,10 +258,26 @@ async function executeDesktopWebMcp(
     always: [],
     metadata,
   })
-  const result =
-    params.action === "list"
-      ? await DesktopBrowser.list(binding, ctx.abort)
-      : await DesktopBrowser.invoke(binding, invocation!.toolName, invocation!.digest, invocation!.input, ctx.abort)
+  if (params.action === "list") {
+    const tools = await DesktopBrowser.list(binding, ctx.abort)
+    return {
+      title: "Desktop WebMCP",
+      output: listingOutput({}, tools),
+      metadata: {
+        truncated: false,
+        providerID: binding.providerID,
+        generation: binding.generation,
+        operation: params.action,
+      },
+    }
+  }
+  const result = await DesktopBrowser.invoke(
+    binding,
+    invocation!.toolName,
+    invocation!.digest,
+    invocation!.input,
+    ctx.abort,
+  )
   return {
     title: "Desktop WebMCP",
     output: JSON.stringify({ untrusted: true, result }),

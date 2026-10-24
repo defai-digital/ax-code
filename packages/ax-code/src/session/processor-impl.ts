@@ -85,6 +85,22 @@ export namespace SessionProcessor {
     return input.replace(/<\/?system-reminder\b[^>]*>/gi, "[tag-stripped]")
   }
 
+  /**
+   * The tool-error text the model sees. Some tool errors (DesktopBrowser.Failure)
+   * keep the single recovery step in `data.nextAction`, and their tool description
+   * tells the model to follow it; Error.message alone drops it, so models that
+   * cannot see the step guess and retry.
+   */
+  function toolErrorText(error: unknown): string {
+    const message = toErrorMessage(error)
+    if (!(error instanceof Error) || !("data" in error)) return message
+    const data = error.data
+    if (!data || typeof data !== "object" || !("nextAction" in data)) return message
+    const nextAction = data.nextAction
+    if (typeof nextAction !== "string" || nextAction.length === 0 || message.includes(nextAction)) return message
+    return `${message}\nnextAction: ${nextAction}`
+  }
+
   // Tool-input keys whose value is always a URL: a credential in the userinfo
   // has no other field to be recognized by, and the whole string is what the
   // record and the audit report render.
@@ -1194,7 +1210,7 @@ export namespace SessionProcessor {
                   })
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
-                    const errorMsg = toErrorMessage(value.error)
+                    const errorMsg = toolErrorText(value.error)
                     const errorCode = value.error instanceof Error ? value.error.name : "Unknown"
                     const toolErrorEnd = Date.now()
                     const toolInput =

@@ -9,6 +9,15 @@ describe("ToolErrorPatternTracker", () => {
     ToolErrorPatternTracker.resetAll()
   })
 
+  test("tells the model to stop, not retry, when the repeated error is a stop directive", () => {
+    const error =
+      "No project browser is enrolled for this coding session.\nnextAction: Ask the user to enable agent access in the project browser pane."
+    for (let i = 0; i < 3; i++) ToolErrorPatternTracker.record(sessionID, "desktop_webmcp", error)
+    const guidance = ToolErrorPatternTracker.guidance(sessionID, "desktop_webmcp", error)
+    expect(guidance).toContain("Stop calling desktop_webmcp")
+    expect(guidance).not.toMatch(/before retrying|read the relevant files/)
+  })
+
   describe("record", () => {
     test("returns 1 on first occurrence", () => {
       const count = ToolErrorPatternTracker.record(sessionID, "edit", "Could not find oldString in the file")

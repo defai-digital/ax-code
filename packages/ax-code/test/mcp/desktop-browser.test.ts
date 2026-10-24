@@ -74,7 +74,9 @@ describe("private desktop WebMCP provider", () => {
           status: "Completed",
           snapshot: state,
         })
-        expect((await listing).output).toContain("echo")
+        const listed = JSON.parse((await listing).output)
+        expect(listed.result.map((tool: { name: string }) => tool.name)).toContain("echo")
+        expect(listed.note).toBeUndefined()
         expect(asked).toEqual([])
         await expect(
           tool.execute(
@@ -87,6 +89,40 @@ describe("private desktop WebMCP provider", () => {
         expect(asked[0]!.autoOnceAt).toBeUndefined()
       } finally {
         stop()
+        DesktopBrowser.disconnect(connection.providerID)
+      }
+    })
+  })
+
+  test("an empty catalog names action=read as the next step instead of another listing", async () => {
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "1")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+    await fixture(async (session, state) => {
+      const ordinary = { ...state, tools: [] }
+      const connection = await DesktopBrowser.enroll({ sessionID: session.id, snapshot: ordinary })
+      const tool = await DesktopWebMcpTool.init()
+      const ctx: Tool.Context = {
+        sessionID: session.id,
+        messageID: MessageID.ascending(),
+        agent: "build",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => {},
+        ask: (input) => Permission.ask({ ...input, sessionID: session.id, ruleset: [] }),
+      }
+      try {
+        const listing = tool.execute({ action: "list" }, ctx)
+        const batch = await DesktopBrowser.poll(connection.providerID, ctx.abort)
+        DesktopBrowser.respond(connection.providerID, {
+          requestID: batch.request!.requestID,
+          generation: ordinary.generation,
+          status: "Completed",
+          snapshot: ordinary,
+        })
+        const empty = JSON.parse((await listing).output)
+        expect(empty).toMatchObject({ untrusted: true, result: [] })
+        expect(empty.note).toContain("action=read")
+      } finally {
         DesktopBrowser.disconnect(connection.providerID)
       }
     })
