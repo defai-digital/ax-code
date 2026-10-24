@@ -20,10 +20,9 @@ export function dialogModelOptionDisabled(
 }
 
 /**
- * Model-picker sections are one per provider. Family (Opus/Sonnet/…) is a sort
- * key, not a heading — repeating "Anthropic (Claude Code) · Opus" above
- * "Claude Opus 5" wasted a row per family. A picker already scoped to one
- * provider omits the heading; the dialog title names it.
+ * Model-picker sections are one per provider, with models sorted by display
+ * name within each section. A picker already scoped to one provider omits
+ * the heading; the dialog title names it.
  */
 export function dialogModelPickerCategory(input: {
   providerName: string

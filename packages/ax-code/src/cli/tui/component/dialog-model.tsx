@@ -2,7 +2,7 @@ import { useLanguage } from "@tui/context/language"
 import { createEffect, createMemo, createSignal } from "solid-js"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
-import { map, pipe, flatMap, entries, filter, sortBy, take } from "remeda"
+import { map, pipe, flatMap, entries, filter, sort, sortBy, take } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { createDialogProviderOptions, DialogProvider } from "./dialog-provider"
@@ -26,22 +26,8 @@ import {
   fetchAxEngineDownloadOffer,
   fetchAxEngineModelAnnotations,
 } from "./dialog-ax-engine-download"
-import { claudeFamilyId, claudeFamilySortKey } from "@/provider/anthropic-families"
-import { grokFamilyId, grokFamilySortKey } from "@/provider/grok-families"
-import { kimiFamilyId, kimiFamilySortKey } from "@/provider/kimi-families"
-import { codexFamilyId, codexFamilySortKey } from "@/provider/codex-families"
 
-function pickerFamilySortKey(modelID: string) {
-  const claude = claudeFamilyId({ id: modelID })
-  if (claude) return claudeFamilySortKey(claude)
-  const grok = grokFamilyId({ id: modelID })
-  if (grok) return 10 + grokFamilySortKey(grok)
-  const kimi = kimiFamilyId({ id: modelID })
-  if (kimi) return 20 + kimiFamilySortKey(kimi)
-  const codex = codexFamilyId({ id: modelID })
-  if (codex) return 30 + codexFamilySortKey(codex)
-  return 100
-}
+const modelNameCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" })
 
 export function DialogModel(props: { providerID?: string }) {
   const uiText = useLanguage().t
@@ -181,10 +167,7 @@ export function DialogModel(props: { providerID?: string }) {
               },
             }
           }),
-          sortBy(
-            (x) => pickerFamilySortKey(x.value.modelID),
-            (x) => x.title,
-          ),
+          sort((a, b) => modelNameCollator.compare(a.searchText, b.searchText)),
         ),
       ),
     )
