@@ -21,9 +21,60 @@ export type UpgradeCheckOutcome = {
 // Non-interactive version probe behind `ax-code upgrade check`. Shares
 // Installation.check with the TUI update dialog and never installs anything.
 export async function runUpgradeCheck(input: { method?: "curl" | "brew" } = {}): Promise<UpgradeCheckOutcome> {
-  const { releaseType: _releaseType, ...report } = await Installation.check({ method: input.method })
+  // An undetected method can still answer "up to date" from the public
+  // release index. Installing that answer stays a separate decision.
+  const { releaseType: _releaseType, ...report } = await Installation.check({
+    method: input.method,
+    unknownMethod: "curl",
+  })
   const exitCode = report.error ? 2 : report.upToDate ? 0 : 1
   return { report, exitCode }
+}
+
+export type UnknownUpgradeAction =
+  | { kind: "up-to-date"; current: string; desktop: boolean; activePath: string }
+  | { kind: "desktop"; activePath: string; latest: string | null; error?: string; updateAvailable: boolean }
+  | { kind: "noninteractive"; message: string; exitCode: 2 }
+  | { kind: "prompt"; activePath: string }
+
+// `ax-code upgrade` with an undetected method must not call prompts.select
+// unless stdin is a TTY (#496). A desktop bundle is not a curl install.
+export function decideUnknownUpgrade(input: {
+  activePath: string
+  interactive: boolean
+  explicitTarget: boolean
+  desktop: boolean
+  report?: UpgradeCheckReport
+}): UnknownUpgradeAction {
+  if (!input.explicitTarget && input.report?.upToDate && input.report.current) {
+    return {
+      kind: "up-to-date",
+      current: input.report.current,
+      desktop: input.desktop,
+      activePath: input.activePath,
+    }
+  }
+  if (input.desktop) {
+    return {
+      kind: "desktop",
+      activePath: input.activePath,
+      latest: input.report?.latest ?? null,
+      error: input.report?.error,
+      updateAvailable: input.report?.upToDate === false && Boolean(input.report.latest),
+    }
+  }
+  if (!input.interactive) {
+    return { kind: "noninteractive", message: noninteractiveUnknownMessage(input.report), exitCode: 2 }
+  }
+  return { kind: "prompt", activePath: input.activePath }
+}
+
+function noninteractiveUnknownMessage(report: UpgradeCheckReport | undefined): string {
+  const guidance = "could not determine the install method; re-run with --method curl|brew"
+  if (!report) return guidance
+  if (report.error) return renderUpgradeCheckHuman(report)
+  if (report.upToDate === false && report.latest) return `${renderUpgradeCheckHuman(report)}\n${guidance}`
+  return guidance
 }
 
 export function renderUpgradeCheckHuman(report: UpgradeCheckReport): string {
@@ -125,7 +176,50 @@ export const UpgradeCommand = {
     const detectedMethod = await Installation.method()
     const method = (args.method as Installation.Method) ?? detectedMethod
     if (method === "unknown") {
-      prompts.log.error(`ax-code is installed to ${process.execPath} and may be managed by a package manager`)
+      const activePath = await Installation.activeInstallPath()
+      const report = args.target ? undefined : await Installation.check({ method: "unknown", unknownMethod: "curl" })
+      const action = decideUnknownUpgrade({
+        activePath,
+        interactive: process.stdin.isTTY === true,
+        explicitTarget: Boolean(args.target),
+        desktop: Installation.desktopBundleEntry(activePath),
+        report,
+      })
+      if (action.kind === "up-to-date") {
+        prompts.log.success(`Already up to date (v${action.current})`)
+        if (action.desktop) {
+          prompts.log.info(
+            `This copy is the AX Code desktop bundle at ${action.activePath}. The desktop app updates it.`,
+          )
+        }
+        prompts.outro("Done")
+        return
+      }
+      if (action.kind === "desktop") {
+        prompts.log.error(
+          `ax-code at ${action.activePath} is the desktop app bundle. The desktop app updates this copy; ax-code upgrade does not replace it.`,
+        )
+        if (action.updateAvailable && action.latest) {
+          prompts.log.info(
+            `CLI release v${action.latest} is available. Update AX Code from the desktop app, or install the standalone CLI with \`ax-code upgrade --method curl\`.`,
+          )
+          process.exitCode = 1
+        } else if (action.error) {
+          prompts.log.error(action.error)
+          process.exitCode = 2
+        } else {
+          process.exitCode = 1
+        }
+        prompts.outro("Done")
+        return
+      }
+      if (action.kind === "noninteractive") {
+        prompts.log.error(action.message)
+        prompts.outro("Done")
+        process.exitCode = action.exitCode
+        return
+      }
+      prompts.log.error(`ax-code is installed to ${action.activePath} and may be managed by a package manager`)
       const install = await prompts.select({
         message: "Install anyways?",
         options: [

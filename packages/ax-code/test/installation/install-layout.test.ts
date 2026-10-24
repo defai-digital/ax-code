@@ -3,7 +3,11 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { Installation } from "../../src/installation"
-import { standaloneInstallRoot, isWithinInstallPrefix } from "../../src/installation/install-layout"
+import {
+  isDesktopBundleEntry,
+  standaloneInstallRoot,
+  isWithinInstallPrefix,
+} from "../../src/installation/install-layout"
 
 describe("installation layout", () => {
   test.each([
@@ -17,6 +21,22 @@ describe("installation layout", () => {
     expect(standaloneInstallRoot(entryPath, home, "win32")).toBe("C:\\Users\\test\\.ax-code")
     if (process.platform === "win32") expect(await Installation.method({ home, entryPath })).toBe("curl")
   })
+  test("recognizes the desktop app bundle without treating the cache runtime as one", () => {
+    expect(
+      isDesktopBundleEntry(
+        "C:\\Users\\test\\AppData\\Local\\Programs\\AX Code\\resources\\ax-code\\bin\\ax-code",
+        "win32",
+      ),
+    ).toBe(true)
+    expect(
+      isDesktopBundleEntry("/Applications/AX Code.app/Contents/Resources/ax-code/lib/index-node-tui.js", "darwin"),
+    ).toBe(true)
+    expect(isDesktopBundleEntry("/opt/AX Code/resources/ax-code/bin/ax-code", "linux")).toBe(true)
+    expect(isDesktopBundleEntry("C:/Users/test/.cache/ax-code/libexec/runtime-1/bin/AX-Code.exe", "win32")).toBe(false)
+    expect(isDesktopBundleEntry("/opt/resources/ax-code-other/bin/ax-code", "linux")).toBe(false)
+    expect(Installation.desktopBundleEntry("/opt/AX Code/resources/ax-code/bin/ax-code", "linux")).toBe(true)
+  })
+
   test("recognizes Windows bundles without matching neighboring or source directories", () => {
     expect(standaloneInstallRoot("C:/Users/test/.ax-code/lib/index-node-tui.js", "C:/Users/test", "win32")).toBe(
       "C:\\Users\\test\\.ax-code",

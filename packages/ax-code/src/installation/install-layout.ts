@@ -20,6 +20,13 @@ export function standaloneInstallRoot(
     return root
 }
 
+/** Electron packs the CLI at `resources/ax-code` (macOS: `Contents/Resources/ax-code`). */
+export function isDesktopBundleEntry(activePath: string, platform: NodeJS.Platform = process.platform) {
+  const paths = platform === "win32" ? path.win32 : path.posix
+  const normalized = paths.normalize(activePath).replaceAll("\\", "/")
+  return /(?:^|\/)resources\/ax-code(?:\/|$)/i.test(normalized)
+}
+
 export function isWithinInstallPrefix(activePath: string, prefix: string, platform: NodeJS.Platform) {
   const paths = platform === "win32" ? path.win32 : path.posix
   const relative = paths.relative(prefix, activePath)

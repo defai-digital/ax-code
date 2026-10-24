@@ -1,5 +1,5 @@
 import { verifyMinisign } from "./minisign"
-import { standaloneInstallRoot, isWithinInstallPrefix } from "./install-layout"
+import { standaloneInstallRoot, isDesktopBundleEntry, isWithinInstallPrefix } from "./install-layout"
 import path from "path"
 import os from "os"
 import fs from "fs/promises"
@@ -415,11 +415,16 @@ export namespace Installation {
     error?: string
   }
 
+  export function desktopBundleEntry(activePath: string, platform: NodeJS.Platform = dependencies.platform) {
+    return isDesktopBundleEntry(activePath, platform)
+  }
+
   // One version probe shared by `ax-code upgrade check`, the TUI update
   // dialog and the server route. Never installs anything. `unknownMethod`
-  // chooses what an undetected install method is checked against: the CLI
-  // reports an error, interactive callers fall back to the public installer
-  // index exactly as `upgrade()` falls back to the curl installer.
+  // chooses what an undetected install method is checked against. Callers
+  // that only need a version answer pass `"curl"` and still record
+  // `method: "unknown"`. `upgrade()` uses the same public index when it
+  // falls back to the curl installer.
   export async function check(input: { method?: Method; unknownMethod?: "error" | "curl" } = {}): Promise<CheckReport> {
     const current = VERSION
     const detected: Method = input.method ?? (await Installation.method().catch(() => "unknown" as const))

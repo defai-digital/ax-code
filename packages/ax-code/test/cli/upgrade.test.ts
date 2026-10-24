@@ -2,7 +2,12 @@ import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest
 import semver from "semver"
 import { Bus } from "../../src/bus"
 import { upgrade } from "../../src/cli/upgrade"
-import { renderUpgradeCheckHuman, runUpgradeCheck, UpgradeCheckCommand } from "../../src/cli/cmd/upgrade"
+import {
+  decideUnknownUpgrade,
+  renderUpgradeCheckHuman,
+  runUpgradeCheck,
+  UpgradeCheckCommand,
+} from "../../src/cli/cmd/upgrade"
 import { Config } from "../../src/config/config"
 import { Flag } from "../../src/flag/flag"
 import { Installation } from "../../src/installation"
@@ -191,6 +196,68 @@ describe("cli upgrade", () => {
   })
 })
 
+describe("unknown upgrade decision", () => {
+  const bundle = "C:/Users/test/AppData/Local/Programs/AX Code/resources/ax-code/lib/index-node-tui.js"
+  const currentReport = {
+    current,
+    latest: current,
+    upToDate: true as const,
+    method: "unknown" as const,
+  }
+
+  test("reports up to date before prompting, including a desktop bundle", () => {
+    expect(
+      decideUnknownUpgrade({
+        activePath: bundle,
+        interactive: false,
+        explicitTarget: false,
+        desktop: true,
+        report: currentReport,
+      }),
+    ).toEqual({ kind: "up-to-date", current, desktop: true, activePath: bundle })
+  })
+
+  test("refuses to replace a desktop bundle when a newer CLI release exists", () => {
+    expect(
+      decideUnknownUpgrade({
+        activePath: bundle,
+        interactive: true,
+        explicitTarget: false,
+        desktop: true,
+        report: { current, latest: patch, upToDate: false, method: "unknown" },
+      }),
+    ).toMatchObject({ kind: "desktop", updateAvailable: true, latest: patch, activePath: bundle })
+  })
+
+  test("does not prompt when stdin is not a TTY", () => {
+    const action = decideUnknownUpgrade({
+      activePath: "C:/Program Files/ax-code/ax-code.exe",
+      interactive: false,
+      explicitTarget: false,
+      desktop: false,
+      report: { current, latest: patch, upToDate: false, method: "unknown" },
+    })
+    expect(action.kind).toBe("noninteractive")
+    if (action.kind !== "noninteractive") return
+    expect(action.exitCode).toBe(2)
+    expect(action.message).toContain("--method curl|brew")
+    expect(action.message).toContain(patch)
+  })
+
+  test("prompts on a TTY for an unknown non-desktop install and names that path", () => {
+    const activePath = "C:/tools/ax-code.exe"
+    expect(
+      decideUnknownUpgrade({
+        activePath,
+        interactive: true,
+        explicitTarget: false,
+        desktop: false,
+        report: { current, latest: patch, upToDate: false, method: "unknown" },
+      }),
+    ).toEqual({ kind: "prompt", activePath })
+  })
+})
+
 describe("cli upgrade check", () => {
   test("reports up to date with exit 0 and the JSON report shape", async () => {
     methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("curl")
@@ -242,17 +309,28 @@ describe("cli upgrade check", () => {
     expect(renderUpgradeCheckHuman(outcome.report)).toContain("network down")
   })
 
-  test("fails with exit 2 when the install method cannot be determined", async () => {
+  test("compares the public release index when the install method is unknown", async () => {
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("unknown")
+    latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(current)
+
+    const outcome = await runUpgradeCheck()
+
+    expect(latestSpy).toHaveBeenCalledWith("curl")
+    expect(outcome.exitCode).toBe(0)
+    expect(outcome.report).toMatchObject({ method: "unknown", upToDate: true, latest: current })
+    expect(outcome.report.error).toBeUndefined()
+    expect(renderUpgradeCheckHuman(outcome.report)).toContain("up to date")
+  })
+
+  test("reports an available update for an unknown method without installing", async () => {
     methodSpy = vi.spyOn(Installation, "method").mockResolvedValue("unknown")
     latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(patch)
 
     const outcome = await runUpgradeCheck()
 
-    expect(outcome.exitCode).toBe(2)
-    expect(outcome.report.method).toBe("unknown")
-    expect(outcome.report.latest).toBeNull()
-    expect(outcome.report.error).toContain("--method curl|brew")
-    expect(latestSpy).not.toHaveBeenCalled()
+    expect(outcome.exitCode).toBe(1)
+    expect(outcome.report).toMatchObject({ method: "unknown", upToDate: false, latest: patch })
+    expect(renderUpgradeCheckHuman(outcome.report)).toContain("update available")
   })
 
   test("honors an explicit method without auto-detecting", async () => {
