@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.29.1] - 2026-10-24
+
+### Fixed
+
+- Keep upgrade commands responsive without a TTY when the install method is unknown, and leave desktop-owned bundles to the desktop updater.
+- Return failing exit statuses for version-probe and installer errors, including rejections without an error value.
+- Preserve installer diagnostics written to stdout and report the exit code for silent failures.
+- Preserve existing minute-precision UTC review, debug, and model observation timestamps while upgrading to the patched Zod 4.6.6 release.
+
+### Changed
+
+- Publish SDK 2.6.48 with regenerated OpenAPI schemas and unchanged timestamp acceptance.
+- Refresh model download observations while keeping new models pending review.
+
 ## [7.29.0] - 2026-10-24
 
 ### Fixed
