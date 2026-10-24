@@ -5,6 +5,19 @@ import { Filesystem } from "@/util/filesystem"
 const BINARY_SAMPLE_BYTES = 4096
 const BINARY_NON_PRINTABLE_RATIO = 0.3
 
+const SUPPORTED_IMAGE_ATTACHMENT_MIMES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
+
+/**
+ * Whether a MIME type may be returned as a binary image attachment.
+ *
+ * Providers only accept raster PNG/JPEG/GIF/WebP payloads. SVG is text and
+ * FlatBuffers schema files share the `image/vnd.fastbidsheet` MIME type, so
+ * both are excluded by membership rather than by a prefix test.
+ */
+export function isSupportedImageAttachment(mime: string): boolean {
+  return SUPPORTED_IMAGE_ATTACHMENT_MIMES.has(mime)
+}
+
 /**
  * Detect whether `filePath` is a binary file.
  *

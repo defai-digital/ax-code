@@ -15,6 +15,7 @@ import { BodyTooLargeError, readBoundedBody } from "@/util/http-body"
 import { ToolNumber } from "./schema"
 import { originPermissionPatterns } from "@/util/url-permission"
 import { wrapUntrustedContent } from "../util/untrusted-content"
+import { isSupportedImageAttachment } from "./file-content"
 
 // Block SSRF to private/reserved IP ranges. Uses pinnedFetch to
 // resolve DNS once and connect to the validated IP directly —
@@ -185,8 +186,14 @@ export const WebFetchTool = Tool.define("webfetch", {
         .replace(/^"|"$/g, "")
       const title = `${params.url} (${contentType})`
 
-      // Check if response is an image
+      // Check if response is an image. SVG and vnd.fastbidsheet stay on the
+      // text path; any other image type must be a supported attachment format,
+      // and is rejected before decoding so a non-raster payload never becomes
+      // an attachment or garbled text.
       const isImage = mime.startsWith("image/") && mime !== "image/svg+xml" && mime !== "image/vnd.fastbidsheet"
+      if (isImage && !isSupportedImageAttachment(mime)) {
+        throw new Error(`Unsupported fetched image content type: ${mime}`)
+      }
 
       if (isImage) {
         const base64Content = Buffer.from(body).toString("base64")

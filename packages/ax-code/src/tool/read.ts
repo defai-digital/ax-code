@@ -16,7 +16,7 @@ import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
-import { isBinaryFile } from "./file-content"
+import { isBinaryFile, isSupportedImageAttachment } from "./file-content"
 import { detectOfficeKind, extractOfficeText } from "./office-text"
 import { ToolNumber } from "./schema"
 import { CanonicalOutput } from "./canonical-output"
@@ -249,9 +249,11 @@ export const ReadTool = Tool.define("read", {
 
       const instructions = await InstructionPrompt.resolve(ctx.messages, filepath, ctx.messageID)
 
-      // Exclude SVG (XML-based) and vnd.fastbidsheet (.fbs extension, commonly FlatBuffers schema files)
+      // Only raster formats providers accept are attachments; SVG (XML-based)
+      // and vnd.fastbidsheet (.fbs FlatBuffers schemas) stay non-images, and
+      // other image types fall through to binary refusal.
       const mime = Filesystem.mimeType(filepath)
-      const isImage = mime.startsWith("image/") && mime !== "image/svg+xml" && mime !== "image/vnd.fastbidsheet"
+      const isImage = isSupportedImageAttachment(mime)
       const isPdf = mime === "application/pdf"
       if (isImage || isPdf) {
         const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024

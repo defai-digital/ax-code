@@ -618,6 +618,26 @@ describe("tool.read truncation", () => {
     })
   })
 
+  test("rejects bitmap images instead of returning an attachment", async () => {
+    await using tmp = await tmpdir({
+      config: { username: "test" },
+      init: async (dir) => {
+        // BMP signature ("BM") followed by NUL bytes.
+        const bmp = Buffer.from([0x42, 0x4d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        await writeFile(path.join(dir, "bitmap.bmp"), bmp)
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        await expect(read.execute({ filePath: path.join(tmp.path, "bitmap.bmp") }, ctx)).rejects.toThrow(
+          "Cannot read binary file",
+        )
+      },
+    })
+  })
+
   test("large image files are properly attached without error", async () => {
     await Instance.provide({
       directory: FIXTURES_DIR,

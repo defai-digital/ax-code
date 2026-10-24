@@ -57,6 +57,24 @@ describe("tool.webfetch", () => {
     )
   })
 
+  test("rejects unsupported image content types instead of returning an attachment", async () => {
+    const bytes = new Uint8Array([0x42, 0x4d, 0x00, 0x00, 0x00, 0x00])
+    await withFetch(
+      async () => new Response(bytes, { status: 200, headers: { "content-type": "image/bmp" } }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            await expect(
+              webfetch.execute({ url: "https://93.184.216.34/image.bmp", format: "markdown" }, ctx),
+            ).rejects.toThrow("Unsupported fetched image content type: image/bmp")
+          },
+        })
+      },
+    )
+  })
+
   test("keeps svg as text output", async () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>hello</text></svg>'
     await withFetch(
