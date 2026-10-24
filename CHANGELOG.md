@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.29.0] - 2026-10-24
+
+### Fixed
+
+- Preserve WebMCP stop instructions and surface provider failure reasons with a consistent next action.
+- Detect repeated tool calls across model steps while allowing polls whose results are changing.
+- Limit transient read ID normalization to Desktop WebMCP and apply it before hashing long results.
+- Keep oversized browser snapshots usable with explicit truncation notes and bindings limited to visible controls.
+- Patch the ip-address IPv6 validation denial of service dependency.
+
+### Changed
+
+- Publish SDK 2.6.47 with the current server contract and verified GitHub Packages distribution.
+- Upgrade the remaining CI setup-node action to v7.
+
 ## [7.28.5] - 2026-10-23
 
 ### Fixed
