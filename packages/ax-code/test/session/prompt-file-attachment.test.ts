@@ -135,6 +135,85 @@ describe("prompt file attachment", () => {
   })
 })
 
+describe("prompt file attachment rejects unsupported image media", () => {
+  function fileParts(parts: Awaited<ReturnType<typeof resolveFileAttachmentPart>>) {
+    return parts.filter((part) => part.type === "file")
+  }
+
+  function textOf(parts: Awaited<ReturnType<typeof resolveFileAttachmentPart>>) {
+    return parts.map((part) => (part.type === "text" ? part.text : "")).join("\n")
+  }
+
+  test("a data image/heic part becomes a readable error instead of a file part", async () => {
+    const sessionID = SessionID.make("session_attachment_heic_data")
+    const messageID = MessageID.ascending()
+    const parts = await resolveFileAttachmentPart({
+      sessionID,
+      messageID,
+      agentName: "test",
+      part: {
+        type: "file",
+        mime: "image/heic",
+        filename: "photo.heic",
+        url: "data:image/heic;base64,AAEC",
+      },
+      draftSyntheticTextPart: (text) => ({ type: "text", text, sessionID, messageID }),
+      attachDraftContext: (part) => ({ ...part, messageID, sessionID }),
+    })
+
+    expect(fileParts(parts)).toEqual([])
+    const text = textOf(parts)
+    expect(text).toMatch(/unsupported/i)
+    expect(text).toMatch(/image\/heic/)
+  })
+
+  test("a BMP file attachment is rejected without reading the file", async () => {
+    // Pin a username so the config loader never falls back to os.userInfo(),
+    // which is unavailable in the sandbox and would mask the attachment path.
+    await using tmp = await tmpdir({ config: { username: "test" } })
+    const filepath = path.join(tmp.path, "photo.bmp")
+    const bmp = Buffer.from(
+      "424d3a0000000000000036000000280000000100000001000000010018000000000004000000130b0000130b00000000000000000000",
+      "hex",
+    )
+    await fs.writeFile(filepath, bmp)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const sessionID = SessionID.make("session_attachment_bmp_file")
+        const messageID = MessageID.ascending()
+        const readBytes = vi.spyOn(Filesystem, "readBytes")
+        try {
+          const parts = await resolveFileAttachmentPart({
+            sessionID,
+            messageID,
+            agentName: "test",
+            part: {
+              type: "file",
+              mime: "image/bmp",
+              filename: "photo.bmp",
+              url: pathToFileURL(filepath).href,
+            },
+            draftSyntheticTextPart: (text) => ({ type: "text", text, sessionID, messageID }),
+            attachDraftContext: (part) => ({ ...part, messageID, sessionID }),
+          })
+
+          // Soft assertions so the red run surfaces every unmet part of the
+          // contract: no file part, a readable error, and no file read.
+          expect.soft(fileParts(parts)).toEqual([])
+          const text = textOf(parts)
+          expect.soft(text).toMatch(/unsupported/i)
+          expect.soft(text).toMatch(/image\/bmp/)
+          expect.soft(readBytes.mock.calls.filter(([candidate]) => candidate === filepath)).toEqual([])
+        } finally {
+          readBytes.mockRestore()
+        }
+      },
+    })
+  })
+})
+
 describe("prompt MCP resource attachment", () => {
   const MCP_URI = "mcp://docs/readme.md"
 

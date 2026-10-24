@@ -1,11 +1,23 @@
 import type { Role, Usage } from "@agentclientprotocol/sdk"
 import type { AssistantMessage } from "@ax-code/sdk/v2"
+import { isSupportedImageAttachment } from "../tool/file-content"
 import { parseUri } from "./agent-adapter"
 import { isHttpUri } from "./utils"
 
 export type PromptPart =
   | { type: "text"; text: string; synthetic?: boolean; ignored?: boolean }
   | { type: "file"; url: string; filename: string; mime: string }
+
+const UNSUPPORTED_IMAGE_TEXT = (mime: string) => `Unsupported image mime type: ${mime}`
+
+function normalizedMediaType(mime: string | null | undefined): string | undefined {
+  return mime?.split(";")[0]?.trim().toLowerCase() || undefined
+}
+
+function unsupportedImageMime(mime: string | undefined): string | undefined {
+  if (!mime?.startsWith("image/")) return undefined
+  return isSupportedImageAttachment(mime) ? undefined : mime
+}
 
 export function parsePromptParts(
   prompt: ReadonlyArray<{
@@ -37,6 +49,11 @@ export function parsePromptParts(
       case "image": {
         const parsed = parseUri(part.uri ?? "")
         const filename = parsed.type === "file" ? parsed.filename : "image"
+        const unsupported = unsupportedImageMime(normalizedMediaType(part.mimeType))
+        if (unsupported) {
+          parts.push({ type: "text", text: UNSUPPORTED_IMAGE_TEXT(unsupported) })
+          break
+        }
         if (part.data) {
           parts.push({
             type: "file",
@@ -61,7 +78,12 @@ export function parsePromptParts(
         }
         // parseUri labels every file text/plain. Honor a declared media type so
         // an image or PDF link is attached as media instead of read as text.
-        const mime = part.mimeType?.split(";")[0]?.trim().toLowerCase()
+        const mime = normalizedMediaType(part.mimeType)
+        const unsupported = unsupportedImageMime(mime)
+        if (unsupported) {
+          parts.push({ type: "text", text: UNSUPPORTED_IMAGE_TEXT(unsupported) })
+          break
+        }
         if (parsed.type === "file" && mime && (mime.startsWith("image/") || mime === "application/pdf")) {
           parsed.mime = mime
         }
@@ -81,6 +103,11 @@ export function parsePromptParts(
           // mimeType is optional in the protocol; default it like MCP blob
           // content instead of silently dropping the attachment.
           const mime = resource.mimeType || "application/octet-stream"
+          const unsupported = unsupportedImageMime(normalizedMediaType(mime))
+          if (unsupported) {
+            parts.push({ type: "text", text: UNSUPPORTED_IMAGE_TEXT(unsupported) })
+            break
+          }
           parts.push({
             type: "file",
             url: `data:${mime};base64,${resource.blob}`,

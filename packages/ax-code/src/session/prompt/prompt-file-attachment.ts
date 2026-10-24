@@ -6,6 +6,7 @@ import { Instance } from "../../project/instance"
 import { LSP } from "@ax-code/ax-code-intel"
 import { Session } from ".."
 import { FileTime } from "../../file/time"
+import { isSupportedImageAttachment } from "../../tool/file-content"
 import { ReadTool } from "../../tool/read"
 import { Tool } from "../../tool/tool"
 import { Filesystem } from "../../util/filesystem"
@@ -23,6 +24,14 @@ const log = Log.create({ service: "session.prompt" })
 // reading it: loading a multi-GB file just to reject it would exhaust memory
 // before the post-read check runs.
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+
+const UNSUPPORTED_IMAGE_TEXT = (mime: string) => `Unsupported image mime type: ${mime}`
+
+function unsupportedImageMime(mime: string): string | undefined {
+  const mediaType = mime.split(";")[0]?.trim().toLowerCase()
+  if (!mediaType?.startsWith("image/")) return undefined
+  return isSupportedImageAttachment(mediaType) ? undefined : mediaType
+}
 
 type Draft<T> = T extends MessageV2.Part ? Omit<T, "id"> & { id?: string } : never
 type DraftTextPart = Draft<MessageV2.TextPart>
@@ -106,6 +115,10 @@ export async function resolveFileAttachmentPart(input: {
           input.attachDraftContext(part),
         ]
       }
+      {
+        const unsupported = unsupportedImageMime(part.mime)
+        if (unsupported) return [input.draftSyntheticTextPart(UNSUPPORTED_IMAGE_TEXT(unsupported))]
+      }
       break
     case "file:":
       log.info("file", {
@@ -143,6 +156,11 @@ export async function resolveFileAttachmentPart(input: {
         return [
           input.draftSyntheticTextPart(`Access denied: symlink target is outside the project directory: ${filepath}`),
         ]
+      }
+
+      const unsupported = unsupportedImageMime(part.mime)
+      if (unsupported) {
+        return [input.draftSyntheticTextPart(UNSUPPORTED_IMAGE_TEXT(unsupported))]
       }
 
       const s = Filesystem.stat(filepath)
