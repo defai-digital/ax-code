@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "checkedAt": "2026-10-20T00:10:36.095Z",
+  "checkedAt": "2026-10-24T07:53:02.234Z",
   "models": [
     {
       "repo": "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
@@ -47,6 +47,41 @@
     {
       "repo": "AutomatosX/AX-Qwen3.8-Flash-Next-MLX-AXQ-MXFP4-MTP",
       "revision": "4fdb4a602ac8ed53afcad1874861ee0ecdd636e1",
+      "private": false,
+      "gated": false,
+      "license": "apache-2.0"
+    },
+    {
+      "repo": "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-6bit-MTP",
+      "revision": "ad22433661ef9292e09b6b0eeb602e06c0aa2474",
+      "private": false,
+      "gated": false,
+      "license": "mit"
+    },
+    {
+      "repo": "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-6bit-MTP",
+      "revision": "b0b979ad6be74740571eeedb9af35c56158f03e8",
+      "private": false,
+      "gated": false,
+      "license": "mit"
+    },
+    {
+      "repo": "AutomatosX/AX-Qwen3.8-Flash-Next-MLX-AXQ-6bit-MTP",
+      "revision": "3c1dd547d70cb7bf01dd0a89c41c400dde32ed39",
+      "private": false,
+      "gated": false,
+      "license": "other"
+    },
+    {
+      "repo": "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
+      "revision": "603b1ecf466bf8fa58ce78d453a59b3af2a98f07",
+      "private": false,
+      "gated": false,
+      "license": "other"
+    },
+    {
+      "repo": "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit",
+      "revision": "3fcf7bb0c59142da013e721e370f478d2d51b1a0",
       "private": false,
       "gated": false,
       "license": "apache-2.0"
