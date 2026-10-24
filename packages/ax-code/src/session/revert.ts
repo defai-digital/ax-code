@@ -220,25 +220,23 @@ export namespace SessionRevert {
     return result
   }
 
-  function assertCompleteCoverage(
-    store: SessionShard.Store,
-    sessionIDs: SessionID[],
-    boundary: Position,
-    boundaryMessageID: MessageID,
-  ) {
-    const unfinished = store
-      .use((db) =>
-        db
-          .select({
-            id: MessageTable.id,
-            sessionID: MessageTable.session_id,
-            time: MessageTable.time_created,
-            data: MessageTable.data,
-          })
-          .from(MessageTable)
-          .where(inArray(MessageTable.session_id, sessionIDs))
-          .all(),
-      )
+  function assertCompleteCoverage(store: SessionShard.Store, sessionIDs: SessionID[], boundaryMessageID: MessageID) {
+    const messages = store.use((db) =>
+      db
+        .select({
+          id: MessageTable.id,
+          sessionID: MessageTable.session_id,
+          time: MessageTable.time_created,
+          data: MessageTable.data,
+        })
+        .from(MessageTable)
+        .where(inArray(MessageTable.session_id, sessionIDs))
+        .all(),
+    )
+    const boundaryMessage = messages.find((row) => row.id === boundaryMessageID)
+    if (!boundaryMessage) throw new Error(`Session revert boundary ${boundaryMessageID} disappeared`)
+    const boundary = { time: boundaryMessage.time, id: boundaryMessage.id }
+    const unfinished = messages
       .filter(
         (row) =>
           row.data.role === "assistant" &&
@@ -314,7 +312,6 @@ export namespace SessionRevert {
     assertCompleteCoverage(
       store,
       scope.sessions.map((session) => session.id),
-      boundary,
       input.messageID,
     )
     const entries = patchEntries(

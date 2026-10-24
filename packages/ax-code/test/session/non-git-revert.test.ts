@@ -5,6 +5,9 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionRevert } from "../../src/session/revert"
 import { MessageID, PartID } from "../../src/session/schema"
+import { SessionShard } from "../../src/session/shard"
+import { PartTable } from "../../src/session/session.sql"
+import { eq } from "../../src/storage/db"
 import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Snapshot } from "../../src/snapshot"
 import { tmpdir } from "../fixture/fixture"
@@ -172,3 +175,100 @@ test.each([false, true])(
     })
   },
 )
+
+test("undo identifies remapped part timestamps that strand an interrupted step", async () => {
+  await using tmp = await tmpdir({ git: true, config: { snapshot: true, username: "testuser" } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "remapped.txt")
+      await fs.writeFile(file, "before\n")
+      const session = await Session.create({})
+      try {
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "user",
+          agent: "build",
+          model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+          time: { created: Date.now() },
+        })
+        const a1 = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "assistant",
+          parentID: user.id,
+          agent: "build",
+          mode: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          modelID: ModelID.make("test-model"),
+          providerID: ProviderID.make("test"),
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          time: { created: Date.now(), completed: Date.now() },
+          finish: "stop",
+        })
+        const a1Snapshot = await Snapshot.track()
+        expect(a1Snapshot).toBeTruthy()
+        const a1StepStart = await Session.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: a1.id,
+          type: "step-start",
+          snapshot: a1Snapshot,
+        })
+        const a2 = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "assistant",
+          parentID: user.id,
+          agent: "build",
+          mode: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          modelID: ModelID.make("test-model"),
+          providerID: ProviderID.make("test"),
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          time: { created: Date.now(), completed: Date.now() },
+          error: {
+            name: "MessageAbortedError",
+            data: { message: "Backend interrupted", metadata: { reason: "backend_restart" } },
+          },
+        })
+        const a2Snapshot = await Snapshot.track()
+        expect(a2Snapshot).toBeTruthy()
+        await Session.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: a2.id,
+          type: "step-start",
+          snapshot: a2Snapshot,
+        })
+        await Session.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: a2.id,
+          type: "tool",
+          tool: "write",
+          callID: "call_remapped_write",
+          state: { status: "running", input: { filePath: file }, time: { start: Date.now() } },
+        })
+        await fs.writeFile(file, "after\n")
+
+        // A fork/import rewrites every copied part's timestamp while preserving
+        // message times. Pushing A1's step-start into the future reproduces that
+        // skew: the boundary part sorts after A2's older message time even though
+        // A2 is the interrupted step that lacks recorded coverage.
+        const future = Date.now() + 24 * 60 * 60 * 1000
+        SessionShard.storeFor(session.id, { write: true }).use((db) => {
+          db.update(PartTable).set({ time_created: future }).where(eq(PartTable.id, a1StepStart.id)).run()
+        })
+
+        await expect(
+          SessionRevert.preview({ sessionID: session.id, messageID: a1.id, partID: a1StepStart.id }),
+        ).rejects.toThrow("Undo coverage is incomplete")
+        expect(await fs.readFile(file, "utf8")).toBe("after\n")
+      } finally {
+        await Session.remove(session.id)
+      }
+    },
+  })
+})
