@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import type { Provider } from "../../src/provider/provider"
 import { ProviderTransform as T } from "../../src/provider/transform"
@@ -285,6 +286,59 @@ describe("reasoning continuity", () => {
       expect(body.messages[1].content).not.toContain("<think>")
     },
   )
+
+  test("declared reasoning_details interleaved field serializes reasoning parts", async () => {
+    const m = model("glm-5.3")
+    m.capabilities.interleaved = { field: "reasoning_details" }
+    const options = T.options({ model: m, sessionID: "test" })
+    const normalized = T.message(history, m, options)
+    const body = await wire(m, options, normalized)
+    expect(body.messages[1].reasoning_details).toEqual([{ type: "reasoning.text", text: reasoning }])
+    expect(body.messages[1].reasoning_content).toBeUndefined()
+  })
+
+  test("native OpenAI Responses reasoning survives a declared interleaved field", async () => {
+    const m = model("glm-5.3", "vivgrid", "@ai-sdk/openai")
+    m.capabilities.interleaved = { field: "reasoning_content" }
+    const options = T.options({ model: m, sessionID: "test" })
+    const prompt = history.map((message) => {
+      if (message.role !== "assistant") return message
+      return {
+        ...message,
+        content: message.content.map((part: any) =>
+          part.type === "reasoning"
+            ? {
+                ...part,
+                providerOptions: { openai: { itemId: "reasoning-1", reasoningEncryptedContent: "encrypted" } },
+              }
+            : part,
+        ),
+      }
+    })
+
+    let body: any
+    const sdk = createOpenAI({
+      name: m.providerID,
+      baseURL: m.api.url,
+      apiKey: "test",
+      fetch: async (_url, init) => {
+        body = parseJsonStrict(String(init?.body))
+        throw new Error("captured")
+      },
+    })
+    await expect(
+      sdk.languageModel(m.api.id).doGenerate({
+        prompt: T.message(prompt, m, options) as any,
+        maxOutputTokens: 4096,
+        providerOptions: { openai: { store: false } },
+      }),
+    ).rejects.toThrow("captured")
+
+    const item = body.input.find((entry: any) => entry.type === "reasoning")
+    expect(item).toBeDefined()
+    expect(item.encrypted_content).toBe("encrypted")
+    expect(item.summary).toEqual([{ type: "summary_text", text: reasoning }])
+  })
 
   test("GLM preservation has an independent opt-out", () => {
     const m = model("glm-5.3")

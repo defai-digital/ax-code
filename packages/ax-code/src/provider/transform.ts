@@ -85,8 +85,15 @@ export namespace ProviderTransform {
     // Anthropic thinking blocks (signatures, redacted data) must stay as
     // reasoning parts. Mapping them through openaiCompatible.reasoning_content
     // drops interleaved thinking on MiniMax Token Plan / minimax.io.
+    //
+    // providerOptions.openaiCompatible is an extension namespace only the
+    // @ai-sdk/openai-compatible serializer reads. Native SDKs (OpenAI
+    // Responses, OpenRouter/Together-style) must keep their native reasoning
+    // parts, so the field conversion is gated on that SDK.
     const interleavedField =
-      isAnthropicSdk(model.api.npm) || typeof model.capabilities.interleaved !== "object"
+      isAnthropicSdk(model.api.npm) ||
+      model.api.npm !== "@ai-sdk/openai-compatible" ||
+      typeof model.capabilities.interleaved !== "object"
         ? undefined
         : model.capabilities.interleaved.field
 
@@ -158,8 +165,23 @@ export namespace ProviderTransform {
           // Always set the interleaved field, including when empty. DeepSeek
           // (and some GLM/Kimi routes) reject a missing reasoning_content on
           // follow-up assistant turns even if this turn had no thinking.
-          const existing = (msg.providerOptions as { openaiCompatible?: Record<string, string> } | undefined)
-            ?.openaiCompatible
+          //
+          // reasoning_details is a structured array on the wire, so the plain
+          // string form is invalid there: emit `{ type: "reasoning.text", text }`
+          // and keep an existing array when this pass added no reasoning bytes.
+          const existing = (
+            msg.providerOptions as
+              | { openaiCompatible?: Record<string, string | Array<{ type: string; text: string }>> }
+              | undefined
+          )?.openaiCompatible
+          const carried =
+            field === "reasoning_details"
+              ? reasoningText
+                ? [{ type: "reasoning.text", text: reasoningText }]
+                : Array.isArray(existing?.reasoning_details)
+                  ? existing.reasoning_details
+                  : []
+              : reasoningText || (typeof existing?.[field] === "string" ? existing[field] : "")
           return {
             ...msg,
             content: filteredContent,
@@ -167,7 +189,7 @@ export namespace ProviderTransform {
               ...msg.providerOptions,
               openaiCompatible: {
                 ...existing,
-                [field]: reasoningText || (typeof existing?.[field] === "string" ? existing[field] : ""),
+                [field]: carried,
               },
             },
           }
