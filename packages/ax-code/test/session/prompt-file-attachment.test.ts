@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
@@ -6,6 +6,9 @@ import {
   normalizeDocumentSymbolEnvelopeData,
   resolveFileAttachmentPart,
 } from "../../src/session/prompt/prompt-file-attachment"
+import { resolveMcpResourcePart } from "../../src/session/prompt/prompt-mcp-resource"
+import { MCP } from "../../src/mcp"
+import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { MessageID, SessionID } from "../../src/session/schema"
@@ -129,5 +132,149 @@ describe("prompt file attachment", () => {
         }
       },
     })
+  })
+})
+
+describe("prompt MCP resource attachment", () => {
+  const MCP_URI = "mcp://docs/readme.md"
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  type ResourceContent = {
+    uri: string
+    mimeType: string
+    blob: string
+  }
+
+  async function resolveResource(content: ResourceContent, mime: string) {
+    const sessionID = SessionID.make("session_prompt_mcp_resource")
+    const messageID = MessageID.ascending()
+    const ask = vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+    const read = vi.spyOn(MCP, "readResource").mockResolvedValue({
+      contents: [content],
+    } as Awaited<ReturnType<typeof MCP.readResource>>)
+
+    const parts = await resolveMcpResourcePart({
+      sessionID,
+      agentName: "test",
+      agentPermission: [],
+      part: {
+        type: "file",
+        mime,
+        filename: "resource.bin",
+        url: MCP_URI,
+        source: {
+          type: "resource",
+          text: { start: 0, end: 0, value: "" },
+          clientName: "docs",
+          uri: MCP_URI,
+        },
+      },
+      draftSyntheticTextPart: (text) => ({ type: "text", text, sessionID, messageID }),
+      attachDraftContext: (part) => ({ ...part, messageID, sessionID }),
+    })
+
+    expect(ask).toHaveBeenCalledOnce()
+    expect(read).toHaveBeenCalledWith("docs", MCP_URI)
+    return parts
+  }
+
+  function fileParts(parts: Awaited<ReturnType<typeof resolveMcpResourcePart>>) {
+    return parts.filter((part) => part.type === "file")
+  }
+
+  test("decodes a text/markdown blob without attaching the MCP URI", async () => {
+    const parts = await resolveResource(
+      {
+        uri: MCP_URI,
+        mimeType: "text/markdown",
+        blob: Buffer.from("# Notes", "utf8").toString("base64"),
+      },
+      "text/markdown",
+    )
+
+    expect(parts.every((part) => part.type === "text")).toBe(true)
+    expect(parts.map((part) => ("text" in part ? part.text : "")).join("\n")).toContain("# Notes")
+  })
+
+  test("decodes PNG bytes into a data image URL file part", async () => {
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+      "base64",
+    )
+    const parts = await resolveResource(
+      {
+        uri: MCP_URI,
+        mimeType: "image/png",
+        blob: png.toString("base64"),
+      },
+      "image/png",
+    )
+
+    const files = fileParts(parts)
+    expect(files).toHaveLength(1)
+    const url = files[0]?.url ?? ""
+    expect(url).toMatch(/^data:image\/png;base64,/)
+    expect(url).not.toContain("mcp://")
+  })
+
+  test("keeps malformed base64 as a binary label without decoding or attaching it", async () => {
+    const parts = await resolveResource(
+      {
+        uri: MCP_URI,
+        mimeType: "image/png",
+        blob: "not base64!!!",
+      },
+      "image/png",
+    )
+
+    expect(fileParts(parts)).toEqual([])
+    const text = parts.map((part) => ("text" in part ? part.text : "")).join("\n")
+    expect(text).toMatch(/Binary content.*image\/png/)
+    // Exactly one label and no decoded payload or failure marker.
+    expect(text.match(/Binary content/g)).toHaveLength(1)
+    expect(text).not.toContain("not base64")
+    expect(text).not.toContain("Failed to read MCP resource")
+  })
+
+  test("keeps BMP bytes as a binary label without a file part", async () => {
+    const bmp = Buffer.from(
+      "424d3a0000000000000036000000280000000100000001000000010018000000000004000000130b0000130b00000000000000000000",
+      "hex",
+    )
+    const parts = await resolveResource(
+      {
+        uri: MCP_URI,
+        mimeType: "image/bmp",
+        blob: bmp.toString("base64"),
+      },
+      "image/bmp",
+    )
+
+    expect(fileParts(parts)).toEqual([])
+    expect(parts.map((part) => ("text" in part ? part.text : "")).join("\n")).toMatch(/Binary content.*image\/bmp/)
+  })
+
+  test("decodes PDF bytes into a data application URL file part", async () => {
+    const pdf = Buffer.from(
+      "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n",
+      "utf8",
+    )
+    const parts = await resolveResource(
+      {
+        uri: MCP_URI,
+        mimeType: "application/pdf",
+        blob: pdf.toString("base64"),
+      },
+      "application/pdf",
+    )
+
+    const files = fileParts(parts)
+    expect(files).toHaveLength(1)
+    const url = files[0]?.url ?? ""
+    expect(url).toMatch(/^data:application\/pdf;base64,/)
+    expect(url).not.toContain("mcp://")
   })
 })

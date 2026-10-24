@@ -22,8 +22,8 @@ type McpToolContentItem = {
 // The text budget is enforced WHILE collecting: bounding only the joined
 // output would still allocate one full copy per part plus the join buffer.
 const MAX_MCP_ATTACHMENTS = 10
-const MAX_MCP_ATTACHMENT_BASE64 = 8 * 1024 * 1024
-const MAX_MCP_ATTACHMENTS_TOTAL_BASE64 = 16 * 1024 * 1024
+export const MAX_MCP_ATTACHMENT_BASE64 = 8 * 1024 * 1024
+export const MAX_MCP_ATTACHMENTS_TOTAL_BASE64 = 16 * 1024 * 1024
 const MAX_MCP_TEXT_BYTES = 8 * 1024 * 1024
 const MAX_MCP_FILENAME = 1024
 const MAX_MCP_SERVER_METADATA_BYTES = 16 * 1024
@@ -54,12 +54,12 @@ function validMcpMimeType(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length <= 128 && MIME_PATTERN.test(value) ? value : fallback
 }
 
-type McpImageKind = "png" | "jpeg" | "gif" | "webp"
+export type McpImageKind = "png" | "jpeg" | "gif" | "webp"
 
 // Providers accept a narrow image set; anything else (svg with script
 // potential, tiff, bmp, application/* masquerading as image/*) degrades to a
 // placeholder instead of poisoning every later provider request.
-const MCP_IMAGE_TYPES: Record<string, McpImageKind> = {
+export const MCP_IMAGE_TYPES: Record<string, McpImageKind> = {
   "image/png": "png",
   "image/jpeg": "jpeg",
   "image/gif": "gif",
@@ -115,7 +115,7 @@ function mcpImageMagicMatches(kind: McpImageKind, bytes: Buffer): boolean {
  * first. Full magic forgery still needs a real image decoder, which stays
  * the provider's job.
  */
-function mcpImageMagicOkRaw(kind: McpImageKind, data: string): boolean {
+export function mcpImageMagicOkRaw(kind: McpImageKind, data: string): boolean {
   let head = ""
   for (let index = 0; index < data.length && head.length < 24; index++) {
     const char = data[index]
@@ -137,7 +137,7 @@ function mcpImageMagicOkRaw(kind: McpImageKind, data: string): boolean {
  * rejected before any compaction copy exists. Only the six common ASCII
  * whitespace chars are tolerated; anything else fails closed.
  */
-function measureBase64(data: string): { length: number; hasWhitespace: boolean } | undefined {
+export function measureBase64(data: string): { length: number; hasWhitespace: boolean } | undefined {
   let length = 0
   let padding = 0
   let hasWhitespace = false
