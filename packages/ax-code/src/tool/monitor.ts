@@ -126,6 +126,9 @@ export const MonitorTool = Tool.define("monitor", {
     if (!shellID) {
       throw new Error("Monitor command did not start a background shell.")
     }
+    // Mark the shell persistent before observing it so a subagent's background
+    // wait cannot mistake the monitor for work that will finish on its own.
+    if (persistent) BackgroundShell.markPersistent(shellID, ctx.sessionID, true)
 
     let linesEmitted = 0
     let lineCount = 0

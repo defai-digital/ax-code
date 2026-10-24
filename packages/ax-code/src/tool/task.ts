@@ -14,6 +14,7 @@ import DESCRIPTION from "./task.txt"
 import { assertPoolAlias, modelPoolParameter, resolvePoolModel } from "./task-model-pool"
 import z from "zod"
 import { Session } from "../session"
+import { BackgroundNotification } from "../session/background-notification"
 import { SessionID, MessageID, type TaskQueueID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { MessageV2 } from "../session/message-v2"
@@ -63,6 +64,15 @@ const BACKGROUND_FINALIZE_INSTRUCTION =
   `Produce the final result for this task now in plain text, using bash_output to read any background output you have not consumed. ` +
   `Do not start new shells or monitors, and do not delegate further. ` +
   `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
+
+// Sent when the background wait exhausted the budget reserved for it. The
+// task must still return usable evidence rather than fail: the final turn
+// reports the partial result and says explicitly that work is still running.
+const BACKGROUND_ONGOING_INSTRUCTION =
+  `Background work started by this task is still running and did not finish within the available time. ` +
+  `Produce the best final result for this task now in plain text, using bash_output to read any background output already produced. ` +
+  `Say explicitly which background work is still running and what evidence remains pending. ` +
+  `Do not start new shells or monitors, and do not delegate further.`
 const log = Log.create({ service: "task-tool" })
 
 const baseParameters = z.object({
@@ -100,6 +110,8 @@ type TaskMetadata = {
   model: { modelID: string; providerID: string }
   background?: boolean
   queueID?: TaskQueueID
+  /** Background work was still pending when the task finalized (ongoing). */
+  backgroundPending?: boolean
   emptyResult: boolean
   finalizeAttempted: boolean
   recoveredFromEmpty: boolean
@@ -478,6 +490,11 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       let finalizeAttempted = false
       let finalizeError: ReturnType<typeof errorDetails> | undefined
       let initialEmpty = false
+      // Whether background work needs a finalization turn (completed or still
+      // running). Distinct from `backgroundTimedOut`, which only records that
+      // the bounded wait actually expired.
+      let backgroundWorkPending = false
+      let backgroundTimedOut = false
       try {
         ensureNotAborted()
         ctx.metadata({
@@ -537,24 +554,35 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         // finalization. A finalize forced by finished background work is not
         // recovery from an empty response.
         initialEmpty = initialText.trim().length === 0 && TaskOutputSchema.fromResult(result) === undefined
-        const backgroundShellsPending =
-          !initialError && BackgroundShell.list(session.id).some((shell) => shell.status === "running")
-        if (backgroundShellsPending) {
-          await withTimeout(
-            BackgroundShell.waitForCompletion(session.id, { signal: ctx.abort }),
-            Math.max(1, SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt)),
-            `Subagent background work timed out after ${SUBAGENT_TIMEOUT_MS / 60_000} minutes`,
+        // Persistent shells (monitors) are expected to keep running; waiting
+        // for one would burn the whole task budget. A queued notification
+        // means work already finished, so it still deserves a final turn.
+        backgroundWorkPending =
+          !initialError &&
+          (BackgroundShell.list(session.id).some((shell) => shell.status === "running" && shell.persistent !== true) ||
+            BackgroundNotification.pendingCount(session.id) > 0)
+        if (backgroundWorkPending) {
+          // Spend the remaining original budget on the wait, but reserve the
+          // finalize window so the final prompt still has time to run.
+          const waitBudgetMs = Math.max(
+            0,
+            SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt) - SUBAGENT_FINALIZE_TIMEOUT_MS,
           )
+          const outcome = await BackgroundShell.waitForCompletion(session.id, {
+            signal: ctx.abort,
+            timeoutMs: waitBudgetMs,
+          })
           ensureNotAborted()
+          backgroundTimedOut = outcome === "timeout"
         }
         // A child that satisfied output_schema produced usable evidence even
         // with no prose, so the empty-result finalize retry must not run. The
         // background path still finalizes: its last turn only reported that
-        // the detached work had started.
-        if (backgroundShellsPending || (initialEmpty && !initialError)) {
+        // the detached work had started, or ended with work still running.
+        if (backgroundWorkPending || (initialEmpty && !initialError)) {
           finalizeAttempted = true
           const finalizeMessageID = MessageID.ascending()
-          const finalizeTimeoutMs = backgroundShellsPending
+          const finalizeTimeoutMs = backgroundWorkPending
             ? Math.min(SUBAGENT_FINALIZE_TIMEOUT_MS, Math.max(1, SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt)))
             : SUBAGENT_FINALIZE_TIMEOUT_MS
           try {
@@ -570,14 +598,18 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
                 agentRouting: "preserve",
                 isolation: constraints.isolation,
                 toolsScope: "turn",
-                tools: backgroundShellsPending
+                tools: backgroundWorkPending
                   ? { ...taskTools, bash: false, monitor: false, task: false, task_parallel: false }
                   : { ...taskTools, task: false },
                 format: structuredFormat,
                 parts: [
                   {
                     type: "text",
-                    text: backgroundShellsPending ? BACKGROUND_FINALIZE_INSTRUCTION : EMPTY_FINALIZE_INSTRUCTION,
+                    text: backgroundWorkPending
+                      ? backgroundTimedOut
+                        ? BACKGROUND_ONGOING_INSTRUCTION
+                        : BACKGROUND_FINALIZE_INSTRUCTION
+                      : EMPTY_FINALIZE_INSTRUCTION,
                   },
                 ],
               }),
@@ -736,6 +768,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
           finalizeAttempted,
           recoveredFromEmpty,
           recoveredResultNeedsReview,
+          ...(backgroundTimedOut ? { backgroundPending: true } : {}),
           subagentError: !!error || !!finalizeError,
           errorName: error?.name ?? finalizeError?.name,
           errorMessage: error ? assistantErrorMessage(error) : finalizeError?.message,

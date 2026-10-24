@@ -102,7 +102,7 @@ describe("BackgroundShell registry", () => {
     const finished = fakeProc()
     BackgroundShell.register({ sessionID, command: "noop", description: "finished", proc: finished })
     ;(finished as unknown as EventEmitter).emit("close")
-    await expect(BackgroundShell.waitForCompletion(sessionID)).resolves.toBeUndefined()
+    await expect(BackgroundShell.waitForCompletion(sessionID)).resolves.toBe("completed")
 
     // Abort rejects and releases the observer: the later close must not
     // re-settle the rejected wait or throw.
@@ -115,8 +115,39 @@ describe("BackgroundShell registry", () => {
     await expect(aborted).rejects.toMatchObject({ name: "AbortError" })
     ;(pending as unknown as EventEmitter).emit("close")
 
-    await expect(BackgroundShell.waitForCompletion(sessionID)).resolves.toBeUndefined()
-    await expect(BackgroundShell.waitForCompletion("ses_bg_wait_completion_none")).resolves.toBeUndefined()
+    await expect(BackgroundShell.waitForCompletion(sessionID)).resolves.toBe("completed")
+    await expect(BackgroundShell.waitForCompletion("ses_bg_wait_completion_none")).resolves.toBe("completed")
+  })
+
+  test("waitForCompletion ignores persistent shells and reports timeout", async () => {
+    const sessionID = "ses_bg_wait_persistent"
+    const persistentProc = fakeProc()
+    const persistent = BackgroundShell.register({
+      sessionID,
+      command: "tail -f log",
+      description: "persistent",
+      proc: persistentProc,
+    })
+    BackgroundShell.markPersistent(persistent.id, sessionID)
+    expect(BackgroundShell.get(persistent.id, sessionID)?.persistent).toBe(true)
+
+    // A persistent shell is expected to keep running, so it must not make the
+    // wait block; the wait resolves immediately with no completable work.
+    await expect(BackgroundShell.waitForCompletion(sessionID)).resolves.toBe("completed")
+    expect(BackgroundShell.get(persistent.id)?.status).toBe("running")
+
+    const runningProc = fakeProc()
+    BackgroundShell.register({ sessionID, command: "sleep 60", description: "running", proc: runningProc })
+
+    // A bounded wait reports timeout instead of hanging and releases its
+    // observers, so a later close cannot re-settle the returned result.
+    await expect(BackgroundShell.waitForCompletion(sessionID, { timeoutMs: 20 })).resolves.toBe("timeout")
+
+    const controller = new AbortController()
+    const aborted = BackgroundShell.waitForCompletion(sessionID, { signal: controller.signal })
+    controller.abort()
+    await expect(aborted).rejects.toMatchObject({ name: "AbortError" })
+    ;(runningProc as unknown as EventEmitter).emit("close")
   })
 
   test("multi-byte UTF-8 characters split across chunks are not corrupted", () => {

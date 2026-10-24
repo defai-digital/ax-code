@@ -52,6 +52,12 @@ export namespace BackgroundShell {
     /** Output integrity is independent of command exit status and remains sticky across reads. */
     outputStatus: BackgroundOutputSpool["integrity"]
     metadataTruncated: boolean
+    /**
+     * A persistent shell (persistent monitor) is expected to outlive the turn.
+     * Task finalization ignores it: it will never complete within the caller's
+     * budget, so waiting for its exit would only burn that budget.
+     */
+    persistent?: boolean
   }
 
   interface Entry extends Omit<Info, "outputStatus"> {
@@ -156,6 +162,7 @@ export namespace BackgroundShell {
       exitCode: null,
       startedAt: Date.now(),
       endedAt: null,
+      persistent: false,
       proc,
       spool: new BackgroundOutputSpool(),
       exited: false,
@@ -346,6 +353,7 @@ export namespace BackgroundShell {
       endedAt: entry.endedAt,
       outputStatus: entry.spool.integrity,
       metadataTruncated: entry.metadataTruncated,
+      persistent: entry.persistent,
     }
   }
 
@@ -354,6 +362,20 @@ export namespace BackgroundShell {
     const entry = shells.get(id)
     if (!entry) return undefined
     if (sessionID !== undefined && entry.sessionID !== sessionID) return undefined
+    return toInfo(entry)
+  }
+
+  /**
+   * Mark a shell as persistent (or clear the mark). Persistent shells are
+   * ignored by `waitForCompletion`: they run until the session ends or
+   * `kill_shell`, so waiting for their exit would consume the caller's whole
+   * budget without ever producing a completion signal.
+   */
+  export function markPersistent(id: string, sessionID: string, persistent = true): Info | undefined {
+    expireFinished()
+    const entry = shells.get(id)
+    if (!entry || entry.sessionID !== sessionID) return undefined
+    entry.persistent = persistent
     return toInfo(entry)
   }
 
@@ -415,25 +437,34 @@ export namespace BackgroundShell {
   }
 
   /**
-   * Resolve once every shell that belongs to `sessionID` and is running at
-   * call time has finished. A session with no running shell resolves
-   * immediately, and a shell that finishes between the snapshot and the
-   * observer attach is settled by observe's initial exit callback. The
-   * observers and the abort listener are always released on completion or
-   * abort.
+   * Resolve once every non-persistent shell that belongs to `sessionID` and is
+   * running at call time has finished. Persistent shells are ignored: they
+   * never complete within a caller's budget. A session with nothing to wait
+   * for resolves `"completed"` immediately, and a shell that finishes between
+   * the snapshot and the observer attach is settled by observe's initial exit
+   * callback. With `timeoutMs`, an unfinished wait resolves `"timeout"`
+   * instead of hanging. The observers, timer, and abort listener are always
+   * released on completion, timeout, or abort; abort still throws.
    */
-  export async function waitForCompletion(sessionID: string, opts: { signal?: AbortSignal } = {}): Promise<void> {
+  export async function waitForCompletion(
+    sessionID: string,
+    opts: { signal?: AbortSignal; timeoutMs?: number } = {},
+  ): Promise<"completed" | "timeout"> {
     if (opts.signal?.aborted) throw abortError()
-    const running = list(sessionID).filter((entry) => entry.status === "running")
-    if (running.length === 0) return
+    const running = list(sessionID).filter((entry) => entry.status === "running" && entry.persistent !== true)
+    if (running.length === 0) return "completed"
+    if (opts.timeoutMs !== undefined && opts.timeoutMs <= 0) return "timeout"
 
+    let timedOut = false
     await new Promise<void>((resolve, reject) => {
       let remaining = running.length
       let settled = false
+      let timer: ReturnType<typeof setTimeout> | undefined
       const unsubscribers: Array<() => void> = []
       const settle = (error?: Error) => {
         if (settled) return
         settled = true
+        if (timer !== undefined) clearTimeout(timer)
         opts.signal?.removeEventListener("abort", onAbort)
         for (const unsubscribe of unsubscribers) unsubscribe()
         if (error) reject(error)
@@ -441,6 +472,12 @@ export namespace BackgroundShell {
       }
       const onAbort = () => settle(abortError())
       opts.signal?.addEventListener("abort", onAbort, { once: true })
+      if (opts.timeoutMs !== undefined) {
+        timer = setTimeout(() => {
+          timedOut = true
+          settle()
+        }, opts.timeoutMs)
+      }
 
       for (const shell of running) {
         const unsubscribe = observe(shell.id, sessionID, {
@@ -464,6 +501,7 @@ export namespace BackgroundShell {
       if (!settled && remaining <= 0) settle()
     })
     if (opts.signal?.aborted) throw abortError()
+    return timedOut ? "timeout" : "completed"
   }
 
   /** Wait until this shell has unread output, exits, the timeout elapses, or abort fires. Then consume like read(). */

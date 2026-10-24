@@ -7,6 +7,8 @@ import { BackgroundNotification } from "../../src/session/background-notificatio
 import { SessionPrompt } from "../../src/session/prompt"
 import { MessageID, SessionID, TaskQueueID } from "../../src/session/schema"
 import { TaskTool } from "../../src/tool/task"
+import { MonitorTool } from "../../src/tool/monitor"
+import { BashTool } from "../../src/tool/bash"
 import { BackgroundShell } from "../../src/tool/bash-background"
 import { MessageV2 } from "../../src/session/message-v2"
 import { TaskQueue } from "../../src/session/task-queue"
@@ -1545,6 +1547,10 @@ describe("tool.task", () => {
           expect(promptCalls).toBe(2)
           expect(promptSpy).toHaveBeenCalledTimes(2)
           expect(result.output).toContain("completed shell evidence")
+          // The shell completed within budget, so this is finite background
+          // work, not an ongoing timeout. Only a real wait timeout may set
+          // backgroundPending.
+          expect((result.metadata as any).backgroundPending).not.toBe(true)
           await vi.waitFor(
             () => {
               expect(BackgroundNotification.pendingCount(childSessionID!)).toBeGreaterThan(0)
@@ -1732,6 +1738,421 @@ describe("tool.task", () => {
           closeShell()
           promptSpy.mockRestore()
           loopSpy.mockRestore()
+          BackgroundShell.resetForTests()
+        }
+      },
+    })
+  })
+
+  test("does not wait on a persistent monitor as background work", async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const fakeProc = new EventEmitter() as any
+        fakeProc.stdout = new EventEmitter()
+        fakeProc.stderr = new EventEmitter()
+        fakeProc.pid = undefined
+        fakeProc.exitCode = 0
+
+        let childSessionID: string | undefined
+        let promptSessionID: string | undefined
+        let shellID: string | undefined
+        let promptCalls = 0
+
+        // Real timers drive TaskTool.init and the first prompt. The prompt
+        // mock switches to fake timers only after it has registered the
+        // monitor shell and produced its answer, so the 10-minute advance
+        // controls the post-prompt wait instead of the prompt chain itself.
+        let resolveFirstPrompt!: () => void
+        const firstPromptSettled = new Promise<void>((resolve) => {
+          resolveFirstPrompt = resolve
+        })
+
+        // The real MonitorTool delegates its command to BashTool. Hand it a
+        // fake launcher that registers a still-running shell in the child
+        // session and reports that shell through the normal background
+        // metadata shape.
+        const bashInitSpy = vi.spyOn(BashTool, "init").mockImplementation((async () => ({
+          execute: async () => {
+            const info = BackgroundShell.register({
+              sessionID: promptSessionID!,
+              command: "tail -f app.log",
+              description: "persistent monitor",
+              proc: fakeProc,
+            })
+            return {
+              title: "persistent monitor",
+              metadata: { background: { shellID: info.id, pid: null } },
+              output: `Command running in background with shell ID: ${info.id}`,
+            }
+          },
+        })) as any)
+
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          promptCalls++
+          const sessionID = String(input.sessionID)
+          childSessionID = sessionID
+          promptSessionID = sessionID
+          const monitor = await MonitorTool.init()
+          const monitorResult = await monitor.execute(
+            { command: "tail -f app.log", description: "persistent monitor", persistent: true },
+            {
+              sessionID: input.sessionID,
+              messageID: input.messageID ?? MessageID.ascending(),
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+          shellID = String(monitorResult.metadata.shellID)
+          // The first prompt has produced its answer and registered the
+          // monitor. Flip to fake timers before returning so the task's
+          // post-prompt wait is the only thing the 10-minute advance drives.
+          vi.useFakeTimers()
+          resolveFirstPrompt()
+          return {
+            info: {
+              id: input.messageID ?? MessageID.ascending(),
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "persistent monitor answer" }],
+          } as any
+        }) as any)
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+
+        try {
+          const toolPromise = (await TaskTool.init()).execute(
+            {
+              description: "persistent monitor foreground",
+              prompt: "start a persistent monitor and report",
+              subagent_type: "general",
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          await firstPromptSettled
+          await vi.advanceTimersByTimeAsync(0)
+          expect(promptCalls).toBe(1)
+          expect(shellID).toBeTruthy()
+          expect(BackgroundShell.get(shellID!, childSessionID!)?.status).toBe("running")
+
+          // A persistent monitor is expected to outlive the turn. It must not
+          // consume the task's 10-minute budget or force a finalization.
+          await vi.advanceTimersByTimeAsync(10 * 60 * 1000 + 60_000)
+          const result = await toolPromise
+
+          expect(promptCalls).toBe(1)
+          expect(promptSpy).toHaveBeenCalledTimes(1)
+          expect(result.metadata.subagentError).toBe(false)
+          expect(result.output).toContain("persistent monitor answer")
+          expect(result.output).not.toContain("timed out")
+        } finally {
+          promptSpy.mockRestore()
+          cancelSpy.mockRestore()
+          bashInitSpy.mockRestore()
+          BackgroundShell.resetForTests()
+          vi.useRealTimers()
+        }
+      },
+    })
+  })
+
+  test("keeps backgroundPending for an ongoing nonpersistent shell instead of timing out", async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const fakeProc = new EventEmitter() as any
+        fakeProc.stdout = new EventEmitter()
+        fakeProc.stderr = new EventEmitter()
+        fakeProc.pid = undefined
+        fakeProc.exitCode = 0
+
+        let childSessionID: string | undefined
+        let shellID: string | undefined
+        let promptCalls = 0
+
+        // Real timers drive TaskTool.init and the first prompt. The prompt
+        // mock switches to fake timers only after it has registered the
+        // still-running shell and produced its answer.
+        let resolveFirstPrompt!: () => void
+        const firstPromptSettled = new Promise<void>((resolve) => {
+          resolveFirstPrompt = resolve
+        })
+
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          promptCalls++
+          if (promptCalls === 1) {
+            const sessionID = String(input.sessionID)
+            childSessionID = sessionID
+            const info = BackgroundShell.register({
+              sessionID,
+              command: "sleep 3600",
+              description: "ongoing shell",
+              proc: fakeProc,
+            })
+            shellID = info.id
+            vi.useFakeTimers()
+            resolveFirstPrompt()
+            return {
+              info: {
+                id: input.messageID ?? MessageID.ascending(),
+                sessionID: input.sessionID,
+                role: "assistant",
+                time: { created: Date.now(), completed: Date.now() },
+              },
+              parts: [{ type: "text", text: "started in background" }],
+            } as any
+          }
+          return {
+            info: {
+              id: input.messageID ?? MessageID.ascending(),
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "ongoing work remains" }],
+          } as any
+        }) as any)
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+
+        try {
+          const toolPromise = (await TaskTool.init()).execute(
+            {
+              description: "ongoing shell foreground",
+              prompt: "start a long-running shell and report",
+              subagent_type: "general",
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          await firstPromptSettled
+          await vi.advanceTimersByTimeAsync(0)
+          expect(promptCalls).toBe(1)
+          expect(shellID).toBeTruthy()
+          expect(BackgroundShell.get(shellID!, childSessionID!)?.status).toBe("running")
+
+          // The shell is still open. Past the ordinary budget the task must
+          // finalize with the ongoing state instead of surfacing a timeout.
+          await vi.advanceTimersByTimeAsync(10 * 60 * 1000 + 60_000)
+          const result = await toolPromise
+
+          expect(promptCalls).toBe(2)
+          expect(result.output).toContain("ongoing work remains")
+          expect((result.metadata as any).backgroundPending).toBe(true)
+          expect(result.metadata.subagentError).toBe(false)
+        } finally {
+          promptSpy.mockRestore()
+          cancelSpy.mockRestore()
+          BackgroundShell.resetForTests()
+          vi.useRealTimers()
+        }
+      },
+    })
+  })
+
+  test("finalizes an already-finished background notification instead of leaving ongoing work pending", async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const fakeProc = new EventEmitter() as any
+        fakeProc.stdout = new EventEmitter()
+        fakeProc.stderr = new EventEmitter()
+        fakeProc.pid = undefined
+        fakeProc.exitCode = 0
+
+        let childSessionID: string | undefined
+        let pendingAfterClose = 0
+        let promptCalls = 0
+
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          promptCalls++
+          if (promptCalls === 1) {
+            const sessionID = String(input.sessionID)
+            childSessionID = sessionID
+            BackgroundShell.register({
+              sessionID,
+              command: "echo finished",
+              description: "finished shell",
+              proc: fakeProc,
+            })
+            fakeProc.stdout.emit("data", Buffer.from("finished shell output\n"))
+            fakeProc.emit("close")
+            pendingAfterClose = BackgroundNotification.pendingCount(sessionID)
+            return {
+              info: {
+                id: input.messageID ?? MessageID.ascending(),
+                sessionID: input.sessionID,
+                role: "assistant",
+                time: { created: Date.now(), completed: Date.now() },
+              },
+              parts: [{ type: "text", text: "shell started and finished" }],
+            } as any
+          }
+          return {
+            info: {
+              id: input.messageID ?? MessageID.ascending(),
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "consumed finished notification" }],
+          } as any
+        }) as any)
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "finished notification foreground",
+              prompt: "run a short shell and report",
+              subagent_type: "general",
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          // No shell is running, but its exit notification is still queued.
+          expect(pendingAfterClose).toBeGreaterThan(0)
+          expect(promptCalls).toBe(2)
+          expect(promptSpy).toHaveBeenCalledTimes(2)
+          expect(result.output).toContain("consumed finished notification")
+          expect(result.metadata.subagentError).toBe(false)
+        } finally {
+          promptSpy.mockRestore()
+          cancelSpy.mockRestore()
           BackgroundShell.resetForTests()
         }
       },

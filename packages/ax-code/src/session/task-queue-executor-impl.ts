@@ -12,6 +12,7 @@ import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { BackgroundShell } from "../tool/bash-background"
 import { assistantError } from "../tool/task-errors"
+import { BackgroundNotification } from "./background-notification"
 import { MessageV2 } from "./message-v2"
 import { SessionPrompt } from "./prompt"
 import { SessionExecution } from "./execution"
@@ -956,6 +957,19 @@ const BACKGROUND_FINALIZE_PROMPT =
   `Do not start new shells or monitors, and do not delegate further. ` +
   `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
 
+// Sent when the background wait used its share of the execution budget. The
+// execution must still return a deliverable instead of timing out, and the
+// final turn must say explicitly that work is still running.
+const BACKGROUND_ONGOING_PROMPT =
+  `Background work started by this task is still running and did not finish within the available time. ` +
+  `Produce the best final result for this task now in plain text, using bash_output to read any background output already produced. ` +
+  `Say explicitly which background work is still running and what evidence remains pending. ` +
+  `Do not start new shells or monitors, and do not delegate further.`
+
+// Reserve part of the queue item's execution budget for the final turn so a
+// background wait cannot consume the whole deadline.
+const SUBAGENT_FINALIZE_RESERVE_MS = 2 * 60 * 1000
+
 function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
   if (!item.sessionID) return undefined
   const sessionID = item.sessionID
@@ -975,24 +989,45 @@ function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
         const body = promptBodyFromQueueItem(item)
         if (!body) throw new Error(`Subagent queue item ${item.id} has no executable prompt`)
         const next = await applyRestartContinuation(item, body)
+        const executionStartedAt = Date.now()
         const result = await SessionPrompt.prompt({ ...next, sessionID })
-        // A normal subagent returns on this path; only a child that left shell
-        // work running waits for it and issues the final turn. A turn that
+        // A normal subagent returns on this path; only a child that left
+        // non-persistent shell work pending waits for it and issues the final
+        // turn. Persistent shells (monitors) never finish on their own, and a
+        // queued notification still deserves that final turn. A turn that
         // already produced an assistant error is final: matching the
-        // foreground guard, pending shells must not defer or replace it.
-        const pendingShells =
-          !assistantError(result) && BackgroundShell.list(sessionID).some((shell) => shell.status === "running")
-        if (!pendingShells) {
+        // foreground guard, pending work must not defer or replace it.
+        const pending =
+          !assistantError(result) &&
+          (BackgroundShell.list(sessionID).some((shell) => shell.status === "running" && shell.persistent !== true) ||
+            BackgroundNotification.pendingCount(sessionID) > 0)
+        if (!pending) {
           if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
           return result
         }
-        await BackgroundShell.waitForCompletion(sessionID, { signal: controller.signal })
+        // Stay inside the item's existing execution budget, reserving a final
+        // turn window. No polling and no unbounded wait: after the window the
+        // run finalizes with an explicit ongoing result instead of failing.
+        const executionBudgetMs = item.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS
+        const waitBudgetMs = Math.max(
+          0,
+          executionBudgetMs - (Date.now() - executionStartedAt) - SUBAGENT_FINALIZE_RESERVE_MS,
+        )
+        const outcome = await BackgroundShell.waitForCompletion(sessionID, {
+          signal: controller.signal,
+          timeoutMs: waitBudgetMs,
+        })
         const final = await SessionPrompt.prompt({
           ...next,
           sessionID,
           toolsScope: "turn",
           tools: { ...next.tools, bash: false, monitor: false, task: false, task_parallel: false },
-          parts: [{ type: "text", text: BACKGROUND_FINALIZE_PROMPT }],
+          parts: [
+            {
+              type: "text",
+              text: outcome === "timeout" ? BACKGROUND_ONGOING_PROMPT : BACKGROUND_FINALIZE_PROMPT,
+            },
+          ],
         })
         // Only the final result is recorded for workflow usage; the interim
         // "work started" turn is not the child's deliverable.
