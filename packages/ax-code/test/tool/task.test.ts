@@ -1871,6 +1871,248 @@ describe("tool.task", () => {
     })
   })
 
+  test.each([
+    [true, false],
+    [false, false],
+    [true, true],
+    [false, true],
+  ])(
+    "nested background subagent delivers its evidence first (background: %s, immediate: %s)",
+    async (background, immediate) => {
+      await using tmp = await tmpdir({
+        git: true,
+        config: {
+          username: "test",
+          agent: {
+            orchestrator: {
+              description: "Orchestrates nested tasks",
+              mode: "subagent",
+              permission: { task: "allow" },
+            },
+          },
+        },
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({})
+          const user = await Session.updateMessage({
+            id: MessageID.ascending(),
+            sessionID: parent.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "build",
+            model: { providerID: "test" as any, modelID: "test-model" as any },
+            tools: {},
+            mode: "build",
+          } as any)
+          const assistant = await Session.updateMessage({
+            id: MessageID.ascending(),
+            parentID: user.id,
+            sessionID: parent.id,
+            role: "assistant",
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            modelID: "test-model",
+            providerID: "test",
+            time: { created: Date.now() },
+          } as MessageV2.Assistant)
+          const response = (input: any, text: string) =>
+            ({
+              info: {
+                id: input.messageID ?? MessageID.ascending(),
+                sessionID: input.sessionID,
+                role: "assistant",
+                time: { created: Date.now(), completed: Date.now() },
+              },
+              parts: [{ type: "text", text }],
+            }) as any
+          const handoffText = async (sessionID: SessionID) => {
+            const messages = await Session.messages({ sessionID })
+            return messages
+              .flatMap((message) => message.parts)
+              .filter((part) => part.type === "text" && part.metadata?.["source"] === "background_subagent_handoff")
+              .map((part) => (part as MessageV2.TextPart).text)
+              .join("\n")
+          }
+
+          let childSessionID: SessionID | undefined
+          let grandchildSessionID: SessionID | undefined
+          let childQueueID: TaskQueueID | undefined
+          let grandchildQueueID: TaskQueueID | undefined
+          let grandchildStarted = false
+          let childPromptCalls = 0
+          let releaseGrandchild!: () => void
+          const grandchildCompletion = new Promise<void>((resolve) => {
+            releaseGrandchild = resolve
+          })
+          const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+            const sessionID = input.sessionID as SessionID
+            if (sessionID === childSessionID) {
+              childPromptCalls++
+              return response(input, `child final: ${await handoffText(sessionID)}`)
+            }
+            if (childSessionID) {
+              grandchildStarted = true
+              await grandchildCompletion
+              return response(input, "grandchild evidence")
+            }
+
+            childSessionID = sessionID
+            childPromptCalls++
+            const childUser = await Session.updateMessage({
+              id: MessageID.ascending(),
+              sessionID,
+              role: "user",
+              time: { created: Date.now() },
+              agent: "orchestrator",
+              model: { providerID: "test" as any, modelID: "test-model" as any },
+              tools: {},
+              mode: "build",
+            } as any)
+            const childAssistant = await Session.updateMessage({
+              id: MessageID.ascending(),
+              parentID: childUser.id,
+              sessionID,
+              role: "assistant",
+              mode: "build",
+              agent: "orchestrator",
+              path: { cwd: tmp.path, root: tmp.path },
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+              modelID: "test-model",
+              providerID: "test",
+              time: { created: Date.now() },
+            } as MessageV2.Assistant)
+            const nested = await (
+              await TaskTool.init()
+            ).execute(
+              {
+                description: "nested background evidence",
+                prompt: "produce delayed evidence",
+                subagent_type: "orchestrator",
+                background: true,
+              },
+              {
+                sessionID,
+                messageID: childAssistant.id,
+                callID: "nested-background-call",
+                agent: "orchestrator",
+                abort: AbortSignal.any([]),
+                messages: [],
+                metadata: () => {},
+                ask: async () => {},
+                extra: {},
+              } as any,
+            )
+            grandchildSessionID = nested.metadata.sessionId
+            grandchildQueueID = nested.metadata.queueID
+            if (immediate) {
+              releaseGrandchild()
+              await vi.waitFor(
+                async () => {
+                  expect(await handoffText(sessionID)).toContain("grandchild evidence")
+                },
+                { timeout: 2_000, interval: 25 },
+              )
+            }
+            return response(input, "interim child answer")
+          }) as any)
+          const loopSpy = vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+
+          const settle = async (id: TaskQueueID | undefined) => {
+            if (!id) return
+            await vi.waitFor(
+              async () => {
+                const item = await TaskQueue.get(id)
+                expect(["completed", "failed", "cancelled"]).toContain(item.status)
+                expect(item.payload["deliveryStatus"]).toBe("delivered")
+              },
+              { timeout: 2_000, interval: 25 },
+            )
+          }
+
+          try {
+            const execution = (await TaskTool.init()).execute(
+              {
+                description: "parent background evidence",
+                prompt: "delegate and collect the result",
+                subagent_type: "orchestrator",
+                background,
+              },
+              {
+                sessionID: parent.id,
+                messageID: assistant.id,
+                callID: "parent-background-call",
+                agent: "build",
+                abort: AbortSignal.any([]),
+                messages: [],
+                metadata: () => {},
+                ask: async () => {},
+                extra: {},
+              } as any,
+            )
+            let rootSettled = false
+            void execution.then(
+              () => {
+                rootSettled = true
+              },
+              () => {
+                rootSettled = true
+              },
+            )
+            if (background) childQueueID = (await execution).metadata.queueID
+
+            await vi.waitFor(
+              () => {
+                expect(grandchildSessionID).toBeTruthy()
+                expect(grandchildStarted).toBe(true)
+              },
+              { timeout: 2_000, interval: 25 },
+            )
+            await new Promise((resolve) => setTimeout(resolve, 100))
+            if (!immediate) {
+              expect(await handoffText(parent.id)).toBe("")
+              if (background) expect((await TaskQueue.get(childQueueID!)).status).toBe("running")
+              else expect(rootSettled).toBe(false)
+              expect(childPromptCalls).toBe(1)
+            }
+
+            releaseGrandchild()
+            const finalText = background
+              ? await vi.waitFor(
+                  async () => {
+                    const text = await handoffText(parent.id)
+                    expect(text).toContain("child final:")
+                    return text
+                  },
+                  { timeout: 2_000, interval: 25 },
+                )
+              : (await execution).output
+            expect(finalText).toContain("grandchild evidence")
+            expect(childPromptCalls).toBe(2)
+            if (!immediate) {
+              expect(loopSpy.mock.calls.some(([input]) => input.sessionID === childSessionID)).toBe(false)
+            }
+          } finally {
+            releaseGrandchild()
+            await settle(grandchildQueueID)
+            await settle(childQueueID)
+            promptSpy.mockRestore()
+            loopSpy.mockRestore()
+          }
+        },
+      })
+    },
+  )
+
   test("does not wait on a persistent monitor as background work", async () => {
     await using tmp = await tmpdir({ git: true, config: { username: "test" } })
 

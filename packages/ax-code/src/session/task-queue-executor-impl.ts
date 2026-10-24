@@ -952,8 +952,8 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
 }
 
 const BACKGROUND_FINALIZE_PROMPT =
-  `Background shell work started by this task has finished. ` +
-  `Produce the final result for this task now in plain text, using bash_output to read any background output you have not consumed. ` +
+  `Background work started by this task has finished. ` +
+  `Produce the final result for this task now in plain text, using bash_output to read any background shell output you have not consumed and including the evidence from any background tasks that completed. ` +
   `Do not start new shells or monitors, and do not delegate further. ` +
   `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
 
@@ -963,7 +963,7 @@ const BACKGROUND_FINALIZE_PROMPT =
 const BACKGROUND_ONGOING_PROMPT =
   `Background work started by this task is still running and did not finish within the available time. ` +
   `Produce the best final result for this task now in plain text, using bash_output to read any background output already produced. ` +
-  `Say explicitly which background work is still running and what evidence remains pending. ` +
+  `Say explicitly which background work (shells or tasks) is still running and what evidence remains pending. ` +
   `Do not start new shells or monitors, and do not delegate further.`
 
 // Reserve part of the queue item's execution budget for the final turn so a
@@ -973,10 +973,10 @@ const SUBAGENT_FINALIZE_RESERVE_MS = 2 * 60 * 1000
 function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
   if (!item.sessionID) return undefined
   const sessionID = item.sessionID
-  // One controller per execution: the watchdog's cancel() aborts a pending
-  // background-shell wait as well as the child session prompt. The wait and
-  // the follow-up prompt stay inside the same execution watchdog, so no
-  // additional timeout layer is introduced.
+  // One controller per execution: the watchdog's cancel() aborts pending
+  // background-shell and nested-subagent waits as well as the child session
+  // prompt. The waits and the follow-up prompt stay inside the same execution
+  // watchdog, so no additional timeout layer is introduced.
   const controller = new AbortController()
   return {
     sessionID,
@@ -992,33 +992,48 @@ function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
         const executionStartedAt = Date.now()
         const result = await SessionPrompt.prompt({ ...next, sessionID })
         // A normal subagent returns on this path; only a child that left
-        // non-persistent shell work pending waits for it and issues the final
-        // turn. Persistent shells (monitors) never finish on their own, and a
-        // queued completion notification still deserves that final turn.
-        // Monitor lines are progress, not completion, and must not count as
-        // pending work. A turn that already produced an assistant error is
-        // final: matching the foreground guard, pending work must not defer or
-        // replace it.
-        const pending =
-          !assistantError(result) &&
-          (BackgroundShell.list(sessionID).some((shell) => shell.status === "running" && shell.persistent !== true) ||
-            BackgroundNotification.pendingCompletionCount(sessionID) > 0)
-        if (!pending) {
+        // non-persistent shell work or background task subagents unsettled
+        // waits for them and issues the final turn. Persistent shells
+        // (monitors) never finish on their own, and a queued completion
+        // notification still deserves that final turn. Monitor lines are
+        // progress, not completion, and must not count as pending work. A turn
+        // that already produced an assistant error is final: matching the
+        // foreground guard, pending work must not defer or replace it.
+        const shellPending =
+          BackgroundShell.list(sessionID).some((shell) => shell.status === "running" && shell.persistent !== true) ||
+          BackgroundNotification.pendingCompletionCount(sessionID) > 0
+        const { nestedSubagentWork, waitForNestedSubagentResults } = await import("./background-subagent-delivery")
+        // A nested delivery that landed during this execution still needs a
+        // synthesis turn even though there is nothing left to wait for; rows
+        // delivered before this execution were already synthesized.
+        const nested = assistantError(result)
+          ? { pending: false, settled: false }
+          : await nestedSubagentWork({ sessionID, since: executionStartedAt })
+        if (assistantError(result) || (!shellPending && !nested.pending && !nested.settled)) {
           if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
           return result
         }
         // Stay inside the item's existing execution budget, reserving a final
-        // turn window. No polling and no unbounded wait: after the window the
-        // run finalizes with an explicit ongoing result instead of failing.
+        // turn window. Both waits are bounded by that window: after it the run
+        // finalizes with an explicit ongoing result instead of failing.
         const executionBudgetMs = item.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS
-        const waitBudgetMs = Math.max(
-          0,
-          executionBudgetMs - (Date.now() - executionStartedAt) - SUBAGENT_FINALIZE_RESERVE_MS,
-        )
-        const outcome = await BackgroundShell.waitForCompletion(sessionID, {
-          signal: controller.signal,
-          timeoutMs: waitBudgetMs,
-        })
+        const waitEndsAt =
+          Date.now() + Math.max(0, executionBudgetMs - (Date.now() - executionStartedAt) - SUBAGENT_FINALIZE_RESERVE_MS)
+        let outcome: "completed" | "timeout" = "completed"
+        if (shellPending) {
+          outcome = await BackgroundShell.waitForCompletion(sessionID, {
+            signal: controller.signal,
+            timeoutMs: Math.max(0, waitEndsAt - Date.now()),
+          })
+        }
+        if (nested.pending) {
+          const waited = await waitForNestedSubagentResults({
+            sessionID,
+            signal: controller.signal,
+            timeoutMs: Math.max(0, waitEndsAt - Date.now()),
+          })
+          if (waited === "timeout") outcome = "timeout"
+        }
         const final = await SessionPrompt.prompt({
           ...next,
           sessionID,

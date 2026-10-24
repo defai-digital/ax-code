@@ -19,6 +19,11 @@ import { SessionID, MessageID, type TaskQueueID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { MessageV2 } from "../session/message-v2"
 import { needsRecoveredResultReview } from "../session/background-subagent-handoff"
+import {
+  beginNestedResultCollection,
+  nestedSubagentWork,
+  waitForNestedSubagentResults,
+} from "../session/background-subagent-delivery"
 import { agentModel } from "../session/prompt/prompt-command-selection"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
@@ -57,11 +62,12 @@ const EMPTY_FINALIZE_INSTRUCTION =
   `Do not call more tools unless absolutely required. ` +
   `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
 
-// Sent after the child's background shells finish: the final turn must fold
-// their evidence in without launching more detached work.
+// Sent after the child's background shells and background subagent tasks
+// finish: the final turn must fold their evidence in without launching more
+// detached work.
 const BACKGROUND_FINALIZE_INSTRUCTION =
-  `Background shell work started by this task has finished. ` +
-  `Produce the final result for this task now in plain text, using bash_output to read any background output you have not consumed. ` +
+  `Background work started by this task has finished. ` +
+  `Produce the final result for this task now in plain text, using bash_output to read any background shell output you have not consumed and including the evidence from any background tasks that completed. ` +
   `Do not start new shells or monitors, and do not delegate further. ` +
   `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
 
@@ -71,7 +77,7 @@ const BACKGROUND_FINALIZE_INSTRUCTION =
 const BACKGROUND_ONGOING_INSTRUCTION =
   `Background work started by this task is still running and did not finish within the available time. ` +
   `Produce the best final result for this task now in plain text, using bash_output to read any background output already produced. ` +
-  `Say explicitly which background work is still running and what evidence remains pending. ` +
+  `Say explicitly which background work (shells or tasks) is still running and what evidence remains pending. ` +
   `Do not start new shells or monitors, and do not delegate further.`
 const log = Log.create({ service: "task-tool" })
 
@@ -525,7 +531,8 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         }
 
         // The original 10-minute prompt budget covers both the background
-        // shell wait and the finalization prompt that follows it.
+        // waits (shells and nested subagent deliveries) and the finalization
+        // prompt that follows them.
         const promptStartedAt = Date.now()
         result = await withTimeout(
           SessionPrompt.prompt({
@@ -559,23 +566,47 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         // notification means work already finished, so it still deserves a
         // final turn. Monitor lines are progress, not completion, and must not
         // force that final turn.
-        backgroundWorkPending =
-          !initialError &&
-          (BackgroundShell.list(session.id).some((shell) => shell.status === "running" && shell.persistent !== true) ||
-            BackgroundNotification.pendingCompletionCount(session.id) > 0)
+        const shellWorkPending =
+          BackgroundShell.list(session.id).some((shell) => shell.status === "running" && shell.persistent !== true) ||
+          BackgroundNotification.pendingCompletionCount(session.id) > 0
+        // A direct background subagent delivers its evidence as a handoff into
+        // this session. Both the queued executor and this direct path must
+        // wait for unsettled deliveries, and a delivery that landed during
+        // this turn still needs a synthesis turn, or the task's answer would
+        // omit the work it just delegated. Rows delivered before this turn
+        // were already synthesized and must not finalize it again.
+        const nestedWork = initialError
+          ? { pending: false, settled: false }
+          : await nestedSubagentWork({ sessionID: session.id, since: promptStartedAt })
+        // While this task is collecting nested results, a handoff delivery
+        // must not wake the session with a loop that races this finalization.
+        using _nestedCollection =
+          nestedWork.pending || nestedWork.settled ? beginNestedResultCollection(session.id) : undefined
+        backgroundWorkPending = !initialError && (shellWorkPending || nestedWork.pending || nestedWork.settled)
         if (backgroundWorkPending) {
           // Spend the remaining original budget on the wait, but reserve the
           // finalize window so the final prompt still has time to run.
-          const waitBudgetMs = Math.max(
-            0,
-            SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt) - SUBAGENT_FINALIZE_TIMEOUT_MS,
-          )
-          const outcome = await BackgroundShell.waitForCompletion(session.id, {
-            signal: ctx.abort,
-            timeoutMs: waitBudgetMs,
-          })
+          const waitEndsAt =
+            Date.now() +
+            Math.max(0, SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt) - SUBAGENT_FINALIZE_TIMEOUT_MS)
+          let timedOut = false
+          if (shellWorkPending) {
+            const outcome = await BackgroundShell.waitForCompletion(session.id, {
+              signal: ctx.abort,
+              timeoutMs: Math.max(0, waitEndsAt - Date.now()),
+            })
+            timedOut = outcome === "timeout"
+          }
+          if (nestedWork.pending) {
+            const outcome = await waitForNestedSubagentResults({
+              sessionID: session.id,
+              signal: ctx.abort,
+              timeoutMs: Math.max(0, waitEndsAt - Date.now()),
+            })
+            if (outcome === "timeout") timedOut = true
+          }
           ensureNotAborted()
-          backgroundTimedOut = outcome === "timeout"
+          backgroundTimedOut = timedOut
         }
         // A child that satisfied output_schema produced usable evidence even
         // with no prose, so the empty-result finalize retry must not run. The

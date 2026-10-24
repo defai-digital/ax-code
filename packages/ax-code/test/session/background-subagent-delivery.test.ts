@@ -4,7 +4,9 @@ import { Session } from "../../src/session"
 import {
   BackgroundSubagentDeliveryInternals,
   deliverBackgroundSubagentHandoff,
+  nestedSubagentWork,
   recoverBackgroundSubagentHandoffs,
+  waitForNestedSubagentResults,
 } from "../../src/session/background-subagent-delivery"
 import { SessionCompaction } from "../../src/session/compaction"
 import { MessageV2 } from "../../src/session/message-v2"
@@ -117,6 +119,114 @@ describe("background subagent result delivery", () => {
           await TaskQueue.completeResultDelivery({ id: task.item.id, claim })
         }
         expect((await TaskQueue.get(task.item.id)).payload["deliveryStatus"]).toBe("delivered")
+      },
+    })
+  })
+
+  test("preserves root wake when the parent has unrelated active queue work", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const task = await createCompletedBackgroundTask(parent.id, tmp.path, "root result")
+        const unrelated = await TaskQueue.enqueue({
+          sessionID: parent.id,
+          kind: "prompt",
+          title: "unrelated active prompt",
+          payload: {},
+        })
+        await TaskQueue.setStatus({ id: unrelated.id, status: "running" })
+        const loop = vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+
+        await deliverBackgroundSubagentHandoff(task)
+
+        await vi.waitFor(() => {
+          expect(loop).toHaveBeenCalledWith({ sessionID: parent.id })
+        })
+      },
+    })
+  })
+
+  test("a result consumed by waitfor does not require another synthesis turn", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const task = await createCompletedBackgroundTask(parent.id, tmp.path, "consumed result")
+        const claim = {
+          owner: "waitfor" as const,
+          sessionID: parent.id,
+          messageID: MessageID.ascending(),
+          callID: "call_waitfor_consumed",
+          time: Date.now(),
+        }
+        await TaskQueue.claimResultDelivery({ id: task.item.id, claim })
+        await TaskQueue.completeResultDelivery({ id: task.item.id, claim })
+
+        const work = await nestedSubagentWork({ sessionID: parent.id, since: Date.now() - 1000 })
+        expect(work).toEqual({ pending: false, settled: false })
+      },
+    })
+  })
+
+  test("finds a current child result beyond unrelated queue history", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const task = await createCompletedBackgroundTask(parent.id, tmp.path, "current child result")
+        const since = Date.now() - 1000
+        expect(await nestedSubagentWork({ sessionID: parent.id, since })).toEqual({ pending: true, settled: true })
+        vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+        await deliverBackgroundSubagentHandoff(task)
+
+        for (let index = 0; index < 201; index++) {
+          const unrelated = await TaskQueue.enqueue({
+            sessionID: parent.id,
+            kind: "prompt",
+            title: `unrelated prompt ${index}`,
+            payload: {},
+          })
+          await TaskQueue.setStatus({ id: unrelated.id, status: "completed" })
+        }
+
+        const work = await nestedSubagentWork({ sessionID: parent.id, since })
+        expect(work).toEqual({ pending: false, settled: true })
+      },
+    })
+  })
+
+  test("bounds and aborts a nested result wait", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const child = await Session.create({ parentID: parent.id })
+        await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "pending nested task",
+          payload: { source: "task", deliveryStatus: "pending", parentSessionID: parent.id },
+        })
+
+        await expect(waitForNestedSubagentResults({ sessionID: parent.id, timeoutMs: 1 })).resolves.toBe("timeout")
+        const controller = new AbortController()
+        const waiting = waitForNestedSubagentResults({
+          sessionID: parent.id,
+          timeoutMs: 10_000,
+          signal: controller.signal,
+        })
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        controller.abort()
+        await expect(waiting).rejects.toMatchObject({ name: "AbortError" })
       },
     })
   })
