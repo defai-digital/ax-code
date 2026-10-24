@@ -6,7 +6,10 @@ import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { SessionShard } from "../../src/session/shard"
+import { MessageTable, PartTable } from "../../src/session/session.sql"
 import { SessionPrompt } from "../../src/session/prompt"
+import { Database, eq } from "../../src/storage/db"
 import { Filesystem } from "../../src/util/filesystem"
 import { readSessionTransferFile } from "../../src/cli/cmd/storage/import"
 import { buildTransfer, writeTransfer } from "../../src/cli/cmd/storage/transfer"
@@ -183,5 +186,103 @@ describe("storage transfer", () => {
         await Session.remove(session.id)
       },
     })
+  })
+
+  test("imports a transfer into the active session shard and rolls back a corrupt one", async () => {
+    const previousShardSessions = process.env.AX_CODE_SHARD_SESSIONS
+    process.env.AX_CODE_SHARD_SESSIONS = "1"
+    try {
+      await using tmp = await tmpdir({
+        git: true,
+        config: {
+          // This host cannot resolve os.userInfo() (uv_os_get_passwd ENOENT);
+          // an explicit username short-circuits config-impl.ts's fallback.
+          username: "test",
+          agent: {
+            build: {
+              model: "openai/gpt-5.4",
+            },
+          },
+        },
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const text = "import this transcript into the active shard"
+          const session = await Session.create({})
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            noReply: true,
+            model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
+            parts: [{ type: "text", text }],
+          })
+
+          const info = await Session.get(session.id)
+          const messages = await Session.messages({ sessionID: session.id })
+          const data = buildTransfer({
+            info,
+            messages: messages.map((msg) => ({
+              info: msg.info,
+              parts: msg.parts,
+            })),
+            events: [],
+          })
+
+          await Session.remove(session.id)
+          writeTransfer(data)
+
+          // Reads route through the active shard, so an import that only writes
+          // the registry silently disappears from the visible transcript.
+          const imported = await Session.messages({ sessionID: session.id })
+          expect(imported.flatMap((msg) => msg.parts).find((part) => part.type === "text")?.text).toBe(text)
+
+          const projectID = Instance.project.id
+          const shardMessages = SessionShard.storeForProject(projectID).use((db) =>
+            db.select().from(MessageTable).where(eq(MessageTable.session_id, session.id)).all(),
+          )
+          const shardParts = SessionShard.storeForProject(projectID).use((db) =>
+            db.select().from(PartTable).where(eq(PartTable.session_id, session.id)).all(),
+          )
+          expect(shardMessages.length).toBeGreaterThan(0)
+          expect(shardParts.length).toBeGreaterThan(0)
+
+          const registryMessages = Database.use((db) =>
+            db.select().from(MessageTable).where(eq(MessageTable.session_id, session.id)).all(),
+          )
+          const registryParts = Database.use((db) =>
+            db.select().from(PartTable).where(eq(PartTable.session_id, session.id)).all(),
+          )
+          expect(registryMessages).toHaveLength(0)
+          expect(registryParts).toHaveLength(0)
+
+          await Session.remove(session.id)
+
+          // A corrupt part must abort the whole import: the session metadata
+          // inserted earlier in the same transaction has to roll back, and the
+          // shard must not keep a half-imported message.
+          const textPart = data.messages[0]?.parts.find((part) => part.type === "text")
+          if (!textPart) throw new Error("expected transfer text part")
+          Object.assign(textPart, { type: "corrupted-text" })
+
+          expect(() => writeTransfer(data)).toThrow()
+          await expect(Session.get(session.id)).rejects.toThrow()
+
+          const leftoverMessages = SessionShard.storeForProject(projectID).use((db) =>
+            db.select().from(MessageTable).where(eq(MessageTable.session_id, session.id)).all(),
+          )
+          const leftoverParts = SessionShard.storeForProject(projectID).use((db) =>
+            db.select().from(PartTable).where(eq(PartTable.session_id, session.id)).all(),
+          )
+          expect(leftoverMessages).toHaveLength(0)
+          expect(leftoverParts).toHaveLength(0)
+        },
+      })
+    } finally {
+      if (previousShardSessions === undefined) delete process.env.AX_CODE_SHARD_SESSIONS
+      else process.env.AX_CODE_SHARD_SESSIONS = previousShardSessions
+    }
   })
 })
