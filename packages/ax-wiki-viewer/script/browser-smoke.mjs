@@ -277,7 +277,7 @@ try {
   await page.keyboard.press("Escape")
   assert.equal(await page.evaluate(() => document.activeElement?.tagName), "INPUT")
   await page.locator(".legend details.key summary").click()
-  assert.match(await page.locator(".legend").innerText(), /size = visible connections/)
+  assert.match(await page.locator(".legend").innerText(), /Force size = admitted connections/)
   await page.getByRole("searchbox").fill("Arch")
   assert.equal(await page.locator(".notice").isHidden(), false)
   assert.match(await page.locator(".notice").innerText(), /single node/)
@@ -672,8 +672,18 @@ try {
       rejected = true
     }
     const preserved = document.querySelectorAll("#one .list .node-label").length === graph.nodes.length
+    first.focus(graph.nodes.find((node) => node.kind === "page").id)
+    const one = document.getElementById("one")
+    const relationship = one.querySelector('[aria-label="Relationships"]')
+    relationship.value = "citations"
+    relationship.dispatchEvent(new Event("change"))
+    ;[...one.querySelectorAll("button")].find((button) => button.textContent === "Explore selected").click()
     first.update({ ...graph, snapshot: "new", nodes: [], edges: [] })
     const empty = document.querySelector("#one .detail").textContent.includes("No matching")
+    const explorationReset =
+      relationship.value === "all" &&
+      one.querySelector(".scope-status").textContent.startsWith("Global snapshot") &&
+      [...one.querySelectorAll("button")].find((button) => button.textContent === "Back").disabled
     first.dispose()
     first.dispose()
     let disposed = false
@@ -684,7 +694,15 @@ try {
     }
     const isolated = document.querySelectorAll("#two .list .node-label").length === graph.nodes.length
     second.dispose()
-    return { rejected, preserved, empty, disposed, isolated, cleaned: document.querySelectorAll(".axwv").length === 0 }
+    return {
+      rejected,
+      preserved,
+      empty,
+      explorationReset,
+      disposed,
+      isolated,
+      cleaned: document.querySelectorAll(".axwv").length === 0,
+    }
   }, graph)
   // Auto-tour: opt-in, counts down to the next view, pauses on activity, and announces once.
   const tourPage = await browser.newPage({ viewport: { width: 1280, height: 900 } })
@@ -740,6 +758,7 @@ try {
     rejected: true,
     preserved: true,
     empty: true,
+    explorationReset: true,
     disposed: true,
     isolated: true,
     cleaned: true,
@@ -754,13 +773,18 @@ try {
       codeRelationships: "unavailable",
       nodes: [
         { id: "page:g.md", kind: "page", label: "G", path: "g.md", freshness: "unknown", recordedReferences: 5 },
-        { id: "source:s.ts", kind: "source", label: "s.ts", path: "s.ts", freshness: "unknown", recordedReferences: 1 },
+        { id: "source:s.ts", kind: "source", label: "s.ts", path: "s.ts", freshness: "unknown", recordedReferences: 3 },
+        { id: "source:t.ts", kind: "source", label: "t.ts", path: "t.ts", freshness: "unknown", recordedReferences: 0 },
       ],
-      edges: [{ from: "page:g.md", to: "source:s.ts", kind: "references-source", freshness: "unknown" }],
+      edges: [
+        { from: "page:g.md", to: "source:s.ts", kind: "references-source", freshness: "unknown" },
+        { from: "source:s.ts", to: "source:t.ts", kind: "uses", freshness: "unknown" },
+      ],
       omitted: { nodes: 4, edges: 4 },
     })
     const found = {
       count: host.querySelectorAll(".badge").length,
+      sourceLabel: host.querySelector('[data-id="source:s.ts"] .badge text')?.textContent,
       label: host.querySelector(".badge text")?.textContent,
       note: host.querySelector(".badge title")?.textContent,
     }
@@ -768,7 +792,12 @@ try {
     host.remove()
     return found
   })
-  assert.deepEqual(badges, { count: 1, label: "+4", note: "+4 recorded references not in this snapshot" })
+  assert.deepEqual(badges, {
+    count: 2,
+    sourceLabel: "+2",
+    label: "+4",
+    note: "+4 recorded references not in this snapshot",
+  })
   const stale = await api.evaluate(() => {
     const host = document.createElement("main")
     document.body.appendChild(host)
@@ -948,6 +977,15 @@ try {
       ]),
     },
   )
+  // Explicit directory grouping keeps this small fixture useful for module presentation tests.
+  workspaceGraph.modules = {
+    rule: "Cited files grouped by directory",
+    groups: [
+      { path: "src", files: 2 },
+      { path: "lib", files: 1 },
+    ],
+    dependencies: [{ from: "src", to: "lib", imports: 1 }],
+  }
   const workspaceFile = path.join(dir, "workspace.html")
   await writeFile(workspaceFile, renderWikiGraphHtml(workspaceGraph).html)
   const work = await browser.newPage({ viewport: { width: 1280, height: 900 } })
@@ -1012,8 +1050,128 @@ try {
   await work.getByRole("tab", { name: "Modules" }).click()
   assert.match(await work.locator(".modules").innerText(), /Module dependencies/i)
   assert.ok((await work.locator(".modules .row-label").count()) >= 2)
+  // Diagram and matrix inspect the same aggregate evidence, independently of the capped map.
+  await work.getByRole("button", { name: "Diagram", exact: true }).click()
+  assert.equal(await work.locator(".dependency-diagram").isVisible(), true)
+  await work.locator(".module-link").first().focus()
+  await work.keyboard.press("Enter")
+  assert.match(
+    await work.locator(".module-evidence").innerText(),
+    /1 recorded imports[\s\S]*1 file-pair edges admitted/,
+  )
+  await work.getByRole("button", { name: "Matrix", exact: true }).click()
+  assert.equal(await work.locator(".dependency-diagram").isVisible(), false)
+  assert.match(await work.locator(".module-evidence").innerText(), /src\/a.ts → lib\/c.ts/)
+
+  // Local exploration keeps the world positions, while Back restores scope and camera.
+  await work.getByRole("tab", { name: "Evidence map" }).click()
+  await work.getByRole("button", { name: "Show all / reset", exact: true }).click()
+  await work.locator(".list .node-label").filter({ hasText: "page: Quickstart" }).click()
+  assert.match(await work.locator(".detail").innerText(), /1 files placed here; 2 admitted citations; 1 shared sources/)
+  const mapSvg = work.locator(".canvas svg[role=img]")
+  const globalCamera = await mapSvg.getAttribute("viewBox")
+  const transforms = () =>
+    work.locator("svg g.node").evaluateAll((nodes) => nodes.map((n) => [n.dataset.id, n.getAttribute("transform")]))
+  const beforeScope = await transforms()
+  await work.getByRole("button", { name: "Explore selected", exact: true }).click()
+  assert.match(await work.locator(".scope-status").innerText(), /Local: Quickstart.*1 hop.*3 nodes/)
+  const visibleNodes = () =>
+    work.locator("svg g.node").evaluateAll((nodes) => nodes.filter((n) => n.getAttribute("display") !== "none").length)
+  assert.equal(await visibleNodes(), 3)
+  assert.match(await work.locator(".counts").innerText(), /^3 of 5 nodes/)
+  assert.deepEqual(await transforms(), beforeScope)
+  await work.getByLabel("Depth", { exact: true }).selectOption("2")
+  assert.equal(await visibleNodes(), 4)
+  await work.getByRole("button", { name: "Back", exact: true }).click()
+  assert.equal(await visibleNodes(), 3)
+  await work.getByRole("button", { name: "Back", exact: true }).click()
+  assert.equal(await visibleNodes(), 5)
+  assert.equal(await mapSvg.getAttribute("viewBox"), globalCamera)
+  await work.getByRole("button", { name: "Zoom to selected", exact: true }).click()
+  assert.notEqual(await mapSvg.getAttribute("viewBox"), globalCamera)
+  await work.getByRole("button", { name: "Back", exact: true }).click()
+  assert.equal(await mapSvg.getAttribute("viewBox"), globalCamera)
+  await work.getByRole("button", { name: "Zoom in", exact: true }).click()
+  const zoomedTreemap = await mapSvg.getAttribute("viewBox")
+  await work.getByRole("button", { name: "Radial", exact: true }).click()
+  assert.ok((await work.locator("path[data-page]").count()) > 0)
+  await work.getByRole("button", { name: /^Cross-links/ }).click()
+  assert.match(await work.locator(".scope-status").innerText(), /cross-links hidden by display choice/)
+  await work.getByRole("button", { name: "Treemap", exact: true }).click()
+  assert.equal(await mapSvg.getAttribute("viewBox"), zoomedTreemap)
+  await work.getByRole("button", { name: "Force", exact: true }).click()
+  // Use reduced motion in a separate context below; this animated simulation is bounded.
+  await work.waitForTimeout(3500)
+  const savedForce = await transforms()
+  await work.getByRole("button", { name: "Radial", exact: true }).click()
+  await work.getByRole("button", { name: "Force", exact: true }).click()
+  assert.deepEqual(await transforms(), savedForce)
+  await work.getByRole("button", { name: "Show all / reset", exact: true }).click()
+  await work.locator(".list .node-label").filter({ hasText: "source: src/a.ts" }).click()
+  await work.getByLabel("Relationships", { exact: true }).selectOption("imports")
+  await work.getByRole("button", { name: "Explore selected", exact: true }).click()
+  assert.match(await work.locator(".scope-status").innerText(), /2 nodes \/ 1 relationships/)
+  assert.equal(await visibleNodes(), 2)
+  await work.getByRole("button", { name: "Global view", exact: true }).click()
+  assert.equal(await visibleNodes(), 5)
   assert.deepEqual(workErrors, [])
   await work.close()
+
+  // SCC containers are expandable and keyboard-operable; aggregate counts can exceed admitted pairs.
+  const cycleGraph = {
+    ...workspaceGraph,
+    modules: {
+      rule: "Cited files grouped for the cycle fixture",
+      groups: [
+        { path: "applications/WWW/非常長的模組名稱/WWW-interface", files: 1 },
+        { path: "src", files: 2 },
+        { path: "lib", files: 1 },
+      ],
+      dependencies: [
+        { from: "applications/WWW/非常長的模組名稱/WWW-interface", to: "src", imports: 1 },
+        { from: "src", to: "lib", imports: 3 },
+        { from: "lib", to: "src", imports: 2 },
+      ],
+    },
+  }
+  const cycleFile = path.join(dir, "cycles.html")
+  await writeFile(cycleFile, renderWikiGraphHtml(cycleGraph).html)
+  const cyclePage = await browser.newPage({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" })
+  const cycleErrors = []
+  cyclePage.on("pageerror", (error) => cycleErrors.push(error.message))
+  await cyclePage.goto(pathToFileURL(cycleFile).href)
+  await cyclePage.getByRole("tab", { name: "Modules" }).click()
+  await cyclePage.getByRole("button", { name: "Diagram", exact: true }).click()
+  await cyclePage.getByRole("button", { name: /^Expand cycle:/ }).focus()
+  await cyclePage.keyboard.press("Enter")
+  assert.equal(await cyclePage.getByRole("button", { name: /^Collapse cycle:/ }).getAttribute("aria-expanded"), "true")
+  assert.match(
+    await cyclePage.locator(".module-evidence").innerText(),
+    /5 recorded imports[\s\S]*1 file-pair edges admitted/,
+  )
+  assert.equal(await cyclePage.locator(".module-member").count(), 2)
+  assert.equal(
+    await cyclePage.locator(".module-card > text").evaluateAll((labels) =>
+      labels.every((label) => {
+        const card = label.parentElement.querySelector("rect").getBBox()
+        const text = label.getBBox()
+        return text.x >= card.x && text.x + text.width <= card.x + card.width
+      }),
+    ),
+    true,
+    "module titles stay inside their cards despite shared SVG styles",
+  )
+  if (process.env.AX_WIKI_MODULE_SCREENSHOT)
+    await cyclePage.screenshot({ path: process.env.AX_WIKI_MODULE_SCREENSHOT, fullPage: true })
+  await cyclePage.setViewportSize({ width: 768, height: 1024 })
+  assert.equal(await cyclePage.getByRole("button", { name: /^Collapse cycle:/ }).isVisible(), true)
+  await cyclePage.getByRole("tab", { name: "Evidence map" }).click()
+  await cyclePage.getByRole("button", { name: "Radial", exact: true }).click()
+  assert.equal(await cyclePage.locator("svg.swap").count(), 0)
+  if (process.env.AX_WIKI_RADIAL_SCREENSHOT)
+    await cyclePage.screenshot({ path: process.env.AX_WIKI_RADIAL_SCREENSHOT, fullPage: true })
+  assert.deepEqual(cycleErrors, [])
+  await cyclePage.close()
 
   console.log(
     JSON.stringify({

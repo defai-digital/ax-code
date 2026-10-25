@@ -31,7 +31,7 @@ export function createRadialLayout(input: HierarchyInput): ForceLayout {
     byId,
     stop: () => {},
     reheat: () => {},
-    radial: { cx, cy, angles, treeParent },
+    radial: { cx, cy, angles, treeParent, sectors: [] },
   }
   if (total === 0) return layout
 
@@ -67,7 +67,10 @@ export function createRadialLayout(input: HierarchyInput): ForceLayout {
       cursor += unit
     }
     if (group.sources.length === 0 && group.loose.length === 0) cursor += unit
-    if (group.head) place(group.head, (start + cursor) / 2)
+    if (group.head) {
+      place(group.head, (start + cursor) / 2)
+      layout.radial!.sectors.push({ id: group.head, start, end: cursor, radius: R + 18 })
+    }
     cursor += gaps > 0 ? GAP : 0
   }
   return layout

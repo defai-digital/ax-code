@@ -72,8 +72,9 @@ export const TREEMAP_ASPECT = { min: 0.8, max: 2.6 } as const
 
 /**
  * DOM-free nested treemap: page -> source -> symbol. Every cited file is one unit of area
- * (plus one per symbol drawn inside it), so a page's area is the number of files it cites
- * in this view. Cross links are not drawn here; the viewer shows them as lines when a cell
+ * independent of contained symbols. Page area reflects files placed under that page,
+ * not every citation: a shared file is placed under its first citing page. Cross links
+ * are not drawn here; the viewer shows them as lines when a cell
  * is focused. Every node is a rectangle centered on its x/y. `aspect` is the canvas
  * width-to-height ratio the rectangle should fill.
  */
@@ -90,7 +91,7 @@ export function createTreemapLayout(input: HierarchyInput, options: { aspect?: n
 
   const sourceCell = (id: string): Cell => {
     const kids = (children.get(id) ?? []).map((kid) => ({ id: kid, value: weight(), kids: [] }))
-    return { id, value: kids.length + 1, kids }
+    return { id, value: 1, kids }
   }
   const pageCells: Cell[] = groups.map((group, index) => {
     const kids = [
@@ -112,8 +113,9 @@ export function createTreemapLayout(input: HierarchyInput, options: { aspect?: n
   const left = origin.x - size.width / 2
   const top = origin.y - size.height / 2
   const assign = (cells: Cell[], box: Rect, depth: number) => {
+    const byCell = new Map(cells.map((cell) => [cell.id, cell]))
     for (const [id, rect] of squarify(cells, box)) {
-      const cell = cells.find((candidate) => candidate.id === id)!
+      const cell = byCell.get(id)!
       const node = byId.get(id)
       if (node) {
         node.x = rect.x + rect.w / 2

@@ -1,5 +1,7 @@
 import type { WikiGraph, WikiGraphModules, WikiGraphPage } from "@ax-code/ax-wiki/graph"
 
+import { renderModuleDiagram } from "./module-diagram.js"
+
 /** Styles for the modules view. Scoped under the `.axwv` ancestor, which owns the color variables. */
 export const modulesCss = `
 .axwv .modules{display:flex;flex-direction:column;gap:4px;min-width:0;color:var(--text)}
@@ -32,6 +34,23 @@ export const modulesCss = `
 .axwv .modules .cycles ol{margin:4px 0 0;padding-left:1.25em}
 .axwv .modules .cycles li{margin:2px 0;overflow-wrap:anywhere}
 .axwv .modules .more{margin:4px 0 0;color:var(--muted);font-size:12px}
+.axwv .module-views{display:flex;gap:6px;margin-bottom:8px}
+.axwv .module-views [aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+.axwv .modules svg.dependency-diagram text{text-anchor:start}
+.axwv .modules svg.dependency-diagram text.edge-count{text-anchor:middle}
+.axwv .module-card>rect{fill:var(--surface);stroke:var(--line-2);stroke-width:1.5}
+.axwv .cycle-card>rect{stroke:var(--amber);stroke-dasharray:5 3}
+.axwv .module-card .hit{fill:transparent;stroke:none}
+.axwv .module-link{cursor:pointer}
+.axwv .module-link .link-line{fill:none;stroke:#93a6ba;stroke-width:1.6}
+.axwv .module-link .link-hit{fill:none;stroke:transparent;stroke-width:16}
+.axwv .module-link:hover .link-line,.axwv .module-link:focus .link-line{stroke:var(--accent);stroke-width:3}
+.axwv .module-link .edge-count{paint-order:stroke;stroke:var(--canvas);stroke-width:4;fill:var(--text)}
+.axwv .module-card [role=button],.axwv .module-card[role=button]{cursor:pointer}
+.axwv .dependency-diagram [role=button]:focus-visible,.axwv .modules .cell[role=button]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.axwv .module-evidence:empty{display:none}
+.axwv .module-evidence{padding:12px;border:1px solid var(--line);border-radius:10px;overflow-wrap:anywhere}
+.axwv .module-evidence ul{max-height:220px;overflow:auto}
 @media (prefers-reduced-motion:reduce){.axwv .modules,.axwv .modules *{transition:none!important;animation:none!important}}
 `
 
@@ -46,7 +65,7 @@ const COUNT_MIN_CELL = 18
 /** Over-estimate of an 11px glyph so rotated labels stay inside the svg viewport. */
 const CHAR_PX = 7.2
 
-type ModuleAnalysis = {
+export type ModuleAnalysis = {
   order: string[]
   cycles: string[][]
   levels: Map<string, number>
@@ -59,6 +78,7 @@ type ViewOptions = {
   onSelectPage?(id: string): void
   /** Matrix rows and columns to show; the page heatmap and file attribution always use every group. */
   visibleGroups?: ReadonlySet<string>
+  onInspectImports?(pairs: WikiGraphModules["dependencies"]): void
 }
 
 function compareText(a: string, b: string): number {
@@ -652,6 +672,20 @@ function renderMatrix(
           const title = svg(doc, "title")
           title.textContent = `${groupLabel(from)} imports ${groupLabel(to)}: ${imports}`
           rect.append(title)
+          rect.setAttribute("role", "button")
+          rect.setAttribute("tabindex", "0")
+          rect.setAttribute("aria-label", title.textContent)
+          const inspect = () => options.onInspectImports?.([{ from, to, imports }])
+          rect.addEventListener("click", inspect, { signal })
+          rect.addEventListener(
+            "keydown",
+            (event) => {
+              if (event.key !== "Enter" && event.key !== " ") return
+              event.preventDefault()
+              inspect()
+            },
+            { signal },
+          )
           if (showNumber) {
             marks.push({
               x: x + metrics.cell / 2,
@@ -808,7 +842,82 @@ export function renderModulesView(
     // Hiding groups only filters matrix rows and columns; file attribution still uses every group.
     const visible = options.visibleGroups
     const shown = visible ? { ...analysis, order: analysis.order.filter((path) => visible.has(path)) } : analysis
-    root.append(scroller(doc, renderMatrix(doc, modules, shown, pages, options, abort.signal)))
+    const switcher = html(doc, "div")
+    switcher.className = "module-views"
+    switcher.setAttribute("role", "group")
+    switcher.setAttribute("aria-label", "Module presentation")
+    const matrixButton = html(doc, "button")
+    matrixButton.textContent = "Matrix"
+    matrixButton.setAttribute("aria-pressed", "true")
+    const diagramButton = html(doc, "button")
+    diagramButton.textContent = "Diagram"
+    diagramButton.setAttribute("aria-pressed", "false")
+    switcher.append(matrixButton, diagramButton)
+    root.append(switcher)
+    const inspect = html(doc, "section")
+    inspect.className = "module-evidence"
+    inspect.setAttribute("aria-label", "Module import evidence")
+    inspect.setAttribute("aria-live", "polite")
+    const inspectImports = (pairs: WikiGraphModules["dependencies"]) => {
+      inspect.replaceChildren()
+      const total = pairs.reduce((sum, pair) => sum + pair.imports, 0)
+      inspect.append(paragraph(doc, "", `${total} recorded imports between cited files (aggregate).`))
+      const pairKeys = new Set(pairs.map((pair) => `${pair.from}\0${pair.to}`))
+      for (const pair of pairs)
+        inspect.append(paragraph(doc, "", `${groupLabel(pair.from)} → ${groupLabel(pair.to)}: ${pair.imports}`))
+      const paths = new Map(graph.nodes.filter((node) => node.kind === "source").map((node) => [node.id, node.path]))
+      const admitted = graph.edges.filter((edge) => {
+        if (edge.kind !== "uses") return false
+        const from = paths.get(edge.from),
+          to = paths.get(edge.to)
+        return (
+          from !== undefined &&
+          to !== undefined &&
+          pairKeys.has(`${groupOfFile(modules.groups, from)}\0${groupOfFile(modules.groups, to)}`)
+        )
+      })
+      inspect.append(
+        paragraph(
+          doc,
+          "caption",
+          `${admitted.length} file-pair edges admitted to this graph; the aggregate can include omitted evidence. No source-line locations are available.`,
+        ),
+      )
+      const list = html(doc, "ul")
+      for (const edge of admitted) {
+        const item = html(doc, "li")
+        item.textContent = `${paths.get(edge.from)} → ${paths.get(edge.to)}`
+        list.append(item)
+      }
+      inspect.append(list)
+    }
+    const sharedOptions = { ...options, onInspectImports: inspectImports }
+    const matrix = scroller(doc, renderMatrix(doc, modules, shown, pages, sharedOptions, abort.signal))
+    const files = filesByGroup(modules.groups, analysis.order, pages)
+    const diagram = renderModuleDiagram(doc, modules, shown, {
+      signal: abort.signal,
+      onGroup: (path) => options.onSelectGroup?.(path, files.get(path) ?? []),
+      onImports: inspectImports,
+    })
+    diagram.hidden = true
+    const choose = (isDiagram: boolean) => {
+      matrix.hidden = isDiagram
+      diagram.hidden = !isDiagram
+      matrixButton.setAttribute("aria-pressed", String(!isDiagram))
+      diagramButton.setAttribute("aria-pressed", String(isDiagram))
+    }
+    matrixButton.addEventListener("click", () => choose(false), { signal: abort.signal })
+    diagramButton.addEventListener("click", () => choose(true), { signal: abort.signal })
+    root.append(
+      paragraph(
+        doc,
+        "caption",
+        "Diagram arrows point from importer to dependency. Cycle cards group mutually dependent modules. Select an arrow or matrix cell to inspect recorded counts.",
+      ),
+      matrix,
+      diagram,
+      inspect,
+    )
   }
 
   root.append(renderCycles(doc, analysis.cycles))

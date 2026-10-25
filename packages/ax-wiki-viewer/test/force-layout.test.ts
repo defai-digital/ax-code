@@ -160,3 +160,20 @@ test("keeps page names from stacking in the shared page lane", () => {
     .sort((a, b) => a - b)
   for (let i = 1; i < ys.length; i++) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(PAGE_LABEL_GAP - 1)
 })
+
+test("restored positions stay still until an explicit reheat and still emit ticks", async () => {
+  const positions = new Map(graph.nodes.map((node, index) => [node.id, { x: 100 + index * 80, y: 200 }]))
+  let ticks = 0
+  const layout = createForceLayout(graph, { reducedMotion: false, positions, onTick: () => ticks++ })
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(ticks).toBe(0)
+    for (const node of layout.nodes) expect({ x: node.x, y: node.y }).toEqual(positions.get(node.id))
+    layout.reheat(0.1)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(ticks).toBeGreaterThan(0)
+    expect(layout.nodes.some((node) => node.x !== positions.get(node.id)!.x)).toBe(true)
+  } finally {
+    layout.stop()
+  }
+})

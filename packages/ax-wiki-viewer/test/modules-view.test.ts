@@ -344,7 +344,9 @@ test("renders the matrix, cycles, heatmap, and safe text", () => {
     }
   }
   const buttons = nodes.filter((node) => node.attrs.get("role") === "button")
-  expect(buttons.every((button) => button.tag === "g" && button.attrs.get("tabindex") === "0")).toBe(true)
+  expect(buttons.every((button) => ["g", "rect"].includes(button.tag) && button.attrs.get("tabindex") === "0")).toBe(
+    true,
+  )
   const titles = nodes.filter((node) => node.tag === "title").map((node) => node.textContent)
   expect(titles).toContain("a imports b: 1")
   expect(titles).toContain("b imports a: 4")
@@ -466,4 +468,29 @@ test("never renders a split surrogate pair", () => {
     .filter((text): text is string => typeof text === "string" && text.length > 0)
   expect(written.length).toBeGreaterThan(0)
   for (const text of written) expect(() => encodeURIComponent(text)).not.toThrow()
+})
+
+test("matrix evidence distinguishes module aggregates from admitted file pairs", () => {
+  const container = new FakeNode("div")
+  const graph = {
+    nodes: [],
+    edges: [],
+    pages: [],
+    modules: {
+      rule: "fixture",
+      groups: [
+        { path: "a", files: 3 },
+        { path: "b", files: 2 },
+      ],
+      dependencies: [{ from: "a", to: "b", imports: 7 }],
+    },
+  } as unknown as WikiGraph
+  const dispose = renderModulesView(fakeDocument(), container as unknown as HTMLElement, graph, {})
+  const cell = walk(container).find((node) => node.tag === "rect" && node.attrs.get("aria-label") === "a imports b: 7")!
+  fire(cell, "keydown", { key: "Enter", preventDefault() {} })
+  expect(textOf(container)).toContain("7 recorded imports between cited files (aggregate)")
+  expect(textOf(container)).toContain("0 file-pair edges admitted to this graph")
+  dispose()
+  fire(cell, "click", { preventDefault() {} })
+  expect(textOf(container)).toBe("")
 })

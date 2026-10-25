@@ -135,7 +135,11 @@ export function countOutlineSymbols(outline: readonly OutlineSource[]): number {
   return outline.reduce((total, source) => total + walk(source.symbols), 0)
 }
 
-export function viewCounts(graph: WikiGraph, filters: ViewFilters): ViewCounts {
+export function viewCounts(
+  graph: WikiGraph,
+  filters: ViewFilters,
+  scope: { nodes?: ReadonlySet<string>; edge?(edge: WikiGraph["edges"][number]): boolean } = {},
+): ViewCounts {
   const byKind: Record<NodeKind, number> = { page: 0, source: 0, symbol: 0 }
   const byFreshness: Record<FreshnessState, number> = { fresh: 0, stale: 0, unknown: 0 }
   const visible = new Set<string>()
@@ -144,10 +148,11 @@ export function viewCounts(graph: WikiGraph, filters: ViewFilters): ViewCounts {
     byKind[node.kind]++
     byFreshness[node.freshness]++
     if (filters.kinds[node.kind] && filters.freshness[node.freshness]) matchCandidates++
-    if (isNodeVisible(node, filters)) visible.add(node.id)
+    if (isNodeVisible(node, filters) && (!scope.nodes || scope.nodes.has(node.id))) visible.add(node.id)
   }
   let visibleEdges = 0
-  for (const edge of graph.edges) if (visible.has(edge.from) && visible.has(edge.to)) visibleEdges++
+  for (const edge of graph.edges)
+    if (visible.has(edge.from) && visible.has(edge.to) && (!scope.edge || scope.edge(edge))) visibleEdges++
   return {
     visibleNodes: visible.size,
     visibleEdges,
@@ -221,7 +226,7 @@ function plural(count: number, one: string, many: string): string {
 export function countsBarText(counts: ViewCounts, state: ViewState, query = ""): string {
   // Compact bar form: "N of M nodes · N of M edges in view".
   let text = `${counts.visibleNodes} of ${counts.recordedNodes} nodes · ${counts.visibleEdges} of ${counts.recordedEdges} edges in view`
-  if (counts.filteredNodes > 0)
+  if (counts.filteredNodes > 0 || counts.filteredEdges > 0)
     text += ` · ${plural(counts.filteredNodes, "node", "nodes")} and ${plural(counts.filteredEdges, "edge", "edges")} hidden by filters`
   if (counts.omittedNodes + counts.omittedEdges > 0)
     text += ` · ${plural(counts.omittedNodes, "node", "nodes")} and ${plural(counts.omittedEdges, "edge", "edges")} beyond the view cap`

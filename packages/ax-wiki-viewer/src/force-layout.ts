@@ -35,6 +35,7 @@ type RadialMeta = {
   angles: ReadonlyMap<string, number>
   /** child id -> primary parent id. Every other edge is a cross link. */
   treeParent: ReadonlyMap<string, string>
+  sectors: Array<{ id: string; start: number; end: number; radius: number }>
 }
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number }
@@ -105,6 +106,7 @@ export function createForceLayout(
     reducedMotion: boolean
     onTick?: () => void
     onEnd?: () => void
+    positions?: ReadonlyMap<string, { x: number; y: number; fx?: number | null; fy?: number | null }>
   },
 ): ForceLayout {
   const degree = new Map<string, number>()
@@ -123,6 +125,10 @@ export function createForceLayout(
   }))
   for (const node of nodes) node.radius = layoutRadius(node.degree)
   seedPositions(nodes)
+  for (const node of nodes) {
+    const saved = options.positions?.get(node.id)
+    if (saved) Object.assign(node, saved)
+  }
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const links: LayoutLink[] = input.edges
     .filter((edge) => edge.from !== edge.to && byId.has(edge.from) && byId.has(edge.to))
@@ -167,9 +173,7 @@ export function createForceLayout(
     finish()
   }
 
-  if (options.reducedMotion) {
-    runSync(1)
-  } else {
+  if (!options.reducedMotion) {
     simulation.on("tick", () => {
       ticks++
       if (ticks >= LAYOUT_LIMITS.maxTicks) finish()
@@ -177,6 +181,8 @@ export function createForceLayout(
     })
     simulation.on("end", finish)
   }
+  if (options.positions) simulation.stop()
+  else if (options.reducedMotion) runSync(1)
 
   return {
     nodes,

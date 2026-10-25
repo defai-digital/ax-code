@@ -1,6 +1,9 @@
 import { parseWikiGraph } from "@ax-code/ax-wiki/graph"
 import type { WikiGraphEdge, WikiGraphNode } from "@ax-code/ax-wiki/graph"
 import { fitCamera, wheelZoomFactor, zoomAbout } from "./camera.js"
+import type { Camera } from "./camera.js"
+import { citationSummary, localNeighborhood, matchesRelationship } from "./exploration.js"
+import type { LocalScope, Relationship } from "./exploration.js"
 import { LAYOUT_WORLD, createForceLayout } from "./force-layout.js"
 import { createRadialLayout } from "./radial-layout.js"
 import { createTreemapLayout } from "./treemap-layout.js"
@@ -74,6 +77,10 @@ export const mapCss = `
 .axwv .hud{position:absolute;right:10px;bottom:10px;z-index:2;display:grid;grid-template-columns:30px;gap:2px;align-items:center;margin:0;padding:4px;border:1px solid var(--line);border-radius:12px;background:rgba(13,21,32,.82);backdrop-filter:blur(6px)}
 .axwv .hud button{padding:0;height:30px;width:30px;line-height:1;font-size:16px;background:transparent;border-color:transparent;border-radius:8px;display:flex;align-items:center;justify-content:center}
 .axwv .hud button:hover{background:var(--surface-2)}
+.axwv .explore-controls{order:1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.axwv .explore-controls label{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.axwv .explore-controls button:disabled{opacity:.45;cursor:default}
+.axwv .scope-status{order:1;font-size:12px;color:var(--muted);margin-top:6px}
 .axwv .view-caption{order:1;margin:6px 0 0;font-size:12px;color:var(--muted)}
 .axwv .sr-only{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .axwv .views button{display:inline-flex;align-items:center;gap:6px}
@@ -161,8 +168,9 @@ const VIEWS = [
   {
     id: "treemap",
     label: "Treemap",
-    question: "Which files does each page cite? Each small cell is one cited file; amber outlines changed files.",
-    hint: "Nested treemap: pages contain the files they cite, one cell per file",
+    question:
+      "Area counts files placed here, not all citations. Shared files appear once, under the first citing page; empty groups keep a minimum cell. Amber outlines changed files.",
+    hint: "Nested treemap: one cell per placed file; symbols do not increase its area",
   },
   {
     id: "force",
@@ -189,8 +197,7 @@ const RADIAL_LABEL_ZOOM: Record<NodeKind, number> = { page: 0, source: 0.85, sym
 const TREEMAP_LABEL_ZOOM: Record<NodeKind, number> = { page: 0, source: 0.5, symbol: 1.1 }
 /** Fixed layouts keep their own positions; there is nothing to drag or reheat. */
 const isStatic = (candidate: ForceLayout | undefined) =>
-  candidate !== undefined &&
-  (candidate.radial !== undefined || candidate.treemap !== undefined)
+  candidate !== undefined && (candidate.radial !== undefined || candidate.treemap !== undefined)
 
 const FRESHNESS_NOTE = {
   fresh: "observed bytes match the recorded hash.",
@@ -224,7 +231,25 @@ export function mountMap(
   } = {},
 ) {
   let graph = parseWikiGraph(input)
+  let citations = citationSummary(graph)
   let topics = new Map<string, CitingTopic>()
+  let scope: LocalScope | undefined
+  let scopeIds: Set<string> | undefined
+  let relationship: Relationship = "all"
+  let crossLinks = true
+  type ViewMemory = {
+    camera: Camera
+    positions: Map<string, { x: number; y: number; fx?: number | null; fy?: number | null }>
+    aspect: number
+  }
+  const viewMemory = new Map<ViewId, ViewMemory>()
+  const history: Array<{
+    scope?: LocalScope
+    camera: Camera
+    view: ViewId
+    selected?: string
+    relationship: Relationship
+  }> = []
   const topicColor = (id: string) => {
     const topic = topics.get(id)
     return typeof topic === "number" ? TOPIC_PALETTE[topic % TOPIC_PALETTE.length] : undefined
@@ -348,6 +373,37 @@ export function mountMap(
   chips.setAttribute("aria-label", "Filter by freshness")
   const viewCaption = html("p", root)
   viewCaption.className = "view-caption"
+  const exploreBar = html("div", root)
+  exploreBar.className = "explore-controls"
+  exploreBar.setAttribute("role", "group")
+  exploreBar.setAttribute("aria-label", "Explore relationships")
+  const explore = html("button", exploreBar, "Explore selected")
+  const depthLabel = html("label", exploreBar, "Depth ")
+  const depth = html("select", depthLabel)
+  depth.setAttribute("aria-label", "Depth")
+  for (const value of [1, 2]) {
+    const option = html("option", depth, `${value} hop${value === 1 ? "" : "s"}`)
+    option.value = String(value)
+  }
+  const relationsLabel = html("label", exploreBar, "Relationships ")
+  const relations = html("select", relationsLabel)
+  relations.setAttribute("aria-label", "Relationships")
+  for (const [value, label] of [
+    ["all", "All recorded"],
+    ["citations", "Citations"],
+    ["imports", "Imports"],
+  ]) {
+    const option = html("option", relations, label)
+    option.value = value
+  }
+  const crossToggle = html("button", exploreBar, "Cross-links")
+  crossToggle.setAttribute("aria-pressed", "true")
+  const zoomSelection = html("button", exploreBar, "Zoom to selected")
+  const back = html("button", exploreBar, "Back")
+  const globalView = html("button", exploreBar, "Global view")
+  const scopeStatus = html("p", root)
+  scopeStatus.className = "scope-status"
+  scopeStatus.setAttribute("aria-live", "polite")
   const liveRegion = html("div", root)
   liveRegion.className = "sr-only"
   liveRegion.setAttribute("aria-live", "polite")
@@ -406,9 +462,11 @@ export function mountMap(
   zoomReadout.setAttribute("aria-hidden", "true")
 
   const svgNS = "http://www.w3.org/2000/svg"
+  const sectorLayer = doc.createElementNS(svgNS, "g")
+  sectorLayer.setAttribute("aria-hidden", "true")
   const edgeLayer = doc.createElementNS(svgNS, "g")
   const nodeLayer = doc.createElementNS(svgNS, "g")
-  svg.append(edgeLayer, nodeLayer)
+  svg.append(sectorLayer, edgeLayer, nodeLayer)
   type EdgeEls = { path: SVGPathElement; arrow: SVGPathElement; edge: WikiGraphEdge }
   type NodeEls = { group: SVGGElement; circle: SVGElement; label: SVGTextElement; node: LayoutNode }
   let edgeEls: EdgeEls[] = []
@@ -418,7 +476,12 @@ export function mountMap(
   function neighborhoodOf(id: string): Set<string> | undefined {
     if (!layout) return undefined
     const near = new Set([id])
-    for (const link of layout.links) {
+    for (const link of graph.edges) {
+      if (
+        !matchesRelationship(link, relationship) ||
+        (scopeIds && (!scopeIds.has(link.from) || !scopeIds.has(link.to)))
+      )
+        continue
       if (link.from === id) near.add(link.to)
       else if (link.to === id) near.add(link.from)
     }
@@ -426,20 +489,24 @@ export function mountMap(
   }
 
   function neighborhood(): Set<string> | undefined {
-    return selected === undefined ? undefined : neighborhoodOf(selected)
+    return scopeIds ?? (selected === undefined ? undefined : neighborhoodOf(selected))
   }
 
   /** Canvas-only focus: selection wins, hover previews, neither touches list or detail. */
   function canvasFocus(): { id: string; near: Set<string> } | undefined {
     const id = selected ?? hovered
     if (id === undefined) return undefined
-    const near = neighborhoodOf(id)
+    const near = scopeIds ?? neighborhoodOf(id)
     return near === undefined ? undefined : { id, near }
   }
 
   let visibleById = new Map<string, boolean>()
   function refreshVisibility() {
-    visibleById = new Map(graph.nodes.map((node) => [node.id, isNodeVisible(node, filters)]))
+    const eligible = graph.nodes.filter((node) => isNodeVisible(node, filters))
+    scopeIds = scope ? localNeighborhood(eligible, graph.edges, scope, relationship) : undefined
+    visibleById = new Map(
+      graph.nodes.map((node) => [node.id, isNodeVisible(node, filters) && (!scopeIds || scopeIds.has(node.id))]),
+    )
   }
 
   function canvasAspect(): number {
@@ -456,14 +523,14 @@ export function mountMap(
     zoomReadout.textContent = `${Math.round(zoom * 100)}%`
   }
 
-  function fitView() {
+  function fitView(only?: ReadonlySet<string>) {
     if (!layout || layout.nodes.length === 0) {
       zoom = 1
       offsetX = offsetY = 0
       viewBox()
       return
     }
-    if (layout.bounds) {
+    if (layout.bounds && !only && !scopeIds) {
       const fixed = fitCamera(layout.bounds, canvasAspect(), LAYOUT_WORLD.width)
       zoom = fixed.zoom
       offsetX = fixed.offsetX
@@ -477,6 +544,16 @@ export function mountMap(
       maxX = -Infinity,
       maxY = -Infinity
     for (const node of layout.nodes) {
+      if (only && !only.has(node.id)) continue
+      if (!only && scopeIds && !scopeIds.has(node.id)) continue
+      const rect = layout.treemap?.rects.get(node.id)
+      if (rect) {
+        minX = Math.min(minX, node.x - rect.w / 2)
+        maxX = Math.max(maxX, node.x + rect.w / 2)
+        minY = Math.min(minY, node.y - rect.h / 2)
+        maxY = Math.max(maxY, node.y + rect.h / 2)
+        continue
+      }
       const drawn = node.kind === "page" ? Math.max(node.radius, 14) : node.radius
       const pad = drawn + 28
       let left = node.x - pad
@@ -489,6 +566,19 @@ export function mountMap(
       minY = Math.min(minY, node.y - pad)
       maxX = Math.max(maxX, node.x + pad)
       maxY = Math.max(maxY, node.y + pad)
+    }
+    if (!Number.isFinite(minX)) return
+    if (layout.radial) {
+      for (const { node, label } of nodeEls) {
+        if (only && !only.has(node.id)) continue
+        if (!only && scopeIds && !scopeIds.has(node.id)) continue
+        if (node.kind === "symbol" && !filters.kinds.symbol) continue
+        const box = labelBox(node, label, 4)
+        minX = Math.min(minX, box.x0)
+        maxX = Math.max(maxX, box.x1)
+        minY = Math.min(minY, box.y0)
+        maxY = Math.max(maxY, box.y1)
+      }
     }
     const fitted = fitCamera({ minX, minY, maxX, maxY }, canvasAspect(), LAYOUT_WORLD.width)
     zoom = fitted.zoom
@@ -666,7 +756,11 @@ export function mountMap(
       if (!dimmed && incident) arrow.setAttribute("stroke", direction === "outgoing" ? FOCUS_OUT : FOCUS_IN)
       else arrow.removeAttribute("stroke")
       // A treemap is about containment, so cross links appear only for the focused cell.
-      const hideLine = layout.treemap !== undefined && !(incident && !dimmed)
+      const hideLine =
+        !matchesRelationship(edge, relationship) ||
+        (scopeIds !== undefined && (!scopeIds.has(edge.from) || !scopeIds.has(edge.to))) ||
+        (layout.radial !== undefined && crossLink && !crossLinks) ||
+        (layout.treemap !== undefined && !(incident && !dimmed))
       path.setAttribute("display", hideLine ? "none" : "")
       arrow.setAttribute("display", hideLine ? "none" : "")
     }
@@ -681,8 +775,11 @@ export function mountMap(
       pageLabelY.set(entry.node.id, y)
       lastLabelY = entry.node.y + y
     }
+    const screenScale = (zoom * canvas.getBoundingClientRect().width) / LAYOUT_WORLD.width
     const candidates: { label: SVGTextElement; box: Box; priority: number }[] = []
     for (const { group, circle, label, node } of nodeEls) {
+      const outside = scopeIds !== undefined && !scopeIds.has(node.id)
+      group.setAttribute("display", outside ? "none" : "")
       const dimmed = visibleById.get(node.id) !== true || (near !== undefined && !near.has(node.id))
       const emphasized = near !== undefined && near.has(node.id)
       // Symbols are detail. They stay faint until the neighborhood or a closer zoom.
@@ -699,14 +796,17 @@ export function mountMap(
         circle.removeAttribute("stroke-width")
       }
       const radial = layout.radial
+      const readable = (node.kind === "page" ? (layout.treemap ? 15 : 22) : 11) * screenScale >= 9
       const showLabel =
-        label.textContent === ""
+        readable &&
+        !outside &&
+        (label.textContent === ""
           ? false
           : layout.treemap
             ? emphasized || zoom >= TREEMAP_LABEL_ZOOM[node.kind]
             : radial
               ? emphasized || zoom >= RADIAL_LABEL_ZOOM[node.kind]
-              : emphasized || (node.kind === "page" && namedPages <= 16) || zoom >= LABEL_ZOOM[node.kind]
+              : emphasized || (node.kind === "page" && namedPages <= 16) || zoom >= LABEL_ZOOM[node.kind])
       label.setAttribute("display", showLabel ? "" : "none")
       if (layout.treemap) {
         // Fixed inside each rectangle when the cell was built.
@@ -758,12 +858,32 @@ export function mountMap(
     }
   }
 
+  const textWidths = new Map<string, number>()
+  const measureContext = doc.createElement("canvas").getContext("2d")
+  function textWidth(text: string, size: number, bold = false): number {
+    const key = `${size}:${bold}:${text}`
+    const cached = textWidths.get(key)
+    if (cached !== undefined) return cached
+    let width = Array.from(text).length * size * 0.65
+    if (measureContext) {
+      measureContext.font = `${bold ? "650 " : ""}${size}px system-ui, -apple-system, "Segoe UI", sans-serif`
+      width = measureContext.measureText(text).width
+    }
+    textWidths.set(key, width)
+    return width
+  }
+  function fitLabel(text: string, width: number, size: number, bold: boolean): string {
+    if (textWidth(text, size, bold) <= width) return text
+    const chars = Array.from(text)
+    while (chars.length && textWidth(`${chars.join("")}…`, size, bold) > width) chars.pop()
+    return chars.length ? `${chars.join("")}…` : ""
+  }
   type Box = { x0: number; y0: number; x1: number; y1: number }
   /** World-space footprint of a label. Text size is in world units, so this does not depend on zoom. */
   function labelBox(node: LayoutNode, label: SVGTextElement, pageDy: number): Box {
     const treemapBox = layout?.treemap?.rects.get(node.id)
     const size = node.kind === "page" ? (treemapBox ? 15 : 22) : 11
-    const width = Array.from(label.textContent ?? "").length * size * 0.58
+    const width = textWidth(label.textContent ?? "", size, node.kind === "page")
     const half = size * 0.6
     if (treemapBox) {
       const baseline = node.kind === "page" ? 19 : node.kind === "source" ? 12 : 11
@@ -805,14 +925,29 @@ export function mountMap(
   }
 
   function renderCounts() {
-    const counts = viewCounts(graph, filters)
-    const state = viewState(graph, filters)
+    const counts = viewCounts(graph, filters, {
+      nodes: scopeIds,
+      edge: (edge) =>
+        matchesRelationship(edge, relationship) &&
+        (!layout?.radial || crossLinks || layout.radial.treeParent.get(edge.to) === edge.from),
+    })
+    const base = viewState(graph, filters)
+    const state =
+      base === "empty" || base === "all-kinds-hidden"
+        ? base
+        : counts.visibleNodes === 0
+          ? "zero-match"
+          : counts.visibleNodes === 1
+            ? "single-node"
+            : counts.visibleEdges === 0
+              ? "no-edges"
+              : "ok"
     status.textContent = countsBarText(counts, state, filters.query)
-    identityText.textContent = `Snapshot: ${graph.snapshot}\nScope: recorded Wiki manifest plus verified JS/TS imports. Code call graph unavailable.\nWiki page → referenced source; source → imported source. Recorded membership and static imports, not a call graph. Node size is visible connections in this snapshot.`
+    identityText.textContent = `Snapshot: ${graph.snapshot}\nScope: recorded Wiki manifest plus verified JS/TS imports. Code call graph unavailable.\nWiki page → referenced source; source → imported source. Recorded membership and static imports, not a call graph. Treemap area counts placed files; Force size reflects admitted connections; Radial size fits leaf slots.`
     if (state === "empty" || state === "zero-match" || state === "all-kinds-hidden") {
       overlay.style.display = "flex"
       overlayMessage.textContent = overlayText(state, counts)
-      overlayReset.style.display = isDefaultFilters(filters) ? "none" : ""
+      overlayReset.style.display = isDefaultFilters(filters) && !scope && relationship === "all" ? "none" : ""
       notice.style.display = "none"
     } else {
       overlay.style.display = "none"
@@ -887,7 +1022,7 @@ export function mountMap(
   function renderList() {
     const near = neighborhood()
     const query = filters.query.trim()
-    const matches = graph.nodes.filter((node) => isNodeVisible(node, filters))
+    const matches = graph.nodes.filter((node) => visibleById.get(node.id))
     // The Enter cycle walks every match for the query and filters, ignoring the
     // selection: a selected node shrinks the rendered list to its neighborhood,
     // which would pin the cycle to whatever the first Enter picked.
@@ -910,7 +1045,7 @@ export function mountMap(
     list.setAttribute("role", "tree")
     list.setAttribute("aria-label", "Explore pages, sources and symbols")
     const { parent, kids, cited } = tree()
-    const shown = new Map(graph.nodes.filter((node) => isNodeVisible(node, filters)).map((node) => [node.id, node]))
+    const shown = new Map(matches.map((node) => [node.id, node]))
     const visibleKids = (id: string) => (kids.get(id) ?? []).filter((kid) => shown.has(kid))
     const draw = (container: HTMLElement, node: WikiGraphNode, level: number) => {
       const children = visibleKids(node.id)
@@ -1022,6 +1157,12 @@ export function mountMap(
     const usesOut = related.filter((edge) => edge.kind === "uses" && edge.from === node.id)
     const usesIn = related.filter((edge) => edge.kind === "uses" && edge.to === node.id)
     const kindLabel = node.kind === "page" ? "Page" : node.kind === "source" ? "Source" : "Symbol"
+    const summaryCounts = citations.pages.get(node.id)
+    const placedNote = summaryCounts
+      ? `\nTreemap: ${summaryCounts.placed} files placed here; ${summaryCounts.admitted} admitted citations; ${summaryCounts.shared} shared sources. Placement is not ownership.`
+      : node.kind === "source" && (citations.citingPages.get(node.id)?.size ?? 0) > 1
+        ? `\nShared by ${citations.citingPages.get(node.id)!.size} citing pages in this snapshot.`
+        : ""
     const line =
       node.kind === "page"
         ? `Cites ${citing.length} of ${plural(node.recordedReferences, "source", "sources")} in this snapshot.`
@@ -1051,7 +1192,7 @@ export function mountMap(
         ? `\n\nAnchored symbols (${node.symbols.length}):\n${node.symbols.map((anchor) => `- ${anchor.name} (${anchor.provenance})`).join("\n")}`
         : ""
     detail.textContent =
-      `${kindLabel}: ${node.label}\nLocation: ${node.path}${summary}${extra}\nFreshness: ${node.freshness} — ${FRESHNESS_NOTE[node.freshness]}\n${line}\nProvenance: Wiki manifest membership` +
+      `${kindLabel}: ${node.label}\nLocation: ${node.path}${summary}${extra}\nFreshness: ${node.freshness} — ${FRESHNESS_NOTE[node.freshness]}\n${line}${placedNote}\nProvenance: Wiki manifest membership` +
       anchors +
       (rows.length ? `\n\n${rows.join("\n")}` : "")
   }
@@ -1124,7 +1265,9 @@ export function mountMap(
     key.append(doc.createElement("summary"))
     key.firstElementChild!.textContent = "How to read"
     for (const text of [
-      "size = visible connections",
+      "Treemap area = placed files (shared files appear once; symbols do not add area)",
+      "Force size = admitted connections; Radial size is adjusted to fit slots",
+      "Shared ×N = distinct citing pages in this snapshot",
       "+N = recorded references not in this snapshot",
       "amber edge: selected node depends on target",
       "teal edge: target depends on selected node",
@@ -1146,8 +1289,17 @@ export function mountMap(
     const meta = doc.createElement("span")
     meta.textContent = `${info.kind} · ${info.freshness}`
     const stats = doc.createElement("span")
-    stats.textContent = `${plural(degree, "connection", "connections")} shown of ${plural(info.recordedReferences, "recorded reference", "recorded references")}`
+    stats.textContent = `${plural(degree, "connection", "connections")} admitted · ${plural(info.recordedReferences, "recorded citation", "recorded citations")}`
     tip.append(title, meta, stats)
+    const citation = citations.pages.get(info.id)
+    const shared = citations.citingPages.get(info.id)?.size ?? 0
+    if (citation || shared > 1) {
+      const evidence = doc.createElement("span")
+      evidence.textContent = citation
+        ? `${citation.placed} placed files · ${citation.admitted} admitted citations · ${citation.shared} shared sources`
+        : `Shared by ${shared} citing pages in this snapshot`
+      tip.append(evidence)
+    }
     const extra = info.kind === "symbol" ? info.detail : info.path
     if (extra && extra !== info.label) {
       const path = doc.createElement("code")
@@ -1275,8 +1427,112 @@ export function mountMap(
     }
   }
 
+  function currentCamera(): Camera {
+    return { zoom, offsetX, offsetY }
+  }
+  function restoreCamera(camera: Camera) {
+    zoom = camera.zoom
+    offsetX = camera.offsetX
+    offsetY = camera.offsetY
+    cameraTouched = true
+    viewBox()
+  }
+  function saveView() {
+    if (!layout) return
+    layout.stop()
+    viewMemory.set(view, {
+      camera: currentCamera(),
+      aspect: canvasAspect(),
+      positions: new Map(layout.nodes.map(({ id, x, y, fx, fy }) => [id, { x, y, fx, fy }])),
+    })
+  }
+  function remember() {
+    history.push({ scope: scope ? { ...scope } : undefined, camera: currentCamera(), view, selected, relationship })
+    if (history.length > 32) history.shift()
+  }
+  function renderExploration() {
+    explore.disabled = selected === undefined || !visibleById.get(selected)
+    zoomSelection.disabled = explore.disabled
+    back.disabled = history.length === 0
+    globalView.disabled = scope === undefined
+    const rootName = graph.nodes.find((node) => node.id === scope?.root)?.label
+    const shownEdges = graph.edges.filter(
+      (edge) => visibleById.get(edge.from) && visibleById.get(edge.to) && matchesRelationship(edge, relationship),
+    )
+    const crossCount = layout?.radial
+      ? shownEdges.filter((edge) => layout!.radial!.treeParent.get(edge.to) !== edge.from).length
+      : 0
+    crossToggle.textContent = `Cross-links (${crossCount})`
+    scopeStatus.textContent = scope
+      ? `Local: ${rootName} · ${scope.hops} hop${scope.hops === 1 ? "" : "s"} · ${scopeIds?.size ?? 0} nodes / ${shownEdges.length} relationships within current filters. Both directions; snapshot only. Omitted: ${graph.omitted.nodes} nodes, ${graph.omitted.edges} edges.`
+      : `Global snapshot · ${relationship === "all" ? "all recorded relationship types" : relationship}. Select an item to explore or zoom.`
+    if (layout?.radial && !crossLinks) scopeStatus.textContent += ` ${crossCount} cross-links hidden by display choice.`
+    for (const arc of sectorLayer.children) {
+      arc.setAttribute("display", scopeIds && !scopeIds.has(arc.getAttribute("data-page")!) ? "none" : "")
+    }
+  }
+  explore.onclick = () => {
+    if (!selected) return
+    remember()
+    scope = { root: selected, hops: depth.value === "2" ? 2 : 1 }
+    layout?.stop()
+    render()
+    fitView()
+    cameraTouched = true
+    applyEmphasis()
+  }
+  depth.onchange = () => {
+    if (!scope) return
+    remember()
+    scope = { ...scope, hops: depth.value === "2" ? 2 : 1 }
+    render()
+    fitView()
+    cameraTouched = true
+    applyEmphasis()
+  }
+  relations.onchange = () => {
+    remember()
+    relationship = relations.value as Relationship
+    render()
+  }
+  crossToggle.onclick = () => {
+    crossLinks = !crossLinks
+    crossToggle.setAttribute("aria-pressed", String(crossLinks))
+    render()
+  }
+  zoomSelection.onclick = () => {
+    if (!selected) return
+    remember()
+    layout?.stop()
+    fitView(new Set([selected]))
+    cameraTouched = true
+    render()
+  }
+  back.onclick = () => {
+    const previous = history.pop()
+    if (!previous) return
+    scope = previous.scope
+    selected = previous.selected
+    relationship = previous.relationship
+    relations.value = relationship
+    depth.value = String(scope?.hops ?? 1)
+    if (view !== previous.view) setView(previous.view)
+    restoreCamera(previous.camera)
+    render()
+  }
+  globalView.onclick = () => {
+    remember()
+    scope = undefined
+    scopeIds = undefined
+    render()
+    fitView()
+    cameraTouched = true
+    applyEmphasis()
+  }
+
   function render() {
     refreshVisibility()
+    renderExploration()
     positionElements()
     applyEmphasis()
     renderList()
@@ -1286,12 +1542,29 @@ export function mountMap(
   }
 
   function buildElements() {
+    sectorLayer.replaceChildren()
     edgeLayer.replaceChildren()
     nodeLayer.replaceChildren()
     edgeEls = []
     nodeEls = []
     nodeElsById.clear()
     if (!layout) return
+    for (const sector of layout.radial?.sectors ?? []) {
+      const { cx, cy } = layout.radial!
+      const point = (a: number) => `${cx + sector.radius * Math.cos(a)},${cy + sector.radius * Math.sin(a)}`
+      const arc = doc.createElementNS(svgNS, "path")
+      const end = Math.min(sector.end, sector.start + Math.PI * 2 - 0.001)
+      arc.setAttribute(
+        "d",
+        `M${point(sector.start)} A${sector.radius},${sector.radius} 0 ${end - sector.start > Math.PI ? 1 : 0} 1 ${point(end)}`,
+      )
+      arc.setAttribute("fill", "none")
+      arc.setAttribute("stroke", topicColor(sector.id)?.page ?? PAGE_RING)
+      arc.setAttribute("stroke-width", "5")
+      arc.setAttribute("opacity", ".35")
+      arc.setAttribute("data-page", sector.id)
+      sectorLayer.append(arc)
+    }
     for (const edge of graph.edges) {
       const path = doc.createElementNS(svgNS, "path")
       path.setAttribute("class", "edge")
@@ -1341,16 +1614,14 @@ export function mountMap(
         // Name sits in the cell's header band, cut to what fits.
         // The page cell supplies the directory context, so a file shows its own name.
         const fontSize = node.kind === "page" ? 15 : 11
-        const room = Math.floor((treemapBox.w - (omittedBadge ? 26 : 10)) / (fontSize * 0.58))
+        const room = treemapBox.w - (omittedBadge ? 26 : 10)
         const pageInfo = node.kind === "page" ? graph.pages?.find((candidate) => candidate.id === node.id) : undefined
         // Citations past the page cap count too: the stale ring uses the node's
         // aggregate freshness, so a bounded count here would contradict it.
         const changed = pageInfo ? pageInfo.stale + pageInfo.omitted.stale : 0
-        const name =
-          node.kind === "source" ? info.label.slice(info.label.lastIndexOf("/") + 1) : info.label
+        const name = node.kind === "source" ? info.label.slice(info.label.lastIndexOf("/") + 1) : info.label
         const full = changed > 0 ? `${name} · ${changed} changed` : name
-        const text = Array.from(full)
-        label.textContent = room < 3 ? "" : text.length > room ? `${text.slice(0, room - 1).join("")}…` : full
+        label.textContent = treemapBox.h < fontSize + 4 ? "" : fitLabel(full, room, fontSize, node.kind === "page")
         label.style.textAnchor = "start"
         label.setAttribute("x", String(-treemapBox.w / 2 + 5))
         label.setAttribute(
@@ -1362,6 +1633,29 @@ export function mountMap(
       const title = doc.createElementNS(svgNS, "title")
       title.textContent = `${info.label} (${node.kind}, ${info.freshness}, ${plural(node.degree, "connection", "connections")} shown)`
       group.append(circle, label, title)
+      const shared = citations.citingPages.get(node.id)?.size ?? 0
+      if (shared > 1) {
+        const mark = doc.createElementNS(svgNS, "path")
+        mark.setAttribute("class", "shared-mark")
+        const x = treemapBox ? -treemapBox.w / 2 + 4 : -drawn - 5
+        const y = treemapBox ? treemapBox.h / 2 - 5 : -4
+        mark.setAttribute("d", `M${x},${y} h6 m-6,3 h6`)
+        mark.setAttribute("stroke", "#c9d6e4")
+        mark.setAttribute("stroke-width", "1.5")
+        mark.setAttribute("aria-hidden", "true")
+        group.append(mark)
+        if (!treemapBox || (treemapBox.w >= 52 && treemapBox.h >= 32)) {
+          const count = doc.createElementNS(svgNS, "text")
+          count.setAttribute("class", "shared-count")
+          count.setAttribute("x", String(x + 9))
+          count.setAttribute("y", String(y + 4))
+          count.style.textAnchor = "start"
+          count.style.fontSize = "9px"
+          count.textContent = `×${shared}`
+          group.append(count)
+        }
+        title.textContent += `; shared by ${shared} citing pages`
+      }
       // A page cell would outline its whole area for one changed file; its header counts them instead.
       if (info.freshness === "stale" && !(treemapBox && node.kind === "page")) {
         const ring = doc.createElementNS(svgNS, treemapBox ? "rect" : "circle")
@@ -1379,7 +1673,8 @@ export function mountMap(
         ring.setAttribute("aria-hidden", "true")
         group.insertBefore(ring, label)
       }
-      const omitted = info.recordedReferences - node.degree
+      const admittedCitations = citations.pages.get(info.id)?.admitted ?? citations.citingPages.get(info.id)?.size ?? 0
+      const omitted = info.recordedReferences - admittedCitations
       // Treemap cells carry the badge in their top-right corner when there is room for it.
       const badgeAt = treemapBox
         ? treemapBox.w >= 28 && treemapBox.h >= 20
@@ -1576,6 +1871,7 @@ export function mountMap(
     }
     layout = createForceLayout(graph, {
       reducedMotion,
+      positions: viewMemory.get("force")?.positions,
       onTick: positionElements,
       onEnd: () => {
         positionElements()
@@ -1622,14 +1918,19 @@ export function mountMap(
     hideTip()
     markActivity()
     const before = new Map((layout?.nodes ?? []).map((node) => [node.id, { x: node.x, y: node.y }]))
+    saveView()
     view = next
     renderViewMeta()
     hovered = undefined
     cameraTouched = false
     buildLayout()
-    fitView()
-    if (isStatic(layout)) tweenFrom(before)
-    else if (!reducedMotion) {
+    const saved = viewMemory.get(view)
+    if (saved && (view !== "treemap" || Math.abs(saved.aspect - canvasAspect()) <= 0.15)) {
+      restoreCamera(saved.camera)
+      hasFitted = true
+    } else fitView()
+    if (!saved && isStatic(layout)) tweenFrom(before)
+    else if (!saved && !reducedMotion) {
       // The force layout is still moving, so it cannot be tweened; fade it in instead.
       svg.classList.remove("swap")
       void svg.getBoundingClientRect()
@@ -1642,6 +1943,7 @@ export function mountMap(
     for (const [id, button] of viewButtons) button.setAttribute("aria-pressed", String(id === view))
     const entry = VIEWS.find((candidate) => candidate.id === view)!
     viewCaption.textContent = `${entry.label}: ${entry.question}`
+    crossToggle.style.display = view === "radial" ? "" : "none"
   }
 
   /**
@@ -1727,6 +2029,12 @@ export function mountMap(
   doc.addEventListener("visibilitychange", onVisibility)
 
   function select(node: WikiGraphNode) {
+    const outsideScope = scopeIds !== undefined && !scopeIds.has(node.id)
+    if (outsideScope) {
+      remember()
+      scope = undefined
+      scopeIds = undefined
+    }
     // Selection only changes emphasis, never positions, so a still-running
     // simulation simply settles beneath it instead of reflowing.
     // Selecting a node whose kind is filtered out (a symbol from the Outline) shows that kind again.
@@ -1738,6 +2046,11 @@ export function mountMap(
     markActivity()
     revealInTree(node.id)
     render()
+    if (outsideScope) {
+      fitView(new Set([node.id]))
+      cameraTouched = true
+      applyEmphasis()
+    }
     detailHeading.focus()
   }
 
@@ -1799,7 +2112,7 @@ export function mountMap(
   // Refit until the user pans or zooms, so a resize does not leave the picture letterboxed.
   const resize = new ResizeObserver(() => {
     if (disposed) return
-    if (layout?.treemap && Math.abs(canvasAspect() - treemapAspect) > 0.15) {
+    if (layout?.treemap && !cameraTouched && Math.abs(canvasAspect() - treemapAspect) > 0.15) {
       buildLayout()
       fitView()
       render()
@@ -1902,6 +2215,14 @@ export function mountMap(
   }
   const doReset = () => {
     selected = undefined
+    scope = undefined
+    scopeIds = undefined
+    history.length = 0
+    relationship = "all"
+    relations.value = "all"
+    crossLinks = true
+    crossToggle.setAttribute("aria-pressed", "true")
+    viewMemory.clear()
     filters = defaultFilters()
     matchIndex = 0
     search.value = ""
@@ -1952,8 +2273,20 @@ export function mountMap(
     update(input: unknown) {
       if (disposed) throw new Error("Viewer is disposed")
       const next = parseWikiGraph(input)
+      citations = citationSummary(next)
+      textWidths.clear()
       matchIndex = 0
       if (next.snapshot !== graph.snapshot) {
+        relationship = "all"
+        relations.value = relationship
+        depth.value = "1"
+        crossLinks = true
+        crossToggle.setAttribute("aria-pressed", "true")
+        scope = undefined
+        scopeIds = undefined
+        history.length = 0
+        viewMemory.clear()
+        cameraTouched = false
         selected = undefined
         filters = defaultFilters()
         search.value = ""
@@ -1976,6 +2309,10 @@ export function mountMap(
       doc.removeEventListener("visibilitychange", onVisibility)
       cancelTween()
       layout?.stop()
+      viewMemory.clear()
+      history.length = 0
+      textWidths.clear()
+      depth.onchange = relations.onchange = null
       layout = undefined
       if (unlockHover) doc.removeEventListener("pointermove", unlockHover)
       unlockHover = undefined

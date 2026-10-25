@@ -224,3 +224,15 @@ test("counting never mutates its inputs", () => {
   viewState(graph, filters)
   expect(filters).toEqual(frozen)
 })
+
+test("local and relationship filters preserve count conservation and report edge-only filtering", () => {
+  const local = viewCounts(graph, defaultFilters(), { nodes: new Set(["page:guide.md", "source:src/a.ts"]) })
+  expect(local.visibleNodes).toBe(2)
+  expect(local.visibleEdges).toBe(1)
+  expect(local.visibleNodes + local.filteredNodes + local.omittedNodes).toBe(local.recordedNodes)
+  expect(local.visibleEdges + local.filteredEdges + local.omittedEdges).toBe(local.recordedEdges)
+  const imports = viewCounts(graph, defaultFilters(), { edge: (edge) => edge.kind === "uses" })
+  expect(imports.filteredNodes).toBe(0)
+  expect(imports.filteredEdges).toBe(graph.edges.length)
+  expect(countsBarText(imports, "no-edges")).toContain(`0 nodes and ${graph.edges.length} edges hidden by filters`)
+})

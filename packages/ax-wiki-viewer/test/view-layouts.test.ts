@@ -111,3 +111,16 @@ test("treemap gives every cited file the same area and fills the requested aspec
   const wide = createTreemapLayout(input, { aspect: 10 }).bounds!
   expect((wide.maxX - wide.minX) / (wide.maxY - wide.minY)).toBeCloseTo(2.6, 5)
 })
+
+test("contained symbols cannot inflate source or page area", () => {
+  const withSymbols = createTreemapLayout({ nodes, edges })
+  const sourceOnly = createTreemapLayout({
+    nodes: nodes.filter((n) => n.kind !== "symbol"),
+    edges: edges.filter((e) => e.kind !== "contains"),
+  })
+  for (const id of ["p:a", "p:b", "s:1", "s:2", "s:3"]) {
+    expect(withSymbols.treemap!.rects.get(id)).toEqual(sourceOnly.treemap!.rects.get(id))
+    expect(withSymbols.byId.get(id)!.x).toBe(sourceOnly.byId.get(id)!.x)
+    expect(withSymbols.byId.get(id)!.y).toBe(sourceOnly.byId.get(id)!.y)
+  }
+})
