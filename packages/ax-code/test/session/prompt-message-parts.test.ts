@@ -1,7 +1,11 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { resolveUserMessageParts } from "../../src/session/prompt/prompt-message-parts"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { Permission } from "../../src/permission"
+import { MCP } from "../../src/mcp"
+import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { tmpdir } from "../fixture/fixture"
 
 describe("prompt message parts", () => {
   const sessionID = SessionID.make("session_prompt_message_parts")
@@ -87,6 +91,56 @@ describe("prompt message parts", () => {
         const synthetic = parts[1] as { text: string }
         expect(synthetic.text).toContain("Invoked by user; guaranteed to exist")
       })
+    })
+  })
+
+  describe("MCP resource permission", () => {
+    test("applies session deny rules to MCP resource reads", async () => {
+      await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+      const uri = "mcp://docs/private.txt"
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const session = await Session.create({
+              permission: [
+                { permission: MCP.permissionKey("mcp_resource", "docs"), pattern: "*", action: "deny" as const },
+              ],
+            })
+            const read = vi.spyOn(MCP, "readResource").mockResolvedValue({
+              contents: [{ uri, mimeType: "text/plain", text: "MCP PRIVATE NOTES" }],
+            } as Awaited<ReturnType<typeof MCP.readResource>>)
+
+            const parts = await resolveUserMessageParts({
+              sessionID: session.id,
+              messageID: MessageID.ascending(),
+              agentName: "build",
+              agentPermission: Permission.fromConfig({ "*": "allow" }),
+              parts: [
+                {
+                  type: "file",
+                  mime: "text/plain",
+                  filename: "private.txt",
+                  url: uri,
+                  source: {
+                    type: "resource",
+                    text: { start: 0, end: 0, value: "" },
+                    clientName: "docs",
+                    uri,
+                  },
+                },
+              ],
+            })
+
+            expect(read).not.toHaveBeenCalled()
+            const text = parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
+            expect(text).not.toContain("MCP PRIVATE NOTES")
+          },
+        })
+      } finally {
+        vi.restoreAllMocks()
+        await Instance.disposeAll()
+      }
     })
   })
 })

@@ -1,5 +1,6 @@
 import { NamedError } from "@ax-code/util/error"
 import { Permission } from "../../permission"
+import { Session } from ".."
 import { Log } from "../../util/log"
 import { MessageV2 } from "../message-v2"
 import { PartID, type MessageID, type SessionID } from "../schema"
@@ -65,10 +66,12 @@ export async function resolveUserMessageParts(input: {
     input.parts.map(async (part): Promise<DraftPart[]> => {
       if (part.type === "file") {
         if (part.source?.type === "resource") {
+          const session = await Session.get(input.sessionID)
           return resolveMcpResourcePart({
             sessionID: input.sessionID,
             agentName: input.agentName,
             agentPermission: input.agentPermission,
+            sessionPermission: session.permission ?? [],
             part: { ...part, source: part.source },
             draftSyntheticTextPart,
             attachDraftContext,

@@ -62,6 +62,7 @@ export async function resolveMcpResourcePart(input: {
   sessionID: SessionID
   agentName: string
   agentPermission: Permission.Ruleset
+  sessionPermission?: Permission.Ruleset
   part: ResourceFilePart
   draftSyntheticTextPart: (text: string) => DraftTextPart
   attachDraftContext: (part: ResourceFilePart) => DraftFilePart
@@ -94,7 +95,7 @@ export async function resolveMcpResourcePart(input: {
         uri,
         filename: input.part.filename,
       },
-      ruleset: input.agentPermission,
+      ruleset: Permission.merge(input.agentPermission, input.sessionPermission ?? []),
       agent: input.agentName,
     })
 
