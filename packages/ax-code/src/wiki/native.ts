@@ -52,6 +52,7 @@ import { MessageV2 } from "../session/message-v2"
 import type { SessionID } from "../session/schema"
 import { writeWikiBuildReport, WIKI_BUILD_REPORT_SCHEMA_VERSION, type WikiBuildReportPageOutcome } from "./build-report"
 import { engineConfig, resolveWikiRuntimeConfig } from "./config"
+import { resolveWikiReasoning } from "./reasoning"
 import { createIdleWikiSourceRanker } from "./embedding-ranker"
 import { SYMBOL_SUMMARIES_MAX, SYMBOL_SUMMARY_MAX } from "@ax-code/ax-wiki/node"
 
@@ -128,7 +129,7 @@ Rules:
 - Do not include a Sources section; AX Wiki adds the authoritative source list.
 Return a json object with summary (20-600 characters), body (at least 80 characters of Markdown), symbols (an array of at most 80 exact symbol strings), and symbolSummaries (an array of at most 20 {name, summary} objects for symbols from the symbols array).`
 
-const WIKI_PROMPT_VERSION = "native-page-v3"
+const WIKI_PROMPT_VERSION = "native-page-v4-low-reasoning"
 
 /**
  * Identity of the generator that would produce pages for `model`. Used by the
@@ -258,12 +259,16 @@ export function wikiPageOutputTokens(model: Provider.Model): number {
 
 /**
  * Page generation is an auxiliary call. Reuse the small-request thinking
- * switches, and ask supported GLM/MiniMax gateways for low reasoning effort. `reasoningEffort`
- * is a chat-options schema field; extra body fields (`thinking`,
+ * switches and supported model variants, using each SDK's namespace. `reasoningEffort`
+ * is a compatible chat-options schema field; extra body fields (`thinking`,
  * `enable_thinking`, `chat_template_kwargs`) must stay on the provider id so
  * the OpenAI-compatible SDK copies them into the request.
  */
 export function wikiPageProviderOptions(model: Provider.Model): Record<string, Record<string, any>> | undefined {
+  return wikiPageReasoningPolicy(model).providerOptions
+}
+
+export function wikiPageReasoningPolicy(model: Provider.Model) {
   const policy = wikiPageBudgetPolicy(model)
   // The generic MiniMax small-request template switch is for local inference.
   // M3.1 Flash's hosted API always thinks and defaults to max effort. Send its
@@ -272,24 +277,9 @@ export function wikiPageProviderOptions(model: Provider.Model): Record<string, R
     policy.class === "minimax-flash-class"
       ? { reasoningEffort: policy.reasoningEffort }
       : ProviderTransform.smallOptions(model)
-  const extras: Record<string, any> = { ...small }
-  const declaredEffort = extras.reasoningEffort
-  delete extras.reasoningEffort
-  delete extras.reasoning_effort
-  const reasoningEffort =
-    typeof declaredEffort === "string"
-      ? declaredEffort
-      : Object.keys(extras).length === 0
-        ? policy.reasoningEffort
-        : undefined
-  const options: Record<string, Record<string, any>> = {}
-  if (reasoningEffort && model.providerID !== "openaiCompatible") {
-    options.openaiCompatible = { reasoningEffort }
-  }
-  const providerBody: Record<string, any> = { ...extras }
-  if (reasoningEffort) providerBody.reasoningEffort = reasoningEffort
-  if (Object.keys(providerBody).length > 0) options[model.providerID] = providerBody
-  return Object.keys(options).length > 0 ? options : undefined
+  const preferred =
+    Object.keys(small).length === 0 && policy.reasoningEffort ? { reasoningEffort: policy.reasoningEffort } : small
+  return resolveWikiReasoning(model, preferred)
 }
 
 function wikiMinimaxFlashNeedsLowEffort(model: Provider.Model): boolean {
@@ -493,12 +483,14 @@ async function resolveSessionModelRef(sessionID: SessionID) {
 async function resolveModel(model?: string, sessionID?: SessionID) {
   const reference = await resolveWikiModelRef({ model, sessionID })
   const resolved = await Provider.getModel(reference.providerID, reference.modelID)
+  const reasoning = wikiPageReasoningPolicy(resolved)
   return {
     reference,
     label: `${reference.providerID}/${reference.modelID}`,
     language: await Provider.getLanguage(resolved),
     maxOutputTokens: wikiPageOutputTokens(resolved),
-    providerOptions: wikiPageProviderOptions(resolved),
+    providerOptions: reasoning.providerOptions,
+    reasoningMode: reasoning.mode,
   }
 }
 
@@ -956,6 +948,11 @@ export async function runNativeWiki(input: {
     let result: WikiBuildResult | undefined
     let failure: string | undefined
     try {
+      if (model.reasoningMode === "uncontrolled") {
+        throw new Error(
+          `AX Wiki cannot request low or disabled reasoning for ${model.label}. Configure a supported none/off/minimal/low model variant or choose another wiki.model.`,
+        )
+      }
       result = await buildAxWiki({
         signal: input.signal,
         allowSource: input.allowSource,
@@ -1049,6 +1046,7 @@ export async function runNativeWiki(input: {
               action: input.action,
               outcome: failure !== undefined ? "failed" : failed !== undefined ? "partial" : "completed",
               model: model.label,
+              reasoningMode: model.reasoningMode,
               generator: { version: Installation.VERSION, promptVersion: WIKI_PROMPT_VERSION },
               repositoryHead,
               startedAt: buildStartedAt.toISOString(),

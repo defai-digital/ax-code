@@ -94,6 +94,8 @@ test("accepts a complete fenced JSON page without another model call", async () 
   const result = await run(tmp.path, model)
   expect(result.generatedPages).toEqual(["quickstart.md"])
   expect(model.doStreamCalls).toHaveLength(1)
+  expect(model.doStreamCalls[0].providerOptions?.groq).toMatchObject({ reasoningEffort: "low" })
+  expect((await readWikiBuildReport(tmp.path, ".ax-wiki"))?.reasoningMode).toBe("low")
   expect(await readFile(path.join(tmp.path, ".ax-wiki/quickstart.md"), "utf8")).toContain(page.body.split("\n\n")[1])
 })
 
@@ -311,4 +313,26 @@ test("resumes the reported ten-of-twelve-page cancellation case without repeatin
   expect(report?.generated).toHaveLength(2)
   expect(report?.written).toHaveLength(12)
   expect(await readdir(path.join(tmp.path, ".ax-wiki/.page-cache"))).toEqual([])
+})
+
+test("refuses an uncontrolled reasoning model before dispatch and records the reason", async () => {
+  await using tmp = await fixture()
+  const language = new MockLanguageModelV3({ doStream: async () => response(valid) })
+  vi.spyOn(Provider, "getModel").mockResolvedValue({
+    id: "unknown",
+    providerID: "unknown",
+    api: { id: "unknown", npm: "@ai-sdk/openai-compatible", url: "https://fixture.example/v1" },
+    capabilities: { reasoning: true },
+    options: {},
+    variants: {},
+    limit: { context: 32000, output: 8192 },
+  } as Provider.Model)
+  await expect(run(tmp.path, language)).rejects.toThrow("AX Wiki cannot request low or disabled reasoning")
+  expect(language.doStreamCalls).toHaveLength(0)
+  const report = await readWikiBuildReport(tmp.path, ".ax-wiki")
+  expect(report).toMatchObject({ outcome: "failed", reasoningMode: "uncontrolled", written: [] })
+  expect(report?.error).toContain("wiki.model")
+  await expect(access(path.join(tmp.path, ".ax-wiki/quickstart.md"))).rejects.toThrow()
+  // The refusal must release the build lock for the next attempt.
+  await expect(run(tmp.path, language)).rejects.toThrow("AX Wiki cannot request low or disabled reasoning")
 })

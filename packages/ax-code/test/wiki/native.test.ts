@@ -353,7 +353,7 @@ describe("wiki native generator", () => {
     expect(input?.generatorIdentity).toEqual({
       name: "ax-wiki",
       version: Installation.VERSION,
-      promptVersion: "native-page-v3",
+      promptVersion: "native-page-v4-low-reasoning",
       model: input?.model,
     })
   })

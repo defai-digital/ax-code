@@ -1,6 +1,7 @@
 import fs from "node:fs/promises"
 import { resolveInside, sanitizeWikiDir } from "@ax-code/ax-wiki"
 import { atomicWrite } from "@ax-code/ax-wiki/node"
+import type { WikiReasoningMode } from "./reasoning"
 import { parseJsonStrict } from "../util/json-value"
 
 /**
@@ -50,6 +51,8 @@ export type WikiBuildReport = {
    */
   outcome: "completed" | "partial" | "failed"
   model: string
+  /** Requested policy, not an attestation of provider compute. */
+  reasoningMode?: WikiReasoningMode
   generator: { version: string; promptVersion: string }
   repositoryHead?: string
   startedAt: string
