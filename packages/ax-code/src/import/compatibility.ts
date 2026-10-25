@@ -230,7 +230,10 @@ export namespace CompatibilityImport {
   /** Map one Claude-style MCP server entry onto the AX Code MCP config shape. */
   function mapMcpServer(raw: unknown): { server?: Record<string, unknown>; warnings?: string[]; reason?: string } {
     if (!isRecord(raw)) return { reason: "unsupported_mcp_shape" }
-    if (typeof raw.url === "string" && (raw.type === "sse" || raw.type === "http")) {
+    // Claude's flat .mcp.json lets a legacy remote omit `type`, which means
+    // SSE. An explicit sse/http type is accepted too; any other explicit
+    // transport (e.g. websocket) stays unsupported.
+    if (typeof raw.url === "string" && (raw.type === undefined || raw.type === "sse" || raw.type === "http")) {
       const headers = redactMcpValues("header", raw.headers)
       return {
         server: {

@@ -159,6 +159,37 @@ describe("CompatibilityImport MCP servers (ADR-220)", () => {
     })
   })
 
+  test("accepts a legacy URL-only remote entry that omits type (defaults to SSE)", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, ".mcp.json"),
+          JSON.stringify({
+            mcpServers: {
+              legacy: { url: "https://mcp.example.com/sse" },
+              unsupported: { type: "websocket", url: "https://mcp.example.com/ws" },
+            },
+          }),
+          "utf-8",
+        )
+      },
+    })
+
+    const report = await CompatibilityImport.run({ source: "claude", directory: tmp.path, write: true })
+    const legacy = report.candidates.find((item) => item.targetPath.endsWith("#mcp/legacy"))
+    expect(legacy?.action).toBe("copy")
+
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.legacy).toEqual({
+      type: "remote",
+      url: "https://mcp.example.com/sse",
+      enabled: false,
+    })
+    // An explicit non-SSE/HTTP transport is still rejected.
+    expect(config.mcp.unsupported).toBeUndefined()
+    expect(() => Config.Info.parse(config)).not.toThrow()
+  })
+
   test("reads user-level ~/.claude.json only with the explicit user flag", async () => {
     await using home = await tmpdir({
       init: async (dir) => {
