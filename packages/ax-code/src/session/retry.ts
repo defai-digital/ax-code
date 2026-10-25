@@ -174,6 +174,7 @@ export namespace SessionRetry {
     "socket hang up",
     "connection reset",
     "getaddrinfo",
+    "stream ended without finish event",
   ]
   const NETWORK_CIRCUIT_THRESHOLD = 3
   const NETWORK_CIRCUIT_COOLDOWN_MS = 30_000

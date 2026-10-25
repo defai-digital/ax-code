@@ -399,6 +399,29 @@ describe("session.retry.retryable", () => {
     expect(SessionRetry.retryable(mk())).toBeUndefined()
   })
 
+  test("counts the synthetic missing-finish error toward the network circuit", () => {
+    SessionRetry.resetNetworkCircuit(providerID)
+    const network = () =>
+      new MessageV2.APIError({
+        message: "getaddrinfo ENOTFOUND api.example.com",
+        isRetryable: true,
+      }).toObject() as MessageV2.APIError
+    const missingFinish = () =>
+      new MessageV2.APIError({
+        message: "Stream ended without finish event — possible network interruption",
+        isRetryable: true,
+      }).toObject() as MessageV2.APIError
+
+    expect(SessionRetry.retryable(network(), providerID)).toBe("getaddrinfo ENOTFOUND api.example.com")
+    expect(SessionRetry.retryable(network(), providerID)).toBe("getaddrinfo ENOTFOUND api.example.com")
+    // The processor's synthetic missing-finish error is a severed-stream
+    // signal, so it must count as the third consecutive network failure
+    // instead of resetting the streak.
+    expect(SessionRetry.retryable(missingFinish(), providerID)).toBeUndefined()
+    expect(SessionRetry.networkCircuitOpen(providerID)).toBe(true)
+    SessionRetry.resetNetworkCircuit(providerID)
+  })
+
   test("recordNetworkSuccess clears the streak so intermittent failures never open the circuit", () => {
     const mk = () =>
       new MessageV2.APIError({

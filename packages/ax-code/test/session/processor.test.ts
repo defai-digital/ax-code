@@ -1574,7 +1574,10 @@ describe("session.processor", () => {
     })
   })
 
-  test("exhausts the retry budget when every stream ends after finish-step without finish", async () => {
+  test("opens the network circuit when every stream ends after finish-step without finish", async () => {
+    // The synthetic missing-finish error counts toward the per-provider network
+    // circuit, so start from a clean streak regardless of test order.
+    SessionRetry.resetNetworkCircuit(model.providerID)
     // `username` keeps the fixture hermetic in sandboxes where the current uid
     // has no passwd entry (os.userInfo() then throws ENOENT).
     await using tmp = await tmpdir({ git: true, config: { username: "test" } })
@@ -1609,9 +1612,9 @@ describe("session.processor", () => {
 
         // Every attempt reports a completed step with usage but never the
         // terminal `finish` event. A successful finish-step must not restore
-        // the retry budget before the stream is known to have completed,
-        // otherwise attempt resets to 0 on every retry and the budget never
-        // runs out.
+        // the retry budget or clear the network failure streak before the
+        // stream is known to have completed, otherwise attempt resets to 0 on
+        // every retry and the budget never runs out.
         let calls = 0
         streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
           calls++
@@ -1647,8 +1650,13 @@ describe("session.processor", () => {
         })
 
         expect(result).toBe("stop")
-        expect(calls).toBe(SessionRetry.RETRY_MAX_ATTEMPTS + 1)
-        expect(sleepSpy).toHaveBeenCalledTimes(SessionRetry.RETRY_MAX_ATTEMPTS)
+        // The first two truncations increment the network failure streak and
+        // retry; the third opens the circuit, so the retry budget is bounded
+        // by the circuit threshold instead of the generic attempt ceiling.
+        expect(calls).toBe(3)
+        expect(sleepSpy).toHaveBeenCalledTimes(2)
+        expect(SessionRetry.networkCircuitOpen(model.providerID)).toBe(true)
+        SessionRetry.resetNetworkCircuit(model.providerID)
         expect(processor.message.error).toBeDefined()
       },
     })

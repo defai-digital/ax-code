@@ -1733,16 +1733,14 @@ export namespace SessionProcessor {
                   ) {
                     needsCompaction = true
                   }
-                  // Retry limits apply to consecutive provider failures. A
-                  // successful finish-step restores the full budget for the
-                  // next step in a long tool-using turn, and clears the
-                  // network failure streak so intermittent failures never
-                  // accumulate across successes toward a spurious circuit
-                  // open (STAB-14). Same reasoning for the concurrency-limit
-                  // streak: a finished step means the provider is currently
-                  // admitting requests, so past pool contention should not
-                  // keep stretching future retry delays for this provider.
-                  SessionRetry.recordNetworkSuccess(input.model.providerID)
+                  // Retry limits apply to consecutive provider failures. The
+                  // concurrency-limit streak is cleared at finish-step: a
+                  // completed step means the provider is currently admitting
+                  // requests, so past pool contention should not keep
+                  // stretching future retry delays for this provider. The
+                  // network failure streak is cleared only after the terminal
+                  // `finish` event (below), because a `finish-step` can still
+                  // be followed by a severed connection (STAB-14).
                   SessionRetry.recordConcurrencySuccess(input.model.providerID)
                   // ADR-258: bound the summed tool output of this step. Each
                   // result already carries its per-tool truncation; this pass
@@ -1909,7 +1907,13 @@ export namespace SessionProcessor {
             // can arrive with valid usage and still be followed by a severed
             // connection; resetting there let every retry restart the budget
             // and loop forever without ever exhausting it.
-            if (receivedFinish) attempt = 0
+            if (receivedFinish) {
+              attempt = 0
+              // A completed stream is the only proof the provider path is
+              // healthy, so clear the network failure streak here rather than
+              // at finish-step (STAB-14).
+              SessionRetry.recordNetworkSuccess(input.model.providerID)
+            }
             // If the stream ended without a "finish" event and we're not
             // doing compaction, the connection was likely severed by a
             // network interruption. Throw so the catch path triggers retry.
