@@ -194,6 +194,43 @@ describe("createDeltaBatcher", () => {
     expect(batcher.flush()).toBeUndefined()
   })
 
+  test("a rejected part does not let later batches overtake unfinished subscribers", async () => {
+    const events: string[] = []
+    let release!: () => void
+    const batcher = createDeltaBatcher({
+      sessionID: "ses_1",
+      messageID: "msg_1",
+      publish: ({ partID, delta }) => {
+        events.push(delta)
+        if (partID === "failed") return Promise.reject(new Error("subscriber failed"))
+        if (delta === "slow")
+          return new Promise<void>((resolve) => {
+            release = resolve
+          })
+      },
+      schedule: () => ({ clear() {} }),
+    })
+    batcher.push("failed", "first")
+    batcher.push("slow", "slow")
+    const first = batcher.flush()!.catch((error) => error)
+    await tick()
+    batcher.push("slow", "next")
+    const next = batcher.flush()
+    let drained = false
+    const drain = Promise.resolve(batcher.flush()).then(() => {
+      drained = true
+    })
+    await tick()
+    expect(events).toEqual(["first", "slow"])
+    expect(drained).toBe(false)
+    release()
+    expect(await first).toEqual(new Error("subscriber failed"))
+    await next
+    await drain
+    expect(events).toEqual(["first", "slow", "next"])
+    expect(drained).toBe(true)
+  })
+
   test("a failed batch does not block a later flush", async () => {
     const published: string[] = []
     const onFlushError = vi.fn()

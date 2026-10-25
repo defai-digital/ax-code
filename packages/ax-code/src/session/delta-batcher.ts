@@ -81,7 +81,13 @@ export function createDeltaBatcher(input: {
         asyncPublish = true
         return Promise.resolve(result)
       })
-      return { promise: Promise.all(results), asyncPublish }
+      // A rejected subscriber must not release the ordering barrier while
+      // another subscriber from this batch is still delivering its delta.
+      const promise = Promise.allSettled(results).then((settled) => {
+        const failure = settled.find((result) => result.status === "rejected")
+        if (failure?.status === "rejected") throw failure.reason
+      })
+      return { promise, asyncPublish }
     }
 
     // Chain onto earlier in-flight work so a later flush cannot publish ahead

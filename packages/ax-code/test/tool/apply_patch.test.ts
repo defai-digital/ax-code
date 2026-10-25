@@ -354,6 +354,29 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test.each([false, true])(
+    "rejects overlapping move destinations before writing (move first: %s)",
+    async (moveFirst) => {
+      await using fixture = await tmpdir()
+      const { ctx, calls } = makeCtx()
+      await Instance.provide({
+        directory: fixture.path,
+        fn: async () => {
+          const source = path.join(fixture.path, "source.txt")
+          const dest = path.join(fixture.path, "dest.txt")
+          await writeAndTrack(source, "old\n")
+          const move = "*** Update File: source.txt\n*** Move to: dest.txt\n@@\n-old\n+changed\n"
+          const add = "*** Add File: dest.txt\n+new\n"
+          const patchText = "*** Begin Patch\n" + (moveFirst ? move + add : add + move) + "*** End Patch"
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("Multiple operations target the same path")
+          expect(calls).toHaveLength(0)
+          expect(await fs.readFile(source, "utf-8")).toBe("old\n")
+          await expect(fs.stat(dest)).rejects.toMatchObject({ code: "ENOENT" })
+        },
+      })
+    },
+  )
+
   test("inserts lines with insert-only hunk", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

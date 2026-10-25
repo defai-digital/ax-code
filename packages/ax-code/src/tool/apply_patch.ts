@@ -151,6 +151,14 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       }
       seenPaths.add(filePath)
       const movePath = hunk.type === "update" && hunk.move_path ? resolvePatchPath(hunk.move_path) : undefined
+      if (movePath && movePath !== filePath) {
+        if (seenPaths.has(movePath)) {
+          throw new Error(
+            `apply_patch verification failed: Multiple operations target the same path: ${hunk.move_path}`,
+          )
+        }
+        seenPaths.add(movePath)
+      }
       await assertExternalDirectory(ctx, filePath)
       await assertSymlinkInsideProject(filePath)
       Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
