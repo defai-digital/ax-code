@@ -156,6 +156,10 @@ Configure the integration in project `ax-code.json`:
 
 Each model page gets at most two classified attempts sharing a 180-second deadline. Relative Wiki links are checked against the page plan before the page is accepted; a broken-link response may use the remaining attempt to repair that page. Final validation and manual-content guards still run before publication.
 
+Wiki page generation requests low reasoning effort for MiniMax M3.1 Flash through supported OpenAI-compatible gateways. This model always reasons and defaults to maximum effort when the field is omitted; low effort leaves more of the page deadline for the generated document. Wiki keeps its full auxiliary output-token budget and the same 180-second deadline. The setting is specific to Wiki page generation and does not change interactive chat. Local inference and providers with different reasoning formats keep their existing settings. See the [MiniMax API parameter contract](https://platform.minimax.io/docs/api-reference/text-openai-api).
+
+Wiki requests identify themselves with `ax-code/<version> ax-wiki` in the HTTP User-Agent. Operators can use this to distinguish background page generation from foreground chat when investigating timeouts or cancellations; it contains no repository path or page content.
+
 Interrupted builds retain validated results in `.ax-wiki/.page-cache/` (or the configured Wiki directory). A later build reuses matching results only after checking current source evidence, plan, generator, model and previous content. Initial generation remains unpublished until the complete candidate passes validation. Successful publication removes consumed staging entries; subsequent explicit `wiki generate` still regenerates all pages. Cache entries are bounded and permission-gated; corrupt or inaccessible entries are ignored.
 
 `.build-report.json` distinguishes model-generated and cached pages from `written` pages, which were actually published. Its optional `pages` array records each page's attempts, duration, prompt/source byte sizes and exact token usage when supplied by the provider. Failed or cancelled builds report no published pages.

@@ -1,5 +1,6 @@
 import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 
 const { generateObject } = vi.hoisted(() => ({ generateObject: vi.fn() }))
 vi.mock("ai", async (load) => ({
@@ -338,6 +339,9 @@ describe("wiki native generator", () => {
     // min(65536, 32000, GROQ_OUTPUT_TOKEN_MAX=4096), not the GLM 8192 page cap.
     expect(request.maxOutputTokens).toBe(4_096)
     expect(generateObject.mock.calls[0][0].messages[0].content).toContain("json object with summary")
+    expect(generateObject.mock.calls[0][0].headers).toEqual({
+      "User-Agent": `ax-code/${Installation.VERSION} ax-wiki`,
+    })
   })
 
   test("passes typed evidenceProvider and a stable generator identity", async () => {
@@ -743,6 +747,72 @@ describe("wiki page generation budget", () => {
       openaiCompatible: { reasoningEffort: "low" },
       "defai-01-ax-trust-com": { reasoningEffort: "low", thinking: { type: "enabled" } },
     })
+  })
+
+  test("uses low effort for MiniMax M3.1 Flash without shrinking its page budget", () => {
+    const model = wikiModel({ id: "MiniMax-M3.1-Flash" })
+    expect(wikiPageBudgetPolicy(model)).toEqual({
+      class: "minimax-flash-class",
+      maxOutputTokens: 32_000,
+      capReason: "none",
+      reasoningEffort: "low",
+    })
+    expect(wikiPageProviderOptions(model)).toEqual({
+      openaiCompatible: { reasoningEffort: "low" },
+      "defai-01-ax-trust-com": { reasoningEffort: "low" },
+    })
+  })
+
+  test("sends the supported MiniMax Wiki effort on the actual OpenAI-compatible wire", async () => {
+    let body: Record<string, unknown> | undefined
+    const sdk = createOpenAICompatible({
+      name: "defai-01-ax-trust-com",
+      baseURL: "https://wiki-gateway.example/v1",
+      fetch: async (_url, init) => {
+        body = JSON.parse(String(init?.body))
+        return Response.json({
+          id: "wiki-fixture",
+          created: 1,
+          model: "MiniMax-M3.1-Flash",
+          choices: [{ index: 0, message: { role: "assistant", content: "{}" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        })
+      },
+    })
+    await sdk.chatModel("MiniMax-M3.1-Flash").doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "Generate a synthetic Wiki page." }] }],
+      providerOptions: wikiPageProviderOptions(wikiModel({ id: "MiniMax-M3.1-Flash" })),
+    })
+    expect(body?.reasoning_effort).toBe("low")
+    expect(body?.thinking).toBeUndefined()
+    expect(body?.chat_template_kwargs).toBeUndefined()
+  })
+
+  test("uses the upstream MiniMax identity and preserves other dialects", () => {
+    expect(wikiPageBudgetPolicy(wikiModel({ id: "wiki-fast", apiID: "MiniMax-M3.1-Flash" })).reasoningEffort).toBe(
+      "low",
+    )
+    for (const model of [
+      wikiModel({ id: "MiniMax-M3.1-Flash", apiID: "another-model" }),
+      wikiModel({ id: "MiniMax-M3" }),
+      wikiModel({ id: "MiniMax-M3.1-Flash", reasoning: false }),
+      wikiModel({ id: "MiniMax-M3.1-Flash", providerID: "openrouter" }),
+      wikiModel({ id: "MiniMax-M3.1-Flash", providerID: "ax-engine" }),
+      wikiModel({ id: "MiniMax-M3.1-Flash", url: "http://127.0.0.1:8000/v1" }),
+      wikiModel({ id: "MiniMax-M3.1-Flash", url: "https://openrouter.ai/api/v1" }),
+      wikiModel({ id: "MiniMax-M3.1-Flash", url: "https://dashscope.aliyuncs.com/compatible-mode/v1" }),
+    ]) {
+      expect(wikiPageBudgetPolicy(model).class).toBe("standard")
+    }
+    expect(wikiPageProviderOptions(wikiModel({ id: "MiniMax-M3" }))).toEqual({
+      "defai-01-ax-trust-com": { thinking: { type: "disabled" }, reasoning_split: true },
+    })
+    const nonNative = wikiModel({ id: "MiniMax-M3.1-Flash" })
+    nonNative.options.nativeReasoning = false
+    expect(wikiPageBudgetPolicy(nonNative).class).toBe("standard")
+    const anthropic = wikiModel({ id: "MiniMax-M3.1-Flash" })
+    anthropic.api.npm = "@ai-sdk/anthropic"
+    expect(wikiPageBudgetPolicy(anthropic).class).toBe("standard")
   })
 
   test("keeps the GLM thinking switch on the provider id", () => {

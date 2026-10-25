@@ -41,6 +41,7 @@ import { Instance } from "../project/instance"
 import { isRecord } from "../util/record"
 import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine/constants"
 import { isDedicatedPrivateGpuProviderID } from "../provider/private-gpu/presets"
+import { isLocalProviderHost } from "../provider/local-dispatcher"
 import { Provider } from "../provider/provider"
 import { Filesystem } from "../util/filesystem"
 import { parseJsonResult } from "../util/json-value"
@@ -223,10 +224,12 @@ function symbolGloss(nameHint: string, value: unknown): { name: string; summary:
  * reasoning (fc3fa1893); every other model keeps the full aux budget, because
  * capping it truncates the page JSON mid-object (deepseek-flash, 2026-09-29).
  * Keeping this as an explicit table with a `capReason` makes the policy
- * auditable and regression-testable instead of an inline predicate.
+ * auditable and regression-testable instead of an inline predicate. MiniMax
+ * M3.1 Flash uses low effort without an output cap: its default max effort can
+ * consume the page deadline, and this model cannot disable thinking.
  */
 export type WikiPageBudgetPolicy = {
-  class: "glm-class" | "standard"
+  class: "glm-class" | "minimax-flash-class" | "standard"
   maxOutputTokens: number
   capReason: "glm-hidden-reasoning" | "none"
   reasoningEffort?: "low"
@@ -234,6 +237,9 @@ export type WikiPageBudgetPolicy = {
 
 export function wikiPageBudgetPolicy(model: Provider.Model): WikiPageBudgetPolicy {
   const aux = ProviderTransform.auxMaxOutputTokens(model)
+  if (wikiMinimaxFlashNeedsLowEffort(model)) {
+    return { class: "minimax-flash-class", maxOutputTokens: aux, capReason: "none", reasoningEffort: "low" }
+  }
   if (wikiGlmNeedsLowEffort(model)) {
     return {
       class: "glm-class",
@@ -251,13 +257,20 @@ export function wikiPageOutputTokens(model: Provider.Model): number {
 
 /**
  * Page generation is an auxiliary call. Reuse the small-request thinking
- * switches, and ask GLM gateways for low reasoning effort. `reasoningEffort`
+ * switches, and ask supported GLM/MiniMax gateways for low reasoning effort. `reasoningEffort`
  * is a chat-options schema field; extra body fields (`thinking`,
  * `enable_thinking`, `chat_template_kwargs`) must stay on the provider id so
  * the OpenAI-compatible SDK copies them into the request.
  */
 export function wikiPageProviderOptions(model: Provider.Model): Record<string, Record<string, any>> | undefined {
-  const small = ProviderTransform.smallOptions(model)
+  const policy = wikiPageBudgetPolicy(model)
+  // The generic MiniMax small-request template switch is for local inference.
+  // M3.1 Flash's hosted API always thinks and defaults to max effort. Send its
+  // documented low-effort field instead of a template switch it may ignore.
+  const small =
+    policy.class === "minimax-flash-class"
+      ? { reasoningEffort: policy.reasoningEffort }
+      : ProviderTransform.smallOptions(model)
   const extras: Record<string, any> = { ...small }
   const declaredEffort = extras.reasoningEffort
   delete extras.reasoningEffort
@@ -266,7 +279,7 @@ export function wikiPageProviderOptions(model: Provider.Model): Record<string, R
     typeof declaredEffort === "string"
       ? declaredEffort
       : Object.keys(extras).length === 0
-        ? wikiPageBudgetPolicy(model).reasoningEffort
+        ? policy.reasoningEffort
         : undefined
   const options: Record<string, Record<string, any>> = {}
   if (reasoningEffort && model.providerID !== "openaiCompatible") {
@@ -276,6 +289,21 @@ export function wikiPageProviderOptions(model: Provider.Model): Record<string, R
   if (reasoningEffort) providerBody.reasoningEffort = reasoningEffort
   if (Object.keys(providerBody).length > 0) options[model.providerID] = providerBody
   return Object.keys(options).length > 0 ? options : undefined
+}
+
+function wikiMinimaxFlashNeedsLowEffort(model: Provider.Model): boolean {
+  if (model.capabilities.reasoning !== true || model.options?.nativeReasoning === false) return false
+  if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+  if (WIKI_LOW_EFFORT_EXCLUDED_PROVIDERS.has(model.providerID)) return false
+  if (isDedicatedPrivateGpuProviderID(model.providerID)) return false
+  if (wikiHostRejectsReasoningEffort(model.api.url)) return false
+  try {
+    if (isLocalProviderHost(new URL(model.api.url).hostname)) return false
+  } catch {
+    return false
+  }
+  // Match the actual upstream ID, not a user-facing alias or the wider M3 family.
+  return model.api.id.toLowerCase() === "minimax-m3.1-flash"
 }
 
 function wikiGlmNeedsLowEffort(model: Provider.Model): boolean {
@@ -811,6 +839,7 @@ export async function runNativeWiki(input: {
               // requests and wrap exhausted errors outside our classifier.
               maxRetries: 0,
               model: model.language,
+              headers: { "User-Agent": `ax-code/${Installation.VERSION} ax-wiki` },
               maxOutputTokens: model.maxOutputTokens,
               schema: PAGE_SCHEMA,
               experimental_repairText: async ({ text }) => repairWikiPageText(text),
