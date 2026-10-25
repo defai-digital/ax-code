@@ -96,6 +96,21 @@ describe("resolvePromptParts ADR-236 forms", () => {
     })
   })
 
+  test("@file:range bounds long UTF-8 lines after a streamed prefix", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const target = path.join(tmp.path, "large.txt")
+        await writeFile(target, "skip\n".repeat(20000) + "a".repeat(30 * 1024 - 1) + "😀".repeat(50000))
+        const parts = await resolvePromptParts(`@file:${target}:20001`)
+        const body = parts[1].text.replace(/<file_range[^>]*>\n/, "").split("\n[truncated:")[0]
+        expect(body).toBe("a".repeat(30 * 1024 - 1))
+        expect(parts[1].text).toContain("[truncated:")
+      },
+    })
+  })
+
   test("@file:range with start past EOF becomes an inline note", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -193,6 +208,15 @@ describe("resolvePromptParts ADR-236 forms", () => {
     const idx = parts[1].text.indexOf("[truncated:")
     expect(idx).toBeGreaterThan(0)
     expect(Buffer.byteLength(parts[1].text.slice(0, idx), "utf8")).toBeLessThanOrEqual(30 * 1024 + 1)
+  })
+
+  test("keeps a UTF-8 boundary at the reference byte cap", async () => {
+    const parts = await resolvePromptParts("@diff", {
+      runners: makeRunners({ runGit: async () => "a".repeat(30 * 1024 - 1) + "😀" }),
+    })
+    const body = parts[1].text.split("\n[truncated:")[0]
+    expect(body).not.toContain("\uFFFD")
+    expect(Buffer.byteLength(body)).toBeLessThanOrEqual(30 * 1024)
   })
 
   test("unrecognized @-token falls through to file resolution under Instance", async () => {

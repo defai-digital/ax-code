@@ -8,6 +8,7 @@ import {
 } from "../../src/session/prompt/prompt-file-attachment"
 import { resolveMcpResourcePart } from "../../src/session/prompt/prompt-mcp-resource"
 import { MCP } from "../../src/mcp"
+import { Truncate } from "../../src/tool/truncate"
 import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
@@ -352,15 +353,16 @@ describe("prompt MCP resource attachment", () => {
   type ResourceContent = {
     uri: string
     mimeType: string
-    blob: string
+    blob?: string
+    text?: string
   }
 
-  async function resolveResource(content: ResourceContent, mime: string) {
+  async function resolveResource(content: ResourceContent | ResourceContent[], mime: string) {
     const sessionID = SessionID.make("session_prompt_mcp_resource")
     const messageID = MessageID.ascending()
     const ask = vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
     const read = vi.spyOn(MCP, "readResource").mockResolvedValue({
-      contents: [content],
+      contents: Array.isArray(content) ? content : [content],
     } as Awaited<ReturnType<typeof MCP.readResource>>)
 
     const parts = await resolveMcpResourcePart({
@@ -391,6 +393,41 @@ describe("prompt MCP resource attachment", () => {
   function fileParts(parts: Awaited<ReturnType<typeof resolveMcpResourcePart>>) {
     return parts.filter((part) => part.type === "file")
   }
+
+  test("bounds all MCP resource text before truncation storage", async () => {
+    const output = vi
+      .spyOn(Truncate, "output")
+      .mockImplementation(async (text) => ({ content: text, truncated: false }))
+    await resolveResource(
+      [
+        { uri: MCP_URI, mimeType: "text/plain", text: "a".repeat(6 * 1024 * 1024) },
+        { uri: MCP_URI, mimeType: "text/plain", text: "b".repeat(6 * 1024 * 1024) },
+      ],
+      "text/plain",
+    )
+    const written = output.mock.calls.map(([text]) => text)
+    expect(written.reduce((sum, text) => sum + Buffer.byteLength(text), 0)).toBeLessThanOrEqual(8 * 1024 * 1024)
+    expect(written.join("")).toMatch(/truncated/i)
+  })
+
+  test("limits MCP resource attachment count even for tiny valid images", async () => {
+    const png = Buffer.from("89504e470d0a1a0a", "hex").toString("base64")
+    const parts = await resolveResource(
+      Array.from({ length: 12 }, () => ({ uri: MCP_URI, mimeType: "image/png", blob: png })),
+      "image/png",
+    )
+    expect(fileParts(parts)).toHaveLength(10)
+  })
+
+  test("does not put malformed server MIME text into synthetic labels", async () => {
+    const parts = await resolveResource(
+      { uri: MCP_URI, mimeType: "x/y]\nINJECTED MIME CONTENT", blob: "!!!" },
+      "application/octet-stream",
+    )
+    const text = parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
+    expect(text).not.toContain("INJECTED MIME CONTENT")
+    expect(text).toContain("[Binary content: application/octet-stream]")
+  })
 
   test("decodes a text/markdown blob without attaching the MCP URI", async () => {
     const parts = await resolveResource(

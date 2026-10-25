@@ -21,10 +21,10 @@ type McpToolContentItem = {
 // texts or binary attachments; over-limit content degrades to a placeholder.
 // The text budget is enforced WHILE collecting: bounding only the joined
 // output would still allocate one full copy per part plus the join buffer.
-const MAX_MCP_ATTACHMENTS = 10
+export const MAX_MCP_ATTACHMENTS = 10
 export const MAX_MCP_ATTACHMENT_BASE64 = 8 * 1024 * 1024
 export const MAX_MCP_ATTACHMENTS_TOTAL_BASE64 = 16 * 1024 * 1024
-const MAX_MCP_TEXT_BYTES = 8 * 1024 * 1024
+export const MAX_MCP_TEXT_BYTES = 8 * 1024 * 1024
 const MAX_MCP_FILENAME = 1024
 const MAX_MCP_SERVER_METADATA_BYTES = 16 * 1024
 export const MAX_MCP_HOOK_FEEDBACK_BYTES = 64 * 1024
@@ -50,7 +50,7 @@ const MCP_SCAN_STOPPED = "[MCP content scan stopped: too much rejected content]"
 const MCP_SCAN_STOPPED_SKIPPED = "[MCP content scan stopped: too many unsupported items]"
 const MIME_PATTERN = /^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/
 
-function validMcpMimeType(value: unknown, fallback: string): string {
+export function validMcpMimeType(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length <= 128 && MIME_PATTERN.test(value) ? value : fallback
 }
 

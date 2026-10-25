@@ -1,6 +1,8 @@
 import path from "path"
 import os from "os"
 import fs from "fs/promises"
+import { createReadStream } from "node:fs"
+import { truncateUtf8Bytes } from "../../tool/bash-helpers"
 import { pathToFileURL } from "url"
 import { Agent } from "../../agent/agent"
 import { ConfigMarkdown } from "../../config/markdown"
@@ -41,11 +43,11 @@ export const defaultReferenceRunners: ReferenceRunners = {
   },
 }
 
-function truncateExpansion(body: string, label: string): string {
-  if (Buffer.byteLength(body, "utf8") <= MAX_EXPANSION_BYTES) return body
+function truncateExpansion(body: string, label: string, force = false): string {
+  if (!force && Buffer.byteLength(body, "utf8") <= MAX_EXPANSION_BYTES) return body
   // Slice UTF-8 bytes, not UTF-16 code units, so multibyte content stays
   // within the advertised cap.
-  const capped = Buffer.from(body, "utf8").subarray(0, MAX_EXPANSION_BYTES).toString("utf8")
+  const capped = truncateUtf8Bytes(body, MAX_EXPANSION_BYTES)
   return `${capped}\n[truncated: ${label} exceeded ${MAX_EXPANSION_BYTES} bytes]`
 }
 
@@ -76,6 +78,47 @@ async function expandGitLog(count: number, runners: ReferenceRunners): Promise<a
   }
 }
 
+async function readFileRange(filepath: string, start: number, end: number | undefined) {
+  const stream = createReadStream(filepath, { highWaterMark: 64 * 1024 })
+  const chunks: Buffer[] = []
+  let bytes = 0
+  let line = 1
+  let truncated = false
+  let reachedEnd = false
+  try {
+    outer: for await (const chunk of stream) {
+      let offset = 0
+      while (offset < chunk.length) {
+        const newline = chunk.indexOf(10, offset)
+        const next = newline === -1 ? chunk.length : newline + 1
+        if (line >= start) {
+          // Retain a small lookahead to detect the cap without materializing
+          // the rest of a long line. The stream is destroyed on an early exit.
+          const take = Math.min(next - offset, MAX_EXPANSION_BYTES + 4 - bytes)
+          if (take > 0) chunks.push(chunk.subarray(offset, offset + take))
+          bytes += take
+          if (take < next - offset) {
+            truncated = true
+            break outer
+          }
+        }
+        if (newline !== -1) line++
+        if (end !== undefined && line > end) {
+          reachedEnd = true
+          break outer
+        }
+        offset = next
+      }
+    }
+  } finally {
+    stream.destroy()
+  }
+  const decoder = new TextDecoder("utf-8", { ignoreBOM: true })
+  let text = decoder.decode(Buffer.concat(chunks, bytes), { stream: truncated }).replace(/\r\n/g, "\n")
+  if (reachedEnd) text = text.replace(/\n$/, "")
+  return { text, total: line, truncated }
+}
+
 async function expandFileRange(
   name: string,
   start: number,
@@ -104,8 +147,10 @@ async function expandFileRange(
     // content here. The attachment layer reads the 1-based range via the
     // 0-based start/end query parameters.
     if (name.startsWith("~/")) {
-      const params = new URLSearchParams({ start: String(start - 1) })
-      if (end !== undefined) params.set("end", String(end - 1))
+      const params = new URLSearchParams({
+        start: String(start - 1),
+        ...(end !== undefined ? { end: String(end - 1) } : {}),
+      })
       return [
         {
           type: "file",
@@ -125,17 +170,12 @@ async function expandFileRange(
       ]
     }
 
-    const content = await fs.readFile(checked, "utf8")
-    const lines = content.split(/\r?\n/)
-    const total = lines.length
-    const startIdx = Math.max(0, Math.min(total, start - 1))
-    const endIdx = end !== undefined ? Math.min(total, end) : total
-    if (startIdx >= endIdx) {
-      return [inlineNote(`[${label} is out of range (file has ${total} lines)]`)]
+    const selected = await readFileRange(checked, start, end)
+    if (start > selected.total) {
+      return [inlineNote(`[${label} is out of range (file has ${selected.total} lines)]`)]
     }
-    const selected = lines.slice(startIdx, endIdx)
     const header = `<file_range path="${name}" start="${start}"${end !== undefined ? ` end="${end}"` : ""}>`
-    const body = truncateExpansion(selected.join("\n"), label)
+    const body = truncateExpansion(selected.text, label, selected.truncated)
     return [{ type: "text", text: `${header}\n${body}\n</file_range>` }]
   } catch (err) {
     return [inlineNote(`[${label} failed: ${(err as Error).message}]`)]

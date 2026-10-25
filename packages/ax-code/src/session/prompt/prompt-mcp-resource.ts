@@ -2,10 +2,14 @@ import { NamedError } from "@ax-code/util/error"
 import { MCP } from "../../mcp"
 import { Permission } from "../../permission"
 import { Truncate } from "../../tool/truncate"
+import { truncateUtf8Bytes } from "../../tool/bash-helpers"
 import { Log } from "../../util/log"
 import { MessageV2 } from "../message-v2"
 import {
   MAX_MCP_ATTACHMENT_BASE64,
+  MAX_MCP_ATTACHMENTS,
+  MAX_MCP_TEXT_BYTES,
+  validMcpMimeType,
   MAX_MCP_ATTACHMENTS_TOTAL_BASE64,
   MCP_IMAGE_TYPES,
   mcpImageMagicOkRaw,
@@ -106,15 +110,33 @@ export async function resolveMcpResourcePart(input: {
 
     const contents = Array.isArray(resourceContent.contents) ? resourceContent.contents : [resourceContent.contents]
     let totalBase64 = 0
+    let attachmentCount = 0
+    const notice = "\n[Untrusted MCP resource text truncated]"
+    let textRemaining = MAX_MCP_TEXT_BYTES - Buffer.byteLength(notice)
+    let textStopped = false
+    const appendText = async (body: string) => {
+      if (textStopped) return
+      const header = `[Untrusted MCP resource content from ${clientName} (${uri})]\n\n`
+      const prefix = truncateUtf8Bytes(header, textRemaining)
+      textRemaining -= Buffer.byteLength(prefix)
+      const content = truncateUtf8Bytes(body, textRemaining)
+      textRemaining -= Buffer.byteLength(content)
+      textStopped = prefix.length !== header.length || content.length !== body.length
+      const text = prefix + content + (textStopped ? notice : "")
+      const truncated = await Truncate.output(text)
+      pieces.push(input.draftSyntheticTextPart(truncated.content))
+    }
     for (const content of contents) {
       if ("text" in content && content.text) {
-        const text = `[Untrusted MCP resource content from ${clientName} (${uri})]\n\n${content.text as string}`
-        const truncated = await Truncate.output(text)
-        pieces.push(input.draftSyntheticTextPart(truncated.content))
+        await appendText(content.text)
       } else if ("blob" in content && content.blob) {
         // MIME types are case-insensitive; normalize before matching so an
         // uppercase declaration cannot bypass the textual/image allowlists.
-        const mimeType = ("mimeType" in content && content.mimeType ? content.mimeType : input.part.mime).toLowerCase()
+        const mimeType = validMcpMimeType(
+          "mimeType" in content ? content.mimeType : undefined,
+          validMcpMimeType(input.part.mime, "application/octet-stream"),
+        ).toLowerCase()
+        if (textStopped && isTextualMimeType(mimeType)) continue
         const blob = content.blob
         // Validate before any decode or data-URL copy: invalid base64 would
         // throw or persist a broken attachment, and an over-cap payload must
@@ -127,12 +149,7 @@ export async function resolveMcpResourcePart(input: {
         }
         const compact = measured.hasWhitespace ? blob.replace(/\s/g, "") : blob
         if (isTextualMimeType(mimeType)) {
-          const text = `[Untrusted MCP resource content from ${clientName} (${uri})]\n\n${Buffer.from(
-            compact,
-            "base64",
-          ).toString("utf8")}`
-          const truncated = await Truncate.output(text)
-          pieces.push(input.draftSyntheticTextPart(truncated.content))
+          await appendText(Buffer.from(compact, "base64").toString("utf8"))
           continue
         }
         const imageKind = MCP_IMAGE_TYPES[mimeType]
@@ -140,11 +157,15 @@ export async function resolveMcpResourcePart(input: {
           (imageKind !== undefined && mcpImageMagicOkRaw(imageKind, compact)) ||
           (mimeType === "application/pdf" && pdfMagicOkRaw(compact))
         if (attachable) {
-          if (totalBase64 + measured.length > MAX_MCP_ATTACHMENTS_TOTAL_BASE64) {
+          if (
+            attachmentCount >= MAX_MCP_ATTACHMENTS ||
+            totalBase64 + measured.length > MAX_MCP_ATTACHMENTS_TOTAL_BASE64
+          ) {
             pieces.push(input.draftSyntheticTextPart(`[Binary content: ${mimeType}]`))
             continue
           }
           totalBase64 += measured.length
+          attachmentCount++
           pieces.push(input.attachDraftContext({ ...input.part, mime: mimeType, url: dataUrl(mimeType, compact) }))
           continue
         }
