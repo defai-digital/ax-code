@@ -1574,6 +1574,86 @@ describe("session.processor", () => {
     })
   })
 
+  test("exhausts the retry budget when every stream ends after finish-step without finish", async () => {
+    // `username` keeps the fixture hermetic in sandboxes where the current uid
+    // has no passwd entry (os.userInfo() then throws ENOENT).
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: model.providerID, modelID: model.id },
+          tools: {},
+          mode: "build",
+        } as MessageV2.User)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: session.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: model.id,
+          providerID: model.providerID,
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        // Every attempt reports a completed step with usage but never the
+        // terminal `finish` event. A successful finish-step must not restore
+        // the retry budget before the stream is known to have completed,
+        // otherwise attempt resets to 0 on every retry and the budget never
+        // runs out.
+        let calls = 0
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
+          calls++
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+              }
+            })(),
+          } as any
+        })
+        sleepSpy = vi.spyOn(SessionRetry, "sleep").mockResolvedValue()
+
+        const processor = SessionProcessor.create({
+          assistantMessage: assistant as MessageV2.Assistant,
+          sessionID: session.id,
+          model,
+          abort: AbortSignal.any([]),
+        })
+        const result = await processor.process({
+          user: user as MessageV2.User,
+          agent: await Agent.get("build"),
+          abort: AbortSignal.any([]),
+          sessionID: session.id,
+          system: [],
+          messages: [],
+          tools: {},
+          model,
+        })
+
+        expect(result).toBe("stop")
+        expect(calls).toBe(SessionRetry.RETRY_MAX_ATTEMPTS + 1)
+        expect(sleepSpy).toHaveBeenCalledTimes(SessionRetry.RETRY_MAX_ATTEMPTS)
+        expect(processor.message.error).toBeDefined()
+      },
+    })
+  })
+
   test("defers error publication after retry exhaustion to the prompt loop", async () => {
     await using tmp = await tmpdir({ git: true })
 

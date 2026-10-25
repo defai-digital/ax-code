@@ -1797,7 +1797,6 @@ export namespace SessionProcessor {
                       })
                     }
                   }
-                  attempt = 0
                   break
 
                 case "text-start":
@@ -1905,6 +1904,12 @@ export namespace SessionProcessor {
                 break
               }
             }
+            // Only the terminal `finish` event proves the provider stream
+            // completed, so only it restores the retry budget. A `finish-step`
+            // can arrive with valid usage and still be followed by a severed
+            // connection; resetting there let every retry restart the budget
+            // and loop forever without ever exhausting it.
+            if (receivedFinish) attempt = 0
             // If the stream ended without a "finish" event and we're not
             // doing compaction, the connection was likely severed by a
             // network interruption. Throw so the catch path triggers retry.
