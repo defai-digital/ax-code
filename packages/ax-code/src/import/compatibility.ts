@@ -188,8 +188,8 @@ export namespace CompatibilityImport {
   // --- MCP import (ADR-220) -------------------------------------------------
 
   /** `${config}#mcp/<name>` display form used for MCP candidates. */
-  function mcpTarget(directory: string, name: string) {
-    return `${projectConfigFileFor(directory)}#mcp/${name}`
+  function mcpTarget(configFile: string, name: string) {
+    return `${configFile}#mcp/${name}`
   }
 
   /** Prefer the live project config file, mirroring Config.projectConfigFile. */
@@ -296,7 +296,7 @@ export namespace CompatibilityImport {
           kind: "mcp",
           action: "skip",
           sourcePath: file,
-          targetPath: mcpTarget(input.directory, "*"),
+          targetPath: mcpTarget(configFile, "*"),
           reason: "invalid_source_json",
         })
         continue
@@ -310,7 +310,7 @@ export namespace CompatibilityImport {
             kind: "mcp",
             action: "skip",
             sourcePath: file,
-            targetPath: mcpTarget(input.directory, name),
+            targetPath: mcpTarget(configFile, name),
             reason: mapped.reason ?? "unsupported_mcp_shape",
             ...(warnings.length > 0 ? { warnings } : {}),
           })
@@ -323,7 +323,7 @@ export namespace CompatibilityImport {
             kind: "mcp",
             action: "skip",
             sourcePath: file,
-            targetPath: mcpTarget(input.directory, name),
+            targetPath: mcpTarget(configFile, name),
             reason: "target_exists",
           })
           continue
@@ -333,7 +333,7 @@ export namespace CompatibilityImport {
           kind: "mcp",
           action: "copy",
           sourcePath: file,
-          targetPath: mcpTarget(input.directory, name),
+          targetPath: mcpTarget(configFile, name),
           ...(warnings.length > 0 ? { warnings } : {}),
         })
         // Files are read project-first, then the --user source. Claim the name
@@ -466,7 +466,7 @@ export namespace CompatibilityImport {
           kind: "mcp",
           action: "skip",
           sourcePath: file,
-          targetPath: mcpTarget(input.directory, "*"),
+          targetPath: mcpTarget(configFile, "*"),
           reason: parsed.line !== undefined ? `invalid_source_toml:${parsed.line}` : "invalid_source_toml",
         })
         continue
@@ -481,7 +481,7 @@ export namespace CompatibilityImport {
             kind: "mcp",
             action: "skip",
             sourcePath: file,
-            targetPath: mcpTarget(input.directory, name),
+            targetPath: mcpTarget(configFile, name),
             reason: mapped.reason ?? "unsupported_mcp_shape",
             ...(warnings.length > 0 ? { warnings } : {}),
           })
@@ -493,7 +493,7 @@ export namespace CompatibilityImport {
             kind: "mcp",
             action: "skip",
             sourcePath: file,
-            targetPath: mcpTarget(input.directory, name),
+            targetPath: mcpTarget(configFile, name),
             reason: "target_exists",
           })
           continue
@@ -503,7 +503,7 @@ export namespace CompatibilityImport {
           kind: "mcp",
           action: "copy",
           sourcePath: file,
-          targetPath: mcpTarget(input.directory, name),
+          targetPath: mcpTarget(configFile, name),
           ...(warnings.length > 0 ? { warnings } : {}),
         })
         // Files are read project-first, then the --user source. Claim the name

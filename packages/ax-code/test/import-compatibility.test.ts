@@ -265,6 +265,18 @@ describe("CompatibilityImport MCP servers (ADR-220)", () => {
       homeSpy.mockRestore()
     }
   })
+
+  test("mcp targetPath names the project ax-code.json file, not a pending promise", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, ".mcp.json"), JSON.stringify(MCP_JSON), "utf-8")
+      },
+    })
+
+    const report = await CompatibilityImport.plan({ source: "claude", directory: tmp.path })
+    const github = report.candidates.find((item) => item.targetPath.endsWith("#mcp/github"))
+    expect(github?.targetPath).toBe(`${path.join(tmp.path, "ax-code.json")}#mcp/github`)
+  })
 })
 
 describe("CompatibilityImport Codex MCP servers (ADR-227)", () => {
@@ -471,6 +483,21 @@ describe("CompatibilityImport Codex MCP servers (ADR-227)", () => {
     const broken = report.candidates.find((item) => item.targetPath.endsWith("#mcp/broken"))
     expect(broken?.action).toBe("skip")
     expect(broken?.reason).toBe("unsupported_mcp_shape")
+  })
+
+  test("mcp targetPath selects an existing ax-code.jsonc over ax-code.json", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, "ax-code.json"), "{}\n", "utf-8")
+        await fs.writeFile(path.join(dir, "ax-code.jsonc"), "{}\n", "utf-8")
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(path.join(dir, ".codex", "config.toml"), '[mcp_servers.docs]\ncommand = "npx"\n', "utf-8")
+      },
+    })
+
+    const report = await CompatibilityImport.plan({ source: "codex", directory: tmp.path })
+    const docs = report.candidates.find((item) => item.targetPath.endsWith("#mcp/docs"))
+    expect(docs?.targetPath).toBe(`${path.join(tmp.path, "ax-code.jsonc")}#mcp/docs`)
   })
 })
 
