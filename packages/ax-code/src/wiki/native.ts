@@ -964,7 +964,10 @@ export async function runNativeWiki(input: {
         wikiDir: config.dir,
         action: input.action,
         generator,
-        sourceRanker: input.idleEmbeddings && config.localEmbeddings ? createIdleWikiSourceRanker(input) : undefined,
+        sourceRanker:
+          input.idleEmbeddings && config.localEmbeddings && process.platform === "darwin" && process.arch === "arm64"
+            ? createIdleWikiSourceRanker({ ...input, wikiDir: config.dir })
+            : undefined,
         pageResultCache: {
           ...staged,
           read: async (page, key) => {

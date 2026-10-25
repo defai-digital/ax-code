@@ -15,6 +15,8 @@ import { HfCache } from "../provider/ax-engine/hf-cache"
 import { FileLock } from "../util/filelock"
 import { Process } from "../util/process"
 import { withTimeout } from "../util/timeout"
+import { readBoundedBody } from "../util/http-body"
+import { parseJsonStrict } from "../util/json-value"
 
 export const WIKI_EMBEDDING_MODEL = {
   repo: "AutomatosX/AX-Qwen3-Embedding-0.6B-MLX-AXQ-MXFP8",
@@ -84,7 +86,7 @@ export async function verifyWikiEmbeddingFiles(
       const target = await realpath(path.join(directory, name))
       const relative = path.relative(root, target)
       if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return false
-      const file = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW)
+      const file = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
       try {
         const before = await file.stat()
         if (!before.isFile()) return false
@@ -159,25 +161,29 @@ export async function openWikiEmbeddingWorker(
   })
   if (!lease) return undefined
   let child: Process.Child | undefined
-  let closed = false
-  const close = async () => {
-    if (closed) return
-    closed = true
-    if (child) {
-      try {
-        await Process.killProcessTree(child)
-        await withTimeout(child.exited, 3000, "Wiki embedding worker did not exit")
-      } catch {
+  const lifetime = new AbortController()
+  let closing: Promise<void> | undefined
+  const close = () => {
+    if (closing) return closing
+    lifetime.abort(new DOMException("Wiki embedding worker closed", "AbortError"))
+    closing = (async () => {
+      if (child) {
         try {
-          await Process.killProcessTree(child, { signal: "SIGKILL" })
-          await withTimeout(child.exited, 3000, "Wiki embedding worker did not exit after SIGKILL")
-        } catch (cause) {
-          // Do not release admission or proceed to generation with a live worker.
-          throw new WikiEmbeddingCleanupError({ message: "Wiki embedding worker cleanup failed" }, { cause })
+          await Process.killProcessTree(child)
+          await withTimeout(child.exited, 3000, "Wiki embedding worker did not exit")
+        } catch {
+          try {
+            await Process.killProcessTree(child, { signal: "SIGKILL" })
+            await withTimeout(child.exited, 3000, "Wiki embedding worker did not exit after SIGKILL")
+          } catch (cause) {
+            // Do not release admission or proceed to generation with a live worker.
+            throw new WikiEmbeddingCleanupError({ message: "Wiki embedding worker cleanup failed" }, { cause })
+          }
         }
       }
-    }
-    lease[Symbol.dispose]()
+      lease[Symbol.dispose]()
+    })()
+    return closing
   }
   try {
     const cache = HfCache.repoDir(WIKI_EMBEDDING_MODEL.repo)
@@ -219,15 +225,19 @@ export async function openWikiEmbeddingWorker(
     )
     const embed = async (texts: string[]) => {
       signal.throwIfAborted()
+      lifetime.signal.throwIfAborted()
+      if (texts.length < 1 || texts.length > 4 || texts.some((text) => !text.trim() || Buffer.byteLength(text) > 4096))
+        throw new Error("Wiki embedding input exceeds batch limits")
       const response = await fetch(`http://127.0.0.1:${port}/v1/embeddings`, {
         method: "POST",
         redirect: "error",
-        signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+        signal: AbortSignal.any([signal, lifetime.signal, AbortSignal.timeout(15_000)]),
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ model: "qwen3_embedding", input: texts, pooling: "last", normalize: true }),
       })
       if (!response.ok) throw new Error("Wiki embedding request failed")
-      return parseWikiEmbeddings(await response.json(), texts.length)
+      const body = await readBoundedBody(response, 256 * 1024)
+      return parseWikiEmbeddings(parseJsonStrict(Buffer.from(body).toString("utf8")), texts.length)
     }
     // Authenticated model request is the readiness check: an unrelated listener
     // winning the ephemeral-port race cannot be mistaken for our worker.

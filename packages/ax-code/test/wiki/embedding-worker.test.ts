@@ -133,3 +133,64 @@ test("download cancellation propagates and releases ownership", async () => {
   })
   expect(release).toHaveBeenCalledOnce()
 })
+
+test("concurrent closes await the same cleanup and reject further requests", async () => {
+  const child = { pid: 123, exitCode: null, signalCode: null, exited: Promise.resolve(0) } as unknown as Process.Child
+  vi.spyOn(Process, "spawn").mockReturnValue(child)
+  const cleanup = Promise.withResolvers<void>()
+  const kill = vi.spyOn(Process, "killProcessTree").mockReturnValue(cleanup.promise)
+  const request = vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, ...Array(1023).fill(0)] }] }))
+  vi.stubGlobal("fetch", request)
+  const worker = (await openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => true }))!
+  const first = worker.close()
+  expect(worker.close()).toBe(first)
+  expect(release).not.toHaveBeenCalled()
+  await expect(worker.embed(["source"])).rejects.toMatchObject({ name: "AbortError" })
+  expect(request).toHaveBeenCalledOnce()
+  cleanup.resolve()
+  await first
+  expect(kill).toHaveBeenCalledOnce()
+  expect(release).toHaveBeenCalledOnce()
+})
+
+test("requests enforce batch and response bounds and close aborts an in-flight request", async () => {
+  const child = { pid: 123, exitCode: null, signalCode: null, exited: Promise.resolve(0) } as unknown as Process.Child
+  vi.spyOn(Process, "spawn").mockReturnValue(child)
+  vi.spyOn(Process, "killProcessTree").mockResolvedValue()
+  const request = vi.fn(async (_url: string, _init: RequestInit) =>
+    Response.json({ data: [{ index: 0, embedding: [1, ...Array(1023).fill(0)] }] }),
+  )
+  vi.stubGlobal("fetch", request)
+  const worker = (await openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => true }))!
+  for (const input of [[], [" "], Array(5).fill("text"), ["界".repeat(1400)]])
+    await expect(worker.embed(input)).rejects.toThrow("batch limits")
+  expect(request).toHaveBeenCalledOnce()
+  request.mockResolvedValueOnce(new Response("x".repeat(256 * 1024 + 1)))
+  await expect(worker.embed(["source"])).rejects.toThrow()
+  request.mockImplementationOnce(
+    async (_url, init) =>
+      new Promise<Response>((_, reject) => {
+        init.signal!.addEventListener("abort", () => reject(init.signal!.reason), { once: true })
+      }),
+  )
+  const pending = expect(worker.embed(["source"])).rejects.toMatchObject({ name: "AbortError" })
+  await worker.close()
+  await pending
+  expect(release).toHaveBeenCalledOnce()
+})
+
+test("failed cleanup remains shared and retains the worker lease", async () => {
+  const child = { pid: 123, exitCode: null, signalCode: null, exited: Promise.resolve(0) } as unknown as Process.Child
+  vi.spyOn(Process, "spawn").mockReturnValue(child)
+  const kill = vi.spyOn(Process, "killProcessTree").mockRejectedValue(new Error("cannot reap worker"))
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, ...Array(1023).fill(0)] }] })),
+  )
+  const worker = (await openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => true }))!
+  const closing = worker.close()
+  await expect(closing).rejects.toMatchObject({ name: "WikiEmbeddingCleanupError" })
+  expect(worker.close()).toBe(closing)
+  expect(kill).toHaveBeenCalledTimes(2)
+  expect(release).not.toHaveBeenCalled()
+})

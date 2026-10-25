@@ -17,7 +17,7 @@ import { parseFrontmatter, renderWikiPage } from "./frontmatter.js"
 import { cutGraphText, GRAPH_LIMITS, GRAPH_TEXT_FORBIDDEN } from "./graph.js"
 import { sha256, stableJson } from "./hash.js"
 import type { EvidenceProvider, WikiSourceRanker } from "./ports.js"
-import { createWikiPlan, selectPageSources, sourceMatchesPage } from "./plan.js"
+import { createWikiPlan, isWikiSourceOrder, selectPageSources, sourceMatchesPage } from "./plan.js"
 import {
   extractProtectedSections,
   managedContentHash,
@@ -274,6 +274,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
         page: { ...page, selectors: [...page.selectors] },
         sources: pageCache.get(page.path)!.selected.map((source) => ({ ...source })),
       })),
+      { maxTotalBytes: config.maxPageSourceBytes ?? 160_000 },
     )
     input.signal?.throwIfAborted()
     for (const page of plan.pages) {
@@ -281,13 +282,8 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
       if (!order) continue
       const cached = pageCache.get(page.path)!
       const byPath = new Map(cached.selected.map((source) => [source.path, source]))
-      if (order.length !== byPath.size || new Set(order).size !== order.length || order.some((p) => !byPath.has(p)))
-        throw new Error("Wiki source ranker must return a permutation of selected sources")
-      // Preserve the highest-ranked source and the initial test sample.
-      const protectedCount =
-        page.kind === "module" ? Math.min(3, cached.selected.length) : Math.min(1, cached.selected.length)
-      if (cached.selected.slice(0, protectedCount).some((source, index) => order[index] !== source.path))
-        throw new Error("Wiki source ranker changed protected source order")
+      if (!isWikiSourceOrder(page, cached.selected, order))
+        throw new Error("Wiki source ranker must preserve source membership and protected order")
       if (order.some((p, index) => p !== cached.selected[index]!.path)) {
         cached.selected = order.map((p) => byPath.get(p)!)
         rankings.set(page.path, { identity: input.sourceRanker.identity, order })

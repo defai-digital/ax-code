@@ -259,3 +259,22 @@ export function selectPageSources(sources: WikiSource[], page: WikiPlanPage, max
   const selected = new Set([first, ...tests])
   return [...selected, ...ranked.filter((source) => !selected.has(source))].slice(0, limit)
 }
+
+/** Entrypoint plus the module's early test sample must survive optional ranking. */
+export function wikiSourcePrefixLength(page: WikiPlanPage, sources: readonly WikiSource[]): number {
+  return Math.min(page.kind === "module" ? 3 : 1, sources.length)
+}
+
+export function isWikiSourceOrder(
+  page: WikiPlanPage,
+  sources: readonly WikiSource[],
+  order: readonly string[],
+): boolean {
+  const paths = new Set(sources.map((source) => source.path))
+  return (
+    order.length === paths.size &&
+    new Set(order).size === order.length &&
+    order.every((p) => paths.has(p)) &&
+    sources.slice(0, wikiSourcePrefixLength(page, sources)).every((source, index) => order[index] === source.path)
+  )
+}

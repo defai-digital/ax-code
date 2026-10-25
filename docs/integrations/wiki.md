@@ -133,16 +133,27 @@ memory. Only one idle embedding worker runs across AX Code projects. A separate
 authenticated loopback worker leaves the user's chat service untouched and
 stops before Wiki prose generation. Foreground activity cancels the idle job.
 Missing/unsupported Engine, unavailable resources, verification failure or an
-embedding timeout retains ordinary deterministic source selection.
+embedding timeout retains a matching cached order, or ordinary deterministic
+source selection when no matching receipt exists.
 
 The worker uses last-token pooling and normalized 1,024-dimensional vectors to
 rank already-selected files against each page's topic. The first source and
 module pages' first three sources (including the early test sample) stay fixed.
 Source membership, permissions and evidence byte limits remain unchanged. A
-build considers at most 128 distinct optional files, reads at most 1,024 bytes
-per file for ranking, and reuses vectors within that build. The optional stage
+build shares a budget of at most 128 distinct optional files across pages,
+reads at most 1,024 bytes per file for ranking, and reuses vectors within that build.
+Pages whose evidence already fits, or whose protected prefix fills the budget,
+skip ranking. The optional stage
 has a two-minute budget, including download and loading. Changed source order
 and ranking profile participate in page fingerprints.
+
+Completed rankings are stored atomically under `.ax-wiki/.embedding-cache` as
+bounded receipts containing source paths and digests, without source text or
+vectors. Receipts bind the complete source inventory, page, model profile and
+evidence budget. Unchanged pages reuse their order without starting Engine,
+which preserves incremental fingerprints during temporary Engine unavailability.
+Changing these inputs invalidates the receipt. Cache access respects repository
+permissions; unreadable or malformed receipts are treated as misses.
 
 This can change which optional evidence survives the page byte budget. It does
 not add semantic search, replace the generation model, or establish a measured
@@ -189,7 +200,11 @@ Configure the integration in project `ax-code.json`:
 
 Each model page gets at most two classified attempts sharing a 180-second deadline. Relative Wiki links are checked against the page plan before the page is accepted; a broken-link response may use the remaining attempt to repair that page. Final validation and manual-content guards still run before publication.
 
-Wiki page generation requests low reasoning effort for MiniMax M3.1 Flash through supported OpenAI-compatible gateways. This model always reasons and defaults to maximum effort when the field is omitted; low effort leaves more of the page deadline for the generated document. Wiki keeps its full auxiliary output-token budget and the same 180-second deadline. The setting is specific to Wiki page generation and does not change interactive chat. Local inference and providers with different reasoning formats keep their existing settings. See the [MiniMax API parameter contract](https://platform.minimax.io/docs/api-reference/text-openai-api).
+Wiki page generation requests disabled reasoning where supported, otherwise the lowest supported effort (`minimal` or `low`). It does not inherit the foreground session's reasoning variant. Provider-specific controls use their SDK namespaces; native Google uses the model's supported thinking budget or level, native Anthropic uses disabled thinking or low effort, and CLI providers receive their lowest effort argument. Explicit model variants named `none`, `off`, `minimal`, or `low` are eligible only when their actual options request disabled or low reasoning; hiding reasoning text alone does not qualify.
+
+MiniMax M3.1 Flash uses low effort because its hosted API always reasons and defaults to maximum effort. Local template switches are not treated as effective controls for hosted MiniMax APIs. See the [MiniMax API parameter contract](https://platform.minimax.io/docs/api-reference/text-openai-api).
+
+A reasoning model without a recognized off/low control is refused before generation dispatch. Configure a supported low-effort model variant or select another `wiki.model`; Wiki does not silently use an uncontrolled provider default. Non-reasoning models need no control. `.build-report.json` records `reasoningMode` as `off`, `low`, `not-required`, or `uncontrolled`; this describes the requested policy, not a measurement of provider compute. Existing output budgets and the 180-second deadline are unchanged. This policy applies only to native Wiki page generation, not interactive chat or external consumers of the reusable Wiki package.
 
 Wiki requests identify themselves with `ax-code/<version> ax-wiki` in the HTTP User-Agent. Operators can use this to distinguish background page generation from foreground chat when investigating timeouts or cancellations; it contains no repository path or page content.
 

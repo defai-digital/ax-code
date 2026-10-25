@@ -21,5 +21,8 @@ export type EvidenceProvider = {
 /** Optional host ranking of already-selected evidence; never expands source access. */
 export type WikiSourceRanker = {
   identity: string
-  rank(pages: Array<{ page: WikiPlanPage; sources: WikiSource[] }>): Promise<Map<string, string[]>>
+  rank(
+    pages: Array<{ page: WikiPlanPage; sources: WikiSource[] }>,
+    options?: { maxTotalBytes: number },
+  ): Promise<Map<string, string[]>>
 }
