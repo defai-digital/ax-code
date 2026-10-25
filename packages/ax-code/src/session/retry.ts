@@ -237,10 +237,18 @@ export namespace SessionRetry {
    * Record a successful provider step so intermittent network failures
    * separated by successes never accumulate toward the circuit threshold;
    * only consecutive failures should open the circuit (STAB-14).
+   *
+   * A success also closes an already-open circuit: a genuinely successful
+   * provider stream during the cooldown proves the path recovered, so the
+   * next isolated transient failure must be retryable instead of failing
+   * fast against a stale open window.
    */
   export function recordNetworkSuccess(providerID?: string) {
     const state = circuits.get(providerID ?? "__global__")
-    if (state) state.failureStreak = 0
+    if (state) {
+      state.failureStreak = 0
+      state.openUntil = 0
+    }
   }
 
   /**

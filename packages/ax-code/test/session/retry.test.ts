@@ -439,6 +439,12 @@ describe("session.retry.retryable", () => {
     // Only three consecutive failures without an intervening success open it.
     expect(SessionRetry.retryable(mk())).toBeUndefined()
     expect(SessionRetry.networkCircuitOpen()).toBe(true)
+    // A genuinely successful provider stream during the open window must also
+    // close the circuit. Otherwise the next isolated transient failure fails
+    // fast with zero retries despite the success that followed the opening.
+    SessionRetry.recordNetworkSuccess()
+    expect(SessionRetry.networkCircuitOpen()).toBe(false)
+    expect(SessionRetry.retryable(mk())).toBe("fetch failed")
   })
 })
 
