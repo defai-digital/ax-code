@@ -1182,7 +1182,7 @@ describe("session.prompt helpers", () => {
       memory: async () => undefined,
       structuredPrompt: "structured",
     })
-    expect(first).toEqual(["env", "skills", "rules", "structured"])
+    expect(first).toEqual(["rules", "structured", "env", "skills"])
 
     const second = await systemPrompt({
       agent: { name: "build" } as any,
@@ -1195,10 +1195,10 @@ describe("session.prompt helpers", () => {
       memory: async () => undefined,
       structuredPrompt: "structured",
     })
-    expect(second).toEqual(["env", "rules"])
+    expect(second).toEqual(["rules", "env"])
   })
 
-  test("includes project memory between environment and skills when present", async () => {
+  test("includes live project memory after required instructions and environment", async () => {
     const cache = {}
     const result = await systemPrompt({
       agent: { name: "build" } as any,
@@ -1210,7 +1210,7 @@ describe("session.prompt helpers", () => {
       instructions: async () => ["rules"],
       memory: async () => "<project-memory>...</project-memory>",
     })
-    expect(result).toEqual(["env", "<project-memory>...</project-memory>", "skills", "rules"])
+    expect(result).toEqual(["rules", "env", "<project-memory>...</project-memory>", "skills"])
   })
 
   test("a compact turn drops the skill list, caps memory and keeps required instructions", async () => {
@@ -1228,14 +1228,14 @@ describe("session.prompt helpers", () => {
       memory,
     }
     const compact = await systemPrompt({ ...base, environmentOverride: ["compact"], compact: true })
-    expect(compact).toEqual(["compact", "<project-memory>capped</project-memory>", "rules"])
+    expect(compact).toEqual(["rules", "compact", "<project-memory>capped</project-memory>"])
     expect(skills).not.toHaveBeenCalled()
     expect(memory.mock.calls[0]?.[3]).toEqual({ maxTokens: COMPACT_MEMORY_TOKENS })
 
     // The compact turn must not poison the cache: the next normal turn still
     // computes and includes the skill list, with uncapped memory.
     const normal = await systemPrompt(base)
-    expect(normal).toEqual(["env", "<project-memory>capped</project-memory>", "skills", "rules"])
+    expect(normal).toEqual(["rules", "env", "<project-memory>capped</project-memory>", "skills"])
     expect(skills).toHaveBeenCalledTimes(1)
     expect(memory.mock.calls[1]?.[3]).toBeUndefined()
   })
@@ -1252,12 +1252,12 @@ describe("session.prompt helpers", () => {
       memory: async () => undefined,
     })
 
-    expect(result[0]).toBe("env")
-    expect(result[1]).toContain("<assurance_workflow>")
-    expect(result[1]).toContain("register_finding")
-    expect(result[1]).toContain("verify_project")
-    expect(result[1]).toContain("review_complete")
-    expect(result[2]).toBe("rules")
+    expect(result[0]).toContain("<assurance_workflow>")
+    expect(result[0]).toContain("register_finding")
+    expect(result[0]).toContain("verify_project")
+    expect(result[0]).toContain("review_complete")
+    expect(result[1]).toBe("rules")
+    expect(result[2]).toBe("env")
   })
 
   test("omits the assurance workflow when structured review tools are denied", async () => {
@@ -1272,7 +1272,7 @@ describe("session.prompt helpers", () => {
       memory: async () => undefined,
     })
 
-    expect(result).toEqual(["env", "rules"])
+    expect(result).toEqual(["rules", "env"])
   })
 
   test("skills cache survives non-file-tool messages and re-runs on a new file-tool call", async () => {
@@ -1412,7 +1412,7 @@ describe("session.prompt helpers", () => {
       instructions: async () => ["", "rules"],
       memory: async () => undefined,
     })
-    expect(result).toEqual(["env", "rules"])
+    expect(result).toEqual(["rules", "env"])
   })
 
   test("skills cache invalidates when message history is truncated (compaction)", async () => {

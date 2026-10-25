@@ -285,6 +285,42 @@ describe("system prompt cache stability", () => {
       memory: async () => undefined,
     }) satisfies Parameters<typeof systemPrompt>[0]
 
+  test.each(["environment", "memory", "skills"] as const)(
+    "keeps required instructions in the shared prefix when %s changes",
+    async (changed) => {
+      const cache = {}
+      const rules = ["Repository rules.", "Use the configured language.", "Return the structured result."]
+      const input = {
+        ...args(cache),
+        format: { type: "json_schema" },
+        instructions: async () => rules.slice(0, 2),
+        structuredPrompt: rules[2],
+      }
+      const first = await systemPrompt({
+        ...input,
+        environmentOverride: ["environment-v1"],
+        memory: async () => "memory-v1",
+        skills: async () => "skills-v1",
+      })
+      const second = await systemPrompt({
+        ...input,
+        environmentOverride: [changed === "environment" ? "environment-v2" : "environment-v1"],
+        memory: async () => (changed === "memory" ? "memory-v2" : "memory-v1"),
+        skills: async () => (changed === "skills" ? "skills-v2" : "skills-v1"),
+      })
+      expect(first.slice(0, rules.length)).toEqual(rules)
+      expect(second.slice(0, rules.length)).toEqual(rules)
+      expect(second).toContain(`${changed}-v2`)
+      expect(second).not.toContain(`${changed}-v1`)
+      expect(first).toContain(`${changed}-v1`)
+
+      // A new session must use changed instructions, not freeze an old prefix.
+      const refreshed = await systemPrompt({ ...input, cache: {}, instructions: async () => ["Updated rules."] })
+      expect(refreshed[0]).toBe("Updated rules.")
+      expect(refreshed).not.toContain(rules[0])
+    },
+  )
+
   test("system array is byte-identical across changing goal and todo state", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -333,22 +369,22 @@ describe("system prompt cache stability", () => {
       memory: async () => memory,
     }
     const compact = await systemPrompt({ ...input, environmentOverride: ["direct response"] })
-    expect(compact).toEqual(["direct response", memory, "skills", "repository instruction", "configured instruction"])
+    expect(compact).toEqual(["repository instruction", "configured instruction", "direct response", memory, "skills"])
     expect(environmentCalls).toBe(0)
 
     const coding = await systemPrompt(input)
-    expect(coding).toEqual(["coding environment", memory, "skills", "repository instruction", "configured instruction"])
+    expect(coding).toEqual(["repository instruction", "configured instruction", "coding environment", memory, "skills"])
     expect(environmentCalls).toBe(1)
 
     memory = "Updated user preference."
     const compactAgain = await systemPrompt({ ...input, environmentOverride: [] })
-    expect(compactAgain).toEqual([memory, "skills", "repository instruction", "configured instruction"])
+    expect(compactAgain).toEqual(["repository instruction", "configured instruction", memory, "skills"])
     expect(await systemPrompt(input)).toEqual([
+      "repository instruction",
+      "configured instruction",
       "coding environment",
       memory,
       "skills",
-      "repository instruction",
-      "configured instruction",
     ])
     expect(environmentCalls).toBe(1)
     expect(instructionCalls).toBe(1)

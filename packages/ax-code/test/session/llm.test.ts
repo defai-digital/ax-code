@@ -22,6 +22,8 @@ import { Recorder } from "../../src/replay/recorder"
 import { ScopedFlag } from "../../src/flag/scoped"
 import { RequestProvenance } from "../../src/session/request-provenance"
 import { preparePromptRequest } from "../../src/session/prompt/prompt-request-build"
+import { systemPrompt } from "../../src/session/prompt/prompt-system"
+import { ReasoningPolicy } from "../../src/control-plane/reasoning-policy"
 import PROMPT_CRAFT from "../../src/session/prompt/craft.txt"
 import PROMPT_AX_ENGINE from "../../src/session/prompt/ax-engine.txt"
 
@@ -2667,6 +2669,128 @@ describe("session.llm.stream - AX Trust prompt-cache header", () => {
     })
     expect(capture.headers.get("X-AX-Prompt-Cache-Key")).toBeNull()
   })
+})
+
+describe("session.llm.stream - stable instruction prefix", () => {
+  test.each([
+    { modelName: "qwen3.8-flash", superLong: false },
+    { modelName: "claude-sonnet-4-6", superLong: false },
+    { modelName: "gpt-4o", superLong: false },
+    { modelName: "gpt-4o", superLong: true },
+  ])(
+    "preserves the serialized instruction prefix on AX Trust $modelName with Super-Long=$superLong",
+    async ({ modelName, superLong }) => {
+      const providerID = ProviderID.make("prefix-gateway")
+      const modelID = ModelID.make(modelName)
+      await using tmp = await tmpdir({
+        config: {
+          enabled_providers: [providerID],
+          provider: {
+            [providerID]: {
+              npm: "@ai-sdk/openai-compatible",
+              options: { apiKey: "test", baseURL: `${state.server.url.origin}/v1`, axTrust: true },
+              models: {
+                [modelID]: {
+                  name: modelName,
+                  tool_call: true,
+                  limit: { context: 128_000, output: 4096 },
+                },
+              },
+            },
+          },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          vi.spyOn(ScopedFlag, "autonomous").mockReturnValue(superLong)
+          vi.spyOn(ScopedFlag, "superLong").mockReturnValue(superLong)
+          vi.stubEnv("AX_CODE_SUPER_LONG_DURABLE_PACING", "0")
+          const model = await Provider.getModel(providerID, modelID)
+          const sessionID = SessionID.make("session-stable-prefix")
+          const agent: Agent.Info = {
+            name: "test",
+            mode: "primary",
+            prompt: "Fixed agent instructions.",
+            options: {},
+            permission: [{ permission: "*", pattern: "*", action: "deny" }],
+          }
+          const rules = ["Repository rules.", "Use the configured language."]
+          const history: ModelMessage[] = [
+            { role: "user", content: "Previous question." },
+            { role: "assistant", content: "Previous answer." },
+          ]
+          const before = structuredClone(history)
+          const cache = {}
+          const captures: Capture[] = []
+          for (const revision of [1, 2]) {
+            if (superLong)
+              vi.spyOn(ReasoningPolicy, "systemReminder").mockReturnValue(`Reasoning revision ${revision}.`)
+            const system = await systemPrompt({
+              agent,
+              model,
+              format: { type: "text" },
+              cache,
+              instructions: async () => rules,
+              environmentOverride: [`Environment revision ${revision}.`],
+              memory: async () => `Memory revision ${revision}.`,
+              skills: async () => `Skills revision ${revision}.`,
+            })
+            const request = waitRequest(
+              "/chat/completions",
+              new Response(createChatStream("ok"), { headers: { "Content-Type": "text/event-stream" } }),
+            )
+            const stream = await LLM.stream({
+              user: {
+                id: MessageID.make(`user-prefix-${revision}`),
+                sessionID,
+                role: "user",
+                time: { created: revision },
+                agent: agent.name,
+                model: { providerID, modelID },
+              },
+              sessionID,
+              model,
+              agent,
+              system,
+              messages: [...history, { role: "user", content: `Current question ${revision}.` }],
+              abort: new AbortController().signal,
+              tools: {},
+            })
+            for await (const _ of stream.fullStream) {
+              // Capture the final serialized request, not only the intermediate array.
+            }
+            expect(LLM.lastStreamError(stream)).toBeUndefined()
+            captures.push(await request)
+          }
+          const prefix = [agent.prompt, ...rules].join("\n") + "\n"
+          for (const [index, capture] of captures.entries()) {
+            const revision = index + 1
+            const messages = capture.body.messages as Array<{ role: string; content: string }>
+            expect(messages[0].role).toBe("system")
+            expect(messages[0].content.startsWith(prefix)).toBe(true)
+            for (const label of ["Environment", "Memory", "Skills"]) {
+              expect(messages[0].content).toContain(`${label} revision ${revision}.`)
+              expect(messages[0].content).not.toContain(`${label} revision ${3 - revision}.`)
+            }
+            const conversation = messages
+              .filter((message) => message.role !== "system")
+              .map(({ role, content }) => ({ role, content }))
+            expect(conversation).toEqual([...history, { role: "user", content: `Current question ${revision}.` }])
+            expect(capture.headers.get("X-AX-Prompt-Cache-Key")).toBe(sessionID)
+            if (superLong) {
+              const system = messages.filter((message) => message.role === "system").map((message) => message.content)
+              const reminder = system.findIndex((content) => content.includes("Super-Long mode"))
+              const reasoning = system.indexOf(`Reasoning revision ${revision}.`)
+              expect(reminder).toBeGreaterThanOrEqual(0)
+              expect(reasoning).toBeGreaterThan(reminder)
+            }
+          }
+          expect(history).toEqual(before)
+        },
+      })
+    },
+  )
 })
 
 describe("session.llm.stream - model promptCacheMode override", () => {

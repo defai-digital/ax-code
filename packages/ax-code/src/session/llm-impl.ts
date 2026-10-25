@@ -317,10 +317,6 @@ export namespace LLM {
       cacheBlocks.push({ kind: "stable", label: "system", content: joined })
     }
     const reasoningPolicyReminder = ReasoningPolicy.systemReminder(reasoningPolicyDecision)
-    if (reasoningPolicyReminder) {
-      system.push(reasoningPolicyReminder)
-      cacheBlocks.push({ kind: "dynamic", label: "transient", content: reasoningPolicyReminder })
-    }
 
     const observedModelCapabilities = {
       contextWindow: input.model.limit.context,
@@ -354,6 +350,10 @@ export namespace LLM {
     if (superLongEnabled) {
       system.push(SUPER_LONG_REMINDER)
       cacheBlocks.push({ kind: "stable", label: "stable-rules", content: SUPER_LONG_REMINDER })
+    }
+    if (reasoningPolicyReminder) {
+      system.push(reasoningPolicyReminder)
+      cacheBlocks.push({ kind: "dynamic", label: "transient", content: reasoningPolicyReminder })
     }
 
     const prePluginSystem = [...system]

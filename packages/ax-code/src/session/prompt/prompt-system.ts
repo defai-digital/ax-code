@@ -134,24 +134,22 @@ export async function systemPrompt(input: {
   }
   if (!input.cache.instructions) input.cache.instructions = await (input.instructions ?? InstructionPrompt.system)()
 
-  // Cache-stability invariant: everything in this array must be stable within
-  // a session. The provider-side prompt cache keys on the system/history
-  // prefix, so per-turn dynamic state (session goal, pending todos, decision
-  // hints, intelligence nudge) deliberately does NOT live here — it is
-  // rendered as a synthetic <turn_context> part on the last user message by
-  // prompt-turn-context.ts / prompt-reminders.ts instead.
+  // Preserve the longest reusable instruction prefix. Environment refreshes,
+  // live memory edits and path-sensitive skill recommendations must follow
+  // required rules, not invalidate them. These remain system content; do not
+  // freeze their values or demote user-curated instructions to user messages.
+  // Per-turn state (goals, todos, decision hints and intelligence nudges)
+  // remains in request-only <turn_context> parts instead.
   // Empty blocks are dropped from the array sources too: some providers
   // reject an empty system message, and a loader alternating between "" and
   // nothing would otherwise flicker the cached prefix.
   const system = [
-    ...(input.environmentOverride ?? input.cache.environment ?? []).filter(Boolean),
     ...(assuranceWorkflow ? [assuranceWorkflow] : []),
+    ...input.cache.instructions.filter(Boolean),
+    ...(input.format.type === "json_schema" && input.structuredPrompt ? [input.structuredPrompt] : []),
+    ...(input.environmentOverride ?? input.cache.environment ?? []).filter(Boolean),
     ...(memory ? [memory] : []),
     ...(skills ? [skills] : []),
-    ...input.cache.instructions.filter(Boolean),
   ]
-  if (input.format.type === "json_schema" && input.structuredPrompt) {
-    system.push(input.structuredPrompt)
-  }
   return system
 }

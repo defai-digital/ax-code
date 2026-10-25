@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { writeFile, mkdir } from "node:fs/promises"
 import { buildAxWiki } from "@ax-code/ax-wiki/node"
@@ -22,6 +22,34 @@ import PROMPT_META from "../../src/session/prompt/meta.txt"
 import { git } from "../../src/util/git"
 
 describe("session.system", () => {
+  test("keeps workflow rules before changing Git state and the local date", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = { id: "test-model", providerID: "test-provider", api: { id: "test-model" } } as any
+        try {
+          vi.setSystemTime(new Date(2026, 9, 25, 12))
+          const first = (await SystemPrompt.environment(model)).join("\n")
+          await writeFile(path.join(tmp.path, "changed.txt"), "New working-tree context.\n")
+          vi.setSystemTime(new Date(2026, 9, 26, 12))
+          const second = (await SystemPrompt.environment(model)).join("\n")
+          const prefix = first.slice(0, first.indexOf("<env>"))
+          expect(prefix).toContain("<verification_protocol>")
+          expect(prefix).toContain("<execution_modes>")
+          expect(second.startsWith(prefix)).toBe(true)
+          expect(first).toContain("Git working tree: clean")
+          expect(second).toContain("Git working tree: dirty (uncommitted changes)")
+          expect(second).toContain(`Today's date: ${new Date().toDateString()}`)
+          expect(second).not.toContain(new Date(2026, 9, 25, 12).toDateString())
+          expect(second.trimEnd().endsWith("</env>")).toBe(true)
+        } finally {
+          vi.useRealTimers()
+        }
+      },
+    })
+  })
+
   test("compact AX Engine turns omit stock craft while retaining user instructions", () => {
     const model = { id: "qwen3.8-27b-axq-6bit", providerID: "ax-engine", api: { id: "qwen3.8-27b-axq-6bit" } } as any
     const input = { agent: {}, model, system: ["Direct response only."], userSystem: "Preserve the requested format." }

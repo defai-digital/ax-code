@@ -284,6 +284,15 @@ export namespace SystemPrompt {
       [
         `You are running in AX Code. The requested model is ${model.providerID}/${model.id} (API model: ${model.api.id}).`,
         `This is the configured request target, not independent proof of upstream served weights. Model or CLI names in memory, examples, and tool documentation do not change your runtime identity or authorize a model switch. Describe available tools from their actual definitions; do not infer browser ownership or headless mode from a model name.`,
+        ...liveSearchBlock,
+        ...autonomousWorkflow,
+        ...verificationProtocol,
+        ...executionModesProtocol,
+        ...wikiProtocol,
+        ...htmlDevWorkflow,
+        ...webmcpBridge,
+        ...debugEngineWorkflow,
+        // Keep refreshed workspace facts after reusable workflow instructions.
         `Here is some useful information about the environment you are running in:`,
         `<env>`,
         `  Working directory: ${Instance.directory}`,
@@ -295,18 +304,10 @@ export namespace SystemPrompt {
               `  A bash workdir override applies to that call only; later calls without workdir start in the working directory above. An empty path-filtered diff does not prove there are no changes until the path base is correct.`,
             ]
           : []),
-        ...gitContext,
         `  Platform: ${process.platform}`,
+        ...gitContext,
         `  Today's date: ${new Date().toDateString()}`,
         `</env>`,
-        ...liveSearchBlock,
-        ...autonomousWorkflow,
-        ...verificationProtocol,
-        ...executionModesProtocol,
-        ...wikiProtocol,
-        ...htmlDevWorkflow,
-        ...webmcpBridge,
-        ...debugEngineWorkflow,
       ].join("\n"),
     ]
   }
