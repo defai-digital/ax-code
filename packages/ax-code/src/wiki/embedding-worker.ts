@@ -9,6 +9,7 @@ import semver from "semver"
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { Config } from "../config/config"
+import { ProcessRegistry } from "../runtime/process-registry"
 import { AxEnginePaths } from "../provider/ax-engine/paths"
 import { getDependencyStatus } from "../provider/ax-engine/dependency"
 import { HfCache } from "../provider/ax-engine/hf-cache"
@@ -135,6 +136,7 @@ async function installedWikiEmbeddingEngine(signal?: AbortSignal) {
   signal?.throwIfAborted()
   const config = await Config.get()
   if (config.disabled_providers?.includes("ax-engine")) return undefined
+  if (config.enabled_providers && !config.enabled_providers.includes("ax-engine")) return undefined
   const dependency = await getDependencyStatus(config.provider?.["ax-engine"]?.options ?? {})
   signal?.throwIfAborted()
   if (
@@ -179,6 +181,7 @@ export async function openWikiEmbeddingWorker(
   })
   if (!lease) return undefined
   let child: Process.Child | undefined
+  let forgetChild: (() => Promise<void>) | undefined
   const lifetime = new AbortController()
   let closing: Promise<void> | undefined
   const close = () => {
@@ -199,6 +202,7 @@ export async function openWikiEmbeddingWorker(
           }
         }
       }
+      await forgetChild?.()
       lease[Symbol.dispose]()
     })()
     return closing
@@ -247,6 +251,13 @@ export async function openWikiEmbeddingWorker(
       await child.exited
       throw new Error("Wiki embedding worker did not start")
     }
+    const pid = child.pid
+    const registered = ProcessRegistry.register({ pid, kind: "wiki", command: dependency.binaryPath })
+    let forgotten: Promise<void> | undefined
+    forgetChild = () => (forgotten ??= registered.then(() => ProcessRegistry.unregister(pid, "wiki")))
+    // Serialize removal after registration so a fast exit cannot leave a late
+    // registry write behind. Failed reaping keeps the entry for the next sweep.
+    void child.exited.then(forgetChild, forgetChild)
     const embed = async (texts: string[]) => {
       signal.throwIfAborted()
       lifetime.signal.throwIfAborted()

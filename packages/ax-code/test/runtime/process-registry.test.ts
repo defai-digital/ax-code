@@ -126,6 +126,15 @@ describe("ProcessRegistry.unregister", () => {
   })
 })
 
+test("Wiki worker entries participate in identity-verified orphan sweeping", async () => {
+  await using tmp = await tmpdir()
+  const { deps, signals } = depsFor(tmp.path, { alive: [777] })
+  await writeEntry(tmp.path, { pid: 777, pgid: 0, kind: "wiki" })
+  const report = await ProcessRegistry.sweepOrphans(deps)
+  expect(report.killed).toBe(1)
+  expect(signals[0]).toEqual({ target: 777, signal: "SIGTERM" })
+})
+
 describe("ProcessRegistry.sweepOrphans", () => {
   test("keeps entries of live owners untouched", async () => {
     await using tmp = await tmpdir()

@@ -2344,7 +2344,7 @@
       ]
     },
     "security_scan": {
-      "count": 559,
+      "count": 562,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -6817,6 +6817,30 @@
           "severity": "medium",
           "kind": "env_leak",
           "summary": "env_leak"
+        },
+        {
+          "fingerprint": "a3b6150e4222a1cfe8267da5fc909ab9f11c56e4b338fa2af3f0958db9fbbf0e",
+          "file": "src/wiki/embedding-worker.ts",
+          "line": 104,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "ca4c3a2ec0bb008cefd716f3a611caaa4294924e835b27790b61f09df00a0891",
+          "file": "src/wiki/embedding-worker.ts",
+          "line": 177,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "3613742fe54de1bdf0734888f94e1b67d716f7a32ee44101410715676eb25f17",
+          "file": "src/wiki/embedding-worker.ts",
+          "line": 209,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
         }
       ]
     },

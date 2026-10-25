@@ -12,7 +12,7 @@ import { parseJsonResult } from "@/util/json-value"
 import { sleep } from "@/util/timeout"
 
 // ADR-209: child-process registry and orphan sweep. Every spawned MCP stdio
-// server, LSP server and background shell is recorded as one small JSON file
+// server, LSP server, background shell and Wiki worker is recorded as one JSON file
 // under `<state>/processes/`; clean teardown removes it. When a backend dies
 // hard (OOM, SIGKILL, a node:ffi crash) the entries survive, and the next
 // startup sweeps children whose owner is gone — after verifying the child's
@@ -23,9 +23,9 @@ import { sleep } from "@/util/timeout"
  * spawn it describes, and a failed sweep must never block startup.
  */
 export namespace ProcessRegistry {
-  export type Kind = "mcp" | "lsp" | "shell"
+  export type Kind = "mcp" | "lsp" | "shell" | "wiki"
 
-  const KINDS = ["mcp", "lsp", "shell"] as const
+  const KINDS = ["mcp", "lsp", "shell", "wiki"] as const
 
   export const Entry = z.object({
     pid: z.number().int().min(2),

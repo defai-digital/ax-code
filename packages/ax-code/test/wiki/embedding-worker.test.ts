@@ -5,6 +5,7 @@ import { Config } from "../../src/config/config"
 import { getDependencyStatus } from "../../src/provider/ax-engine/dependency"
 import { FileLock } from "../../src/util/filelock"
 import { Process } from "../../src/util/process"
+import { ProcessRegistry } from "../../src/runtime/process-registry"
 import { canUseWikiEmbeddings, openWikiEmbeddingWorker, WIKI_EMBEDDING_MODEL } from "../../src/wiki/embedding-worker"
 import { tmpdir } from "../fixture/fixture"
 
@@ -27,6 +28,8 @@ beforeEach(() => {
     blockers: [],
     warnings: [],
   })
+  vi.spyOn(ProcessRegistry, "register").mockResolvedValue()
+  vi.spyOn(ProcessRegistry, "unregister").mockResolvedValue()
   vi.spyOn(FileLock, "tryAcquire").mockResolvedValue({ [Symbol.dispose]: release })
   vi.spyOn(Process, "text").mockResolvedValue({
     code: 0,
@@ -78,6 +81,15 @@ test("Qwen eligibility requires a compatible installed Engine and respects provi
   vi.mocked(Config.get).mockResolvedValueOnce({ disabled_providers: ["ax-engine"] })
   vi.mocked(getDependencyStatus).mockClear()
   expect(await canUseWikiEmbeddings()).toBe(false)
+  expect(getDependencyStatus).not.toHaveBeenCalled()
+  expect(FileLock.tryAcquire).not.toHaveBeenCalled()
+  expect(Process.text).not.toHaveBeenCalled()
+})
+
+test("provider allowlists exclude Wiki embeddings before Engine detection or model IO", async () => {
+  vi.mocked(Config.get).mockResolvedValue({ enabled_providers: ["cloud"] })
+  expect(await canUseWikiEmbeddings()).toBe(false)
+  expect(await openWikiEmbeddingWorker(new AbortController().signal)).toBeUndefined()
   expect(getDependencyStatus).not.toHaveBeenCalled()
   expect(FileLock.tryAcquire).not.toHaveBeenCalled()
   expect(Process.text).not.toHaveBeenCalled()
@@ -159,6 +171,45 @@ test("verified cached model uses an authenticated separate worker and closes ide
   expect(release).toHaveBeenCalledTimes(1)
 })
 
+test("registers the owned worker for identity-safe orphan sweeping and unregisters after reaping", async () => {
+  const exit = Promise.withResolvers<number>()
+  const child = { pid: 123, exitCode: null, signalCode: null, exited: exit.promise } as unknown as Process.Child
+  vi.spyOn(Process, "spawn").mockReturnValue(child)
+  vi.spyOn(Process, "killProcessTree").mockImplementation(async () => {
+    exit.resolve(0)
+  })
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, ...Array(1023).fill(0)] }] })),
+  )
+  const worker = (await openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => true }))!
+  expect(ProcessRegistry.register).toHaveBeenCalledWith({ pid: 123, kind: "wiki", command: "/fake/ax-engine" })
+  expect(ProcessRegistry.unregister).not.toHaveBeenCalled()
+  await worker.close()
+  expect(ProcessRegistry.unregister).toHaveBeenCalledWith(123, "wiki")
+  expect(ProcessRegistry.unregister).toHaveBeenCalledOnce()
+})
+
+test("a worker exit cannot overtake its pending registry write", async () => {
+  const registration = Promise.withResolvers<void>()
+  vi.mocked(ProcessRegistry.register).mockReturnValue(registration.promise)
+  const exit = Promise.withResolvers<number>()
+  const child = { pid: 123, exitCode: null, signalCode: null, exited: exit.promise } as unknown as Process.Child
+  vi.spyOn(Process, "spawn").mockReturnValue(child)
+  vi.spyOn(Process, "killProcessTree").mockResolvedValue()
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, ...Array(1023).fill(0)] }] })),
+  )
+  const worker = (await openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => true }))!
+  exit.resolve(0)
+  await Promise.resolve()
+  expect(ProcessRegistry.unregister).not.toHaveBeenCalled()
+  registration.resolve()
+  await worker.close()
+  expect(ProcessRegistry.unregister).toHaveBeenCalledExactlyOnceWith(123, "wiki")
+})
+
 test("missing artifact downloads exact pin then rejects unverified bytes without starting worker", async () => {
   const spawn = vi.spyOn(Process, "spawn")
   await expect(openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => false })).rejects.toThrow(
@@ -230,7 +281,12 @@ test("requests enforce batch and response bounds and close aborts an in-flight r
 })
 
 test("failed cleanup remains shared and retains the worker lease", async () => {
-  const child = { pid: 123, exitCode: null, signalCode: null, exited: Promise.resolve(0) } as unknown as Process.Child
+  const child = {
+    pid: 123,
+    exitCode: null,
+    signalCode: null,
+    exited: new Promise<number>(() => {}),
+  } as unknown as Process.Child
   vi.spyOn(Process, "spawn").mockReturnValue(child)
   const kill = vi.spyOn(Process, "killProcessTree").mockRejectedValue(new Error("cannot reap worker"))
   vi.stubGlobal(
@@ -243,6 +299,7 @@ test("failed cleanup remains shared and retains the worker lease", async () => {
   expect(worker.close()).toBe(closing)
   expect(kill).toHaveBeenCalledTimes(2)
   expect(release).not.toHaveBeenCalled()
+  expect(ProcessRegistry.unregister).not.toHaveBeenCalled()
 })
 
 test("a failed spawn releases admission and preserves the spawn error instead of claiming a live worker", async () => {
