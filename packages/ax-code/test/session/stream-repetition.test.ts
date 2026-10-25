@@ -60,6 +60,33 @@ describe("stream-repetition", () => {
     }
   })
 
+  test("allows shared 4-space-indented setup lines in distinct Markdown examples", () => {
+    const setup = '    $ ax-code run --sandbox read-only --title "Example" "summarize this change"'
+    const examples = [
+      "The first example explains how a read-only review is scoped to one prompt.",
+      "The second example explains how the same command reports a different verdict.",
+      "The third example applies the command to a longer operator request.",
+      "The fourth example passes a different title while keeping the same shape.",
+    ]
+    const output =
+      "Four legal Markdown examples share one indented setup line.\n\n" +
+      examples.map((line, i) => `Example ${i + 1}: ${line}\n\n${setup}\n\n`).join("")
+    for (const size of [output.length, 1, 37, 512]) {
+      const guard = StreamRepetition.create(fast)
+      for (let offset = 0; offset < output.length; offset += size) {
+        expect(guard.push(output.slice(offset, offset + size))).toBeUndefined()
+      }
+    }
+  })
+
+  test("still detects back-to-back repetition in indented code as a tail loop", () => {
+    const guard = StreamRepetition.create(fast)
+    const unit = '    const value = await loadSomething("source.ts")\n'
+    const detection = guard.push(unit.repeat(30))
+    expect(detection?.kind).toBe("tail")
+    expect(detection!.count).toBeGreaterThanOrEqual(StreamRepetition.MIN_TAIL_REPEATS)
+  })
+
   test("keeps fence state when the opening delimiter leaves the sliding window", () => {
     const guard = StreamRepetition.create({ ...fast, windowChars: 600 })
     guard.push("~~~~typescript\n")

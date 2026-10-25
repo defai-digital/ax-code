@@ -148,6 +148,9 @@ export namespace StreamRepetition {
       while (segments.length && segments[0].start < end - windowChars) segments.shift()
     }
     const recordSegment = (raw: string, start: number, kind: Segment["kind"]) => {
+      // CommonMark indented code is not prose. Generated examples often share
+      // an identical setup line, which must not count toward prose repetition.
+      if (kind === "prose" && /^(?: {4}|\t)/.test(raw)) return
       // Whitespace inside code can be data (for example a string literal).
       const text = kind === "code" ? raw.trim() : normalizeSegment(raw)
       if (text.length >= minSegmentChars) segments.push({ start, text, kind })
