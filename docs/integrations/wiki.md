@@ -132,9 +132,11 @@ Ranking requires AC power, at least 8 GiB total memory and 2 GiB reported free
 memory. Only one idle embedding worker runs across AX Code projects. A separate
 authenticated loopback worker leaves the user's chat service untouched and
 stops before Wiki prose generation. Foreground activity cancels the idle job.
-Missing/unsupported Engine, unavailable resources, verification failure or an
-embedding timeout retains a matching cached order, or ordinary deterministic
-source selection when no matching receipt exists.
+Other platforms and hosts without a compatible installed Engine always use
+ordinary deterministic source selection, even when an old ranking receipt exists.
+On eligible hosts, unavailable resources, verification failure or an embedding
+timeout retains a matching cached order, or ordinary deterministic source selection
+when no matching receipt exists.
 
 The worker uses last-token pooling and normalized 1,024-dimensional vectors to
 rank already-selected files against each page's topic. The first source and
@@ -151,7 +153,7 @@ Completed rankings are stored atomically under `.ax-wiki/.embedding-cache` as
 bounded receipts containing source paths and digests, without source text or
 vectors. Receipts bind the complete source inventory, page, model profile and
 evidence budget. Unchanged pages reuse their order without starting Engine,
-which preserves incremental fingerprints during temporary Engine unavailability.
+which preserves incremental fingerprints when the installed Engine worker is temporarily unavailable.
 Changing these inputs invalidates the receipt. Cache access respects repository
 permissions; unreadable or malformed receipts are treated as misses.
 

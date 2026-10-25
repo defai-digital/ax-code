@@ -5,7 +5,7 @@ import { Config } from "../../src/config/config"
 import { getDependencyStatus } from "../../src/provider/ax-engine/dependency"
 import { FileLock } from "../../src/util/filelock"
 import { Process } from "../../src/util/process"
-import { openWikiEmbeddingWorker, WIKI_EMBEDDING_MODEL } from "../../src/wiki/embedding-worker"
+import { canUseWikiEmbeddings, openWikiEmbeddingWorker, WIKI_EMBEDDING_MODEL } from "../../src/wiki/embedding-worker"
 import { tmpdir } from "../fixture/fixture"
 
 vi.mock("../../src/provider/ax-engine/dependency", () => ({ getDependencyStatus: vi.fn() }))
@@ -41,6 +41,54 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   vi.clearAllMocks()
+})
+
+test.each([
+  ["darwin", "x64"],
+  ["linux", "arm64"],
+  ["win32", "arm64"],
+])("%s/%s never enables Qwen ranking or probes Engine", async (host, architecture) => {
+  Object.defineProperty(process, "platform", { value: host })
+  Object.defineProperty(process, "arch", { value: architecture })
+  expect(await canUseWikiEmbeddings()).toBe(false)
+  expect(getDependencyStatus).not.toHaveBeenCalled()
+  expect(Config.get).not.toHaveBeenCalled()
+})
+
+test("Qwen eligibility requires a compatible installed Engine and respects provider disablement", async () => {
+  expect(await canUseWikiEmbeddings()).toBe(true)
+  vi.mocked(getDependencyStatus).mockResolvedValueOnce({
+    available: false,
+    mode: "missing",
+    installable: true,
+    blockers: [],
+    warnings: [],
+  })
+  expect(await canUseWikiEmbeddings()).toBe(false)
+  vi.mocked(getDependencyStatus).mockResolvedValueOnce({
+    available: true,
+    binaryPath: "/fake/engine",
+    version: "7.8.0",
+    mode: "path",
+    installable: false,
+    blockers: [],
+    warnings: [],
+  })
+  expect(await canUseWikiEmbeddings()).toBe(false)
+  vi.mocked(Config.get).mockResolvedValueOnce({ disabled_providers: ["ax-engine"] })
+  vi.mocked(getDependencyStatus).mockClear()
+  expect(await canUseWikiEmbeddings()).toBe(false)
+  expect(getDependencyStatus).not.toHaveBeenCalled()
+  expect(FileLock.tryAcquire).not.toHaveBeenCalled()
+  expect(Process.text).not.toHaveBeenCalled()
+})
+
+test("Engine detection errors fall back, while caller cancellation propagates", async () => {
+  vi.mocked(getDependencyStatus).mockRejectedValueOnce(new Error("probe failed"))
+  expect(await canUseWikiEmbeddings()).toBe(false)
+  const controller = new AbortController()
+  controller.abort(new DOMException("Foreground", "AbortError"))
+  await expect(canUseWikiEmbeddings(controller.signal)).rejects.toMatchObject({ name: "AbortError" })
 })
 
 test("unsupported hosts, missing engines, old versions, battery and memory pressure have no download", async () => {

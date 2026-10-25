@@ -130,6 +130,33 @@ async function unusedPort(): Promise<number> {
   })
 }
 
+async function installedWikiEmbeddingEngine(signal?: AbortSignal) {
+  if (process.platform !== "darwin" || process.arch !== "arm64") return undefined
+  signal?.throwIfAborted()
+  const config = await Config.get()
+  if (config.disabled_providers?.includes("ax-engine")) return undefined
+  const dependency = await getDependencyStatus(config.provider?.["ax-engine"]?.options ?? {})
+  signal?.throwIfAborted()
+  if (
+    !dependency.available ||
+    !dependency.binaryPath ||
+    !semver.valid(dependency.version) ||
+    semver.lt(dependency.version!, "7.9.0")
+  )
+    return undefined
+  return { binaryPath: dependency.binaryPath }
+}
+
+/** Cache reuse has the same platform/installation boundary as fresh ranking. */
+export async function canUseWikiEmbeddings(signal?: AbortSignal): Promise<boolean> {
+  try {
+    return (await installedWikiEmbeddingEngine(signal)) !== undefined
+  } catch {
+    signal?.throwIfAborted()
+    return false
+  }
+}
+
 /** Called only inside idle maintenance, never from bootstrap or a status read. */
 export async function openWikiEmbeddingWorker(
   signal: AbortSignal,
@@ -141,17 +168,8 @@ export async function openWikiEmbeddingWorker(
   signal.throwIfAborted()
   // This small worker has its own admission budget, independent of chat's 32 GiB floor.
   if (os.totalmem() < 8 * 1024 ** 3 || os.freemem() < 2 * 1024 ** 3) return undefined
-  const config = await Config.get()
-  if (config.disabled_providers?.includes("ax-engine")) return undefined
-  const dependency = await getDependencyStatus(config.provider?.["ax-engine"]?.options ?? {})
-  signal.throwIfAborted()
-  if (
-    !dependency.available ||
-    !dependency.binaryPath ||
-    !semver.valid(dependency.version) ||
-    semver.lt(dependency.version!, "7.9.0")
-  )
-    return undefined
+  const dependency = await installedWikiEmbeddingEngine(signal)
+  if (!dependency) return undefined
   const power = await Process.text(["pmset", "-g", "batt"], { timeout: 2000, abort: signal, nothrow: true })
   signal.throwIfAborted()
   if (power.code !== 0 || !power.text.includes("AC Power")) return undefined

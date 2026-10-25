@@ -9,6 +9,7 @@ import {
 import { Log } from "../util/log"
 import {
   openWikiEmbeddingWorker,
+  canUseWikiEmbeddings,
   WIKI_EMBEDDING_MODEL,
   WikiEmbeddingCleanupError,
   type WikiEmbeddingWorker,
@@ -29,6 +30,7 @@ export function createIdleWikiSourceRanker(
     allowSource?: (relative: string) => boolean
   },
   runtime: {
+    available?: typeof canUseWikiEmbeddings
     open?: (signal: AbortSignal) => Promise<WikiEmbeddingWorker | undefined>
     read?: typeof readFilePrefix
     timeoutMs?: number
@@ -52,6 +54,10 @@ export function createIdleWikiSourceRanker(
         )
       })
       if (!eligible.length) return new Map()
+      // A receipt from a previous installation must not opt an unsupported host
+      // or a machine without Engine back into Qwen-derived source ordering.
+      if (!(await (runtime.available ?? canUseWikiEmbeddings)(input.signal))) return new Map()
+      input.signal?.throwIfAborted()
       const receipts =
         runtime.cache ??
         (input.wikiDir

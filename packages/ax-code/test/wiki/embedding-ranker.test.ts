@@ -35,7 +35,7 @@ function fixture() {
   )
   const open = vi.fn(async () => ({ close, embed }))
   const read = vi.fn(async (_root: string, _relative: string, _maxBytes: number) => "source content")
-  return { open, read, close, embed }
+  return { open, read, close, embed, available: vi.fn(async () => true) }
 }
 
 test("ranks optional evidence while protecting entrypoint/tests and closes before returning", async () => {
@@ -175,7 +175,7 @@ test("all-fit evidence or a protected prefix that fills the budget never opens a
   expect(runtime.open).not.toHaveBeenCalled()
 })
 
-test("durable receipts reuse ranking without Engine and invalidate changed source hashes or budgets", async () => {
+test("durable receipts reuse ranking without starting a worker and invalidate changed source hashes or budgets", async () => {
   await using tmp = await tmpdir({})
   const runtime = fixture()
   const input = { root: tmp.path, wikiDir: ".ax-wiki" }
@@ -242,7 +242,7 @@ test("the 128-source budget is shared across pages and unscored slots retain bas
   }
 })
 
-test("a durable ranking preserves compiler fingerprints and skips generation when Engine is unavailable", async () => {
+test("a durable ranking preserves compiler fingerprints and skips generation when worker startup is unavailable", async () => {
   await using tmp = await tmpdir({})
   const runtime = fixture()
   runtime.embed.mockImplementation(async (texts) =>
@@ -283,4 +283,22 @@ test("a durable ranking preserves compiler fingerprints and skips generation whe
   expect(second.manifest.pages["quickstart.md"].fingerprint).toBe(first.manifest.pages["quickstart.md"].fingerprint)
   expect(generator).not.toHaveBeenCalled()
   expect(offline).not.toHaveBeenCalled()
+})
+
+test("losing platform or Engine eligibility bypasses even a matching durable receipt", async () => {
+  await using tmp = await tmpdir({})
+  const input = { root: tmp.path, wikiDir: ".ax-wiki" }
+  const runtime = fixture()
+  await createIdleWikiSourceRanker(input, runtime).rank([{ page, sources }], { maxTotalBytes: 100_000 })
+  const cache = createWikiEmbeddingRankCache(input)
+  const read = vi.spyOn(cache, "read")
+  runtime.open.mockClear()
+  runtime.available.mockResolvedValue(false)
+  expect(
+    await createIdleWikiSourceRanker(input, { ...runtime, cache }).rank([{ page, sources }], {
+      maxTotalBytes: 100_000,
+    }),
+  ).toEqual(new Map())
+  expect(read).not.toHaveBeenCalled()
+  expect(runtime.open).not.toHaveBeenCalled()
 })
