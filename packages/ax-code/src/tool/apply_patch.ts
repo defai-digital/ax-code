@@ -153,9 +153,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       const movePath = hunk.type === "update" && hunk.move_path ? resolvePatchPath(hunk.move_path) : undefined
       if (movePath && movePath !== filePath) {
         if (seenPaths.has(movePath)) {
-          throw new Error(
-            `apply_patch verification failed: Multiple operations target the same path: ${hunk.move_path}`,
-          )
+          throw new Error(`apply_patch verification failed: Multiple operations target the same path: ${movePath}`)
         }
         seenPaths.add(movePath)
       }

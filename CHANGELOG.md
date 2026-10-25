@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.29.3] - 2026-10-25
+
+### Fixed
+
+- Drain every subscriber in a streaming delta batch before delivering later batches, including when a subscriber fails.
+- Reject overlapping patch sources and move destinations before any write or approval prompt.
+- Preserve delta flush ordering, include tool errors in step budgets, and improve repeated streaming output detection.
+- Protect existing move destinations, preserve Unicode in long file lines, and report ripgrep execution failures.
+
+### Changed
+
+- Publish SDK 2.6.50 with the current server contract.
+
 ## [7.29.2] - 2026-10-25
 
 ### Fixed
