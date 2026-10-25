@@ -1963,6 +1963,26 @@ export namespace SessionProcessor {
               }
               if (currentText) currentText.text = StreamRepetition.truncateLoopedText(currentText.text)
             }
+            // Start-only attempts persist empty parts, but remain safe to replay.
+            // Remove them before the next attempt drops their local references.
+            if (!replayUnsafe) {
+              const abandoned: Array<MessageV2.TextPart | MessageV2.ReasoningPart> = []
+              if (currentText && currentText.text.length === 0) abandoned.push(currentText)
+              for (const part of Object.values(reasoningMap)) {
+                if (part.text.length === 0) abandoned.push(part)
+              }
+              for (const part of abandoned) {
+                await Session.removePart({
+                  sessionID: input.sessionID,
+                  messageID: input.assistantMessage.id,
+                  partID: part.id,
+                })
+              }
+              if (currentText && currentText.text.length === 0) currentText = undefined
+              for (const [id, part] of Object.entries(reasoningMap)) {
+                if (part.text.length === 0) delete reasoningMap[id]
+              }
+            }
             if (replayUnsafe) {
               // Even compaction/media repair cannot replay a request that
               // already published output or started a tool.

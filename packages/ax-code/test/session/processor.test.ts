@@ -2412,6 +2412,48 @@ test("partial output locks automatic replay even when the API error is transient
   })
 })
 
+test("retry discards empty parts started before a transient failure", async () => {
+  await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const stream = vi
+        .fn()
+        .mockResolvedValueOnce({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "text-start", id: "text_old" }
+            yield { type: "reasoning-start", id: "reasoning_old" }
+            throw new MessageV2.APIError({ message: "Service Unavailable", statusCode: 503, isRetryable: true })
+          })(),
+        } as unknown as Awaited<ReturnType<typeof LLM.stream>>)
+        .mockResolvedValueOnce(successfulTextStream("recovered"))
+      const sleep = vi.fn(async () => {})
+      const { processor, streamInput } = await createProcessorFixture(
+        tmp.path,
+        processorDependencies({ stream, sleep }),
+      )
+
+      expect(await processor.process(streamInput)).toBe("continue")
+      expect(stream).toHaveBeenCalledTimes(2)
+      expect(sleep).toHaveBeenCalledTimes(1)
+      expect(processor.message.error).toBeUndefined()
+
+      const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+      const abandoned = saved.parts.filter(
+        (part) => (part.type === "text" || part.type === "reasoning") && part.text.trim().length === 0,
+      )
+      expect(abandoned).toEqual([])
+      const unfinished = saved.parts.filter(
+        (part) => (part.type === "text" || part.type === "reasoning") && !part.time?.end,
+      )
+      expect(unfinished).toEqual([])
+      expect(saved.parts.some((part) => part.type === "text" && part.text === "recovered")).toBe(true)
+    },
+  })
+})
+
 test("tool input start locks automatic replay before tool-call", async () => {
   await using tmp = await tmpdir({ git: true, config: { username: "test" } })
   await Instance.provide({
