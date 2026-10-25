@@ -592,6 +592,25 @@ describe("tool.read truncation", () => {
     })
   })
 
+  test("does not split a Unicode surrogate pair when truncating a long line", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        const longLine = "x".repeat(1999) + "\u{1F680}" + "tail"
+        await writeFile(path.join(dir, "unicode-long-line.txt"), longLine)
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const result = await read.execute({ filePath: path.join(tmp.path, "unicode-long-line.txt") }, ctx)
+        expect(result.output.isWellFormed()).toBe(true)
+        expect(result.metadata.preview.isWellFormed()).toBe(true)
+        expect(result.output).toContain("(line truncated to 2000 chars)")
+      },
+    })
+  })
+
   test("image files set truncated to false", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

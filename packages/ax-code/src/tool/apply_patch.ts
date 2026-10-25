@@ -139,9 +139,17 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     let totalDiff = ""
 
     const resolvePatchPath = (filePath: string) => resolveToolFilePath(filePath, Instance.directory)
+    const seenPaths = new Set<string>()
 
     for (const hunk of hunks) {
       const filePath = resolvePatchPath(hunk.path)
+      // Repeated operations derive from the same snapshot and cannot apply
+      // cleanly in sequence. Reject them before prompting, matching
+      // Patch.maybeParseApplyPatchVerified; chunks within one update stay valid.
+      if (seenPaths.has(filePath)) {
+        throw new Error(`apply_patch verification failed: Multiple operations target the same path: ${hunk.path}`)
+      }
+      seenPaths.add(filePath)
       const movePath = hunk.type === "update" && hunk.move_path ? resolvePatchPath(hunk.move_path) : undefined
       await assertExternalDirectory(ctx, filePath)
       await assertSymlinkInsideProject(filePath)
@@ -239,8 +247,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             ? await fs
                 .stat(movePath)
                 .then((stats) => {
+                  if (stats.isDirectory()) throw new Error(`Path is a directory: ${movePath}`)
                   moveMode = stats.mode & 0o777
-                  return !stats.isDirectory()
+                  return true
                 })
                 .catch((error: unknown) => {
                   const code = Filesystem.errnoCode(error)
@@ -253,6 +262,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             : undefined
           let moveOldContent: string | undefined
           const moveSameFile = moveExisted ? await sameFile(filePath, movePath!) : false
+          // Overwriting an existing destination discards its content, so the
+          // destination needs the same must-read-before-write protection as
+          // the source. A case-only rename names one inode twice, so it has no
+          // separate destination to protect.
+          if (moveExisted && !moveSameFile) await FileTime.assert(ctx.sessionID, movePath!)
           if (moveExisted) {
             try {
               moveOldContent = await fs.readFile(movePath!, "utf-8")

@@ -167,6 +167,12 @@ describe("file.ripgrep", () => {
     expect(hits).toEqual([])
   })
 
+  test("search rejects an invalid regular expression", async () => {
+    await using tmp = await tmpdir()
+
+    await expect(Ripgrep.search({ cwd: tmp.path, pattern: "[" })).rejects.toThrow("ripgrep failed")
+  })
+
   test("search treats zero limit as no results", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

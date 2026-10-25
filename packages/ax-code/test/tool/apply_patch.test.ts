@@ -216,7 +216,7 @@ describe("tool.apply_patch freeform", () => {
         const source = path.join(fixture.path, "source.txt")
         const dest = path.join(fixture.path, "dest.txt")
         await writeAndTrack(source, "old content\n")
-        await fs.writeFile(dest, "existing\n", "utf-8")
+        await writeAndTrack(dest, "existing\n")
 
         const actualReadFile = fs.readFile
         const readSpy = vi.spyOn(fs, "readFile").mockImplementation(async (input, options) => {
@@ -334,6 +334,26 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("rejects repeated operations on one file during verification", async () => {
+    await using fixture = await tmpdir()
+    const { ctx, calls } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "repeated.txt")
+        await writeAndTrack(target, "line1\nline2\n")
+
+        const patchText =
+          "*** Begin Patch\n*** Update File: repeated.txt\n@@\n-line1\n+changed1\n*** Update File: repeated.txt\n@@\n-line2\n+changed2\n*** End Patch"
+
+        await expect(execute({ patchText }, ctx)).rejects.toThrow("Multiple operations target the same path")
+        expect(calls).toHaveLength(0)
+        expect(await fs.readFile(target, "utf-8")).toBe("line1\nline2\n")
+      },
+    })
+  })
+
   test("inserts lines with insert-only hunk", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
@@ -436,6 +456,52 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("rejects a directory move destination during verification", async () => {
+    await using fixture = await tmpdir()
+    const { ctx, calls } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const original = path.join(fixture.path, "old.txt")
+        const destination = path.join(fixture.path, "dest")
+        await writeAndTrack(original, "from\n")
+        await fs.mkdir(destination)
+
+        const patchText = "*** Begin Patch\n*** Update File: old.txt\n*** Move to: dest\n@@\n-from\n+new\n*** End Patch"
+
+        await expect(execute({ patchText }, ctx)).rejects.toThrow(`Path is a directory: ${destination}`)
+        expect(calls).toHaveLength(0)
+        expect(await fs.readFile(original, "utf-8")).toBe("from\n")
+        expect((await fs.stat(destination)).isDirectory()).toBe(true)
+      },
+    })
+  })
+
+  test("requires reading an existing move destination before overwriting it", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const original = path.join(fixture.path, "old.txt")
+        const destination = path.join(fixture.path, "dest.txt")
+        await writeAndTrack(original, "from\n")
+        await fs.writeFile(destination, "existing\n", "utf-8")
+
+        const patchText =
+          "*** Begin Patch\n*** Update File: old.txt\n*** Move to: dest.txt\n@@\n-from\n+new\n*** End Patch"
+
+        await expect(execute({ patchText }, ctx)).rejects.toThrow(
+          `You must read file ${destination} before overwriting it`,
+        )
+        expect(await fs.readFile(original, "utf-8")).toBe("from\n")
+        expect(await fs.readFile(destination, "utf-8")).toBe("existing\n")
+      },
+    })
+  })
+
   test("moves file overwriting existing destination", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
@@ -448,7 +514,7 @@ describe("tool.apply_patch freeform", () => {
         await fs.mkdir(path.dirname(original), { recursive: true })
         await fs.mkdir(path.dirname(destination), { recursive: true })
         await writeAndTrack(original, "from\n")
-        await fs.writeFile(destination, "existing\n", "utf-8") // destination is overwritten, not patched
+        await writeAndTrack(destination, "existing\n")
 
         const patchText =
           "*** Begin Patch\n*** Update File: old/name.txt\n*** Move to: renamed/dir/name.txt\n@@\n-from\n+new\n*** End Patch"

@@ -521,6 +521,7 @@ export namespace Ripgrep {
       nothrow: true,
     })
     if (result.code === 2) {
+      if (!result.text.trim()) throw new Error(`ripgrep failed: ${result.stderr}`)
       // Exit 2 marks partial errors (an unreadable file, a vanished directory);
       // stdout still carries every match already found, so keep parsing it.
       log.warn("ripgrep error", { code: result.code, stderr: result.stderr })

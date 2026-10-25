@@ -19,6 +19,19 @@ export function sameReadSource(left: BigIntStats, right: BigIntStats) {
   )
 }
 
+/**
+ * Cut a long line at a UTF-16 boundary. Ending between a high and a low
+ * surrogate would leave a lone code unit, so back off one unit — the same
+ * boundary rule as clampGrepLine in ./grep-line.ts.
+ */
+function truncateReadLine(source: string): string {
+  let end = MAX_LINE_LENGTH
+  const last = source.charCodeAt(end - 1)
+  const next = source.charCodeAt(end)
+  if (last >= 0xd800 && last <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) end--
+  return source.slice(0, end)
+}
+
 /** A bounded source snapshot, not an mtime-only cache admission. */
 export async function readSourceSnapshot(filepath: string, signal: AbortSignal) {
   const handle = await fs.open(filepath, "r")
@@ -69,8 +82,7 @@ export async function renderReadText(
         hasMoreLines = true
         break // One-line lookahead; do not scan to EOF just to count hidden lines.
       }
-      const line =
-        normalized.length > MAX_LINE_LENGTH ? normalized.substring(0, MAX_LINE_LENGTH) + MAX_LINE_SUFFIX : normalized
+      const line = normalized.length > MAX_LINE_LENGTH ? truncateReadLine(normalized) + MAX_LINE_SUFFIX : normalized
       const size = Buffer.byteLength(line) + (raw.length ? 1 : 0)
       if (bytes + size > MAX_BYTES) {
         truncatedByBytes = true
