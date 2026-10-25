@@ -694,11 +694,10 @@ export namespace SessionProcessor {
               | { type: "reasoning"; text: string }
               | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
             > = []
-            // ADR-258: completed string outputs of the current step's tool
-            // calls, in arrival order. Errors never enter this list (they
-            // are never spilled); the finish-step handler applies the
-            // aggregate step budget over it.
-            let stepToolResults: Array<{ part: MessageV2.ToolPart; text: string; bytes: number }> = []
+            // ADR-258: emitted string outputs of the current step's tool
+            // calls, in arrival order. Errors count toward the aggregate
+            // budget but are never spilled.
+            let stepToolResults: Array<{ part: MessageV2.ToolPart; text: string; bytes: number; error: boolean }> = []
             lastStreamError = undefined
             // A setup the caller started ahead of time belongs to the first
             // attempt only: a retry must set up again rather than replay a
@@ -1165,6 +1164,7 @@ export namespace SessionProcessor {
                         part: completedPart,
                         text: output,
                         bytes: Buffer.byteLength(output, "utf-8"),
+                        error: false,
                       })
                     }
                     // Attribute patch-part files to this message's own writes:
@@ -1313,7 +1313,7 @@ export namespace SessionProcessor {
                       annotatedError = `${base}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
                     }
 
-                    await Session.updatePart.force({
+                    const failedPart: MessageV2.ToolPart = {
                       ...match,
                       state: {
                         status: "error",
@@ -1333,6 +1333,13 @@ export namespace SessionProcessor {
                           end: toolErrorEnd,
                         },
                       },
+                    }
+                    await Session.updatePart.force(failedPart)
+                    stepToolResults.push({
+                      part: failedPart,
+                      text: annotatedError,
+                      bytes: Buffer.byteLength(annotatedError, "utf-8"),
+                      error: true,
                     })
                     Recorder.emit({
                       type: "tool.result",
@@ -1741,7 +1748,8 @@ export namespace SessionProcessor {
                   // result already carries its per-tool truncation; this pass
                   // spills the largest emitted outputs through the same
                   // Truncate path (head preview + spill file note) until the
-                  // projected total fits the budget. Call ids and result
+                  // projected total fits the budget. Errors count toward the
+                  // total but are never spill candidates. Call ids and result
                   // order are unchanged, only output text shrinks, and a
                   // spilled result keeps at least a 2 KB preview.
                   if (stepToolResults.length > 0) {
@@ -1751,7 +1759,7 @@ export namespace SessionProcessor {
                       overrideBytes,
                     })
                     const plan = ToolResultBudget.plan({
-                      results: stepToolResults.map((entry) => ({ bytes: entry.bytes })),
+                      results: stepToolResults.map((entry) => ({ bytes: entry.bytes, error: entry.error })),
                       budgetBytes,
                     })
                     for (const index of plan.spill) {

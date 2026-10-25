@@ -44,7 +44,7 @@ describe("session.processor step tool-result budget (ADR-258)", () => {
       git: true,
       config: {
         username: "testuser",
-        tool_output: { step_budget_bytes: 8 * 1024 },
+        tool_output: { step_budget_bytes: 40 * 1024 },
       },
     })
     await Instance.provide({
@@ -82,6 +82,12 @@ describe("session.processor step tool-result budget (ADR-258)", () => {
 
         const smallOutput = "small-result\n".repeat(200) // ~2.8 KB, stays intact
         const largeOutput = "x".repeat(30 * 1024) // spilled to a ~2 KB preview
+        // ~20 KB. "permission denied" makes the failure non-recoverable, so
+        // self-correction does not append a reflection prompt that would echo
+        // the message and double the emitted error bytes. The two successful
+        // outputs alone (~33 KB) stay under the 40 KB step budget, so only
+        // counting this error pushes the step over and spills the large success.
+        const errorOutput = `boom failed: permission denied\n${"e".repeat(20 * 1024)}`
         const streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
           fullStream: (async function* () {
             yield { type: "start" }
@@ -108,7 +114,7 @@ describe("session.processor step tool-result budget (ADR-258)", () => {
               type: "tool-error",
               toolCallId: "call_error",
               input: { command: "boom" },
-              error: new Error("boom failed"),
+              error: new Error(errorOutput),
             }
             yield {
               type: "finish-step",
@@ -160,10 +166,12 @@ describe("session.processor step tool-result budget (ADR-258)", () => {
             expect(Buffer.byteLength(output, "utf-8")).toBeLessThan(6 * 1024)
           }
 
-          // Errors are never spilled.
+          // Errors count toward the step budget but are never spilled: the
+          // full annotated error text survives intact.
           expect(failed.state.status).toBe("error")
           if (failed.state.status === "error") {
             expect(failed.state.error).toContain("boom failed")
+            expect(Buffer.byteLength(failed.state.error, "utf-8")).toBeGreaterThanOrEqual(20 * 1024)
           }
         } finally {
           streamSpy.mockRestore()
