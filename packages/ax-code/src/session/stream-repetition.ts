@@ -9,14 +9,16 @@
  * TUI spins forever with no error.
  *
  * This guard watches the raw text/reasoning deltas of one stream and detects
- * two repetition shapes inside a sliding tail window:
+ * two repetition shapes over sliding windows:
  *
  * - `segment`: the same prose line (>= MIN_SEGMENT_CHARS) appears
- *   MAX_SEGMENT_REPEATS+ times in the window. Catches the common "same plan
- *   sentence re-emitted between re-reads of the same code" loop. Complete
- *   fenced blocks count as single units: distinct tests often share lines.
- * - `tail`: the window ends with the same short unit repeated back-to-back.
- *   Catches single-line streams with no paragraph breaks ("foo foo foo ...").
+ *   MAX_SEGMENT_REPEATS+ times in the prose segment window. Catches the common
+ *   "same plan sentence re-emitted between re-reads of the same code" loop.
+ *   Complete fenced blocks count as single units: distinct tests often share
+ *   lines.
+ * - `tail`: the larger raw tail window ends with the same unit repeated
+ *   back-to-back. Catches single-line streams with no paragraph breaks
+ *   ("foo foo foo ...") and whole fenced blocks repeated verbatim.
  *
  * Checks are throttled (every CHECK_INTERVAL_CHARS appended, only after
  * MIN_TOTAL_CHARS total) so the per-delta cost stays negligible.
@@ -24,8 +26,10 @@
 export namespace StreamRepetition {
   /** Don't evaluate anything until this much text has streamed. */
   export const MIN_TOTAL_CHARS = 4096
-  /** Sliding window kept for analysis. */
+  /** Sliding window kept for prose segment analysis. */
   export const WINDOW_CHARS = 6144
+  /** Sliding window kept for the raw back-to-back tail check. */
+  export const TAIL_WINDOW_CHARS = 12288
   /** Run the checks at most once per this many appended chars. */
   export const CHECK_INTERVAL_CHARS = 512
   /** Prose lines shorter than this are ignored by the segment check. */
@@ -37,8 +41,9 @@ export namespace StreamRepetition {
   /** Consecutive repeats of the unit required at the tail. */
   export const MIN_TAIL_REPEATS = 3
   // Cover multiline code loops too: shared lines are excluded from the prose
-  // check, but three copies of an entire code block can fit in the raw window.
-  export const MAX_TAIL_UNIT_CHARS = Math.floor(WINDOW_CHARS / MIN_TAIL_REPEATS)
+  // check, but three copies of an entire code block can fit in the raw tail
+  // window. Derived from the tail window, not the (smaller) segment window.
+  export const MAX_TAIL_UNIT_CHARS = Math.floor(TAIL_WINDOW_CHARS / MIN_TAIL_REPEATS)
   /** Cap on anchor occurrences scanned per tail check (cost bound). */
   const MAX_ANCHOR_OCCURRENCES = 64
   /** Cap unique paragraph keys counted per window (cost bound). */
@@ -128,6 +133,9 @@ export namespace StreamRepetition {
   export function create(options: Options = {}) {
     const minTotalChars = options.minTotalChars ?? MIN_TOTAL_CHARS
     const windowChars = options.windowChars ?? WINDOW_CHARS
+    // An explicit windowChars keeps its old meaning for both checks; otherwise
+    // the raw tail check gets a larger default so whole code blocks fit.
+    const tailWindowChars = options.windowChars ?? TAIL_WINDOW_CHARS
     const checkIntervalChars = options.checkIntervalChars ?? CHECK_INTERVAL_CHARS
     const minSegmentChars = options.minSegmentChars ?? MIN_SEGMENT_CHARS
     const maxSegmentRepeats = options.maxSegmentRepeats ?? MAX_SEGMENT_REPEATS
@@ -211,7 +219,7 @@ export namespace StreamRepetition {
           const chunk = delta.slice(offset, offset + untilCheck)
           offset += chunk.length
           total += chunk.length
-          window = (window + chunk).slice(-windowChars)
+          window = (window + chunk).slice(-tailWindowChars)
           appendSegments(chunk)
           pruneSegments(total)
           sinceCheck += chunk.length

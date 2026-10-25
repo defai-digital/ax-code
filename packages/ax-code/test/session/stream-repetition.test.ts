@@ -129,6 +129,29 @@ describe("stream-repetition", () => {
     expect(detection?.kind).toBe("tail")
   })
 
+  test("detects an identical 2070-character fenced block repeated beyond the old raw window", () => {
+    // 22 lines: opener (6 chars) + 20 x 103-char body lines + closer (4 chars).
+    const body = Array.from(
+      { length: 20 },
+      (_, i) => `  const value${i} = await loadSource("file-${i}.ts", { verify: true })`.padEnd(102) + "\n",
+    ).join("")
+    const unit = "```ts\n" + body + "```\n"
+    expect(unit.length).toBe(2070)
+    // Longer than the old 6144/3 tail-unit cap, but within the raw tail window.
+    expect(unit.length).toBeGreaterThan(StreamRepetition.WINDOW_CHARS / StreamRepetition.MIN_TAIL_REPEATS)
+
+    const output = unit.repeat(20)
+
+    const whole = StreamRepetition.create(fast)
+    expect(whole.push(output)?.kind).toBe("tail")
+
+    const split = StreamRepetition.create(fast)
+    let detection: StreamRepetition.Detection | undefined
+    for (let offset = 0; offset < output.length && !detection; offset += 37)
+      detection = split.push(output.slice(offset, offset + 37))
+    expect(detection?.kind).toBe("tail")
+  })
+
   test("reset clears an unclosed fence before checking prose in a new step", () => {
     const guard = StreamRepetition.create(fast)
     guard.push("```ts\nconst unfinished = true\n")
