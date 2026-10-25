@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.29.4] - 2026-10-25
+
+### Fixed
+
+- Bound retries for provider streams that end without a terminal finish event, and count truncated streams toward network circuit protection.
+- Clear the provider network circuit after a successful stream and prevent replay once tool input starts.
+- Remove empty text and reasoning parts before safe retries, including blocks that already received their end event.
+- Preserve reusable system instruction prefixes while refreshing environment, memory, skill and reasoning context.
+
+### Changed
+
+- Publish SDK 2.6.51 with the current server contract.
+
 ## [7.29.3] - 2026-10-25
 
 ### Fixed
