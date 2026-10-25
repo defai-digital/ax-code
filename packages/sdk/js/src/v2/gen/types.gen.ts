@@ -5291,6 +5291,21 @@ export type WikiVisualizationGraph = {
       to: string
       imports: number
     }>
+    evidence?: {
+      scan: {
+        status: "partial" | "unavailable" | "unknown"
+        analyzedFiles?: number
+        unsupportedFiles?: number
+        unavailableFiles?: number
+        failedFiles?: number
+        unscannedFiles?: number
+        unresolvedImports?: number
+        omittedImports?: number
+      }
+      internalImports: number
+      omittedDependencies: number
+      omittedDependencyImports: number
+    }
   }
 }
 

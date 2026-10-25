@@ -85,6 +85,23 @@ export const WikiGraphSchema = z
         dependencies: z
           .array(z.object({ from: z.string().max(1024), to: z.string().max(1024), imports: count }))
           .max(GRAPH_LIMITS.moduleDependencies),
+        evidence: z
+          .object({
+            scan: z.object({
+              status: z.enum(["partial", "unavailable", "unknown"]),
+              analyzedFiles: count.optional(),
+              unsupportedFiles: count.optional(),
+              unavailableFiles: count.optional(),
+              failedFiles: count.optional(),
+              unscannedFiles: count.optional(),
+              unresolvedImports: count.optional(),
+              omittedImports: count.optional(),
+            }),
+            internalImports: count,
+            omittedDependencies: count,
+            omittedDependencyImports: count,
+          })
+          .optional(),
       })
       .optional(),
   })

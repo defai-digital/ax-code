@@ -1,4 +1,5 @@
 /** Deterministic coding evidence. No filesystem, viewer or model dependency. */
+import { dependencyMetrics } from "./dependency-metrics.js"
 export type WikiInsightSource = {
   path: string
   status: "analyzed" | "unsupported" | "unavailable" | "failed" | "not-scanned"
@@ -66,12 +67,16 @@ export function analyzeWikiCodingInsights(input: {
     }
   }
   const cited = new Set(input.pages.flatMap((page) => page.sources))
+  const metrics = dependencyMetrics(
+    [...sources.keys()],
+    [...adjacency].flatMap(([from, targets]) => targets.map((to) => ({ from, to, imports: 1 }))),
+  )
   const limit = Math.max(
     0,
     Math.min(WIKI_INSIGHT_LIMITS.neighbors, input.neighborLimit ?? WIKI_INSIGHT_LIMITS.neighbors),
   )
-  const list = (paths: string[]) => ({
-    count: paths.length,
+  const list = (paths: string[], count: number) => ({
+    count,
     files: paths.slice(0, limit),
     omitted: Math.max(0, paths.length - limit),
   })
@@ -106,8 +111,8 @@ export function analyzeWikiCodingInsights(input: {
     ],
     targets: requested.slice(0, WIKI_INSIGHT_LIMITS.targets).map((target) => {
       const source = sources.get(target)
-      const dependencies = list(adjacency.get(target) ?? [])
-      const dependents = list([...(incoming.get(target) ?? [])].sort())
+      const dependencies = list(adjacency.get(target) ?? [], metrics.get(target)?.outboundNeighbors ?? 0)
+      const dependents = list([...(incoming.get(target) ?? [])].sort(), metrics.get(target)?.inboundNeighbors ?? 0)
       const route = cycleThrough(target, adjacency)
       const cycle = route && route.length - 1 <= WIKI_INSIGHT_LIMITS.cycleEdges ? route : undefined
       const related = input.pages

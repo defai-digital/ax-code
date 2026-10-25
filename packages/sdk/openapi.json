@@ -55827,6 +55827,83 @@
                     "imports"
                   ]
                 }
+              },
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "scan": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "partial",
+                          "unavailable",
+                          "unknown"
+                        ]
+                      },
+                      "analyzedFiles": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "unsupportedFiles": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "unavailableFiles": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "failedFiles": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "unscannedFiles": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "unresolvedImports": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "omittedImports": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "status"
+                    ]
+                  },
+                  "internalImports": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "omittedDependencies": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "omittedDependencyImports": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "scan",
+                  "internalImports",
+                  "omittedDependencies",
+                  "omittedDependencyImports"
+                ]
               }
             },
             "required": [

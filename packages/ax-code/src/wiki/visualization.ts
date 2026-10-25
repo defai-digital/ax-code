@@ -15,7 +15,7 @@ import {
   readWikiPageBodies,
 } from "@ax-code/ax-wiki/node"
 import { graphRelativePath, projectWikiManifest, parseWikiGraph } from "@ax-code/ax-wiki/graph"
-import type { InventorySymbol } from "@ax-code/ax-wiki/graph"
+import type { InventorySymbol, WikiImportScan } from "@ax-code/ax-wiki/graph"
 import { WikiInventory } from "./inventory"
 import { renderWikiGraphHtml } from "@ax-code/ax-wiki-viewer/node"
 import { parseJsonStrict } from "../util/json-value"
@@ -111,10 +111,32 @@ export namespace WikiVisualization {
     }
     let inventory: Map<string, InventorySymbol[]> | undefined
     let imports: Map<string, string[]> | undefined
+    let importScan: WikiImportScan = { status: "unavailable" }
     try {
-      const all = await WikiInventory.buildAll(canonicalRoot, cited)
+      const scan = {
+        status: "partial" as const,
+        analyzedFiles: 0,
+        unsupportedFiles: 0,
+        unavailableFiles: 0,
+        failedFiles: 0,
+        unscannedFiles: new Set(cited).size,
+        unresolvedImports: 0,
+        omittedImports: 0,
+      }
+      const all = await WikiInventory.buildAll(canonicalRoot, cited, WikiInventory.LIMITS, undefined, {
+        onSource: (_file, state) => {
+          if (state.status === "analyzed") scan.analyzedFiles++
+          if (state.status === "unsupported") scan.unsupportedFiles++
+          if (state.status === "unavailable") scan.unavailableFiles++
+          if (state.status === "failed") scan.failedFiles++
+          if (state.status !== "not-scanned") scan.unscannedFiles--
+          scan.unresolvedImports += state.unresolvedImports
+          scan.omittedImports += state.omittedImports
+        },
+      })
       inventory = new Map([...all].map(([relative, entry]) => [relative, entry.symbols]))
       imports = new Map([...all].map(([relative, entry]) => [relative, entry.imports]))
+      importScan = scan
     } catch {
       inventory = undefined
       imports = undefined
@@ -127,6 +149,7 @@ export namespace WikiVisualization {
       sourceContents,
       inventory,
       imports,
+      importScan,
       observed,
       documents,
     })

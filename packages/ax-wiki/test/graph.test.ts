@@ -879,3 +879,81 @@ test.each([[], ["src/other.ts"], ["src/a.ts", "src/a.ts"]].map((unverified) => (
     expect(() => parseWikiGraph(graph)).toThrow("Invalid unverified sources")
   },
 )
+
+test("records module omissions before graph drawing caps and parses optional scope safely", () => {
+  const sources = Array.from({ length: 40 }, (_, i) =>
+    Array.from({ length: 3 }, (_, j) => `g${String(i).padStart(2, "0")}/${j}.ts`),
+  ).flat()
+  const imports = new Map(
+    sources
+      .filter((file) => file.endsWith("/0.ts"))
+      .map((from) => [from, sources.filter((file) => file.endsWith("/0.ts") && file !== from)]),
+  )
+  imports.get("g00/0.ts")!.push("g00/1.ts")
+  const graph = projectWikiManifest(
+    { schemaVersion: 1, generator: "ax-wiki", pages: { "all.md": { title: "All", sources, sourceHashes: {} } } },
+    {
+      snapshot: "scope",
+      imports,
+      importScan: { status: "partial", analyzedFiles: 120, unresolvedImports: 2 },
+    },
+  )
+  expect(graph.modules!.groups).toHaveLength(40)
+  expect(graph.modules!.dependencies).toHaveLength(800)
+  expect(graph.modules!.evidence).toEqual({
+    scan: { status: "partial", analyzedFiles: 120, unresolvedImports: 2 },
+    internalImports: 1,
+    omittedDependencies: 760,
+    omittedDependencyImports: 760,
+  })
+  expect(parseWikiGraph(graph).modules).toEqual(graph.modules)
+  const legacy = { ...graph, modules: { ...graph.modules!, evidence: undefined } }
+  expect(parseWikiGraph(legacy).modules!.evidence).toBeUndefined()
+  for (const change of [
+    { internalImports: -1 },
+    { omittedDependencies: 0.5 },
+    { scan: { status: "complete" } },
+    { scan: { status: "partial", analyzedFiles: -1 } },
+  ]) {
+    expect(() =>
+      parseWikiGraph({ ...graph, modules: { ...graph.modules!, evidence: { ...graph.modules!.evidence, ...change } } }),
+    ).toThrow()
+  }
+  const parsed = parseWikiGraph({
+    ...graph,
+    modules: {
+      ...graph.modules!,
+      evidence: { ...graph.modules!.evidence, secret: "discard", scan: { status: "unknown", secret: "discard" } },
+    },
+  })
+  expect(JSON.stringify(parsed.modules)).not.toContain("discard")
+})
+
+test("rejects aggregate module count overflow before a viewer consumes it", () => {
+  const graph = projectWikiManifest(manifest(), { snapshot: "overflow" })
+  const modules = {
+    rule: "Fixture",
+    groups: [
+      { path: "a", files: 1 },
+      { path: "b", files: 1 },
+    ],
+    dependencies: [
+      { from: "a", to: "b", imports: Number.MAX_SAFE_INTEGER },
+      { from: "b", to: "a", imports: 1 },
+    ],
+  }
+  expect(() => parseWikiGraph({ ...graph, modules })).toThrow("Invalid count")
+  expect(() =>
+    parseWikiGraph({
+      ...graph,
+      modules: {
+        ...modules,
+        dependencies: [],
+        groups: [
+          { path: "a", files: Number.MAX_SAFE_INTEGER },
+          { path: "b", files: 1 },
+        ],
+      },
+    }),
+  ).toThrow("Invalid count")
+})

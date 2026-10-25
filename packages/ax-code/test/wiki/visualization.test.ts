@@ -334,3 +334,37 @@ describe("live Wiki onboarding page", () => {
     }
   })
 })
+
+test("reports partial import scan coverage independently of recorded edges", async () => {
+  await using tmp = await tmpdir()
+  await setup(tmp.path)
+  await mkdir(path.join(tmp.path, "src"))
+  await writeFile(path.join(tmp.path, "src/a.ts"), 'import "./missing"\nexport const a = 1\n')
+  await writeFile(path.join(tmp.path, "src/notes.txt"), "plain text")
+  await writeFile(
+    path.join(tmp.path, ".ax-wiki/.manifest.json"),
+    JSON.stringify({
+      ...manifest,
+      pages: {
+        "guide.md": { title: "Guide", sources: ["src/a.ts", "src/notes.txt", "src/gone.ts"], sourceHashes: {} },
+      },
+    }),
+  )
+  const graph = await WikiVisualization.snapshot(tmp.path)
+  expect(graph.modules!.evidence).toEqual({
+    scan: {
+      status: "partial",
+      analyzedFiles: 1,
+      unsupportedFiles: 1,
+      unavailableFiles: 1,
+      failedFiles: 0,
+      unscannedFiles: 0,
+      unresolvedImports: 1,
+      omittedImports: 0,
+    },
+    internalImports: 0,
+    omittedDependencies: 0,
+    omittedDependencyImports: 0,
+  })
+  expect(WikiGraphSchema.parse(graph).modules!.evidence).toEqual(graph.modules!.evidence)
+})

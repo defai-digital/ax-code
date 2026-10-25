@@ -1,4 +1,5 @@
 import { expect, test } from "vitest"
+import { renderModuleInsights, renderModuleScope } from "../src/module-insights.js"
 import type { WikiGraph, WikiGraphModules, WikiGraphPage } from "@ax-code/ax-wiki/graph"
 import {
   analyzeModules,
@@ -156,13 +157,13 @@ test("levelized order puts providers before consumers and breaks ties by path", 
   expect(cycle.levels.get("b")).toBe(1)
 })
 
-test("a self-loop stays a single group and does not invent a cycle", () => {
+test("within-group edges are excluded from dependency metrics and do not invent a module cycle", () => {
   const analyzed = analyzeModules(modules(["a", "b"], [["a", "a", 3]]))
   expect(analyzed.cycles).toEqual([])
   expect(analyzed.order).toEqual(["a", "b"])
   expect(analyzed.levels.get("a")).toBe(0)
-  expect(analyzed.inbound.get("a")).toBe(3)
-  expect(analyzed.outbound.get("a")).toBe(3)
+  expect(analyzed.inbound.get("a")).toBe(0)
+  expect(analyzed.outbound.get("a")).toBe(0)
   expect(sortedComponents(["a"], [["a", "a"]])).toEqual([["a"]])
 })
 
@@ -493,4 +494,75 @@ test("matrix evidence distinguishes module aggregates from admitted file pairs",
   dispose()
   fire(cell, "click", { preventDefault() {} })
   expect(textOf(container)).toBe("")
+})
+
+test("insights separates units, sorts and pages evidence, preserves selection and disposes replaced listeners", () => {
+  const groups = ["a", "b", "c", "d", "e", "f"]
+  const input = modules(
+    groups,
+    groups.flatMap((from) =>
+      groups.filter((to) => to !== from).map((to) => [from, to, from === "a" ? 8 : 1] as [string, string, number]),
+    ),
+  )
+  const abort = new AbortController()
+  const selected: string[] = []
+  const inspected: WikiGraphModules["dependencies"][] = []
+  const root = renderModuleInsights(fakeDocument(), input, {
+    signal: abort.signal,
+    onGroup: (path) => selected.push(path),
+    onImports: (pairs) => inspected.push(pairs),
+  }) as unknown as FakeNode
+  const click = (node: FakeNode) => fire(node, "click", { preventDefault() {} })
+  const buttons = (text: string) => walk(root).filter((node) => node.tag === "button" && node.textContent === text)
+  const rank = () => walk(root).filter((node) => classes(node).includes("module-ranking"))
+  expect(textOf(rank()[1])).toContain("a5")
+  const oldRankButton = walk(rank()[1]).find((node) => node.tag === "button")!
+  click(oldRankButton)
+  expect(selected).toEqual(["a"])
+  click(buttons("File pairs")[0])
+  expect(textOf(rank()[1])).toContain("a40")
+  click(oldRankButton)
+  expect(selected).toEqual(["a"])
+  expect(textOf(root)).toContain("1–25 of 30 retained module pairs")
+  const rows = () => walk(root).find((node) => node.tag === "tbody")!.children
+  expect(textOf(rows()[0])).toBe("ab8Inspect")
+  const oldInspect = buttons("Inspect")[0]
+  click(oldInspect)
+  expect(inspected[0]).toEqual([{ from: "a", to: "b", imports: 8 }])
+  expect(rows()[0].attrs.get("data-selected")).toBe("true")
+  click(buttons("Next pairs")[0])
+  expect(textOf(root)).toContain("26–30 of 30 retained module pairs")
+  expect(rows()).toHaveLength(5)
+  click(oldInspect)
+  expect(inspected).toHaveLength(1)
+  click(buttons("Importer")[0])
+  expect(textOf(root)).toContain("1–25 of 30 retained module pairs")
+  expect(textOf(rows()[0])).toBe("ab8Inspect")
+  expect(rows()[0].attrs.get("data-selected")).toBe("true")
+  click(buttons("File pairs")[1])
+  expect(textOf(rows()[0])).toBe("ab8Inspect")
+  click(buttons("File pairs")[1])
+  expect(textOf(rows()[0])).toBe("ba1Inspect")
+  const inspect = buttons("Inspect")[0]
+  abort.abort()
+  click(inspect)
+  expect(inspected).toHaveLength(1)
+})
+
+test("scope presents legacy unknowns and explicit partial scan omissions", () => {
+  const input = modules(["a", "b"])
+  expect(textOf(renderModuleScope(fakeDocument(), input) as unknown as FakeNode)).toContain("Scan coverage unknown")
+  expect(textOf(renderModuleScope(fakeDocument(), input) as unknown as FakeNode)).toContain("unknown not scanned")
+  input.evidence = {
+    scan: { status: "partial", analyzedFiles: 1, unscannedFiles: 1 },
+    internalImports: 3,
+    omittedDependencies: 2,
+    omittedDependencyImports: 7,
+  }
+  const text = textOf(renderModuleScope(fakeDocument(), input) as unknown as FakeNode)
+  expect(text).toContain("Partial scan")
+  expect(text).toContain("1 not scanned")
+  expect(text).toContain("Omitted module pairs: 2 (7 file pairs)")
+  expect(text).toContain("excluded from rankings: 3")
+  expect(text).toContain("not runtime hotpaths or defect probabilities")
 })

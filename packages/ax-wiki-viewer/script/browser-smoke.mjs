@@ -1063,6 +1063,21 @@ try {
   assert.equal(await work.locator(".dependency-diagram").isVisible(), false)
   assert.match(await work.locator(".module-evidence").innerText(), /src\/a.ts → lib\/c.ts/)
 
+  await work.getByRole("button", { name: "Insights", exact: true }).click()
+  assert.equal(await work.locator(".module-insights").isVisible(), true)
+  assert.equal(await work.locator(".modules svg.chart").first().isVisible(), false)
+  assert.match(await work.locator(".module-scope").innerText(), /Scan coverage unknown/)
+  await work.getByRole("button", { name: "Inspect src → lib", exact: true }).focus()
+  await work.keyboard.press("Enter")
+  assert.match(await work.locator(".module-evidence").innerText(), /src\/a.ts → lib\/c.ts/)
+  await work
+    .getByRole("group", { name: "Ranking unit" })
+    .getByRole("button", { name: "File pairs", exact: true })
+    .click()
+  assert.match(await work.locator(".module-rankings").innerText(), /file pairs/)
+  await work.getByRole("button", { name: "lib: 1 incoming file pairs", exact: true }).click()
+  assert.match(await work.locator(".detail").innerText(), /lib\/c.ts/)
+
   // Local exploration keeps the world positions, while Back restores scope and camera.
   await work.getByRole("tab", { name: "Evidence map" }).click()
   await work.getByRole("button", { name: "Show all / reset", exact: true }).click()
@@ -1163,6 +1178,38 @@ try {
   )
   if (process.env.AX_WIKI_MODULE_SCREENSHOT)
     await cyclePage.screenshot({ path: process.env.AX_WIKI_MODULE_SCREENSHOT, fullPage: true })
+  await cyclePage.getByRole("button", { name: "Insights", exact: true }).click()
+  const rankingUnit = cyclePage.getByRole("group", { name: "Ranking unit" })
+  assert.equal(
+    await cyclePage.getByRole("button", { name: "src: 2 incoming neighbor modules", exact: true }).count(),
+    1,
+  )
+  await rankingUnit.getByRole("button", { name: "File pairs", exact: true }).click()
+  assert.equal(await cyclePage.getByRole("button", { name: "src: 3 incoming file pairs", exact: true }).count(), 1)
+  await cyclePage.getByRole("button", { name: "Inspect src → lib", exact: true }).click()
+  assert.match(
+    await cyclePage.locator(".module-evidence").innerText(),
+    /3 recorded imports[\s\S]*1 file-pair edges admitted/,
+  )
+  const firstPair = () => cyclePage.locator(".module-table tbody tr").first().innerText()
+  assert.match(await firstPair(), /src[\s\S]*lib[\s\S]*3/)
+  await cyclePage.locator(".module-table").getByRole("button", { name: "File pairs", exact: true }).click()
+  assert.match(await firstPair(), /applications[\s\S]*src[\s\S]*1/)
+  await cyclePage.locator(".module-scope summary").click()
+  if (process.env.AX_WIKI_INSIGHTS_SCREENSHOT)
+    await cyclePage.screenshot({ path: process.env.AX_WIKI_INSIGHTS_SCREENSHOT, fullPage: true })
+  await cyclePage.setViewportSize({ width: 600, height: 900 })
+  assert.equal(
+    await cyclePage
+      .locator(".module-rankings")
+      .evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(" ").length),
+    1,
+  )
+  assert.equal(
+    await cyclePage.locator(".module-insights").evaluate((node) => node.scrollWidth <= node.clientWidth),
+    true,
+  )
+  await cyclePage.getByRole("button", { name: "Diagram", exact: true }).click()
   await cyclePage.setViewportSize({ width: 768, height: 1024 })
   assert.equal(await cyclePage.getByRole("button", { name: /^Collapse cycle:/ }).isVisible(), true)
   await cyclePage.getByRole("tab", { name: "Evidence map" }).click()

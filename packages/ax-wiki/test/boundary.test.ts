@@ -24,6 +24,7 @@ const CORE_FILES = [
   "validate.ts",
   "build-pure.ts",
   "insights.ts",
+  "dependency-metrics.ts",
   "discovery-concurrency.ts",
 ]
 

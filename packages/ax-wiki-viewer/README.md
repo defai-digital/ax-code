@@ -37,7 +37,15 @@ Supply a schema-1 graph from `@ax-code/ax-wiki/graph`. `mount` shows four tabs:
   and a page-by-module heatmap. Matrix cells and diagram links inspect the same
   recorded import counts. Aggregate module counts can include evidence omitted
   from the node/edge graph; the detail list labels admitted file pairs separately.
-  Neither view claims a complete call graph or source-line navigation.
+  **Insights** adds incoming/outgoing rankings with separate neighbor-module and
+  file-pair units, plus a sortable, paginated dependency table using the same
+  evidence details. Rankings use all retained groups, even when the matrix hides
+  isolated groups. Select a ranking bar to inspect the group's cited files.
+  Expand the scope summary to see scan coverage, unresolved imports and omissions;
+  older snapshots report unknown coverage. Counts are bounded static observations,
+  not runtime hotpaths or defect probabilities. Adaptive directory groups are not
+  directly comparable across snapshots. No view claims a complete call graph or
+  source-line navigation.
 
 The reading, overview and module data come from the optional `pages`, `overview` and
 `modules` projections (pass page bodies as `documents` to `projectWikiManifest`).

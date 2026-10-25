@@ -1,9 +1,12 @@
-import type { WikiGraph, WikiGraphModules, WikiGraphPage } from "@ax-code/ax-wiki/graph"
+import { dependencyMetrics, type WikiGraph, type WikiGraphModules, type WikiGraphPage } from "@ax-code/ax-wiki/graph"
 
 import { renderModuleDiagram } from "./module-diagram.js"
+import { moduleInsightsCss, renderModuleInsights, renderModuleScope } from "./module-insights.js"
 
 /** Styles for the modules view. Scoped under the `.axwv` ancestor, which owns the color variables. */
-export const modulesCss = `
+export const modulesCss =
+  moduleInsightsCss +
+  `
 .axwv .modules{display:flex;flex-direction:column;gap:4px;min-width:0;color:var(--text)}
 .axwv .modules h2{font-size:15px;font-weight:650;margin:16px 0 0;letter-spacing:-.01em}
 .axwv .modules h2:first-child{margin-top:0}
@@ -207,16 +210,12 @@ export function analyzeModules(modules: WikiGraphModules): ModuleAnalysis {
     known.add(group.path)
     paths.push(group.path)
   }
-  const inbound = new Map<string, number>(paths.map((path) => [path, 0]))
-  const outbound = new Map<string, number>(paths.map((path) => [path, 0]))
-  const edges: Array<[string, string]> = []
-  for (const dependency of modules.dependencies) {
-    if (outbound.has(dependency.from))
-      outbound.set(dependency.from, outbound.get(dependency.from)! + dependency.imports)
-    if (inbound.has(dependency.to)) inbound.set(dependency.to, inbound.get(dependency.to)! + dependency.imports)
-    if (known.has(dependency.from) && known.has(dependency.to) && dependency.from !== dependency.to)
-      edges.push([dependency.from, dependency.to])
-  }
+  const metrics = dependencyMetrics(paths, modules.dependencies)
+  const inbound = new Map([...metrics].map(([path, metric]) => [path, metric.inboundPairs]))
+  const outbound = new Map([...metrics].map(([path, metric]) => [path, metric.outboundPairs]))
+  const edges: Array<[string, string]> = modules.dependencies
+    .filter((edge) => known.has(edge.from) && known.has(edge.to) && edge.from !== edge.to)
+    .map((edge) => [edge.from, edge.to])
 
   // Edge direction is "imports" / depends-on. A sink depends on nothing, so it is a provider.
   const components = stronglyConnected(paths, edges)
@@ -835,10 +834,12 @@ export function renderModulesView(
   const joiner = rule.length === 0 || /[.!?]$/.test(rule) ? " " : ". "
   root.append(paragraph(doc, "caption", rule.length === 0 ? sentence : `${rule}${joiner}${sentence}`))
 
+  root.append(renderModuleScope(doc, modules))
+
   const pages = (graph.pages ?? []).slice(0, MAX_PAGES)
   const analysis = analyzeModules(modules)
   if (modules.dependencies.length === 0) root.append(paragraph(doc, "empty", "No recorded imports"))
-  else {
+  {
     // Hiding groups only filters matrix rows and columns; file attribution still uses every group.
     const visible = options.visibleGroups
     const shown = visible ? { ...analysis, order: analysis.order.filter((path) => visible.has(path)) } : analysis
@@ -852,7 +853,10 @@ export function renderModulesView(
     const diagramButton = html(doc, "button")
     diagramButton.textContent = "Diagram"
     diagramButton.setAttribute("aria-pressed", "false")
-    switcher.append(matrixButton, diagramButton)
+    const insightsButton = html(doc, "button")
+    insightsButton.textContent = "Insights"
+    insightsButton.setAttribute("aria-pressed", "false")
+    switcher.append(matrixButton, diagramButton, insightsButton)
     root.append(switcher)
     const inspect = html(doc, "section")
     inspect.className = "module-evidence"
@@ -900,14 +904,23 @@ export function renderModulesView(
       onImports: inspectImports,
     })
     diagram.hidden = true
-    const choose = (isDiagram: boolean) => {
-      matrix.hidden = isDiagram
-      diagram.hidden = !isDiagram
-      matrixButton.setAttribute("aria-pressed", String(!isDiagram))
-      diagramButton.setAttribute("aria-pressed", String(isDiagram))
+    const insights = renderModuleInsights(doc, modules, {
+      signal: abort.signal,
+      onGroup: (path) => options.onSelectGroup?.(path, files.get(path) ?? []),
+      onImports: inspectImports,
+    })
+    insights.hidden = true
+    const choose = (view: "matrix" | "diagram" | "insights") => {
+      matrix.hidden = view !== "matrix"
+      diagram.hidden = view !== "diagram"
+      insights.hidden = view !== "insights"
+      matrixButton.setAttribute("aria-pressed", String(view === "matrix"))
+      diagramButton.setAttribute("aria-pressed", String(view === "diagram"))
+      insightsButton.setAttribute("aria-pressed", String(view === "insights"))
     }
-    matrixButton.addEventListener("click", () => choose(false), { signal: abort.signal })
-    diagramButton.addEventListener("click", () => choose(true), { signal: abort.signal })
+    matrixButton.addEventListener("click", () => choose("matrix"), { signal: abort.signal })
+    diagramButton.addEventListener("click", () => choose("diagram"), { signal: abort.signal })
+    insightsButton.addEventListener("click", () => choose("insights"), { signal: abort.signal })
     root.append(
       paragraph(
         doc,
@@ -916,6 +929,7 @@ export function renderModulesView(
       ),
       matrix,
       diagram,
+      insights,
       inspect,
     )
   }

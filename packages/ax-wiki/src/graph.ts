@@ -3,6 +3,7 @@ import { provenanceOfSymbol } from "./grounding.js"
 import type { SymbolProvenance } from "./grounding.js"
 
 export type { SymbolProvenance } from "./grounding.js"
+export { dependencyMetrics } from "./dependency-metrics.js"
 export type GraphFreshness = "fresh" | "stale" | "unknown"
 export type SymbolAnchor = {
   name: string
@@ -90,6 +91,23 @@ export type WikiGraphModules = {
   rule: string
   groups: Array<{ path: string; files: number }>
   dependencies: Array<{ from: string; to: string; imports: number }>
+  /** Absent in legacy snapshots. Scan limits and module-pair omissions are separate from drawing caps. */
+  evidence?: {
+    scan: WikiImportScan
+    internalImports: number
+    omittedDependencies: number
+    omittedDependencyImports: number
+  }
+}
+export type WikiImportScan = {
+  status: "partial" | "unavailable" | "unknown"
+  analyzedFiles?: number
+  unsupportedFiles?: number
+  unavailableFiles?: number
+  failedFiles?: number
+  unscannedFiles?: number
+  unresolvedImports?: number
+  omittedImports?: number
 }
 export type WikiGraph = {
   schemaVersion: 1
@@ -313,6 +331,7 @@ function parseModules(value: unknown): WikiGraphModules | undefined {
   })
   const known = new Set(groups.map((group) => group.path))
   if (known.size !== groups.length) throw new Error("Duplicate module group")
+  count(groups.reduce((sum, group) => sum + group.files, 0))
   const pairs = new Set<string>()
   const dependencies = list(modules.dependencies, GRAPH_LIMITS.moduleDependencies, "module dependencies").map((raw) => {
     const dependency = record(raw)
@@ -326,7 +345,33 @@ function parseModules(value: unknown): WikiGraphModules | undefined {
     if (imports < 1) throw new Error("Invalid module dependency")
     return { from, to, imports }
   })
-  return { rule: text(modules.rule, 256), groups, dependencies }
+  count(dependencies.reduce((sum, dependency) => sum + dependency.imports, 0))
+  let evidence: WikiGraphModules["evidence"]
+  if (modules.evidence !== undefined) {
+    const raw = record(modules.evidence)
+    const scan = record(raw.scan)
+    if (scan.status !== "partial" && scan.status !== "unavailable" && scan.status !== "unknown")
+      throw new Error("Invalid import scan status")
+    const parsed: WikiImportScan = { status: scan.status }
+    for (const field of [
+      "analyzedFiles",
+      "unsupportedFiles",
+      "unavailableFiles",
+      "failedFiles",
+      "unscannedFiles",
+      "unresolvedImports",
+      "omittedImports",
+    ] as const) {
+      if (scan[field] !== undefined) parsed[field] = count(scan[field])
+    }
+    evidence = {
+      scan: parsed,
+      internalImports: count(raw.internalImports),
+      omittedDependencies: count(raw.omittedDependencies),
+      omittedDependencyImports: count(raw.omittedDependencyImports),
+    }
+  }
+  return { rule: text(modules.rule, 256), groups, dependencies, ...(evidence ? { evidence } : {}) }
 }
 /** Validate and detach an allowlisted graph; extra producer fields never reach exports. */
 export function parseWikiGraph(input: unknown): WikiGraph {
@@ -433,6 +478,7 @@ export function projectWikiManifest(
     inventory?: ReadonlyMap<string, InventorySymbol[]>
     /** Caller-supplied resolved import targets keyed by root-relative source path. */
     imports?: ReadonlyMap<string, string[]>
+    importScan?: WikiImportScan
     /** Page bodies without frontmatter, keyed by the manifest page path. */
     documents?: ReadonlyMap<string, string>
   },
@@ -665,7 +711,11 @@ export function projectWikiManifest(
     omitted: { nodes: ordered.length - nodes.length, edges: allEdges.length - edges.length },
     pages: projectPages(citedByPage, allNodes, allEdges, options.documents),
     overview: projectOverview(manifest, allNodes),
-    modules: projectModules(allNodes, allEdges),
+    modules: projectModules(
+      allNodes,
+      allEdges,
+      options.importScan ?? { status: options.imports ? "unknown" : "unavailable" },
+    ),
   })
 }
 
@@ -812,7 +862,11 @@ function projectOverview(manifest: Record<string, unknown>, allNodes: ReadonlyMa
  * the group budget is reached, so busy trees get finer groups than quiet ones.
  * Child directories with only a few cited files stay in their parent group.
  */
-function projectModules(allNodes: ReadonlyMap<string, WikiGraphNode>, allEdges: readonly WikiGraphEdge[]) {
+function projectModules(
+  allNodes: ReadonlyMap<string, WikiGraphNode>,
+  allEdges: readonly WikiGraphEdge[],
+  scan: WikiImportScan,
+) {
   const files = [...allNodes.values()].filter((node) => node.kind === "source").map((node) => node.path)
   const minimum = Math.max(3, Math.ceil(files.length * 0.015))
   const groupOf = new Map<string, string>(files.map((file) => [file, ""]))
@@ -846,21 +900,34 @@ function projectModules(allNodes: ReadonlyMap<string, WikiGraphNode>, allEdges: 
   const counts = new Map<string, number>()
   for (const group of groupOf.values()) counts.set(group, (counts.get(group) ?? 0) + 1)
   const imports = new Map<string, { from: string; to: string; imports: number }>()
+  let internalImports = 0
   for (const edge of allEdges) {
     if (edge.kind !== "uses") continue
     const from = groupOf.get(edge.from.slice("source:".length))
     const to = groupOf.get(edge.to.slice("source:".length))
-    if (from === undefined || to === undefined || from === to) continue
+    if (from === undefined || to === undefined) continue
+    if (from === to) {
+      internalImports++
+      continue
+    }
     const pair = `${from}\u0000${to}`
     const entry = imports.get(pair) ?? { from, to, imports: 0 }
     entry.imports++
     imports.set(pair, entry)
   }
+  const dependencies = [...imports.values()].sort(
+    (a, b) => b.imports - a.imports || compareText(a.from, b.from) || compareText(a.to, b.to),
+  )
+  const omitted = dependencies.slice(GRAPH_LIMITS.moduleDependencies)
   return {
     rule: `Cited files grouped by directory: the largest groups split first into subdirectories with at least ${minimum} cited files, at most ${GRAPH_LIMITS.moduleGroups} groups`,
     groups: [...counts].sort(([a], [b]) => compareText(a, b)).map(([path, count]) => ({ path, files: count })),
-    dependencies: [...imports.values()]
-      .sort((a, b) => b.imports - a.imports || compareText(a.from, b.from) || compareText(a.to, b.to))
-      .slice(0, GRAPH_LIMITS.moduleDependencies),
+    dependencies: dependencies.slice(0, GRAPH_LIMITS.moduleDependencies),
+    evidence: {
+      scan,
+      internalImports,
+      omittedDependencies: omitted.length,
+      omittedDependencyImports: omitted.reduce((sum, edge) => sum + edge.imports, 0),
+    },
   }
 }
