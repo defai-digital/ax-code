@@ -11,7 +11,10 @@ import { MCP } from "../../src/mcp"
 import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
+import { Session } from "../../src/session"
 import { MessageID, SessionID } from "../../src/session/schema"
+import { resolvePromptParts } from "../../src/session/prompt/prompt-reference-parts"
+import { resolveUserMessageParts } from "../../src/session/prompt/prompt-message-parts"
 import { tmpdir } from "../fixture/fixture"
 
 describe("prompt file attachment", () => {
@@ -57,6 +60,70 @@ describe("prompt file attachment", () => {
     const url = "file://remote-host/tmp/bad.txt"
     const parts = await resolveAttachment({ url })
     expect(parts).toMatchObject([{ type: "text", text: `Invalid file URL: ${url}` }])
+  })
+
+  test("resolves home references through external-directory permission", async () => {
+    await using home = await tmpdir()
+    await using project = await tmpdir({ git: true, config: { username: "test" } })
+    await fs.writeFile(path.join(home.path, "notes"), "zero\nHOME NOTES\nthird\nfourth")
+    vi.stubEnv("HOME", home.path)
+
+    try {
+      await Instance.provide({
+        directory: project.path,
+        fn: async () => {
+          const ranged = await resolvePromptParts("@file:~/notes:2-3")
+          expect(JSON.stringify(ranged)).not.toContain("HOME NOTES")
+
+          const session = await Session.create({ permission: [] })
+          const parts = await resolvePromptParts("@~/notes")
+          const resolve = (agentPermission: Permission.Ruleset, inputs = parts) =>
+            resolveUserMessageParts({
+              sessionID: session.id,
+              messageID: MessageID.ascending(),
+              agentName: "build",
+              agentPermission,
+              parts: inputs as any,
+            })
+          const textOf = (resolved: Awaited<ReturnType<typeof resolve>>) =>
+            resolved.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
+
+          const ask = vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+          const allowedRanged = textOf(await resolve([], ranged))
+          expect(allowedRanged).toContain("HOME NOTES")
+          expect(allowedRanged).toContain("third")
+          expect(allowedRanged).not.toContain("zero")
+          expect(allowedRanged).not.toContain("fourth")
+          expect(ask.mock.calls.some(([request]) => request.permission === "external_directory")).toBe(true)
+          ask.mockClear()
+
+          const allowed = textOf(await resolve([]))
+          expect(allowed).toContain("HOME NOTES")
+          expect(ask.mock.calls.some(([request]) => request.permission === "external_directory")).toBe(true)
+
+          await fs.writeFile(
+            path.join(home.path, "photo.png"),
+            Buffer.from(
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+              "base64",
+            ),
+          )
+          const mediaParts = await resolvePromptParts("@~/photo.png")
+          mediaParts[1].mime = "image/png"
+          ask.mockClear()
+          await resolve([], mediaParts)
+          expect(ask.mock.calls.some(([request]) => request.permission === "external_directory")).toBe(true)
+          ask.mockRestore()
+
+          const denied = textOf(await resolve(Permission.fromConfig({ external_directory: "deny" })))
+          expect(denied).not.toContain("HOME NOTES")
+          expect(denied).toContain("Read tool failed")
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+      vi.restoreAllMocks()
+    }
   })
 
   test("decodes textual data attachments and rejects other binary data", async () => {

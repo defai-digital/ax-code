@@ -1,12 +1,15 @@
 import path from "path"
+import os from "os"
 import fs from "fs/promises"
 import { fileURLToPath } from "url"
 import { NamedError } from "@ax-code/util/error"
 import { Instance } from "../../project/instance"
 import { LSP } from "@ax-code/ax-code-intel"
+import { Permission } from "../../permission"
 import { Session } from ".."
 import { FileTime } from "../../file/time"
 import { isSupportedImageAttachment } from "../../tool/file-content"
+import { assertExternalDirectory } from "../../tool/external-directory"
 import { ReadTool } from "../../tool/read"
 import { Tool } from "../../tool/tool"
 import { Filesystem } from "../../util/filesystem"
@@ -67,16 +70,34 @@ async function documentSymbolsForRangeExpansion(
   return normalizeDocumentSymbolEnvelopeData(live?.data)
 }
 
-function createReadToolContext(input: { sessionID: SessionID; messageID: MessageID; agentName: string }): Tool.Context {
+function createReadToolContext(input: {
+  sessionID: SessionID
+  messageID: MessageID
+  agentName: string
+  permission?: Permission.Ruleset
+}): Tool.Context {
+  const permission = input.permission
   return {
     sessionID: input.sessionID,
     abort: AbortSignal.timeout(30_000),
     agent: input.agentName,
     messageID: input.messageID,
+    // External-directory approval for a home reference is requested once,
+    // explicitly, before any file/read dispatch. The read tool must not ask
+    // again, but its read-permission ask still goes through real evaluation.
     extra: { bypassCwdCheck: true },
     messages: [],
     metadata: async () => {},
-    ask: async () => {},
+    ask: permission
+      ? async (request) => {
+          await Permission.ask({
+            ...request,
+            sessionID: input.sessionID,
+            ruleset: permission,
+            agent: input.agentName,
+          })
+        }
+      : async () => {},
   }
 }
 
@@ -84,6 +105,7 @@ export async function resolveFileAttachmentPart(input: {
   sessionID: SessionID
   messageID: MessageID
   agentName: string
+  agentPermission?: Permission.Ruleset
   part: AttachmentFilePart
   draftSyntheticTextPart: (text: string) => DraftTextPart
   attachDraftContext: AttachDraftContext
@@ -97,12 +119,23 @@ export async function resolveFileAttachmentPart(input: {
       `Read tool failed to read ${options.filepath} with the following error: ${message}`,
     )
   }
-  const readToolContext = () =>
-    createReadToolContext({
+  const readToolContext = async (options?: { externalHome?: boolean }) => {
+    if (!options?.externalHome) {
+      return createReadToolContext({
+        sessionID: input.sessionID,
+        messageID: input.messageID,
+        agentName: input.agentName,
+      })
+    }
+    const session = await Session.get(input.sessionID)
+    const permission = Permission.merge(input.agentPermission ?? [], session.permission ?? [])
+    return createReadToolContext({
       sessionID: input.sessionID,
       messageID: input.messageID,
       agentName: input.agentName,
+      permission,
     })
+  }
 
   const part = input.part
   let url: URL
@@ -144,17 +177,33 @@ export async function resolveFileAttachmentPart(input: {
         return [input.draftSyntheticTextPart(`Invalid file URL: ${part.url}`)]
       }
 
-      if (!Instance.containsPath(filepath)) {
-        log.warn("file attachment outside project", {
-          command: "session.prompt.fileAttach",
-          status: "denied",
-          sessionID: input.sessionID,
-          filepath,
-        })
-        return [input.draftSyntheticTextPart(`Access denied: file path is outside the project directory: ${filepath}`)]
-      }
       const realFilepath = await fs.realpath(filepath).catch(() => null)
-      if (realFilepath && !Instance.containsPath(realFilepath)) {
+      // A source marker of "@~/" identifies a reference the runner resolved
+      // from the user's home directory. It may live outside the project, but
+      // only when both the requested path and its real target stay in home.
+      const homeReference =
+        part.source?.type === "file" &&
+        (part.source.text.value.startsWith("@~/") || part.source.text.value.startsWith("@file:~/"))
+      const externalHome = homeReference && !Instance.containsPath(filepath)
+      if (!Instance.containsPath(filepath)) {
+        const insideHome =
+          externalHome &&
+          realFilepath !== null &&
+          Filesystem.contains(os.homedir(), filepath) &&
+          Filesystem.contains(os.homedir(), realFilepath)
+        if (!insideHome) {
+          log.warn("file attachment outside project", {
+            command: "session.prompt.fileAttach",
+            status: "denied",
+            sessionID: input.sessionID,
+            filepath,
+            realFilepath,
+          })
+          return [
+            input.draftSyntheticTextPart(`Access denied: file path is outside the project directory: ${filepath}`),
+          ]
+        }
+      } else if (realFilepath && !Instance.containsPath(realFilepath)) {
         log.warn("file attachment symlink escapes project", {
           command: "session.prompt.fileAttach",
           status: "denied",
@@ -178,6 +227,21 @@ export async function resolveFileAttachmentPart(input: {
         part.mime = "application/x-directory"
       }
       const mime = normalizedMediaType(part.mime)
+      // Use the canonical target for every read after approval so a symlink
+      // swapped during the approval window cannot redirect the read.
+      const readPath = externalHome && realFilepath ? realFilepath : filepath
+      // One context serves the external-directory check and both read paths;
+      // for an external home reference it carries the merged ruleset.
+      const toolContext = await readToolContext({ externalHome })
+      if (externalHome) {
+        try {
+          await assertExternalDirectory(toolContext, filepath, {
+            kind: s?.isDirectory() ? "directory" : "file",
+          })
+        } catch (error) {
+          return [createReadFailurePart({ error, filepath })]
+        }
+      }
       if (isTextualMimeType(mime)) {
         part.mime = "text/plain"
         let offset: number | undefined = undefined
@@ -214,12 +278,12 @@ export async function resolveFileAttachmentPart(input: {
             }
           }
         }
-        const args = { filePath: filepath, offset, limit }
+        const args = { filePath: readPath, offset, limit }
 
         const pieces: DraftPart[] = [draftReadToolCallPart(args)]
         await ReadTool.init()
           .then(async (t) => {
-            const result = await t.execute(args, readToolContext())
+            const result = await t.execute(args, toolContext)
             pieces.push(input.draftSyntheticTextPart(result.output))
             if (result.attachments?.length) {
               pieces.push(
@@ -248,10 +312,10 @@ export async function resolveFileAttachmentPart(input: {
       }
 
       if (part.mime === "application/x-directory") {
-        const args = { filePath: filepath }
+        const args = { filePath: readPath }
         return await ReadTool.init()
           .then(async (t) => {
-            const result = await t.execute(args, readToolContext())
+            const result = await t.execute(args, toolContext)
             return [
               draftReadToolCallPart(args),
               input.draftSyntheticTextPart(result.output),
@@ -276,7 +340,7 @@ export async function resolveFileAttachmentPart(input: {
       part.mime = mime
 
       try {
-        await FileTime.read(input.sessionID, filepath)
+        await FileTime.read(input.sessionID, readPath)
 
         let dataUrl: string
         let finalMime = part.mime
@@ -284,7 +348,7 @@ export async function resolveFileAttachmentPart(input: {
           // Reject oversized files from the stat before reading; the
           // post-read check below still guards growth between stat and read.
           if (s && s.size > MAX_ATTACHMENT_BYTES) throw new Error(`Attachment too large: ${s.size} bytes`)
-          const buffer = await Filesystem.readBytes(filepath)
+          const buffer = await Filesystem.readBytes(readPath)
           if (buffer.length > MAX_ATTACHMENT_BYTES) throw new Error(`Attachment too large: ${buffer.length} bytes`)
 
           if (MessageV2.isMedia(part.mime) && part.mime.startsWith("image/")) {
@@ -309,7 +373,7 @@ export async function resolveFileAttachmentPart(input: {
         }
 
         return [
-          draftReadToolCallPart({ filePath: filepath }),
+          draftReadToolCallPart({ filePath: readPath }),
           {
             id: part.id,
             messageID: input.messageID,

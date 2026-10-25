@@ -78,6 +78,7 @@ export async function resolveUserMessageParts(input: {
           sessionID: input.sessionID,
           messageID: input.messageID,
           agentName: input.agentName,
+          agentPermission: input.agentPermission,
           part,
           draftSyntheticTextPart,
           attachDraftContext,

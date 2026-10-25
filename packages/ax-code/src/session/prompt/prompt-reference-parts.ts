@@ -76,7 +76,12 @@ async function expandGitLog(count: number, runners: ReferenceRunners): Promise<a
   }
 }
 
-async function expandFileRange(name: string, start: number, end: number | undefined): Promise<any[]> {
+async function expandFileRange(
+  name: string,
+  start: number,
+  end: number | undefined,
+  match: RegExpMatchArray,
+): Promise<any[]> {
   const label = `@file:${name}:${start}${end ? `-${end}` : ""}`
   try {
     // Resolve like a plain @path: only `~/` leaves the worktree.
@@ -93,6 +98,32 @@ async function expandFileRange(name: string, start: number, end: number | undefi
 
     const stats = await fs.stat(checked).catch(() => undefined)
     if (!stats?.isFile()) return [inlineNote(`[${label} is not a file]`)]
+
+    // Home ranges must pass the attachment path's external-directory
+    // permission gate, so emit a normal file part instead of embedding
+    // content here. The attachment layer reads the 1-based range via the
+    // 0-based start/end query parameters.
+    if (name.startsWith("~/")) {
+      const params = new URLSearchParams({ start: String(start - 1) })
+      if (end !== undefined) params.set("end", String(end - 1))
+      return [
+        {
+          type: "file",
+          url: `${pathToFileURL(checked).href}?${params.toString()}`,
+          filename: name,
+          mime: "text/plain",
+          source: {
+            type: "file",
+            path: checked,
+            text: {
+              value: match[0],
+              start: match.index ?? 0,
+              end: (match.index ?? 0) + match[0].length,
+            },
+          },
+        },
+      ]
+    }
 
     const content = await fs.readFile(checked, "utf8")
     const lines = content.split(/\r?\n/)
@@ -121,7 +152,11 @@ async function expandUrl(href: string, runners: ReferenceRunners): Promise<any[]
   }
 }
 
-async function expandReference(token: ReferenceToken, runners: ReferenceRunners): Promise<any[]> {
+async function expandReference(
+  token: ReferenceToken,
+  runners: ReferenceRunners,
+  match: RegExpMatchArray,
+): Promise<any[]> {
   switch (token.kind) {
     case "diff":
       return expandGitDiff(["diff", "--no-color"], "@diff", runners)
@@ -130,7 +165,7 @@ async function expandReference(token: ReferenceToken, runners: ReferenceRunners)
     case "git":
       return expandGitLog(Math.min(MAX_GIT_COUNT, token.count), runners)
     case "file-range":
-      return expandFileRange(token.path, token.start, token.end)
+      return expandFileRange(token.path, token.start, token.end, match)
     case "url":
       return expandUrl(token.href, runners)
     default:
@@ -157,7 +192,7 @@ export async function resolvePromptParts(template: string, options?: { runners?:
     // the existing @file / @agent resolution.
     const token = parseReferenceToken(name)
     if (token && isAdr236Reference(token)) {
-      const expanded = await expandReference(token, runners)
+      const expanded = await expandReference(token, runners, match)
       parts.push(...expanded)
       continue
     }
@@ -199,12 +234,29 @@ export async function resolvePromptParts(template: string, options?: { runners?:
     })
     if (!stats) continue
 
+    // Only @~/ parts carry a FileSource marker so the attachment layer can
+    // recognize a home reference that legitimately lives outside the project.
+    const homeSource = name.startsWith("~/")
+      ? {
+          source: {
+            type: "file" as const,
+            path: checkedPath,
+            text: {
+              value: match[0],
+              start: match.index ?? 0,
+              end: (match.index ?? 0) + match[0].length,
+            },
+          },
+        }
+      : {}
+
     if (stats.isDirectory()) {
       parts.push({
         type: "file",
         url: pathToFileURL(checkedPath).href,
         filename: name,
         mime: "application/x-directory",
+        ...homeSource,
       })
       continue
     }
@@ -214,6 +266,7 @@ export async function resolvePromptParts(template: string, options?: { runners?:
       url: pathToFileURL(checkedPath).href,
       filename: name,
       mime: "text/plain",
+      ...homeSource,
     })
   }
   return parts
