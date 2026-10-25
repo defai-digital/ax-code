@@ -14,6 +14,7 @@ import {
 } from "@ax-code/ax-wiki/node"
 import { wikiProjectRoot } from "../wiki/root"
 import { engineConfig, resolveWikiRuntimeConfig } from "../wiki/config"
+import { queryWikiCodingInsights } from "../wiki/coding-insights"
 
 // Read-only access to the AX Wiki. The wiki is a compiled navigation layer,
 // not structural truth: `read` always returns the page's `sources` so the
@@ -23,7 +24,7 @@ import { engineConfig, resolveWikiRuntimeConfig } from "../wiki/config"
 // they are given, so this turns "there is a wiki somewhere" into one cheap
 // first action. See .internal/adr and docs/integrations/wiki.md.
 
-const operations = ["index", "read", "related"] as const
+const operations = ["index", "read", "related", "insights"] as const
 
 type RepoWikiMetadata = {
   available?: boolean
@@ -35,6 +36,7 @@ type RepoWikiMetadata = {
   truncated?: boolean
   sources?: string[]
   matchCount?: number
+  evidenceId?: string
 }
 
 // Bound the in-context cost. Cards are already small (12 pages by default),
@@ -104,6 +106,12 @@ const parameters = z.object({
       "Page to open for `read`, repo-relative to the wiki dir (e.g. quickstart.md or modules/ax-code/src/tool.md)",
     ),
   symbol: z.string().optional().describe("Symbol or source path to look up for `related`"),
+  targets: z
+    .array(z.string().min(1).max(512))
+    .min(1)
+    .max(5)
+    .optional()
+    .describe("Repository-relative source paths for `insights`; query only files relevant to the current coding task"),
 })
 
 export const RepoWikiTool = Tool.define<typeof parameters, RepoWikiMetadata>("repo_wiki", {
@@ -121,6 +129,27 @@ export const RepoWikiTool = Tool.define<typeof parameters, RepoWikiMetadata>("re
       always: ["*"],
       metadata: {},
     })
+
+    if (args.operation === "insights") {
+      if (!runtime.enabled)
+        return {
+          title: "repo_wiki insights",
+          output: "AX Wiki is disabled; no insight scan was run.",
+          metadata: { available: false },
+        }
+      const result = await queryWikiCodingInsights({ root, wikiDir, targets: args.targets ?? [], context: ctx })
+      return result
+        ? {
+            title: "repo_wiki insights",
+            output: result.output,
+            metadata: { available: true, evidenceId: result.evidenceId },
+          }
+        : {
+            title: "repo_wiki insights",
+            output: `No usable AX Wiki manifest found at ${wikiDir}/. Use current source and code_intelligence/LSP; no insight scan was run.`,
+            metadata: { available: false },
+          }
+    }
 
     const status = await getWikiStatus({ root, wikiDir, config: engineConfig(runtime) })
     if (!status.healthy) {

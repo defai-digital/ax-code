@@ -106,12 +106,45 @@ before relying on implementation details.
 Agents reach the wiki in three ways, from cheapest to most specific:
 
 1. **Prompt index.** When a healthy wiki exists, the session prompt carries a short `<repo_wiki>` block: the wiki location, a freshness label, and one line per page (path and a trimmed summary, about 750 tokens for the default 12 pages). The summaries only locate where to read; they are not proof.
-2. **`repo_wiki` tool.** A read-only tool with three operations: `index` (page cards with per-page freshness), `read` (one page plus its cited sources, which cited sources changed, and any frontmatter symbols not found in those sources), and `related` (pages for a symbol, body mention, or source path). It is available in the full and coding tool profiles and uses the `read` permission.
+2. **`repo_wiki` tool.** A read-only tool with four operations: `index` (page cards with per-page freshness), `read` (one page plus its cited sources, which cited sources changed, and any frontmatter symbols not found in those sources), `related` (pages for a symbol, body mention, or source path), and `insights` (current-source dependency evidence and verification checks for explicit target files). It is available in the full and coding tool profiles and uses the `read` permission.
 3. **Generic file tools.** `read`, `glob`, and `grep` on `.ax-wiki/` still work.
 
 Prompt freshness is judged per page: a page is fresh while every source it cites still matches the manifest hash. An added or edited file that no page cites leaves the prompt label `fresh` and adds a note that the wiki does not cover it yet. A changed cited source marks the label `stale` and the prompt asks the agent to treat the wiki as navigation only. `ax-code wiki status` and `wiki lint` keep the stricter repo-wide verdict, where any added, removed, or edited eligible file is stale.
 
 The wiki never replaces source: every `read` result lists the files to verify against, and if a page and the code disagree the code wins.
+
+### Coding insights
+
+Before changing dependencies or shared interfaces, the agent can call:
+
+```json
+{ "operation": "insights", "targets": ["src/service.ts", "src/client.ts"] }
+```
+
+The query accepts up to five repository-relative files and reads current bytes in
+the active worktree, with separate read permission checks for source and resolver
+configuration. It returns bounded import/dependent candidates, concrete file-level
+cycle witnesses when available, related page locators, content hashes, and separate
+inspection/verification checks. The pure analysis contract lives in AX Wiki; the
+runtime does not depend on the viewer.
+
+The agent uses these observations to inspect affected interfaces, find existing
+relevant tests through code intelligence/LSP, and propose improvements relevant to
+the user's task. Checks do not assert bugs or authorize unrelated refactors. Verify
+the actual source before acting and rerun the query after edits. A lower dependency
+count is not evidence that a change is correct.
+
+Analysis covers cited files plus explicit targets, with bounded reads and syntactic
+resolution. It always declares partial repository coverage; missing edges do not
+prove independence. Full-file and prefix hashes are distinguished, and page
+freshness here describes only the target citation, not the entire page. Output is
+bounded to 24,000 UTF-8 bytes, with omitted counts and whole-witness omission rather
+than truncated JSON. No report is injected wholesale into the system prompt.
+
+Git co-change, runtime hot paths and defect probabilities are explicitly unavailable.
+This query does not generate Wiki pages, persist model-written advice, install an
+analytics runtime, or execute suggested changes. The Modules viewer does not yet
+display this coding-insights payload.
 
 ## Incremental updates and manual content
 

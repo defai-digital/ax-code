@@ -151,18 +151,43 @@ export namespace WikiInventory {
     sources: readonly string[],
     limits: Limits = LIMITS,
     signal?: AbortSignal,
+    options: {
+      readFile?: typeof readFilePrefix
+      priority?: readonly string[]
+      onSource?: (
+        path: string,
+        state: {
+          status: "analyzed" | "unsupported" | "unavailable" | "failed" | "not-scanned"
+          omittedImports: number
+          unresolvedImports: number
+        },
+      ) => void
+    } = {},
   ): Promise<Map<string, SourceInventory>> {
     signal?.throwIfAborted()
     const cited = new Set(sources)
-    const selected = [...cited].sort().slice(0, Math.max(0, limits.maxSources))
+    const priority = new Set(options.priority ?? [])
+    const selected = [...cited]
+      .sort((a, b) => Number(priority.has(b)) - Number(priority.has(a)) || (a < b ? -1 : a > b ? 1 : 0))
+      .slice(0, Math.max(0, limits.maxSources))
+    const read = options.readFile ?? readFilePrefix
+    const report = (
+      path: string,
+      status: "analyzed" | "unsupported" | "unavailable" | "failed" | "not-scanned",
+      omittedImports = 0,
+      unresolvedImports = 0,
+    ) => options.onSource?.(path, { status, omittedImports, unresolvedImports })
     const inventory = new Map<string, SourceInventory>()
     // Nearest tsconfig.json per directory, read once; only its own `paths` apply (no `extends`).
     const configs = new Map<string, PathAliases | undefined>()
     for (const relative of selected) {
       for (let dir = path.posix.dirname(relative); ; dir = path.posix.dirname(dir)) {
         if (configs.has(dir)) break
-        const text = await readFilePrefix(root, dir === "." ? "tsconfig.json" : `${dir}/tsconfig.json`, 65_536)
-        configs.set(dir, text === undefined ? undefined : (parsePathAliases(dir === "." ? "" : dir, text) ?? { dir, rules: [] }))
+        const text = await read(root, dir === "." ? "tsconfig.json" : `${dir}/tsconfig.json`, 65_536)
+        configs.set(
+          dir,
+          text === undefined ? undefined : (parsePathAliases(dir === "." ? "" : dir, text) ?? { dir, rules: [] }),
+        )
         if (dir === ".") break
       }
     }
@@ -176,11 +201,20 @@ export namespace WikiInventory {
     let remaining = Math.max(0, limits.totalBytes)
     for (const relative of selected) {
       signal?.throwIfAborted()
-      if (remaining <= 0) break
+      if (remaining <= 0) {
+        report(relative, "not-scanned")
+        continue
+      }
       const lang = languageFor(relative)
-      if (!lang) continue
-      const content = await readFilePrefix(root, relative, Math.min(remaining, Math.max(0, limits.perFileBytes)))
-      if (!content) continue
+      if (!lang) {
+        report(relative, "unsupported")
+        continue
+      }
+      const content = await read(root, relative, Math.min(remaining, Math.max(0, limits.perFileBytes)))
+      if (content === undefined) {
+        report(relative, "unavailable")
+        continue
+      }
       remaining -= Buffer.byteLength(content)
       let symbols: SyntacticExtractor.Symbol[] | undefined
       let refs: SyntacticExtractor.ImportRef[] | undefined
@@ -190,20 +224,23 @@ export namespace WikiInventory {
         refs = extracted.imports
       } catch {
         signal?.throwIfAborted()
+        report(relative, "failed")
         continue
       }
       const listed = (symbols ?? [])
         .slice(0, Math.max(0, limits.symbolsPerSource))
         .map((symbol) => ({ name: symbol.name, qualified: symbol.qualified, kind: symbol.kind }))
-      const imports = [
-        ...new Set(
-          (refs ?? [])
-            .map((ref) => resolveImport(relative, ref.specifier, cited, aliasesFor(relative)))
-            .filter((target): target is string => !!target && target !== relative),
-        ),
-      ]
-        .sort()
-        .slice(0, Math.max(0, limits.importsPerSource))
+      const resolved = (refs ?? []).map((ref) => resolveImport(relative, ref.specifier, cited, aliasesFor(relative)))
+      const allImports = [
+        ...new Set(resolved.filter((target): target is string => !!target && target !== relative)),
+      ].sort()
+      const imports = allImports.slice(0, Math.max(0, limits.importsPerSource))
+      report(
+        relative,
+        "analyzed",
+        allImports.length - imports.length,
+        resolved.filter((value) => value === undefined).length,
+      )
       if (listed.length === 0 && imports.length === 0) continue
       inventory.set(relative, { symbols: listed, imports })
     }

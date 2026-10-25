@@ -106,6 +106,31 @@ test("buildAll collects symbols and resolved imports in one pass", async () => {
   expect(again.get("src/a.ts")).toEqual(inventory.get("src/a.ts"))
 })
 
+test("inventory observations distinguish unsupported and unreadable sources from a successfully empty scan", async () => {
+  const states = new Map<string, { status: string; omittedImports: number; unresolvedImports: number }>()
+  const reads: string[] = []
+  await WikiInventory.buildAll(
+    "/fixture",
+    ["empty.ts", "missing.ts", "notes.zzzunknown", "imports.ts", "target.ts"],
+    { maxSources: 5, totalBytes: 1000, perFileBytes: 1000, importsPerSource: 0, symbolsPerSource: 0 },
+    undefined,
+    {
+      readFile: async (_root, path) => {
+        reads.push(path)
+        if (path === "empty.ts" || path === "target.ts") return ""
+        if (path === "imports.ts") return 'import "./target"\nimport "missing-package"'
+        return undefined
+      },
+      onSource: (path, status) => states.set(path, status),
+    },
+  )
+  expect(states.get("empty.ts")?.status).toBe("analyzed")
+  expect(states.get("missing.ts")?.status).toBe("unavailable")
+  expect(states.get("notes.zzzunknown")?.status).toBe("unsupported")
+  expect(reads).not.toContain("notes.zzzunknown")
+  expect(states.get("imports.ts")).toEqual({ status: "analyzed", omittedImports: 1, unresolvedImports: 1 })
+})
+
 test("buildAll skips self imports and caps imports per source", async () => {
   await using tmp = await tmpdir()
   await mkdir(path.join(tmp.path, "src"))
@@ -128,7 +153,9 @@ test("resolves tsconfig path aliases from the nearest config without guessing", 
   const cited = new Set(["pkg/src/session/index.ts", "pkg/src/tool/bash.ts", "pkg/lib/util.ts"])
   const aliases = WikiInventory.parsePathAliases(
     "pkg",
-    JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"], "@tui/*": ["./src/cli/tui/*"], "#lib": ["./lib/util.ts"] } } }),
+    JSON.stringify({
+      compilerOptions: { paths: { "@/*": ["./src/*"], "@tui/*": ["./src/cli/tui/*"], "#lib": ["./lib/util.ts"] } },
+    }),
   )!
   expect(aliases.rules.map((rule) => rule.prefix)).toEqual(["@tui/", "#lib", "@/"])
   expect(WikiInventory.resolveImport("pkg/src/a.ts", "@/session", cited, aliases)).toBe("pkg/src/session/index.ts")
@@ -140,7 +167,9 @@ test("resolves tsconfig path aliases from the nearest config without guessing", 
   expect(WikiInventory.resolveImport("pkg/src/a.ts", "zod", cited, aliases)).toBeUndefined()
   expect(WikiInventory.resolveImport("pkg/src/a.ts", "@/session", cited)).toBeUndefined()
   // Escaping targets and comment-bearing configs are ignored.
-  expect(WikiInventory.parsePathAliases("", JSON.stringify({ compilerOptions: { paths: { "x/*": ["../out/*"] } } }))).toBeUndefined()
+  expect(
+    WikiInventory.parsePathAliases("", JSON.stringify({ compilerOptions: { paths: { "x/*": ["../out/*"] } } })),
+  ).toBeUndefined()
   expect(WikiInventory.parsePathAliases("pkg", '{ // comment\n "compilerOptions": {} }')).toBeUndefined()
 })
 

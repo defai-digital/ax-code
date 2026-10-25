@@ -23,6 +23,7 @@ const CORE_FILES = [
   "frontmatter.ts",
   "validate.ts",
   "build-pure.ts",
+  "insights.ts",
   "discovery-concurrency.ts",
 ]
 
