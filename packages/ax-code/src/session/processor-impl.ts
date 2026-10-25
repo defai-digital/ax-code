@@ -650,6 +650,7 @@ export namespace SessionProcessor {
           blocked = false
           let currentText: MessageV2.TextPart | undefined
           let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
+          const emptyAttemptParts = new Set<PartID>()
           const finalizeBufferedPart = (
             part: MessageV2.TextPart | MessageV2.ReasoningPart,
             input: { overwriteEndTime: boolean },
@@ -783,6 +784,7 @@ export namespace SessionProcessor {
                     },
                     metadata: value.providerMetadata,
                   }
+                  emptyAttemptParts.add(reasoningPart.id)
                   reasoningMap[value.id] = reasoningPart
                   await partWriteBatcher.forceImmediate(reasoningPart)
                   break
@@ -793,6 +795,7 @@ export namespace SessionProcessor {
                     const part = reasoningMap[value.id]
                     const offset = part.text.length
                     part.text += value.text
+                    if (part.text.length) emptyAttemptParts.delete(part.id)
                     guardStreamOutput("reasoning", value.text)
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     deltaBatcher.push(part.id, value.text, offset)
@@ -1808,6 +1811,7 @@ export namespace SessionProcessor {
                     },
                     metadata: value.providerMetadata,
                   }
+                  emptyAttemptParts.add(currentText.id)
                   await partWriteBatcher.forceImmediate(currentText)
                   break
 
@@ -1816,6 +1820,7 @@ export namespace SessionProcessor {
                   if (currentText) {
                     const offset = currentText.text.length
                     currentText.text += value.text
+                    if (currentText.text.length) emptyAttemptParts.delete(currentText.id)
                     guardStreamOutput("text", value.text)
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
                     deltaBatcher.push(currentText.id, value.text, offset)
@@ -1839,6 +1844,7 @@ export namespace SessionProcessor {
                       { text: currentText.text },
                     )
                     currentText.text = textOutput.text
+                    if (currentText.text.length) emptyAttemptParts.delete(currentText.id)
                     // DSML markup annotation (ADR-064 D3): DeepSeek-class
                     // models sometimes emit raw tool-call markup as plain text
                     // when a gateway fails to translate tool calls. The markup
@@ -1966,16 +1972,13 @@ export namespace SessionProcessor {
             // Start-only attempts persist empty parts, but remain safe to replay.
             // Remove them before the next attempt drops their local references.
             if (!replayUnsafe) {
-              const abandoned: Array<MessageV2.TextPart | MessageV2.ReasoningPart> = []
-              if (currentText && currentText.text.length === 0) abandoned.push(currentText)
-              for (const part of Object.values(reasoningMap)) {
-                if (part.text.length === 0) abandoned.push(part)
-              }
-              for (const part of abandoned) {
+              // Keep ids after text-end/reasoning-end retire their local parts,
+              // so completed empty blocks cannot leak into a recovered answer.
+              for (const partID of emptyAttemptParts) {
                 await Session.removePart({
                   sessionID: input.sessionID,
                   messageID: input.assistantMessage.id,
-                  partID: part.id,
+                  partID,
                 })
               }
               if (currentText && currentText.text.length === 0) currentText = undefined

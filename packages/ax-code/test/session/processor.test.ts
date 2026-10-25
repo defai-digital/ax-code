@@ -2412,7 +2412,7 @@ test("partial output locks automatic replay even when the API error is transient
   })
 })
 
-test("retry discards empty parts started before a transient failure", async () => {
+test.each([false, true])("retry discards empty parts before a transient failure (ended: %s)", async (ended) => {
   await using tmp = await tmpdir({ git: true, config: { username: "test" } })
   await Instance.provide({
     directory: tmp.path,
@@ -2425,6 +2425,10 @@ test("retry discards empty parts started before a transient failure", async () =
             yield { type: "start-step" }
             yield { type: "text-start", id: "text_old" }
             yield { type: "reasoning-start", id: "reasoning_old" }
+            if (ended) {
+              yield { type: "text-end", id: "text_old" }
+              yield { type: "reasoning-end", id: "reasoning_old" }
+            }
             throw new MessageV2.APIError({ message: "Service Unavailable", statusCode: 503, isRetryable: true })
           })(),
         } as unknown as Awaited<ReturnType<typeof LLM.stream>>)
