@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.29.2] - 2026-10-25
+
+### Fixed
+
+- Preserve provider reasoning replay and model selection across startup and restored sessions; sort model names naturally within providers.
+- Preserve rollback coverage for forked and imported sessions, and route imported history into active storage shards.
+- Wait for nested background subagent work and distinguish progress updates from completion.
+- Enforce session permissions for MCP resources and external home references; preserve subtask prompt text and dotted provider options.
+- Validate textual and binary attachments consistently, reject unsupported image formats, and bound MCP resource text and attachment counts.
+- Read file ranges with bounded memory and preserve UTF-8 characters when truncating prompt references.
+
+### Changed
+
+- Publish SDK 2.6.49 with the current server contract.
+
 ## [7.29.1] - 2026-10-24
 
 ### Fixed
