@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { CompatibilityImport } from "../src/import/compatibility"
+import { Config } from "../src/config/config"
 import { Global } from "../src/global"
 import { tmpdir } from "./fixture/fixture"
 
@@ -346,6 +347,54 @@ describe("CompatibilityImport Codex MCP servers (ADR-227)", () => {
       enabled: false,
       headers: { Authorization: "{env:REMOTE_TOKEN}" },
     })
+  })
+
+  test("drops Codex startup_timeout instead of emitting an unsupported config key", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(
+          path.join(dir, ".codex", "config.toml"),
+          [
+            "[mcp_servers.docs]",
+            'command = "npx"',
+            'args = ["-y", "@modelcontextprotocol/server-docs"]',
+            "startup_timeout = 1500",
+            "",
+            "[mcp_servers.remote]",
+            'url = "https://mcp.example.com/remote"',
+            "startup_timeout = 20",
+            "",
+          ].join("\n"),
+          "utf-8",
+        )
+      },
+    })
+
+    const report = await CompatibilityImport.run({ source: "codex", directory: tmp.path, write: true })
+    const docs = report.candidates.find((item) => item.targetPath.endsWith("#mcp/docs"))
+    const remote = report.candidates.find((item) => item.targetPath.endsWith("#mcp/remote"))
+    // Codex startup_timeout bounds server startup and has no AX Code
+    // equivalent; request `timeout` is a different bound, so the value is
+    // dropped with a name-only warning rather than renamed.
+    expect(docs?.warnings).toContain("startup_timeout_omitted")
+    expect(remote?.warnings).toContain("startup_timeout_omitted")
+    expect(JSON.stringify(report)).not.toContain("startup_timeout_ms")
+
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.docs).toEqual({
+      type: "local",
+      command: ["npx", "-y", "@modelcontextprotocol/server-docs"],
+      enabled: false,
+    })
+    expect(config.mcp.remote).toEqual({
+      type: "remote",
+      url: "https://mcp.example.com/remote",
+      enabled: false,
+    })
+    expect(JSON.stringify(config)).not.toContain("startup_timeout_ms")
+    // The MCP schemas are strict, so the written config must still parse.
+    expect(() => Config.Info.parse(config)).not.toThrow()
   })
 
   test("does NOT overwrite an existing entry in the project config", async () => {

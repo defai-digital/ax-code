@@ -394,20 +394,22 @@ export namespace CompatibilityImport {
   /**
    * Map one Codex MCP server entry onto the AX Code MCP config shape.
    * Mirrors the Claude `mapMcpServer` for `type: "local"` (command+args)
-   * and `type: "remote"` (URL), and threads the Codex-specific fields
+   * and `type: "remote"` (URL), and threads the Codex-specific field
    * `bearer_token_env_var` (translated into an `Authorization: {env:VAR}`
-   * header — the variable NAME only, never the literal value) and
-   * `startup_timeout` (renamed to `startup_timeout_ms` so the unit is
-   * unambiguous). `disabled: true` maps to `enabled: false`; the entry
-   * is still emitted (the rule: disabled entries stay disabled).
+   * header — the variable NAME only, never the literal value).
+   * `disabled: true` maps to `enabled: false`; the entry is still emitted
+   * (the rule: disabled entries stay disabled).
+   *
+   * Codex `startup_timeout` bounds how long the server may take to start;
+   * AX Code's `timeout` bounds requests, so the two are not interchangeable
+   * and the value is dropped with a name-only warning. Emitting a bespoke
+   * `startup_timeout_ms` key would fail the strict McpLocal/McpRemote schemas
+   * and invalidate the whole imported config.
    */
   function mapCodexMcpServer(raw: unknown): { server?: Record<string, unknown>; warnings?: string[]; reason?: string } {
     if (!isRecord(raw)) return { reason: "unsupported_mcp_shape" }
-    const startupTimeoutMs = (() => {
-      const value = raw.startup_timeout
-      if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined
-      return value
-    })()
+    const startTimeout = raw.startup_timeout
+    const omitsStartupTimeout = typeof startTimeout === "number" && Number.isFinite(startTimeout) && startTimeout > 0
     if (typeof raw.url === "string" && raw.url.trim().length > 0) {
       const headers: Record<string, string> = {}
       const warnings: string[] = []
@@ -418,28 +420,28 @@ export namespace CompatibilityImport {
         // by name only so the value is never printed.
         warnings.push("bearer_token_env_var_omitted")
       }
+      if (omitsStartupTimeout) warnings.push("startup_timeout_omitted")
       const server: Record<string, unknown> = {
         type: "remote",
         url: raw.url,
         enabled: false,
         ...(Object.keys(headers).length > 0 ? { headers } : {}),
-        ...(startupTimeoutMs !== undefined ? { startup_timeout_ms: startupTimeoutMs } : {}),
       }
       return { server, ...(warnings.length > 0 ? { warnings } : {}) }
     }
     if (typeof raw.command === "string" && raw.command.trim().length > 0) {
       const args = Array.isArray(raw.args) && raw.args.every((arg) => typeof arg === "string") ? raw.args : []
       const environment = redactMcpValues("env", raw.env)
+      const warnings = [...environment.warnings, ...(omitsStartupTimeout ? ["startup_timeout_omitted"] : [])]
       const server: Record<string, unknown> = {
         type: "local",
         command: [raw.command, ...args],
         enabled: false,
         ...(Object.keys(environment.kept).length > 0 ? { environment: environment.kept } : {}),
-        ...(startupTimeoutMs !== undefined ? { startup_timeout_ms: startupTimeoutMs } : {}),
       }
       return {
         server,
-        ...(environment.warnings.length > 0 ? { warnings: environment.warnings } : {}),
+        ...(warnings.length > 0 ? { warnings } : {}),
       }
     }
     return { reason: "unsupported_mcp_shape" }
