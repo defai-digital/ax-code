@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.0] - 2026-10-25
+
+### Added
+
+- Rank optional idle Wiki evidence using pinned local embeddings on eligible macOS ARM64 hosts with an already installed AX Engine, with bounded worker admission and reusable content-bound ordering receipts.
+
+### Fixed
+
+- Honor provider allowlists before probing Engine or reusing local Wiki embedding receipts.
+- Register Wiki embedding workers for identity-verified orphan recovery and order registry cleanup after pending registration.
+- Require supported low or disabled reasoning for native Wiki generation while preserving foreground reasoning behavior.
+- Preserve MCP project import precedence, target paths and legacy URL-only servers; omit unsupported Codex startup timeouts.
+
+### Changed
+
+- Publish SDK 2.6.52 with the optional Wiki local-embedding configuration contract.
+
 ## [7.29.4] - 2026-10-25
 
 ### Fixed
