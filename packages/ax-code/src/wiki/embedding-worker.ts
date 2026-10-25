@@ -167,7 +167,7 @@ export async function openWikiEmbeddingWorker(
     if (closing) return closing
     lifetime.abort(new DOMException("Wiki embedding worker closed", "AbortError"))
     closing = (async () => {
-      if (child) {
+      if (child?.pid !== undefined) {
         try {
           await Process.killProcessTree(child)
           await withTimeout(child.exited, 3000, "Wiki embedding worker did not exit")
@@ -223,6 +223,12 @@ export async function openWikiEmbeddingWorker(
       ],
       { env: { ...env, AX_ENGINE_API_KEY: token }, abort: signal, timeout: 120_000 },
     )
+    // Node reports asynchronous spawn errors through exited without assigning
+    // a PID. Surface that error and release admission: no process needs reaping.
+    if (child.pid === undefined) {
+      await child.exited
+      throw new Error("Wiki embedding worker did not start")
+    }
     const embed = async (texts: string[]) => {
       signal.throwIfAborted()
       lifetime.signal.throwIfAborted()
@@ -235,7 +241,12 @@ export async function openWikiEmbeddingWorker(
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ model: "qwen3_embedding", input: texts, pooling: "last", normalize: true }),
       })
-      if (!response.ok) throw new Error("Wiki embedding request failed")
+      if (!response.ok) {
+        // Readiness may retry. Release the unread response instead of holding
+        // its connection until the whole worker lifetime ends.
+        void response.body?.cancel().catch(() => {})
+        throw new Error("Wiki embedding request failed")
+      }
       const body = await readBoundedBody(response, 256 * 1024)
       return parseWikiEmbeddings(parseJsonStrict(Buffer.from(body).toString("utf8")), texts.length)
     }

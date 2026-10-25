@@ -16,7 +16,7 @@ import {
 
 import { createWikiEmbeddingRankCache, type WikiEmbeddingRankCache } from "./embedding-cache"
 
-const PROFILE = `${WIKI_EMBEDDING_MODEL.repo}@${WIKI_EMBEDDING_MODEL.revision}:${sha256(stableJson(WIKI_EMBEDDING_MODEL.files))}:last:l2:1024:prefix1024:rank-v2`
+const PROFILE = `${WIKI_EMBEDDING_MODEL.repo}@${WIKI_EMBEDDING_MODEL.revision}:${sha256(stableJson(WIKI_EMBEDDING_MODEL.files))}:last:l2:1024:prefix1024:rank-v3`
 const MAX_SOURCES = 128
 
 /** Rank only optional evidence, preserving membership and the entrypoint/test prefix. */
@@ -45,7 +45,7 @@ export function createIdleWikiSourceRanker(
         const cost = (items: typeof sources) =>
           items.reduce((total, source) => total + Math.min(32_000, source.bytes), 0)
         return (
-          sources.length - prefix >= 2 &&
+          sources.slice(prefix).filter((source) => source.bytes > 0).length >= 2 &&
           cost(sources) > maxBytes &&
           cost(sources.slice(0, prefix)) < maxBytes &&
           sources.every((source) => input.allowSource?.(source.path) !== false)
@@ -86,7 +86,12 @@ export function createIdleWikiSourceRanker(
         if (!worker) return cachedOrders
         // Admit candidates round-robin: an overview cannot spend the entire
         // job budget before later module pages get any evidence ranked.
-        const candidates = pending.map(({ page, sources }) => sources.slice(wikiSourcePrefixLength(page, sources)))
+        // Empty files are valid discovered sources, but readFilePrefix returns
+        // undefined for them. Keep their slots without spending an embedding or
+        // turning that expected absence into a failure of the entire job.
+        const candidates = pending.map(({ page, sources }) =>
+          sources.slice(wikiSourcePrefixLength(page, sources)).filter((source) => source.bytes > 0),
+        )
         const selected = new Map<string, (typeof pages)[number]["sources"][number]>()
         for (let index = 0; index < Math.max(...candidates.map((items) => items.length)); index++) {
           for (const items of candidates) {

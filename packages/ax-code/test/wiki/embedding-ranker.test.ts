@@ -1,6 +1,9 @@
 import { expect, test, vi } from "vitest"
+import { writeFile } from "node:fs/promises"
+import path from "node:path"
 import type { WikiPlanPage, WikiSource } from "@ax-code/ax-wiki"
 import { buildPure, type WikiPageGenerationRequest } from "@ax-code/ax-wiki"
+import { readFilePrefix } from "@ax-code/ax-wiki/node"
 import { createIdleWikiSourceRanker } from "../../src/wiki/embedding-ranker"
 import {
   parseWikiEmbeddings,
@@ -42,6 +45,41 @@ test("ranks optional evidence while protecting entrypoint/tests and closes befor
   expect(result.get(page.path)).toEqual(["index.ts", "first.test.ts", "second.test.ts", "recovery.ts", "theme.ts"])
   expect(runtime.read).toHaveBeenCalledTimes(2)
   expect(runtime.close).toHaveBeenCalledTimes(1)
+})
+
+test("empty source files retain their slots without discarding valid evidence rankings", async () => {
+  await using tmp = await tmpdir({})
+  await writeFile(path.join(tmp.path, "empty.ts"), "")
+  await writeFile(path.join(tmp.path, "theme.ts"), "export const theme = 'blue'")
+  await writeFile(path.join(tmp.path, "recovery.ts"), "export function restoreSession() {}")
+  const selected = [...sources.slice(0, 3), { ...sources[0], path: "empty.ts", bytes: 0 }, ...sources.slice(3)]
+  const runtime = fixture()
+  const read = vi.fn(readFilePrefix)
+  const result = await createIdleWikiSourceRanker({ root: tmp.path }, { ...runtime, read }).rank(
+    [{ page, sources: selected }],
+    { maxTotalBytes: 100_000 },
+  )
+  expect(result.get(page.path)).toEqual([
+    "index.ts",
+    "first.test.ts",
+    "second.test.ts",
+    "empty.ts",
+    "recovery.ts",
+    "theme.ts",
+  ])
+  expect(read.mock.calls.map((args) => args[1])).toEqual(["theme.ts", "recovery.ts"])
+  expect(runtime.close).toHaveBeenCalledOnce()
+})
+
+test("one nonempty optional source cannot benefit from ranking and never opens a worker", async () => {
+  const runtime = fixture()
+  const selected = sources.map((source, index) => (index === 3 ? { ...source, bytes: 0 } : source))
+  expect(
+    await createIdleWikiSourceRanker({ root: "/unused" }, runtime).rank([{ page, sources: selected }], {
+      maxTotalBytes: 100_000,
+    }),
+  ).toEqual(new Map())
+  expect(runtime.open).not.toHaveBeenCalled()
 })
 
 test("missing engine and small source lists do not read sources", async () => {

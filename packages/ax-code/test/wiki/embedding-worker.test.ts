@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import os from "node:os"
+import path from "node:path"
 import { Config } from "../../src/config/config"
 import { getDependencyStatus } from "../../src/provider/ax-engine/dependency"
 import { FileLock } from "../../src/util/filelock"
 import { Process } from "../../src/util/process"
 import { openWikiEmbeddingWorker, WIKI_EMBEDDING_MODEL } from "../../src/wiki/embedding-worker"
+import { tmpdir } from "../fixture/fixture"
 
 vi.mock("../../src/provider/ax-engine/dependency", () => ({ getDependencyStatus: vi.fn() }))
 const platform = Object.getOwnPropertyDescriptor(process, "platform")!
@@ -193,4 +195,57 @@ test("failed cleanup remains shared and retains the worker lease", async () => {
   expect(worker.close()).toBe(closing)
   expect(kill).toHaveBeenCalledTimes(2)
   expect(release).not.toHaveBeenCalled()
+})
+
+test("a failed spawn releases admission and preserves the spawn error instead of claiming a live worker", async () => {
+  const failure = Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" })
+  const exited = Promise.reject(failure)
+  void exited.catch(() => {})
+  const child = { pid: undefined, exitCode: -2, signalCode: null, exited } as unknown as Process.Child
+  vi.spyOn(Process, "spawn").mockReturnValue(child)
+  const kill = vi.spyOn(Process, "killProcessTree").mockResolvedValue()
+  const request = vi.fn()
+  vi.stubGlobal("fetch", request)
+  await expect(openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => true })).rejects.toBe(
+    failure,
+  )
+  expect(kill).not.toHaveBeenCalled()
+  expect(request).not.toHaveBeenCalled()
+  expect(release).toHaveBeenCalledOnce()
+})
+
+test("an Engine binary removed after detection releases admission through the real spawn error path", async () => {
+  await using tmp = await tmpdir({})
+  vi.mocked(getDependencyStatus).mockResolvedValueOnce({
+    available: true,
+    binaryPath: path.join(tmp.path, "removed-engine"),
+    version: "7.9.0",
+    mode: "path",
+    installable: false,
+    blockers: [],
+    warnings: [],
+  })
+  const kill = vi.spyOn(Process, "killProcessTree").mockResolvedValue()
+  await expect(
+    openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => true }),
+  ).rejects.toMatchObject({ code: "ENOENT" })
+  expect(kill).not.toHaveBeenCalled()
+  expect(release).toHaveBeenCalledOnce()
+})
+
+test("HTTP error responses cancel their unread bodies before a readiness retry can reuse the connection", async () => {
+  const child = { pid: 123, exitCode: null, signalCode: null, exited: Promise.resolve(0) } as unknown as Process.Child
+  vi.spyOn(Process, "spawn").mockReturnValue(child)
+  vi.spyOn(Process, "killProcessTree").mockResolvedValue()
+  const request = vi.fn(async () => Response.json({ data: [{ index: 0, embedding: [1, ...Array(1023).fill(0)] }] }))
+  vi.stubGlobal("fetch", request)
+  const worker = (await openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => true }))!
+  const cancel = vi.fn()
+  request.mockResolvedValueOnce(new Response(new ReadableStream({ cancel }), { status: 503 }))
+  try {
+    await expect(worker.embed(["source"])).rejects.toThrow("request failed")
+    expect(cancel).toHaveBeenCalledOnce()
+  } finally {
+    await worker.close()
+  }
 })
