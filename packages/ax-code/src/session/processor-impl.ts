@@ -1972,6 +1972,11 @@ export namespace SessionProcessor {
             // Start-only attempts persist empty parts, but remain safe to replay.
             // Remove them before the next attempt drops their local references.
             if (!replayUnsafe) {
+              // Drain progress snapshots before removal: an empty delta can
+              // queue an upsert even though the attempt remains replay-safe.
+              // Batcher failures are already reported; removal must still run.
+              await deltaBatcher.flush()?.catch((error) => log.warn("delta flush failed", { error }))
+              await partWriteBatcher.flush().catch((error) => log.warn("part flush before retry failed", { error }))
               // Keep ids after text-end/reasoning-end retire their local parts,
               // so completed empty blocks cannot leak into a recovered answer.
               for (const partID of emptyAttemptParts) {
