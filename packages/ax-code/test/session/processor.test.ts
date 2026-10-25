@@ -2412,6 +2412,35 @@ test("partial output locks automatic replay even when the API error is transient
   })
 })
 
+test("tool input start locks automatic replay before tool-call", async () => {
+  await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const stream = vi
+        .fn()
+        .mockResolvedValueOnce({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "tool-input-start", id: "call_old", toolName: "read" }
+            throw new MessageV2.APIError({ message: "Service Unavailable", statusCode: 503, isRetryable: true })
+          })(),
+        } as unknown as Awaited<ReturnType<typeof LLM.stream>>)
+        .mockResolvedValueOnce(successfulTextStream("recovered"))
+      const sleep = vi.fn(async () => {})
+      const { processor, streamInput } = await createProcessorFixture(
+        tmp.path,
+        processorDependencies({ stream, sleep }),
+      )
+      expect(await processor.process(streamInput)).toBe("stop")
+      expect(processor.recoverySafe).toBe(false)
+      expect(stream).toHaveBeenCalledTimes(1)
+      expect(sleep).not.toHaveBeenCalled()
+    },
+  })
+})
+
 test("a setup prepared by the caller is used for the first attempt only", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

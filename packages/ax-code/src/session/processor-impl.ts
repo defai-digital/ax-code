@@ -848,6 +848,7 @@ export namespace SessionProcessor {
                   break
 
                 case "tool-input-start":
+                  replayUnsafe = true
                   usedTools = true
                   await setBusyStatus({
                     waitState: "tool",
