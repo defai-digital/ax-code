@@ -336,6 +336,10 @@ export namespace CompatibilityImport {
           targetPath: mcpTarget(input.directory, name),
           ...(warnings.length > 0 ? { warnings } : {}),
         })
+        // Files are read project-first, then the --user source. Claim the name
+        // here so a later same-named entry is target_exists rather than a
+        // second copy candidate that would override this one at apply time.
+        existingMcp.add(name)
       }
     }
     return candidates
@@ -502,6 +506,10 @@ export namespace CompatibilityImport {
           targetPath: mcpTarget(input.directory, name),
           ...(warnings.length > 0 ? { warnings } : {}),
         })
+        // Files are read project-first, then the --user source. Claim the name
+        // here so a later same-named entry is target_exists rather than a
+        // second copy candidate that would override this one at apply time.
+        existingMcp.add(name)
       }
     }
     return candidates

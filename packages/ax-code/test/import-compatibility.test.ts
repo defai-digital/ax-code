@@ -199,6 +199,49 @@ describe("CompatibilityImport MCP servers (ADR-220)", () => {
     }
   })
 
+  test("a project MCP entry wins over a same-named user-level entry", async () => {
+    await using home = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, ".claude.json"),
+          JSON.stringify({ mcpServers: { shared: { command: "user-cmd" } } }),
+          "utf-8",
+        )
+      },
+    })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, ".mcp.json"),
+          JSON.stringify({ mcpServers: { shared: { command: "project-cmd" } } }),
+          "utf-8",
+        )
+      },
+    })
+
+    const homeSpy = vi.spyOn(Global.Path, "home", "get").mockReturnValue(home.path)
+    try {
+      const report = await CompatibilityImport.run({ source: "claude", directory: tmp.path, user: true, write: true })
+      const shared = report.candidates.filter((item) => item.targetPath.endsWith("#mcp/shared"))
+      expect(shared).toHaveLength(2)
+      expect(shared[0]).toEqual(
+        expect.objectContaining({ action: "copy", sourcePath: path.join(tmp.path, ".mcp.json") }),
+      )
+      expect(shared[1]).toEqual(
+        expect.objectContaining({
+          action: "skip",
+          reason: "target_exists",
+          sourcePath: path.join(home.path, ".claude.json"),
+        }),
+      )
+
+      const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+      expect(config.mcp.shared).toEqual({ type: "local", command: ["project-cmd"], enabled: false })
+    } finally {
+      homeSpy.mockRestore()
+    }
+  })
+
   test("codex user config.toml is reported as skipped, not silently ignored", async () => {
     await using home = await tmpdir({
       init: async (dir) => {
@@ -338,6 +381,54 @@ describe("CompatibilityImport Codex MCP servers (ADR-227)", () => {
       const withUser = await CompatibilityImport.plan({ source: "codex", directory: tmp.path, user: true })
       const names = withUser.candidates.filter((item) => item.kind === "mcp").map((item) => item.targetPath)
       expect(names.join("\n")).toContain("#mcp/personal")
+    } finally {
+      homeSpy.mockRestore()
+    }
+  })
+
+  test("a project mcp_servers entry wins over a same-named user-level entry", async () => {
+    await using home = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(
+          path.join(dir, ".codex", "config.toml"),
+          '[mcp_servers.shared]\ncommand = "user-cmd"\n',
+          "utf-8",
+        )
+      },
+    })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, ".codex"), { recursive: true })
+        await fs.writeFile(
+          path.join(dir, ".codex", "config.toml"),
+          '[mcp_servers.shared]\ncommand = "project-cmd"\n',
+          "utf-8",
+        )
+      },
+    })
+
+    const homeSpy = vi.spyOn(Global.Path, "home", "get").mockReturnValue(home.path)
+    try {
+      const report = await CompatibilityImport.run({ source: "codex", directory: tmp.path, user: true, write: true })
+      const shared = report.candidates.filter((item) => item.targetPath.endsWith("#mcp/shared"))
+      expect(shared).toHaveLength(2)
+      expect(shared[0]).toEqual(
+        expect.objectContaining({
+          action: "copy",
+          sourcePath: path.join(tmp.path, ".codex", "config.toml"),
+        }),
+      )
+      expect(shared[1]).toEqual(
+        expect.objectContaining({
+          action: "skip",
+          reason: "target_exists",
+          sourcePath: path.join(home.path, ".codex", "config.toml"),
+        }),
+      )
+
+      const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+      expect(config.mcp.shared).toEqual({ type: "local", command: ["project-cmd"], enabled: false })
     } finally {
       homeSpy.mockRestore()
     }
