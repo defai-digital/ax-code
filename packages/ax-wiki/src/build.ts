@@ -218,6 +218,7 @@ export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResul
   }
 
   const pure = await buildPure({
+    sourceRanker: input.sourceRanker,
     signal: input.signal,
     allowWrite: input.allowWrite,
     root,

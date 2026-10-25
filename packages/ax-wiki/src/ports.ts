@@ -17,3 +17,9 @@ import type { WikiPlanPage, WikiSource } from "./types.js"
 export type EvidenceProvider = {
   provide(input: { root: string; page: WikiPlanPage; sources: WikiSource[] }): Promise<EvidenceBundle>
 }
+
+/** Optional host ranking of already-selected evidence; never expands source access. */
+export type WikiSourceRanker = {
+  identity: string
+  rank(pages: Array<{ page: WikiPlanPage; sources: WikiSource[] }>): Promise<Map<string, string[]>>
+}

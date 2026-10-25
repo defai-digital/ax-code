@@ -16,7 +16,7 @@ import { mapWithBoundedConcurrency } from "./discovery-concurrency.js"
 import { parseFrontmatter, renderWikiPage } from "./frontmatter.js"
 import { cutGraphText, GRAPH_LIMITS, GRAPH_TEXT_FORBIDDEN } from "./graph.js"
 import { sha256, stableJson } from "./hash.js"
-import type { EvidenceProvider } from "./ports.js"
+import type { EvidenceProvider, WikiSourceRanker } from "./ports.js"
 import { createWikiPlan, selectPageSources, sourceMatchesPage } from "./plan.js"
 import {
   extractProtectedSections,
@@ -117,6 +117,7 @@ export type WikiEvidenceReader = (input: {
 }) => Promise<WikiSourceEvidence[]>
 
 export type WikiBuildPureInput = {
+  sourceRanker?: WikiSourceRanker
   signal?: AbortSignal
   allowWrite?: (relative: string) => boolean
   root: string
@@ -181,6 +182,7 @@ function changedSources(previous: WikiManifest | undefined, current: Record<stri
 }
 
 function pageFingerprint(input: {
+  ranking?: { identity: string; order: string[] }
   planHash: string
   config: AxWikiConfig
   sourceHashes: Record<string, string>
@@ -198,6 +200,7 @@ function pageFingerprint(input: {
       generatorIdentity: input.generatorIdentity ?? null,
       model: input.model ?? null,
       semanticRevision: input.semanticRevision ?? null,
+      ...(input.ranking ? { ranking: input.ranking } : {}),
       ...(input.evidenceFingerprint !== undefined ? { evidence: input.evidenceFingerprint } : {}),
     }),
   )
@@ -264,6 +267,33 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
   for (const page of plan.pages) {
     pageCache.set(page.path, { selected: selectPageSources(sources, page, config.maxSourcesPerPage ?? 80) })
   }
+  const rankings = new Map<string, { identity: string; order: string[] }>()
+  if (input.sourceRanker) {
+    const orders = await input.sourceRanker.rank(
+      plan.pages.map((page) => ({
+        page: { ...page, selectors: [...page.selectors] },
+        sources: pageCache.get(page.path)!.selected.map((source) => ({ ...source })),
+      })),
+    )
+    input.signal?.throwIfAborted()
+    for (const page of plan.pages) {
+      const order = orders.get(page.path)
+      if (!order) continue
+      const cached = pageCache.get(page.path)!
+      const byPath = new Map(cached.selected.map((source) => [source.path, source]))
+      if (order.length !== byPath.size || new Set(order).size !== order.length || order.some((p) => !byPath.has(p)))
+        throw new Error("Wiki source ranker must return a permutation of selected sources")
+      // Preserve the highest-ranked source and the initial test sample.
+      const protectedCount =
+        page.kind === "module" ? Math.min(3, cached.selected.length) : Math.min(1, cached.selected.length)
+      if (cached.selected.slice(0, protectedCount).some((source, index) => order[index] !== source.path))
+        throw new Error("Wiki source ranker changed protected source order")
+      if (order.some((p, index) => p !== cached.selected[index]!.path)) {
+        cached.selected = order.map((p) => byPath.get(p)!)
+        rankings.set(page.path, { identity: input.sourceRanker.identity, order })
+      }
+    }
+  }
   if (input.evidenceProvider) {
     const provider = input.evidenceProvider
     // Prefetch every page's typed evidence with bounded concurrency; results are
@@ -283,6 +313,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     prospectiveFingerprints.set(
       page.path,
       pageFingerprint({
+        ranking: rankings.get(page.path),
         planHash,
         config,
         sourceHashes: Object.fromEntries(cached.selected.map((source) => [source.path, source.hash])),

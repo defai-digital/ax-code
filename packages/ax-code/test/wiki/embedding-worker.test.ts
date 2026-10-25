@@ -1,0 +1,135 @@
+import { afterEach, beforeEach, expect, test, vi } from "vitest"
+import os from "node:os"
+import { Config } from "../../src/config/config"
+import { getDependencyStatus } from "../../src/provider/ax-engine/dependency"
+import { FileLock } from "../../src/util/filelock"
+import { Process } from "../../src/util/process"
+import { openWikiEmbeddingWorker, WIKI_EMBEDDING_MODEL } from "../../src/wiki/embedding-worker"
+
+vi.mock("../../src/provider/ax-engine/dependency", () => ({ getDependencyStatus: vi.fn() }))
+const platform = Object.getOwnPropertyDescriptor(process, "platform")!
+const arch = Object.getOwnPropertyDescriptor(process, "arch")!
+const release = vi.fn()
+beforeEach(() => {
+  Object.defineProperty(process, "platform", { value: "darwin" })
+  Object.defineProperty(process, "arch", { value: "arm64" })
+  vi.spyOn(os, "totalmem").mockReturnValue(16 * 1024 ** 3)
+  vi.spyOn(os, "freemem").mockReturnValue(4 * 1024 ** 3)
+  vi.spyOn(Config, "get").mockResolvedValue({})
+  vi.mocked(getDependencyStatus).mockResolvedValue({
+    available: true,
+    binaryPath: "/fake/ax-engine",
+    version: "7.9.0",
+    mode: "path",
+    installable: false,
+    blockers: [],
+    warnings: [],
+  })
+  vi.spyOn(FileLock, "tryAcquire").mockResolvedValue({ [Symbol.dispose]: release })
+  vi.spyOn(Process, "text").mockResolvedValue({
+    code: 0,
+    text: "Now drawing from 'AC Power'",
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
+  })
+})
+afterEach(() => {
+  Object.defineProperty(process, "platform", platform)
+  Object.defineProperty(process, "arch", arch)
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  vi.clearAllMocks()
+})
+
+test("unsupported hosts, missing engines, old versions, battery and memory pressure have no download", async () => {
+  const signal = new AbortController().signal
+  const verify = vi.fn(async () => true)
+  Object.defineProperty(process, "arch", { value: "x64" })
+  expect(await openWikiEmbeddingWorker(signal, { verify })).toBeUndefined()
+  expect(getDependencyStatus).not.toHaveBeenCalled()
+  Object.defineProperty(process, "arch", { value: "arm64" })
+  vi.mocked(getDependencyStatus).mockResolvedValueOnce({
+    available: false,
+    mode: "missing",
+    installable: true,
+    blockers: [],
+    warnings: [],
+  })
+  expect(await openWikiEmbeddingWorker(signal, { verify })).toBeUndefined()
+  vi.mocked(getDependencyStatus).mockResolvedValueOnce({
+    available: true,
+    binaryPath: "/fake/engine",
+    version: "7.8.0",
+    mode: "path",
+    installable: false,
+    blockers: [],
+    warnings: [],
+  })
+  expect(await openWikiEmbeddingWorker(signal, { verify })).toBeUndefined()
+  vi.mocked(Process.text).mockResolvedValueOnce({
+    code: 0,
+    text: "Battery Power",
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
+  })
+  expect(await openWikiEmbeddingWorker(signal, { verify })).toBeUndefined()
+  vi.mocked(os.freemem).mockReturnValue(0)
+  expect(await openWikiEmbeddingWorker(signal, { verify })).toBeUndefined()
+  expect(verify).not.toHaveBeenCalled()
+  expect(FileLock.tryAcquire).not.toHaveBeenCalled()
+})
+
+test("another worker owns the lease: no model IO or queue", async () => {
+  vi.mocked(FileLock.tryAcquire).mockResolvedValueOnce(undefined)
+  const verify = vi.fn(async () => true)
+  expect(await openWikiEmbeddingWorker(new AbortController().signal, { verify })).toBeUndefined()
+  expect(verify).not.toHaveBeenCalled()
+})
+
+test("verified cached model uses an authenticated separate worker and closes idempotently", async () => {
+  const child = { pid: 123, exitCode: null, signalCode: null, exited: Promise.resolve(0) } as unknown as Process.Child
+  const spawn = vi.spyOn(Process, "spawn").mockReturnValue(child)
+  const kill = vi.spyOn(Process, "killProcessTree").mockResolvedValue()
+  const request = vi.fn(async (_url: string, _init: RequestInit) =>
+    Response.json({ data: [{ index: 0, embedding: [1, ...Array(1023).fill(0)] }] }),
+  )
+  vi.stubGlobal("fetch", request)
+  const worker = await openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => true })
+  expect(worker).toBeDefined()
+  expect(Process.text).toHaveBeenCalledTimes(1) // power only; no download
+  expect(spawn.mock.calls[0][0]).toContain("--offline")
+  expect(spawn.mock.calls[0][0]).toContain("127.0.0.1")
+  const token = spawn.mock.calls[0][1]!.env!.AX_ENGINE_API_KEY
+  expect(token).toHaveLength(64)
+  expect(spawn.mock.calls[0][0].join(" ")).not.toContain(token!)
+  expect((request.mock.calls[0][1].headers as Record<string, string>).Authorization).toBe(`Bearer ${token}`)
+  await worker!.close()
+  await worker!.close()
+  expect(kill).toHaveBeenCalledTimes(1)
+  expect(release).toHaveBeenCalledTimes(1)
+})
+
+test("missing artifact downloads exact pin then rejects unverified bytes without starting worker", async () => {
+  const spawn = vi.spyOn(Process, "spawn")
+  await expect(openWikiEmbeddingWorker(new AbortController().signal, { verify: async () => false })).rejects.toThrow(
+    "verification",
+  )
+  expect(Process.text).toHaveBeenLastCalledWith(
+    ["/fake/ax-engine", "download", `${WIKI_EMBEDDING_MODEL.repo}@${WIKI_EMBEDDING_MODEL.revision}`, "--json"],
+    expect.objectContaining({ timeout: 90_000, abort: expect.any(AbortSignal) }),
+  )
+  expect(spawn).not.toHaveBeenCalled()
+  expect(release).toHaveBeenCalledOnce()
+})
+
+test("download cancellation propagates and releases ownership", async () => {
+  const controller = new AbortController()
+  vi.mocked(Process.text).mockImplementation(async (cmd) => {
+    if (cmd[1] === "download") controller.abort(new DOMException("Foreground", "AbortError"))
+    return { code: 0, text: "AC Power", stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) }
+  })
+  await expect(openWikiEmbeddingWorker(controller.signal, { verify: async () => false })).rejects.toMatchObject({
+    name: "AbortError",
+  })
+  expect(release).toHaveBeenCalledOnce()
+})

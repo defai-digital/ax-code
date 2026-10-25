@@ -3,6 +3,7 @@ import { AX_WIKI_DIR_DEFAULT, sanitizeWikiDir } from "@ax-code/ax-wiki"
 import { Config } from "../config/config"
 
 export type WikiRuntimeConfig = AxWikiConfig & {
+  localEmbeddings: boolean
   auto: boolean
   enabled: boolean
   dir: string
@@ -12,6 +13,7 @@ export type WikiRuntimeConfig = AxWikiConfig & {
 }
 
 type WikiConfigSlice = AxWikiConfig & {
+  localEmbeddings?: boolean
   auto?: boolean
   enabled?: boolean
   dir?: string
@@ -40,6 +42,7 @@ export async function resolveWikiRuntimeConfig(
   const slice = await readWikiConfigSlice()
   return {
     ...(slice ?? {}),
+    localEmbeddings: slice?.localEmbeddings !== false,
     enabled: slice?.enabled !== false,
     auto: slice?.auto !== false,
     dir: sanitizeWikiDir(overrides.dir ?? slice?.dir, AX_WIKI_DIR_DEFAULT),

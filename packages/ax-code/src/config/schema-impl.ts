@@ -1569,6 +1569,12 @@ export const Info = z
       ),
     wiki: z
       .object({
+        localEmbeddings: z
+          .boolean()
+          .optional()
+          .describe(
+            "Rank idle Wiki evidence with an installed AX Engine on macOS arm64. Downloads a pinned local embedding model when needed. Default: true.",
+          ),
         auto: z
           .boolean()
           .optional()

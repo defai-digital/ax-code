@@ -62,6 +62,7 @@ test("explicit requests share worktree root, join running builds and honor reado
       await begun
       expect(state.build).toHaveBeenCalledTimes(1)
       expect(state.build.mock.calls[0][0]).toMatchObject({
+        idleEmbeddings: true,
         root: tmp.path,
         dir: ".ax-wiki",
         includeGraphEvidence: false,

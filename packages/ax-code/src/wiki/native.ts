@@ -52,6 +52,7 @@ import { MessageV2 } from "../session/message-v2"
 import type { SessionID } from "../session/schema"
 import { writeWikiBuildReport, WIKI_BUILD_REPORT_SCHEMA_VERSION, type WikiBuildReportPageOutcome } from "./build-report"
 import { engineConfig, resolveWikiRuntimeConfig } from "./config"
+import { createIdleWikiSourceRanker } from "./embedding-ranker"
 import { SYMBOL_SUMMARIES_MAX, SYMBOL_SUMMARY_MAX } from "@ax-code/ax-wiki/node"
 
 const execFileAsync = promisify(execFile)
@@ -740,6 +741,8 @@ export async function planNativeWiki(input: { root: string; dir?: string }): Pro
 }
 
 export async function runNativeWiki(input: {
+  /** Only the idle maintenance controller enables model provisioning. */
+  idleEmbeddings?: boolean
   signal?: AbortSignal
   allowSource?: (relative: string) => boolean
   allowWrite?: (relative: string) => boolean
@@ -961,6 +964,7 @@ export async function runNativeWiki(input: {
         wikiDir: config.dir,
         action: input.action,
         generator,
+        sourceRanker: input.idleEmbeddings && config.localEmbeddings ? createIdleWikiSourceRanker(input) : undefined,
         pageResultCache: {
           ...staged,
           read: async (page, key) => {

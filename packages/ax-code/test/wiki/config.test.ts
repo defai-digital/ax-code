@@ -10,7 +10,17 @@ test("runtime Wiki defaults to the hidden repository directory", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      expect(await resolveWikiRuntimeConfig()).toMatchObject({ dir: ".ax-wiki" })
+      expect(await resolveWikiRuntimeConfig()).toMatchObject({ dir: ".ax-wiki", localEmbeddings: true })
+    },
+  })
+})
+
+test("local embeddings can be disabled independently of automatic maintenance", async () => {
+  await using tmp = await tmpdir({ git: true, config: { wiki: { localEmbeddings: false } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(await resolveWikiRuntimeConfig()).toMatchObject({ auto: true, localEmbeddings: false })
     },
   })
 })

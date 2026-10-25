@@ -71,6 +71,77 @@ function baseInput() {
 }
 
 describe("buildPure (in-memory, no filesystem)", () => {
+  test("source ordering reaches generation and invalidates fingerprints without changing membership", async () => {
+    const ranker = {
+      identity: "embedding-fixture-v1",
+      rank: async (pages: Array<{ page: { path: string }; sources: WikiSource[] }>) =>
+        new Map(
+          pages.map(({ page, sources }) => [
+            page.path,
+            [sources[0]!, ...sources.slice(1).reverse()].map((s) => s.path),
+          ]),
+        ),
+    }
+    const input = {
+      ...baseInput(),
+      config: {
+        pages: [
+          {
+            path: "quickstart.md",
+            title: "Guide",
+            purpose: "Architecture",
+            selectors: ["**"],
+            kind: "custom" as const,
+          },
+        ],
+      },
+    }
+    const baseline = await buildPure(input)
+    const make = generator()
+    const ranked = await buildPure({ ...input, sourceRanker: ranker, generator: make })
+    const page = "quickstart.md"
+    expect(new Set(ranked.manifest.pages[page]!.sources)).toEqual(new Set(baseline.manifest.pages[page]!.sources))
+    expect(ranked.manifest.pages[page]!.fingerprint).not.toBe(baseline.manifest.pages[page]!.fingerprint)
+    const request = make.mock.calls.map(([request]) => request).find((r) => r.page.path === page)!
+    expect(request.sources.map((s) => s.path)).toEqual(ranked.manifest.pages[page]!.sources)
+    const update = await buildPure({
+      ...input,
+      action: "update",
+      sourceRanker: ranker,
+      previous: ranked.manifest,
+      readExistingPage: async (p) => ranked.candidate.get(p),
+    })
+    expect(update.generatedPages).toEqual([])
+  })
+
+  test("source rankers cannot inject paths, duplicate sources or move the protected entrypoint", async () => {
+    for (const mutate of [
+      (paths: string[]) => [...paths, "secret.env"],
+      (paths: string[]) => paths.map(() => paths[0]!),
+      (paths: string[]) => [...paths].reverse(),
+    ]) {
+      await expect(
+        buildPure({
+          ...baseInput(),
+          sourceRanker: {
+            identity: "bad",
+            rank: async (pages) =>
+              new Map(pages.map(({ page, sources }) => [page.path, mutate(sources.map((s) => s.path))])),
+          },
+        }),
+      ).rejects.toThrow(/source ranker/)
+    }
+  })
+
+  test("unavailable optional ranking preserves baseline fingerprints", async () => {
+    const baseline = await buildPure(baseInput())
+    const unavailable = await buildPure({
+      ...baseInput(),
+      sourceRanker: { identity: "unused", rank: async () => new Map() },
+    })
+    expect(unavailable.manifest).toEqual(baseline.manifest)
+  })
+
   test("retries a failed existing page after a source inventory changes the plan", async () => {
     const first = await buildPure(baseInput())
     const sources = [

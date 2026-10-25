@@ -187,6 +187,7 @@ export namespace WikiAutomatic {
                 signal,
                 lockTimeoutMs: 100,
                 includeGraphEvidence: false,
+                idleEmbeddings: cfg.localEmbeddings,
                 allowSource: (relative) => allowed("read", relative),
                 allowWrite: (relative) => allowed("edit", relative),
                 sessionID: selected.sessionID,

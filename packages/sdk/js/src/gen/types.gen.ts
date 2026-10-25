@@ -1076,6 +1076,10 @@ export type Config = {
    */
   wiki?: {
     /**
+     * Rank idle Wiki evidence with an installed AX Engine on macOS arm64. Downloads a pinned local embedding model when needed. Default: true.
+     */
+    localEmbeddings?: boolean
+    /**
      * Maintain Wiki in the background after interactive project idle. Default: true; false disables automatic maintenance.
      */
     auto?: boolean

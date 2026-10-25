@@ -115,6 +115,39 @@ The wiki never replaces source: every `read` result lists the files to verify ag
 
 ## Incremental updates and manual content
 
+### Optional local evidence ranking
+
+On macOS arm64, idle Wiki maintenance can use an already-installed AX Engine
+7.9.0 or later to rank optional source evidence before page generation. This is
+enabled by default; set `wiki.localEmbeddings` to `false` to disable it. Normal
+CLI generation, startup and status reads do not provision an embedding model.
+
+When eligible work exists, AX Code downloads the pinned
+`AutomatosX/AX-Qwen3-Embedding-0.6B-MLX-AXQ-MXFP8` revision through AX Engine if
+the verified artifact is absent from the standard Hugging Face cache. The pack
+is approximately 0.63 GB. It is a development artifact, not a certified model.
+AX Code does not install AX Engine automatically or substitute MXFP4/GGUF.
+
+Ranking requires AC power, at least 8 GiB total memory and 2 GiB reported free
+memory. Only one idle embedding worker runs across AX Code projects. A separate
+authenticated loopback worker leaves the user's chat service untouched and
+stops before Wiki prose generation. Foreground activity cancels the idle job.
+Missing/unsupported Engine, unavailable resources, verification failure or an
+embedding timeout retains ordinary deterministic source selection.
+
+The worker uses last-token pooling and normalized 1,024-dimensional vectors to
+rank already-selected files against each page's topic. The first source and
+module pages' first three sources (including the early test sample) stay fixed.
+Source membership, permissions and evidence byte limits remain unchanged. A
+build considers at most 128 distinct optional files, reads at most 1,024 bytes
+per file for ranking, and reuses vectors within that build. The optional stage
+has a two-minute budget, including download and loading. Changed source order
+and ranking profile participate in page fingerprints.
+
+This can change which optional evidence survives the page byte budget. It does
+not add semantic search, replace the generation model, or establish a measured
+speed or answer-quality improvement.
+
 `wiki update` compares current source hashes with the manifest and maps changes through each page's selectors. A plan change regenerates all planned pages; otherwise unrelated pages remain untouched.
 
 Generated prose is compiler-owned. Put durable maintainer text inside a protected block:

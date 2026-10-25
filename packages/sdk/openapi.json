@@ -41067,6 +41067,10 @@
             "description": "Native source-backed AX Wiki. Complements structural ax-code index; does not replace code_intelligence.",
             "type": "object",
             "properties": {
+              "localEmbeddings": {
+                "description": "Rank idle Wiki evidence with an installed AX Engine on macOS arm64. Downloads a pinned local embedding model when needed. Default: true.",
+                "type": "boolean"
+              },
               "auto": {
                 "description": "Maintain Wiki in the background after interactive project idle. Default: true; false disables automatic maintenance.",
                 "type": "boolean"

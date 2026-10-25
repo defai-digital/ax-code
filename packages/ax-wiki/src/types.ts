@@ -1,5 +1,5 @@
 import type { EvidenceBundle } from "./contracts.js"
-import type { EvidenceProvider } from "./ports.js"
+import type { EvidenceProvider, WikiSourceRanker } from "./ports.js"
 
 export const AX_WIKI_SCHEMA_VERSION = 1 as const
 export const AX_WIKI_GENERATOR = "ax-wiki" as const
@@ -181,6 +181,7 @@ export type WikiBuildLockHandle = { release(): Promise<void> }
 export type WikiBuildLock = { acquire(): Promise<WikiBuildLockHandle> }
 
 export type WikiBuildInput = {
+  sourceRanker?: WikiSourceRanker
   signal?: AbortSignal
   allowSource?: (relative: string) => boolean
   allowWrite?: (relative: string) => boolean
