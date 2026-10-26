@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-22
+Last reviewed: 2026-10-26
 Owner: ax-code runtime
 
 Choose the Desktop app for a graphical workspace, or CLI-only for terminal, SSH, and CI workflows. The commands below follow the Desktop and CLI READMEs. Later sections cover CLI runtime labels from `ax-code doctor`, manual verification, upgrades, and contributor launchers.
@@ -51,7 +51,7 @@ curl -fsSL https://download.automatosx.com/ax-code-desktop/install | bash
 Use Windows AMD64 (x64) and PowerShell 5.1 or newer. Confirm the installer publisher is **DEFAI Private Limited**, then open AX Code from the Start Menu.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.automatosx.com/ax-code-desktop/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm -UseBasicParsing https://download.automatosx.com/ax-code-desktop/install.ps1 | iex"
 ```
 
 ### Desktop on Ubuntu
