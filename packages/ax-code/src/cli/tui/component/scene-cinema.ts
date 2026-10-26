@@ -3,11 +3,13 @@
  *
  * Every playback gets a fade in from black and out to black, a soft bloom
  * around bright lights, a gentle contrast and saturation grade, and a
- * vignette. Every theme carries an authored move: an opening pushes in gently
- * as the arrival settles, an ending starts close and pulls back to the full
- * frame as it departs, and neutral or framed themes hold still. The camera is
- * deterministic and never draws per playback. The camera resample is bilinear,
- * which also smooths the painters' hard stair-stepped edges.
+ * vignette, plus a static ordered dither so smooth gradients stay smooth
+ * instead of banding once they quantize to bytes. Every theme carries an
+ * authored move: an opening pushes in gently as the arrival settles, an ending
+ * starts close and pulls back to the full frame as it departs, and neutral or
+ * framed themes hold still. The camera is deterministic and never draws per
+ * playback. The camera resample is bilinear, which also smooths the painters'
+ * hard stair-stepped edges.
  *
  * Pure and deterministic: the output depends only on the inputs.
  */
@@ -280,6 +282,17 @@ function vignetteGrid(w: number, h: number): Grid {
   return gridCache
 }
 
+/**
+ * 4x4 Bayer matrix, 0..15 row-major. Indexed by output position, never by
+ * time: a framed playback dithers the same way on every draw.
+ */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5] as const
+/** The matrix as byte offsets in [-1, +0.875]: under one quantization step. */
+const BAYER_OFFSET = Float32Array.from(BAYER, (value) => (value / 16 - 0.5) * 2)
+
+/** Clamp a graded float to a byte and round to nearest, dither overshoot included. */
+const toByte = (value: number) => (value <= 0 ? 0 : value >= 255 ? 255 : (value + 0.5) | 0)
+
 /** Contrast S-curve as a byte lookup table, with a lifted floor and capped white. */
 const CURVE = (() => {
   const lut = new Uint8Array(256 * 4)
@@ -422,6 +435,7 @@ export function applyCinema(src: Buffer, width: number, height: number, shot: Ci
     const grow1 = Math.min(gh - 1, gyi + 1) * gw * 3
     const gfy = gyf - gyi
     const bloomRow = litRow[gyi]! | litRow[Math.min(gh - 1, gyi + 1)]!
+    const ditherRow = (y & 3) << 2
     let o = y * w * 3
     let v = y * w
     for (let x = 0; x < w; x++, o += 3, v++) {
@@ -465,9 +479,12 @@ export function applyCinema(src: Buffer, width: number, height: number, shot: Ci
       g = luma + (g - luma) * SATURATION
       bl = luma + (bl - luma) * SATURATION
       const k = vignette[v]! * exposure
-      out[o] = (CURVE[r < 0 ? 0 : r > 1023 ? 1023 : r | 0]! * k) | 0
-      out[o + 1] = (CURVE[g < 0 ? 0 : g > 1023 ? 1023 : g | 0]! * k) | 0
-      out[o + 2] = (CURVE[bl < 0 ? 0 : bl > 1023 ? 1023 : bl | 0]! * k) | 0
+      // Static dither folded into the write: the offset only ever moves a byte
+      // by one step, so it breaks banding without adding visible texture.
+      const dither = BAYER_OFFSET[ditherRow | (x & 3)]!
+      out[o] = toByte(CURVE[r < 0 ? 0 : r > 1023 ? 1023 : r | 0]! * k + dither)
+      out[o + 1] = toByte(CURVE[g < 0 ? 0 : g > 1023 ? 1023 : g | 0]! * k + dither)
+      out[o + 2] = toByte(CURVE[bl < 0 ? 0 : bl > 1023 ? 1023 : bl | 0]! * k + dither)
     }
   }
   return out

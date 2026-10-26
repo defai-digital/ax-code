@@ -210,6 +210,30 @@ describe("cinema finishing pass", () => {
     expect(src.equals(copy)).toBe(true)
   })
 
+  test("dithers a flat mid-tone with a static Bayer pattern", () => {
+    const w = 64
+    const h = 36
+    const src = solid(w, h, [128, 128, 128])
+    const s = { zoom: 1, centerX: w / 2, centerY: h / 2, exposure: 1 }
+    const out = applyCinema(src, w, h, s)
+    // The middle of the frame sits inside the untouched vignette plateau, so a
+    // flat tone grades to a single level there: more than one byte value can
+    // only come from the dither.
+    const center = pixel(out, w, w / 2, h / 2)
+    const tones = new Set<number>()
+    for (let y = h / 2 - 4; y <= h / 2 + 4; y++)
+      for (let x = w / 2 - 4; x <= w / 2 + 4; x++)
+        for (let c = 0; c < 3; c++) {
+          const value = pixel(out, w, x, y)[c]!
+          tones.add(value)
+          // One step of spread either way, never a visible texture.
+          expect(Math.abs(value - center[c]!)).toBeLessThanOrEqual(3)
+        }
+    expect(tones.size).toBeGreaterThan(1)
+    // Keyed to position alone, so a redraw is byte-identical.
+    expect(applyCinema(src, w, h, s).equals(out)).toBe(true)
+  })
+
   test("returns black at zero exposure and for degenerate sizes", () => {
     const src = solid(16, 16, [200, 200, 200])
     const dark = applyCinema(src, 16, 16, { zoom: 1, centerX: 8, centerY: 8, exposure: 0 })

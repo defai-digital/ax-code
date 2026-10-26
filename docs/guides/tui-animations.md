@@ -11,7 +11,8 @@ manual overrides, and the difference between pixel graphics and text rendering.
 Each TUI launch randomly selects one of thirty-nine animation pairs with equal probability (1/39 each).
 In pixel mode, Foliage and every landmark scene also pass through a finishing
 pass: a short fade in from black and out to black, a soft glow around bright
-lights, a gentle contrast and color grade, and a vignette. The camera is
+lights, a gentle contrast and color grade, and a vignette, plus a static dither
+keyed to pixel position that keeps smooth gradients from banding. The camera is
 authored per theme and never drawn at playback: an opening pushes in gently by
 3% as the arrival settles, an ending starts close and pulls back to the full
 frame as it departs, and the neutral Digital Code and Taegeuk themes hold still.
