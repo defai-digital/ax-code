@@ -186,8 +186,51 @@ export function exportSnapshot(base = root) {
   return files
 }
 
-export function syncSnapshot(website, { check = false, base = root } = {}) {
-  const files = exportSnapshot(base)
+export function syncSnapshot(website, { check = false, base = root, pages } = {}) {
+  let files = exportSnapshot(base)
+  const metadataPath = "src/content/docs-snapshot.json"
+  if (pages !== undefined) {
+    if (!Array.isArray(pages) || pages.length === 0 || new Set(pages).size !== pages.length)
+      throw new Error("Scoped export requires unique page slugs")
+    const previous = JSON.parse(readFileSync(approvedPath(website, metadataPath), "utf8"))
+    const current = JSON.parse(files.get(metadataPath).toString())
+    if (previous.schemaVersion !== 1) throw new Error("Unsupported existing snapshot")
+    const selected = current.pages.filter((page) => pages.includes(page.slug))
+    if (selected.length !== pages.length) throw new Error("Unknown scoped documentation page")
+    const sources = new Set(selected.map((page) => page.source))
+    const records = current.files.filter((record) => sources.has(record.source))
+    const destinations = new Set(records.map((record) => record.destination))
+    // Verify the old snapshot before merging. Scoped export must never bless manual edits.
+    for (const record of previous.files) {
+      if (hash(readFileSync(approvedPath(website, record.destination))) !== record.sha256)
+        throw new Error(`Existing snapshot changed outside exporter: ${record.destination}`)
+    }
+    const provenance = {
+      sourceCommit: current.sourceCommit,
+      runtimeVersion: current.runtimeVersion,
+      sdkVersion: current.sdkVersion,
+    }
+    const merged = {
+      ...previous,
+      contentState: "Scoped working-tree snapshots; per-page provenance overrides the original snapshot version",
+      pages: [
+        ...previous.pages.filter((page) => !pages.includes(page.slug)),
+        ...selected.map((page) => ({ ...page, ...provenance })),
+      ],
+      files: [
+        ...previous.files.filter((record) => !destinations.has(record.destination)),
+        ...records.map((record) => ({ ...record, ...provenance })),
+      ],
+    }
+    const mergedFiles = new Map(
+      previous.files
+        .filter((record) => !destinations.has(record.destination))
+        .map((record) => [record.destination, readFileSync(approvedPath(website, record.destination))]),
+    )
+    for (const record of records) mergedFiles.set(record.destination, files.get(record.destination))
+    mergedFiles.set(metadataPath, Buffer.from(JSON.stringify(merged, null, 2) + "\n"))
+    files = mergedFiles
+  }
   const managed = ["src/content/docs", "public/docs-assets"]
   const existing = []
   const walk = (dir) => {
@@ -212,7 +255,9 @@ export function syncSnapshot(website, { check = false, base = root } = {}) {
     const extra = existing.filter((name) => !files.has(name))
     if (stale.length || extra.length) throw new Error(`Stale public docs snapshot: ${[...stale, ...extra].join(", ")}`)
   } else {
-    for (const name of managed) rmSync(join(website, name), { recursive: true, force: true })
+    const extra = existing.filter((name) => !files.has(name))
+    if (pages && extra.length) throw new Error(`Unexpected scoped snapshot files: ${extra.join(", ")}`)
+    if (!pages) for (const name of managed) rmSync(join(website, name), { recursive: true, force: true })
     for (const [name, data] of files) {
       const target = approvedPath(website, name)
       mkdirSync(dirname(target), { recursive: true })
@@ -225,8 +270,10 @@ export function syncSnapshot(website, { check = false, base = root } = {}) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const index = process.argv.indexOf("--website")
   if (index < 0 || !process.argv[index + 1])
-    throw new Error("Usage: node script/export-public-docs.mjs --website PATH [--check]")
+    throw new Error("Usage: node script/export-public-docs.mjs --website PATH [--check] [--pages slug,slug]")
+  const pagesIndex = process.argv.indexOf("--pages")
+  const pages = pagesIndex < 0 ? undefined : (process.argv[pagesIndex + 1] ?? "").split(",")
   console.log(
-    `Verified ${syncSnapshot(resolve(process.argv[index + 1]), { check: process.argv.includes("--check") })} approved public documentation files.`,
+    `Verified ${syncSnapshot(resolve(process.argv[index + 1]), { check: process.argv.includes("--check"), pages })} approved public documentation files.`,
   )
 }

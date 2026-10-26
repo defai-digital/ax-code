@@ -416,6 +416,18 @@
     {
       "source": "docs/providers/model-download-publication.md",
       "page": "providers/model-download-publication"
+    },
+    {
+      "source": "docs/getting-started/connect-provider.md",
+      "page": "getting-started/connect-provider"
+    },
+    {
+      "source": "docs/getting-started/select-model.md",
+      "page": "getting-started/select-model"
+    },
+    {
+      "source": "docs/getting-started/wiki-quickstart.md",
+      "page": "getting-started/wiki-quickstart"
     }
   ]
 }

@@ -115,6 +115,37 @@ describe("public documentation export", () => {
     }
   })
 
+  test("scoped exports preserve older pages and assets, record provenance, and detect tampering", () => {
+    const website = mkdtempSync(join(tmpdir(), "ax-docs-scoped-"))
+    try {
+      syncSnapshot(website)
+      const metadataPath = join(website, "src/content/docs-snapshot.json")
+      const metadata = JSON.parse(readFileSync(metadataPath, "utf8"))
+      metadata.runtimeVersion = "older-version"
+      writeFileSync(metadataPath, JSON.stringify(metadata))
+      const originalHub = readFileSync(join(website, "src/content/docs/index.md"))
+      const originalAsset = readFileSync(join(website, "public/docs-assets/NOTICE"))
+      const pages = ["providers/custom-provider"]
+      syncSnapshot(website, { pages })
+      const merged = JSON.parse(readFileSync(metadataPath, "utf8"))
+      expect(merged.runtimeVersion).toBe("older-version")
+      expect(merged.pages.find((page: { slug: string }) => page.slug === pages[0]).runtimeVersion).not.toBe(
+        "older-version",
+      )
+      expect(readFileSync(join(website, "src/content/docs/index.md"))).toEqual(originalHub)
+      expect(readFileSync(join(website, "public/docs-assets/NOTICE"))).toEqual(originalAsset)
+      expect(() => syncSnapshot(website, { pages, check: true })).not.toThrow()
+      expect(() => syncSnapshot(website, { pages: ["missing-page"] })).toThrow(/Unknown scoped/)
+      writeFileSync(join(website, "public/docs-assets/private.txt"), "unexpected")
+      expect(() => syncSnapshot(website, { pages })).toThrow(/Unexpected scoped/)
+      rmSync(join(website, "public/docs-assets/private.txt"))
+      writeFileSync(join(website, "src/content/docs/index.md"), "tampered")
+      expect(() => syncSnapshot(website, { pages })).toThrow(/changed outside exporter/)
+    } finally {
+      rmSync(website, { recursive: true, force: true })
+    }
+  })
+
   test("refuses symlinked output trees before deleting or writing", () => {
     const website = mkdtempSync(join(tmpdir(), "ax-docs-output-"))
     try {

@@ -22,6 +22,12 @@ Public website: [ax-code.app/en/docs/](https://ax-code.app/en/docs/).
 For existing installations, start with [Upgrade and recovery](getting-started/upgrade.md).
 Source access and public downloads are separate; see [Source access](getting-started/source-access.md).
 
+## Practical quickstarts
+
+1. [Connect your first provider](getting-started/connect-provider.md)
+2. [Choose and change models](getting-started/select-model.md)
+3. [Create and use your first AX Wiki](getting-started/wiki-quickstart.md)
+
 ## Choose by task
 
 For opt-in shared terminal navigation through an external MCP client, see
