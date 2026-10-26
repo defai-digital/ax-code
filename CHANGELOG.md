@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.1] - 2026-10-26
+
+### Fixed
+
+- Preserve the full disposal grace period when syntax styles are reused, cancel delayed disposals on cleanup, and finish remaining cleanup after one native destroy fails.
+- Keep notification queues bounded, avoid keeping the process alive for audio gaps, and keep redirected terminal output free of control sequences.
+- Release session-owned browser pages and transports when sessions are deleted, including delayed opens.
+- Consume the upstream AX TUI hidden-child and empty-slot lifecycle fixes through a pinned dependency patch.
+- Correct Wiki timeout backoff and build reports; improve targeted Wiki evidence, module exploration and dependency metrics.
+- Keep cinema finish motion deterministic and bounded with authored camera moves and static dither.
+
+### Changed
+
+- Publish SDK 2.6.53 with the current server contract.
+
 ## [7.30.0] - 2026-10-25
 
 ### Added
