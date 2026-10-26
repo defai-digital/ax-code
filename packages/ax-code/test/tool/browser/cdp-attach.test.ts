@@ -368,7 +368,10 @@ describe("browser runtime CDP attach mode", () => {
         browser.newContext = vi.fn().mockResolvedValue(context)
         let finishLaunch!: (value: unknown) => void
         _setPlaywrightForTest({
-          chromium: { launch: vi.fn(() => new Promise((resolve) => (finishLaunch = resolve))), connectOverCDP: vi.fn() },
+          chromium: {
+            launch: vi.fn(() => new Promise((resolve) => (finishLaunch = resolve))),
+            connectOverCDP: vi.fn(),
+          },
         } as never)
 
         const rt = BrowserRuntime.forSession("ses_release_launch_fail")
@@ -450,7 +453,10 @@ describe("browser runtime CDP attach mode", () => {
         const browser = createMockBrowser()
         let finishLaunch!: (value: unknown) => void
         _setPlaywrightForTest({
-          chromium: { launch: vi.fn(() => new Promise((resolve) => (finishLaunch = resolve))), connectOverCDP: vi.fn() },
+          chromium: {
+            launch: vi.fn(() => new Promise((resolve) => (finishLaunch = resolve))),
+            connectOverCDP: vi.fn(),
+          },
         } as never)
         const previous = BrowserRuntime.releaseSettleMs
         BrowserRuntime.releaseSettleMs = 20
@@ -498,6 +504,24 @@ describe("browser runtime CDP attach mode", () => {
         } finally {
           BrowserRuntime.releaseSettleMs = previous
         }
+      },
+    })
+  })
+
+  test("an owned context is closed when its first page cannot be created", async () => {
+    await using tmp = await tmpdir({ config: { browser: { cdpUrl: "http://localhost:9222" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const context = createMockContext(createMockPage())
+        context.newPage = vi.fn().mockRejectedValue(new Error("Target crashed"))
+        const browser = createMockBrowser([])
+        browser.newContext = vi.fn().mockResolvedValue(context)
+        _setPlaywrightForTest(createMockPlaywright(browser) as never)
+
+        const rt = BrowserRuntime.forSession("ses_owned_context_fail")
+        await expect(rt.open("https://example.com", { width: 1440, height: 900 })).rejects.toThrow("Target crashed")
+        expect(context.close).toHaveBeenCalledOnce()
       },
     })
   })

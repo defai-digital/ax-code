@@ -6,7 +6,19 @@ import { useContextMenu } from "../../ui/context-menu"
 import { createSessionPromptDraftLifecycle, promptDraftKey } from "./session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent } from "ax-tui"
-import { children, createEffect, createMemo, onMount, createSignal, onCleanup, on, Show, Switch, Match, For } from "solid-js"
+import {
+  children,
+  createEffect,
+  createMemo,
+  onMount,
+  createSignal,
+  onCleanup,
+  on,
+  Show,
+  Switch,
+  Match,
+  For,
+} from "solid-js"
 import { providerModelEquals } from "@/provider/model-key"
 import { shouldAdoptMessageModelFromHistory } from "@tui/context/local-util"
 import { effortDisplay } from "@/provider/effort-label"

@@ -449,7 +449,14 @@ export class BrowserRuntime {
         viewport: { width: viewport.width, height: viewport.height },
       }))
     const ownsContext = !existing
-    const pwPage = await context.newPage()
+    let pwPage: PwPage
+    try {
+      pwPage = await context.newPage()
+    } catch (err) {
+      // A context created just for this page is not tracked anywhere yet.
+      if (ownsContext) await context.close().catch(() => {})
+      throw err
+    }
     const pending = { pwPage, context, ownsContext }
     this.pendingPages.add(pending)
     await this.stopIfReleaseClosed()
