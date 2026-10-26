@@ -11,6 +11,7 @@
  * is not installed, all methods throw a diagnostic error.
  */
 import { createRequire } from "node:module"
+import { GlobalBus } from "@/bus/global"
 import { Log } from "@/util/log"
 import { Config } from "@/config/config"
 
@@ -201,6 +202,8 @@ const SNAPSHOT_SCRIPT = `
 export class BrowserRuntime {
   private static instance: BrowserRuntime | undefined
   private static bySession = new Map<string, BrowserRuntime>()
+  /** One process-wide session.deleted listener, added with the first per-session runtime. */
+  private static deletionListener: ((event: { payload: any }) => void) | undefined
 
   private browser: PwBrowser | undefined
   /** true when connected to the user's real browser via CDP (browser.cdpUrl) */
@@ -213,6 +216,16 @@ export class BrowserRuntime {
   private latestPageID: string | undefined
   private pageCounter = 0
   private launchPromise: Promise<PwBrowser> | undefined
+  /** Set by release(): the session is gone, so nothing may be (re)opened here. */
+  private released = false
+  /** How long release() lets in-flight open() calls settle before closing anyway. */
+  static releaseSettleMs = 30_000
+  /** open() calls still in flight; release() lets them settle before closing. */
+  private opening = new Set<Promise<unknown>>()
+  /** release() stopped waiting and closed; a late open() must clean up after itself. */
+  private releaseClosing = false
+  /** Pages newPage() returned that open() has not registered yet; close() closes them too. */
+  private pendingPages = new Set<Pick<PageEntry, "pwPage" | "context" | "ownsContext">>()
 
   private static disposeRegistered = false
 
@@ -246,14 +259,72 @@ export class BrowserRuntime {
     if (!runtime) {
       runtime = new BrowserRuntime()
       BrowserRuntime.bySession.set(sessionID, runtime)
+      BrowserRuntime.ensureSessionDeletedSubscription()
     }
     return runtime
   }
 
+  /**
+   * Close and drop the Chromium runtime for one session.
+   * Unknown ids are a no-op. Not called on leave or idle.
+   */
+  static async release(sessionID: string): Promise<void> {
+    const runtime = BrowserRuntime.bySession.get(sessionID)
+    if (!runtime) return
+    // Detach first so forSession() cannot hand out a closing runtime. An open()
+    // in flight may still be launching, creating a page or navigating, with
+    // nothing yet visible to close(); let it settle (it registers its page or
+    // cleans up after itself) so close() sees everything it made, and in attach
+    // mode closes those tabs before dropping the CDP transport.
+    BrowserRuntime.bySession.delete(sessionID)
+    runtime.released = true
+    // Bounded: a stalled CDP peer can keep an open() pending forever, and only
+    // close() tearing the transport down would reject it.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const settled = await Promise.race([
+      Promise.allSettled([...runtime.opening]).then(() => true),
+      new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), BrowserRuntime.releaseSettleMs)
+        timer.unref?.()
+      }),
+    ])
+    clearTimeout(timer)
+    if (!settled) log.warn("closing a released browser runtime with open() still pending", { sessionID })
+    runtime.releaseClosing = true
+    try {
+      await runtime.close()
+    } catch (error) {
+      log.error("failed to close session browser runtime", { sessionID, error })
+    }
+  }
+
+  // GlobalBus carries session.deleted from every project instance, so one
+  // listener covers sessions in any directory without an instance context.
+  private static ensureSessionDeletedSubscription(): void {
+    if (BrowserRuntime.deletionListener) return
+    const listener = (event: { payload: any }) => {
+      if (event.payload?.type !== "session.deleted") return
+      const sessionID = event.payload.properties?.info?.id
+      if (typeof sessionID === "string") void BrowserRuntime.release(sessionID)
+    }
+    BrowserRuntime.deletionListener = listener
+    GlobalBus.on("event", listener)
+  }
+
   /** Reset singleton and per-session runtimes (test-only). */
   static _reset(): void {
+    const runtimes: BrowserRuntime[] = []
+    if (BrowserRuntime.instance) runtimes.push(BrowserRuntime.instance)
+    for (const runtime of BrowserRuntime.bySession.values()) runtimes.push(runtime)
     BrowserRuntime.instance = undefined
     BrowserRuntime.bySession.clear()
+    if (BrowserRuntime.deletionListener) GlobalBus.off("event", BrowserRuntime.deletionListener)
+    BrowserRuntime.deletionListener = undefined
+    for (const runtime of runtimes) {
+      void runtime.close().catch((error) => {
+        log.error("failed to close browser runtime", { error })
+      })
+    }
   }
 
   // ---- helpers ----
@@ -321,6 +392,28 @@ export class BrowserRuntime {
   }
 
   async open(url: string, viewport: { width: number; height: number }): Promise<BrowserPage> {
+    if (this.released) throw new Error("Browser runtime was released because its session was deleted.")
+    const opening = this.openNow(url, viewport)
+    this.opening.add(opening)
+    try {
+      return await opening
+    } finally {
+      this.opening.delete(opening)
+      // Settled after release() gave up waiting: whatever this open launched,
+      // connected or registered is invisible to that close(), so close it here.
+      if (this.released && this.releaseClosing) await this.close().catch(() => {})
+    }
+  }
+
+  // A release() that already gave up waiting cannot see what this open makes
+  // next; stop between steps instead of creating more behind its back.
+  private async stopIfReleaseClosed(): Promise<void> {
+    if (!this.released || !this.releaseClosing) return
+    await this.close()
+    throw new Error("Browser runtime was released because its session was deleted.")
+  }
+
+  private async openNow(url: string, viewport: { width: number; height: number }): Promise<BrowserPage> {
     const pw = this.ensurePlaywright()
 
     // The peer may have gone away silently (e.g. the user closed their
@@ -344,6 +437,7 @@ export class BrowserRuntime {
       }
       log.info("browser launched")
     }
+    await this.stopIfReleaseClosed()
 
     // In attach mode the user's session (tabs, cookies, sign-in state) lives in
     // the browser's existing default context; a fresh isolated context would
@@ -356,6 +450,9 @@ export class BrowserRuntime {
       }))
     const ownsContext = !existing
     const pwPage = await context.newPage()
+    const pending = { pwPage, context, ownsContext }
+    this.pendingPages.add(pending)
+    await this.stopIfReleaseClosed()
 
     this.pageCounter++
     const pageID = `page_${this.pageCounter}`
@@ -390,6 +487,7 @@ export class BrowserRuntime {
       finalUrl = pwPage.url() || url
       title = await pwPage.title()
     } catch (err) {
+      this.pendingPages.delete(pending)
       // The page is not registered in this.pages yet, so close() and
       // closePage() would never see it. Close it (and the context if we
       // created one) here — otherwise it leaks as an orphan tab, which in
@@ -413,8 +511,13 @@ export class BrowserRuntime {
       title,
       viewport,
     }
+    this.pendingPages.delete(pending)
     this.pages.set(pageID, entry)
     this.latestPageID = pageID
+
+    // Released mid-open: the page is registered, so the close() that release()
+    // runs once this settles takes it down with the browser.
+    if (this.released) throw new Error("Browser runtime was released because its session was deleted.")
 
     log.info("page opened", { pageID, url: finalUrl, viewport })
 
@@ -768,6 +871,17 @@ export class BrowserRuntime {
       }
     }
     this.pages.clear()
+    // Half-opened pages too, before the transport goes: in attach mode
+    // browser.close() only disconnects, and such a tab would stay open.
+    for (const entry of this.pendingPages) {
+      try {
+        if (entry.ownsContext) await entry.context.close()
+        else await entry.pwPage.close()
+      } catch {
+        // Page/context may already be closed
+      }
+    }
+    this.pendingPages.clear()
     this.consoleBuffers.clear()
     this.networkBuffers.clear()
     this.uidRegistry.clear()

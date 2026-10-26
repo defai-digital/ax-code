@@ -8,6 +8,7 @@
  * action dispatch) without requiring a real browser binary.
  */
 import { describe, expect, test, vi, beforeEach } from "vitest"
+import { GlobalBus } from "../../../src/bus/global"
 import { BrowserRuntime, _resetPlaywrightCache } from "../../../src/tool/browser/runtime"
 
 // ---------------------------------------------------------------------------
@@ -757,5 +758,65 @@ describe("browser runtime", () => {
     const page = createMockPage()
     injectPage(runtime, "page_1", page, createMockContext())
     await expect(runtime.action("latest", "click", { uid: "uid_1" })).rejects.toThrow(/snapshotID/)
+  })
+
+  test("release closes and removes the session runtime", async () => {
+    const sessionID = "ses_browser_release"
+    const sessionRuntime = BrowserRuntime.forSession(sessionID)
+    const close = vi.spyOn(sessionRuntime, "close").mockResolvedValue(undefined)
+    await BrowserRuntime.release(sessionID)
+    expect(close).toHaveBeenCalledOnce()
+    expect(BrowserRuntime.forSession(sessionID)).not.toBe(sessionRuntime)
+  })
+
+  test("release is a no-op for an unknown session", async () => {
+    const sessionID = "ses_browser_keep"
+    const sessionRuntime = BrowserRuntime.forSession(sessionID)
+    const close = vi.spyOn(sessionRuntime, "close")
+    await BrowserRuntime.release("ses_browser_missing")
+    expect(close).not.toHaveBeenCalled()
+    expect(BrowserRuntime.forSession(sessionID)).toBe(sessionRuntime)
+  })
+
+  test("release logs and swallows close errors", async () => {
+    const sessionID = "ses_browser_close_error"
+    const sessionRuntime = BrowserRuntime.forSession(sessionID)
+    vi.spyOn(sessionRuntime, "close").mockRejectedValue(new Error("close failed"))
+    await expect(BrowserRuntime.release(sessionID)).resolves.toBeUndefined()
+    expect(BrowserRuntime.forSession(sessionID)).not.toBe(sessionRuntime)
+  })
+
+  test("_reset closes per-session runtimes", () => {
+    const sessionID = "ses_browser_reset"
+    const sessionRuntime = BrowserRuntime.forSession(sessionID)
+    const close = vi.spyOn(sessionRuntime, "close").mockResolvedValue(undefined)
+    BrowserRuntime._reset()
+    expect(close).toHaveBeenCalledOnce()
+  })
+
+  test("session.deleted from any directory releases that session runtime", async () => {
+    const deletedID = "ses_browser_deleted"
+    const otherID = "ses_browser_other_dir"
+    const keptID = "ses_browser_kept"
+    const deletedRuntime = BrowserRuntime.forSession(deletedID)
+    const otherRuntime = BrowserRuntime.forSession(otherID)
+    const keptRuntime = BrowserRuntime.forSession(keptID)
+    const closeDeleted = vi.spyOn(deletedRuntime, "close").mockResolvedValue(undefined)
+    const closeOther = vi.spyOn(otherRuntime, "close").mockResolvedValue(undefined)
+    const closeKept = vi.spyOn(keptRuntime, "close").mockResolvedValue(undefined)
+    const deleted = (directory: string, id: string) =>
+      GlobalBus.emit("event", { directory, payload: { type: "session.deleted", properties: { info: { id } } } })
+
+    deleted("/tmp/ax-browser-a", deletedID)
+    deleted("/tmp/ax-browser-b", otherID)
+    GlobalBus.emit("event", { directory: "/tmp/ax-browser-a", payload: { type: "session.updated", properties: {} } })
+    await vi.waitFor(() => expect(closeDeleted).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(closeOther).toHaveBeenCalledOnce())
+    expect(closeKept).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(BrowserRuntime.forSession(deletedID)).not.toBe(deletedRuntime))
+    expect(BrowserRuntime.forSession(keptID)).toBe(keptRuntime)
+
+    deleted("/tmp/ax-browser-a", "ses_browser_unknown")
+    expect(closeKept).not.toHaveBeenCalled()
   })
 })
