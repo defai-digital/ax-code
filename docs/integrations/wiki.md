@@ -319,6 +319,12 @@ and CI do not enable the interactive scheduler. Non-Git directories require an e
 request. In Git projects, Wiki generation and consumption use the nearest worktree
 root, so opening AX Code in a package does not create a separate package Wiki.
 
+Build deadlines are recorded in `.build-report.json` and enter the saved failure
+cooldown (5 minutes, 15 minutes, 1 hour, then 6 hours), including across restarts.
+Foreground interruptions do not count as failures. An explicit refresh bypasses
+the cooldown; `ax-code wiki status` and `ax-code wiki doctor` show the last build
+to help distinguish a timeout from a model or validation failure.
+
 The session sidebar and `/wiki-viz` open a local progress page immediately and request
 maintenance. Once a snapshot is ready, that page shows recorded Wiki page/source
 relationships. See [Wiki visualization](../guides/wiki-visualization.md).

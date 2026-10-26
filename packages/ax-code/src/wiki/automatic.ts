@@ -195,15 +195,14 @@ export namespace WikiAutomatic {
               }),
             )
           } catch (error) {
-            // A preempted build (foreground activity, disposal, or the run
-            // deadline aborted the signal) is not a deterministic failure: it
-            // must never climb the durable cooldown ladder. Neither is losing
-            // the build lock to another process (a CLI update or a second
-            // server on the same checkout): the page set was never attempted.
+            // Foreground activity and disposal are preemptions, but a run
+            // deadline is a failure that must back off across restarts too.
+            // Lock contention with a CLI update or another server is also
+            // excluded: the page set was never attempted.
             const lockBusy =
               error instanceof WikiBuildLockBusyError ||
               (error instanceof Error && error.name === "WikiBuildLockBusyError")
-            if (!signal.aborted && !lockBusy) {
+            if ((!signal.aborted || signal.reason?.name === "TimeoutError") && !lockBusy) {
               const report = await readWikiBuildReport(root, cfg.dir)
               await recordWikiFailure(root, cfg.dir, {
                 head,

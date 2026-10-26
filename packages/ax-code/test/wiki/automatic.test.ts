@@ -312,6 +312,58 @@ test("a preempted maintenance build is not recorded as a durable failure", async
   })
 })
 
+test("a maintenance deadline records durable backoff that survives instance restart", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.spyOn(Agent, "get").mockImplementation(async (name) => ({
+    name,
+    mode: "primary",
+    native: true,
+    options: {},
+    permission: Permission.fromConfig({ "*": "allow" }),
+  }))
+  const original = globalThis.setTimeout
+  vi.spyOn(globalThis, "setTimeout").mockImplementation((handler, ms, ...args) =>
+    original(handler, ms === 600_000 ? 50 : ms === 30_000 ? 0 : ms, ...args),
+  )
+  state.build.mockImplementationOnce(async ({ signal }) => {
+    await new Promise<void>((resolve) => {
+      if (signal.aborted) return resolve()
+      signal.addEventListener("abort", () => resolve(), { once: true })
+    })
+    throw signal.reason
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await WikiAutomatic.refresh("build")
+      await waitForStatus({ phase: "failed" })
+      expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toMatchObject({
+        consecutiveFailures: 1,
+        error: "Wiki maintenance deadline exceeded",
+      })
+    },
+  })
+  await Instance.disposeAll()
+  const now = Date.now.bind(Date)
+  let elapsed = 0
+  vi.spyOn(Date, "now").mockImplementation(() => now() + elapsed)
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await WikiAutomatic.enable("build")
+      elapsed = 30_001
+      await waitForStatus({ phase: "ready" })
+      expect(state.build).toHaveBeenCalledTimes(1)
+      expect((await readWikiFailureMemory(tmp.path, ".ax-wiki"))?.consecutiveFailures).toBe(1)
+      // Explicit refresh still bypasses the saved timeout cooldown.
+      await WikiAutomatic.refresh("build")
+      await waitForBuildCalls(2)
+      await waitForStatus({ phase: "ready" })
+      expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toBeUndefined()
+    },
+  })
+})
+
 test("an explicit request still runs while a failure cooldown is active", async () => {
   await using tmp = await tmpdir({ git: true })
   vi.spyOn(Agent, "get").mockImplementation(async (name) => ({

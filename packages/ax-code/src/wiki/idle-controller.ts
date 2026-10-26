@@ -103,7 +103,7 @@ export function createWikiIdleController(input: {
       const signal = controller.signal
       publish({ phase: "running", reason: "building", completed: 0, total: 0 })
       const deadline = setTimeout(
-        () => controller?.abort(new Error("Wiki maintenance deadline exceeded")),
+        () => controller?.abort(new DOMException("Wiki maintenance deadline exceeded", "TimeoutError")),
         input.deadlineMs ?? 600_000,
       )
       flight = Promise.resolve()

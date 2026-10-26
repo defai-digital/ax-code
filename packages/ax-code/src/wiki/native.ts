@@ -876,19 +876,20 @@ export async function runNativeWiki(input: {
             // Keep a foreground cancel intact. A page deadline must name the
             // page and must not be retried as a schema failure.
             if (input.signal?.aborted) {
+              const timedOut = input.signal.reason?.name === "TimeoutError"
               outcomes.set(request.page.path, {
                 path: request.page.path,
                 status: "failed",
                 attempts: attempt + 1,
-                failureClass: "cancelled",
+                failureClass: timedOut ? "timeout" : "cancelled",
                 durationMs: Date.now() - pageStartedMs,
                 sourceBytes,
                 promptBytes,
                 inputTokens,
                 outputTokens,
-                message: "Build cancelled",
+                message: timedOut ? "Build deadline exceeded" : "Build cancelled",
               })
-              throw error
+              throw timedOut ? input.signal.reason : error
             }
             if (abort.signal.aborted) {
               outcomes.set(request.page.path, {
@@ -1009,8 +1010,9 @@ export async function runNativeWiki(input: {
       // build outcome, so this is best-effort: a failed write is logged and
       // ignored, and its absence is tolerated by every reader. A cancelled
       // build is not a result: keep the previously committed report instead of
-      // overwriting it with a "failed" record for a preemption.
-      if (!input.signal?.aborted)
+      // overwriting it with a "failed" record for a preemption. A build
+      // deadline is a failure, however, and needs its own diagnostic report.
+      if (!input.signal?.aborted || input.signal.reason?.name === "TimeoutError")
         try {
           for (const failed of result?.failedPages ?? []) {
             if (outcomes.get(failed.path)?.status === "failed") continue

@@ -146,13 +146,15 @@ describe("default idle Wiki maintenance", () => {
     await s.controller.dispose()
   })
   test("a stuck job ends at the configured deadline", async () => {
-    const s = setup({ idleMs: 0, deadlineMs: 1000 })
+    const onError = vi.fn()
+    const s = setup({ idleMs: 0, deadlineMs: 1000, onError })
     s.build.mockImplementation(
       async (signal) =>
         new Promise<void>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true })),
     )
     await vi.advanceTimersByTimeAsync(1000)
     expect(s.controller.status().phase).toBe("failed")
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ name: "TimeoutError" }))
     await s.controller.dispose()
   })
 })

@@ -276,6 +276,28 @@ test("a cancelled build keeps the previously committed build report", async () =
   expect(await readFile(path.join(tmp.path, ".ax-wiki/.build-report.json"), "utf8")).toBe(committed)
 })
 
+test("a build deadline replaces the previous report with a timeout without publishing", async () => {
+  await using tmp = await fixture()
+  await run(tmp.path, new MockLanguageModelV3({ doStream: async () => response(valid) }))
+  const manifest = await readFile(path.join(tmp.path, ".ax-wiki/.manifest.json"), "utf8")
+  const abort = new AbortController()
+  const model = new MockLanguageModelV3({
+    doStream: async () => {
+      abort.abort(new DOMException("Wiki maintenance deadline exceeded", "TimeoutError"))
+      return response("invalid")
+    },
+  })
+  await expect(run(tmp.path, model, abort.signal)).rejects.toThrow("Wiki maintenance deadline exceeded")
+  expect(model.doStreamCalls).toHaveLength(1)
+  expect(await readWikiBuildReport(tmp.path, ".ax-wiki")).toMatchObject({
+    outcome: "failed",
+    error: "Wiki maintenance deadline exceeded",
+    failed: { path: "quickstart.md", failureClass: "timeout", attempts: 1 },
+    pages: [expect.objectContaining({ path: "quickstart.md", failureClass: "timeout", published: false })],
+  })
+  expect(await readFile(path.join(tmp.path, ".ax-wiki/.manifest.json"), "utf8")).toBe(manifest)
+})
+
 test("resumes the reported ten-of-twelve-page cancellation case without repeating completed model calls", async () => {
   await using tmp = await tmpdir({
     git: true,
