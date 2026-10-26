@@ -1,0 +1,110 @@
+name: Build frozen Windows candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Full frozen source commit SHA
+        required: true
+        type: string
+      version:
+        description: CLI version
+        required: true
+        type: string
+      source_sha256:
+        description: SHA-256 of git archive tar.gz for candidate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: windows-candidate-${{ inputs.candidate }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      CANDIDATE: ${{ inputs.candidate }}
+      VERSION: ${{ inputs.version }}
+      SOURCE_SHA256: ${{ inputs.source_sha256 }}
+      AX_CODE_DISABLE_AUTOUPDATE: "1"
+      AX_CODE_DISABLE_AUTO_INDEX: "1"
+      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+      AX_CODE_DISABLE_MODELS_FETCH: "1"
+      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+    steps:
+      - name: Validate immutable inputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:CANDIDATE -cnotmatch '^[0-9a-f]{40}$') { throw 'Invalid candidate SHA' }
+          if ($env:VERSION -cnotmatch '^\d+\.\d+\.\d+$') { throw 'Invalid version' }
+          if ($env:SOURCE_SHA256 -cnotmatch '^[0-9a-f]{64}$') { throw 'Invalid source digest' }
+          if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { throw 'Native x64 runner required' }
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate }}
+          persist-credentials: false
+      - name: Verify and materialize frozen source bytes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ((git rev-parse HEAD) -ne $env:CANDIDATE) { throw 'Checkout identity mismatch' }
+          $archive = Join-Path $env:RUNNER_TEMP 'source.tar.gz'
+          git -c core.autocrlf=false -c core.eol=lf archive --format=tar.gz --output $archive $env:CANDIDATE
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() -ne $env:SOURCE_SHA256) { throw 'Source digest mismatch' }
+          tar -xzf $archive -C $env:GITHUB_WORKSPACE
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen source extraction failed' }
+          if ((Get-Content packages/ax-code/package.json -Raw | ConvertFrom-Json).version -ne $env:VERSION) { throw 'Source version mismatch' }
+          $homeRoot = Join-Path $env:RUNNER_TEMP 'qualification-home'
+          "AX_CODE_TEST_HOME=$homeRoot" >> $env:GITHUB_ENV
+          foreach ($name in @('CONFIG','CACHE','DATA','STATE')) {
+            "XDG_${name}_HOME=$homeRoot/$($name.ToLower())" >> $env:GITHUB_ENV
+          }
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Test Windows installer regressions
+        run: pnpm exec vitest run script/install-powershell.test.ts script/windows-runtime-integrity.test.ts --retry=0
+      - uses: ./.github/actions/build-evidence-cache
+      - name: Build remaining native addons
+        run: pnpm build:native index-core diff parser
+      - name: Compile SDK and plugin
+        run: |
+          pnpm --dir packages/sdk/js exec tsc
+          if ($LASTEXITCODE -ne 0) { throw 'SDK compilation failed' }
+          pnpm --dir packages/plugin run build
+          if ($LASTEXITCODE -ne 0) { throw 'Plugin compilation failed' }
+      - name: Build unsigned candidate for external signing
+        shell: pwsh
+        run: |
+          $env:AX_CODE_VERSION = $env:VERSION
+          $env:AX_CODE_CHANNEL = 'latest'
+          $env:AX_CODE_RELEASE = 'true'
+          pnpm --dir packages/ax-code exec tsx script/build-node-tui.ts --release --arch x64 --defer-windows-signing
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate packaging failed' }
+          $archive = 'packages/ax-code/dist/ax-code-windows-x64.zip'
+          $receipt = [ordered]@{
+            candidate = $env:CANDIDATE
+            version = $env:VERSION
+            source_sha256 = $env:SOURCE_SHA256
+            archive_sha256 = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
+            execution = 'github-native-windows-x64'
+            status = 'built_external_signing_and_qualification_required'
+          }
+          $receipt | ConvertTo-Json | Set-Content windows-candidate-build.json -Encoding utf8
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-x64-build-${{ inputs.candidate }}
+          path: |
+            packages/ax-code/dist/ax-code-windows-x64.zip
+            windows-candidate-build.json
+          if-no-files-found: error
+          retention-days: 7
