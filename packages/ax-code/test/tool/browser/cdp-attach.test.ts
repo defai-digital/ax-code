@@ -38,6 +38,24 @@ function createMockBrowser(contexts: ReturnType<typeof createMockContext>[] = []
   }
 }
 
+// createMockBrowser's contexts() is a fixed array. Real Playwright appends a
+// context created via newContext, so a second attach-mode open sees it as
+// contexts()[0]. This helper mirrors that.
+function createSharedFallbackBrowser() {
+  const page1 = createMockPage()
+  const page2 = createMockPage()
+  const fallback = createMockContext(page1)
+  fallback.newPage.mockResolvedValueOnce(page1).mockResolvedValueOnce(page2)
+  const contexts: ReturnType<typeof createMockContext>[] = []
+  const browser = createMockBrowser([])
+  browser.contexts.mockImplementation(() => contexts)
+  browser.newContext.mockImplementation(async () => {
+    contexts.push(fallback)
+    return fallback
+  })
+  return { page1, page2, fallback, browser }
+}
+
 function createMockPlaywright(attachBrowser: unknown, launchedBrowser: unknown = createMockBrowser()) {
   return {
     chromium: {
@@ -298,6 +316,62 @@ describe("browser runtime CDP attach mode", () => {
 
         expect(fallback.close).toHaveBeenCalled()
         expect(getInternals(rt).pages.size).toBe(0)
+      },
+    })
+  })
+
+  test("closePage of one page sharing the attach-mode fallback context leaves the other page open", async () => {
+    await using tmp = await tmpdir({ config: { browser: { cdpUrl: "http://localhost:9222" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { page1, page2, fallback, browser } = createSharedFallbackBrowser()
+        _setPlaywrightForTest(createMockPlaywright(browser) as never)
+
+        const rt = BrowserRuntime.forSession("ses_cdp_shared")
+        const first = await rt.open("https://example.com", { width: 1440, height: 900 })
+        const second = await rt.open("https://example.com/other", { width: 1440, height: 900 })
+
+        expect(browser.newContext).toHaveBeenCalledTimes(1)
+        expect(first.pageID).toBe("page_1")
+        expect(second.pageID).toBe("page_2")
+        expect(getInternals(rt).pages.size).toBe(2)
+
+        await rt.closePage(first.pageID)
+
+        expect(fallback.close).not.toHaveBeenCalled()
+        expect(page1.close).toHaveBeenCalled()
+        expect(page2.close).not.toHaveBeenCalled()
+        expect(getInternals(rt).pages.has(second.pageID)).toBe(true)
+        expect(getInternals(rt).pages.has(first.pageID)).toBe(false)
+
+        await rt.closePage(second.pageID)
+
+        expect(fallback.close).toHaveBeenCalledTimes(1)
+        expect(getInternals(rt).pages.size).toBe(0)
+      },
+    })
+  })
+
+  test("close() closes a shared attach-mode fallback context and drops both pages", async () => {
+    await using tmp = await tmpdir({ config: { browser: { cdpUrl: "http://localhost:9222" } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { fallback, browser } = createSharedFallbackBrowser()
+        _setPlaywrightForTest(createMockPlaywright(browser) as never)
+
+        const rt = BrowserRuntime.forSession("ses_cdp_shared_close")
+        await rt.open("https://example.com", { width: 1440, height: 900 })
+        await rt.open("https://example.com/other", { width: 1440, height: 900 })
+        expect(browser.newContext).toHaveBeenCalledTimes(1)
+        expect(getInternals(rt).pages.size).toBe(2)
+
+        await rt.close()
+
+        expect(fallback.close).toHaveBeenCalledTimes(1)
+        expect(getInternals(rt).pages.size).toBe(0)
+        expect(browser.close).toHaveBeenCalled()
       },
     })
   })

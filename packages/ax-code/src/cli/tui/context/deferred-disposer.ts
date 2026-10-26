@@ -1,4 +1,7 @@
+import { Log } from "@/util/log"
 import { scheduleUnref } from "@/util/timeout"
+
+const log = Log.create({ service: "tui.deferred-disposer" })
 
 // Defers destroying a superseded native-backed instance. Renderables swap to
 // the new instance synchronously when their reactive prop updates, before the
@@ -39,7 +42,13 @@ export function createDeferredDisposer(schedule: (fn: () => void) => void | { cl
         if (pending.get(previous) !== generation) return
         pending.delete(previous)
         // The instance may have become current again since it was scheduled.
-        if (previous !== current) destroyOnce(previous)
+        if (previous === current) return
+        try {
+          destroyOnce(previous)
+        } catch (error) {
+          // destroy() runs from a timer; a throw here is an uncaught exception that can crash the TUI.
+          log.warn("failed to destroy superseded instance", { error })
+        }
       })
       if (handle) generation.clear = () => handle.clear()
     },

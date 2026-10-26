@@ -135,4 +135,19 @@ describe("createDeferredDisposer", () => {
     expect(() => disposer.dispose()).not.toThrow()
     vi.runAllTimers()
   })
+
+  test("a throwing destroy() in the scheduled callback does not escape the callback", () => {
+    const disposer = createDeferredDisposer()
+    const first = {
+      destroy: () => {
+        throw new Error("native destroy failed")
+      },
+    }
+    const second = fakeStyle()
+
+    disposer.track(first)
+    disposer.track(second)
+    expect(() => vi.runAllTimers()).not.toThrow()
+    expect(second.destroys()).toBe(0)
+  })
 })

@@ -439,8 +439,11 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       subtleSyntaxDisposer.track(subtleSyntax())
     })
     onCleanup(() => {
-      syntaxDisposer.dispose()
-      subtleSyntaxDisposer.dispose()
+      try {
+        syntaxDisposer.dispose()
+      } finally {
+        subtleSyntaxDisposer.dispose()
+      }
     })
     const themeProxy = new Proxy({} as Theme, {
       get(_target, prop) {
