@@ -93,6 +93,30 @@ const SOURCE_SOLID_LOADER_SRC = path.join(REPO_ROOT, "script/solid-loader.mjs")
 const NODE_PTY_PATCH_SRC = path.join(REPO_ROOT, "patches/node-pty-prebuilt-multiarch@0.10.1-pre.5.patch")
 
 describe("AX Code TUI stability guardrails", () => {
+  test("never rebuilds JSX props or option rows that are never mounted", async () => {
+    const code = (source: string) =>
+      source
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("//"))
+        .join("\n")
+    // A JSX prop is a getter that builds fresh elements on every read; copies
+    // read only by a condition are never inserted, so they are never destroyed.
+    const prompt = code(await fs.readFile(PROMPT_SRC, "utf8"))
+    expect(prompt).toContain("const footerRight = children(() => props.footerRight)")
+    expect(prompt.match(/props\.footerRight/g)).toHaveLength(1)
+    const permission = code(await fs.readFile(PERMISSION_PROMPT_SRC, "utf8"))
+    expect(permission).toContain("const header = children(() => props.header)")
+    expect(permission.match(/props\.header/g)).toHaveLength(1)
+    // measure() runs from an unowned renderer callback; reading the compiled
+    // footer getter there would create an undisposed JSX memo per layout.
+    const dialogSelect = code(await fs.readFile(DIALOG_SELECT_SRC, "utf8"))
+    expect(dialogSelect).toContain("const footerVisible = createMemo(() => Boolean(props.footer) && line().showFooter)")
+    // The closed autocomplete stays mounted but hidden; it must not rebuild rows.
+    const autocomplete = code(await fs.readFile(AUTOCOMPLETE_SRC, "utf8"))
+    expect(autocomplete).toContain("if (!store.visible) return []")
+    expect(autocomplete).toContain("createMemo(() => (store.visible ? insertGroupHeaders(options()) : []))")
+  })
+
   test("keeps finished code visible while its highlight resolves", async () => {
     const adapter = await fs.readFile(RENDER_ADAPTER_SRC, "utf8")
 

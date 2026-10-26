@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 
 import { createAudioNotifier, speechText } from "../../../src/cli/tui/util/audio-notify"
 import type { AudioNotifyDeps, AudioNotifyInput, AudioNotifySettings } from "../../../src/cli/tui/util/audio-notify"
@@ -485,4 +485,31 @@ describe("config gating", () => {
     expect(spawner.calls).toHaveLength(1)
     expect(spawner.calls[0].cmd).toEqual(["afplay", MACOS_CHIME])
   })
+})
+
+test("default playback-gap timers do not hold the process open", async () => {
+  const original = globalThis.setTimeout
+  const timers: NodeJS.Timeout[] = []
+  vi.stubGlobal("setTimeout", (fn: () => void, ms: number) => {
+    const timer = original(fn, ms)
+    timers.push(timer)
+    return timer
+  })
+  try {
+    const instance = createAudioNotifier({
+      spawn: () => ({ exited: Promise.resolve(0) }),
+      platform: "darwin",
+      which: () => "/usr/bin/afplay",
+      fileExists: () => true,
+    })
+    const settings = { enabled: true, sound: "chime" } as const
+    instance.notify({ kind: "permission", settings })
+    instance.notify({ kind: "question", settings })
+    await settle()
+    expect(timers).toHaveLength(1)
+    expect(timers[0].hasRef()).toBe(false)
+  } finally {
+    for (const timer of timers) clearTimeout(timer)
+    vi.unstubAllGlobals()
+  }
 })

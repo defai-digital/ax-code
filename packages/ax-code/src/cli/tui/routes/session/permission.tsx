@@ -3,7 +3,7 @@ import { useLanguage } from "@tui/context/language"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { canPersistPermission, canConfirmPersistentPermission } from "@/permission/interaction"
 import { createStore, produce } from "solid-js/store"
-import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, Show, Switch } from "solid-js"
+import { children, createEffect, createMemo, createSignal, For, Match, on, onCleanup, Show, Switch } from "solid-js"
 import { Portal, useKeyboard, useTerminalDimensions, type JSX } from "ax-tui/solid"
 import type { TextareaRenderable } from "ax-tui"
 import { useKeybind } from "../../context/keybind"
@@ -983,6 +983,9 @@ export function PermissionChoicePrompt<const T extends Record<string, string>>(p
   const { theme } = useTheme()
   const keybind = useKeybind()
   const dimensions = useContentDimensions()
+  // A JSX prop builds fresh elements on every read; the Show condition and the
+  // body would each build one header, and the condition's copy is never mounted.
+  const header = children(() => props.header)
   // Reactive so a reused Prompt (queued requests flushed together) tracks the
   // current request's option set instead of freezing to the first one's.
   const keys = createMemo(() => Object.keys(props.options) as (keyof T)[])
@@ -1057,7 +1060,7 @@ export function PermissionChoicePrompt<const T extends Record<string, string>>(p
     >
       <box gap={1} paddingLeft={1} paddingRight={3} paddingTop={1} paddingBottom={1} flexGrow={1}>
         <Show
-          when={props.header}
+          when={header()}
           fallback={
             <box flexDirection="row" gap={1} paddingLeft={1} flexShrink={0}>
               <text fg={theme.warning}>{"▲"}</text>
@@ -1066,7 +1069,7 @@ export function PermissionChoicePrompt<const T extends Record<string, string>>(p
           }
         >
           <box paddingLeft={1} flexShrink={0}>
-            {props.header}
+            {header()}
           </box>
         </Show>
         {props.body}

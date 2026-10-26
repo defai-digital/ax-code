@@ -11,6 +11,7 @@ function fakeStdout() {
   const writes: string[] = []
   const stream = {
     writable: true as boolean,
+    isTTY: true,
     destroyed: false,
     write: (chunk: string) => {
       writes.push(chunk)
@@ -46,6 +47,18 @@ describe("supportsTerminalNotification", () => {
 })
 
 describe("notifyTerminal", () => {
+  test("unknown TTY status stays byte-clean like a redirected Node stream", () => {
+    const { stream, writes } = fakeStdout()
+    expect(
+      notifyTerminal(
+        { title: "ax-code", body: "done", key: "unknown-tty" },
+        { ...stream, isTTY: undefined },
+        supportedEnv,
+      ),
+    ).toBe(false)
+    expect(writes).toEqual([])
+  })
+
   test("writes an OSC 9 sequence on supported terminals", () => {
     const { stream, writes } = fakeStdout()
     const result = notifyTerminal({ title: "ax-code", body: "Task complete", key: "k1" }, stream, supportedEnv)
@@ -176,6 +189,8 @@ describe("notifyTerminal", () => {
     const target = { threaded: true, write: (sequence: string) => void native.push(sequence) }
     registerTuiSequenceTarget(target)
     const direct: string[] = []
+    const originalTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY")
+    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true })
     const originalWrite = process.stdout.write
     process.stdout.write = ((chunk: string) => {
       direct.push(chunk)
@@ -193,6 +208,8 @@ describe("notifyTerminal", () => {
     } finally {
       unregisterTuiSequenceTarget(target)
       process.stdout.write = originalWrite
+      if (originalTTY) Object.defineProperty(process.stdout, "isTTY", originalTTY)
+      else Reflect.deleteProperty(process.stdout, "isTTY")
     }
   })
 })

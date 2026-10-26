@@ -763,7 +763,10 @@ function Option(props: {
       footerWidth: plainFooter,
     })
   })
-  const footerVisible = () => Boolean(props.footer) && line().showFooter
+  // A memo, not a plain accessor: measure() runs from a renderer size callback
+  // with no Solid owner, and reading the compiled `props.footer` getter there
+  // creates an unowned JSX memo that is never disposed and pins the row.
+  const footerVisible = createMemo(() => Boolean(props.footer) && line().showFooter)
   function measure() {
     if (!slotRef) return
     const width = slotRef.width

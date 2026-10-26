@@ -23,7 +23,21 @@ const OSC_PREFIX = "\x1b]9;"
 const OSC_SUFFIX = "\x07"
 const MAX_PAYLOAD_LENGTH = MAX_SEQUENCE_LENGTH - OSC_PREFIX.length - OSC_SUFFIX.length
 
+// Fire-once keys accumulate one entry per turn/permission/error for the
+// life of the process, so keep only the newest keys and drop the oldest.
+export const MAX_FIRED_KEYS = 512
+
 const firedKeys = new Set<string>()
+
+function addFiredKey(key: string) {
+  firedKeys.add(key)
+  // Set iterates in insertion order, so the first key is the oldest.
+  while (firedKeys.size > MAX_FIRED_KEYS) {
+    const oldest = firedKeys.values().next().value
+    if (oldest === undefined) break
+    firedKeys.delete(oldest)
+  }
+}
 
 export function supportsTerminalNotification(env: NotifyEnv = process.env) {
   if (env.TERM_PROGRAM && SUPPORTED_TERM_PROGRAMS.has(env.TERM_PROGRAM)) return true
@@ -50,11 +64,11 @@ export function notifyTerminal(
   // Consume the key up front: a notification is attempted at most once per
   // key, even when the stream turns out to be degraded.
   if (firedKeys.has(input.key)) return false
-  firedKeys.add(input.key)
+  addFiredKey(input.key)
 
   // Redirected stdout must stay byte-clean; BEL and OSC escapes are only
   // meaningful to a terminal and would otherwise corrupt captured output.
-  if (stream.isTTY === false || stream.writable === false || stream.destroyed) return false
+  if (stream.isTTY !== true || stream.writable === false || stream.destroyed) return false
 
   const title = sanitize(input.title)
   const body = sanitize(input.body)

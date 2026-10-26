@@ -52,6 +52,20 @@ export type AudioNotifyDeps = {
   setTimeout: (fn: () => void, ms: number) => unknown
 }
 
+// Fire-once keys accumulate one entry per turn/permission/error for the
+// life of the notifier, so keep only the newest keys and drop the oldest.
+export const MAX_FIRED_KEYS = 512
+
+function addFiredKey(keys: Set<string>, key: string) {
+  keys.add(key)
+  // Set iterates in insertion order, so the first key is the oldest.
+  while (keys.size > MAX_FIRED_KEYS) {
+    const oldest = keys.values().next().value
+    if (oldest === undefined) break
+    keys.delete(oldest)
+  }
+}
+
 const PLAY_TIMEOUT_MS = 20_000
 const MIN_PLAY_GAP_MS = 2_000
 const MAX_SPEECH_LENGTH = 120
@@ -172,7 +186,7 @@ export function createAudioNotifier(overrides: Partial<AudioNotifyDeps> = {}) {
     fileExists: existsSync,
     now: () => Date.now(),
     setTimeout: (fn, ms) => {
-      setTimeout(fn, ms)
+      setTimeout(fn, ms).unref?.()
     },
     ...overrides,
   }
@@ -217,7 +231,7 @@ export function createAudioNotifier(overrides: Partial<AudioNotifyDeps> = {}) {
       if (!(settings.events?.[input.kind] ?? DEFAULT_EVENT_ENABLED[input.kind])) return
       if (input.key !== undefined) {
         if (firedKeys.has(input.key)) return
-        firedKeys.add(input.key)
+        addFiredKey(firedKeys, input.key)
       }
       backends ??= probeBackends(deps)
       if (sound === "chime") {

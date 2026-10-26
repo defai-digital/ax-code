@@ -6,7 +6,7 @@ import { useContextMenu } from "../../ui/context-menu"
 import { createSessionPromptDraftLifecycle, promptDraftKey } from "./session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent } from "ax-tui"
-import { createEffect, createMemo, onMount, createSignal, onCleanup, on, Show, Switch, Match, For } from "solid-js"
+import { children, createEffect, createMemo, onMount, createSignal, onCleanup, on, Show, Switch, Match, For } from "solid-js"
 import { providerModelEquals } from "@/provider/model-key"
 import { shouldAdoptMessageModelFromHistory } from "@tui/context/local-util"
 import { effortDisplay } from "@/provider/effort-label"
@@ -607,6 +607,10 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   // `props.footerRight` (right-aligned, just before the ctrl+c hint) — no
   // toggle width is reserved for them here. Home also passes the WebMCP
   // bridge chip through the same prop, after the mode chips.
+  // Resolved once: a JSX prop is a getter that builds fresh elements on every
+  // read, and the footer conditions re-read it on each keystroke, leaving
+  // chip trees that were never mounted (and so never destroyed) behind.
+  const footerRight = children(() => props.footerRight)
   // ctrl+c is overloaded: it clears a non-empty draft and exits when the
   // input is empty — the footer hint mirrors whichever action currently applies.
   const footerClearHint = createMemo(() => {
@@ -1081,7 +1085,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
       measured: {
         leftWidth: footerLeftWidth(),
         gaugeWidth: contextGauge() ? footerGaugeWidth() : 0,
-        extraWidth: props.footerRight ? footerExtraWidth() : 0,
+        extraWidth: footerRight() ? footerExtraWidth() : 0,
       },
       contentWidth: promptContentWidth(),
       toggleWidth: 0,
@@ -1671,14 +1675,14 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                 </Show>
                 <Show
                   when={
-                    props.footerRight ||
+                    footerRight() ||
                     footerLayout().showVariants ||
                     footerLayout().showShellHint ||
                     footerLayout().showClearHint
                   }
                 >
                   <box gap={2} flexDirection="row" flexShrink={0}>
-                    <Show when={props.footerRight}>
+                    <Show when={footerRight()}>
                       <box
                         flexDirection="row"
                         flexShrink={0}
@@ -1687,7 +1691,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                           setFooterExtraWidth(this.width)
                         }}
                       >
-                        {props.footerRight}
+                        {footerRight()}
                       </box>
                     </Show>
                     <Switch>

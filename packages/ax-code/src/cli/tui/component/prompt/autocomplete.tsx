@@ -709,6 +709,9 @@ export function Autocomplete(props: {
   })
 
   const options = createMemo((prev: AutocompleteOption[] | undefined) => {
+    // Hidden, the search still tracks every prompt keystroke; nothing reads
+    // the result until the popup opens.
+    if (!store.visible) return []
     const filesValue = files()
     const agentsValue = agents()
     const commandsValue = commands()
@@ -1022,7 +1025,11 @@ export function Autocomplete(props: {
     })
   })
 
-  const optionsWithGroupHeaders = createMemo(() => insertGroupHeaders(options()))
+  // Rows render only while the popup is open: hidden, `options()` is the whole
+  // command list and is rebuilt whenever a command registration changes, and
+  // every rebuild would recreate (and, in a hidden subtree, never lay out) one
+  // renderable per command.
+  const optionsWithGroupHeaders = createMemo(() => (store.visible ? insertGroupHeaders(options()) : []))
 
   const desired = createMemo(() => {
     const count = optionsWithGroupHeaders().length || 1

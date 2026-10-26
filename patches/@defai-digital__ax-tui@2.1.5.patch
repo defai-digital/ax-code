@@ -1,0 +1,80 @@
+diff --git a/index-UTATIG2C.js b/index-UTATIG2C.js
+index e2f0d50343f239a87d0661c70f1ea27cca4765f4..566a03e2600f4a606fd4becfeb083ea369cae8d7 100644
+--- a/index-UTATIG2C.js
++++ b/index-UTATIG2C.js
+@@ -5668,6 +5668,7 @@ var Renderable = class _Renderable extends BaseRenderable {
+         obj.onRemove();
+         obj.parent = null;
+         this._ctx.unregisterLifecyclePass(obj);
++        this._shouldUpdateBefore.delete(obj);
+         this.renderableMapById.delete(id);
+         const index = this._childrenInLayoutOrder.findIndex((obj2) => obj2.id === id);
+         if (index !== -1) {
+@@ -5807,6 +5808,7 @@ var Renderable = class _Renderable extends BaseRenderable {
+       this.remove(child.id);
+     }
+     this._childrenInLayoutOrder = [];
++    this._shouldUpdateBefore.clear();
+     this.renderableMapById.clear();
+     _Renderable.renderablesByNumber.delete(this.num);
+     this.blur();
+diff --git a/solid/index.bun.js b/solid/index.bun.js
+index c0894b15aa5b29321ee08dc3d9936c377fe15519..b4a44288b844a28c0e091621aa5f37fc366f1719 100644
+--- a/solid/index.bun.js
++++ b/solid/index.bun.js
+@@ -1074,6 +1074,25 @@ var LayoutSlotRenderable = class extends SlotBaseRenderable {
+     this.freeYogaNode();
+     slotParent?.destroy();
+   }
++  // A destroyed host walks its children with destroyRecursively(); the
++  // BaseRenderable default is a no-op, which left this placeholder's Yoga node
++  // allocated and pinned in the Yoga node registry forever.
++  destroyRecursively() {
++    if (this.destroyed) {
++      return;
++    }
++    const host = this.parent;
++    if (host) {
++      host.remove(this.id);
++    }
++    const slotParent = this.slotParent;
++    if (slotParent && host && slotParent.hasOtherAttachedSlotChildren(this)) {
++      slotParent.didRemoveSlotChild(host, this);
++      this.disposeWithoutSlotCascade();
++      return;
++    }
++    this.destroy();
++  }
+ };
+ var SlotRenderable = class extends SlotBaseRenderable {
+   destroyed = false;
+diff --git a/solid/index.js b/solid/index.js
+index 2722fcc179c9861a283a7a67fd6ba44d442d630b..1fcb2ecc63fedf6b1d2f1582e58dec1e46464415 100644
+--- a/solid/index.js
++++ b/solid/index.js
+@@ -1074,6 +1074,25 @@ var LayoutSlotRenderable = class extends SlotBaseRenderable {
+     this.freeYogaNode();
+     slotParent?.destroy();
+   }
++  // A destroyed host walks its children with destroyRecursively(); the
++  // BaseRenderable default is a no-op, which left this placeholder's Yoga node
++  // allocated and pinned in the Yoga node registry forever.
++  destroyRecursively() {
++    if (this.destroyed) {
++      return;
++    }
++    const host = this.parent;
++    if (host) {
++      host.remove(this.id);
++    }
++    const slotParent = this.slotParent;
++    if (slotParent && host && slotParent.hasOtherAttachedSlotChildren(this)) {
++      slotParent.didRemoveSlotChild(host, this);
++      this.disposeWithoutSlotCascade();
++      return;
++    }
++    this.destroy();
++  }
+ };
+ var SlotRenderable = class extends SlotBaseRenderable {
+   destroyed = false;

@@ -13,6 +13,7 @@ import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
 import { useTuiConfig } from "./tui-config"
 import { scheduleDeferredStartupTask } from "../util/startup-task"
+import { createDeferredDisposer } from "./deferred-disposer"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 
@@ -425,6 +426,22 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
 
     const syntax = createMemo(() => generateSyntax(values()))
     const subtleSyntax = createMemo(() => generateSubtleSyntax(values()))
+    // SyntaxStyle.fromTheme allocates native tables that are never freed on
+    // their own, so every theme change (each picker cursor move included)
+    // would leak one pair. Defer destroying the superseded pair until after
+    // in-flight work (an async highlight) that may still read it.
+    const syntaxDisposer = createDeferredDisposer()
+    const subtleSyntaxDisposer = createDeferredDisposer()
+    createEffect(() => {
+      syntaxDisposer.track(syntax())
+    })
+    createEffect(() => {
+      subtleSyntaxDisposer.track(subtleSyntax())
+    })
+    onCleanup(() => {
+      syntaxDisposer.dispose()
+      subtleSyntaxDisposer.dispose()
+    })
     const themeProxy = new Proxy({} as Theme, {
       get(_target, prop) {
         return values()[prop as keyof Theme]
