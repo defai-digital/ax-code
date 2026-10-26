@@ -103,6 +103,16 @@ When fixing multiple bugs, work in this order:
 - **Iterate on critical areas** — after fixing a bug in a high-value module, scan that module for similar issues. Bug clusters indicate fragile code that needs multiple passes. Run dedup_scan and hardcode_scan on the module
 - **Repeat on hotspots** — if a module has 3+ bugs, treat it as a hotspot. Review the entire module systematically rather than fixing bugs in isolation
 
+
+For a failure crossing module boundaries, use available `repo_wiki` with
+`operation: "insights"` and 1–5 relevant source `targets` after locating the failing
+path. Read the returned sources and verify callers with LSP/code_intelligence or
+focused search, including importers outside the cited set. If Wiki is missing,
+disabled, uncited or partial, continue from current source; do not regenerate it
+as part of a read-only investigation. A cycle or high dependency count is a lead,
+not a bug or runtime hotpath. Choose tests from the reproduced behavior, not a
+lower metric. Re-query after an authorized fix if dependency evidence changed.
+
 ## PREFERRED TOOLS (when available)
 
 - **`repo_wiki`** — use for architecture and module responsibilities, then

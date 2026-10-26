@@ -123,6 +123,14 @@ export const RepoWikiTool = Tool.define<typeof parameters, RepoWikiMetadata>("re
     const runtime = await resolveWikiRuntimeConfig()
     const wikiDir = runtime.dir
 
+    if (!runtime.enabled)
+      return {
+        title: "repo_wiki",
+        output:
+          "AX Wiki is disabled; no wiki or source scan was run. Use current source and available code_intelligence/LSP or focused read/search tools.",
+        metadata: { available: false },
+      }
+
     await ctx.ask({
       permission: "read",
       patterns: [wikiDir],
@@ -131,12 +139,6 @@ export const RepoWikiTool = Tool.define<typeof parameters, RepoWikiMetadata>("re
     })
 
     if (args.operation === "insights") {
-      if (!runtime.enabled)
-        return {
-          title: "repo_wiki insights",
-          output: "AX Wiki is disabled; no insight scan was run.",
-          metadata: { available: false },
-        }
       const result = await queryWikiCodingInsights({ root, wikiDir, targets: args.targets ?? [], context: ctx })
       return result
         ? {
@@ -146,7 +148,7 @@ export const RepoWikiTool = Tool.define<typeof parameters, RepoWikiMetadata>("re
           }
         : {
             title: "repo_wiki insights",
-            output: `No usable AX Wiki manifest found at ${wikiDir}/. Use current source and code_intelligence/LSP; no insight scan was run.`,
+            output: `No usable AX Wiki manifest found at ${wikiDir}/. Use current source and available code_intelligence/LSP or focused read/search tools; no insight scan was run.`,
             metadata: { available: false },
           }
     }
@@ -155,7 +157,7 @@ export const RepoWikiTool = Tool.define<typeof parameters, RepoWikiMetadata>("re
     if (!status.healthy) {
       return {
         title: "repo_wiki",
-        output: `No usable AX Wiki found at ${wikiDir}/ (freshness: ${status.freshness}). Run \`ax-code wiki generate\` to build it, then retry.`,
+        output: `No usable AX Wiki found at ${wikiDir}/ (freshness: ${status.freshness}). Continue with current source and available code_intelligence/LSP or focused read/search tools. Generate Wiki separately when requested.`,
         metadata: { available: false, freshness: status.freshness },
       }
     }

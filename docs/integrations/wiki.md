@@ -2,10 +2,14 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-10-03
+Last reviewed: 2026-10-26
 Owner: AX Code runtime
 
 AX Wiki is AX Code's native repository-wiki compiler. It turns tracked source, configuration, tests, workflows, and existing documentation into a small source-backed Markdown knowledge base under `.ax-wiki/`. It uses the same provider configuration and model routing as AX Code; there is no separate executable or credential store.
+
+Plain-text `.txt` sources, including agent prompts and tool descriptions, are
+eligible for discovery and freshness checks. Normal exclusions, permissions, file
+size limits and binary-file checks still apply.
 
 `ax-code wiki viz` draws the compiled pages and the files they cite. Screenshots of that map are in [Wiki evidence visualization](../guides/wiki-visualization.md).
 
@@ -106,7 +110,7 @@ before relying on implementation details.
 Agents reach the wiki in three ways, from cheapest to most specific:
 
 1. **Prompt index.** When a healthy wiki exists, the session prompt carries a short `<repo_wiki>` block: the wiki location, a freshness label, and one line per page (path and a trimmed summary, about 750 tokens for the default 12 pages). The summaries only locate where to read; they are not proof.
-2. **`repo_wiki` tool.** A read-only tool with four operations: `index` (page cards with per-page freshness), `read` (one page plus its cited sources, which cited sources changed, and any frontmatter symbols not found in those sources), `related` (pages for a symbol, body mention, or source path), and `insights` (current-source dependency evidence and verification checks for explicit target files). It is available in the full and coding tool profiles and uses the `read` permission.
+2. **`repo_wiki` tool.** A read-only tool with four operations: `index` (page cards with per-page freshness), `read` (one page plus its cited sources, which cited sources changed, and any frontmatter symbols not found in those sources), `related` (pages for a symbol, body mention, or source path), and `insights` (current-source dependency evidence and verification checks for explicit target files). It is available in the full, coding and AX Engine core tool profiles and uses the `read` permission.
 3. **Generic file tools.** `read`, `glob`, and `grep` on `.ax-wiki/` still work.
 
 Prompt freshness is judged per page: a page is fresh while every source it cites still matches the manifest hash. An added or edited file that no page cites leaves the prompt label `fresh` and adds a note that the wiki does not cover it yet. A changed cited source marks the label `stale` and the prompt asks the agent to treat the wiki as navigation only. `ax-code wiki status` and `wiki lint` keep the stricter repo-wide verdict, where any added, removed, or edited eligible file is stale.
@@ -132,7 +136,12 @@ The agent uses these observations to inspect affected interfaces, find existing
 relevant tests through code intelligence/LSP, and propose improvements relevant to
 the user's task. Checks do not assert bugs or authorize unrelated refactors. Verify
 the actual source before acting and rerun the query after edits. A lower dependency
-count is not evidence that a change is correct.
+count is not evidence that a change is correct. Every query includes a coverage
+verification check, even for a fully read, cited file with zero observed importers:
+use available LSP/code intelligence or focused source search to inspect references
+outside the cited set. Uncited targets also route back to index/related for module
+context. Missing or disabled Wiki falls back to current source; a query never
+triggers generation.
 
 Analysis covers cited files plus explicit targets, with bounded reads and syntactic
 resolution. It always declares partial repository coverage; missing edges do not
@@ -145,6 +154,49 @@ Git co-change, runtime hot paths and defect probabilities are explicitly unavail
 This query does not generate Wiki pages, persist model-written advice, install an
 analytics runtime, or execute suggested changes. The Modules viewer does not yet
 display this coding-insights payload.
+
+### Debugging and performance workflow
+
+The existing `debug-only` and `debug-n-fix` skills use targeted insights for failures
+crossing module boundaries, then verify source/callers and the original reproduction.
+Read-only diagnosis stays read-only. Simple edits do not require a Wiki lookup.
+
+The performance agent distinguishes measured bottlenecks, static candidates and
+insufficient evidence. A measured result needs a workload, source revision/dirty
+state, environment and baseline; a claimed improvement also needs a comparable
+candidate measurement. With no profile, it asks for the smallest useful measurement
+and labels impact unmeasured. Missing measurement means unknown, not 0% improvement.
+Import counts never establish runtime hotpaths.
+
+Source-only explanations and impact assessments can finish from verified source
+and references without executing project tests. After changes, the normal project
+verification requirements still apply. Denied execution must not be retried through
+another execution tool.
+
+### Live consumption checks
+
+Maintainers can run the opt-in source-CLI evaluation against configured providers:
+
+```bash
+pnpm --dir packages/ax-code exec tsx script/wiki-consumption-eval.ts \
+  --model provider/model --out /tmp/wiki-consumption-run --repeats 2
+```
+
+The output directory must not exist. Repeat `--model` to compare models; at most
+two model workers run concurrently. Each request has a finite timeout and uses a
+disposable synthetic repository with execution and edits disabled. The five cases
+cover architecture, stale documentation, an importer outside the cited set, absent
+profiling evidence, and a supplied synthetic CPU summary. `--scenario` selects a
+case. Requests use the caller's provider credentials and consume provider quota.
+
+Receipts retain tool traces, concrete answer checks, requested model metadata,
+source hashes and fixture immutability checks. Direct Wiki-page reads count as
+consumption; the impact case additionally requires `insights` and an independent
+caller search. Inspect the recorded answers as well as pass/fail checks. These
+samples do not establish general model reliability, production performance, or
+which model weights the upstream provider actually served. No benchmark or R
+runtime is required by the Wiki consumer; existing profiling artifacts can be read
+through ordinary file tools.
 
 ## Incremental updates and manual content
 

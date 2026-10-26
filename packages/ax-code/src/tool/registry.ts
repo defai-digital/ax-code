@@ -274,6 +274,7 @@ export namespace ToolRegistry {
         ReadTool,
         GlobTool,
         GrepTool,
+        RepoWikiTool,
         EditTool,
         WriteTool,
         SkillTool,

@@ -45,6 +45,15 @@ Use this classification before editing:
 
 Do not fix an unconfirmed hypothesis unless the user explicitly asks for a speculative hardening change. A passing test after the fix is not proof that the original bug was real unless the original failure was captured first.
 
+For a failure crossing module boundaries, use available `repo_wiki` with
+`operation: "insights"` and 1–5 relevant source `targets` after locating the failing
+path. Read the returned sources and verify callers with LSP/code_intelligence or
+focused search, including importers outside the cited set. If Wiki is missing,
+disabled, uncited or partial, continue from current source; do not regenerate it
+as part of a read-only investigation. A cycle or high dependency count is a lead,
+not a bug or runtime hotpath. Choose tests from the reproduced behavior, not a
+lower metric. Re-query after an authorized fix if dependency evidence changed.
+
 ## Phase 2 - Fix
 
 4. Implement the minimal change that directly addresses the confirmed root cause.

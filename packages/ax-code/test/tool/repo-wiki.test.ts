@@ -233,19 +233,22 @@ describe("tool.repo_wiki", () => {
       directory: tmp.path,
       fn: async () => {
         const requests: string[] = []
-        const result = await (
-          await RepoWikiTool.init()
-        ).execute(
-          { operation: "insights", targets: ["packages/core/src/index.ts"] },
-          {
-            ...ctx,
-            ask: async (request) => {
-              requests.push(...request.patterns)
+        const tool = await RepoWikiTool.init()
+        for (const operation of ["index", "read", "related", "insights"] as const) {
+          const result = await tool.execute(
+            { operation, page: "quickstart.md", symbol: "coreValue", targets: ["packages/core/src/index.ts"] },
+            {
+              ...ctx,
+              ask: async (request) => {
+                requests.push(...request.patterns)
+              },
             },
-          },
-        )
-        expect(result.metadata.available).toBe(false)
-        expect(requests).toEqual([".ax-wiki"])
+          )
+          expect(result.metadata.available).toBe(false)
+          expect(result.output).toContain("AX Wiki is disabled")
+          expect(result.output).toContain("focused read/search")
+        }
+        expect(requests).toEqual([])
       },
     })
     await using empty = await tmpdir()
@@ -350,7 +353,7 @@ describe("tool.repo_wiki", () => {
         const tool = await RepoWikiTool.init()
         const result = await tool.execute({ operation: "index" }, ctx)
         expect(result.metadata.available).toBe(false)
-        expect(result.output).toContain("ax-code wiki generate")
+        expect(result.output).toContain("Continue with current source")
       },
     })
   })

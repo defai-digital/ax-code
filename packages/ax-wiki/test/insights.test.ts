@@ -80,3 +80,16 @@ test("Wiki protocol advertises targeted insight lookup without loading analytics
   expect(protocol).toContain("navigation only")
   expect(protocol.length).toBeLessThan(2_500)
 })
+
+test("a cited full-file target with zero edges still routes to independent usage verification", () => {
+  const result = analyzeWikiCodingInsights({
+    targets: ["a.ts"],
+    sources: [source("a.ts")],
+    pages: [{ path: "a.md", sources: ["a.ts"], sourceHashes: { "a.ts": digest } }],
+  })
+  const target = result.targets[0]
+  expect(target.cited).toBe(true)
+  expect(target.dependents.count).toBe(0)
+  expect(target.checks.find((check) => check.kind === "verify-coverage")?.reason).toContain("outside this set")
+  expect(target.checks.find((check) => check.kind === "verify-coverage")?.reason).toContain("references")
+})

@@ -155,12 +155,17 @@ export function analyzeWikiCodingInsights(input: {
           reason:
             "Read related pages as locators. Verify source claims, especially stale or unknown target citations; target freshness is not whole-page freshness.",
         })
-      if (!cited.has(target) || source?.status !== "analyzed" || source.hashScope !== "file")
-        checks.push({
-          kind: "verify-coverage",
-          reason:
-            "This target is uncited or incompletely analyzed. Inspect current source directly; absent findings are not a clean bill of health.",
-        })
+      // Even a cited, fully read target cannot establish caller completeness: importers
+      // outside the supplied inventory and unsupported resolution remain unobserved.
+      checks.push({
+        kind: "verify-coverage",
+        reason: [
+          ...(!cited.has(target) || source?.status !== "analyzed" || source.hashScope !== "file"
+            ? ["This target is uncited or incompletely analyzed. Read its current source first."]
+            : []),
+          "Check references and importers outside this set using code_intelligence/LSP when available, otherwise focused source search. Inspect the matches and relevant tests; zero observed edges do not prove no impact. For an uncited target, use repo_wiki index/related to locate module context. Do not regenerate Wiki as a side effect of this query.",
+        ].join(" "),
+      })
       return {
         path: target,
         cited: cited.has(target),

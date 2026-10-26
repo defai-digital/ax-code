@@ -32,6 +32,7 @@ test("coding is opt-in, retains lifecycle and verification tools, and invalidate
       expect(coding).toEqual(
         expect.arrayContaining([
           "read",
+          "repo_wiki",
           "write",
           "edit",
           "multiedit",
@@ -117,6 +118,11 @@ test("AX Engine retains core by default and coding prompts omit unavailable adva
         modelID: ModelID.make("local"),
       })
       expect(core.map((tool) => tool.id)).toContain("submit_goal_plan")
+      const wiki = core.find((tool) => tool.id === "repo_wiki")
+      expect(wiki).toBeDefined()
+      const schema = z.toJSONSchema(wiki!.parameters)
+      expect(schema).toMatchObject({ properties: { operation: { enum: ["index", "read", "related", "insights"] } } })
+      expect(Buffer.byteLength(wiki!.description + JSON.stringify(schema))).toBeLessThan(5_000)
       expect(core.map((tool) => tool.id)).not.toContain("task")
       const bash = core.find((tool) => tool.id === "bash")
       expect(bash?.description).toContain(Shell.acceptable())

@@ -5,9 +5,43 @@ import { afterEach, describe, expect, test } from "vitest"
 import { DISCOVERY_READ_CONCURRENCY, mapWithBoundedConcurrency } from "../src/discovery-concurrency.js"
 import { discoverSources, readFilePrefix, readGroundingExcerpts, readSourceEvidence } from "../src/discovery.js"
 import { sha256 } from "../src/hash.js"
+import { buildAxWiki } from "../src/build.js"
+import { getPageFreshness } from "../src/artifacts.js"
 import type { WikiSource } from "../src/types.js"
 
 const roots: string[] = []
+
+test("plain-text prompts are cited and edits invalidate page freshness while discovery guards still apply", async () => {
+  const root = await fixture()
+  await writeFile(path.join(root, "prompt.txt"), "Verify claims against current source.\n")
+  await writeFile(path.join(root, "excluded.txt"), "Excluded text\n")
+  await writeFile(path.join(root, "binary.txt"), Buffer.from("not\0text"))
+  await writeFile(path.join(root, "oversized.txt"), "x".repeat(1001))
+  const config = {
+    exclude: ["excluded.txt"],
+    maxSourceBytes: 1000,
+    pages: [
+      { path: "quickstart.md", title: "Prompt behavior", purpose: "Explain agent behavior", selectors: ["*.txt"] },
+    ],
+  }
+  const sources = await discoverSources({ root, wikiDir: ".ax-wiki", config })
+  expect(sources.map((source) => source.path)).toEqual(["prompt.txt"])
+  await buildAxWiki({
+    root,
+    action: "generate",
+    config,
+    generator: async (request) => {
+      expect(request.sources.map((source) => source.path)).toEqual(["prompt.txt"])
+      return {
+        summary: "Verify claims using current source.",
+        body: "## Behavior\n\nThe agent verifies claims against current source before answering. Read prompt.txt for the current instructions and recheck cited source when it changes.",
+      }
+    },
+  })
+  expect((await getPageFreshness({ root })).get("quickstart.md")?.freshness).toBe("fresh")
+  await writeFile(path.join(root, "prompt.txt"), "Verify claims and callers against current source.\n")
+  expect((await getPageFreshness({ root })).get("quickstart.md")?.freshness).toBe("stale")
+})
 
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "ax-wiki-discovery-"))

@@ -5,7 +5,9 @@ How you work on every turn. This is not a new product surface and not a reason t
 ## Coding
 - Prefer tools over describing a patch. Edit or write files; a code block in chat is not a substitute.
 - Make the smallest change that solves the request. Reuse helpers already in the tree. Do not add an abstraction for one call site.
+- For a shared-interface or dependency impact assessment (including read-only planning), query available `repo_wiki insights` once after identifying the relevant paths, before concluding the impact assessment. Verify callers in current source, and re-query after edits when those relationships matter. For an uncited target or partial/empty result, use LSP or focused search outside the cited set; do not treat missing edges as no impact. Skip this lookup for trivial edits.
 - After meaningful edits, run the most relevant test, typecheck, or lint. Never claim a check passed unless you ran it.
+- For source-only explanations or impact assessments with no edits, verify claims by reading current source and references. Do not require executable project checks to finish that investigation. If execution is unavailable, do not route it through another tool; report the evidence boundary and answer from the permitted reads.
 - Do not revert unrelated user work. Do not commit unless asked.
 
 ## Debugging

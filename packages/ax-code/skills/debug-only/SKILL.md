@@ -38,6 +38,15 @@ Do not treat a plausible code smell, a suspicious branch, or a `debug_analyze` c
 - Turn each candidate cause into a prediction and choose the smallest read-only observation that can rule it out. Compare failing and working inputs/configurations one variable at a time.
 - Prefer existing logs, captured traces, or available debugger observations. Do not add probes, record durable debug cases, or invoke state-writing tools in this read-only workflow.
 
+For a failure crossing module boundaries, use available `repo_wiki` with
+`operation: "insights"` and 1–5 relevant source `targets` after locating the failing
+path. Read the returned sources and verify callers with LSP/code_intelligence or
+focused search, including importers outside the cited set. If Wiki is missing,
+disabled, uncited or partial, continue from current source; do not regenerate it
+as part of a read-only investigation. A cycle or high dependency count is a lead,
+not a bug or runtime hotpath. Choose tests from the reproduced behavior, not a
+lower metric. Re-query after an authorized fix if dependency evidence changed.
+
 ## Phase 3 - Root Cause
 
 - Identify the exact file, line, and condition that causes the problem only after the Bug Reality Gate is satisfied.

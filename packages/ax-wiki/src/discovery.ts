@@ -48,6 +48,7 @@ const TEXT_EXTENSIONS = new Set([
   ".toml",
   ".ts",
   ".tsx",
+  ".txt",
   ".vue",
   ".xml",
   ".yaml",

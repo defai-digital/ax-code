@@ -44,9 +44,9 @@ export function renderAxWikiProtocol(input: {
     freshness === "fresh"
       ? "  Prefer the wiki before wide repository searches for conceptual questions."
       : "  Use this wiki for navigation only; verify current original source before relying on any implementation claim. Run: ax-code wiki update.",
-    "  Use the repo_wiki tool to list pages, read one page with its cited sources, or find pages for a symbol.",
-    "  Before dependency or shared-interface changes, use repo_wiki insights with relevant target paths for bounded current-source evidence and verification checks. Treat checks as task-scoped investigation, not defect claims or instructions to refactor; verify source and rerun after edits.",
-    "  Use code_intelligence or LSP for precise symbols, callers, callees, references, and refactor impact.",
+    "  When available, use repo_wiki to list pages, read one page with its cited sources, or find pages for a symbol. Otherwise read the relevant wiki page and current source with available read/search tools.",
+    "  For a dependency/shared-interface impact assessment, including read-only planning, query available repo_wiki insights once after locating targets; also use it for bugs crossing module boundaries. If uncited, partial or empty, check references outside the cited set with LSP or focused search. Checks are investigation, not defect or hotpath claims; verify source and rerun after edits.",
+    "  Use available code_intelligence or LSP for precise symbols, callers and references; otherwise use focused source search.",
     "  If wiki content conflicts with code, trust code and suggest: ax-code wiki update.",
     "  Do not load the entire wiki; start at quickstart and drill into relevant pages.",
     ...(cards.length > 0
