@@ -10,14 +10,13 @@ manual overrides, and the difference between pixel graphics and text rendering.
 
 Each TUI launch randomly selects one of thirty-nine animation pairs with equal probability (1/39 each).
 In pixel mode, Foliage and every landmark scene also pass through a finishing
-pass: a fade in from black and out to black, a soft glow around bright lights,
-a gentle contrast and color grade, and a vignette. Each playback also draws its
-own camera move. Most often the camera holds still; otherwise it slowly pushes
-in, pulls back, or drifts left or right, with a random depth (4–10%), pacing,
-and focal point. The opening and ending draw independently, so the same scene
-can play differently on each launch. Scenes with edge labels or a tightly framed subject (Racing, Mahjong, and
-Sanguozhi) hold their full composition. Singapore and Dinosaur limit camera
-travel to a shallow 3.5% zoom. The text fallback is unchanged.
+pass: a short fade in from black and out to black, a soft glow around bright
+lights, a gentle contrast and color grade, and a vignette. The camera currently
+holds the full composition (locked framing) while authored per-theme moves are
+prepared, so each playback shows the scene as painted. Scenes with edge labels
+or a tightly framed subject (Racing, Mahjong, and Sanguozhi) hold their full
+composition. Singapore and Dinosaur limit camera travel to a shallow 3.5% zoom
+when a move is supplied. The text fallback is unchanged.
 
 The pixel transport is bounded to 1920x1080. Illustrated scenes start within a
 1280x720 pixel budget at 16:9; smaller windows keep their native raster. During

@@ -5,7 +5,6 @@ import {
   CINEMA_FADE_OUT_MS,
   CINEMA_STILL,
   CINEMA_ZOOM_MAX,
-  CINEMA_ZOOM_MIN,
   applyCinema,
   chooseCinemaMove,
   cinemaShot,
@@ -64,24 +63,12 @@ describe("cinema shot", () => {
     expect(shot(5000).exposure).toBe(0)
   })
 
-  test("draws every kind, with still the most common, and varies depth, pacing and focus", () => {
+  test("holds the camera frozen for every draw until authored moves land", () => {
     const random = seeded(7)
-    const moves = Array.from({ length: 2000 }, () => chooseCinemaMove(random))
-    const count = (kind: CinemaMoveKind) => moves.filter((move) => move.kind === kind).length
-    for (const kind of KINDS) expect(count(kind)).toBeGreaterThan(0)
-    for (const kind of KINDS.slice(1)) expect(count("still")).toBeGreaterThan(count(kind))
-    const moving = moves.filter((move) => move.kind !== "still")
-    for (const move of moving) {
-      expect(move.zoom).toBeGreaterThanOrEqual(CINEMA_ZOOM_MIN)
-      expect(move.zoom).toBeLessThanOrEqual(CINEMA_ZOOM_MAX)
-      expect(Math.abs(move.focusX)).toBeLessThanOrEqual(1)
-      expect(Math.abs(move.focusY)).toBeLessThanOrEqual(1)
-    }
-    expect(new Set(moving.map((move) => move.ease)).size).toBe(4)
-    expect(new Set(moving.map((move) => move.zoom.toFixed(3))).size).toBeGreaterThan(20)
-    expect(new Set(moving.map((move) => move.focusX.toFixed(2))).size).toBeGreaterThan(20)
-    expect(chooseCinemaMove(() => 0)).toBe(CINEMA_STILL)
-    expect(chooseCinemaMove(() => 0.999999).kind).toBe("drift-right")
+    for (let i = 0; i < 2000; i++) expect(chooseCinemaMove(random)).toBe(CINEMA_STILL)
+    for (const value of [0, 0.4, 0.55, 0.7, 0.85, 0.999999]) expect(chooseCinemaMove(() => value)).toBe(CINEMA_STILL)
+    expect(chooseCinemaMove()).toBe(CINEMA_STILL)
+    expect(chooseCinemaMove(() => 0.999999).zoom).toBe(1)
   })
 
   test("still holds the full frame; push-in closes in; pull-back reveals", () => {
@@ -129,6 +116,7 @@ describe("cinema shot", () => {
       { kind: "drift-left", zoom: CINEMA_ZOOM_MAX, ease: "linear", focusX: 0, focusY: 1 },
       { kind: "drift-right", zoom: 3, ease: "in-out", focusX: 5, focusY: -5 },
     ]
+    // Drawn moves are frozen stills for now; the extremes keep the clamp covered.
     for (const move of [...extremes, ...Array.from({ length: 200 }, () => chooseCinemaMove(random))])
       for (let t = 0; t <= 3000; t += 150) {
         const s = cinemaShot({ width: 320, height: 180, elapsedMs: t, durationMs: 3000, move })
@@ -140,6 +128,34 @@ describe("cinema shot", () => {
         expect(s.centerY - halfH).toBeGreaterThanOrEqual(-1e-9)
         expect(s.centerY + halfH).toBeLessThanOrEqual(180 + 1e-9)
       }
+  })
+
+  test("a frozen draw holds framing and grades a lifted black floor", () => {
+    // A regular scene that used to receive random moves now holds the composition.
+    const move = sceneCinemaMove("fuji-day", chooseCinemaMove(seeded(3)))
+    expect(move).toEqual(CINEMA_STILL)
+    for (const elapsedMs of [0, 300, 1200, 2400, 3000]) {
+      const s = cinemaShot({ width: 960, height: 540, elapsedMs, durationMs: 3000, move })
+      expect(s.zoom).toBe(1)
+      expect(s.centerX).toBe(480)
+      expect(s.centerY).toBe(270)
+    }
+
+    const w = 160
+    const h = 90
+    const shotAt = { zoom: 1, centerX: w / 2, centerY: h / 2, exposure: 1 }
+    // A graded mid-tone stays close to the painted value.
+    const mid = applyCinema(solid(w, h, [100, 110, 120]), w, h, shotAt)
+    const midCenter = pixel(mid, w, w / 2, h / 2)
+    for (let c = 0; c < 3; c++) expect(Math.abs(midCenter[c]! - [100, 110, 120][c]!)).toBeLessThan(16)
+    // Solid black no longer survives as pure 0: the floor sits near 8/255.
+    const black = applyCinema(solid(w, h, [0, 0, 0]), w, h, shotAt)
+    const blackCenter = pixel(black, w, w / 2, h / 2)
+    for (const channel of blackCenter) {
+      expect(channel).toBeGreaterThan(0)
+      expect(channel).toBeLessThanOrEqual(12)
+    }
+    expect(black.every((value) => value > 0 && value <= 12)).toBe(true)
   })
 
   test("holds the camera still when the duration is unknown", () => {
@@ -196,8 +212,9 @@ describe("cinema finishing pass", () => {
       }
     const lit = applyCinema(night, w, h, { zoom: 1, centerX: w / 2, centerY: h / 2, exposure: 1 })
     const plain = applyCinema(solid(w, h, [10, 14, 40]), w, h, { zoom: 1, centerX: w / 2, centerY: h / 2, exposure: 1 })
-    // A few pixels outside the light pick up its glow.
-    expect(pixel(lit, w, 70, 45)[0]!).toBeGreaterThan(pixel(plain, w, 70, 45)[0]! + 4)
+    // A few pixels outside the light pick up its glow. The softer bloom grade
+    // (0.38) leaves a 3/255 lift here; the delta still proves the bright pass ran.
+    expect(pixel(lit, w, 70, 45)[0]!).toBeGreaterThan(pixel(plain, w, 70, 45)[0]! + 2)
 
     const sky = solid(w, h, [150, 200, 235])
     const graded = applyCinema(sky, w, h, { zoom: 1, centerX: w / 2, centerY: h / 2, exposure: 1 })

@@ -3,24 +3,23 @@
  *
  * Every playback gets a fade in from black and out to black, a soft bloom
  * around bright lights, a gentle contrast and saturation grade, and a
- * vignette. The camera move is drawn per playback: often none, otherwise a
- * push-in, pull-back, or sideways drift whose depth, pacing, and focal point
- * are drawn too, so the move stays a surprise instead of a signature on every
- * scene. The camera resample is bilinear, which also smooths the painters'
+ * vignette. The camera holds the full composition: a move is only applied when
+ * the caller supplies one, so framing stays locked until authored per-theme
+ * moves land. The camera resample is bilinear, which also smooths the painters'
  * hard stair-stepped edges.
  *
  * Pure and deterministic: the output depends only on the inputs.
  */
 
-export const CINEMA_FADE_IN_MS = 420
+export const CINEMA_FADE_IN_MS = 180
 export const CINEMA_FADE_OUT_MS = 360
 /** Zoom range of a camera move. The top end still never crops a landmark. */
 export const CINEMA_ZOOM_MIN = 1.04
 export const CINEMA_ZOOM_MAX = 1.1
 const BLOOM_DIV = 4
-const BLOOM_STRENGTH = 0.55
-const VIGNETTE = 0.28
-const SATURATION = 1.1
+const BLOOM_STRENGTH = 0.38
+const VIGNETTE = 0.2
+const SATURATION = 1.06
 
 export type CinemaMoveKind = "still" | "push-in" | "pull-back" | "drift-left" | "drift-right"
 export type CinemaEase = "in-out" | "out" | "in" | "linear"
@@ -37,37 +36,15 @@ export type CinemaMove = Readonly<{
 
 export const CINEMA_STILL: CinemaMove = Object.freeze({ kind: "still", zoom: 1, ease: "linear", focusX: 0, focusY: 0 })
 
-/** Draw weights: still is the most common outcome. */
-const KIND_WEIGHTS: readonly (readonly [CinemaMoveKind, number])[] = [
-  ["still", 0.4],
-  ["push-in", 0.15],
-  ["pull-back", 0.15],
-  ["drift-left", 0.15],
-  ["drift-right", 0.15],
-]
-const EASES: readonly CinemaEase[] = ["in-out", "out", "in", "linear"]
-
-/** Draw a camera move for one playback: its kind, depth, pacing, and focal point. */
+/**
+ * Draw a camera move for one playback. Interim freeze: a per-playback random
+ * move resampled the whole frame for motion that was nearly invisible, so
+ * framing stays locked until authored per-theme camera paths land. The random
+ * source is kept for surface compatibility with that follow-up work.
+ */
 export function chooseCinemaMove(random: () => number = Math.random): CinemaMove {
-  let draw = random()
-  let kind: CinemaMoveKind = "still"
-  for (const [candidate, weight] of KIND_WEIGHTS) {
-    if (draw < weight) {
-      kind = candidate
-      break
-    }
-    draw -= weight
-  }
-  if (kind === "still") return CINEMA_STILL
-  const drift = kind === "drift-left" || kind === "drift-right"
-  // Drifts stay shallower: the travel already carries the motion.
-  const top = drift ? CINEMA_ZOOM_MIN + (CINEMA_ZOOM_MAX - CINEMA_ZOOM_MIN) * 0.5 : CINEMA_ZOOM_MAX
-  const zoom = CINEMA_ZOOM_MIN + (top - CINEMA_ZOOM_MIN) * random()
-  const ease = EASES[Math.min(EASES.length - 1, Math.floor(random() * EASES.length))]!
-  const focusX = drift ? 0 : random() * 2 - 1
-  // Vertical focus leans upward more often, where skylines and landmarks sit.
-  const focusY = drift ? random() * 0.8 - 0.4 : random() * 1.3 - 0.9
-  return Object.freeze({ kind, zoom, ease, focusX, focusY })
+  void random
+  return CINEMA_STILL
 }
 
 /** Respect authored framing: overlay-heavy scenes must never lose their edges. */
@@ -181,13 +158,18 @@ function vignetteGrid(w: number, h: number): Grid {
   return gridCache
 }
 
-/** Contrast S-curve as a byte lookup table. */
+/** Contrast S-curve as a byte lookup table, with a lifted floor and capped white. */
 const CURVE = (() => {
   const lut = new Uint8Array(256 * 4)
+  // Remap after the S-curve: pure black lands near 8/255 and pure white near
+  // 242/255, so the grade softens clipping instead of crushing it.
+  const FLOOR = 0.03
+  const RANGE = 0.92
   for (let i = 0; i < lut.length; i++) {
     const v = Math.min(1, i / 255)
     const s = v * v * (3 - 2 * v)
-    lut[i] = Math.round(255 * Math.min(1, v * 0.72 + s * 0.28))
+    const curve = Math.min(1, v * 0.72 + s * 0.28)
+    lut[i] = Math.round(255 * (FLOOR + curve * RANGE))
   }
   return lut
 })()
