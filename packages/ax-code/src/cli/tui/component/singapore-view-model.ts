@@ -1,6 +1,7 @@
 import type { FujiRun } from "./fuji-view-model"
 import { createSceneGrid } from "./scene-grid"
 import { hdHex, hdMix, type RGB } from "./scene-hd"
+import { actionProgress } from "./scene-cinema"
 
 export type SingaporeStyle = "singapore-day" | "singapore-night"
 export function isSingaporeStyle(style: string | undefined): style is SingaporeStyle {
@@ -90,10 +91,10 @@ export function singaporeJet(u: number, elapsedMs: number): { x: number; y: numb
     y: SINGAPORE_MERLION.mouthY - 5 * t + 11.9 * t * t + Math.sin(t * 24 - singaporePhase(elapsedMs) * 4) * 0.08 * t,
   }
 }
-/** The cabin drifts across the bay once within the default three-second clip. */
+/** The cabin crosses the bay once on the action envelope, then holds. */
 export function singaporeBoat(elapsedMs: number): { x: number; y: number } {
   return {
-    x: 45 + Math.min(1, Math.max(0, elapsedMs) / 3000) * 12,
+    x: 45 + actionProgress(elapsedMs) * 12,
     y: 21 + Math.sin(singaporePhase(elapsedMs) * 2) * 0.12,
   }
 }

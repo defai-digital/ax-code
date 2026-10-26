@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vitest"
 import { inflateSync } from "node:zlib"
 import {
+  ACTION_END_MS,
+  ACTION_START_MS,
   CINEMA_FADE_IN_MS,
   CINEMA_FADE_OUT_MS,
   CINEMA_STILL,
   CINEMA_ZOOM_MAX,
+  actionProgress,
   applyCinema,
   chooseCinemaMove,
   cinemaShot,
@@ -17,25 +20,18 @@ import {
   SCENE_MIN_QUALITY,
   SCENE_PIXEL_BUDGET,
   digitalCodePixelPlayer,
+  finishScenePixels,
   nextSceneQuality,
   sceneQualityCeiling,
   sceneRasterSize,
 } from "../../../src/cli/tui/component/digital-code-pixels"
+import { renderTextScenePixels } from "../../../src/cli/tui/component/text-scene-pixels"
 
 const KINDS: CinemaMoveKind[] = ["still", "push-in", "pull-back", "drift-left", "drift-right"]
 const PUSH: CinemaMove = { kind: "push-in", zoom: 1.08, ease: "in-out", focusX: 0.6, focusY: -0.5 }
 const PULL: CinemaMove = { ...PUSH, kind: "pull-back" }
 const shot = (elapsedMs: number, move: CinemaMove = PULL) =>
   cinemaShot({ width: 320, height: 180, elapsedMs, durationMs: 3000, move })
-
-/** Deterministic pseudo-random stream for draws. */
-function seeded(seed: number) {
-  let state = seed >>> 0
-  return () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
-    return state / 4294967296
-  }
-}
 
 function solid(w: number, h: number, rgb: [number, number, number]) {
   const buffer = Buffer.alloc(w * h * 3)
@@ -63,12 +59,44 @@ describe("cinema shot", () => {
     expect(shot(5000).exposure).toBe(0)
   })
 
-  test("holds the camera frozen for every draw until authored moves land", () => {
-    const random = seeded(7)
-    for (let i = 0; i < 2000; i++) expect(chooseCinemaMove(random)).toBe(CINEMA_STILL)
-    for (const value of [0, 0.4, 0.55, 0.7, 0.85, 0.999999]) expect(chooseCinemaMove(() => value)).toBe(CINEMA_STILL)
-    expect(chooseCinemaMove()).toBe(CINEMA_STILL)
-    expect(chooseCinemaMove(() => 0.999999).zoom).toBe(1)
+  test("openings push in, endings pull back, neutral themes hold still", () => {
+    for (const style of ["fuji-day", "castle-day", "dinosaur-day"])
+      expect(chooseCinemaMove(style)).toEqual({ kind: "push-in", zoom: 1.03, ease: "out", focusX: 0, focusY: 0 })
+    for (const style of ["fuji-night", "castle-night", "dinosaur-night"])
+      expect(chooseCinemaMove(style)).toEqual({ kind: "pull-back", zoom: 1.03, ease: "out", focusX: 0, focusY: 0 })
+    // Both neutral themes appear in each half of every pair, so they hold still.
+    for (const style of ["digital-code", "taegeuk", undefined, "unknown-theme"])
+      expect(chooseCinemaMove(style)).toBe(CINEMA_STILL)
+    // Authored moves are shared constants: the camera is never drawn per playback.
+    expect(chooseCinemaMove("fuji-day")).toBe(chooseCinemaMove("castle-day"))
+    expect(chooseCinemaMove("fuji-night")).toBe(chooseCinemaMove("castle-night"))
+  })
+
+  test("the action envelope holds, eases once, then holds at the end pose", () => {
+    expect(actionProgress(0)).toBe(0)
+    expect(actionProgress(ACTION_START_MS - 1)).toBe(0)
+    expect(actionProgress(ACTION_START_MS)).toBe(0)
+    expect(actionProgress(1300)).toBeGreaterThan(0)
+    expect(actionProgress(1300)).toBeLessThan(1)
+    expect(actionProgress(ACTION_END_MS)).toBe(1)
+    expect(actionProgress(3000)).toBe(1)
+    expect(actionProgress(-100)).toBe(0)
+    let previous = -1
+    for (let elapsedMs = 0; elapsedMs <= 3000; elapsedMs += 100) {
+      const progress = actionProgress(elapsedMs)
+      expect(progress).toBeGreaterThanOrEqual(previous)
+      previous = progress
+    }
+    expect(previous).toBe(1)
+  })
+
+  test("the action window scales with a longer playback", () => {
+    expect(actionProgress(1400, 6000)).toBe(0)
+    expect(actionProgress(1401, 6000)).toBeGreaterThan(0)
+    expect(actionProgress(3800, 6000)).toBe(1)
+    expect(actionProgress(6000, 6000)).toBe(1)
+    // The default clip keeps the authored window unchanged.
+    expect(actionProgress(1300, 3000)).toBe(actionProgress(1300))
   })
 
   test("still holds the full frame; push-in closes in; pull-back reveals", () => {
@@ -109,15 +137,14 @@ describe("cinema shot", () => {
   })
 
   test("keeps the camera window inside the painted frame for any drawn move", () => {
-    const random = seeded(11)
     const extremes: CinemaMove[] = [
       { kind: "push-in", zoom: CINEMA_ZOOM_MAX, ease: "out", focusX: 1, focusY: -1 },
       { kind: "pull-back", zoom: CINEMA_ZOOM_MAX, ease: "in", focusX: -1, focusY: 1 },
       { kind: "drift-left", zoom: CINEMA_ZOOM_MAX, ease: "linear", focusX: 0, focusY: 1 },
       { kind: "drift-right", zoom: 3, ease: "in-out", focusX: 5, focusY: -5 },
     ]
-    // Drawn moves are frozen stills for now; the extremes keep the clamp covered.
-    for (const move of [...extremes, ...Array.from({ length: 200 }, () => chooseCinemaMove(random))])
+    // Drawn moves are authored now; the extremes keep the clamp covered.
+    for (const move of [...extremes, chooseCinemaMove("fuji-day"), chooseCinemaMove("fuji-night")])
       for (let t = 0; t <= 3000; t += 150) {
         const s = cinemaShot({ width: 320, height: 180, elapsedMs: t, durationMs: 3000, move })
         const halfW = 320 / s.zoom / 2
@@ -130,15 +157,20 @@ describe("cinema shot", () => {
       }
   })
 
-  test("a frozen draw holds framing and grades a lifted black floor", () => {
-    // A regular scene that used to receive random moves now holds the composition.
-    const move = sceneCinemaMove("fuji-day", chooseCinemaMove(seeded(3)))
-    expect(move).toEqual(CINEMA_STILL)
+  test("an authored push-in closes on the center while grading a lifted black floor", () => {
+    // Fuji's opening breathes in 3% from the full frame and settles on the center.
+    const move = sceneCinemaMove("fuji-day", chooseCinemaMove("fuji-day"))
+    expect(move.kind).toBe("push-in")
+    const at = (elapsedMs: number) => cinemaShot({ width: 960, height: 540, elapsedMs, durationMs: 3000, move })
+    expect(at(0).zoom).toBe(1)
+    expect(at(3000).zoom).toBeCloseTo(1.03)
+    let previousZoom = 0
     for (const elapsedMs of [0, 300, 1200, 2400, 3000]) {
-      const s = cinemaShot({ width: 960, height: 540, elapsedMs, durationMs: 3000, move })
-      expect(s.zoom).toBe(1)
+      const s = at(elapsedMs)
       expect(s.centerX).toBe(480)
       expect(s.centerY).toBe(270)
+      expect(s.zoom).toBeGreaterThanOrEqual(previousZoom)
+      previousZoom = s.zoom
     }
 
     const w = 160
@@ -286,6 +318,32 @@ describe("scene raster budget", () => {
     expect(sizes[0]).toBe(640)
     expect(sizes.at(-1)!).toBeLessThan(640)
     expect(sizes.at(-1)!).toBeGreaterThanOrEqual(640 * SCENE_MIN_QUALITY - 2)
+    player.dispose()
+  })
+
+  test("a scene drawn without an injected move uses its authored camera", () => {
+    const writes: string[] = []
+    const player = digitalCodePixelPlayer((data) => writes.push(data), { now: () => 0 })
+    const decode = (data: string) =>
+      inflateSync(
+        Buffer.from([...data.matchAll(/\x1b_G[^;]*;([A-Za-z0-9+/=]*)\x1b\\/g)].map((m) => m[1]).join(""), "base64"),
+      )
+    const painted = renderTextScenePixels(320, 180, "castle-day", 1500)
+    const finished = (move: CinemaMove) =>
+      finishScenePixels(painted, 320, 180, { elapsedMs: 1500, durationMs: 3000, move, style: "castle-day" })
+    player.draw({
+      width: 320,
+      height: 180,
+      columns: 80,
+      rows: 24,
+      direction: "down",
+      style: "castle-day",
+      elapsedMs: 1500,
+      durationMs: 3000,
+    })
+    expect(decode(writes[0]!).equals(finished(chooseCinemaMove("castle-day")))).toBe(true)
+    // Authored framing is not the locked framing a still would paint.
+    expect(decode(writes[0]!).equals(finished(CINEMA_STILL))).toBe(false)
     player.dispose()
   })
 

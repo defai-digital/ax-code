@@ -1,5 +1,6 @@
 import type { FujiRun } from "./fuji-view-model"
 import { createSceneGrid } from "./scene-grid"
+import { actionProgress } from "./scene-cinema"
 
 export type DinosaurStyle = "dinosaur-day" | "dinosaur-night"
 export function isDinosaurStyle(style: string | undefined): style is DinosaurStyle {
@@ -109,10 +110,13 @@ export function dinosaurPtero(elapsedMs: number): DinosaurPtero {
 }
 
 export type DinosaurWalker = { x: number; y: number }
-/** Baby dinosaur toddling west across the foreground, against the sky traffic. */
+/**
+ * Baby dinosaur toddling west across the foreground, against the sky traffic.
+ * One crossing per playback on the shared action envelope: it starts at the
+ * right and holds its end pose instead of wrapping.
+ */
 export function dinosaurWalker(elapsedMs: number): DinosaurWalker {
-  const phase = (Math.max(0, elapsedMs) % DINOSAUR_CYCLE_MS) / DINOSAUR_CYCLE_MS
-  return { x: DINOSAUR_COLUMNS - 8 - Math.floor(phase * (DINOSAUR_COLUMNS - 16)), y: 20 }
+  return { x: DINOSAUR_COLUMNS - 8 - Math.floor(actionProgress(elapsedMs) * (DINOSAUR_COLUMNS - 16)), y: 20 }
 }
 
 /** Side-view sauropod sprite, 38 columns wide, painted from DINOSAUR_SAUROPOD. */

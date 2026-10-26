@@ -90,7 +90,7 @@ test("fountain stays anchored at the mouth while spray flutters and falls into t
   expect(singaporeJet(0.5, -1)).toEqual(singaporeJet(0.5, 0))
 })
 
-test("boat crosses once and holds its position at the three-second boundary", () => {
+test("boat crosses once on the action envelope and holds at the three-second boundary", () => {
   let previous = 0
   for (let time = 0; time <= 3000; time += 50) {
     const boat = singaporeBoat(time)
@@ -99,6 +99,11 @@ test("boat crosses once and holds its position at the three-second boundary", ()
     expect(boat.y).toBeLessThanOrEqual(21.2)
     previous = boat.x
   }
+  // The envelope holds before 700ms, is mid-traverse at 1000ms, and settles by 1900ms.
+  expect(singaporeBoat(700).x).toBe(45)
+  expect(singaporeBoat(1000).x).toBeGreaterThan(45)
+  expect(singaporeBoat(1000).x).toBeLessThan(57)
+  expect(singaporeBoat(1900).x).toBe(57)
   expect(singaporeBoat(3000).x).toBe(57)
   expect(singaporeBoat(6000).x).toBe(57)
   expect(singaporeBoat(-1)).toEqual(singaporeBoat(0))

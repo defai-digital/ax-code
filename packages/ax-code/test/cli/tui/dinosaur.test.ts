@@ -42,13 +42,16 @@ test("the pterosaur and the baby dinosaur cross deterministically", () => {
   const walker = dinosaurWalker(0)
   expect(walker).toEqual({ x: 68, y: 20 })
   expect(dinosaurWalker(1800).x).toBeLessThan(walker.x)
-  expect(dinosaurWalker(3600)).toEqual(walker)
+  // One crossing on the action envelope: the walker arrives and holds its end pose.
+  expect(dinosaurWalker(1900).x).toBe(8)
+  expect(dinosaurWalker(2500)).toEqual(dinosaurWalker(3600))
 })
 
 test.each(["dinosaur-day", "dinosaur-night"] as const)("%s renders deterministically", (style) => {
   expect(dinosaurRows(76, 24, style, 0)).toEqual(dinosaurRows(76, 24, style, 0))
   expect(dinosaurRows(76, 24, style, 900)).not.toEqual(dinosaurRows(76, 24, style, 0))
-  expect(dinosaurRows(76, 24, style, 3600)).toEqual(dinosaurRows(76, 24, style, 0))
+  // The baby dinosaur settles instead of wrapping, so the frame no longer repeats at 3600ms.
+  expect(dinosaurRows(76, 24, style, 3600)).not.toEqual(dinosaurRows(76, 24, style, 0))
   expect(dinosaurRows(76, 24, style, -100)).toEqual(dinosaurRows(76, 24, style, 0))
   const text = dinosaurRows(76, 24, style, 0)
     .map((row) => row.map((run) => run.text).join(""))

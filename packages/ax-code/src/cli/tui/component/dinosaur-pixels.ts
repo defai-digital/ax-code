@@ -18,6 +18,7 @@ import {
   type DinosaurStyle,
 } from "./dinosaur-view-model"
 import { hash } from "./atmos-paint"
+import { actionProgress } from "./scene-cinema"
 
 /** Smooth 1D value noise. */
 function noise1(x: number, seed: number): number {
@@ -320,10 +321,12 @@ export function renderDinosaurPixels(width: number, height: number, style: Dinos
   for (let i = 0; i < 5; i++)
     hd.stroke(20 + i * 0.42, 15.8, 20.4 + i * 0.42, 16.3, Math.max(0.5, cw * 0.035), hdDarken(dino, 0.63))
 
-  // Baby dinosaur toddling west through the foreground.
+  // Baby dinosaur toddling west through the foreground, once per playback.
   const walker = dinosaurWalker(elapsed)
-  const smoothWalkerX = DINOSAUR_COLUMNS - 8 - phase * (DINOSAUR_COLUMNS - 16)
-  const step = Math.sin(theta * 12) * 0.18
+  const walk = actionProgress(elapsed)
+  const smoothWalkerX = DINOSAUR_COLUMNS - 8 - walk * (DINOSAUR_COLUMNS - 16)
+  // The gait bob settles as the walker arrives, so the end pose stands still.
+  const step = Math.sin(theta * 12) * 0.18 * (1 - walk)
   const baby = hdMix(dino, hdHex(c.belly), 0.25)
   hd.blob(hd.X(smoothWalkerX + 1.5), hd.Y(walker.y + 2.6), cw * 2, ch * 0.28, hdDarken(groundDark, 0.8))
   hd.blob(hd.X(smoothWalkerX + 1.5), hd.Y(walker.y + 1.5), cw * 1.9, ch * 0.75, baby)

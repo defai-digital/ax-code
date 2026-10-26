@@ -3,16 +3,22 @@
  *
  * Every playback gets a fade in from black and out to black, a soft bloom
  * around bright lights, a gentle contrast and saturation grade, and a
- * vignette. The camera holds the full composition: a move is only applied when
- * the caller supplies one, so framing stays locked until authored per-theme
- * moves land. The camera resample is bilinear, which also smooths the painters'
- * hard stair-stepped edges.
+ * vignette. Every theme carries an authored move: an opening pushes in gently
+ * as the arrival settles, an ending starts close and pulls back to the full
+ * frame as it departs, and neutral or framed themes hold still. The camera is
+ * deterministic and never draws per playback. The camera resample is bilinear,
+ * which also smooths the painters' hard stair-stepped edges.
  *
  * Pure and deterministic: the output depends only on the inputs.
  */
 
 export const CINEMA_FADE_IN_MS = 180
 export const CINEMA_FADE_OUT_MS = 360
+/** Window of the one-shot foreground action inside the default 3s playback. */
+export const ACTION_START_MS = 700
+export const ACTION_END_MS = 1900
+/** Playback length the action window is authored against. */
+const ACTION_WINDOW_MS = 3000
 /** Zoom range of a camera move. The top end still never crops a landmark. */
 export const CINEMA_ZOOM_MIN = 1.04
 export const CINEMA_ZOOM_MAX = 1.1
@@ -26,7 +32,10 @@ export type CinemaEase = "in-out" | "out" | "in" | "linear"
 
 export type CinemaMove = Readonly<{
   kind: CinemaMoveKind
-  /** Peak zoom, CINEMA_ZOOM_MIN..CINEMA_ZOOM_MAX (1 for still). */
+  /**
+   * Peak zoom, at most CINEMA_ZOOM_MAX (1 for still). Authored moves sit at
+   * 1.03, just under CINEMA_ZOOM_MIN, so they read as a breath and never crop.
+   */
   zoom: number
   ease: CinemaEase
   /** Focal point as a fraction of the zoom slack, -1..1 on each axis. */
@@ -37,13 +46,110 @@ export type CinemaMove = Readonly<{
 export const CINEMA_STILL: CinemaMove = Object.freeze({ kind: "still", zoom: 1, ease: "linear", focusX: 0, focusY: 0 })
 
 /**
- * Draw a camera move for one playback. Interim freeze: a per-playback random
- * move resampled the whole frame for motion that was nearly invisible, so
- * framing stays locked until authored per-theme camera paths land. The random
- * source is kept for surface compatibility with that follow-up work.
+ * Themes are authored, not drawn: an opening settles by pushing in on the
+ * composition, an ending departs by pulling back to the full frame. The two
+ * neutral themes appear in both halves of every pair and hold still, as do
+ * styles outside the pair list.
  */
-export function chooseCinemaMove(random: () => number = Math.random): CinemaMove {
-  void random
+const NEUTRAL_STYLES: ReadonlySet<string> = new Set(["digital-code", "taegeuk"])
+
+const OPENING_STYLES: ReadonlySet<string> = new Set([
+  "digital-code",
+  "classic-foliage",
+  "midnight-dream",
+  "fuji-day",
+  "mahjong-match",
+  "city-night",
+  "festival-fireworks",
+  "snowfall",
+  "volcano-eruption",
+  "bigben-day",
+  "taipei101-day",
+  "greatwall-dawn",
+  "torii-day",
+  "taegeuk",
+  "sagrada-day",
+  "corcovado-day",
+  "eiffel-day",
+  "brandenburg-night",
+  "domes-snow",
+  "borobudur-mist",
+  "balloons-night",
+  "mekong-dawn",
+  "colosseum-day",
+  "space-launch",
+  "dungeon-descent",
+  "castle-day",
+  "islands-day",
+  "jungle-day",
+  "reef-day",
+  "pyramids-day",
+  "aurora-night",
+  "lighthouse-day",
+  "falls-day",
+  "steppe-day",
+  "canyon-day",
+  "singapore-day",
+  "sanguozhi-muster",
+  "racing-day",
+  "dinosaur-day",
+])
+
+const ENDING_STYLES: ReadonlySet<string> = new Set([
+  "digital-code",
+  "golden-foliage",
+  "sunset-serenade",
+  "fuji-night",
+  "mahjong-ending",
+  "city-dawn",
+  "festival-lanterns",
+  "winter-night",
+  "volcano-calm",
+  "bigben-night",
+  "taipei101-neon",
+  "greatwall-dusk",
+  "torii-night",
+  "taegeuk",
+  "sagrada-night",
+  "corcovado-gold",
+  "eiffel-night",
+  "brandenburg-dawn",
+  "domes-clear",
+  "borobudur-noon",
+  "balloons-dawn",
+  "mekong-dusk",
+  "colosseum-night",
+  "space-drift",
+  "dungeon-treasure",
+  "castle-night",
+  "islands-dusk",
+  "jungle-night",
+  "reef-night",
+  "pyramids-night",
+  "aurora-dawn",
+  "lighthouse-night",
+  "falls-moon",
+  "steppe-night",
+  "canyon-night",
+  "singapore-night",
+  "sanguozhi-dusk",
+  "racing-night",
+  "dinosaur-night",
+])
+
+/** A gentle 3% push: the arrival closes in and settles on the composition. */
+const OPENING_MOVE: CinemaMove = Object.freeze({ kind: "push-in", zoom: 1.03, ease: "out", focusX: 0, focusY: 0 })
+/** The same breath in reverse: start close, reveal the full frame, settle. */
+const ENDING_MOVE: CinemaMove = Object.freeze({ kind: "pull-back", zoom: 1.03, ease: "out", focusX: 0, focusY: 0 })
+
+/**
+ * The authored camera move for a theme. Neutral themes resolve to a still
+ * before the pair lists, because they open and close with the same artwork.
+ */
+export function chooseCinemaMove(style?: string): CinemaMove {
+  if (!style || NEUTRAL_STYLES.has(style)) return CINEMA_STILL
+  if (OPENING_STYLES.has(style)) return OPENING_MOVE
+  if (ENDING_STYLES.has(style)) return ENDING_MOVE
   return CINEMA_STILL
 }
 
@@ -89,6 +195,22 @@ const smoothstep = (t: number) => {
   return u * u * (3 - 2 * u)
 }
 const clampUnit = (v: number) => (v < -1 ? -1 : v > 1 ? 1 : v)
+
+/**
+ * One-shot progress for a foreground action (a walker crossing, a boat leaving
+ * the bay): 0 until ACTION_START_MS, eased 0..1 across the action window, then
+ * 1 so the subject arrives and holds instead of wrapping. A non-default
+ * playback duration scales the window with it. Pure and monotonic.
+ */
+export function actionProgress(elapsedMs: number, durationMs?: number): number {
+  const scale = durationMs && durationMs > 0 ? durationMs / ACTION_WINDOW_MS : 1
+  const start = ACTION_START_MS * scale
+  const end = ACTION_END_MS * scale
+  const elapsed = Math.max(0, elapsedMs)
+  if (elapsed <= start) return 0
+  if (elapsed >= end) return 1
+  return EASE["in-out"]((elapsed - start) / (end - start))
+}
 
 /**
  * The camera at `elapsedMs` for the given move. A push-in starts on the full

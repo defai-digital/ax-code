@@ -421,8 +421,6 @@ export function digitalCodePixelPlayer(
   options: { now?: () => number; move?: CinemaMove } = {},
 ) {
   const now = options.now ?? (() => performance.now())
-  // One camera move per playback, so scenes do not all share the same zoom.
-  const move = options.move ?? chooseCinemaMove()
   const id = randomInt(1, 0x7fffffff)
   let frame: DigitalCodePixels | undefined
   let foliagePainter: { width: number; height: number; paint: (elapsedMs: number) => Buffer } | undefined
@@ -507,7 +505,8 @@ export function digitalCodePixelPlayer(
           finishScenePixels(painted, raster.width, raster.height, {
             elapsedMs,
             durationMs: input.durationMs,
-            move,
+            // Authored per theme, so every draw of a theme shares one camera.
+            move: options.move ?? chooseCinemaMove(style),
             style,
           }),
           raster,
