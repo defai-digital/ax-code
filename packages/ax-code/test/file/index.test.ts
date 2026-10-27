@@ -1395,3 +1395,19 @@ describe("file/index review fixes", () => {
     })
   })
 })
+
+test("File.list() labels a symlink to a directory as a directory", async () => {
+  await using tmp = await tmpdir()
+  await fs.mkdir(path.join(tmp.path, "realdir"))
+  await fs.writeFile(path.join(tmp.path, "real.txt"), "x")
+  await fs.symlink(path.join(tmp.path, "realdir"), path.join(tmp.path, "linkdir"))
+  await fs.symlink(path.join(tmp.path, "real.txt"), path.join(tmp.path, "link.txt"))
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const nodes = await File.list()
+      expect(nodes.find((node) => node.name === "linkdir")?.type).toBe("directory")
+      expect(nodes.find((node) => node.name === "link.txt")?.type).toBe("file")
+    },
+  })
+})

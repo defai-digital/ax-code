@@ -811,7 +811,13 @@ export namespace File {
       if (exclude.includes(entry.name)) continue
       const absolute = path.join(resolved, entry.name)
       const file = toRelativePath(absolute)
-      const type = entry.isDirectory() ? "directory" : "file"
+      // Dirent reports a symlink as neither; follow it so a linked directory
+      // is listed as one (read() resolves it the same way).
+      const type =
+        entry.isDirectory() ||
+        (entry.isSymbolicLink() && (await fs.promises.stat(absolute).catch(() => undefined))?.isDirectory())
+          ? "directory"
+          : "file"
       nodes.push({
         name: entry.name,
         path: file,
