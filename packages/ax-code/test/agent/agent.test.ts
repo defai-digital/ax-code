@@ -1004,6 +1004,19 @@ test("Agent.get resolves own agents only, not Object.prototype members", async (
   })
 })
 
+test("a config agent key named after an Object.prototype member becomes its own agent", async () => {
+  await using tmp = await tmpdir({
+    config: { agent: { toString: { description: "a prototype-named agent", mode: "subagent" } } as any },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect((await Agent.get("build"))?.name).toBe("build")
+      expect(await Agent.get("toString")).toMatchObject({ name: "toString", description: "a prototype-named agent" })
+    },
+  })
+})
+
 test("a default agent renamed by config resolves back through Agent.get", async () => {
   await using tmp = await tmpdir({
     config: {

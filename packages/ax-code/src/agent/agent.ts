@@ -471,8 +471,13 @@ export namespace Agent {
     }
 
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {
+      // `agents` is a plain object: own keys only, so a config key such as
+      // "toString" names a new agent instead of an Object.prototype member,
+      // and "__proto__" would replace the prototype rather than add an agent.
+      if (key === "__proto__") continue
+      const existing = Object.hasOwn(agents, key) ? agents[key] : undefined
       if (value.disable) {
-        const tier = agents[key] ? resolveTier(agents[key]) : undefined
+        const tier = existing ? resolveTier(existing) : undefined
         if (tier === "internal") {
           console.warn(`[agent] cannot disable internal agent "${key}" — it is required for core operations`)
           continue
@@ -481,7 +486,7 @@ export namespace Agent {
         delete agents[key]
         continue
       }
-      let item = agents[key]
+      let item = existing
       if (!item)
         item = agents[key] = {
           name: key,
