@@ -1020,6 +1020,64 @@ export namespace CodeGraphBuilder {
     }
   }
 
+  type ForeignEdges = {
+    nodes: Map<CodeNodeID, { kind: string; qualified_name: string }>
+    edges: CodeGraphQuery.EdgeRow[]
+  }
+
+  // Ingest replaces a file's nodes with fresh ids and so deletes every edge
+  // touching them — including edges another file owns (an import of this
+  // file, a call attributed from a caller elsewhere). Those owners are not
+  // re-ingested when only this file changed, so capture their edges first
+  // and re-point them at the new nodes afterwards.
+  function captureForeignEdges(projectID: ProjectID, file: string): ForeignEdges {
+    const nodes = new Map<CodeNodeID, { kind: string; qualified_name: string }>()
+    const edges = new Map<string, CodeGraphQuery.EdgeRow>()
+    for (const node of CodeGraphQuery.nodesInFile(projectID, file)) {
+      nodes.set(node.id, { kind: node.kind, qualified_name: node.qualified_name })
+      for (const edge of CodeGraphQuery.edgesTo(projectID, node.id)) {
+        if (edge.file !== file) edges.set(edge.id, edge)
+      }
+      for (const edge of CodeGraphQuery.edgesFrom(projectID, node.id)) {
+        if (edge.file !== file) edges.set(edge.id, edge)
+      }
+    }
+    return { nodes, edges: [...edges.values()] }
+  }
+
+  function restoreForeignEdges(
+    projectID: ProjectID,
+    captured: ForeignEdges,
+    nodeInserts: Parameters<typeof CodeGraphQuery.insertNodes>[0],
+    now: number,
+  ) {
+    if (captured.edges.length === 0) return
+    const key = (node: { kind: string; qualified_name: string }) => `${node.kind}\0${node.qualified_name}`
+    // A key shared by several nodes (overloads) maps only when unambiguous.
+    const fresh = new Map<string, CodeNodeID | null>()
+    for (const node of nodeInserts) {
+      const k = key(node)
+      fresh.set(k, fresh.has(k) ? null : node.id)
+    }
+    const remap = (id: CodeNodeID) => {
+      const old = captured.nodes.get(id)
+      if (!old) return id
+      return fresh.get(key(old)) ?? undefined
+    }
+    const restored: Parameters<typeof CodeGraphQuery.insertEdges>[0] = []
+    for (const edge of captured.edges) {
+      const from = remap(edge.from_node)
+      const to = remap(edge.to_node)
+      if (!from || !to) continue
+      // The other endpoint's file may have been re-ingested meanwhile; its
+      // own ingest then rebuilt the edge, so do not resurrect a stale one.
+      const other = captured.nodes.has(edge.from_node) ? edge.to_node : edge.from_node
+      if (!captured.nodes.has(other) && !CodeGraphQuery.getNode(projectID, other)) continue
+      restored.push({ ...edge, id: CodeEdgeID.ascending(), from_node: from, to_node: to, time_updated: now })
+    }
+    for (let i = 0; i < restored.length; i += 60) CodeGraphQuery.insertEdges(restored.slice(i, i + 60))
+  }
+
   async function commitPreparedIndex(
     projectID: ProjectID,
     prepared: Extract<PreparedIndex, { kind: "commit" }>,
@@ -1177,6 +1235,7 @@ export namespace CodeGraphBuilder {
     }
 
     const tTxn = performance.now()
+    const foreignEdges = captureForeignEdges(projectID, prepared.absPath)
     await CodeGraphQuery.ingestFile(projectID, prepared.absPath, prepared.nodeInserts, edgeInserts, {
       id: CodeFileID.ascending(),
       project_id: projectID,
@@ -1189,6 +1248,7 @@ export namespace CodeGraphBuilder {
       time_created: prepared.now,
       time_updated: prepared.now,
     })
+    restoreForeignEdges(projectID, foreignEdges, prepared.nodeInserts, prepared.now)
     prepared.timings.dbTransaction = performance.now() - tTxn
     prepared.timings.total = performance.now() - prepared.tStart
 

@@ -716,6 +716,33 @@ describe("builder.indexFile hash-skip fast path", () => {
 })
 
 describe("builder.indexFiles batch behavior", () => {
+  test("reindexing one file keeps the edges other files own into it", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const a = path.join(tmp.path, "a.ts")
+        const b = path.join(tmp.path, "b.ts")
+        await writeFile(a, "export function foo() {\n  return 1\n}\n")
+        await writeFile(b, 'import { foo } from "./a"\nexport const bar = foo()\n')
+        await CodeGraphBuilder.indexFiles(projectID, [a], { lock: "none" })
+        await CodeGraphBuilder.indexFiles(projectID, [b], { lock: "none" })
+        expect(CodeIntelligence.findDependents(projectID, a)).toEqual([b])
+
+        // An edit to a.ts (the watcher or `ax-code index` path) reindexes
+        // only a.ts; b.ts is unchanged and is never re-ingested.
+        await writeFile(a, "export function foo() {\n  return 2\n}\n")
+        await CodeGraphBuilder.indexFiles(projectID, [a], { lock: "none" })
+        expect(CodeIntelligence.findDependents(projectID, a)).toEqual([b])
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
   test("stats separate unchanged from newly indexed", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
