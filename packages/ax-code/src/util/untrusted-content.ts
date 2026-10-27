@@ -101,15 +101,20 @@ export function isWrappedUntrustedContent(text: string): boolean {
  * Wrap external text in the untrusted-content envelope.
  *
  * - Text below `UNTRUSTED_CONTENT_MIN_LENGTH` is returned unchanged.
- * - Already-wrapped text is returned unchanged (never double-wrapped).
+ * - Text already wrapped under the same source label is returned unchanged
+ *   (never double-wrapped); an envelope naming another source is re-wrapped.
  * - Hidden Unicode is removed and reported in a one-line note inside the
  *   envelope; embedded envelope tags are defanged.
  */
 export function wrapUntrustedContent(text: string, source: string): string {
   if (text.length < UNTRUSTED_CONTENT_MIN_LENGTH) return text
-  if (isWrappedUntrustedContent(text)) return text
+  const label = sanitizeUntrustedSource(source)
+  // Pass through only an envelope carrying this caller's own label: external
+  // text can copy the envelope shape, and must not reach the model under a
+  // source label (such as "system") that the content chose for itself.
+  if (isWrappedUntrustedContent(text) && text.startsWith(`<untrusted_content source="${label}">\n`)) return text
   const { text: stripped, removed } = stripHiddenUnicode(text)
   const body = defangUntrustedContentTags(stripped)
   const note = removed > 0 ? `[${removed} hidden Unicode character${removed === 1 ? "" : "s"} removed]\n` : ""
-  return `<untrusted_content source="${sanitizeUntrustedSource(source)}">\n${note}${body}\n</untrusted_content>`
+  return `<untrusted_content source="${label}">\n${note}${body}\n</untrusted_content>`
 }
