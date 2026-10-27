@@ -181,6 +181,85 @@ test("one staging pass admits the smallest files first and defers the rest to th
   })
 })
 
+test("patch omits a file the turn's baseline excluded from staging, and revert preserves it", async () => {
+  // 0.001 MB is ~1 KB: an 8 KB grow.txt is excluded from every staging pass
+  // once it grows, so the turn's baseline tree keeps the stale small content.
+  vi.stubEnv("AX_CODE_SNAPSHOT_MAX_FILE_MB", "0.001")
+  // The sandbox test runner may have no passwd entry for its uid; an explicit
+  // username keeps Config.loadState off the os.userInfo() fallback.
+  await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "grow.txt")
+      await fs.writeFile(file, "small")
+      await Snapshot.track()
+      const grown = "x".repeat(8 * 1024)
+      await fs.writeFile(file, grown)
+      // The turn's baseline: staging leaves the oversized file out.
+      const before = (await Snapshot.track())!
+      expect(before).toBeTruthy()
+      // The turn itself only creates a.txt.
+      await fs.writeFile(path.join(tmp.path, "a.txt"), "edited")
+
+      const patch = await Snapshot.patch(before!)
+      expect(patch.files).toEqual([path.join(tmp.path, "a.txt").split(path.sep).join("/")])
+
+      await Snapshot.revert([patch])
+      expect(await fs.readFile(file, "utf8")).toBe(grown)
+      await expect(fs.access(path.join(tmp.path, "a.txt"))).rejects.toMatchObject({ code: "ENOENT" })
+    },
+  })
+})
+
+test("revert leaves a baseline-excluded file at its current content", async () => {
+  vi.stubEnv("AX_CODE_SNAPSHOT_MAX_FILE_MB", "0.001")
+  await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "grow.txt")
+      await fs.writeFile(file, "small")
+      await Snapshot.track()
+      const grown = "x".repeat(8 * 1024)
+      await fs.writeFile(file, grown)
+      const before = (await Snapshot.track())!
+      expect(before).toBeTruthy()
+
+      // Even a patch that still names the excluded path must not restore the
+      // stale last-staged content over the file's current bytes.
+      await Snapshot.revert([{ hash: before!, files: [file] }])
+
+      expect(await fs.readFile(file, "utf8")).toBe(grown)
+    },
+  })
+})
+
+test("patch omits a file the turn's baseline left out of the per-pass budget", async () => {
+  // 0.002 MB is ~2 KB: the 8 KB file alone exceeds one staging-pass budget.
+  vi.stubEnv("AX_CODE_SNAPSHOT_MAX_ADD_MB", "0.002")
+  await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "grow.txt")
+      await fs.writeFile(file, "small")
+      await Snapshot.track()
+      const grown = "y".repeat(8 * 1024)
+      await fs.writeFile(file, grown)
+      const before = (await Snapshot.track())!
+      expect(before).toBeTruthy()
+      await fs.writeFile(path.join(tmp.path, "a.txt"), "edited")
+
+      const patch = await Snapshot.patch(before!)
+      expect(patch.files).toEqual([path.join(tmp.path, "a.txt").split(path.sep).join("/")])
+
+      await Snapshot.revert([patch])
+      expect(await fs.readFile(file, "utf8")).toBe(grown)
+    },
+  })
+})
+
 test("cleanup removes sample hooks from older stores but keeps a hooks directory with real hooks", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

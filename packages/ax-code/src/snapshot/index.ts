@@ -17,6 +17,7 @@ import {
   parseNumstatLine,
   type NumstatEntry,
 } from "../util/git-output"
+import { parseJsonFromText } from "../util/json-value"
 import { Log } from "../util/log"
 import { KeyedSerialQueue, work } from "../util/queue"
 import { NamedError } from "@ax-code/util/error"
@@ -274,6 +275,40 @@ export namespace Snapshot {
 
   async function removeSnapshotMeta(current: State, hash: string) {
     await fs.rm(snapshotMetaPath(current, hash), { force: true }).catch(() => undefined)
+  }
+
+  function exclusionRecordPath(current: State, hash: string) {
+    return path.join(current.gitdir, "ax-code", "excluded", hash)
+  }
+
+  /**
+   * A captured tree records only what its staging pass admitted: a path left
+   * out for size or budget keeps its last staged content, so the tree is not a
+   * faithful baseline for it. Persist the excluded set per hash so
+   * patch()/revert() can leave those paths alone instead of reverting them to
+   * stale content. Records exist only for captures that excluded something; a
+   * missing record (older captures) filters nothing.
+   */
+  async function writeExclusionRecord(current: State, hash: string, files: Skipped[]) {
+    if (files.length === 0) return
+    const file = exclusionRecordPath(current, hash)
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    await Filesystem.write(file, JSON.stringify(files.map((skipped) => skipped.path)))
+  }
+
+  async function removeExclusionRecord(current: State, hash: string) {
+    await fs.rm(exclusionRecordPath(current, hash), { force: true }).catch(() => undefined)
+  }
+
+  async function snapshotExclusions(current: State, hash: string): Promise<Set<string>> {
+    const text = await Filesystem.readText(exclusionRecordPath(current, hash)).catch(() => undefined)
+    if (!text) return new Set<string>()
+    const parsed = z.array(z.string()).safeParse(parseJsonFromText(text))
+    if (parsed.success) return new Set(parsed.data)
+    // An unreadable record degrades to the pre-recording behavior instead of
+    // blocking undo entirely.
+    log.warn("failed to read snapshot exclusion record", { hash })
+    return new Set<string>()
   }
 
   async function snapshotTimestamp(current: State, ref: string, hash: string) {
@@ -551,7 +586,7 @@ export namespace Snapshot {
     })
   }
 
-  async function add(current: State, options?: { excludesSynced: boolean }) {
+  async function add(current: State, options?: { excludesSynced: boolean }): Promise<Skipped[]> {
     if (!options?.excludesSynced) await syncExclude(current)
     const windows = await windowsExclusions(current)
     const oversized = await oversizedFiles(current, windows.untracked)
@@ -605,7 +640,7 @@ export namespace Snapshot {
     } finally {
       if (temporary) await fs.rm(temporary, { recursive: true, force: true })
     }
-    if (result.code === 0) return
+    if (result.code === 0) return oversized
     log.error("failed to stage snapshot files", {
       cwd: current.worktree,
       exitCode: result.code,
@@ -706,6 +741,7 @@ export namespace Snapshot {
           continue
         }
         await removeSnapshotMeta(current, hash)
+        await removeExclusionRecord(current, hash)
         deletedRefs++
       }
       if (deletedRefs > 0) log.info("deleted expired snapshot refs", { deletedRefs, prune })
@@ -858,8 +894,9 @@ export namespace Snapshot {
       }
     }
 
+    let staged: Skipped[] = []
     try {
-      await add(current, { excludesSynced: Boolean(current.prevHash) })
+      staged = await add(current, { excludesSynced: Boolean(current.prevHash) })
     } catch (error) {
       // A lock collision is transient: rethrow so withCaptureRetry in
       // track() retries it (ADR-248). Only genuine staging failures degrade
@@ -906,6 +943,7 @@ export namespace Snapshot {
       throw captureFailure("Snapshot tracking failed: update-ref", updateRef.code, updateRef.stderr)
     }
     await writeSnapshotMeta(current, hash)
+    await writeExclusionRecord(current, hash, staged)
     current.prevHash = hash
     log.info("tracking", { hash, cwd: current.directory, git: current.gitdir })
     return hash
@@ -991,11 +1029,21 @@ export namespace Snapshot {
         log.warn("failed to get diff", { hash, exitCode: result.code })
         return { hash, files: [] }
       }
+      // Paths the baseline's staging pass excluded are not faithfully recorded
+      // in it; diffing the worktree against such a tree reports drift the turn
+      // never made, and reverting it would overwrite current content with the
+      // stale last-staged bytes. Leave them out of the patch.
+      const excluded = await snapshotExclusions(current, hash)
       return {
         hash,
         files: result.text
           .split("\0")
           .filter(Boolean)
+          .filter((item) => {
+            if (!excluded.has(item)) return true
+            log.warn("skipped file excluded from the snapshot baseline in patch", { hash, file: item })
+            return false
+          })
           .map((item) => path.join(current.worktree, item).split(path.sep).join("/")),
       }
     })
@@ -1108,18 +1156,53 @@ export namespace Snapshot {
     })
   }
 
+  /**
+   * A restore can be blocked by a directory at the target path (the turn
+   * replaced a snapshot file with a directory). Only a now-empty directory is
+   * removed; one with content fails the revert closed — a directory holding
+   * user content must never be recursively deleted (see "revert refuses to
+   * recursively delete a directory that replaced a new file").
+   */
+  async function clearRestoreTarget(file: string) {
+    const stat = await fs.lstat(file).catch(() => undefined)
+    if (!stat?.isDirectory()) return
+    try {
+      await fs.rmdir(file)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === "ENOTEMPTY" || code === "EEXIST") {
+        throw new Error(`Snapshot revert failed: ${file} is a non-empty directory`)
+      }
+      throw error
+    }
+  }
+
   export async function revert(patches: Patch[]) {
     const current = await state()
     return withOperationLock(current, async () => {
       const seen = new Set<string>()
       const targets: Array<{ file: string; hash: string }> = []
       const realWorktree = await fs.realpath(path.resolve(current.worktree))
+      // Hand-built or persisted patches can still name a path their baseline
+      // excluded from staging; reverting it would write that tree's stale
+      // last-staged content over the file's current bytes.
+      const exclusions = new Map<string, Set<string>>()
       for (const item of patches) {
         if (!valid(item.hash)) continue
         for (const requestedFile of item.files) {
           const file = await revertPath(current, requestedFile, realWorktree)
           if (seen.has(file)) continue
           seen.add(file)
+          let excluded = exclusions.get(item.hash)
+          if (!excluded) {
+            excluded = await snapshotExclusions(current, item.hash)
+            exclusions.set(item.hash, excluded)
+          }
+          const rel = path.relative(current.worktree, file).split(path.sep).join("/")
+          if (excluded.has(rel)) {
+            log.warn("skipped file excluded from the snapshot baseline in revert", { hash: item.hash, file: rel })
+            continue
+          }
           targets.push({ file, hash: item.hash })
         }
       }
@@ -1150,6 +1233,7 @@ export namespace Snapshot {
       const applyTarget = async (target: (typeof targets)[number]) => {
         log.info("reverting", target)
         const rel = path.relative(current.worktree, target.file)
+        await clearRestoreTarget(target.file)
         // Patch paths name individual files, including brackets used in routes.
         // Git's `--` ends options but still expands wildcard and magic pathspecs.
         const result = await runGit(
@@ -1215,8 +1299,17 @@ export namespace Snapshot {
             if (present.has(rel)) restore.push(chunk[index]!)
             else missing.push(chunk[index]!)
           }
+          // Deletions run before restores: a restore can create or replace
+          // the path a deletion still needs (EISDIR), while a deletion can
+          // free a path a restore needs for a file (ENOTDIR).
+          for (const target of missing) {
+            applied.push(target)
+            log.info("file did not exist in snapshot, deleting", target)
+            await remove(target.file)
+          }
           if (restore.length > 0) {
             applied.push(...restore)
+            for (const target of restore) await clearRestoreTarget(target.file)
             const restoreRels = restore.map((target) => path.relative(current.worktree, target.file))
             const result = await runGit(
               [...core, "--literal-pathspecs", ...args(current, ["checkout", hash, "--", ...restoreRels])],
@@ -1225,11 +1318,6 @@ export namespace Snapshot {
             if (result.code !== 0) {
               for (const target of restore) await applyTarget(target)
             }
-          }
-          for (const target of missing) {
-            applied.push(target)
-            log.info("file did not exist in snapshot, deleting", target)
-            await remove(target.file)
           }
         }
       }

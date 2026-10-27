@@ -1729,6 +1729,97 @@ test.skipIf(process.platform === "win32")("diffFull preserves tabs in filenames"
   })
 })
 
+test("revert undoes a file that replaced a directory", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { username: "test" },
+    init: async (dir) => {
+      await fs.mkdir(path.join(dir, "foo"))
+      await Filesystem.write(path.join(dir, "foo", "bar.txt"), "dir content")
+      await $`git add .`.cwd(dir).quiet()
+      await $`git commit --no-gpg-sign -m init`.cwd(dir).quiet()
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await fs.rm(path.join(tmp.path, "foo", "bar.txt"))
+      await fs.rmdir(path.join(tmp.path, "foo"))
+      await Filesystem.write(path.join(tmp.path, "foo"), "file content")
+
+      const patch = await Snapshot.patch(before!)
+      expect(patch.files).toContain(fwd(tmp.path, "foo"))
+      expect(patch.files).toContain(fwd(tmp.path, "foo", "bar.txt"))
+
+      await Snapshot.revert([patch])
+
+      expect((await fs.stat(path.join(tmp.path, "foo"))).isDirectory()).toBe(true)
+      expect(await fs.readFile(path.join(tmp.path, "foo", "bar.txt"), "utf8")).toBe("dir content")
+    },
+  })
+})
+
+test("revert undoes a directory that replaced a file", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { username: "test" },
+    init: async (dir) => {
+      await Filesystem.write(path.join(dir, "foo"), "file content")
+      await $`git add .`.cwd(dir).quiet()
+      await $`git commit --no-gpg-sign -m init`.cwd(dir).quiet()
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await fs.rm(path.join(tmp.path, "foo"))
+      await fs.mkdir(path.join(tmp.path, "foo"))
+      await Filesystem.write(path.join(tmp.path, "foo", "bar.txt"), "dir content")
+
+      const patch = await Snapshot.patch(before!)
+      expect(patch.files).toContain(fwd(tmp.path, "foo"))
+      expect(patch.files).toContain(fwd(tmp.path, "foo", "bar.txt"))
+
+      await Snapshot.revert([patch])
+
+      expect((await fs.stat(path.join(tmp.path, "foo"))).isFile()).toBe(true)
+      expect(await fs.readFile(path.join(tmp.path, "foo"), "utf8")).toBe("file content")
+    },
+  })
+})
+
+test("revert refuses to restore a file over a non-empty directory that replaced it", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { username: "test" },
+    init: async (dir) => {
+      await Filesystem.write(path.join(dir, "foo"), "file content")
+      await $`git add .`.cwd(dir).quiet()
+      await $`git commit --no-gpg-sign -m init`.cwd(dir).quiet()
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await fs.rm(path.join(tmp.path, "foo"))
+      await fs.mkdir(path.join(tmp.path, "foo"))
+      await Filesystem.write(path.join(tmp.path, "foo", "keep.txt"), "keep")
+
+      await expect(Snapshot.revert([{ hash: before!, files: [path.join(tmp.path, "foo")] }])).rejects.toThrow()
+      expect(await fs.readFile(path.join(tmp.path, "foo", "keep.txt"), "utf8")).toBe("keep")
+    },
+  })
+})
+
 test("revert with overlapping files across patches uses first patch hash", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
