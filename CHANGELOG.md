@@ -6,6 +6,24 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.2] - 2026-10-27
+
+### Fixed
+
+- Preserve pre-existing empty working directories during undo and keep snapshot exclusions bound to immutable capture identities.
+- Report MCP, ACP and headless runtime failures accurately; recover bounded provider and Wiki stream interruptions without replaying completed work.
+- Preserve uncertain parallel worktrees, canonicalize project paths consistently, and harden snapshot file/directory restoration.
+- Correct native parser inventory, visual comparison and retention, context reporting, and targeted QA command handling.
+
+### Changed
+
+- Synchronize SDK 2.6.54 and OpenAPI risk-check command schemas with the runtime.
+- Include the reviewed provider/model/Wiki quickstarts and the integrated runtime regression fixes.
+
+### Security
+
+- Pin OTLP connections to validated public DNS results and update the Azure authentication dependency override.
+
 ## [7.30.1] - 2026-10-26
 
 ### Fixed
