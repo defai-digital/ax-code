@@ -122,6 +122,23 @@ describe("plugin permission.ask", () => {
     )
   })
 
+  test("returns deny when the user rejects the prompt with feedback", async () => {
+    await withApiPlugin(captureSource, "corrected-plugin", async (probe) => {
+      const { Permission } = await import("../../src/permission")
+      const permission = probe.permissionAPI as { ask: (input: unknown) => Promise<unknown> } | undefined
+      const pending = permission!.ask({
+        permission: "notify",
+        patterns: ["*.md"],
+        metadata: { requireInteractive: true },
+      })
+      await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1))
+      const [request] = await Permission.list()
+      await Permission.reply({ requestID: request!.id, reply: "reject", message: "private feedback" })
+      const result = await pending
+      expect(result).toEqual({ ok: true, status: "deny" })
+    })
+  })
+
   test("a plugin cannot reach a core permission name: asking for edit is evaluated as plugin:edit", async () => {
     await withApiPlugin(
       captureSource,

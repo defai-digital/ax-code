@@ -142,12 +142,17 @@ export namespace Plugin {
           await owner.run(() => PermissionRuntime.ask(draft))
           return { ok: true, status: "allow" as const }
         } catch (error) {
-          // The runtime's permission pipeline throws `DeniedError` /
-          // `RejectedError` for negative outcomes; both map to `deny`.
-          // Anything else is an infrastructure failure and reports
-          // `ok: false` so the plugin can react.
+          // The runtime's permission pipeline throws `DeniedError`,
+          // `RejectedError` or `CorrectedError` (a reject with feedback,
+          // which stays private to the user) for negative outcomes; all map
+          // to `deny`. Anything else is an infrastructure failure and
+          // reports `ok: false` so the plugin can react.
           const name = error && typeof error === "object" ? (error as { name?: unknown }).name : undefined
-          if (name === "PermissionDeniedError" || name === "PermissionRejectedError") {
+          if (
+            name === "PermissionDeniedError" ||
+            name === "PermissionRejectedError" ||
+            name === "PermissionCorrectedError"
+          ) {
             return { ok: true, status: "deny" as const }
           }
           return { ok: false, error: toErrorMessage(error) }
