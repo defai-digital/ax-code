@@ -386,6 +386,112 @@ describe("Project.fromDirectory with worktrees", () => {
   })
 })
 
+describe("Project.fromDirectory submodules and bare repositories", () => {
+  async function initSeededRepo(dir: string, message: string) {
+    await fs.mkdir(dir, { recursive: true })
+    await $`git init`.cwd(dir).quiet()
+    await $`git config user.email test@opencode.test`.cwd(dir).quiet()
+    await $`git config user.name Test`.cwd(dir).quiet()
+    await $`git commit --allow-empty -m ${message}`.cwd(dir).quiet()
+  }
+
+  function rootCommit(dir: string) {
+    return execFileSync("git", ["rev-list", "--max-parents=0", "HEAD"], { cwd: dir, encoding: "utf8" })
+      .trim()
+      .split("\n")[0]
+  }
+
+  test("submodule resolves to its own checkout and caches inside its modules git dir", async () => {
+    await using tmp = await tmpdir()
+    const seed = path.join(tmp.path, "seed")
+    const superPath = path.join(tmp.path, "super")
+    await initSeededRepo(seed, "seed-root")
+    await initSeededRepo(superPath, "super-root")
+    await $`git -c protocol.file.allow=always submodule add ${seed} sub`.cwd(superPath).quiet()
+    await $`git commit -am add-submodule`.cwd(superPath).quiet()
+
+    const sub = path.join(superPath, "sub")
+    const { project } = await Project.fromDirectory(sub)
+
+    const expected = rootCommit(sub)
+
+    // The worktree is the submodule checkout itself, never a path derived
+    // from the shared git dir (which would land inside super/.git/modules).
+    expect(project.worktree).toBe(sub)
+    expect(project.id).toBe(ProjectID.make(expected))
+
+    // The id cache lives in the submodule's real git dir.
+    const cache = await fs.readFile(path.join(superPath, ".git", "modules", "sub", "ax-code"), "utf8").catch(() => null)
+    expect(cache?.trim()).toBe(expected)
+
+    // No stray .git directory is created alongside the module.
+    const stray = await fs.stat(path.join(superPath, ".git", "modules", ".git")).then(
+      () => true,
+      () => false,
+    )
+    expect(stray).toBe(false)
+  })
+
+  test("linked worktree of a bare repository resolves to its own checkout", async () => {
+    await using tmp = await tmpdir()
+    const seed = path.join(tmp.path, "seed")
+    await initSeededRepo(seed, "seed-root")
+    const proj = path.join(tmp.path, "proj")
+    const bare = path.join(proj, "repo.git")
+    await fs.mkdir(proj, { recursive: true })
+    await $`git clone --bare ${seed} ${bare}`.quiet()
+    const feature = path.join(proj, "feature")
+    await $`git worktree add -b feature-branch ${feature}`.cwd(bare).quiet()
+
+    const { project } = await Project.fromDirectory(feature)
+
+    const expected = rootCommit(feature)
+
+    // The worktree is the checkout itself, not the parent of the bare repo.
+    expect(project.worktree).toBe(feature)
+    expect(project.id).toBe(ProjectID.make(expected))
+
+    // The id cache lives inside the bare repository's git dir.
+    const cache = await fs.readFile(path.join(bare, "ax-code"), "utf8").catch(() => null)
+    expect(cache?.trim()).toBe(expected)
+
+    // Nothing is written outside the real git dir: the old code created a
+    // brand-new proj/.git directory to hold the cache.
+    const fakeDotGit = await fs.stat(path.join(proj, ".git")).then(
+      () => true,
+      () => false,
+    )
+    expect(fakeDotGit).toBe(false)
+
+    // Knock-on: without the stray proj/.git, a plain sibling directory must
+    // not inherit the repository's identity — it keeps its own dir- id.
+    const notes = path.join(proj, "notes")
+    await fs.mkdir(notes)
+    const plain = await Project.fromDirectory(notes)
+    expect(plain.project.id).toMatch(/^dir-[0-9a-f]{40}$/)
+    expect(plain.project.worktree).toBe(notes)
+  })
+
+  test("a leftover .git that is not a repository does not donate its cached id", async () => {
+    await using tmp = await tmpdir()
+    const proj = path.join(tmp.path, "proj")
+    const notes = path.join(proj, "notes")
+    await fs.mkdir(notes, { recursive: true })
+    // Simulate the stray .git the bare-worktree bug used to create: a
+    // directory that is not a real repository but holds a cached project id.
+    await fs.mkdir(path.join(proj, ".git"))
+    const planted = "0123456789abcdef0123456789abcdef01234567"
+    await fs.writeFile(path.join(proj, ".git", "ax-code"), planted)
+
+    const { project, sandbox } = await Project.fromDirectory(notes)
+
+    expect(project.id).not.toBe(ProjectID.make(planted))
+    expect(project.id).toMatch(/^dir-[0-9a-f]{40}$/)
+    expect(project.worktree).toBe(notes)
+    expect(sandbox).toBe(notes)
+  })
+})
+
 describe("Project.discover", () => {
   test("should discover favicon.png in root", async () => {
     await using tmp = await tmpdir({ git: true })

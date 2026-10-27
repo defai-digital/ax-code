@@ -301,21 +301,25 @@ export namespace Project {
 
       const commonDir = await runGit(["rev-parse", "--git-common-dir"], { cwd: sandbox })
       if (commonDir.exitCode !== 0) {
+        // The `.git` entry found by the upward walk is not a real repository,
+        // so it must not donate a cached id or a worktree. Fall back to a
+        // plain directory identity for the requested directory.
         return {
-          id: id ?? ProjectID.global,
-          worktree: sandbox,
-          sandbox,
+          id: directoryProjectID(directory),
+          worktree: directory,
+          sandbox: directory,
           vcs: fakeVcs,
         } satisfies DiscoveryResult
       }
 
-      const worktree = (() => {
-        const common = resolveGitPath(sandbox, commonDir.text().trim())
-        return common === sandbox ? sandbox : path.dirname(common)
-      })()
+      // The real shared git directory: `<repo>/.git` for a plain checkout,
+      // `<super>/.git/modules/<name>` for a submodule, and the bare repository
+      // for a linked worktree. Resolve it absolute so the id cache is only
+      // ever read from and written inside the repository's own git dir.
+      const gitDir = resolveGitPath(sandbox, commonDir.text().trim())
 
       if (id == null) {
-        id = await readCachedProjectId(path.join(worktree, ".git"))
+        id = await readCachedProjectId(gitDir)
       }
 
       if (!id) {
@@ -329,7 +333,7 @@ export namespace Project {
 
         id = roots[0] ? ProjectID.make(roots[0]) : undefined
         if (id) {
-          await Filesystem.write(path.join(worktree, ".git", "ax-code"), id).catch(() => undefined)
+          await Filesystem.write(path.join(gitDir, "ax-code"), id).catch(() => undefined)
         }
       }
 
@@ -347,6 +351,11 @@ export namespace Project {
         } satisfies DiscoveryResult
       }
       sandbox = resolveGitPath(sandbox, topLevel.text().trim())
+      // A `<checkout>/.git` common dir names the main checkout, which linked
+      // worktrees register under as sandboxes. Any other common dir (a
+      // submodule's `.git/modules/<name>`, a bare repository) has no main
+      // checkout, so the checkout itself is the worktree.
+      const worktree = path.basename(gitDir) === ".git" ? path.dirname(gitDir) : sandbox
 
       return { id, sandbox, worktree, vcs: "git" as const } satisfies DiscoveryResult
     })()
