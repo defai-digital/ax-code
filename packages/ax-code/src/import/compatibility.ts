@@ -199,14 +199,27 @@ export namespace CompatibilityImport {
     return path.join(directory, "ax-code.json")
   }
 
-  /** `${VAR}` / `${VAR:-default}` references, the form .mcp.json files use. */
-  const ENV_REFERENCE = /^\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-[^}]*)?\}$/
+  /** Missing project config is empty; any other read error must surface. */
+  async function readProjectConfigText(configFile: string) {
+    return Filesystem.readText(configFile).catch((error: unknown) => {
+      if (Filesystem.isEnoent(error)) return ""
+      throw error
+    })
+  }
+
+  /**
+   * `${VAR}` / `${VAR:-default}`, or the same reference behind a standard
+   * auth scheme and a single space (`Bearer ${TOKEN}`). The scheme group keeps
+   * its trailing space. Any other prefix is a literal and must stay omitted.
+   */
+  const ENV_REFERENCE = /^((?:Bearer|Basic|Token) )?\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-[^}]*)?\}$/
 
   /**
    * Reduce env/header values to what may cross into a report or the target
    * config: explicit variable references become ax-code `{env:VAR}` text
-   * (ConfigPaths substitutes it at load time), literals are omitted and only
-   * the variable NAME is reported (ADR-220: imported values are never printed).
+   * (ConfigPaths substitutes it at load time). A single leading scheme word
+   * is kept (`Bearer {env:TOKEN}`); other literals are omitted and only the
+   * variable NAME is reported (ADR-220: imported values are never printed).
    */
   function redactMcpValues(kind: "env" | "header", values: unknown) {
     const warnings: string[] = []
@@ -218,8 +231,10 @@ export namespace CompatibilityImport {
         continue
       }
       const reference = value.match(ENV_REFERENCE)
-      if (reference) {
-        kept[name] = `{env:${reference[1]}}`
+      // Env values never carry a scheme, so they stay exact references.
+      const scheme = reference?.[1] ?? ""
+      if (reference && (kind === "header" || !scheme)) {
+        kept[name] = `${scheme}{env:${reference[2]}}`
         continue
       }
       warnings.push(`${kind}_value_omitted:${name}`)
@@ -233,12 +248,16 @@ export namespace CompatibilityImport {
     // Claude's flat .mcp.json lets a legacy remote omit `type`, which means
     // SSE. An explicit sse/http type is accepted too; any other explicit
     // transport (e.g. websocket) stays unsupported.
-    if (typeof raw.url === "string" && (raw.type === undefined || raw.type === "sse" || raw.type === "http")) {
+    if (
+      typeof raw.url === "string" &&
+      raw.url.trim().length > 0 &&
+      (raw.type === undefined || raw.type === "sse" || raw.type === "http")
+    ) {
       const headers = redactMcpValues("header", raw.headers)
       return {
         server: {
           type: "remote",
-          url: raw.url,
+          url: raw.url.trim(),
           enabled: false,
           ...(Object.keys(headers.kept).length > 0 ? { headers: headers.kept } : {}),
         },
@@ -278,7 +297,7 @@ export namespace CompatibilityImport {
     if (input.user) files.push(path.join(Global.Path.home, ".claude.json"))
 
     const configFile = await projectConfigFileFor(input.directory)
-    const configText = await Filesystem.readText(configFile).catch(() => "")
+    const configText = await readProjectConfigText(configFile)
     const configData = configText.trim() ? ConfigPaths.parseJsoncOrThrow(configText, configFile) : {}
     const existingMcp =
       isRecord(configData) && isRecord(configData.mcp) ? new Set(Object.keys(configData.mcp)) : new Set<string>()
@@ -456,7 +475,7 @@ export namespace CompatibilityImport {
     files: string[]
   }): Promise<Candidate[]> {
     const configFile = await projectConfigFileFor(input.directory)
-    const configText = await Filesystem.readText(configFile).catch(() => "")
+    const configText = await readProjectConfigText(configFile)
     const configData = configText.trim() ? ConfigPaths.parseJsoncOrThrow(configText, configFile) : {}
     const existingMcp =
       isRecord(configData) && isRecord(configData.mcp) ? new Set(Object.keys(configData.mcp)) : new Set<string>()
@@ -560,7 +579,7 @@ export namespace CompatibilityImport {
     if (Object.keys(servers).length === 0) return
 
     const configFile = await projectConfigFileFor(directory)
-    const before = await Filesystem.readText(configFile).catch(() => "")
+    const before = await readProjectConfigText(configFile)
     const text = before.trim() ? before : "{}"
     const parsed = ConfigPaths.parseJsoncOrThrow(text, configFile)
     if (!isRecord(parsed)) throw new Error(`Project config is not a JSON object: ${configFile}`)

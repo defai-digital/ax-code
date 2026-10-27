@@ -790,12 +790,12 @@ export namespace SessionProcessor {
                   break
 
                 case "reasoning-delta":
-                  if (value.text) replayUnsafe = true
+                  if (value.text.trim()) replayUnsafe = true
                   if (value.id in reasoningMap) {
                     const part = reasoningMap[value.id]
                     const offset = part.text.length
                     part.text += value.text
-                    if (part.text.length) emptyAttemptParts.delete(part.id)
+                    if (part.text.trim()) emptyAttemptParts.delete(part.id)
                     guardStreamOutput("reasoning", value.text)
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     deltaBatcher.push(part.id, value.text, offset)
@@ -1816,11 +1816,11 @@ export namespace SessionProcessor {
                   break
 
                 case "text-delta":
-                  if (value.text) replayUnsafe = true
+                  if (value.text.trim()) replayUnsafe = true
                   if (currentText) {
                     const offset = currentText.text.length
                     currentText.text += value.text
-                    if (currentText.text.length) emptyAttemptParts.delete(currentText.id)
+                    if (currentText.text.trim()) emptyAttemptParts.delete(currentText.id)
                     guardStreamOutput("text", value.text)
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
                     deltaBatcher.push(currentText.id, value.text, offset)
@@ -1844,7 +1844,7 @@ export namespace SessionProcessor {
                       { text: currentText.text },
                     )
                     currentText.text = textOutput.text
-                    if (currentText.text.length) emptyAttemptParts.delete(currentText.id)
+                    if (currentText.text.trim()) emptyAttemptParts.delete(currentText.id)
                     // DSML markup annotation (ADR-064 D3): DeepSeek-class
                     // models sometimes emit raw tool-call markup as plain text
                     // when a gateway fails to translate tool calls. The markup
@@ -1980,15 +1980,19 @@ export namespace SessionProcessor {
               // Keep ids after text-end/reasoning-end retire their local parts,
               // so completed empty blocks cannot leak into a recovered answer.
               for (const partID of emptyAttemptParts) {
-                await Session.removePart({
-                  sessionID: input.sessionID,
-                  messageID: input.assistantMessage.id,
-                  partID,
-                })
+                try {
+                  await Session.removePart({
+                    sessionID: input.sessionID,
+                    messageID: input.assistantMessage.id,
+                    partID,
+                  })
+                } catch (error) {
+                  log.warn("failed to remove empty part before retry", { error, partID })
+                }
               }
-              if (currentText && currentText.text.length === 0) currentText = undefined
+              if (currentText && currentText.text.trim().length === 0) currentText = undefined
               for (const [id, part] of Object.entries(reasoningMap)) {
-                if (part.text.length === 0) delete reasoningMap[id]
+                if (part.text.trim().length === 0) delete reasoningMap[id]
               }
             }
             if (replayUnsafe) {

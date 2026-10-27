@@ -66,10 +66,19 @@ test("cancellation is propagated instead of treated as a cache miss", async () =
 test("receipt count is bounded while an existing page can replace its stale receipt", async () => {
   await using tmp = await tmpdir({})
   const cache = createWikiEmbeddingRankCache({ root: tmp.path, wikiDir: ".ax-wiki" })
-  for (let index = 0; index < 129; index++) await cache.write(`${index}.md`, "key", ["index.ts"])
+  for (let index = 0; index < 128; index++) await cache.write(`${index}.md`, "key", ["index.ts"])
   expect(await readdir(path.join(tmp.path, ".ax-wiki/.embedding-cache"))).toHaveLength(128)
-  expect(await cache.read("128.md", "key")).toBeUndefined()
   await cache.write("0.md", "updated", ["updated.ts"])
   expect(await cache.read("0.md", "key")).toBeUndefined()
   expect(await cache.read("0.md", "updated")).toEqual(["updated.ts"])
+  expect(await readdir(path.join(tmp.path, ".ax-wiki/.embedding-cache"))).toHaveLength(128)
+})
+
+test("a full cache evicts the oldest receipt so a new page can be stored", async () => {
+  await using tmp = await tmpdir({})
+  const cache = createWikiEmbeddingRankCache({ root: tmp.path, wikiDir: ".ax-wiki" })
+  for (let index = 0; index < 128; index++) await cache.write(`${index}.md`, "key", ["index.ts"])
+  await cache.write("new.md", "key", ["fresh.ts"])
+  expect(await cache.read("new.md", "key")).toEqual(["fresh.ts"])
+  expect(await readdir(path.join(tmp.path, ".ax-wiki/.embedding-cache"))).toHaveLength(128)
 })

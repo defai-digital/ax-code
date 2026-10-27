@@ -1,4 +1,4 @@
-import { mkdir, readdir } from "node:fs/promises"
+import { mkdir, readdir, rm, stat } from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
 import {
@@ -71,7 +71,21 @@ export function createWikiEmbeddingRankCache(input: {
         await mkdir(absolute, { recursive: true })
         await assertWikiDirectorySafe(input.root, directory)
         const entries = (await readdir(absolute)).filter((name) => /^[a-f0-9]{64}\.json$/.test(name))
-        if (entries.length >= MAX_ENTRIES && !entries.includes(path.posix.basename(relative))) return
+        const basename = path.posix.basename(relative)
+        // Renamed pages leave stale receipts. Drop the oldest so a new page can still be cached.
+        if (entries.length >= MAX_ENTRIES && !entries.includes(basename)) {
+          await assertWikiDirectorySafe(input.root, directory)
+          let oldest: { name: string; mtimeMs: number } | undefined
+          for (const name of entries) {
+            // A concurrent writer may evict the same receipt between readdir and stat.
+            const info = await stat(resolveInside(input.root, path.posix.join(directory, name))).catch(() => undefined)
+            if (info && (!oldest || info.mtimeMs < oldest.mtimeMs)) oldest = { name, mtimeMs: info.mtimeMs }
+          }
+          if (oldest) {
+            await assertWikiDirectorySafe(input.root, directory)
+            await rm(resolveInside(input.root, path.posix.join(directory, oldest.name)), { force: true })
+          }
+        }
         input.signal?.throwIfAborted()
         await atomicWrite(resolveInside(input.root, relative), content)
       } catch {

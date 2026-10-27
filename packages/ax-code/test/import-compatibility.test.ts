@@ -190,6 +190,110 @@ describe("CompatibilityImport MCP servers (ADR-220)", () => {
     expect(() => Config.Info.parse(config)).not.toThrow()
   })
 
+  test("keeps one auth scheme before a header env reference and omits other prefixes", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, ".mcp.json"),
+          JSON.stringify({
+            mcpServers: {
+              docs: {
+                type: "http",
+                url: "https://mcp.example.com/docs",
+                headers: {
+                  Authorization: "Bearer ${TOKEN}",
+                  X_Glued: "sk-${TOKEN}",
+                  X_Digit: "123abc ${TOKEN}",
+                  X_Words: "Bearer token ${TOKEN}",
+                  X_Mixed: "abc-123 ${TOKEN}",
+                  X_Word: "swordfish ${TOKEN}",
+                },
+              },
+            },
+          }),
+          "utf-8",
+        )
+      },
+    })
+
+    const report = await CompatibilityImport.run({ source: "claude", directory: tmp.path, write: true })
+    const docs = report.candidates.find((item) => item.targetPath.endsWith("#mcp/docs"))
+    expect(docs?.warnings).toEqual(
+      expect.arrayContaining([
+        "header_value_omitted:X_Glued",
+        "header_value_omitted:X_Digit",
+        "header_value_omitted:X_Words",
+        "header_value_omitted:X_Mixed",
+        "header_value_omitted:X_Word",
+      ]),
+    )
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.docs.headers).toEqual({ Authorization: "Bearer {env:TOKEN}" })
+    const serialized = JSON.stringify(config)
+    expect(serialized).not.toContain("sk-")
+    expect(serialized).not.toContain("123abc")
+    expect(serialized).not.toContain("Bearer token")
+    expect(serialized).not.toContain("abc-123")
+    expect(serialized).not.toContain("swordfish")
+  })
+
+  test("an empty url does not hide a local command", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, ".mcp.json"),
+          JSON.stringify({ mcpServers: { local: { command: "npx", args: ["srv"], url: "" } } }),
+          "utf-8",
+        )
+      },
+    })
+
+    await CompatibilityImport.run({ source: "claude", directory: tmp.path, write: true })
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.local).toEqual({
+      type: "local",
+      command: ["npx", "srv"],
+      enabled: false,
+    })
+  })
+
+  test("an env value keeps only an exact reference, never a scheme prefix", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, ".mcp.json"),
+          JSON.stringify({
+            mcpServers: { local: { command: "npx", env: { TOKEN: "${TOKEN}", PREFIXED: "Bearer ${TOKEN}" } } },
+          }),
+          "utf-8",
+        )
+      },
+    })
+
+    const report = await CompatibilityImport.run({ source: "claude", directory: tmp.path, write: true })
+    const local = report.candidates.find((item) => item.targetPath.endsWith("#mcp/local"))
+    expect(local?.warnings).toContain("env_value_omitted:PREFIXED")
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.local.environment).toEqual({ TOKEN: "{env:TOKEN}" })
+  })
+
+  test("a project config read error other than a missing file is not treated as empty", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "ax-code.json"))
+        await fs.writeFile(
+          path.join(dir, ".mcp.json"),
+          JSON.stringify({ mcpServers: { local: { command: "npx", args: ["srv"] } } }),
+          "utf-8",
+        )
+      },
+    })
+
+    await expect(CompatibilityImport.plan({ source: "claude", directory: tmp.path })).rejects.toMatchObject({
+      code: "EISDIR",
+    })
+  })
+
   test("reads user-level ~/.claude.json only with the explicit user flag", async () => {
     await using home = await tmpdir({
       init: async (dir) => {
