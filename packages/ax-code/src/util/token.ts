@@ -19,7 +19,7 @@ export namespace Token {
       (code >= 0x1100 && code <= 0x11ff) || // Hangul Jamo
       (code >= 0x2e80 && code <= 0x303f) || // CJK radicals, Kangxi, CJK symbols/punctuation
       (code >= 0x3040 && code <= 0x30ff) || // Hiragana + Katakana
-      (code >= 0x3130 && code <= 0x318f) || // Hangul compatibility Jamo
+      (code >= 0x3100 && code <= 0x33ff) || // Bopomofo, Hangul compat Jamo, Kanbun, strokes, enclosed/compat CJK
       (code >= 0x3400 && code <= 0x4dbf) || // CJK unified ideographs extension A
       (code >= 0x4e00 && code <= 0x9fff) || // CJK unified ideographs
       (code >= 0xa960 && code <= 0xa97f) || // Hangul Jamo extended-A
