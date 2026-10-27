@@ -41,6 +41,12 @@ describe("runCommand timeout behavior", () => {
     expect(result).toMatchObject({ ok: false, code: 3, timedOut: false })
   })
 
+  test("a command that exits 124 on its own keeps its output and is not a timeout", async () => {
+    const result = await runCommand("echo real failure >&2; exit 124", process.cwd(), 5000)
+    expect(result).toMatchObject({ ok: false, code: 124, timedOut: false })
+    expect(result.stderr).toContain("real failure")
+  })
+
   test("a hanging command times out with code 124 and a timeout marker", async () => {
     // POSIX-only: relies on `exec sleep` and SIGTERM-based timeout escalation.
     if (process.platform === "win32") return

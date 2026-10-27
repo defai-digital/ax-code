@@ -205,6 +205,7 @@ export async function runCommand(
   options?: { signal?: AbortSignal },
 ): Promise<{ ok: boolean; stdout: string; stderr: string; code: number; timedOut: boolean }> {
   const signal = resolveSignal(options?.signal)
+  const started = performance.now()
   const { code, stdout, stderr } = await Process.run(Process.shellCommand(cmd), {
     cwd,
     env: Env.sanitize(),
@@ -215,7 +216,11 @@ export async function runCommand(
   const stdoutText = stdout.toString()
   const stderrText = stderr.toString()
 
-  if (code === 124) {
+  // Process.run reports its own timeout as exit 124, but so does a command
+  // that exits 124 itself (GNU timeout, test runners). Only a run that lasted
+  // the full timeout is ours; otherwise keep the command's real output. The
+  // slack covers libuv's millisecond-rounded timer firing a little early.
+  if (code === 124 && performance.now() - started >= timeoutMs - 5) {
     return {
       ok: false,
       stdout: "",
