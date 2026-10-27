@@ -24,7 +24,9 @@ export function diffFiles(diff?: string): DiffFile[] {
     return parsePatch(text)
       .filter((patch) => patch.hunks.length > 0)
       .map((patch) => {
-        const filename = patch.newFileName || patch.oldFileName || "unknown"
+        // A deleted file's new side is /dev/null; name it by its old path.
+        const newName = patch.newFileName === "/dev/null" ? undefined : patch.newFileName
+        const filename = newName || patch.oldFileName || "unknown"
         return {
           filename: filename.replace(/^[ab]\//, ""),
           additions: patch.hunks.reduce(

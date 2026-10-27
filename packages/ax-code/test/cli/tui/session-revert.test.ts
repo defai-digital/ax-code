@@ -83,4 +83,18 @@ index 1..2 100644
   test("returns undefined when no revert marker exists", () => {
     expect(revertState({}, [{ id: "a", role: "user" }])).toBeUndefined()
   })
+
+  test("names a deleted file by its old path", () => {
+    const diff = [
+      "diff --git a/src/a.ts b/src/a.ts",
+      "deleted file mode 100644",
+      "--- a/src/a.ts",
+      "+++ /dev/null",
+      "@@ -1,2 +0,0 @@",
+      "-one",
+      "-two",
+      "",
+    ].join("\n")
+    expect(diffFiles(diff)).toEqual([{ filename: "src/a.ts", additions: 0, deletions: 2 }])
+  })
 })
