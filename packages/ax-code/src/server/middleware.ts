@@ -56,7 +56,17 @@ export function createRateLimitMiddleware(log: Log.Logger): MiddlewareHandler {
     // `count >= limit` branch could never fire — silently disabling rate
     // limiting whenever the socket address was unavailable.
     const ip = socketAddr ?? "unknown"
-    const key = `${ip}:${c.req.method}:${c.req.path.startsWith("/session/") ? "/session" : c.req.path}`
+    const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)
+    const isFastAcceptRoute =
+      c.req.path.includes("/prompt_async") ||
+      c.req.path.includes("/command_async") ||
+      c.req.path.includes("/shell_async") ||
+      c.req.path.endsWith("/shell")
+    // Session routes share a bucket per class: the fast-accept routes have
+    // their own tighter limit, so counting ordinary session requests against
+    // it would refuse a first prompt_async after a burst of other calls.
+    const bucket = c.req.path.startsWith("/session/") ? (isFastAcceptRoute ? "/session:fast" : "/session") : c.req.path
+    const key = `${ip}:${c.req.method}:${bucket}`
     const now = Date.now()
     // Periodically evict expired buckets so stale keys do not accumulate
     // indefinitely on low-cardinality traffic patterns.
@@ -67,12 +77,6 @@ export function createRateLimitMiddleware(log: Log.Logger): MiddlewareHandler {
       }
     }
     const current = rate.get(key)
-    const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)
-    const isFastAcceptRoute =
-      c.req.path.includes("/prompt_async") ||
-      c.req.path.includes("/command_async") ||
-      c.req.path.includes("/shell_async") ||
-      c.req.path.endsWith("/shell")
     const limit = isFastAcceptRoute ? 30 : mutating ? 120 : 600
     if (!current || current.reset <= now) {
       rate.set(key, { count: 1, reset: now + 60_000 })

@@ -1,5 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
-import { resolveRateLimitClientIP } from "../../src/server/middleware"
+import { Hono } from "hono"
+import { createRateLimitMiddleware, resolveRateLimitClientIP } from "../../src/server/middleware"
+import { Log } from "../../src/util/log"
 
 describe("server middleware", () => {
   test("resolves Node.js client IP from Hono node-server incoming socket", () => {
@@ -44,5 +46,16 @@ describe("server middleware", () => {
       }),
     ).toBeUndefined()
     expect(warn).not.toHaveBeenCalled()
+  })
+
+  test("ordinary session requests do not use up the fast-accept prompt quota", async () => {
+    const app = new Hono()
+      .use(createRateLimitMiddleware(Log.create({ service: "test.rate-limit" })))
+      .post("/session/:id/message", (c) => c.text("ok"))
+      .post("/session/:id/prompt_async", (c) => c.text("ok"))
+    for (let i = 0; i < 30; i++) {
+      expect((await app.request("/session/ses_a/message", { method: "POST" })).status).toBe(200)
+    }
+    expect((await app.request("/session/ses_a/prompt_async", { method: "POST" })).status).toBe(200)
   })
 })
