@@ -145,8 +145,10 @@ function stripRedactedProviderModels<T extends RedactableModel>(
     Object.entries(models).map(([id, model]) => {
       const next = {
         ...model,
-        headers: stripRedactedRecord(model.headers),
-        options: stripRedactedProviderOptions(model.options) as T["options"],
+        ...(model.headers === undefined ? {} : { headers: stripRedactedRecord(model.headers) }),
+        ...(model.options === undefined
+          ? {}
+          : { options: stripRedactedProviderOptions(model.options) as T["options"] }),
       } as T
       return [id, next]
     }),
@@ -177,15 +179,17 @@ export function stripRedactedConfig(config: Config.Info): Config.Info {
   // `undefined` patch value as "delete this key" (jsonc-parser modify
   // semantics), so a partial update like `{ disabled_providers: [...] }`
   // would wipe every configured provider — managed custom API providers
-  // included — and every MCP server from the config file.
+  // included — and every MCP server from the config file. The same holds for
+  // each entry's nested sections: a patch of only a provider's baseURL must
+  // not delete its models, nor an MCP entry patch its headers or oauth.
   if (config.provider) {
     result.provider = Object.fromEntries(
       Object.entries(config.provider).map(([id, p]) => [
         id,
         {
           ...p,
-          options: stripRedactedProviderOptions(p.options),
-          models: stripRedactedProviderModels(p.models),
+          ...(p.options === undefined ? {} : { options: stripRedactedProviderOptions(p.options) }),
+          ...(p.models === undefined ? {} : { models: stripRedactedProviderModels(p.models) }),
         },
       ]),
     )
@@ -201,19 +205,18 @@ export function stripRedactedConfig(config: Config.Info): Config.Info {
             {
               ...rest,
               ...(hasRedactedUserinfo(url) ? {} : { url }),
-              headers: stripRedactedRecord(m.headers),
-              oauth:
-                m.oauth && typeof m.oauth === "object" && m.oauth.clientSecret === REDACTED
-                  ? Object.fromEntries(Object.entries(m.oauth).filter(([key]) => key !== "clientSecret"))
-                  : m.oauth,
+              ...(m.headers === undefined ? {} : { headers: stripRedactedRecord(m.headers) }),
+              ...(m.oauth && typeof m.oauth === "object" && m.oauth.clientSecret === REDACTED
+                ? { oauth: Object.fromEntries(Object.entries(m.oauth).filter(([key]) => key !== "clientSecret")) }
+                : {}),
             },
           ]
         }
-        return [name, { ...m, environment: stripRedactedRecord(m.environment) }]
+        return [name, m.environment === undefined ? m : { ...m, environment: stripRedactedRecord(m.environment) }]
       }),
     )
   }
-  if (config.image_generation) {
+  if (config.image_generation?.options) {
     result.image_generation = {
       ...config.image_generation,
       options: stripRedactedProviderOptions(config.image_generation.options),

@@ -507,6 +507,72 @@ describe("/global/config redaction", () => {
     }
   })
 
+  test("partial provider and mcp entry patch keeps the entry's unsent nested sections", async () => {
+    const previousConfigPath = Global.Path.config
+    await using tmp = await tmpdir()
+
+    try {
+      ;(Global.Path as { config: string }).config = tmp.path
+      Config.global.reset()
+
+      await fs.mkdir(tmp.path, { recursive: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await Filesystem.write(
+        configPath,
+        JSON.stringify({
+          provider: {
+            local: {
+              name: "Local",
+              npm: "@ai-sdk/openai-compatible",
+              options: { baseURL: "http://127.0.0.1:1234/v1" },
+              models: { "qwen-coder": { name: "Qwen Coder" } },
+            },
+          },
+          mcp: {
+            remote: {
+              type: "remote",
+              url: "https://mcp.example",
+              headers: { Authorization: "Bearer mcp-secret" },
+              oauth: { clientId: "client-id" },
+            },
+            tools: { type: "local", command: ["tools-mcp"], environment: { TOKEN: "env-secret" } },
+          },
+        }),
+      )
+
+      // The TUI endpoint dialog patches only the provider's baseURL; the
+      // entries below send only a field each.
+      const response = await Server.Default().request("/global/config", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: { local: { options: { baseURL: "http://127.0.0.1:5678/v1" } } },
+          mcp: {
+            remote: { type: "remote", url: "https://mcp.example" },
+            tools: { type: "local", command: ["tools-mcp"] },
+          },
+        }),
+      })
+      expect(response.status).toBe(200)
+
+      const stored = JSON.parse(await Filesystem.readText(configPath)) as {
+        provider?: Record<string, { options?: { baseURL?: string }; models?: Record<string, unknown> }>
+        mcp?: Record<
+          string,
+          { headers?: Record<string, string>; oauth?: { clientId?: string }; environment?: Record<string, string> }
+        >
+      }
+      expect(stored.provider?.local?.options?.baseURL).toBe("http://127.0.0.1:5678/v1")
+      expect(stored.provider?.local?.models).toEqual({ "qwen-coder": { name: "Qwen Coder" } })
+      expect(stored.mcp?.remote?.headers?.Authorization).toBe("Bearer mcp-secret")
+      expect(stored.mcp?.remote?.oauth?.clientId).toBe("client-id")
+      expect(stored.mcp?.tools?.environment?.TOKEN).toBe("env-secret")
+    } finally {
+      ;(Global.Path as { config: string }).config = previousConfigPath
+      Config.global.reset()
+    }
+  })
+
   test("config GET redacts credentials in a remote MCP URL and PATCH keeps the stored URL", async () => {
     vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
 
