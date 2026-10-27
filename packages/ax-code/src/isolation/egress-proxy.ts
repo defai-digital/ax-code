@@ -186,13 +186,18 @@ export namespace EgressProxy {
             headers: { ...req.headers, host: target.host },
           },
           (upstreamRes) => {
+            // The timeout bounds reaching the upstream, not a slow body.
+            upstream.setTimeout(0)
             res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers)
             upstreamRes.pipe(res)
+            // An upstream that dies mid-body must not look like a complete
+            // response to the client.
+            upstreamRes.on("error", () => res.destroy())
           },
         )
         upstream.setTimeout(connectTimeoutMs, () => upstream.destroy(new Error("egress connect timeout")))
         upstream.on("error", () => {
-          if (res.headersSent) res.end()
+          if (res.headersSent) res.destroy()
           else res.writeHead(502).end("Egress proxy upstream error")
         })
         req.pipe(upstream)
@@ -221,14 +226,27 @@ export namespace EgressProxy {
           refuse("private-address")
           return
         }
+        let established = false
         const upstream = net.connect({ host: address, port, family }, () => {
+          established = true
+          // The timeout bounds the connect; an idle tunnel stays open.
+          upstream.setTimeout(0)
           clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n")
           if (head?.length) upstream.write(head)
           upstream.pipe(clientSocket)
           clientSocket.pipe(upstream)
         })
-        upstream.setTimeout(connectTimeoutMs, () => upstream.destroy())
-        upstream.on("error", () => clientSocket.destroy())
+        upstream.setTimeout(connectTimeoutMs, () => upstream.destroy(new Error("egress connect timeout")))
+        upstream.on("error", (error) => {
+          // Before the tunnel exists the client is still waiting for a status
+          // line; a bare close left it hanging (timeout) or reset (refused).
+          if (!established && !clientSocket.destroyed) {
+            const status = error.message === "egress connect timeout" ? "504 Gateway Timeout" : "502 Bad Gateway"
+            clientSocket.end(`HTTP/1.1 ${status}\r\n\r\n`)
+            return
+          }
+          clientSocket.destroy()
+        })
         clientSocket.on("error", () => upstream.destroy())
       })
     })

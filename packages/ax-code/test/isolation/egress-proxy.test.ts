@@ -146,6 +146,7 @@ describe("egress proxy transport", () => {
         resolve(chunk.toString().split("\r\n")[0] ?? "")
         socket.destroy()
       })
+      socket.on("close", () => resolve("closed"))
       socket.on("error", reject)
     })
   }
@@ -250,6 +251,98 @@ describe("egress proxy transport", () => {
     expect(await connectVia(handle.port, `allowed.test:${upstreamPort}`)).toContain("200")
     expect(await connectVia(handle.port, `other.test:${upstreamPort}`)).toContain("403")
     expect(handle.denials()).toBe(1)
+  })
+
+  test("a slow upstream body is not cut off by the connect timeout", async () => {
+    let upstreamPort: number
+    try {
+      upstreamPort = await startServer(
+        http.createServer((_req, res) => {
+          res.writeHead(200, { "content-type": "text/plain" })
+          res.write("first;")
+          setTimeout(() => res.end("second"), 300)
+        }),
+      )
+    } catch (error) {
+      if (socketBlocked(error)) return
+      throw error
+    }
+    const handle = await startOrSkip({
+      allowedDomains: ["allowed.test"],
+      lookup: loopbackLookup,
+      isPrivate: allowLoopback,
+      connectTimeoutMs: 100,
+    })
+    if (!handle) return
+    const result = await viaProxy(handle.port, `http://allowed.test:${upstreamPort}/`)
+    expect(result.status).toBe(200)
+    expect(result.body).toBe("first;second")
+  })
+
+  test("CONNECT to a refused upstream answers 502 instead of dropping the socket", async () => {
+    let closedPort: number
+    try {
+      const probe = net.createServer()
+      closedPort = await startServer(probe)
+      await new Promise<void>((resolve) => probe.close(() => resolve()))
+      activeServers.splice(activeServers.indexOf(probe), 1)
+    } catch (error) {
+      if (socketBlocked(error)) return
+      throw error
+    }
+    const handle = await startOrSkip({
+      allowedDomains: ["allowed.test"],
+      lookup: loopbackLookup,
+      isPrivate: allowLoopback,
+    })
+    if (!handle) return
+    const line = await connectVia(handle.port, `allowed.test:${closedPort}`).catch(
+      (error: Error) => `error:${error.message}`,
+    )
+    expect(line).toContain("502")
+  })
+
+  test("an idle CONNECT tunnel outlives the connect timeout", async () => {
+    let upstreamPort: number
+    try {
+      upstreamPort = await startServer(
+        net.createServer((socket) => {
+          socket.on("data", (chunk) => socket.write(chunk))
+        }),
+      )
+    } catch (error) {
+      if (socketBlocked(error)) return
+      throw error
+    }
+    const handle = await startOrSkip({
+      allowedDomains: ["allowed.test"],
+      lookup: loopbackLookup,
+      isPrivate: allowLoopback,
+      connectTimeoutMs: 100,
+    })
+    if (!handle) return
+    const echoed = await new Promise<string>((resolve, reject) => {
+      const socket = net.connect({ host: "127.0.0.1", port: handle.port }, () => {
+        socket.write(`CONNECT allowed.test:${upstreamPort} HTTP/1.1\r\nHost: allowed.test\r\n\r\n`)
+      })
+      let established = false
+      socket.on("data", (chunk) => {
+        if (!established) {
+          established = true
+          setTimeout(() => socket.write("ping"), 300)
+          return
+        }
+        resolve(chunk.toString())
+        socket.destroy()
+      })
+      socket.on("close", () => resolve("closed"))
+      socket.on("error", reject)
+      setTimeout(() => {
+        resolve("no echo")
+        socket.destroy()
+      }, 2_000)
+    })
+    expect(echoed).toBe("ping")
   })
 
   test("stops cleanly and stops accepting connections", async () => {
