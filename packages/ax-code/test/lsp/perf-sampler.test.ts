@@ -85,6 +85,17 @@ describe("LSP.perfSnapshot", () => {
     expect(snap.references!.totalMs).toBe(60)
   })
 
+  test("percentiles use nearest rank", () => {
+    LSP.perfReset()
+    recordSample("hover", 10, true)
+    recordSample("hover", 20, true)
+    expect(LSP.perfSnapshot().hover).toMatchObject({ p50: 10, p95: 20 })
+
+    LSP.perfReset()
+    for (let ms = 1; ms <= 10; ms++) recordSample("hover", ms, true)
+    expect(LSP.perfSnapshot().hover).toMatchObject({ p50: 5, p95: 10 })
+  })
+
   test("keeps a bounded duration window while count keeps climbing", () => {
     LSP.perfReset()
 

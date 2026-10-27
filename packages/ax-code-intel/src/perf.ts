@@ -64,7 +64,10 @@ export function finishPhase(operation: string, started: number, ok: boolean) {
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0
-  const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))
+  // Nearest rank: the smallest value with at least p% of samples at or below
+  // it. floor(p * n) overshot by one whenever p * n is whole (p50 of two
+  // samples reported the larger).
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))
   return sorted[idx]!
 }
 
