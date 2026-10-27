@@ -1648,13 +1648,34 @@ export namespace ProviderTransform {
     // Moonshot expands $ref before validation and rejects sibling keywords
     // (description on the same node) plus tuple-style `items` arrays.
     if (isKimiFamily(model)) {
-      const sanitizeMoonshot = (obj: unknown): unknown => {
+      // Keywords whose values are literal data, not schemas. Recursing into
+      // them would rewrite example payloads (a tuple-looking array inside
+      // `default`/`examples` must not be collapsed as schema `items`).
+      const dataKeywords = new Set(["default", "examples", "const", "enum"])
+      // Keywords whose value maps names to schemas. Those names are not
+      // keywords, so a property called `default` is still a schema.
+      const schemaMapKeywords = new Set(["properties", "patternProperties", "definitions", "$defs", "dependentSchemas"])
+      const sanitizeMoonshot = (obj: unknown, schemaMap = false): unknown => {
         if (obj === null || typeof obj !== "object") return obj
-        if (Array.isArray(obj)) return obj.map(sanitizeMoonshot)
+        if (Array.isArray(obj)) return obj.map((item) => sanitizeMoonshot(item))
         const record = obj as Record<string, unknown>
-        if ("$ref" in record && typeof record.$ref === "string") return { $ref: record.$ref }
+        if (schemaMap) {
+          return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, sanitizeMoonshot(value)]))
+        }
+        if ("$ref" in record && typeof record.$ref === "string") {
+          // Sibling keywords are dropped, but the definitions the ref points
+          // at must survive (sanitized) or the ref dangles at the provider.
+          const ref: Record<string, unknown> = { $ref: record.$ref }
+          for (const key of ["definitions", "$defs"]) {
+            if (key in record) ref[key] = sanitizeMoonshot(record[key], true)
+          }
+          return ref
+        }
         const result = Object.fromEntries(
-          Object.entries(record).map(([key, value]) => [key, sanitizeMoonshot(value)]),
+          Object.entries(record).map(([key, value]) => [
+            key,
+            dataKeywords.has(key) ? value : sanitizeMoonshot(value, schemaMapKeywords.has(key)),
+          ]),
         ) as Record<string, unknown>
         if (Array.isArray(result.items)) result.items = result.items[0] ?? {}
         return result
@@ -1710,10 +1731,14 @@ export namespace ProviderTransform {
 
         try {
           const result: any = {}
+          // A nullable node carries type as an array (["object","null"]). Its
+          // enum must not stringify the null literal (that would turn it into
+          // the string "null"); nullability stays expressed by the type array.
+          const nullable = Array.isArray(obj.type) && obj.type.includes("null")
           for (const [key, value] of Object.entries(obj)) {
             if (key === "enum" && Array.isArray(value)) {
               // Convert all enum values to strings
-              result[key] = value.map((v) => String(v))
+              result[key] = (nullable ? value.filter((v) => v !== null) : value).map((v) => String(v))
             } else if (isRecord(value) || Array.isArray(value)) {
               result[key] = sanitizeGemini(value)
             } else {
@@ -1725,16 +1750,19 @@ export namespace ProviderTransform {
           // conversion is independent of JSON key order — previously this lived
           // inside the loop and silently missed schemas where enum appeared
           // before type.
-          if (Array.isArray(result.enum) && (result.type === "integer" || result.type === "number")) {
-            result.type = "string"
+          if (Array.isArray(result.enum) && isNumberType(primaryTypeOf(result.type))) {
+            result.type = nullable ? ["string", "null"] : "string"
           }
+          // Type checks below reduce a nullable type array to its non-null
+          // member so ["object","null"] still behaves like an object node.
+          const primary = primaryTypeOf(result.type)
 
           // Filter required array to only include fields that exist in properties
-          if (result.type === "object" && result.properties && Array.isArray(result.required)) {
+          if (primary === "object" && result.properties && Array.isArray(result.required)) {
             result.required = result.required.filter((field: any) => field in result.properties)
           }
 
-          if (result.type === "array" && !hasCombiner(result)) {
+          if (primary === "array" && !hasCombiner(result)) {
             if (result.items == null) {
               result.items = {}
             }
@@ -1745,7 +1773,7 @@ export namespace ProviderTransform {
           }
 
           // Remove properties/required from non-object types (Gemini rejects these)
-          if (result.type && result.type !== "object" && !hasCombiner(result)) {
+          if (primary && primary !== "object" && !hasCombiner(result)) {
             delete result.properties
             delete result.required
           }
@@ -1760,6 +1788,22 @@ export namespace ProviderTransform {
     }
 
     return schema as JSONSchema7
+  }
+
+  // JSON Schema allows `type` as an array, the nullable form being
+  // ["object", "null"]. Reduce it to the first non-null member so
+  // type-driven checks treat a nullable node like its base type; a
+  // type that is only "null" stays "null".
+  function primaryTypeOf(type: unknown): string | undefined {
+    if (typeof type === "string") return type
+    if (!Array.isArray(type)) return undefined
+    const nonNull = type.filter((member) => member !== "null")
+    const pick = nonNull.length > 0 ? nonNull : type
+    return pick[0]
+  }
+
+  function isNumberType(type: string | undefined): boolean {
+    return type === "integer" || type === "number"
   }
 
   function objectRoot(schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema.BaseSchema | JSONSchema7 {

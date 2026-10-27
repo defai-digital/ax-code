@@ -921,6 +921,71 @@ describe("ProviderTransform.schema - Moonshot / Kimi", () => {
     } as any) as any
     expect(result.properties.pair.items).toEqual({ type: "string" })
   })
+
+  test("keeps definitions on a root $ref node", () => {
+    const result = ProviderTransform.schema(kimiModel, {
+      $ref: "#/definitions/Args",
+      definitions: {
+        Args: {
+          type: "object",
+          properties: { pair: { type: "array", items: [{ type: "string" }, { type: "number" }] } },
+        },
+      },
+      $schema: "http://json-schema.org/draft-07/schema#",
+    } as any) as any
+    expect(result.$ref).toBe("#/definitions/Args")
+    // Definitions survive the ref-node sibling strip and are still sanitized
+    // as schemas, so the ref does not dangle at the provider.
+    expect(result.definitions).toEqual({
+      Args: {
+        type: "object",
+        properties: { pair: { type: "array", items: { type: "string" } } },
+      },
+    })
+  })
+
+  test("keeps $defs on a root $ref node", () => {
+    const result = ProviderTransform.schema(kimiModel, {
+      $ref: "#/$defs/Args",
+      $defs: { Args: { type: "object", properties: { name: { type: "string" } } } },
+    } as any) as any
+    expect(result.$ref).toBe("#/$defs/Args")
+    expect(result.$defs).toEqual({ Args: { type: "object", properties: { name: { type: "string" } } } })
+  })
+
+  test("does not rewrite values of data-valued keywords", () => {
+    const result = ProviderTransform.schema(kimiModel, {
+      type: "object",
+      properties: {
+        mode: {
+          type: "string",
+          enum: ["a", "b"],
+          const: "a",
+          default: { items: ["x", "y"] },
+          examples: [{ items: ["x", "y"] }],
+        },
+      },
+    } as any) as any
+    // default/examples hold literal data, not schemas: a tuple-looking array
+    // inside them must not be collapsed.
+    expect(result.properties.mode.default).toEqual({ items: ["x", "y"] })
+    expect(result.properties.mode.examples).toEqual([{ items: ["x", "y"] }])
+    expect(result.properties.mode.enum).toEqual(["a", "b"])
+    expect(result.properties.mode.const).toBe("a")
+  })
+
+  test("still sanitizes properties whose names match data keywords", () => {
+    const result = ProviderTransform.schema(kimiModel, {
+      type: "object",
+      properties: {
+        default: { $ref: "#/definitions/Mode", description: "dropped sibling" },
+        enum: { type: "array", items: [{ type: "string" }, { type: "number" }] },
+      },
+      definitions: { Mode: { type: "string" } },
+    } as any) as any
+    expect(result.properties.default).toEqual({ $ref: "#/definitions/Mode" })
+    expect(result.properties.enum.items).toEqual({ type: "string" })
+  })
 })
 
 describe("ProviderTransform.schema - gemini array items", () => {
@@ -1267,6 +1332,91 @@ describe("ProviderTransform.schema - gemini non-object properties removal", () =
     const result = ProviderTransform.schema(openaiModel, schema) as any
 
     expect(result.properties.data.properties).toBeDefined()
+  })
+})
+
+describe("ProviderTransform.schema - gemini nullable type arrays", () => {
+  const geminiModel = {
+    providerID: "google",
+    api: {
+      id: "gemini-3-pro",
+    },
+  } as any
+
+  test("keeps properties and required on nullable object nodes", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        filter: {
+          type: ["object", "null"],
+          properties: { field: { type: "string" } },
+          required: ["field"],
+        },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(geminiModel, schema) as any
+
+    expect(result.properties.filter.type).toEqual(["object", "null"])
+    expect(result.properties.filter.properties).toEqual({ field: { type: "string" } })
+    expect(result.properties.filter.required).toEqual(["field"])
+  })
+
+  test("adds default items to nullable array nodes", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        tags: { type: ["array", "null"] },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(geminiModel, schema) as any
+
+    expect(result.properties.tags.type).toEqual(["array", "null"])
+    expect(result.properties.tags.items).toEqual({ type: "string" })
+  })
+
+  test("converts nullable integer enums to strings without a stringified null", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        level: { type: ["integer", "null"], enum: [1, 2, null] },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(geminiModel, schema) as any
+
+    // Follows the integer-enum-to-string path while keeping nullability in
+    // the type array; null itself must never become the string "null".
+    expect(result.properties.level.type).toEqual(["string", "null"])
+    expect(result.properties.level.enum).toEqual(["1", "2"])
+  })
+
+  test("drops null from nullable string enums", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        mode: { type: ["string", "null"], enum: ["a", "b", null] },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(geminiModel, schema) as any
+
+    expect(result.properties.mode.type).toEqual(["string", "null"])
+    expect(result.properties.mode.enum).toEqual(["a", "b"])
+  })
+
+  test("leaves plain integer enums byte-identical", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        level: { type: "integer", enum: [1, 2] },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(geminiModel, schema) as any
+
+    expect(result.properties.level).toEqual({ type: "string", enum: ["1", "2"] })
   })
 })
 
