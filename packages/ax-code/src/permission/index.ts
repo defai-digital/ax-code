@@ -977,6 +977,14 @@ export namespace Permission {
         })
         approved.splice(0, approved.length, ...nextApproved)
       } catch (error) {
+        // The entry is already out of `pending`, so later replies are silent
+        // no-ops. Publish a reject so subscribed prompts unmount instead of
+        // lingering as an unanswerable dialog, as onAbort does (BUG-005).
+        Bus.publishDetached(Event.Replied, {
+          sessionID: existing.info.sessionID,
+          requestID: existing.info.id,
+          reply: "reject",
+        })
         existing.deferred.reject(error)
         throw error
       }

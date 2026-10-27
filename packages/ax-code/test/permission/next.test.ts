@@ -11,6 +11,7 @@ import { Instance } from "../../src/project/instance"
 import { PermissionTable } from "../../src/session/session.sql"
 import { Database, eq } from "../../src/storage/db"
 import { Filesystem } from "../../src/util/filesystem"
+import { FileLock } from "../../src/util/filelock"
 import { tmpdir } from "../fixture/fixture"
 import { MessageID, SessionID } from "../../src/session/schema"
 
@@ -1756,6 +1757,43 @@ test("reply - publishes replied event", async () => {
         reply: "once",
       })
       unsub()
+    },
+  })
+})
+
+test("reply - an always reply whose persistence fails still publishes a reject", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const ask = Permission.ask({
+        id: PermissionID.make("per_always_persist_fails"),
+        sessionID: SessionID.make("session_test"),
+        permission: "bash",
+        patterns: ["git status"],
+        metadata: {},
+        always: ["git status *"],
+        ruleset: [],
+      })
+      ask.catch(() => undefined)
+      await waitForPending(1)
+
+      const seen: Permission.Reply[] = []
+      const unsub = Bus.subscribe(Permission.Event.Replied, (event) => {
+        seen.push(event.properties.reply)
+      })
+      const acquire = vi.spyOn(FileLock, "acquire").mockRejectedValueOnce(new Error("lock unavailable"))
+      try {
+        await expect(
+          Permission.reply({ requestID: PermissionID.make("per_always_persist_fails"), reply: "always" }),
+        ).rejects.toThrow("lock unavailable")
+        await expect(ask).rejects.toThrow("lock unavailable")
+        await vi.waitFor(() => expect(seen).toEqual(["reject"]))
+        expect(await Permission.list()).toEqual([])
+      } finally {
+        acquire.mockRestore()
+        unsub()
+      }
     },
   })
 })
