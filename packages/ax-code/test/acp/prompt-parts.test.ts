@@ -111,3 +111,21 @@ describe("ACP prompt parts reject unsupported image media", () => {
     ])
   })
 })
+
+describe("ACP image parts without inline data", () => {
+  test("a file:// image uri becomes a file part instead of being dropped", () => {
+    const parts = parsePromptParts([{ type: "image", uri: "file:///tmp/shot.png", mimeType: "image/png" }] as any)
+
+    expect(parts).toEqual([{ type: "file", url: "file:///tmp/shot.png", filename: "shot.png", mime: "image/png" }])
+  })
+
+  test("an image uri with an unsupported scheme becomes a text part instead of being dropped", () => {
+    const parts = parsePromptParts([{ type: "image", uri: "s3://bucket/shot.png", mimeType: "image/png" }] as any)
+
+    expect(parts).toHaveLength(1)
+    expect(parts[0]).toMatchObject({ type: "text" })
+    const text = parts[0].type === "text" ? parts[0].text : ""
+    expect(text).toMatch(/unsupported/i)
+    expect(text).toMatch(/s3:\/\/bucket\/shot\.png/)
+  })
+})

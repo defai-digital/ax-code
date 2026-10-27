@@ -10,6 +10,7 @@ export type PromptPart =
   | { type: "file"; url: string; filename: string; mime: string }
 
 const UNSUPPORTED_IMAGE_TEXT = (mime: string) => `Unsupported image mime type: ${mime}`
+const UNSUPPORTED_IMAGE_URI_TEXT = (uri: string) => `Unsupported image uri: ${uri}`
 
 function normalizedMediaType(mime: string | null | undefined): string | undefined {
   return mime?.split(";")[0]?.trim().toLowerCase() || undefined
@@ -69,6 +70,15 @@ export function parsePromptParts(
             filename,
             mime: part.mimeType!,
           })
+        } else if (parsed.type === "file") {
+          // A file:// (or zed://) image reference carries no inline data. Attach
+          // the file exactly like the resource_link case so the image is read
+          // from disk instead of being silently dropped.
+          const mime = normalizedMediaType(part.mimeType)
+          if (mime && (mime.startsWith("image/") || mime === "application/pdf")) parsed.mime = mime
+          parts.push(parsed as PromptPart)
+        } else if (part.uri) {
+          parts.push({ type: "text", text: UNSUPPORTED_IMAGE_URI_TEXT(part.uri) })
         }
         break
       }
