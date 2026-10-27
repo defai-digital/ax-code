@@ -247,6 +247,8 @@ export namespace Curation {
     const checked = opts.skills.length
 
     for (const skill of opts.skills) {
+      // Built-in skills ship with AX Code and cannot be archived from a project.
+      if (skill.scope === "builtin") continue
       const id = skillId(skill.scope ?? "project", skill.name)
       const usageEntry = usage.entries[UsageRecord.skillKey(skill.name)]
       const duplicate = opts.duplicateNames.has(skill.name)

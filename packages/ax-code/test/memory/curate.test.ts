@@ -260,6 +260,23 @@ describe("memory.curate proposals", () => {
     expect(byName.get("stale-file")?.rule).toBe("duplicate_name")
     expect(byName.has("fresh-file")).toBe(false)
   })
+
+  test("never proposes archiving a built-in skill", async () => {
+    await using tmp = await tmpdir()
+    const old = path.join(tmp.path, "builtin-skill.md")
+    await fs.writeFile(old, "# builtin")
+    const oldTime = new Date(now.getTime() - 120 * DAY)
+    await fs.utimes(old, oldTime, oldTime)
+
+    const report = await Curation.proposeSkills({
+      projectRoot: tmp.path,
+      now: () => now,
+      skills: [{ name: "builtin-skill", location: old, scope: "builtin" }],
+      duplicateNames: new Set(),
+    })
+
+    expect(report.proposals).toEqual([])
+  })
 })
 
 describe("memory.curate apply/undo", () => {
