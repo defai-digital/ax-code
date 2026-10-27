@@ -158,6 +158,14 @@ describe("ConfigMarkdown: normal template", () => {
     expect(inlineCodeMatches.length).toBe(0)
   })
 
+  test("a literal backtick inside code does not hide later references", () => {
+    const names = (text: string) => ConfigMarkdown.files(text).map((match) => match[1])
+    expect(names("```\na ` b\n```\n@src/real.ts")).toEqual(["src/real.ts"])
+    expect(names("``a`b`` then @src/real.ts")).toEqual(["src/real.ts"])
+    expect(names("an unmatched ` tick then @src/real.ts")).toEqual(["src/real.ts"])
+    expect(names("```\n@src/fenced.ts\n```\n~~~\n@src/tilde.ts\n~~~\n@src/after.ts")).toEqual(["src/after.ts"])
+  })
+
   test("should not match email addresses", () => {
     const emailTest = "Contact user@example.com for help"
     const emailMatches = ConfigMarkdown.files(emailTest)

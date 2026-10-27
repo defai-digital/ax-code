@@ -8,9 +8,75 @@ export namespace ConfigMarkdown {
   export const SHELL_REGEX = /!`([^`]+)`/g
 
   export function files(template: string) {
-    return Array.from(template.matchAll(FILE_REGEX)).filter(
-      (match) => !isInsideBacktickSpan(template, match.index ?? 0),
-    )
+    const ranges = codeRanges(template)
+    return Array.from(template.matchAll(FILE_REGEX)).filter((match) => {
+      const index = match.index ?? 0
+      return !ranges.some(([start, end]) => index >= start && index < end)
+    })
+  }
+
+  const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/
+
+  // Code regions per CommonMark: a fenced block runs to a closing fence of the
+  // same character and at least the same length (or the end of the text); an
+  // inline span closes only on a backtick run of the same length, and a run
+  // with no partner is a literal backtick, not an opener.
+  function codeRanges(text: string): Array<[number, number]> {
+    const ranges: Array<[number, number]> = []
+    let i = 0
+    while (i < text.length) {
+      if (i === 0 || text[i - 1] === "\n") {
+        const lineEnd = text.indexOf("\n", i)
+        const line = text.slice(i, lineEnd === -1 ? text.length : lineEnd)
+        const fence = FENCE_OPEN.exec(line)
+        if (fence && !(fence[1][0] === "`" && line.slice(fence[0].length).includes("`"))) {
+          const marker = fence[1]
+          const close = new RegExp(`^ {0,3}${marker[0] === "`" ? "`" : "~"}{${marker.length},}[ \\t]*$`)
+          let end = text.length
+          let cursor = lineEnd === -1 ? text.length : lineEnd + 1
+          while (cursor < text.length) {
+            const next = text.indexOf("\n", cursor)
+            const candidate = text.slice(cursor, next === -1 ? text.length : next)
+            if (close.test(candidate)) {
+              end = next === -1 ? text.length : next + 1
+              break
+            }
+            cursor = next === -1 ? text.length : next + 1
+          }
+          ranges.push([i, end])
+          i = end
+          continue
+        }
+      }
+      if (text[i] !== "`") {
+        i++
+        continue
+      }
+      let run = 1
+      while (text[i + run] === "`") run++
+      let j = i + run
+      let closed = -1
+      while (j < text.length) {
+        if (text[j] !== "`") {
+          j++
+          continue
+        }
+        let other = 1
+        while (text[j + other] === "`") other++
+        if (other === run) {
+          closed = j + other
+          break
+        }
+        j += other
+      }
+      if (closed === -1) {
+        i += run
+        continue
+      }
+      ranges.push([i, closed])
+      i = closed
+    }
+    return ranges
   }
 
   export function shell(template: string) {
@@ -84,18 +150,6 @@ export namespace ConfigMarkdown {
   // word characters and hyphens, so glob patterns like `**/*.css` are not
   // false-positive matches.
   const YAML_ALIAS_PATTERN = /(?:^[ \t]*|[:?-][ \t]+|[[{,][ \t]*)(?:[&*][a-zA-Z_][\w-]*|<<[ \t]*:)/m
-
-  function isInsideBacktickSpan(text: string, index: number) {
-    let inside = false
-    for (let i = 0; i < index; i++) {
-      if (text[i] !== "`") continue
-      let run = 1
-      while (text[i + run] === "`") run++
-      inside = !inside
-      i += run - 1
-    }
-    return inside
-  }
 
   function rejectDangerousFrontmatter(file: string, frontmatter: string): InstanceType<typeof FrontmatterError> | null {
     if (Buffer.byteLength(frontmatter, "utf8") > MAX_FRONTMATTER_BYTES) {
