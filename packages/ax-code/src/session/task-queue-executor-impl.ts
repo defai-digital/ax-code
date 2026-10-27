@@ -1009,71 +1009,87 @@ function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
     },
     run: () =>
       runInQueueItemInstance(item, async () => {
-        const body = promptBodyFromQueueItem(item)
-        if (!body) throw new Error(`Subagent queue item ${item.id} has no executable prompt`)
-        const next = await applyRestartContinuation(item, body)
-        const executionStartedAt = Date.now()
-        const result = await SessionPrompt.prompt({ ...next, sessionID })
-        // A normal subagent returns on this path; only a child that left
-        // non-persistent shell work or background task subagents unsettled
-        // waits for them and issues the final turn. Persistent shells
-        // (monitors) never finish on their own, and a queued completion
-        // notification still deserves that final turn. Monitor lines are
-        // progress, not completion, and must not count as pending work. A turn
-        // that already produced an assistant error is final: matching the
-        // foreground guard, pending work must not defer or replace it.
-        const shellPending =
-          BackgroundShell.list(sessionID).some((shell) => shell.status === "running" && shell.persistent !== true) ||
-          BackgroundNotification.pendingCompletionCount(sessionID) > 0
-        const { nestedSubagentWork, waitForNestedSubagentResults } = await import("./background-subagent-delivery")
-        // A nested delivery that landed during this execution still needs a
-        // synthesis turn even though there is nothing left to wait for; rows
-        // delivered before this execution were already synthesized.
-        const nested = assistantError(result)
-          ? { pending: false, settled: false }
-          : await nestedSubagentWork({ sessionID, since: executionStartedAt })
-        if (assistantError(result) || (!shellPending && !nested.pending && !nested.settled)) {
-          if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
+        // A background `task` subagent returns from the tool before it runs, so
+        // its SubagentStop fires here when the run settles, like the foreground
+        // path in tool/task.ts. Workflow children are not task subagents.
+        if (item.payload["source"] !== "task") return runSubagent()
+        let status: "completed" | "failed" = "failed"
+        try {
+          const result = await runSubagent()
+          if (!assistantError(result)) status = "completed"
           return result
+        } finally {
+          const { fireSubagentStop } = await import("../tool/task-shared")
+          await fireSubagentStop({ sessionID, agent: item.agent ?? "", status })
         }
-        // Stay inside the item's existing execution budget, reserving a final
-        // turn window. Both waits are bounded by that window: after it the run
-        // finalizes with an explicit ongoing result instead of failing.
-        const executionBudgetMs = item.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS
-        const waitEndsAt =
-          Date.now() + Math.max(0, executionBudgetMs - (Date.now() - executionStartedAt) - SUBAGENT_FINALIZE_RESERVE_MS)
-        let outcome: "completed" | "timeout" = "completed"
-        if (shellPending) {
-          outcome = await BackgroundShell.waitForCompletion(sessionID, {
-            signal: controller.signal,
-            timeoutMs: Math.max(0, waitEndsAt - Date.now()),
-          })
-        }
-        if (nested.pending) {
-          const waited = await waitForNestedSubagentResults({
-            sessionID,
-            signal: controller.signal,
-            timeoutMs: Math.max(0, waitEndsAt - Date.now()),
-          })
-          if (waited === "timeout") outcome = "timeout"
-        }
-        const final = await SessionPrompt.prompt({
-          ...next,
-          sessionID,
-          toolsScope: "turn",
-          tools: { ...next.tools, bash: false, monitor: false, task: false, task_parallel: false },
-          parts: [
-            {
-              type: "text",
-              text: outcome === "timeout" ? BACKGROUND_ONGOING_PROMPT : BACKGROUND_FINALIZE_PROMPT,
-            },
-          ],
-        })
-        // Only the final result is recorded for workflow usage; the interim
-        // "work started" turn is not the child's deliverable.
-        if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, final)
-        return final
       }),
+  }
+
+  async function runSubagent() {
+    const body = promptBodyFromQueueItem(item)
+    if (!body) throw new Error(`Subagent queue item ${item.id} has no executable prompt`)
+    const next = await applyRestartContinuation(item, body)
+    const executionStartedAt = Date.now()
+    const result = await SessionPrompt.prompt({ ...next, sessionID })
+    // A normal subagent returns on this path; only a child that left
+    // non-persistent shell work or background task subagents unsettled
+    // waits for them and issues the final turn. Persistent shells
+    // (monitors) never finish on their own, and a queued completion
+    // notification still deserves that final turn. Monitor lines are
+    // progress, not completion, and must not count as pending work. A turn
+    // that already produced an assistant error is final: matching the
+    // foreground guard, pending work must not defer or replace it.
+    const shellPending =
+      BackgroundShell.list(sessionID).some((shell) => shell.status === "running" && shell.persistent !== true) ||
+      BackgroundNotification.pendingCompletionCount(sessionID) > 0
+    const { nestedSubagentWork, waitForNestedSubagentResults } = await import("./background-subagent-delivery")
+    // A nested delivery that landed during this execution still needs a
+    // synthesis turn even though there is nothing left to wait for; rows
+    // delivered before this execution were already synthesized.
+    const nested = assistantError(result)
+      ? { pending: false, settled: false }
+      : await nestedSubagentWork({ sessionID, since: executionStartedAt })
+    if (assistantError(result) || (!shellPending && !nested.pending && !nested.settled)) {
+      if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
+      return result
+    }
+    // Stay inside the item's existing execution budget, reserving a final
+    // turn window. Both waits are bounded by that window: after it the run
+    // finalizes with an explicit ongoing result instead of failing.
+    const executionBudgetMs = item.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS
+    const waitEndsAt =
+      Date.now() + Math.max(0, executionBudgetMs - (Date.now() - executionStartedAt) - SUBAGENT_FINALIZE_RESERVE_MS)
+    let outcome: "completed" | "timeout" = "completed"
+    if (shellPending) {
+      outcome = await BackgroundShell.waitForCompletion(sessionID, {
+        signal: controller.signal,
+        timeoutMs: Math.max(0, waitEndsAt - Date.now()),
+      })
+    }
+    if (nested.pending) {
+      const waited = await waitForNestedSubagentResults({
+        sessionID,
+        signal: controller.signal,
+        timeoutMs: Math.max(0, waitEndsAt - Date.now()),
+      })
+      if (waited === "timeout") outcome = "timeout"
+    }
+    const final = await SessionPrompt.prompt({
+      ...next,
+      sessionID,
+      toolsScope: "turn",
+      tools: { ...next.tools, bash: false, monitor: false, task: false, task_parallel: false },
+      parts: [
+        {
+          type: "text",
+          text: outcome === "timeout" ? BACKGROUND_ONGOING_PROMPT : BACKGROUND_FINALIZE_PROMPT,
+        },
+      ],
+    })
+    // Only the final result is recorded for workflow usage; the interim
+    // "work started" turn is not the child's deliverable.
+    if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, final)
+    return final
   }
 }
 

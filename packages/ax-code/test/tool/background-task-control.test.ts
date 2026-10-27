@@ -493,3 +493,57 @@ test.each([false, true])(
     })
   },
 )
+
+describe("background task SubagentStop", () => {
+  test("fires SubagentStop when a background task subagent finishes", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { SessionPrompt } = await import("../../src/session/prompt")
+        const { TaskQueueExecutor } = await import("../../src/session/task-queue-executor")
+        const { LifecycleHooks } = await import("../../src/hooks/lifecycle")
+        const parent = await Session.create({})
+        const child = await Session.create({ parentID: parent.id })
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(
+          async (input) =>
+            ({
+              info: { role: "assistant", sessionID: input.sessionID, id: MessageID.ascending() },
+              parts: [],
+            }) as any,
+        )
+        const hooks = vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue(undefined as any)
+        try {
+          const item = await TaskQueue.enqueue({
+            sessionID: child.id,
+            kind: "subagent",
+            title: "background task",
+            agent: "general",
+            model: { providerID: "test", modelID: "test-model" },
+            payload: {
+              source: "task",
+              parentSessionID: parent.id,
+              body: { agent: "general", parts: [{ type: "text", text: "do the work" }] },
+            },
+          })
+          await TaskQueueExecutor.start(item)
+          await vi.waitFor(async () => expect((await TaskQueue.get(item.id)).status).toBe("completed"))
+          expect(prompt).toHaveBeenCalled()
+          await vi.waitFor(() =>
+            expect(hooks).toHaveBeenCalledWith(
+              expect.objectContaining({
+                event: "SubagentStop",
+                sessionID: child.id,
+                args: { agent: "general", status: "completed" },
+              }),
+            ),
+          )
+        } finally {
+          prompt.mockRestore()
+          hooks.mockRestore()
+        }
+      },
+    })
+  })
+})
