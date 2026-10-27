@@ -328,7 +328,7 @@ test("projects symbol nodes and contains edges with inherited freshness", () => 
   expect(graph.nodes.find((n) => n.id === "source:src/a.ts")!.recordedReferences).toBe(1)
 })
 
-test("validates contains endpoints and inventory entries strictly", () => {
+test("validates contains endpoints strictly and skips invalid inventory entries", () => {
   const graph = projectWikiManifest(manifest(), { snapshot: "fixture" })
   const symbol = {
     id: "symbol:src/a.ts#Foo",
@@ -362,18 +362,73 @@ test("validates contains endpoints and inventory entries strictly", () => {
       bad({ from: "page:guide.md", to: "symbol:src/a.ts#Foo", kind: "references-source", freshness: "unknown" }),
     ),
   ).toThrow(/relationship/)
+  const skippedEmpty = projectWikiManifest(manifest(), {
+    snapshot: "bad",
+    inventory: new Map([["src/a.ts", [{ name: "", qualified: "x", kind: "class" }]]]),
+  })
+  expect(skippedEmpty.nodes.some((node) => node.kind === "symbol")).toBe(false)
+  expect(skippedEmpty.omitted).toEqual({ nodes: 1, edges: 1 })
+  const skippedLong = projectWikiManifest(manifest(), {
+    snapshot: "bad",
+    inventory: new Map([["src/a.ts", [{ name: "x".repeat(257), qualified: "x", kind: "class" }]]]),
+  })
+  expect(skippedLong.nodes.some((node) => node.kind === "symbol")).toBe(false)
+  expect(skippedLong.omitted).toEqual({ nodes: 1, edges: 1 })
+})
+
+test("projects the valid inventory symbols around one whose name is not graph text", () => {
+  const graph = projectWikiManifest(manifest(), {
+    snapshot: "inventory",
+    inventory: new Map([
+      [
+        "src/a.ts",
+        [
+          { name: "good", qualified: "good", kind: "constant" },
+          { name: "{\n  alpha,\n}", qualified: "{\n  alpha,\n}", kind: "constant" },
+          { name: "alsoGood", qualified: "alsoGood", kind: "constant" },
+        ],
+      ],
+    ]),
+  })
+  expect(graph.nodes.filter((node) => node.kind === "symbol").map((node) => node.label)).toEqual(["good", "alsoGood"])
+  expect(graph.edges.filter((edge) => edge.kind === "contains").map((edge) => edge.to)).toEqual([
+    "symbol:src/a.ts#good",
+    "symbol:src/a.ts#alsoGood",
+  ])
+  expect(graph.omitted).toEqual({ nodes: 1, edges: 1 })
   expect(() =>
-    projectWikiManifest(manifest(), {
-      snapshot: "bad",
-      inventory: new Map([["src/a.ts", [{ name: "", qualified: "x", kind: "class" }]]]),
-    }),
-  ).toThrow()
-  expect(() =>
-    projectWikiManifest(manifest(), {
-      snapshot: "bad",
-      inventory: new Map([["src/a.ts", [{ name: "x".repeat(257), qualified: "x", kind: "class" }]]]),
-    }),
-  ).toThrow()
+    projectWikiManifest(
+      {
+        schemaVersion: 1,
+        generator: "ax-wiki",
+        pages: { "guide.md": { title: "Guide", symbols: ["bad\nname"], sources: ["src/a.ts"], sourceHashes: {} } },
+      },
+      { snapshot: "recorded" },
+    ),
+  ).toThrow(/Invalid graph text/)
+})
+
+test("counts skipped inventory entries together with symbols past the view cap", () => {
+  const inventory = new Map([
+    [
+      "src/a.ts",
+      [
+        ...Array.from({ length: 300 }, (_, i) => ({ name: `s${i}`, qualified: `s${i}`, kind: "function" })),
+        { name: "bad\nname", qualified: "bad\nname", kind: "function" },
+      ],
+    ],
+  ])
+  const graph = projectWikiManifest(
+    {
+      schemaVersion: 1,
+      generator: "ax-wiki",
+      pages: { "guide.md": { title: "Guide", sources: ["src/a.ts"], sourceHashes: {} } },
+    },
+    { snapshot: "capped", inventory },
+  )
+  expect(graph.nodes).toHaveLength(200)
+  expect(graph.nodes.some((node) => node.label.includes("\n"))).toBe(false)
+  expect(graph.omitted).toEqual({ nodes: 103, edges: 103 })
 })
 
 test("shares view caps across symbols with neighborhoods together", () => {

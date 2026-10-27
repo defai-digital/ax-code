@@ -102,11 +102,99 @@ fn text<'a>(node: Node, source: &'a str) -> &'a str {
     &source[node.byte_range()]
 }
 
+/// Characters the wiki graph projector rejects. Emitting one as a symbol name
+/// aborts `wiki viz --export`, so the extractor drops it instead.
+fn forbidden_graph_text(value: &str) -> bool {
+    value.chars().any(|ch| {
+        let code = ch as u32;
+        code <= 0x1f
+            || (0x7f..=0x9f).contains(&code)
+            || (0x202a..=0x202e).contains(&code)
+            || (0x2066..=0x2069).contains(&code)
+    })
+}
+
+fn is_binding_pattern(kind: &str) -> bool {
+    matches!(
+        kind,
+        "object_pattern"
+            | "array_pattern"
+            | "rest_pattern"
+            | "assignment_pattern"
+            | "object_assignment_pattern"
+            | "pair_pattern"
+    )
+}
+
+fn acceptable_symbol_text(value: &str) -> Option<String> {
+    if value.is_empty() || forbidden_graph_text(value) {
+        None
+    } else {
+        Some(value.to_owned())
+    }
+}
+
+fn owned_symbol_name(node: Node, source: &str) -> Option<String> {
+    if is_binding_pattern(node.kind()) {
+        return None;
+    }
+    acceptable_symbol_text(text(node, source))
+}
+
 fn node_name(node: Node, source: &str) -> Option<String> {
-    node.child_by_field_name("name")
-        .map(|n| text(n, source))
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned)
+    owned_symbol_name(node.child_by_field_name("name")?, source)
+}
+
+fn member_name(member: Node, source: &str) -> Option<String> {
+    owned_symbol_name(
+        member
+            .child_by_field_name("name")
+            .or_else(|| member.child_by_field_name("property"))?,
+        source,
+    )
+}
+
+/// Leaf binding identifiers of a declarator name, in source order.
+///
+/// A plain identifier is itself. An object or array pattern is not a symbol:
+/// its source can contain newlines and is rejected by graph projection. Walk
+/// binding positions only (`beta: b` yields `b`, defaults and computed keys
+/// are not bindings). Anything else contributes no name, never the raw text.
+fn binding_names(root: Node, source: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        match node.kind() {
+            "identifier" | "shorthand_property_identifier_pattern" => {
+                if let Some(name) = acceptable_symbol_text(text(node, source)) {
+                    if !name.contains('{') && !name.contains('[') {
+                        names.push(name);
+                    }
+                }
+            }
+            "pair_pattern" => {
+                if let Some(value) = node.child_by_field_name("value") {
+                    stack.push(value);
+                }
+            }
+            "assignment_pattern" | "object_assignment_pattern" => {
+                if let Some(left) = node.child_by_field_name("left") {
+                    stack.push(left);
+                }
+            }
+            "object_pattern" | "array_pattern" | "rest_pattern" | "parenthesized_expression" => {
+                for i in (0..node.named_child_count()).rev() {
+                    if let Some(child) = node.named_child(i) {
+                        if child.kind() != "type_annotation" {
+                            stack.push(child);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    names
 }
 
 fn signature(node: Node, source: &str) -> Option<String> {
@@ -221,7 +309,7 @@ fn js_symbols(
                     if item.kind() != "variable_declarator" {
                         continue;
                     }
-                    let Some(name) = node_name(item, source) else {
+                    let Some(binding) = item.child_by_field_name("name") else {
                         continue;
                     };
                     let value = item.child_by_field_name("value");
@@ -232,14 +320,18 @@ fn js_symbols(
                     } else {
                         "variable"
                     };
-                    let mut symbol = declaration(item, kind, &prefix, name, source, positions);
-                    if kind == "function" {
-                        symbol.signature = value.and_then(|n| signature(n, source));
+                    // One symbol per leaf. A pattern with no identifier (a hole,
+                    // or a member assignment) emits nothing rather than its source.
+                    for name in binding_names(binding, source) {
+                        if symbols.len() >= MAX_SYMBOLS {
+                            return Ok((symbols, true));
+                        }
+                        let mut symbol = declaration(item, kind, &prefix, name, source, positions);
+                        if kind == "function" {
+                            symbol.signature = value.and_then(|n| signature(n, source));
+                        }
+                        push_symbol(&mut symbols, &mut budget, symbol)?;
                     }
-                    if symbols.len() >= MAX_SYMBOLS {
-                        return Ok((symbols, true));
-                    }
-                    push_symbol(&mut symbols, &mut budget, symbol)?;
                 }
                 continue;
             }
@@ -274,13 +366,7 @@ fn js_symbols(
                             } else {
                                 "variable"
                             };
-                            (
-                                kind,
-                                member
-                                    .child_by_field_name("name")
-                                    .or_else(|| member.child_by_field_name("property"))
-                                    .map(|n| text(n, source).to_owned()),
-                            )
+                            (kind, member_name(member, source))
                         }
                         _ => continue,
                     };
@@ -617,5 +703,140 @@ mod tests {
         assert_eq!(value.symbols.len(), MAX_SYMBOLS);
         assert!(value.truncated.symbols);
         assert!(extract(&source, "javascript", &AtomicBool::new(true)).is_err());
+    }
+
+    fn symbol_pairs(source: &str, language: &str) -> Vec<(String, String, String)> {
+        extract(source, language, &AtomicBool::new(false))
+            .unwrap()
+            .symbols
+            .iter()
+            .map(|symbol| {
+                (
+                    symbol.name.clone(),
+                    symbol.qualified.clone(),
+                    symbol.kind.clone(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn destructuring_emits_leaf_bindings_not_pattern_text() {
+        let cases = [
+            (
+                "const {\n  alpha,\n  beta: b,\n  ...rest\n} = x\n",
+                "javascript",
+                vec![
+                    ("alpha", "alpha", "constant"),
+                    ("b", "b", "constant"),
+                    ("rest", "rest", "constant"),
+                ],
+            ),
+            (
+                "const { alpha, beta } = require(\"./dep\")\n",
+                "javascript",
+                vec![("alpha", "alpha", "constant"), ("beta", "beta", "constant")],
+            ),
+            (
+                "const [a, , [c]] = y\n",
+                "javascript",
+                vec![("a", "a", "constant"), ("c", "c", "constant")],
+            ),
+            (
+                "const { width = 1 } = box\nconst [head = 1, ...tail] = list\n",
+                "javascript",
+                vec![
+                    ("width", "width", "constant"),
+                    ("head", "head", "constant"),
+                    ("tail", "tail", "constant"),
+                ],
+            ),
+            (
+                "const {\n\talpha,\n\tbeta: b,\n} = x\n",
+                "javascript",
+                vec![("alpha", "alpha", "constant"), ("b", "b", "constant")],
+            ),
+            (
+                "const {\r\n  alpha,\r\n  beta,\r\n} = require(\"./dep\")\r\n",
+                "typescript",
+                vec![("alpha", "alpha", "constant"), ("beta", "beta", "constant")],
+            ),
+            (
+                "export const {\n  a,\n} = mod\n",
+                "typescript",
+                vec![("a", "a", "constant")],
+            ),
+            (
+                "const ok = 1, {\n  a,\n} = obj\n",
+                "javascript",
+                vec![("ok", "ok", "constant"), ("a", "a", "constant")],
+            ),
+            (
+                "const { outer: { inner: renamed } } = obj\n",
+                "typescript",
+                vec![("renamed", "renamed", "constant")],
+            ),
+            (
+                "const { alpha, beta }: { alpha: number; beta: string } = pair\n",
+                "typescript",
+                vec![("alpha", "alpha", "constant"), ("beta", "beta", "constant")],
+            ),
+            (
+                "let { a } = obj\nvar { b } = obj\n",
+                "javascript",
+                vec![("a", "a", "variable"), ("b", "b", "variable")],
+            ),
+            (
+                "const { run } = () => 1\n",
+                "javascript",
+                vec![("run", "run", "function")],
+            ),
+            (
+                "namespace N {\n  export const { a } = x\n}\n",
+                "typescript",
+                vec![("N", "N", "module"), ("a", "N::a", "constant")],
+            ),
+            (
+                "const {\n  title,\n} = props\nexport const View = () => <h1>{title}</h1>\n",
+                "typescriptreact",
+                vec![("title", "title", "constant"), ("View", "View", "function")],
+            ),
+            (
+                "const { kept, gone: obj.member } = x\n",
+                "javascript",
+                vec![("kept", "kept", "constant")],
+            ),
+        ];
+        for (source, language, expected) in cases {
+            let pairs = symbol_pairs(source, language);
+            let expected = expected
+                .iter()
+                .map(|(name, qualified, kind)| {
+                    (
+                        (*name).to_owned(),
+                        (*qualified).to_owned(),
+                        (*kind).to_owned(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(pairs, expected, "{language}: {source}");
+            assert!(
+                pairs.iter().all(|(name, _, _)| {
+                    !name.contains('{')
+                        && !name.contains('[')
+                        && !name.contains('\n')
+                        && !name.contains('\r')
+                        && !name.contains('\t')
+                }),
+                "{pairs:?}"
+            );
+        }
+        let value = extract(
+            "const { run } = (x) => x\n",
+            "javascript",
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert_eq!(value.symbols[0].signature.as_deref(), Some("(x)"));
     }
 }

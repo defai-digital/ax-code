@@ -129,6 +129,27 @@ describe("Wiki visualization snapshot", () => {
     const page = WikiGraphSchema.parse(graph).nodes.find((n) => n.id === "page:guide.md")!
     expect(page.symbols.map((anchor) => anchor.name)).toEqual([...symbols.slice(0, 12), ...symbols.slice(60)])
   })
+  test("snapshots a cited source with multi-line CommonJS destructuring", async () => {
+    await using tmp = await tmpdir()
+    await mkdir(path.join(tmp.path, ".ax-wiki"))
+    await mkdir(path.join(tmp.path, "src"))
+    await writeFile(path.join(tmp.path, "src", "a.ts"), 'const {\n  alpha,\n  beta,\n} = require("./dep")\n')
+    await writeFile(
+      path.join(tmp.path, ".ax-wiki", ".manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        generator: "ax-wiki",
+        pages: {
+          "guide.md": { title: "Guide", sources: ["src/a.ts"], sourceHashes: {} },
+        },
+      }),
+    )
+    const graph = await WikiVisualization.snapshot(tmp.path)
+    const labels = graph.nodes.filter((node) => node.kind === "symbol").map((node) => node.label)
+    expect(labels).toEqual(["alpha", "beta"])
+    expect(labels.every((label) => !/[{[\n\r\t]/.test(label))).toBe(true)
+    expect(graph.snapshot).toMatch(/^sha256:[a-f0-9]{64}$/)
+  })
   test("projects inventoried symbols as contained nodes", async () => {
     await using tmp = await tmpdir()
     await mkdir(path.join(tmp.path, ".ax-wiki"))

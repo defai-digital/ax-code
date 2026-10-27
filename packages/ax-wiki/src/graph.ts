@@ -11,7 +11,7 @@ export type SymbolAnchor = {
 }
 export type WikiGraphNodeKind = "page" | "source" | "symbol"
 export type WikiGraphEdgeKind = "references-source" | "contains" | "uses"
-/** Caller-supplied symbol inventory entry; validated strictly at projection. */
+/** Caller-supplied symbol inventory entry. Entries that fail projection checks are skipped. */
 export type InventorySymbol = {
   name: string
   qualified: string
@@ -159,6 +159,17 @@ function record(value: unknown): Record<string, unknown> {
 function text(value: unknown, max = 1024): string {
   if (typeof value !== "string" || !value.length || value.length > max || GRAPH_TEXT_FORBIDDEN.test(value))
     throw new Error("Invalid graph text")
+  return value
+}
+
+/**
+ * Inventory is caller-supplied best-effort data. Same acceptance rule as
+ * `text`, but a bad value is omitted instead of failing the whole projection.
+ * Manifest-recorded fields keep the throwing `text` check.
+ */
+function inventoryText(value: unknown, max: number): string | undefined {
+  if (typeof value !== "string" || value.length === 0 || value.length > max || GRAPH_TEXT_FORBIDDEN.test(value))
+    return undefined
   return value
 }
 
@@ -622,6 +633,9 @@ export function projectWikiManifest(
   // Inventory-derived symbol nodes and edges. Admission order is decided
   // afterwards, so a page's symbol inventory can never starve later pages.
   const symbolsBySource = new Map<string, WikiGraphNode[]>()
+  // Each rejected inventory entry would have been one symbol node and one
+  // contains edge. Count them with the symbols the view cap leaves out.
+  let skippedInventory = 0
   for (const { cited } of citedByPage) {
     for (const source of cited) {
       const target = `source:${source}`
@@ -631,13 +645,22 @@ export function projectWikiManifest(
       symbolsBySource.set(source, symbols)
       const seen = new Set<string>()
       for (const raw of options.inventory?.get(source) ?? []) {
-        const item = record(raw)
-        const name = text(item.name, GRAPH_LIMITS.symbolName)
-        const qualified = text(item.qualified, GRAPH_LIMITS.qualified)
-        const kind = text(item.kind, 64)
+        const item =
+          raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : undefined
+        const name = item && inventoryText(item.name, GRAPH_LIMITS.symbolName)
+        const qualified = item && inventoryText(item.qualified, GRAPH_LIMITS.qualified)
+        const kind = item && inventoryText(item.kind, 64)
+        if (!name || !qualified || !kind) {
+          skippedInventory++
+          continue
+        }
         if (seen.has(qualified)) continue
+        const symbolId = inventoryText(`symbol:${source}#${qualified}`, 1100)
+        if (!symbolId) {
+          skippedInventory++
+          continue
+        }
         seen.add(qualified)
-        const symbolId = text(`symbol:${source}#${qualified}`, 1100)
         symbols.push({
           id: symbolId,
           kind: "symbol",
@@ -708,7 +731,10 @@ export function projectWikiManifest(
     codeRelationships: "unavailable",
     nodes,
     edges,
-    omitted: { nodes: ordered.length - nodes.length, edges: allEdges.length - edges.length },
+    omitted: {
+      nodes: ordered.length - nodes.length + skippedInventory,
+      edges: allEdges.length - edges.length + skippedInventory,
+    },
     pages: projectPages(citedByPage, allNodes, allEdges, options.documents),
     overview: projectOverview(manifest, allNodes),
     modules: projectModules(

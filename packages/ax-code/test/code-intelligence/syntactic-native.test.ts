@@ -52,6 +52,19 @@ const fixtures = [
     source: "function ignored() { function local(){}; const inside=1 }; if (true) { const skipped=1 }",
   },
   {
+    lang: "javascript",
+    source:
+      "const {\n  alpha,\n  beta: b,\n  ...rest\n} = require('./dep');\nconst [a, , [c]] = y;\nconst ok = 1, {\n  mixed,\n} = obj;\n",
+  },
+  {
+    lang: "typescript",
+    source: "export const {\r\n  alpha,\r\n  beta,\r\n} = require('./dep');\nconst { width = 1 } = box;\n",
+  },
+  {
+    lang: "typescriptreact",
+    source: "const {\n  title,\n} = props;\nexport const View = ({ title }: { title: string }) => <h1>{title}</h1>;\n",
+  },
+  {
     lang: "typescript",
     source: "// \u{1f600}\n\tfunction \u03b1(x: string) { return x }; const after = '\u{1f600}'; function last() {}\n",
   },
@@ -120,6 +133,126 @@ describe.skipIf(!workers)("source-built native syntax inventory", () => {
     const cancelled = new workers!.ParserCancellation!()
     cancelled.cancel()
     await expect(workers!.extractInventoryAsync!(source, "javascript", cancelled)).rejects.toThrow("cancelled")
+  })
+
+  test("emits destructuring leaves and never pattern source text", async () => {
+    const cases: Array<{ lang: string; source: string; names: string[]; kinds: string[]; qualified?: string[] }> = [
+      {
+        lang: "javascript",
+        source: "const {\n  alpha,\n  beta: b,\n  ...rest\n} = x\n",
+        names: ["alpha", "b", "rest"],
+        kinds: ["constant", "constant", "constant"],
+      },
+      {
+        lang: "javascript",
+        source: 'const { alpha, beta } = require("./dep")\n',
+        names: ["alpha", "beta"],
+        kinds: ["constant", "constant"],
+      },
+      {
+        lang: "javascript",
+        source: "const [a, , [c]] = y\n",
+        names: ["a", "c"],
+        kinds: ["constant", "constant"],
+      },
+      {
+        lang: "javascript",
+        source: "const { width = 1 } = box\nconst [head = 1, ...tail] = list\n",
+        names: ["width", "head", "tail"],
+        kinds: ["constant", "constant", "constant"],
+      },
+      {
+        lang: "javascript",
+        source: "const {\n\talpha,\n\tbeta: b,\n} = x\n",
+        names: ["alpha", "b"],
+        kinds: ["constant", "constant"],
+      },
+      {
+        lang: "typescript",
+        source: 'const {\r\n  alpha,\r\n  beta,\r\n} = require("./dep")\r\n',
+        names: ["alpha", "beta"],
+        kinds: ["constant", "constant"],
+      },
+      {
+        lang: "typescript",
+        source: "export const {\n  a,\n} = mod\n",
+        names: ["a"],
+        kinds: ["constant"],
+      },
+      {
+        lang: "javascript",
+        source: "const ok = 1, {\n  a,\n} = obj\n",
+        names: ["ok", "a"],
+        kinds: ["constant", "constant"],
+      },
+      {
+        lang: "typescript",
+        source: "const { outer: { inner: renamed } } = obj\n",
+        names: ["renamed"],
+        kinds: ["constant"],
+      },
+      {
+        lang: "typescript",
+        source: "const { alpha, beta }: { alpha: number; beta: string } = pair\n",
+        names: ["alpha", "beta"],
+        kinds: ["constant", "constant"],
+      },
+      {
+        lang: "javascript",
+        source: "let { a } = obj\nvar { b } = obj\n",
+        names: ["a", "b"],
+        kinds: ["variable", "variable"],
+      },
+      {
+        lang: "javascript",
+        source: "const { run } = (x) => x\n",
+        names: ["run"],
+        kinds: ["function"],
+      },
+      {
+        lang: "typescript",
+        source: "namespace N {\n  export const { a } = x\n}\n",
+        names: ["N", "a"],
+        kinds: ["module", "constant"],
+        qualified: ["N", "N::a"],
+      },
+      {
+        lang: "typescriptreact",
+        source: "const {\n  title,\n} = props\nexport const View = () => <h1>{title}</h1>\n",
+        names: ["title", "View"],
+        kinds: ["constant", "function"],
+      },
+      {
+        lang: "javascriptreact",
+        source: "const {\n  label,\n} = props\nexport const App = () => <b>{label}</b>\n",
+        names: ["label", "App"],
+        kinds: ["constant", "function"],
+      },
+      {
+        lang: "javascript",
+        source: "const { kept, gone: obj.member } = x\n",
+        names: ["kept"],
+        kinds: ["constant"],
+      },
+    ]
+    const assertLeaves = (
+      symbols: Array<{ name: string; kind: string; qualified?: string }> | undefined,
+      c: (typeof cases)[number],
+    ) => {
+      expect(symbols?.map((symbol) => symbol.name)).toEqual(c.names)
+      expect(symbols?.map((symbol) => symbol.kind)).toEqual(c.kinds)
+      if (c.qualified) expect(symbols?.map((symbol) => symbol.qualified)).toEqual(c.qualified)
+      expect(symbols?.every((symbol) => !/[{[\u0000-\u001f\u007f-\u009f]/.test(symbol.name))).toBe(true)
+    }
+
+    for (const c of cases) {
+      const raw = await workers!.extractInventoryAsync!(c.source, c.lang, new workers!.ParserCancellation!())
+      const parsed = parseJsonResult(raw)
+      expect(parsed.ok, c.source).toBe(true)
+      if (!parsed.ok) throw parsed.error
+      const symbols = (parsed.value as { symbols: Array<{ name: string; kind: string; qualified: string }> }).symbols
+      assertLeaves(symbols, c)
+    }
   })
 })
 

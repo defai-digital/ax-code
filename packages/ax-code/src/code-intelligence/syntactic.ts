@@ -184,7 +184,7 @@ export namespace SyntacticExtractor {
     .max(MAX_IMPORTS_PER_FILE)
 
   // Bump this identity whenever the extractor or bundled grammar contract changes.
-  const CACHE_VERSION = "syntactic-v3"
+  const CACHE_VERSION = "syntactic-v4"
   const CachedSymbols = z
     .array(
       z.object({
@@ -505,9 +505,72 @@ export namespace SyntacticExtractor {
   const JS_CLASS_TYPES = new Set(["class_declaration", "abstract_class_declaration"])
   const JS_VALUE_FUNCTION_TYPES = new Set(["arrow_function", "function_expression", "generator_function", "function"])
 
+  // Same characters the wiki graph projector rejects. A symbol name that
+  // contains one aborts `wiki viz --export`, so the extractor drops it.
+  const SYMBOL_TEXT_FORBIDDEN = /[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/
+  const BINDING_PATTERNS = new Set([
+    "object_pattern",
+    "array_pattern",
+    "rest_pattern",
+    "assignment_pattern",
+    "object_assignment_pattern",
+    "pair_pattern",
+  ])
+
+  function acceptableSymbolText(value: string): string | undefined {
+    if (!value || SYMBOL_TEXT_FORBIDDEN.test(value)) return undefined
+    return value
+  }
+
   function nameOf(node: TSNode): string | undefined {
     const name = node.childForFieldName("name")
-    return name?.text || undefined
+    if (!name || BINDING_PATTERNS.has(name.type)) return undefined
+    return acceptableSymbolText(name.text)
+  }
+
+  // Leaf binding identifiers of a declarator name, in source order.
+  // A plain identifier is itself. An object or array pattern is not a symbol:
+  // its source can contain newlines. Walk binding positions only (`beta: b`
+  // yields `b`; defaults and computed keys are not bindings). Anything else
+  // contributes no name, never the raw pattern text.
+  function bindingNames(root: TSNode): string[] {
+    const names: string[] = []
+    const stack: TSNode[] = [root]
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      switch (node.type) {
+        case "identifier":
+        case "shorthand_property_identifier_pattern": {
+          const name = acceptableSymbolText(node.text)
+          if (name && !name.includes("{") && !name.includes("[")) names.push(name)
+          break
+        }
+        case "pair_pattern": {
+          const value = node.childForFieldName("value")
+          if (value) stack.push(value)
+          break
+        }
+        case "assignment_pattern":
+        case "object_assignment_pattern": {
+          const left = node.childForFieldName("left")
+          if (left) stack.push(left)
+          break
+        }
+        case "object_pattern":
+        case "array_pattern":
+        case "rest_pattern":
+        case "parenthesized_expression": {
+          for (let i = node.namedChildCount - 1; i >= 0; i--) {
+            const child = node.namedChild(i)
+            if (child && child.type !== "type_annotation") stack.push(child)
+          }
+          break
+        }
+        default:
+          break
+      }
+    }
+    return names
   }
 
   function walkJsTs(node: TSNode, prefix: string, symbols: Symbol[]): void {
@@ -568,16 +631,19 @@ export namespace SyntacticExtractor {
         for (let i = 0; i < node.namedChildCount; i++) {
           const declarator = node.namedChild(i)
           if (!declarator || declarator.type !== "variable_declarator") continue
-          const name = nameOf(declarator)
-          if (!name) continue
+          const binding = declarator.childForFieldName("name")
+          if (!binding) continue
           const value = declarator.childForFieldName("value")
           const kind: CodeNodeKind =
             value && JS_VALUE_FUNCTION_TYPES.has(value.type) ? "function" : isConst ? "constant" : "variable"
-          const sym =
-            kind === "function" && value
-              ? { ...declaration(declarator, kind, prefix, name), signature: signatureOf(value) }
-              : declaration(declarator, kind, prefix, name)
-          if (!push(symbols, sym)) return false
+          // One symbol per leaf. A pattern with no identifier emits nothing.
+          for (const name of bindingNames(binding)) {
+            const sym =
+              kind === "function" && value
+                ? { ...declaration(declarator, kind, prefix, name), signature: signatureOf(value) }
+                : declaration(declarator, kind, prefix, name)
+            if (!push(symbols, sym)) return false
+          }
         }
         return true
       }
@@ -594,7 +660,8 @@ export namespace SyntacticExtractor {
         const name = nameOf(member)
         if (name && !push(symbols, declaration(member, "method", classQualified, name))) return
       } else if (member.type === "public_field_definition" || member.type === "field_definition") {
-        const name = member.childForFieldName("name")?.text ?? member.childForFieldName("property")?.text
+        const nameNode = member.childForFieldName("name") ?? member.childForFieldName("property")
+        const name = nameNode && !BINDING_PATTERNS.has(nameNode.type) ? acceptableSymbolText(nameNode.text) : undefined
         if (!name) continue
         const value = member.childForFieldName("value")
         const kind: CodeNodeKind = value && JS_VALUE_FUNCTION_TYPES.has(value.type) ? "method" : "variable"

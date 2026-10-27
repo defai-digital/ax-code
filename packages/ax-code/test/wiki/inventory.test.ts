@@ -89,6 +89,19 @@ test("resolves relative imports against the cited set without I/O", () => {
   expect(WikiInventory.resolveImport("src/a.ts", "./b.ts?x=1", cited)).toBeUndefined()
 })
 
+test("extracts destructuring leaves instead of pattern source text", async () => {
+  await using tmp = await tmpdir()
+  await mkdir(path.join(tmp.path, "src"))
+  await writeFile(
+    path.join(tmp.path, "src", "a.ts"),
+    'export const {\n  alpha,\n  beta: b,\n  ...rest\n} = require("./dep")\nconst [a, , [c]] = y\nconst ok = 1, {\n  mixed,\n} = obj\n',
+  )
+  const symbols = (await WikiInventory.build(tmp.path, ["src/a.ts"])).get("src/a.ts")!
+  expect(symbols.map((symbol) => symbol.name)).toEqual(["alpha", "b", "rest", "a", "c", "ok", "mixed"])
+  expect(symbols.every((symbol) => symbol.kind === "constant")).toBe(true)
+  expect(symbols.every((symbol) => !/[{[\u0000-\u001f]/.test(symbol.name))).toBe(true)
+})
+
 test("buildAll collects symbols and resolved imports in one pass", async () => {
   await using tmp = await tmpdir()
   await mkdir(path.join(tmp.path, "src"))
