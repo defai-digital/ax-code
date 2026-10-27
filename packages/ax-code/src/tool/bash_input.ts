@@ -25,13 +25,18 @@ export const BashInputTool = Tool.define("bash_input", {
     }
     // No permission ask: the shell was approved when it was spawned with
     // bash run_in_background, and stdin writes stay inside that grant.
-    const info = await BackgroundShell.write(params.shell_id, ctx.sessionID, params.input, { eof: params.eof })
+    const { info, pending } = await BackgroundShell.write(params.shell_id, ctx.sessionID, params.input, {
+      eof: params.eof,
+      signal: ctx.abort,
+    })
     return {
       title: info.description,
       metadata: { shell: info },
       output:
-        `Wrote ${params.input.length} character(s) to shell ${info.id}` +
-        `${params.eof === true ? " and closed its stdin (EOF)" : ""}. ` +
+        (pending
+          ? `Queued ${params.input.length} character(s) for shell ${info.id}; the process has not read all of it yet`
+          : `Wrote ${params.input.length} character(s) to shell ${info.id}`) +
+        `${params.eof === true ? (pending ? " (stdin closes once it drains)" : " and closed its stdin (EOF)") : ""}. ` +
         `Shell status: ${info.status}. Use bash_output with shell_id "${info.id}" to read its reaction.`,
     }
   },

@@ -87,6 +87,29 @@ describe("bash_input", () => {
     })
   })
 
+  test("a write the child never reads returns instead of hanging, and abort stops the wait", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        // `sleep` never reads stdin, so 1 MiB cannot drain past the pipe buffer.
+        const shellID = await spawnBackground("sleep 30")
+        const data = "x".repeat(1024 * 1024)
+
+        const pending = await BackgroundShell.write(shellID, ctx.sessionID, data, { flushTimeoutMs: 200 })
+        expect(pending.pending).toBe(true)
+        expect(pending.info.id).toBe(shellID)
+
+        const controller = new AbortController()
+        const aborted = BackgroundShell.write(shellID, ctx.sessionID, data, {
+          signal: controller.signal,
+          flushTimeoutMs: 60_000,
+        })
+        setTimeout(() => controller.abort(), 50)
+        await expect(aborted).rejects.toThrow(/aborted/i)
+      },
+    })
+  }, 10_000)
+
   test("rejects writes to an unknown shell id", async () => {
     await Instance.provide({
       directory: projectRoot,

@@ -568,7 +568,17 @@ export namespace BackgroundShell {
    * write). When `eof` is set, stdin is closed after the write so commands
    * that read until end-of-input (e.g. `cat`) can finish.
    */
-  export async function write(id: string, sessionID: string, data: string, opts: { eof?: boolean }): Promise<Info> {
+  // How long a write waits for the child to drain stdin before returning with
+  // the rest still queued. A child that never reads (e.g. `sleep`) would
+  // otherwise hold the tool call open once the pipe buffer fills.
+  const STDIN_FLUSH_TIMEOUT_MS = 5_000
+
+  export async function write(
+    id: string,
+    sessionID: string,
+    data: string,
+    opts: { eof?: boolean; signal?: AbortSignal; flushTimeoutMs?: number },
+  ): Promise<{ info: Info; pending: boolean }> {
     expireFinished()
     const entry = shells.get(id)
     if (!entry || entry.sessionID !== sessionID) {
@@ -585,8 +595,16 @@ export namespace BackgroundShell {
     if (!stdin || stdin.destroyed || stdin.writableEnded || !stdin.writable) {
       throw new Error(`Background shell "${id}" stdin is no longer writable (the process may have just exited).`)
     }
-    await new Promise<void>((resolve, reject) => {
-      const fail = (error: unknown) =>
+    opts.signal?.throwIfAborted()
+    const pending = await new Promise<boolean>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const cleanup = () => {
+        if (timer) clearTimeout(timer)
+        stdin.removeListener("error", onError)
+        opts.signal?.removeEventListener("abort", onAbort)
+      }
+      const fail = (error: unknown) => {
+        cleanup()
         reject(
           new Error(
             `Failed to write to background shell "${id}" — the process exited while writing: ${
@@ -594,23 +612,35 @@ export namespace BackgroundShell {
             }`,
           ),
         )
+      }
       const onError = (error: Error) => fail(error)
+      // The queued bytes stay buffered and still reach the child if it reads
+      // later; only the wait for that is abandoned.
+      const onAbort = () => {
+        cleanup()
+        reject(new Error(`Write to background shell "${id}" was aborted before the process read its stdin.`))
+      }
       stdin.once("error", onError)
+      opts.signal?.addEventListener("abort", onAbort, { once: true })
       const done = (error?: Error | null) => {
-        stdin.removeListener("error", onError)
-        if (error) fail(error)
-        else resolve()
+        if (error) return fail(error)
+        cleanup()
+        resolve(false)
       }
       try {
         if (opts.eof) stdin.end(data, done)
         else stdin.write(data, done)
       } catch (error) {
         // Write-after-exit can also fail synchronously (ERR_STREAM_DESTROYED).
-        stdin.removeListener("error", onError)
         fail(error)
+        return
       }
+      timer = setTimeout(() => {
+        cleanup()
+        resolve(true)
+      }, opts.flushTimeoutMs ?? STDIN_FLUSH_TIMEOUT_MS)
     })
-    return toInfo(entry)
+    return { info: toInfo(entry), pending }
   }
 
   export async function kill(id: string, sessionID?: string): Promise<Info | undefined> {
