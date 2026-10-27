@@ -604,11 +604,16 @@ export namespace Config {
 
     /** An untrusted source may tighten the isolation mode, never loosen it. */
     function tightenIsolationFloor(target: Info, source: Info): Info {
-      const incoming = source.isolation?.mode
-      const floor = target.isolation?.mode
-      if (!incoming || !floor || ISOLATION_STRICTNESS[incoming] >= ISOLATION_STRICTNESS[floor]) return source
+      if (!source.isolation) return source
       const isolation = { ...source.isolation }
-      delete isolation.mode
+      const incoming = isolation.mode
+      const floor = target.isolation?.mode
+      if (incoming && floor && ISOLATION_STRICTNESS[incoming] < ISOLATION_STRICTNESS[floor]) delete isolation.mode
+      // The object form turns network on (with an egress allowlist). It only
+      // narrows a floor that already allows all network; over a disabled or
+      // unset floor it would enable network, like the `true` the per-source
+      // filter already drops.
+      if (typeof isolation.network === "object" && target.isolation?.network !== true) delete isolation.network
       return { ...source, isolation }
     }
 

@@ -2243,6 +2243,56 @@ test("untrusted project config cannot loosen a global read-only isolation floor"
   }
 })
 
+test("untrusted project config cannot turn network on with an egress allowlist object", async () => {
+  // isolation.network as an object enables network with an allowlist. Over a
+  // user floor of network: false it loosens, so it is dropped like `true`.
+  await using globalTmp = await tmpdir()
+  const prevConfig = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  Config.global.reset()
+  try {
+    await writeConfig(globalTmp.path, { isolation: { mode: "workspace-write", network: false } })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, { isolation: { network: { allowed_domains: ["example.com"] } } })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect((await Config.get()).isolation?.network).toBe(false)
+      },
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = prevConfig
+    Config.global.reset()
+  }
+})
+
+test("untrusted project config may narrow an all-network floor to an allowlist", async () => {
+  await using globalTmp = await tmpdir()
+  const prevConfig = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  Config.global.reset()
+  try {
+    await writeConfig(globalTmp.path, { isolation: { mode: "workspace-write", network: true } })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, { isolation: { network: { allowed_domains: ["example.com"] } } })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect((await Config.get()).isolation?.network).toEqual({ allowed_domains: ["example.com"] })
+      },
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = prevConfig
+    Config.global.reset()
+  }
+})
+
 test("an opted-in trusted project config may still loosen the isolation floor", async () => {
   // The out-of-band opt-in is the user saying "this repository's config is
   // mine to trust", which is what lets every other untrusted filter step
