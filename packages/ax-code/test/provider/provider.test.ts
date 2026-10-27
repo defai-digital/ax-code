@@ -1335,6 +1335,25 @@ test("defaultModel treats a missing recent-model store as empty state", async ()
   }
 })
 
+test.each(["{", "null"])("defaultModel treats an unparseable recent-model store (%s) as no selection", async (text) => {
+  const statePath = path.join(Global.Path.state, "model.json")
+  await fs.mkdir(path.dirname(statePath), { recursive: true })
+  const original = await fs.readFile(statePath, "utf8").catch(() => undefined)
+  await fs.writeFile(statePath, text)
+  try {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(Provider.defaultModel()).rejects.toThrow("No model selected")
+      },
+    })
+  } finally {
+    if (original === undefined) await fs.rm(statePath, { force: true })
+    else await fs.writeFile(statePath, original)
+  }
+})
+
 test("defaultModel surfaces unreadable recent-model store errors", async () => {
   const statePath = path.join(Global.Path.state, "model.json")
   const readJson = Filesystem.readJson

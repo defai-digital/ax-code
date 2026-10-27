@@ -1612,10 +1612,16 @@ export namespace Provider {
   export async function defaultModel() {
     const cfg = await Config.get()
     if (cfg.model) return parseModel(cfg.model)
-    const recent = await Filesystem.readJson<{ recent?: unknown }>(path.join(Global.Path.state, "model.json"))
-      .then((value) => providerModelList(value.recent))
+    const recent = await Filesystem.readJson<{ recent?: unknown } | null>(path.join(Global.Path.state, "model.json"))
+      .then((value) => providerModelList(value?.recent))
       .catch((error) => {
         if (Filesystem.isEnoent(error)) return []
+        // A corrupt state file is no selection, not a failure; an unreadable
+        // one (EACCES, ...) still surfaces.
+        if (error instanceof Error && error.cause instanceof SyntaxError) {
+          log.warn("ignoring unparseable recent-model store", { error })
+          return []
+        }
         throw error
       })
     // An unavailable most-recent selection is still user intent. Do not walk
