@@ -340,6 +340,12 @@ export namespace LSPClient {
       activity.run(() => sendNotification(...args))) as typeof connection.sendNotification
 
     const diagnostics = new Map<string, Diagnostic[]>()
+    // Document versions sent per file. Declared before the connection
+    // listens: the publishDiagnostics handler reads it, and a server may
+    // publish while create() is still awaiting the handshake.
+    const files: {
+      [path: string]: number
+    } = {}
     const serverLanguageId = input.languageId
     let closing = false
     let incompleteClose = false
@@ -515,10 +521,6 @@ export namespace LSPClient {
         settings: input.server.initialization,
       })
     }
-
-    const files: {
-      [path: string]: number
-    } = {}
 
     // Per-client path lock namespace. Concurrent notify.open/notify.close
     // for the same file must serialize because they read-modify-write the

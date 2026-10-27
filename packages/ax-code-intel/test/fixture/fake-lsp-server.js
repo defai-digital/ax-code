@@ -131,11 +131,29 @@ function handle(raw) {
   if (data.method === "initialize") {
     initializeParams = data.params
     const respond = () => {
-      send({
+      const reply = encode({
         jsonrpc: "2.0",
         id: data.id,
         result: { capabilities: initializeCapabilities, serverInfo: parseJsonEnv("FAKE_LSP_SERVER_INFO", undefined) },
       })
+      // Servers may republish workspace state before the client finishes its
+      // own setup; this pushes diagnostics in the same write as the reply.
+      const early = process.env.FAKE_LSP_PUBLISH_ON_INITIALIZE
+      if (early) {
+        const publish = encode({
+          jsonrpc: "2.0",
+          method: "textDocument/publishDiagnostics",
+          params: {
+            uri: early,
+            diagnostics: [
+              { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, message: "early" },
+            ],
+          },
+        })
+        process.stdout.write(Buffer.concat([Buffer.from(reply), Buffer.from(publish)]))
+      } else {
+        process.stdout.write(reply)
+      }
       initializeResponded = true
       maybeSendReady()
     }
