@@ -252,13 +252,22 @@ async function finalizeWriterWorktree(input: {
 
   let diffStat = ""
   let dirty = false
+  // Fail safe: only a check that ran to completion may report "no changes".
+  // Any git failure (non-zero exit or a thrown error) leaves this false, and
+  // an unchecked tree is never removed — `Worktree.remove` force-deletes the
+  // directory, so uncertainty must resolve to "keep".
+  let checked = false
   try {
     const [stat, status] = await Promise.all([
       git(["diff", "--stat", startPoint, "HEAD", "--"], { cwd: info.directory }),
-      git(["status", "--porcelain=v1"], { cwd: info.directory }),
+      // --untracked-files=all so a repo/global `status.showUntrackedFiles=no`
+      // cannot hide a writer's new files from the keep decision. The flag
+      // overrides that config the same way arena-implement.ts relies on.
+      git(["status", "--porcelain=v1", "--untracked-files=all"], { cwd: info.directory }),
     ])
     diffStat = stat.exitCode === 0 ? stat.stdout.toString().trim() : ""
     dirty = status.exitCode === 0 && status.stdout.toString().trim().length > 0
+    checked = stat.exitCode === 0 && status.exitCode === 0
   } catch (error) {
     log.warn("failed to read worktree diff status", {
       directory: info.directory,
@@ -269,10 +278,11 @@ async function finalizeWriterWorktree(input: {
   const hasChanges = diffStat.length > 0 || dirty
   let kept = true
   let removed = false
-  if (!hasChanges && outcome.ok) {
-    // ADR-231: zero commits and a clean tree → remove the worktree. A
-    // failed member's empty worktree is also a candidate for removal —
-    // it produced no patch either.
+  if (checked && !hasChanges) {
+    // ADR-231 §3: zero commits and a clean tree → remove the worktree when
+    // its child finishes, regardless of whether the member itself succeeded
+    // — a failed member's empty worktree produced no patch either. A tree
+    // whose changes could not be read (checked === false) is kept.
     try {
       await Worktree.remove({ directory: info.directory })
       removed = true
