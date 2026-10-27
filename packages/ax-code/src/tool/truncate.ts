@@ -67,6 +67,54 @@ export namespace Truncate {
 
   type Entry = { name: string; path: string; size: number; mtimeMs: number }
 
+  /** UTF-8 byte length of a code point. */
+  function codePointBytes(code: number): number {
+    if (code < 0x80) return 1
+    if (code < 0x800) return 2
+    if (code < 0x10000) return 3
+    return 4
+  }
+
+  /**
+   * The longest prefix of `text` that fits in `maxBytes` UTF-8 bytes. The cut
+   * lands on a character boundary, so a multi-byte character is never split.
+   */
+  function utf8Prefix(text: string, maxBytes: number): string {
+    let bytes = 0
+    let index = 0
+    while (index < text.length) {
+      const code = text.codePointAt(index)
+      if (code === undefined) break
+      const size = codePointBytes(code)
+      if (bytes + size > maxBytes) break
+      bytes += size
+      index += code > 0xffff ? 2 : 1
+    }
+    return text.slice(0, index)
+  }
+
+  /**
+   * The longest suffix of `text` that fits in `maxBytes` UTF-8 bytes. The cut
+   * lands on a character boundary, so a multi-byte character is never split.
+   */
+  function utf8Suffix(text: string, maxBytes: number): string {
+    const total = Buffer.byteLength(text, "utf-8")
+    if (total <= maxBytes) return text
+    // The suffix starts at the first character boundary at or after the byte
+    // offset that the budget leaves behind.
+    const budget = total - maxBytes
+    let bytes = 0
+    let index = 0
+    while (index < text.length) {
+      if (bytes >= budget) return text.slice(index)
+      const code = text.codePointAt(index)
+      if (code === undefined) break
+      bytes += codePointBytes(code)
+      index += code > 0xffff ? 2 : 1
+    }
+    return text.slice(index)
+  }
+
   async function readEntries(): Promise<Entry[]> {
     const names = await fs
       .readdir(TRUNCATION_DIR)
@@ -160,6 +208,15 @@ export namespace Truncate {
         const size = Buffer.byteLength(lines[i], "utf-8") + (i > 0 ? 1 : 0)
         if (bytes + size > maxBytes) {
           hitBytes = true
+          // The line alone exceeds the budget, so no complete line fits.
+          // Preview a byte-capped prefix of it instead of showing nothing.
+          // Only blank lines so far counts as nothing shown.
+          if (!out.some((line) => line !== "")) {
+            const separator = i > 0 ? 1 : 0
+            const prefix = utf8Prefix(lines[i], Math.max(0, maxBytes - bytes - separator))
+            out.push(prefix)
+            bytes += Buffer.byteLength(prefix, "utf-8") + separator
+          }
           break
         }
         out.push(lines[i])
@@ -170,6 +227,16 @@ export namespace Truncate {
         const size = Buffer.byteLength(lines[i], "utf-8") + (out.length > 0 ? 1 : 0)
         if (bytes + size > maxBytes) {
           hitBytes = true
+          // The line alone exceeds the budget, so no complete line fits.
+          // Preview a byte-capped suffix of it instead of showing nothing.
+          // Trailing blank lines can precede the oversized line in `out`, so
+          // test for content rather than the line count.
+          if (!out.some((line) => line !== "")) {
+            const separator = out.length > 0 ? 1 : 0
+            const suffix = utf8Suffix(lines[i], Math.max(0, maxBytes - bytes - separator))
+            out.unshift(suffix)
+            bytes += Buffer.byteLength(suffix, "utf-8") + separator
+          }
           break
         }
         out.unshift(lines[i])

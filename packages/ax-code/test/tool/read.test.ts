@@ -704,6 +704,110 @@ root_type Monster;`
   })
 })
 
+describe("tool.read line splitting", () => {
+  test("keeps a lone carriage return inside the line and does not add a line number", async () => {
+    await using tmp = await tmpdir({
+      config: { username: "test" },
+      init: async (dir) => {
+        await writeFile(path.join(dir, "cr.txt"), "const s = 'a\rb'\nline2\nline3\n")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const result = await read.execute({ filePath: path.join(tmp.path, "cr.txt") }, ctx)
+        // Ripgrep and the edit tool split on "\n" only, so the reader must not
+        // invent a fourth line for the lone "\r".
+        expect(result.output).toContain("1: const s = 'a\rb'")
+        expect(result.output).toContain("2: line2")
+        expect(result.output).toContain("3: line3")
+        expect(result.output).not.toContain("4: ")
+        expect(result.output).toContain("End of file - total 3 lines")
+      },
+    })
+  })
+
+  test("renders CRLF files exactly as before", async () => {
+    await using tmp = await tmpdir({
+      config: { username: "test" },
+      init: async (dir) => {
+        await writeFile(path.join(dir, "crlf.txt"), "line1\r\nline2\r\nline3\r\n")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const result = await read.execute({ filePath: path.join(tmp.path, "crlf.txt") }, ctx)
+        expect(result.output).toContain("1: line1")
+        expect(result.output).toContain("2: line2")
+        expect(result.output).toContain("3: line3")
+        expect(result.output).not.toContain("\r")
+        expect(result.output).toContain("End of file - total 3 lines")
+      },
+    })
+  })
+
+  test("strips a trailing lone carriage return on the final line", async () => {
+    await using tmp = await tmpdir({
+      config: { username: "test" },
+      init: async (dir) => {
+        await writeFile(path.join(dir, "trailing-cr.txt"), "line1\r")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const result = await read.execute({ filePath: path.join(tmp.path, "trailing-cr.txt") }, ctx)
+        // A trailing "\r" is the carriage half of a CRLF terminator, so it is
+        // stripped — the same rendering the reader produced before.
+        expect(result.output).toContain("1: line1")
+        expect(result.output).not.toContain("\r")
+        expect(result.output).toContain("End of file - total 1 lines")
+      },
+    })
+  })
+
+  test("keeps a lone carriage return inside the final line", async () => {
+    await using tmp = await tmpdir({
+      config: { username: "test" },
+      init: async (dir) => {
+        await writeFile(path.join(dir, "final-line-cr.txt"), "a\rb")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const result = await read.execute({ filePath: path.join(tmp.path, "final-line-cr.txt") }, ctx)
+        expect(result.output).toContain("1: a\rb")
+        expect(result.output).toContain("End of file - total 1 lines")
+      },
+    })
+  })
+
+  test("keeps line numbers aligned with offset when a carriage return is present", async () => {
+    await using tmp = await tmpdir({
+      config: { username: "test" },
+      init: async (dir) => {
+        await writeFile(path.join(dir, "cr-offset.txt"), "const s = 'a\rb'\nline2\nline3\n")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const result = await read.execute({ filePath: path.join(tmp.path, "cr-offset.txt"), offset: 2 }, ctx)
+        expect(result.output).toContain("2: line2")
+        expect(result.output).toContain("3: line3")
+        expect(result.output).not.toContain("1: ")
+      },
+    })
+  })
+})
+
 describe("tool.read lsp", () => {
   test.each(["normal", "low"])("semantic queries still start a real server on demand in %s mode", async (profile) => {
     vi.stubEnv("AX_CODE_MEMORY_PROFILE", profile)

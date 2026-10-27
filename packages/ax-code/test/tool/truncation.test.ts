@@ -81,6 +81,79 @@ describe("Truncate", () => {
       expect(result.content).not.toContain("line0")
     })
 
+    test("previews a byte-capped prefix when a single line exceeds the byte budget", async () => {
+      const content = '{"a":"' + "y".repeat(60000) + '"}\n'
+      const result = await Truncate.output(content)
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      const marker = result.content.indexOf("\n\n...")
+      // The preview must not be empty: the offending line alone exceeds the
+      // budget, so a byte-capped slice of it is shown instead.
+      expect(marker).toBeGreaterThan(0)
+      const preview = result.content.slice(0, marker)
+      expect(preview.startsWith('{"a":"')).toBe(true)
+      expect(Buffer.byteLength(preview, "utf-8")).toBe(Truncate.MAX_BYTES)
+      expect(result.truncatedTo).toBe(Truncate.MAX_BYTES)
+      const total = Buffer.byteLength(content, "utf-8")
+      expect(result.content).toContain(`...${total - Truncate.MAX_BYTES} bytes truncated...`)
+    })
+
+    test("previews a byte-capped suffix of the last line in tail direction", async () => {
+      const content = "short\n" + "y".repeat(60000) + "\n"
+      const result = await Truncate.output(content, { direction: "tail" })
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      expect(result.truncatedTo).toBe(Truncate.MAX_BYTES)
+      const total = Buffer.byteLength(content, "utf-8")
+      expect(result.content).toContain(`...${total - Truncate.MAX_BYTES} bytes truncated...`)
+      // The tail preview is the last line's suffix, byte-capped.
+      const preview = result.content.slice(result.content.lastIndexOf("\n\n") + 2)
+      expect(preview).toBe("y".repeat(Truncate.MAX_BYTES))
+    })
+
+    test("previews the oversized line even when blank lines follow it in tail direction", async () => {
+      const result = await Truncate.output("y".repeat(60000) + "\n\n\n", { direction: "tail" })
+      if (!result.truncated) throw new Error("expected truncated")
+      expect(result.content).toContain("y".repeat(1000))
+    })
+
+    test("cuts the previewed prefix on a UTF-8 character boundary", async () => {
+      // "€" is 3 bytes, so the byte budget does not land on a character edge.
+      const content = "€".repeat(30000)
+      const result = await Truncate.output(content)
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      const preview = result.content.slice(0, result.content.indexOf("\n\n..."))
+      expect(Buffer.byteLength(preview, "utf-8")).toBe(51198)
+      expect(preview).not.toContain("\uFFFD")
+      expect([...preview].every((char) => char === "€")).toBe(true)
+    })
+
+    test("cuts the previewed suffix on a UTF-8 character boundary", async () => {
+      const content = "short\n" + "€".repeat(30000) + "\n"
+      const result = await Truncate.output(content, { direction: "tail" })
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      const preview = result.content.slice(result.content.lastIndexOf("\n\n") + 2)
+      expect(Buffer.byteLength(preview, "utf-8")).toBe(51198)
+      expect(preview).not.toContain("\uFFFD")
+      expect([...preview].every((char) => char === "€")).toBe(true)
+    })
+
+    test("keeps normal multi-line previews unchanged when a later line is oversized", async () => {
+      const content = "short\n" + "y".repeat(60000)
+      const result = await Truncate.output(content)
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      const preview = result.content.slice(0, result.content.indexOf("\n\n..."))
+      expect(preview).toBe("short")
+    })
+
     test("uses default MAX_LINES and MAX_BYTES", () => {
       expect(Truncate.MAX_LINES).toBe(2000)
       expect(Truncate.MAX_BYTES).toBe(50 * 1024)

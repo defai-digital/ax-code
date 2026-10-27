@@ -1,7 +1,6 @@
 import { createReadStream } from "node:fs"
 import fs from "node:fs/promises"
 import { Readable } from "node:stream"
-import { createInterface } from "node:readline"
 import type { BigIntStats } from "node:fs"
 import z from "zod"
 import { MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BYTES_LABEL } from "../constants/tool"
@@ -58,6 +57,48 @@ export async function readSourceSnapshot(filepath: string, signal: AbortSignal) 
   }
 }
 
+/**
+ * Split a text stream into lines on "\n" only, stripping one trailing "\r"
+ * from each line so CRLF files render exactly as they do today.
+ *
+ * `node:readline` cannot be used here: its terminator regex treats a lone
+ * "\r" as a line break, so a file containing "\r" would be split into extra
+ * lines and the "\r" would be dropped from the content. Ripgrep and the edit
+ * tool split on "\n" only, so their line numbers must match the ones this
+ * reader reports.
+ *
+ * Only the current partial line is buffered, so a huge file is never held in
+ * memory. Because the remainder of a chunk is carried over to the next one,
+ * a CRLF pair that straddles a chunk boundary is still recognised as one
+ * terminator.
+ */
+async function* splitLines(stream: Readable, signal: AbortSignal): AsyncGenerator<string> {
+  // The tail of the stream that has not been split into a complete line yet.
+  let pending = ""
+  for await (const chunk of stream) {
+    signal.throwIfAborted()
+    const text = chunk as string
+    let start = 0
+    let index = text.indexOf("\n")
+    while (index !== -1) {
+      yield stripCarriageReturn(pending + text.slice(start, index))
+      pending = ""
+      start = index + 1
+      index = text.indexOf("\n", start)
+    }
+    // Keep the incomplete remainder for the next chunk.
+    pending += text.slice(start)
+  }
+  signal.throwIfAborted()
+  // A file that does not end in a newline still has a final line.
+  if (pending.length > 0) yield stripCarriageReturn(pending)
+}
+
+/** Drop one trailing "\r" so CRLF and LF files render identically. */
+function stripCarriageReturn(line: string): string {
+  return line.endsWith("\r") ? line.slice(0, -1) : line
+}
+
 export async function renderReadText(
   filepath: string,
   offset: number,
@@ -66,14 +107,13 @@ export async function renderReadText(
   text?: string,
 ) {
   const stream = text === undefined ? createReadStream(filepath, { encoding: "utf8", signal }) : Readable.from([text])
-  const rl = createInterface({ input: stream, crlfDelay: Infinity })
   const raw: string[] = []
   let bytes = 0
   let lines = 0
   let truncatedByBytes = false
   let hasMoreLines = false
   try {
-    for await (const text of rl) {
+    for await (const text of splitLines(stream, signal)) {
       signal.throwIfAborted()
       const normalized = lines === 0 && text.startsWith("\uFEFF") ? text.slice(1) : text
       lines++
@@ -93,7 +133,6 @@ export async function renderReadText(
       bytes += size
     }
   } finally {
-    rl.close()
     stream.destroy()
   }
   signal.throwIfAborted()
