@@ -135,6 +135,9 @@ export async function captureSnapshot(
 
   // Write the run summary
   await VisualArtifactStore.writeRunSummary(projectDir, run)
+  // Apply the retention limits on every capture; the new run is the newest
+  // and stays.
+  await pruneSnapshots(projectDir)
 
   log.info("snapshot captured", {
     runID,

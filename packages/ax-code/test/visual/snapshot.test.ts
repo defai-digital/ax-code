@@ -122,6 +122,25 @@ describe("visual.snapshot", () => {
       expect(remaining.length).toBe(3)
     })
 
+    test("a capture applies the retention limits", async () => {
+      const stale = path.join(VisualArtifactStore.baseDir(tmpDir), "snap_stale")
+      await fs.promises.mkdir(stale, { recursive: true })
+      const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000)
+      await fs.promises.utimes(stale, old, old)
+      const imagePath = path.join(tmpDir, "image.png")
+      await fs.promises.writeFile(
+        imagePath,
+        Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          "base64",
+        ),
+      )
+
+      const result = await captureSnapshot(tmpDir, "session-retention", { type: "file", filePath: imagePath })
+
+      expect(await fs.promises.readdir(VisualArtifactStore.baseDir(tmpDir))).toEqual([result.run.id])
+    })
+
     test("returns 0 when no runs exist", async () => {
       const pruned = await pruneSnapshots(tmpDir)
       expect(pruned).toBe(0)
