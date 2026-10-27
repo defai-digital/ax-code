@@ -61,6 +61,7 @@ import {
   DYNAMIC_REDIRECTION_DIAGNOSTIC,
   expandLeadingTilde,
   spawnHomeDirectory,
+  decodeAnsiCQuoted,
   decodeShellLiteral,
   hasDynamicRedirection,
   hasDynamicShellExpansion,
@@ -98,6 +99,9 @@ const COMMAND_WORD_NODE_TYPES = new Set([
   "word",
   "string",
   "raw_string",
+  // $'...' quoting; dropping it hid an argument such as the -rf of
+  // `rm $'-rf' /` from the destructive classifier.
+  "ansi_c_string",
   "concatenation",
   "simple_expansion",
   "expansion",
@@ -448,7 +452,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         parts.map((part) => {
           const decoded = decodeShellLiteral(part)
           if (decoded === undefined) dynamicPathAccess = true
-          return decoded ?? part
+          return decoded ?? decodeAnsiCQuoted(part) ?? part
         })
       // Set when any scanned command wraps network-capable interpreted code
       // (python -c 'urllib…') or enters another network namespace (docker

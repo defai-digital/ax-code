@@ -108,6 +108,32 @@ describe("ops.strict bash integration", () => {
     )
   }, 30_000)
 
+  test.each([`rm $'-rf' ./strict-mode-target`, `rm $'-r\\x66' ./strict-mode-target`])(
+    "strict on + destructive command behind ANSI-C quoting (%s): hard deny",
+    async (command) => {
+      await using tmp = await tmpdir({ git: true, config: { ops: { strict: true } } })
+      await fs.mkdir(path.join(tmp.path, "strict-mode-target"))
+      await withTrustedProjectConfig(() =>
+        Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            const asks: PermissionRequest[] = []
+            await expect(
+              bash.execute(
+                { command: `${command} && touch ./should-not-exist`, description: "Remove target" },
+                makeCtx(asks),
+              ),
+            ).rejects.toBeInstanceOf(Permission.DeniedError)
+            await expect(fs.stat(path.join(tmp.path, "should-not-exist"))).rejects.toThrow()
+            expect((await fs.stat(path.join(tmp.path, "strict-mode-target"))).isDirectory()).toBe(true)
+          },
+        }),
+      )
+    },
+    30_000,
+  )
+
   test("strict on + benign command: unaffected", async () => {
     await using tmp = await tmpdir({ git: true, config: { ops: { strict: true } } })
     await withTrustedProjectConfig(() =>

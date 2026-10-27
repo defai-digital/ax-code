@@ -96,6 +96,58 @@ export function decodeShellLiteral(value: string): string | undefined {
   return quote === undefined ? result : undefined
 }
 
+const ANSI_C_ESCAPES: Record<string, string> = {
+  a: "\x07",
+  b: "\b",
+  e: "\x1b",
+  E: "\x1b",
+  f: "\f",
+  n: "\n",
+  r: "\r",
+  t: "\t",
+  v: "\v",
+  "\\": "\\",
+  "'": "'",
+  '"': '"',
+  "?": "?",
+}
+
+/**
+ * The value bash gives a word that is wholly $'...' (ANSI-C quoting).
+ * decodeShellLiteral treats it as dynamic for path checks; command
+ * classifiers still need the literal, or `rm $'-rf' /` reads as `rm /` and
+ * `rm $'-r\\x66' /` hides its -rf. Only \\c (control characters) stays
+ * undecoded.
+ */
+export function decodeAnsiCQuoted(value: string): string | undefined {
+  if (!value.startsWith("$'") || value.length < 3 || !value.endsWith("'")) return undefined
+  const body = value.slice(2, -1)
+  let text = ""
+  for (let i = 0; i < body.length; i++) {
+    const char = body[i]!
+    if (char === "'") return undefined
+    if (char !== "\\") {
+      text += char
+      continue
+    }
+    const next = body[++i]
+    if (next === undefined) return undefined
+    const simple = ANSI_C_ESCAPES[next]
+    if (simple !== undefined) {
+      text += simple
+      continue
+    }
+    const numeric = /^(?:x([0-9a-fA-F]{1,2})|u([0-9a-fA-F]{1,4})|U([0-9a-fA-F]{1,8})|([0-7]{1,3}))/.exec(body.slice(i))
+    if (!numeric) return undefined
+    const [match, hex, short, long, octal] = numeric
+    const code = (hex ?? short ?? long) ? parseInt((hex ?? short ?? long)!, 16) : parseInt(octal!, 8)
+    if (code > 0x10ffff) return undefined
+    text += String.fromCodePoint(code)
+    i += match.length - 1
+  }
+  return text
+}
+
 /** Home directory the spawned shell will use for `~` expansion. */
 export function spawnHomeDirectory(env: NodeJS.Dict<string> = process.env): string {
   const home = env.HOME || env.USERPROFILE

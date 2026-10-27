@@ -4,6 +4,7 @@ import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
   assertSupportedWindowsRedirect,
+  decodeAnsiCQuoted,
   decodeShellLiteral,
   expandLeadingTilde,
   spawnHomeDirectory,
@@ -252,5 +253,19 @@ describe("wgetHostDirectory", () => {
     expect(wgetHostDirectory("http://[::1]:8080/a")).toBe("::1:8080")
     expect(wgetHostDirectory("http://[::1]/a")).toBe("::1")
     expect(wgetHostDirectory("https://example.com:80/a")).toBe("example.com:80")
+  })
+})
+
+describe("decodeAnsiCQuoted", () => {
+  test("decodes plain escapes and leaves anything else undecoded", () => {
+    expect(decodeAnsiCQuoted("$'-rf'")).toBe("-rf")
+    expect(decodeAnsiCQuoted("$'a\\tb'")).toBe("a\tb")
+    expect(decodeAnsiCQuoted("$'it\\'s'")).toBe("it's")
+    expect(decodeAnsiCQuoted("$'-r\\x66'")).toBe("-rf")
+    expect(decodeAnsiCQuoted("$'-r\\146'")).toBe("-rf")
+    expect(decodeAnsiCQuoted("$'\\u00e9'")).toBe("é")
+    expect(decodeAnsiCQuoted("$'\\cA'")).toBeUndefined()
+    expect(decodeAnsiCQuoted("'plain'")).toBeUndefined()
+    expect(decodeAnsiCQuoted("$'open")).toBeUndefined()
   })
 })
