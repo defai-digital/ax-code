@@ -178,6 +178,12 @@ describe("plan handoff negation", () => {
     }
   })
 
+  test("a negated approval in plan mode does not route to an edit-capable specialist either", () => {
+    const message = "I do not approve this plan - there is a security hole in the auth flow"
+    expect(route(message, "build")?.agent).toBe("security")
+    expect(route(message, "plan")).toBeNull()
+  })
+
   test("an affirmative approval still hands off to build", () => {
     expect(route("approved, go ahead", "plan")?.agent).toBe("build")
     expect(route("可以開始", "plan")?.agent).toBe("build")

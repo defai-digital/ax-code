@@ -298,6 +298,10 @@ export function routePlanHandoff(message: string): RouteResult | null {
  */
 export function route(message: string, currentAgent: string): RouteResult | null {
   if (currentAgent === "plan") {
+    // The negation invariant above covers every way out of plan mode, not just
+    // the build handoff: a rejected plan must not reach an edit-capable
+    // specialist through topic routing either.
+    if (PLAN_HANDOFF_NEGATION.test(message)) return null
     const handoff = routePlanHandoff(message)
     if (handoff) {
       log.info("keyword-route", { agent: handoff.agent, confidence: handoff.confidence, matched: handoff.matched })
