@@ -43,6 +43,13 @@ async function confirmDestructiveAction(prompt: string) {
   const readline = await import("readline")
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   const answer = await new Promise<string>((resolve) => {
+    // readline traps ^C in raw mode and only pauses, so question() would
+    // never resolve; treat Ctrl+C or a closed input as "no".
+    rl.once("SIGINT", () => {
+      process.stdout.write("\n")
+      resolve("")
+    })
+    rl.once("close", () => resolve(""))
     rl.question(`${prompt} (y/N) `, resolve)
   })
   rl.close()
@@ -503,11 +510,18 @@ export const SessionListCommand = cmd({
           } catch {}
         }
         const removeSignals = registerShutdownSignals(kill)
+        // Quitting the pager before it reads everything closes its stdin; the
+        // write then fails with EPIPE, which must not crash the CLI.
+        let pagerClosed = false
+        proc.stdin.on("error", () => {
+          pagerClosed = true
+        })
         try {
           const didWrite = proc.stdin.write(output)
-          if (!didWrite) {
-            await new Promise<void>((resolve, reject) => {
-              proc.stdin!.once("error", reject)
+          if (!didWrite && !pagerClosed) {
+            await new Promise<void>((resolve) => {
+              proc.stdin!.once("error", () => resolve())
+              proc.stdin!.once("close", () => resolve())
               proc.stdin!.once("drain", resolve)
             })
           }

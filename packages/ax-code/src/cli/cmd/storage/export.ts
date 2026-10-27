@@ -3,6 +3,7 @@ import { SessionID } from "../../../session/schema"
 import { cmd } from "../cmd"
 import { bootstrap } from "../../bootstrap"
 import { UI } from "../../ui"
+import { getRequiredSession } from "../session-required"
 import * as prompts from "@clack/prompts"
 import { EOL } from "os"
 
@@ -69,8 +70,8 @@ export const ExportCommand = cmd({
         })
       }
 
+      const sessionInfo = await getRequiredSession(sessionID!)
       try {
-        const sessionInfo = await Session.get(sessionID!)
         const messages = await Session.messages({ sessionID: sessionInfo.id })
         const events = EventQuery.bySessionLog(sessionInfo.id)
         const exportData = buildTransfer({
@@ -85,7 +86,9 @@ export const ExportCommand = cmd({
         process.stdout.write(JSON.stringify(exportData, null, 2))
         process.stdout.write(EOL)
       } catch (error) {
-        UI.error(`Session not found: ${sessionID!}`)
+        // Only a missing session is "not found"; a locked or corrupt store
+        // must surface its own error.
+        UI.error(`Export failed for ${sessionID!}: ${error instanceof Error ? error.message : String(error)}`)
         process.exit(1)
       }
     })
