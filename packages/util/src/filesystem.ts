@@ -2,7 +2,7 @@ import * as fs from "fs/promises"
 import { createWriteStream, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
-import { dirname, isAbsolute, join, relative, resolve as pathResolve, sep } from "path"
+import { basename, dirname, isAbsolute, join, relative, resolve as pathResolve, sep } from "path"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import { toErrorMessage } from "./error-message"
@@ -194,22 +194,38 @@ export namespace Filesystem {
   }
 
   /**
-   * On Windows, normalize a path to its canonical casing using the filesystem.
-   * This is needed because Windows paths are case-insensitive but LSP servers
-   * may return paths with different casing than what we send them.
+   * Normalize a path to its on-disk casing on case-insensitive platforms
+   * (Windows and macOS). LSP servers, shells and users may spell a path with a
+   * different casing than what is stored, and a case variant must not become a
+   * second identity for the same directory (two instances, two `dir-<sha1>`
+   * project ids). Linux filesystems are case-sensitive, so the input is
+   * returned unchanged there.
    */
   export function normalizePath(p: string): string {
-    if (process.platform !== "win32") return p
+    if (process.platform !== "win32" && process.platform !== "darwin") return p
+    return canonicalCase(p)
+  }
+
+  function canonicalCase(p: string): string {
     try {
       return realpathSync.native(p)
-    } catch {
-      return p
+    } catch (error) {
+      // A missing path has no casing of its own, but its deepest existing
+      // ancestor does: a not-yet-created file under a miscased directory must
+      // normalize the same way the directory does. Segments that do not exist
+      // are appended as typed.
+      if (!isEnoent(error) || !isAbsolute(p)) return p
+      const parent = dirname(p)
+      // A root has no ancestor left to canonicalize.
+      if (parent === p) return p
+      return join(canonicalCase(parent), basename(p))
     }
   }
 
   // We cannot rely on path.resolve() here because git.exe may come from Git Bash, Cygwin, or MSYS2, so we need to translate these paths at the boundary.
-  // Also resolves symlinks so that callers using the result as a cache key
-  // always get the same canonical path for a given physical directory.
+  // Also resolves symlinks and, on case-insensitive platforms, the on-disk
+  // casing, so that callers using the result as a cache key always get the
+  // same canonical path for a given physical directory.
   export function resolve(p: string): string {
     const resolved = pathResolve(windowsPath(p))
     try {

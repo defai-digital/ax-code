@@ -4,6 +4,19 @@ import fs from "fs/promises"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
+/**
+ * Create a mixed-case directory plus its all-lowercase spelling. On a
+ * case-insensitive volume (the macOS default) both spellings address the same
+ * directory; a case-sensitive volume cannot express that, so the darwin tests
+ * skip there instead of asserting the platform name alone.
+ */
+async function mixedCaseDirectory(root: string, segments: string[]) {
+  const onDisk = path.join(root, ...segments)
+  await fs.mkdir(onDisk, { recursive: true })
+  const miscased = path.join(root, ...segments.map((segment) => segment.toLowerCase()))
+  return { onDisk, miscased, supported: await Filesystem.exists(miscased) }
+}
+
 describe("filesystem", () => {
   describe("exists()", () => {
     test("returns true for existing file", async () => {
@@ -700,6 +713,31 @@ describe("filesystem", () => {
       expect(result).toBe(Filesystem.normalizePath(path.resolve(missing)))
     })
 
+    // A case-insensitive volume lets a miscased path address the same physical
+    // directory. resolve() must return the casing that is on disk, or one
+    // directory becomes two instance cache keys (see
+    // test/project/case-insensitive-path.test.ts).
+    test.skipIf(process.platform !== "darwin")("resolves a miscased directory to its on-disk case", async () => {
+      await using tmp = await tmpdir()
+      const { onDisk, miscased, supported } = await mixedCaseDirectory(tmp.path, ["CaseTest", "MyProj"])
+      if (!supported) return
+      expect(miscased).not.toBe(onDisk)
+      expect(Filesystem.resolve(miscased)).toBe(onDisk)
+    })
+
+    test.skipIf(process.platform !== "darwin")(
+      "resolves a missing child of a miscased directory to the on-disk case",
+      async () => {
+        await using tmp = await tmpdir()
+        const { onDisk, miscased, supported } = await mixedCaseDirectory(tmp.path, ["CaseTest"])
+        if (!supported) return
+        // Segments that do not exist yet keep the case the caller typed.
+        expect(Filesystem.resolve(path.join(miscased, "Missing", "file.txt"))).toBe(
+          path.join(onDisk, "Missing", "file.txt"),
+        )
+      },
+    )
+
     test.skipIf(process.platform === "win32")("throws ELOOP on symlink cycle", async () => {
       await using tmp = await tmpdir()
       const a = path.join(tmp.path, "a")
@@ -735,6 +773,36 @@ describe("filesystem", () => {
       await fs.writeFile(file, "x")
       expect(() => Filesystem.resolve(path.join(file, "child"))).toThrow()
     })
+  })
+
+  describe("normalizePath()", () => {
+    test.skipIf(process.platform !== "darwin")("returns the on-disk case of an existing path", async () => {
+      await using tmp = await tmpdir()
+      const { onDisk, miscased, supported } = await mixedCaseDirectory(tmp.path, ["CaseTest", "MyProj"])
+      if (!supported) return
+      expect(Filesystem.normalizePath(miscased)).toBe(onDisk)
+    })
+
+    test.skipIf(process.platform !== "darwin")(
+      "canonicalizes only the existing ancestor of a missing path",
+      async () => {
+        await using tmp = await tmpdir()
+        const { onDisk, miscased, supported } = await mixedCaseDirectory(tmp.path, ["CaseTest"])
+        if (!supported) return
+        expect(Filesystem.normalizePath(path.join(miscased, "Child", "file.txt"))).toBe(
+          path.join(onDisk, "Child", "file.txt"),
+        )
+      },
+    )
+
+    // Linux filesystems are case-sensitive: the input is returned unchanged and
+    // no filesystem call is made for it.
+    test.skipIf(process.platform === "win32" || process.platform === "darwin")(
+      "leaves case-sensitive platform paths untouched",
+      () => {
+        expect(Filesystem.normalizePath("/repo/MyProj/File.txt")).toBe("/repo/MyProj/File.txt")
+      },
+    )
   })
 })
 
