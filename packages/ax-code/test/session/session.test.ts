@@ -262,6 +262,28 @@ describe("session.fork", () => {
     })
   })
 
+  test("archived-history removal treats an archive time of 0 as archived", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({ title: "archived-at-zero-probe" })
+        const child = await Session.create({ parentID: session.id, title: "archived-at-zero-child" })
+        try {
+          await Session.setArchived({ sessionID: session.id, time: 0 })
+          await Session.setArchived({ sessionID: child.id, time: 0 })
+          await Session.removeArchivedGlobally(session.id)
+          const rows = Database.use((db) => db.select().from(SessionTable).all()).filter(
+            (row) => row.id === session.id || row.id === child.id,
+          )
+          expect(rows).toEqual([])
+        } finally {
+          await Session.remove(child.id).catch(() => {})
+          await Session.remove(session.id).catch(() => {})
+        }
+      },
+    })
+  })
+
   test("a fork at an unknown message creates no session", async () => {
     await Instance.provide({
       directory: projectRoot,

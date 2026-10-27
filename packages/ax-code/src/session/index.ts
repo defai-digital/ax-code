@@ -1104,7 +1104,7 @@ export namespace Session {
       // directory move that raced the route's historical-identity check.
       if (
         options.archivedOnly &&
-        (!root.time_archived ||
+        (root.time_archived == null ||
           (options.directory !== undefined && Filesystem.resolve(root.directory) !== options.directory))
       ) {
         throw new ArchivedRemovalConflictError({ sessionID })
@@ -1128,7 +1128,8 @@ export namespace Session {
           .all()
         for (const row of rows) {
           if (allDescendantIDs.has(row.id)) continue
-          if (options.archivedOnly && !row.time_archived) {
+          // `== null`, not falsiness: 0 is a valid archive time (see list()).
+          if (options.archivedOnly && row.time_archived == null) {
             // Keep active children and their subtrees. Reparent in the same
             // transaction instead of letting an archived ancestor delete them.
             const retained = db
