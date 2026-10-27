@@ -2653,6 +2653,77 @@ describe("session.llm.stream - AX Trust prompt-cache header", () => {
     })
   })
 
+  test("honors compatibility.cache_format none for Claude on an AX Trust OpenAI-compat route", async () => {
+    const providerID = "defai-01-ax-trust-com"
+    const modelID = "anthropic/claude-opus-5"
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                management: "ax-trust",
+                options: {
+                  apiKey: "test-ax-trust-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                  compatibility: { cache_format: "none" },
+                },
+                models: { [modelID]: {} },
+              },
+            },
+          }),
+        )
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(modelID))
+        const sessionID = SessionID.make("session-axtrust-claude-cache-none")
+        const user = {
+          id: MessageID.make("user-axtrust-claude-cache-none"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "test",
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {
+        }
+        const capture = await request
+        expect(capture.body.prompt_cache_key).toBeUndefined()
+        expect(capture.body.promptCacheKey).toBeUndefined()
+        expect(JSON.stringify(capture.body.messages)).not.toContain("cache_control")
+      },
+    })
+  })
+
   test("omits X-AX-Prompt-Cache-Key when an AX Trust provider opts out", async () => {
     const capture = await streamAxTrustHeaderCase({
       providerID: "ax-trust-defai-digital",

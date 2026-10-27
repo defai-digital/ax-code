@@ -794,7 +794,14 @@ export namespace LLM {
               specificationVersion: "v3" as const,
               async transformParams(args: any) {
                 if (args.type === "stream") {
-                  args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
+                  // ADR-247 compatibility knobs live on the provider config,
+                  // which the request options above do not carry.
+                  const compatibility = provider?.options?.["compatibility"]
+                  args.params.prompt = ProviderTransform.message(
+                    args.params.prompt,
+                    input.model,
+                    compatibility ? { ...options, compatibility } : options,
+                  )
                 }
                 const tools = args.params?.tools
                 const hasTools = Array.isArray(tools) && tools.length > 0
