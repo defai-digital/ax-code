@@ -454,6 +454,41 @@ describe("ops_apply", () => {
   )
 
   test(
+    "snapshot_command runs in the plan's working directory",
+    withProject(async (ctx) => {
+      const cwd = path.join(Instance.directory, "infra")
+      await fs.mkdir(cwd, { recursive: true })
+      await fs.writeFile(path.join(Instance.directory, "state.txt"), "root-state\n")
+      await fs.writeFile(path.join(cwd, "state.txt"), "sub-state\n")
+      const command = "printf 'mutated\\n' > state.txt"
+      const { planID } = await createPlan(ctx, {
+        ...PLAN_INPUT,
+        apply_command: command,
+        snapshot_command: "cat state.txt",
+        cwd,
+      })
+      const { token } = await approvePlan(ctx, planID)
+
+      const tool = await OpsApplyTool.init()
+      const result = await tool.execute(
+        {
+          approval_token: token,
+          plan_id: planID,
+          command,
+          snapshot_command: "cat state.txt",
+          cwd,
+          timeout_seconds: 600,
+        },
+        ctx,
+      )
+
+      expect(result.metadata.exit_code).toBe(0)
+      expect(result.metadata.before_snapshot_ref).toBe(Hash.fast("sub-state\n"))
+      expect(result.metadata.after_snapshot_ref).toBe(Hash.fast("mutated\n"))
+    }),
+  )
+
+  test(
     "snapshot command failure still applies and journals with null refs",
     withProject(async (ctx) => {
       const { planID } = await createPlan(ctx, {

@@ -41,11 +41,13 @@ const SNAPSHOT_TIMEOUT_SECONDS = 120
  * ref. Best-effort by design: a failing or slow snapshot command must never
  * abort the apply — the ref simply stays null and the mutation proceeds.
  */
-async function snapshotRef(input: { command: string; abort?: AbortSignal }): Promise<string | null> {
+async function snapshotRef(input: { command: string; cwd?: string; abort?: AbortSignal }): Promise<string | null> {
   try {
     OpsExec.assertReadOnly(input.command)
     const result = await OpsExec.run({
       command: input.command,
+      // The plan's cwd applies to the snapshot as well as the mutation.
+      cwd: input.cwd,
       timeoutSeconds: SNAPSHOT_TIMEOUT_SECONDS,
       abort: input.abort,
     })
@@ -168,7 +170,7 @@ export const OpsApplyTool = Tool.define("ops_apply", {
     let excerpt = ""
     try {
       beforeSnapshotRef = params.snapshot_command
-        ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
+        ? await snapshotRef({ command: params.snapshot_command, cwd: params.cwd, abort: ctx.abort })
         : null
       ctx.abort.throwIfAborted()
 
@@ -183,7 +185,7 @@ export const OpsApplyTool = Tool.define("ops_apply", {
 
       afterSnapshotRef =
         params.snapshot_command && !result.aborted
-          ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
+          ? await snapshotRef({ command: params.snapshot_command, cwd: params.cwd, abort: ctx.abort })
           : null
     } catch (error) {
       try {
