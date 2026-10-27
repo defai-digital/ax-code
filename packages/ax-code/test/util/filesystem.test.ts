@@ -795,6 +795,18 @@ describe("filesystem", () => {
       },
     )
 
+    test.skipIf(process.platform !== "darwin")("leaves a relative path as typed", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "CaseTest"))
+      const cwd = process.cwd()
+      process.chdir(tmp.path)
+      try {
+        expect(Filesystem.normalizePath("casetest")).toBe("casetest")
+      } finally {
+        process.chdir(cwd)
+      }
+    })
+
     // Linux filesystems are case-sensitive: the input is returned unchanged and
     // no filesystem call is made for it.
     test.skipIf(process.platform === "win32" || process.platform === "darwin")(

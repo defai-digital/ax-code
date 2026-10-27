@@ -203,6 +203,9 @@ export namespace Filesystem {
    */
   export function normalizePath(p: string): string {
     if (process.platform !== "win32" && process.platform !== "darwin") return p
+    // realpath would resolve a relative path against process.cwd(), which need
+    // not be the project directory, so macOS leaves relative input as typed.
+    if (process.platform === "darwin" && !isAbsolute(p)) return p
     return canonicalCase(p)
   }
 
