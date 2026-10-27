@@ -41,6 +41,7 @@ const SKIP_DIR_PREFIXES = ["node_modules", "dist", "ts-dist", ".turbo", ".git"]
 const SELF_REFERENCE_ALLOWLIST = new Set([
   path.join(ROOT, "packages/ax-code/script/update-models.ts"),
   path.join(ROOT, "script/check-no-cost.ts"),
+  path.join(ROOT, "script/check-no-cost.test.ts"),
 ])
 
 function shouldSkipDir(name: string): boolean {
@@ -80,11 +81,30 @@ const PATTERNS: Array<{ name: string; re: RegExp }> = [
 //   - `function cost(x: number)`         → before = `function `
 //   - `function f(cost: number)`         → before = `function f(`
 //   - `(cost: string) => ...`            → before = `(`
-//   - `f(a, cost: number)`               → before = `..., `
+//   - `f(a, cost: number)`               → before = `..., ` (only while the
+//                                           innermost open bracket is `(`)
 // Legitimate matches (interface field, type alias field, zod object key,
 // inline object literal) are preceded by `{`, `=`, `;`, etc. and won't
 // hit either branch — they remain caught.
-const SCHEMA_FIELD_FALSE_POSITIVE_PREFIX = /(?:\b(?:const|let|var|function|class)\s+(?:\w+\s+)?$|[(,]\s*$)/
+const SCHEMA_FIELD_DECLARATION_PREFIX = /\b(?:const|let|var|function|class)\s+(?:\w+\s+)?$/
+const SCHEMA_FIELD_PARAMETER_PREFIX = /[(,]\s*$/
+
+// A `, ` also separates fields of a one-line object (`z.object({ a: z.string(),
+// cost: z.number() })`); it only marks a parameter when the innermost bracket
+// still open on the line is a `(`.
+function innermostOpenBracket(text: string): string | undefined {
+  const stack: string[] = []
+  for (const char of text) {
+    if (char === "(" || char === "{" || char === "[") stack.push(char)
+    else if (char === ")" || char === "}" || char === "]") stack.pop()
+  }
+  return stack.at(-1)
+}
+
+function isSchemaFieldFalsePositive(beforeMatchOnLine: string): boolean {
+  if (SCHEMA_FIELD_DECLARATION_PREFIX.test(beforeMatchOnLine)) return true
+  return SCHEMA_FIELD_PARAMETER_PREFIX.test(beforeMatchOnLine) && innermostOpenBracket(beforeMatchOnLine) === "("
+}
 
 async function* walk(target: string): AsyncIterable<string> {
   // Roots are best-effort: a fresh checkout (or a workspace package not
@@ -120,7 +140,7 @@ async function* walk(target: string): AsyncIterable<string> {
   }
 }
 
-function* scanText(file: string, body: string): IterableIterator<Hit> {
+export function* scanText(file: string, body: string): IterableIterator<Hit> {
   const lines = body.split("\n")
   for (const { name, re } of PATTERNS) {
     re.lastIndex = 0
@@ -141,7 +161,7 @@ function* scanText(file: string, body: string): IterableIterator<Hit> {
       // declarations like `const cost: number` or `(cost: number) => ...`.
       // These are TS type annotations on a `cost` identifier, not pricing
       // schema fields.
-      if (name === "schema-field" && SCHEMA_FIELD_FALSE_POSITIVE_PREFIX.test(beforeMatchOnLine)) continue
+      if (name === "schema-field" && isSchemaFieldFalsePositive(beforeMatchOnLine)) continue
       yield {
         file,
         line,
@@ -182,4 +202,4 @@ async function main() {
   process.exit(1)
 }
 
-await main()
+if (import.meta.main) await main()
