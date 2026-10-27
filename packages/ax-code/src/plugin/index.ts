@@ -15,11 +15,13 @@ import { Session } from "../session"
 import type { Permission } from "../permission"
 import { PermissionID } from "../permission/schema"
 import { Env } from "@/util/env"
+import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { setMaxListeners } from "node:events"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Global } from "@/global"
+import { Flag } from "@/flag/flag"
 import { RuntimeLocalClient } from "@/runtime/local-client"
 import { PluginLifetime } from "./lifetime"
 import { PluginData } from "./data"
@@ -326,7 +328,10 @@ export namespace Plugin {
           const allowed =
             Filesystem.contains(Instance.directory, pluginPath) ||
             (Instance.worktree !== "/" && Filesystem.contains(Instance.worktree, pluginPath)) ||
-            Filesystem.contains(Global.Path.config, pluginPath)
+            Filesystem.contains(Global.Path.config, pluginPath) ||
+            // Config discovery trusts the global ~/.ax-code and AX_CODE_CONFIG_DIR plugin directories too.
+            Filesystem.contains(path.join(Global.Path.home, ".ax-code"), pluginPath) ||
+            (!!Flag.AX_CODE_CONFIG_DIR && Filesystem.contains(Flag.AX_CODE_CONFIG_DIR, pluginPath))
           if (!allowed) {
             Session.publishError({ message: "Refusing to load plugin outside trusted plugin directories" })
             continue

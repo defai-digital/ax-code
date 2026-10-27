@@ -368,3 +368,34 @@ test("disposal stops callers waiting for config dependencies before a plugin fac
     false,
   )
 })
+
+test("loads a plugin from the global ~/.ax-code/plugin directory", async () => {
+  const { Global } = await import("../../src/global")
+  const key = `ax-code-plugin-home-${crypto.randomUUID()}`
+  const probe = { calls: 0 }
+  Reflect.set(globalThis, Symbol.for(key), probe)
+  const dir = path.join(Global.Path.home, ".ax-code", "plugin")
+  const file = path.join(dir, `${key}.ts`)
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(
+    file,
+    `const probe = globalThis[Symbol.for(${JSON.stringify(key)})]\nexport const home = async () => { probe.calls++; return {} }\n`,
+  )
+  await using tmp = await tmpdir()
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        try {
+          await Plugin.init()
+          expect(probe.calls).toBe(1)
+        } finally {
+          await Instance.dispose()
+        }
+      },
+    })
+  } finally {
+    Reflect.deleteProperty(globalThis, Symbol.for(key))
+    await fs.rm(file, { force: true })
+  }
+})
