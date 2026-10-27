@@ -143,6 +143,22 @@ describe("visual.compare", () => {
     expect(result.matches.length).toBe(2)
   })
 
+  test("compareVisualRuns pairs browser snapshots of the same URL", () => {
+    const target = { type: "snapshot", source: "browser", url: "http://localhost:3000" } as const
+    const before = makeRun({
+      id: "run-before",
+      target,
+      artifacts: [{ id: "a1", kind: "screenshot", label: "Snapshot: http://localhost:3000", path: "/tmp/a1.png" }],
+    })
+    const after = makeRun({
+      id: "run-after",
+      target,
+      artifacts: [{ id: "b1", kind: "screenshot", label: "Snapshot: http://localhost:3000", path: "/tmp/b1.png" }],
+    })
+
+    expect(compareVisualRuns(before, after).matches.length).toBe(1)
+  })
+
   test("compareVisualRuns does not pair artifacts from different URLs", () => {
     const before = makeRun({
       id: "run-before",

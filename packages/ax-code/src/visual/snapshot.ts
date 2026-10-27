@@ -51,7 +51,10 @@ export async function captureSnapshot(
   const runID = `snap_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`
   const now = new Date().toISOString()
 
-  let target: VisualTarget = { type: "snapshot", source: source.type === "url" ? "browser" : "upload" }
+  let target: VisualTarget =
+    source.type === "url"
+      ? { type: "snapshot", source: "browser", url: source.url }
+      : { type: "snapshot", source: "upload" }
 
   let screenshotData: Buffer
   let format: "png" | "jpeg" = "png"

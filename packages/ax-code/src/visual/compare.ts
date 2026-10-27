@@ -31,13 +31,20 @@ export type CompareResult = {
   introducedCount: number
 }
 
+// A browser snapshot records the URL it captured on its snapshot target.
+function targetUrl(target: VisualRun["target"]) {
+  if (target.type === "url") return target.url
+  if (target.type === "snapshot") return target.url
+  return undefined
+}
+
 /**
  * Match artifacts from two runs by URL + viewport label.
  */
 function matchArtifacts(before: VisualRun, after: VisualRun): CompareMatch[] {
   const matches: CompareMatch[] = []
-  const beforeUrl = before.target.type === "url" ? before.target.url : undefined
-  const afterUrl = after.target.type === "url" ? after.target.url : undefined
+  const beforeUrl = targetUrl(before.target)
+  const afterUrl = targetUrl(after.target)
 
   // Match only the same URL, as the contract says. Taking whichever run has a
   // URL target paired artifacts from two different origins and labelled them

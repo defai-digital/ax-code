@@ -90,9 +90,9 @@ describe("visual.snapshot", () => {
       const imagePath = path.join(tmpDir, "shot.webp")
       await fs.promises.writeFile(imagePath, Buffer.from([1, 2, 3]))
 
-      await expect(
-        captureSnapshot(tmpDir, "session-webp", { type: "file", filePath: imagePath }),
-      ).rejects.toThrow(/Unsupported snapshot image format/)
+      await expect(captureSnapshot(tmpDir, "session-webp", { type: "file", filePath: imagePath })).rejects.toThrow(
+        /Unsupported snapshot image format/,
+      )
     })
   })
 
@@ -163,7 +163,7 @@ describe("visual.snapshot", () => {
         url: "http://localhost:3000",
       })
 
-      expect(result.run.target.type).toBe("snapshot")
+      expect(result.run.target).toEqual({ type: "snapshot", source: "browser", url: "http://localhost:3000" })
       expect(open).toHaveBeenCalledWith("http://localhost:3000", { width: 1440, height: 900 })
       expect(screenshot).toHaveBeenCalled()
     } finally {

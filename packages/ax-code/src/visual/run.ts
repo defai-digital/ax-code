@@ -16,7 +16,7 @@ export type VisualTarget =
   | { type: "desktop-window"; appID: string; windowTitle?: string }
   | { type: "screen"; display?: number; region?: { x: number; y: number; width: number; height: number } }
   | { type: "terminal"; appName?: string; windowTitle?: string }
-  | { type: "snapshot"; source: "desktop" | "upload" | "browser" }
+  | { type: "snapshot"; source: "desktop" | "upload" | "browser"; url?: string }
 
 export type VisualArtifact = {
   id: string
