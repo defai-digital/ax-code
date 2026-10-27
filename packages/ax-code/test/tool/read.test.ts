@@ -11,6 +11,7 @@ import { Permission } from "../../src/permission"
 import { Agent } from "../../src/agent/agent"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
+import { FileTime } from "../../src/file/time"
 
 const FIXTURES_DIR = path.join(import.meta.dirname, "fixtures")
 const LSP_FILE = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
@@ -633,6 +634,26 @@ describe("tool.read truncation", () => {
         expect(result.attachments?.[0]).not.toHaveProperty("id")
         expect(result.attachments?.[0]).not.toHaveProperty("sessionID")
         expect(result.attachments?.[0]).not.toHaveProperty("messageID")
+      },
+    })
+  })
+
+  test("reading an image records the read, so the file can then be overwritten", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        const png = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+          "base64",
+        )
+        await writeFile(path.join(dir, "logo.png"), png)
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const file = path.join(tmp.path, "logo.png")
+        await (await ReadTool.init()).execute({ filePath: file }, ctx)
+        await expect(FileTime.assert(ctx.sessionID, file)).resolves.not.toThrow()
       },
     })
   })

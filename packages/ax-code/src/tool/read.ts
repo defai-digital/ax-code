@@ -273,6 +273,18 @@ export const ReadTool = Tool.define("read", {
         }
         const bytes = await Filesystem.readBytes(filepath)
         await assertReadSourceStable(filepath, before)
+        ctx.abort.throwIfAborted()
+        // Same read record as the text and office branches, so a later write or
+        // edit of this file passes the read-before-overwrite check.
+        await FileTime.read(ctx.sessionID, filepath, {
+          mtime: Number(before.mtimeMs),
+          ctime: Number(before.ctimeMs),
+          size: Number(before.size),
+          mtimeNs: before.mtimeNs.toString(),
+          ctimeNs: before.ctimeNs.toString(),
+          dev: before.dev.toString(),
+          ino: before.ino.toString(),
+        })
         return {
           title,
           output: msg,
