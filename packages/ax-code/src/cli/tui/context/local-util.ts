@@ -11,6 +11,24 @@ export const SESSION_MODEL_LIMIT = 150
 
 export type ModelPreferenceStatus = "valid" | "invalid" | "unknown"
 
+/**
+ * Parse the config's `model` pin. The schema accepts any string, so a
+ * malformed value (no "provider/model" slash) made the parser throw inside a
+ * memo and the root error boundary replaced the whole TUI on every launch.
+ * An unparseable pin is ignored and the next model source applies.
+ */
+export function parseConfiguredModel(
+  value: string | undefined,
+  parse: (model: string) => ProviderModelKeyInput,
+): ProviderModelKeyInput | undefined {
+  if (!value) return undefined
+  try {
+    return parse(value)
+  } catch {
+    return undefined
+  }
+}
+
 export function modelPreferenceStatus(
   providers: readonly {
     id: string

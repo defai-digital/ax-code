@@ -44,6 +44,7 @@ import {
   rememberRecentModel as rememberRecentModelEntry,
   resolveCurrentAgent,
   defaultVisibleAgentName,
+  parseConfiguredModel,
   type ModelPreferenceStatus,
   type SessionModelPreferenceStore,
 } from "./local-util"
@@ -332,7 +333,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       })
 
       const fallbackModel = createMemo(() => {
-        if (sync.data.config.model) return Provider.parseModel(sync.data.config.model)
+        const configured = parseConfiguredModel(sync.data.config.model, Provider.parseModel)
+        if (configured) return configured
         // Persisted preferences load asynchronously. Resolving the implicit
         // catalog default before they arrive would briefly show — and, on an
         // early submit, send with — a provider the user never chose.

@@ -22,6 +22,7 @@ import {
   resolveCurrentModelPreference,
   defaultVisibleAgentName,
   resolvePinnedModelPreference,
+  parseConfiguredModel,
 } from "../../../src/cli/tui/context/local-util"
 
 describe("tui local agent selection", () => {
@@ -501,5 +502,17 @@ describe("resolveCurrentModelPreference", () => {
 
     expect(resolveCurrentModelPreference({ session, override, agent, startup, fallback })).toEqual(startup)
     expect(resolveCurrentModelPreference({ session, override, agent, fallback })).toEqual(session)
+  })
+})
+
+describe("tui configured model pin", () => {
+  test("ignores a malformed config model instead of throwing", () => {
+    expect(() => Provider.parseModel("garbage")).toThrow()
+    expect(parseConfiguredModel("garbage", Provider.parseModel)).toBeUndefined()
+    expect(parseConfiguredModel(undefined, Provider.parseModel)).toBeUndefined()
+    expect(parseConfiguredModel("anthropic/claude-sonnet-5", Provider.parseModel)).toEqual({
+      providerID: "anthropic",
+      modelID: "claude-sonnet-5",
+    })
   })
 })
