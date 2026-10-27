@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { writeFile, mkdir } from "fs/promises"
 import { pathToFileURL } from "url"
@@ -6,6 +6,7 @@ import z from "zod"
 import type { Permission } from "../../src/permission"
 import type { Tool } from "../../src/tool/tool"
 import { Instance } from "../../src/project/instance"
+import { Ripgrep } from "../../src/file/ripgrep"
 import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
@@ -156,6 +157,7 @@ Use this skill.
             },
           }
 
+          const walk = vi.spyOn(Ripgrep, "files")
           Recorder.begin(ctx.sessionID)
           const result = await tool.execute({ name: "tool-skill" }, ctx)
           Recorder.flushAll()
@@ -177,6 +179,10 @@ Use this skill.
           expect(result.output).toContain(`Base directory for this skill: ${pathToFileURL(dir).href}`)
           expect(result.output).toContain(`<file>${file}</file>`)
           expect(result.output).toContain(`<file>${skillNamedResource}</file>`)
+          // The sample is bounded, so the walk must be too: the native walker
+          // collects the whole tree before yielding unless given a limit.
+          expect(walk.mock.calls[0]?.[0]).toMatchObject({ limit: 11 })
+          walk.mockRestore()
           expect(events).toHaveLength(1)
           expect(events[0]).toMatchObject({
             type: "skill.loaded",

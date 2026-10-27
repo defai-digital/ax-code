@@ -156,6 +156,8 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           cwd: dir,
           follow: false,
           hidden: true,
+          // One extra slot for the skipped SKILL.md entrypoint.
+          limit: limit + 1,
           signal: ctx.abort,
         })) {
           if (isSkillEntrypoint(file)) {
