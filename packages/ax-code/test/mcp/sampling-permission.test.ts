@@ -103,3 +103,22 @@ test("no sampling rule prompts, and an explicit configured allow can skip the pr
     },
   })
 })
+
+test("denies sampling for an agent that no longer exists", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      expect(
+        await defaultAskPermission({
+          sessionID: session.id,
+          agent: "removed-agent",
+          server: "srv",
+          messageCount: 1,
+          requestedMaxTokens: 100,
+        }),
+      ).toBe("deny")
+    },
+  })
+})

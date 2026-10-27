@@ -464,6 +464,9 @@ export async function defaultAskPermission(input: {
   const { Agent } = await import("../agent/agent")
   const session = await Session.get(input.sessionID)
   const agent = await Agent.get(input.agent ?? (await Agent.defaultAgent()))
+  // The calling agent can vanish on a config reload; with no ruleset to
+  // consult, refuse rather than spend tokens unchecked.
+  if (!agent) return "deny"
   if (
     [agent.permission, session.permission ?? [], input.ruleset ?? []].some(
       (layer) => PermissionRuntime.evaluate("mcp_sampling", input.server, layer).action === "deny",
