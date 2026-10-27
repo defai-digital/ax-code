@@ -79,6 +79,14 @@ async function resolveBudget(model: Provider.Model): Promise<{
       observedWindow,
     }
   }
+  // The capability registry's window is a generic default; substituting it
+  // for a window the provider showed to be implausibly small would report a
+  // budget the route cannot hold.
+  if (resolution.kind === "unknown") {
+    throw new Error(
+      `The context window for model ${model.providerID}/${model.id} is unknown: the provider reported an implausibly small window, so no budget can be reported and automatic compaction is off for this route.`,
+    )
+  }
   const capabilities = getModelCapabilities(model.id, model.providerID)
   const fallback = calculateCompactionBudget(
     {

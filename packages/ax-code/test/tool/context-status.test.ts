@@ -9,6 +9,7 @@ import { effectiveTokenTotal } from "../../src/session/compaction-budget"
 import { ToolRegistry } from "../../src/tool/registry"
 import { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
+import { ObservedWindow } from "../../src/provider/observed-window"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -154,6 +155,32 @@ describe("tool.context_status", () => {
         const result = await tool!.execute({}, toolContext(session.id, messages))
         expect(result.metadata.autoCompaction).toBe(false)
         expect(result.metadata.autoCompactionDisabledReason).toBe("auto_disabled")
+      },
+    })
+  })
+
+  test("does not invent a budget for a route whose window is unknown", async () => {
+    await using tmp = await project({ contextTools: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.getModel(modelRef.providerID, modelRef.modelID)
+        // A provider-stated window below the plausibility floor marks the route unknown.
+        await ObservedWindow.store().recordOverflow(ObservedWindow.routeKeyFor(model), 100, {
+          statedLimit: 100,
+          catalogLimit: model.limit.context,
+        })
+        const tools = await ToolRegistry.tools(modelRef)
+        const tool = tools.find((candidate) => candidate.id === "context_status")
+        expect(tool).toBeDefined()
+
+        const session = await Session.create({})
+        await seedConversation(session.id, tmp.path)
+        const messages = await Session.messages({ sessionID: session.id })
+
+        await expect(tool!.execute({}, toolContext(session.id, messages))).rejects.toThrow(
+          /context window .* is unknown/,
+        )
       },
     })
   })
