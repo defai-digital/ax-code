@@ -178,7 +178,14 @@ export namespace JsonMigration {
       return items
     }
 
-    function insert<T>(values: T[], execute: (values: T[]) => void, label: string) {
+    // Rows the statement actually wrote: onConflictDoNothing skips rows that
+    // a previous (or interrupted) migration already imported.
+    function written(result: unknown, attempted: number) {
+      const changes = (result as { changes?: unknown } | undefined)?.changes
+      return typeof changes === "number" || typeof changes === "bigint" ? Number(changes) : attempted
+    }
+
+    function insert<T>(values: T[], execute: (values: T[]) => unknown, label: string) {
       if (values.length === 0) return 0
       // Try the whole batch first — `db.insert(...).values(values).run()`
       // packs the rows into a single multi-row INSERT statement, cutting
@@ -188,8 +195,7 @@ export namespace JsonMigration {
       // violates an FK or unique constraint), fall back to per-row so
       // one bad record doesn't poison the rest of the batch.
       try {
-        execute(values)
-        return values.length
+        return written(execute(values), values.length)
       } catch (e) {
         log.warn(`batch insert failed for ${label}, falling back to per-row`, {
           error: formatMigrationError(e),
@@ -199,8 +205,7 @@ export namespace JsonMigration {
       let count = 0
       for (const value of values) {
         try {
-          execute([value] as T[])
-          count++
+          count += written(execute([value] as T[]), 1)
         } catch (e) {
           const msg = `failed to migrate ${label} record: ${formatMigrationError(e)}`
           errs.push(msg)

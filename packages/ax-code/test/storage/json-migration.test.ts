@@ -597,12 +597,15 @@ describe("JSON to SQLite migration", () => {
       sandboxes: [],
     })
 
-    await JsonMigration.run(sqlite)
-    await JsonMigration.run(sqlite)
+    const first = await JsonMigration.run(sqlite)
+    const second = await JsonMigration.run(sqlite)
 
     const db = drizzle({ client: sqlite })
     const projects = db.select().from(ProjectTable).all()
     expect(projects.length).toBe(1) // Still only 1 due to onConflictDoNothing
+    // The rerun reports what it wrote, not what it attempted.
+    expect(first.projects).toBe(1)
+    expect(second.projects).toBe(0)
   })
 
   test("migrates todos", async () => {
