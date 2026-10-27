@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { RollbackCommand } from "../../src/cli/cmd/rollback"
+import yargs from "yargs"
+import { RollbackCommand, validateRollbackStep } from "../../src/cli/cmd/rollback"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { SessionRollback } from "../../src/session/rollback"
 import { SessionRevert } from "../../src/session/revert"
 import { MessageID } from "../../src/session/schema"
 import { resetDatabase } from "../fixture/db"
@@ -80,6 +82,66 @@ describe("session rollback confirmation", () => {
         )
 
         expect(process.exitCode).toBe(1)
+      },
+    })
+  })
+})
+
+describe("session rollback --step", () => {
+  test("rejects non-positive-integer and NaN steps", () => {
+    expect(validateRollbackStep(undefined)).toBeUndefined()
+    expect(validateRollbackStep(2)).toBe(2)
+    for (const value of [Number.NaN, 0, -1, 1.5, "2", null]) {
+      expect(() => validateRollbackStep(value)).toThrow("--step must be a positive integer")
+    }
+  })
+
+  test.each(["--step=abc", "--step=0", "--step=1.5", "--step=-2"])(
+    "fails at parse time instead of printing Step #NaN: %s",
+    async (flag) => {
+      // yargs runs `.check` during parse; the failure surfaces as a thrown error
+      // (sync or rejected promise), so capture whichever it is.
+      let failure: unknown
+      try {
+        await yargs()
+          .command(RollbackCommand as never)
+          .exitProcess(false)
+          .parseAsync(["rollback", "ses_missing", flag])
+      } catch (error) {
+        failure = error
+      }
+      expect(String((failure as Error | undefined)?.message)).toContain("--step must be a positive integer")
+    },
+  )
+
+  test("a step the session does not have exits 1", async () => {
+    await using project = await tmpdir({ git: true })
+    const session = await Instance.provide({
+      directory: project.path,
+      fn: async () => Session.create({ title: "missing step" }),
+    })
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        vi.spyOn(Session, "messages").mockResolvedValue([{ info: { role: "user" } }] as never)
+        vi.spyOn(SessionRollback, "points").mockResolvedValue([] as never)
+        const log = vi.spyOn(console, "log").mockImplementation(() => {})
+
+        await withCwd(project.path, () =>
+          RollbackCommand.handler({
+            sessionID: session.id,
+            dryRun: false,
+            force: false,
+            list: false,
+            step: 99,
+            $0: "ax-code",
+            _: ["session", "rollback"],
+          } as never),
+        )
+
+        expect(process.exitCode).toBe(1)
+        expect(log.mock.calls.map(([message]) => String(message)).join("\n")).toContain("Step #99 not found")
       },
     })
   })

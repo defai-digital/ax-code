@@ -28,6 +28,19 @@ function parseCommaList(value: string | undefined): string[] | undefined {
   return parsed && parsed.length > 0 ? parsed : undefined
 }
 
+/**
+ * Recall caps the result list, so a non-integer limit is not a harmless
+ * fallback: `slice(0, NaN)` returns an empty array and the command reports
+ * "No matching entries" with exit 0. Reject it at parse time instead.
+ */
+export function validateMemoryRecallLimit(limit: unknown): number | undefined {
+  if (limit === undefined) return undefined
+  if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1) {
+    throw new Error("--limit must be a positive integer")
+  }
+  return limit
+}
+
 export function applyMemoryEvalExitCode(
   report: Pick<MemoryEvaluationReport, "passedThreshold">,
   target: { exitCode?: number | string | null | undefined } = process,
@@ -357,6 +370,10 @@ export const MemoryRecallCommand = cmd({
       .option("scope", {
         describe: 'which store to search: "project", "global", or "all"',
         choices: ["project", "global", "all"] as const,
+      })
+      .check((argv) => {
+        validateMemoryRecallLimit(argv.limit)
+        return true
       }),
   async handler(args) {
     const kind = args.kind ? KIND_BY_FLAG[args.kind] : undefined
@@ -368,7 +385,7 @@ export const MemoryRecallCommand = cmd({
       tags: parseCommaList(args.tags),
       path: args.path,
       includeExpired: args.includeExpired,
-      limit: args.limit,
+      limit: validateMemoryRecallLimit(args.limit),
       scope,
     })
 

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import * as prompts from "@clack/prompts"
 import path from "path"
+import yargs from "yargs"
 import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import {
@@ -10,6 +11,7 @@ import {
   MemoryRememberCommand,
   applyMemoryDoctorExitCode,
   applyMemoryEvalExitCode,
+  validateMemoryRecallLimit,
 } from "../../src/cli/cmd/memory"
 
 const originalCwd = process.cwd()
@@ -132,6 +134,37 @@ describe("memory command", () => {
     expect(warnTarget.exitCode).toBe(1)
     expect(errorOnlyTarget.exitCode).toBeUndefined()
     expect(neverTarget.exitCode).toBeUndefined()
+  })
+
+  // `--limit abc` used to become NaN, `slice(0, NaN)` returned [], and recall
+  // reported "No matching entries" with exit 0. It must be a usage error.
+  test("recall limit validation rejects non-positive integers and NaN", () => {
+    expect(validateMemoryRecallLimit(undefined)).toBeUndefined()
+    expect(validateMemoryRecallLimit(3)).toBe(3)
+    for (const value of [Number.NaN, 0, -1, 1.5, "3", null]) {
+      expect(() => validateMemoryRecallLimit(value)).toThrow("--limit must be a positive integer")
+    }
+  })
+
+  test("recall rejects a non-numeric --limit at parse time", async () => {
+    // yargs runs `.check` during parse; the failure surfaces as a thrown error
+    // (sync or rejected promise), so capture whichever it is.
+    let failure: unknown
+    try {
+      await yargs()
+        .command(MemoryRecallCommand as never)
+        .exitProcess(false)
+        .parseAsync(["recall", "--limit", "abc"])
+    } catch (error) {
+      failure = error
+    }
+    expect(String((failure as Error | undefined)?.message)).toContain("--limit must be a positive integer")
+  })
+
+  test("recall handler refuses a NaN limit instead of reporting no matches", async () => {
+    await expect(MemoryRecallCommand.handler({ limit: Number.NaN, scope: "project" } as any)).rejects.toThrow(
+      "--limit must be a positive integer",
+    )
   })
 
   test("eval --json emits parseable recall metrics", async () => {

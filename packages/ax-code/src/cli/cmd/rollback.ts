@@ -6,6 +6,20 @@ import type { SessionRevert } from "../../session/revert"
 
 type SessionRevertInput = SessionRevert.RevertInput
 
+/**
+ * `--step` selects a rollback point by 1-based index. Reject anything that is
+ * not a positive integer at parse time: an unvalidated yargs `number` turns
+ * `--step abc` into NaN and `--step 99` into a lookup miss, both of which used
+ * to print "Step #NaN/#99 not found" and still exit 0.
+ */
+export function validateRollbackStep(step: unknown): number | undefined {
+  if (step === undefined) return undefined
+  if (typeof step !== "number" || !Number.isInteger(step) || step < 1) {
+    throw new Error("--step must be a positive integer")
+  }
+  return step
+}
+
 export const RollbackCommand = cmd({
   command: "rollback <sessionID>",
   describe: "rollback file changes from a session",
@@ -23,8 +37,13 @@ export const RollbackCommand = cmd({
         type: "boolean",
         default: false,
       })
-      .option("step", { describe: "Rollback to a specific step index instead of the full session", type: "number" }),
+      .option("step", { describe: "Rollback to a specific step index instead of the full session", type: "number" })
+      .check((argv) => {
+        validateRollbackStep(argv.step)
+        return true
+      }),
   async handler(args) {
+    const step = validateRollbackStep(args.step)
     const { Session } = await import("../../session")
     const { SessionID } = await import("../../session/schema")
     const { SessionRevert } = await import("../../session/revert")
@@ -67,11 +86,11 @@ export const RollbackCommand = cmd({
         }
 
         let target: SessionRevertInput
-        if (args.step != null) {
-          const step = args.step as number
+        if (step !== undefined) {
           const point = SessionRollback.pick({ points: await SessionRollback.points(sessionID), step })
           if (!point) {
             console.log(`\nStep #${step} not found. Use --list to see available steps.`)
+            process.exitCode = 1
             return
           }
           target = {
@@ -158,8 +177,8 @@ export const RollbackCommand = cmd({
 
         await SessionRollback.apply(target)
         console.log(
-          args.step != null
-            ? `\n\x1b[32mRolled back to step #${args.step}.\x1b[0m`
+          step !== undefined
+            ? `\n\x1b[32mRolled back to step #${step}.\x1b[0m`
             : `\n\x1b[32mRolled back ${diff.length} files.\x1b[0m`,
         )
       },

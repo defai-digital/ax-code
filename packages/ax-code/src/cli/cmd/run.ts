@@ -702,7 +702,10 @@ export const RunCommand = cmd({
       })
       .option("port", {
         type: "number",
-        describe: "port for the local server (defaults to random port if no value provided)",
+        describe:
+          "deprecated and ignored: run hosts the server in-process and never binds a port; " +
+          "start one with `ax-code serve --port <n>` and connect with `ax-code run --attach <url>`",
+        deprecated: "run ignores --port; use `ax-code serve --port <n>` with `ax-code run --attach <url>`",
       })
       .option("variant", {
         type: "string",
@@ -766,6 +769,16 @@ export const RunCommand = cmd({
       )
   },
   handler: async (args) => {
+    // --port is still accepted so existing invocations do not break, but nothing
+    // reads it: the non-attach path hosts the server in-process and never binds
+    // a port. Silence would imply the value took effect, so name the flags that
+    // do. --quiet suppresses it like every other non-error warning.
+    if (args.port !== undefined && args.quiet !== true) {
+      warnPrefix(
+        "--port is ignored by run; start a server with `ax-code serve --port <n>` " +
+          "and connect with `ax-code run --attach <url>`",
+      )
+    }
     const abortState: RunAbortState = { earlyTimeoutEmitted: false }
     // Resolved by the --runtime branch inside `body`; the failure converter reads
     // it so an auth/connection rejection names the runtime URL instead of args.attach.
