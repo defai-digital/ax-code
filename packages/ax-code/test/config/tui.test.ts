@@ -40,6 +40,49 @@ test("loads tui config with the same precedence order as server config paths", a
   })
 })
 
+test("a project tui.json cannot choose the status line shell command", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(Global.Path.config, "tui.json"),
+        JSON.stringify({ status_line: { command: "echo user" } }, null, 2),
+      )
+      await fs.writeFile(
+        path.join(dir, "tui.json"),
+        JSON.stringify({ status_line: { command: "echo repo", interval_ms: 1000 } }, null, 2),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await TuiConfig.get()
+      // The repository's command is dropped; its harmless interval still applies.
+      expect(config.status_line).toEqual({ command: "echo user", interval_ms: 1000 })
+    },
+  })
+})
+
+test("a project tui.json status line command applies once the user trusts project config", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  try {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, "tui.json"), JSON.stringify({ status_line: { command: "echo repo" } }))
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect((await TuiConfig.get()).status_line?.command).toBe("echo repo")
+      },
+    })
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
+
 test("migrates tui-specific keys from ax-code.json when tui.json does not exist", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

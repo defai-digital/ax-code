@@ -10,6 +10,7 @@ import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
+import { ProjectConfigTrust } from "./project-config-trust"
 import { asRecord, asRecordOrUndefined, isRecord } from "@/util/record"
 
 export namespace TuiConfig {
@@ -114,6 +115,18 @@ export namespace TuiConfig {
         ...copy,
       }
     })()
+
+    // status_line.command runs through `sh -c` on a timer. A repository's
+    // committed tui.json must not pick a shell command, mirroring how
+    // untrusted ax-code.json drops shell/lsp/formatter commands.
+    if (trusted === false && !ProjectConfigTrust.enabled()) {
+      const statusLine = asRecordOrUndefined(normalized.status_line)
+      if (statusLine && "command" in statusLine) {
+        const { command: _dropped, ...rest } = statusLine
+        normalized.status_line = rest
+        log.warn("ignored status_line.command from untrusted project tui config", { path: configFilepath })
+      }
+    }
 
     const parsed = Info.safeParse(normalized)
     if (!parsed.success) {
