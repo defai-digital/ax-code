@@ -238,3 +238,33 @@ describe("explicit model recovery policy", () => {
     })
   })
 })
+
+test.each([
+  ["http://192.168.1.50:11434/v1", true],
+  ["http://10.0.0.7:8080/v1", true],
+  ["http://ollama:11434/v1", true],
+  ["https://api.example.com/v1", false],
+])("a provider at %s counts as local: %s", async (baseURL, local) => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using tmp = await tmpdir({
+    config: {
+      provider: {
+        "lan-box": {
+          npm: "@ai-sdk/openai-compatible",
+          options: { apiKey: "test-key", baseURL },
+          models: { m: { name: "M", tool_call: true, limit: { context: 128000, output: 4096 } } },
+        },
+      },
+    },
+  })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Provider.isLocalProvider(ProviderID.make("lan-box"))).toBe(local)
+      },
+    })
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
