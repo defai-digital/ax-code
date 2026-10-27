@@ -77,6 +77,21 @@ test("coding is opt-in, retains lifecycle and verification tools, and invalidate
   })
 })
 
+test("core narrows the tool surface for any provider that selects it", async () => {
+  await using tmp = await tmpdir()
+  vi.spyOn(Config, "get").mockResolvedValue({ provider: { test: { options: { toolProfile: "core" } } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const ids = (await ToolRegistry.tools({ providerID: ProviderID.make("test"), modelID: ModelID.make("m") })).map(
+        (tool) => tool.id,
+      )
+      expect(ids).toEqual(expect.arrayContaining(["read", "edit", "bash"]))
+      for (const id of ["ops_plan", "task", "verify_project"]) expect(ids).not.toContain(id)
+    },
+  })
+})
+
 test("coding preserves registered tool ownership and gated feature admission", async () => {
   await using tmp = await tmpdir()
   vi.spyOn(Config, "get").mockResolvedValue({

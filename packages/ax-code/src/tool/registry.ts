@@ -254,12 +254,13 @@ export namespace ToolRegistry {
     const question = Flag.AX_CODE_CLIENT === "cli" || Flag.AX_CODE_ENABLE_QUESTION_TOOL
     const planExit = question ? [PlanExitTool] : []
     const profile = ToolProfile.resolve(cfg, providerID)
-    if (providerID === AX_ENGINE_PROVIDER_ID && profile === "core") {
+    if (profile === "core") {
       // Local coding models have materially smaller context budgets than the
       // hosted models the full registry was designed for. Keep the first-turn
-      // schema focused on tools needed to inspect, edit, and verify code. The
-      // full profile remains an explicit escape hatch for large-context custom
-      // AX Engine deployments.
+      // schema focused on tools needed to inspect, edit, and verify code. AX
+      // Engine defaults to this profile; any other provider can opt in, and
+      // must not silently get the full registry instead. The full profile
+      // remains an explicit escape hatch for large-context AX Engine deployments.
       return [
         InvalidTool,
         ...(cfg.code_mode?.enabled === true ? [ExecuteTool] : []),
