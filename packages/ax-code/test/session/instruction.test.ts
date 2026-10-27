@@ -402,6 +402,34 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
     }
   })
 
+  test("expands a ~/ instruction glob with a directory wildcard", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        instructions: ["~/notes/**/*.md"],
+      },
+    })
+    const fakeHome = path.join(tmp.path, "home")
+    await fs.mkdir(path.join(fakeHome, "notes", "team"), { recursive: true })
+    await fs.writeFile(path.join(fakeHome, "notes", "top.md"), "# top")
+    await fs.writeFile(path.join(fakeHome, "notes", "team", "nested.md"), "# nested")
+    const homedir = vi.spyOn(os, "homedir").mockReturnValue(fakeHome)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const paths = await InstructionPrompt.systemPaths()
+          expect(paths.has(path.join(fakeHome, "notes", "top.md"))).toBe(true)
+          expect(paths.has(path.join(fakeHome, "notes", "team", "nested.md"))).toBe(true)
+        },
+      })
+    } finally {
+      homedir.mockRestore()
+    }
+  })
+
   test("rejects ~/ instruction paths that resolve through symlinks outside the home directory", async () => {
     await using tmp = await tmpdir({
       git: true,

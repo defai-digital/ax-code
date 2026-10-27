@@ -158,6 +158,18 @@ async function allowInstructionAbsolutePath(input: string) {
   )
 }
 
+// Scan an absolute pattern from its last wildcard-free directory. Using only
+// the basename as the pattern would make `~/notes/**/*.md` scan a literal
+// `~/notes/**` directory, which does not exist, and silently match nothing.
+function splitAbsoluteGlob(instruction: string) {
+  const segments = instruction.split(/[\\/]/)
+  const first = segments.findIndex((segment) => /[*?[\]{}]/.test(segment))
+  if (first === -1 || first === segments.length - 1) {
+    return { base: path.dirname(instruction), pattern: path.basename(instruction) }
+  }
+  return { base: segments.slice(0, first).join(path.sep) || path.sep, pattern: segments.slice(first).join("/") }
+}
+
 async function allowRelativeInstructionPath(input: string) {
   const real = await realpathOrResolved(input)
   // Relative instructions resolve against the worktree, or — when project
@@ -278,9 +290,10 @@ export namespace InstructionPrompt {
             continue
           }
         }
-        const matches = path.isAbsolute(instruction)
-          ? await Glob.scan(path.basename(instruction), {
-              cwd: path.dirname(instruction),
+        const absolute = path.isAbsolute(instruction) ? splitAbsoluteGlob(instruction) : undefined
+        const matches = absolute
+          ? await Glob.scan(absolute.pattern, {
+              cwd: absolute.base,
               absolute: true,
               include: "file",
             })
