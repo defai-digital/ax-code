@@ -10,7 +10,6 @@ import { promptToText } from "./prompt"
 import { materializeCliAttachments } from "./attachments"
 import { assertCliCommandSize, materializeCliPrompt } from "./prompt-transport"
 import { parseCliJsonEventLine, stdoutHasCliJsonEvents, type CliOutputParser } from "./parser"
-import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
@@ -388,7 +387,7 @@ export class CliLanguageModel implements LanguageModelV3 {
     // Collect exit + full stdout/stderr. On timeout we still await this (after
     // kill) so the error can include partial CLI diagnostics — same idea as
     // doStream's formatCliTimeout path.
-    const result = Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
+    const result = Promise.all([proc.exited, Process.drain(proc.stdout), Process.drain(proc.stderr)])
     result.catch((err) => {
       log.warn("cli language model result collection failed", {
         error: toErrorMessage(err),
@@ -411,8 +410,8 @@ export class CliLanguageModel implements LanguageModelV3 {
       ])
       if (outcome.kind === "timeout") {
         await abort.kill()
-        let out = Buffer.alloc(0)
-        let err = Buffer.alloc(0)
+        let out: Buffer = Buffer.alloc(0)
+        let err: Buffer = Buffer.alloc(0)
         try {
           // After kill, buffers usually drain quickly; bound the wait so a
           // stuck pipe cannot hang the timeout path forever.

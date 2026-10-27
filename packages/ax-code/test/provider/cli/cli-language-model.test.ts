@@ -216,6 +216,44 @@ describe("CliLanguageModel", () => {
     }
   })
 
+  test("doGenerate keeps the output when the pipe is destroyed after exit instead of ending", async () => {
+    // Process.spawn destroys pipes a background grandchild still holds open;
+    // that emits 'close' without 'end', after all the data was delivered.
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => {
+      const stdout = new PassThrough()
+      const stderr = new PassThrough()
+      const exited = new Promise<number>((resolve) => {
+        setTimeout(() => {
+          stdout.write('{"type":"result","result":"ok"}\n')
+          resolve(0)
+          setTimeout(() => {
+            stdout.destroy()
+            stderr.destroy()
+          }, 5)
+        }, 0)
+      })
+      return {
+        stdout,
+        stderr,
+        exited,
+        exitCode: null,
+        signalCode: null,
+        kill: () => true,
+        pid: 123,
+        stdin: null,
+      } as any
+    })
+
+    try {
+      const result = await makeModel().doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+      })
+      expect(result.content).toEqual([{ type: "text", text: "ok" }])
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
   test("doGenerate forwards responseFormat json as a prompt instruction and unwraps fenced output", async () => {
     const fenced = '```json\n{"overall":"fine","issues":[]}\n```'
     const spawn = vi
