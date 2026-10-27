@@ -1024,6 +1024,24 @@ export namespace CodeGraphBuilder {
     projectID: ProjectID,
     prepared: Extract<PreparedIndex, { kind: "commit" }>,
   ): Promise<IndexResult> {
+    // Staleness guard. The prepare phase can spend a long time in LSP
+    // while the file is deleted or rewritten on disk (the watcher's
+    // purge and reindex jobs for the same path may even overlap).
+    // Committing rows built from content we no longer hold would either
+    // resurrect a file the purge just removed, or let an older revision
+    // land after a newer one. Re-read and compare against the sha we
+    // indexed; on mismatch, skip the write and let the next event for
+    // the path index whatever is on disk now. This runs under the same
+    // project lock as purgeFile, so the check-then-write below is atomic
+    // with respect to a concurrent purge. "unchanged" is the transient
+    // no-rows-written return value (never persisted to completeness).
+    const textNow = await Filesystem.readText(prepared.absPath).catch(() => undefined)
+    if (textNow === undefined || bunCompatHash(textNow).toString() !== prepared.sha) {
+      log.info("skipping index commit, file changed or removed during indexing", { file: prepared.absPath })
+      prepared.timings.total = performance.now() - prepared.tStart
+      return { nodes: 0, edges: 0, completeness: "unchanged", timings: prepared.timings }
+    }
+
     const edgeInserts: Parameters<typeof CodeGraphQuery.insertEdges>[0] = []
     let completeness: IndexResult["completeness"] = prepared.completeness
 
@@ -1398,13 +1416,22 @@ export namespace CodeGraphBuilder {
   // error) between them cannot leave orphaned edges/nodes referring to
   // a file record that's already gone, or vice-versa. Matches the
   // pattern used by `Session.remove` and `Session.revert`.
-  export function purgeFile(projectID: ProjectID, absPath: string): void {
-    Database.transaction(() => {
-      CodeGraphQuery.deleteEdgesTouchingFile(projectID, absPath)
-      CodeGraphQuery.deleteNodesInFile(projectID, absPath)
-      CodeGraphQuery.deleteFile(projectID, absPath)
+  //
+  // The deletes also run under the project lock: without it a purge
+  // could slip between a concurrent commit's staleness re-check and
+  // its ingestFile write, and the commit would re-insert the rows the
+  // purge just deleted (the watcher can run a purge job for a file
+  // whose reindex job is still committing). Async because the lock is
+  // promise-chained — callers must await to observe completion.
+  export async function purgeFile(projectID: ProjectID, absPath: string): Promise<void> {
+    await withProjectLock(projectID, async () => {
+      Database.transaction(() => {
+        CodeGraphQuery.deleteEdgesTouchingFile(projectID, absPath)
+        CodeGraphQuery.deleteNodesInFile(projectID, absPath)
+        CodeGraphQuery.deleteFile(projectID, absPath)
+      })
+      log.info("purged file from graph", { file: absPath })
     })
-    log.info("purged file from graph", { file: absPath })
   }
 
   // Test helper: wipe a project's entire graph state. Exposed so tests

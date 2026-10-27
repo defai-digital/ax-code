@@ -4,6 +4,7 @@ import { Log } from "../util/log"
 import { FileWatcher } from "../file/watcher"
 import { Instance } from "../project/instance"
 import { LANGUAGE_EXTENSIONS } from "@ax-code/ax-code-intel/language"
+import { KeyedSerialQueue } from "../util/queue"
 import { CodeGraphBuilder } from "./builder"
 import type { ProjectID } from "../project/schema"
 
@@ -49,6 +50,14 @@ export namespace CodeGraphWatcher {
     flushTimer?: ReturnType<typeof setTimeout>
     activeReindex: number
     queue: Array<() => Promise<void>>
+    // Per-file-path serialization for graph mutations. Purge and
+    // reindex jobs for the SAME path run one-at-a-time in arrival
+    // order (so a purge cannot overlap a still-running reindex of the
+    // file it deletes), while different paths stay fully concurrent —
+    // the whole project is never serialized. The job queue above still
+    // caps how many jobs (batches) run at once; this queue orders work
+    // within a path across jobs.
+    serial: KeyedSerialQueue
     unsubscribe?: () => void
     disposed: boolean
   }
@@ -110,21 +119,54 @@ export namespace CodeGraphWatcher {
     if (unlinked.length > 0) {
       enqueue(state, async () => {
         if (state.disposed) return
-        for (const file of unlinked) {
-          log.info("purging file from graph", { file })
-          CodeGraphBuilder.purgeFile(state.projectID, file)
-        }
+        // Each purge holds only its own file's lane, so purges for
+        // different files stay concurrent. A purge for a file whose
+        // reindex is still in flight waits for that reindex to settle
+        // instead of racing it.
+        await Promise.all(
+          unlinked.map((file) =>
+            state.serial.run(file, async () => {
+              log.info("purging file from graph", { file })
+              await CodeGraphBuilder.purgeFile(state.projectID, file)
+            }),
+          ),
+        )
       })
     }
     if (changed.length > 0) {
       enqueue(state, async () => {
         if (state.disposed) return
-        log.info("reindexing files", { count: changed.length })
-        await CodeGraphBuilder.indexFiles(state.projectID, changed, {
-          concurrency: Math.min(changed.length, MAX_CONCURRENT_REINDEX),
-          lock: "none",
-          pruneOrphans: false,
-        })
+        // Hold every changed file's lane for the duration of the batch
+        // reindex (still ONE indexFiles call for the whole burst), so a
+        // later purge or reindex batch touching any of these files
+        // queues behind this batch instead of interleaving with it.
+        // Lanes are acquired in sorted order: two overlapping batches
+        // with overlapping file sets can then never wait on each other
+        // in opposite orders (single-key purge jobs cannot form a
+        // cycle either), and files outside the batch are unaffected.
+        const ordered = [...changed].sort()
+        let pending = ordered.length
+        let markAcquired!: () => void
+        const acquired = new Promise<void>((resolve) => (markAcquired = resolve))
+        let release!: () => void
+        const lanes = new Promise<void>((resolve) => (release = resolve))
+        for (const file of ordered) {
+          state.serial.run(file, () => {
+            if (--pending === 0) markAcquired()
+            return lanes
+          })
+        }
+        try {
+          await acquired
+          log.info("reindexing files", { count: changed.length })
+          await CodeGraphBuilder.indexFiles(state.projectID, changed, {
+            concurrency: Math.min(changed.length, MAX_CONCURRENT_REINDEX),
+            lock: "none",
+            pruneOrphans: false,
+          })
+        } finally {
+          release()
+        }
       })
     }
   }
@@ -176,6 +218,7 @@ export namespace CodeGraphWatcher {
       ripe: new Map(),
       activeReindex: 0,
       queue: [],
+      serial: new KeyedSerialQueue(),
       disposed: false,
     }
     state.unsubscribe = Bus.subscribe(

@@ -217,7 +217,7 @@ describe("CodeGraphWatcher.start / stop", () => {
         const file = path.join(tmp.path, "recreated.ts")
         await writeFile(file, "export const recreated = 1\n")
         CodeGraphWatcher.start(projectID)
-        const purge = vi.spyOn(CodeGraphBuilder, "purgeFile").mockImplementation(() => {})
+        const purge = vi.spyOn(CodeGraphBuilder, "purgeFile").mockImplementation(async () => {})
         const index = vi.spyOn(CodeGraphBuilder, "indexFiles").mockResolvedValue({} as never)
 
         // Atomic editors and git write a replacement file as delete+create.
