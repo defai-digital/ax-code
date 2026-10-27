@@ -99,17 +99,17 @@ export namespace Patch {
     const line = lines[startIdx]
 
     if (line.startsWith("*** Add File:")) {
-      const filePath = line.slice("*** Add File:".length).trim()
-      return filePath ? { filePath, nextIdx: startIdx + 1 } : null
+      const filePath = headerPath(line, "*** Add File:")
+      return { filePath, nextIdx: startIdx + 1 }
     }
 
     if (line.startsWith("*** Delete File:")) {
-      const filePath = line.slice("*** Delete File:".length).trim()
-      return filePath ? { filePath, nextIdx: startIdx + 1 } : null
+      const filePath = headerPath(line, "*** Delete File:")
+      return { filePath, nextIdx: startIdx + 1 }
     }
 
     if (line.startsWith("*** Update File:")) {
-      const filePath = line.slice("*** Update File:".length).trim()
+      const filePath = headerPath(line, "*** Update File:")
       let movePath: string | undefined
       let nextIdx = startIdx + 1
 
@@ -119,10 +119,18 @@ export namespace Patch {
         nextIdx++
       }
 
-      return filePath ? { filePath, movePath, nextIdx } : null
+      return { filePath, movePath, nextIdx }
     }
 
     return null
+  }
+
+  // A header with no path would otherwise be skipped with its body, dropping
+  // that file's edit while the rest of the patch reports success.
+  function headerPath(line: string, prefix: string) {
+    const filePath = line.slice(prefix.length).trim()
+    if (!filePath) throw new Error(`Invalid patch format: '${prefix}' header has no file path`)
+    return filePath
   }
 
   // `endIdx` is the envelope's closing marker. The envelope accepts a marker

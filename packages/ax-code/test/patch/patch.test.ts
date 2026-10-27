@@ -166,6 +166,22 @@ describe("Patch namespace", () => {
       expect(() => Patch.parsePatch(patchText)).toThrow("is empty")
     })
 
+    test("rejects a file header with no path instead of dropping its hunk", () => {
+      for (const header of ["*** Update File:", "*** Add File:  ", "*** Delete File:"]) {
+        const patchText = [
+          "*** Begin Patch",
+          "*** Add File: ok.txt",
+          "+hi",
+          header,
+          "@@",
+          "-a",
+          "+b",
+          "*** End Patch",
+        ].join("\n")
+        expect(() => Patch.parsePatch(patchText)).toThrow("has no file path")
+      }
+    })
+
     test("rejects a patch that carries a second Begin Patch block", () => {
       const patchText = [
         "*** Begin Patch",
