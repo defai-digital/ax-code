@@ -39,8 +39,14 @@ export namespace WikiInventory {
 
   const JS_TS_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]
   // TypeScript resolves extensionful relative imports against source files:
-  // `./x.js` in a .ts file means `./x.ts` on disk.
-  const JS_EXT_SWAP: Record<string, string> = { ".js": ".ts", ".jsx": ".tsx", ".mjs": ".mts", ".cjs": ".cts" }
+  // `./x.js` in a .ts file means `./x.ts` or `./x.tsx` on disk, and the
+  // order below is TypeScript's precedence. `./x.jsx` maps only to `.tsx`.
+  const JS_EXT_SWAP: Record<string, readonly string[]> = {
+    ".js": [".ts", ".tsx"],
+    ".jsx": [".tsx"],
+    ".mjs": [".mts"],
+    ".cjs": [".cts"],
+  }
 
   /**
    * A `compilerOptions.paths` table from one tsconfig.json, with its targets
@@ -126,10 +132,14 @@ export namespace WikiInventory {
   }
 
   function probe(base: string, cited: ReadonlySet<string>): string | undefined {
+    // `./dir/` normalizes to `dir/`; probing it as-is would build `dir//index.ts`.
+    if (base.length > 1 && base.endsWith("/")) base = base.replace(/\/+$/, "")
     if (cited.has(base)) return base
     const ext = path.posix.extname(base).toLowerCase()
-    const swapped = JS_EXT_SWAP[ext]
-    if (swapped && cited.has(base.slice(0, -ext.length) + swapped)) return base.slice(0, -ext.length) + swapped
+    const stem = ext ? base.slice(0, -ext.length) : base
+    for (const swapped of JS_EXT_SWAP[ext] ?? []) {
+      if (cited.has(stem + swapped)) return stem + swapped
+    }
     for (const candidate of JS_TS_EXTENSIONS.map((suffix) => base + suffix)) {
       if (cited.has(candidate)) return candidate
     }

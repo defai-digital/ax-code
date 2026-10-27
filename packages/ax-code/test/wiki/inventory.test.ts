@@ -89,6 +89,42 @@ test("resolves relative imports against the cited set without I/O", () => {
   expect(WikiInventory.resolveImport("src/a.ts", "./b.ts?x=1", cited)).toBeUndefined()
 })
 
+test("resolves TypeScript sources behind .js and .jsx specifiers", () => {
+  const cited = new Set([
+    "src/a.ts",
+    "src/plain.js",
+    "src/plain.ts",
+    "src/app.ts",
+    "src/app.tsx",
+    "src/widget.tsx",
+    "src/entry.mts",
+    "src/entry.cts",
+  ])
+  // `./x.js` may denote x.ts or x.tsx; the exact file wins, then .ts before .tsx.
+  expect(WikiInventory.resolveImport("src/a.ts", "./plain.js", cited)).toBe("src/plain.js")
+  expect(WikiInventory.resolveImport("src/a.ts", "./app.js", cited)).toBe("src/app.ts")
+  expect(WikiInventory.resolveImport("src/a.ts", "./widget.js", cited)).toBe("src/widget.tsx")
+  // `./x.jsx` only maps to x.tsx.
+  expect(WikiInventory.resolveImport("src/a.ts", "./widget.jsx", cited)).toBe("src/widget.tsx")
+  // Module and CommonJS spellings keep their own source suffixes.
+  expect(WikiInventory.resolveImport("src/a.ts", "./entry.mjs", cited)).toBe("src/entry.mts")
+  expect(WikiInventory.resolveImport("src/a.ts", "./entry.cjs", cited)).toBe("src/entry.cts")
+  // Nothing listed means no edge, not a guess.
+  expect(WikiInventory.resolveImport("src/a.ts", "./missing.js", cited)).toBeUndefined()
+  expect(WikiInventory.resolveImport("src/a.ts", "./missing.jsx", cited)).toBeUndefined()
+})
+
+test("resolves trailing-slash directory imports to their index file", () => {
+  const cited = new Set(["src/a.ts", "src/dir/index.ts", "src/pkg/index.tsx", "src/empty/readme.md"])
+  expect(WikiInventory.resolveImport("src/a.ts", "./dir/", cited)).toBe("src/dir/index.ts")
+  expect(WikiInventory.resolveImport("src/a.ts", "./pkg/", cited)).toBe("src/pkg/index.tsx")
+  // A directory without an index file stays unresolved.
+  expect(WikiInventory.resolveImport("src/a.ts", "./empty/", cited)).toBeUndefined()
+  expect(WikiInventory.resolveImport("src/a.ts", "./missing/", cited)).toBeUndefined()
+  // Escaping trailing-slash specifiers are rejected like their bare forms.
+  expect(WikiInventory.resolveImport("a.ts", "../outside/", cited)).toBeUndefined()
+})
+
 test("extracts destructuring leaves instead of pattern source text", async () => {
   await using tmp = await tmpdir()
   await mkdir(path.join(tmp.path, "src"))
