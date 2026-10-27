@@ -17,6 +17,7 @@ import { UpdateGoalTool } from "../../src/tool/goal"
 import type { Tool } from "../../src/tool/tool"
 import { buildTurnContext } from "../../src/session/prompt/prompt-turn-context"
 import * as SourceState from "../../src/quality/source-state"
+import { classifyEnvelopeFreshness } from "@ax-code/ax-code-reason/quality/freshness"
 import { tmpdir } from "../fixture/fixture"
 
 const assurance: GoalAssurance.Contract = {
@@ -221,6 +222,24 @@ test("checks preserve permission denial and cannot override the frozen command",
       )
       await expect(tool.execute({ goalCheck: "unknown" }, ctx)).rejects.toThrow(/Unknown goal check/)
       await expect(tool.execute({ goalCheck: "parity" }, ctx)).rejects.toThrow(/Denied by fixture/)
+      await Session.remove(session.id)
+    },
+  })
+})
+
+test("a goal check envelope stays fresh for the debug tools' full-worktree comparison", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { session } = await prepare(tmp.path)
+      // A source file outside the goal's sourcePaths, as in any real repository.
+      await fs.writeFile(path.join(tmp.path, "unrelated.cjs"), "module.exports = 1\n")
+      const result = await (await VerifyProjectTool.init()).execute({ goalCheck: "parity" }, context(session.id))
+      expect(result.metadata.passed).toBe(true)
+      const envelope = result.metadata.verificationEnvelopes[0]!
+      const current = await SourceState.currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+      expect(classifyEnvelopeFreshness(envelope, current).status).toBe("fresh")
       await Session.remove(session.id)
     },
   })

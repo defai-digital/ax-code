@@ -49,6 +49,11 @@ export async function verifyGoalCheck(checkID: string, ctx: Tool.Context) {
     throw new Error(
       "Source fingerprint unavailable; goal check cannot produce fresh evidence. Check source size, links and declared paths.",
     )
+  // The receipt compares the goal's scoped sources; the envelope is cited by
+  // tools that fingerprint the whole worktree (debug_apply_verification,
+  // debug_propose_hypothesis, skill candidates), so it carries that same
+  // whole-worktree state, taken before the run like verify_project's.
+  const worktreeState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
   const startedAt = Date.now()
   const run = await runCheck(check.id, check.command, cwd, { signal: ctx.abort })
   ctx.abort.throwIfAborted()
@@ -93,7 +98,7 @@ export async function verifyGoalCheck(checkID: string, ctx: Tool.Context) {
     structuredFailures: [],
     artifactRefs: [],
     source: { tool: "verify_project", version: Installation.VERSION, runId: ctx.sessionID },
-    sourceState: sourceBefore,
+    sourceState: worktreeState,
     execution: {
       startedAt: new Date(startedAt).toISOString(),
       endedAt: new Date(endedAt).toISOString(),
