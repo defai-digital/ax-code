@@ -1174,6 +1174,27 @@ describe("computer server resolution (bridge-only)", () => {
     })
   })
 
+  test("an app override to another backend does not inherit the default's command and args", () => {
+    vi.stubEnv("AX_COMPUTER_COMMAND", "/opt/ax/bin/ax-computer")
+    const external = { provider: "external" as const, command: "my-server", args: ["--mode", "full"] }
+    expect(Computer.resolveBackend(Computer.backendConfig(external, "cua"))).toEqual({
+      provider: "cua",
+      command: "/opt/ax/bin/ax-computer",
+      args: ["mcp", "--backend", "cua"],
+    })
+    expect(Computer.resolveBackend(Computer.backendConfig(external, "external"))).toEqual({
+      provider: "external",
+      command: "my-server",
+      args: ["--mode", "full"],
+    })
+    const cua = { provider: "cua" as const, command: "/custom/ax-computer", args: ["mcp", "--backend", "cua"] }
+    expect(Computer.resolveBackend(Computer.backendConfig(cua, "axnative"))).toEqual({
+      provider: "axnative",
+      command: "/custom/ax-computer",
+      args: ["mcp", "--backend", "axnative"],
+    })
+  })
+
   test("the ax-computer server is discovered on PATH when no override is set", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ax-server-path-"))
     const bin = path.join(dir, "ax-computer")

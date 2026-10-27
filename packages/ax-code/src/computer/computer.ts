@@ -104,6 +104,23 @@ export namespace Computer {
   }
 
   /**
+   * The backend config for `target`. computer.command and computer.args
+   * describe the default provider's server; an app override to another
+   * backend must not inherit them, or a "cua" override of an external default
+   * spawns the external server without --backend. An external default's
+   * command is not the ax-computer server either.
+   */
+  export function backendConfig(computer: NonNullable<Config.Info["computer"]>, target: BackendName) {
+    if (target === computer.provider) return computer
+    return {
+      ...computer,
+      provider: target,
+      args: undefined,
+      command: computer.provider === "external" ? undefined : computer.command,
+    }
+  }
+
+  /**
    * Pick which backend should serve a scope. App-scoped observations honor
    * `computer.overrides`; windowId and bare desktop go to the default. An
    * override value that names an unknown backend is rejected at config
@@ -298,7 +315,7 @@ export namespace Computer {
         // every provider value routes through a canonical-protocol MCP server
         // (ADR-061); resolveBackend throws a clear install hint when no server
         // command is resolvable
-        const resolved = resolveBackend({ ...computer, provider: target as BackendName })
+        const resolved = resolveBackend(backendConfig(computer, target as BackendName))
         if (!resolved) throw new Error(`Computer use provider "${target}" could not be resolved.`)
         return new ExternalComputerProvider({ command: resolved.command, args: resolved.args })
       }
@@ -361,7 +378,7 @@ export namespace Computer {
       // override (computer.overrides) that differs from the default provider —
       // using the default here would name the failing backend correctly but
       // show the *other* backend's command in the diagnostic.
-      resolved = resolveBackend({ ...cfg.computer, provider: name as BackendName })
+      resolved = resolveBackend(cfg.computer && backendConfig(cfg.computer, name as BackendName))
     } catch {
       // no server command resolvable at all — the install hint in the detail matters more than the command
       resolved = undefined
