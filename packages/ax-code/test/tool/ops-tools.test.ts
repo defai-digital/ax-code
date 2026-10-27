@@ -617,6 +617,10 @@ describe("ops_journal", () => {
 
       const limited = await byPlan.execute({ limit: 2 }, ctx)
       expect(limited.metadata.entries).toHaveLength(2)
+
+      // The status filter also applies to one plan's entries, before the limit.
+      const planFiltered = await byPlan.execute({ plan_id: planID, status: "executed", limit: 1 }, ctx)
+      expect((planFiltered.metadata.entries as Array<{ status: string }>).map((e) => e.status)).toEqual(["executed"])
     }),
   )
 })

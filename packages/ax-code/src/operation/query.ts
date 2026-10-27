@@ -149,14 +149,16 @@ export namespace OperationJournal {
   }
 
   /** Entries of a plan in sequence order (chronological). */
-  export function list(planID: OperationPlanID, opts?: { limit?: number }): Row[] {
+  export function list(planID: OperationPlanID, opts?: { status?: Status; limit?: number }): Row[] {
+    const conditions = [eq(OperationJournalTable.plan_id, planID)]
+    if (opts?.status) conditions.push(eq(OperationJournalTable.status, opts.status))
     const limit =
       opts?.limit !== undefined && Number.isFinite(opts.limit) ? Math.max(0, Math.floor(opts.limit)) : undefined
     return Database.use((db) => {
       const query = db
         .select()
         .from(OperationJournalTable)
-        .where(eq(OperationJournalTable.plan_id, planID))
+        .where(and(...conditions))
         .orderBy(OperationJournalTable.sequence)
         .all()
       return limit !== undefined ? query.slice(0, limit) : query

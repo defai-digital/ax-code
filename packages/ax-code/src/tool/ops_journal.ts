@@ -36,7 +36,10 @@ export const OpsJournalTool = Tool.define("ops_journal", {
     })
 
     const rows = params.plan_id
-      ? OperationJournal.list(OperationPlanIDOf(params.plan_id, Instance.project.id), { limit: params.limit })
+      ? OperationJournal.list(OperationPlanIDOf(params.plan_id, Instance.project.id), {
+          status: params.status,
+          limit: params.limit,
+        })
       : OperationJournal.listByProject(Instance.project.id, { status: params.status, limit: params.limit })
 
     const entries = rows.map((row) => ({
