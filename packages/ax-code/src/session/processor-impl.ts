@@ -663,8 +663,10 @@ export namespace SessionProcessor {
           // Tracks whether the stream loop errored (used by the final
           // transaction to decide whether to overwrite part end times).
           let streamErrored = false
-          // Released in the `finally` below, on every exit from this attempt
-          // (success, retry `continue`, or terminal `break`/give-up). NOT a
+          // Released in the `finally` below, on every exit from this
+          // attempt (success, retry `continue`, or terminal `break`/give-up),
+          // and earlier at catch entry once the request has failed — the
+          // retry backoff sleep must not hold the slot. NOT a
           // `using` declaration: combined with this try/catch/continue/while
           // structure, `using` was observed to silently break the outer
           // `attempt` counter's persistence across iterations (chaos.test.ts
@@ -1924,14 +1926,42 @@ export namespace SessionProcessor {
             // If the stream ended without a "finish" event and we're not
             // doing compaction, the connection was likely severed by a
             // network interruption. Throw so the catch path triggers retry.
-            if (!receivedFinish && !needsCompaction && !input.abort.aborted) {
-              throw new MessageV2.APIError({
-                message: "Stream ended without finish event — possible network interruption",
-                isRetryable: true,
-              }).toObject()
+            if (!receivedFinish && !needsCompaction) {
+              if (input.abort.aborted) {
+                // An abort landing between the last chunk and the stream
+                // closing never throws — the stream simply ends — so without
+                // this branch the attempt fell through to the shared
+                // finalization below and returned "continue" with no error
+                // recorded, unlike every other abort path (see the
+                // abort-during-retry-sleep handling in the catch). Record the
+                // same AbortedError those paths record; the finalization's
+                // `if (input.assistantMessage.error) return "stop"` then
+                // returns the same result they return.
+                input.assistantMessage.error = new MessageV2.AbortedError({
+                  message: "Aborted while streaming a response",
+                }).toObject()
+              } else {
+                throw new MessageV2.APIError({
+                  message: "Stream ended without finish event — possible network interruption",
+                  isRetryable: true,
+                }).toObject()
+              }
             }
           } catch (e: unknown) {
             streamErrored = true
+            // The provider request is over the moment control reaches this
+            // catch. Release the concurrency slot here rather than only in
+            // the `finally` below: that finally waits for this whole catch —
+            // including the `deps.sleep` backoff (30-120s for
+            // concurrency-limit errors) and any media-recovery projection —
+            // so a finally-only release pinned the slot and its
+            // cross-process lease with no request in flight for the entire
+            // backoff, blocking other sessions on the same provider. The
+            // next attempt re-acquires fresh at the top of the loop. Disposal
+            // is idempotent, but clearing the variable keeps the finally from
+            // releasing a second time.
+            _providerSlot?.[Symbol.dispose]()
+            _providerSlot = undefined
             deltaBatcher.flush()?.catch((err) => log.warn("delta flush failed", { error: err }))
             resetShortLivedToolLoopState()
             const errStack = e instanceof Error ? e.stack : undefined

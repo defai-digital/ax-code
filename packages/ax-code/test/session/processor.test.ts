@@ -13,6 +13,7 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { resolvePromptLoopErrorTransition } from "../../src/session/prompt/prompt-loop-errors"
 import { providerFallbackSwitchState } from "../../src/session/prompt/prompt-helpers"
 import { SessionRetry } from "../../src/session/retry"
+import { ProviderConcurrencyGovernor } from "../../src/provider/concurrency-governor"
 import { MessageID, SessionID, PartID } from "../../src/session/schema"
 import { TaskQueue } from "../../src/session/task-queue"
 import { tmpdir } from "../fixture/fixture"
@@ -1570,6 +1571,91 @@ describe("session.processor", () => {
         expect(calls).toBe(2)
         expect(sleepSpy).toHaveBeenCalledTimes(1)
         expect(processor.message.error).toBeUndefined()
+      },
+    })
+  })
+
+  test("releases the provider concurrency slot before the retry backoff sleep", async () => {
+    // `username` keeps the fixture hermetic in sandboxes where the current uid
+    // has no passwd entry (os.userInfo() then throws ENOENT).
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // Start from clean governor/circuit state regardless of test order.
+        ProviderConcurrencyGovernor.resetForTests(model.providerID)
+        SessionRetry.resetNetworkCircuit(model.providerID)
+        try {
+          // The backoff sleep is the one window where the attempt's slot is
+          // held with no provider request in flight: an acquirer competing
+          // for the same provider (tighter limit) must not wait out its
+          // abort timeout on a slot the failed attempt still pins.
+          let probeOutcome = "not-run"
+          const { processor, streamInput } = await createProcessorFixture(
+            tmp.path,
+            processorDependencies({
+              stream: vi
+                .fn()
+                .mockRejectedValueOnce(new MessageV2.APIError({ message: "Overloaded", isRetryable: true }).toObject())
+                .mockResolvedValueOnce(successfulTextStream("recovered")),
+              sleep: async () => {
+                try {
+                  const slot = await ProviderConcurrencyGovernor.acquire({
+                    providerID: model.providerID,
+                    limit: 1,
+                    crossProcess: false,
+                    signal: AbortSignal.timeout(300),
+                  })
+                  slot[Symbol.dispose]()
+                  probeOutcome = "acquired"
+                } catch {
+                  probeOutcome = "blocked-until-timeout"
+                }
+              },
+            }),
+          )
+          const result = await processor.process(streamInput)
+          expect(result).toBe("continue")
+          expect(probeOutcome).toBe("acquired")
+        } finally {
+          ProviderConcurrencyGovernor.resetForTests(model.providerID)
+          SessionRetry.resetNetworkCircuit(model.providerID)
+        }
+      },
+    })
+  })
+
+  test("records an abort that fires after the last chunk instead of returning an empty continue", async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const controller = new AbortController()
+        const { processor, streamInput } = await createProcessorFixture(
+          tmp.path,
+          processorDependencies({
+            stream: async () =>
+              ({
+                fullStream: (async function* () {
+                  yield { type: "start" }
+                  yield { type: "start-step" }
+                  yield { type: "text-start", id: "text_1" }
+                  yield { type: "text-delta", id: "text_1", text: "partial" }
+                  // Abort after the last chunk; the stream then closes
+                  // without a finish event and without throwing.
+                  controller.abort()
+                })(),
+              }) as any,
+          }),
+          controller.signal,
+        )
+        const result = await processor.process(streamInput)
+        // Every other abort path records MessageAbortedError and stops; a
+        // late abort must not masquerade as a normal empty turn.
+        expect(result).toBe("stop")
+        expect(processor.message.error?.name).toBe("MessageAbortedError")
       },
     })
   })
