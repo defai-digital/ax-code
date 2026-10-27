@@ -12,6 +12,7 @@ import { SessionRollback } from "../../src/session/rollback"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
 import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
+import { AX_CODE_DIRECTORY_HEADER } from "../../src/util/directory-headers"
 import { PermissionID } from "../../src/permission/schema"
 import { Question } from "../../src/question"
 import { QuestionID } from "../../src/question/schema"
@@ -1003,6 +1004,126 @@ describe("server route validation", () => {
           headers: { ...ServerRuntimeAuth.headers() },
         })
         expect(res.status).toBe(404)
+      },
+    })
+  })
+
+  test("mcp connect returns 404 for an unknown server", async () => {
+    // The fixture carries a username so the config load never needs
+    // os.userInfo(), which throws in sandboxes without a passwd entry.
+    await using tmp = await tmpdir({ config: { username: "test" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const res = await Server.Default().request("/mcp/no-such-server/connect", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            [AX_CODE_DIRECTORY_HEADER]: tmp.path,
+            ...ServerRuntimeAuth.headers(),
+          },
+        })
+        expect(res.status).toBe(404)
+        expect(await res.json()).toMatchObject({
+          name: "NotFoundError",
+          message: "MCP server not found: no-such-server",
+          details: { resource: "mcpServer" },
+        })
+      },
+    })
+  })
+
+  test("mcp oauth callback returns 400 when no OAuth flow is pending", async () => {
+    // A callback with no pending flow is a client-caused condition, not an
+    // internal fault: the route already declares 400 for it.
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        username: "test",
+        mcp: {
+          remote: {
+            type: "remote",
+            url: "https://mcp.example.com/mcp",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const res = await Server.Default().request("/mcp/remote/auth/callback", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            [AX_CODE_DIRECTORY_HEADER]: tmp.path,
+            ...ServerRuntimeAuth.headers(),
+          },
+          body: JSON.stringify({ code: "auth-code" }),
+        })
+        expect(res.status).toBe(400)
+        expect(await res.json()).toMatchObject({
+          name: "InvalidRequestError",
+          message: "No pending OAuth flow for MCP server: remote",
+          details: { reason: "no_pending_oauth_flow", resource: "mcpServer" },
+        })
+      },
+    })
+  })
+
+  test("mcp oauth routes return 409 for an untrusted project server", async () => {
+    // A project-scoped server is untrusted until the user grants trust, so
+    // starting an OAuth flow for it must be a conflict the client can act on
+    // rather than an opaque 500.
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        username: "test",
+        mcp: {
+          remote: {
+            type: "remote",
+            url: "https://mcp.example.com/mcp",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const headers = {
+          "content-type": "application/json",
+          [AX_CODE_DIRECTORY_HEADER]: tmp.path,
+          ...ServerRuntimeAuth.headers(),
+        }
+
+        const start = await Server.Default().request("/mcp/remote/auth", {
+          method: "POST",
+          headers,
+        })
+        expect(start.status).toBe(409)
+        const startBody = (await start.json()) as {
+          name: string
+          message: string
+          status: number
+          details?: Record<string, unknown>
+        }
+        expect(startBody.name).toBe("ConflictError")
+        expect(startBody.message).toContain("requires trust before authentication")
+        expect(startBody.status).toBe(409)
+        expect(startBody.details).toMatchObject({ reason: "trust_required", resource: "mcpServer" })
+        expect(startBody.details?.fingerprint).toEqual(expect.any(String))
+
+        const authenticate = await Server.Default().request("/mcp/remote/auth/authenticate", {
+          method: "POST",
+          headers,
+        })
+        expect(authenticate.status).toBe(409)
+        expect(await authenticate.json()).toMatchObject({
+          name: "ConflictError",
+          status: 409,
+          details: { reason: "trust_required" },
+        })
       },
     })
   })

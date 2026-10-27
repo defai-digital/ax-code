@@ -249,6 +249,33 @@ export namespace MCP {
     }),
   )
 
+  /**
+   * A server was asked to authenticate before the user trusted it. The trust
+   * gate is a deliberate user gesture, so the caller is told to trust the
+   * server first instead of receiving a generic failure. `fingerprint` is the
+   * fingerprint the trust grant has to cover.
+   */
+  export const TrustRequiredError = NamedError.create(
+    "MCPTrustRequiredError",
+    z.object({
+      server: z.string(),
+      fingerprint: z.string(),
+      message: z.string(),
+    }),
+  )
+
+  /**
+   * An OAuth callback arrived with no flow pending for the server: the flow
+   * expired, was already completed, or never started.
+   */
+  export const NoPendingAuthError = NamedError.create(
+    "MCPNoPendingAuthError",
+    z.object({
+      server: z.string(),
+      message: z.string(),
+    }),
+  )
+
   type MCPClient = Client
 
   /**
@@ -2492,7 +2519,11 @@ export namespace MCP {
 
     const trust = await trustDecision(mcpName, mcpConfig)
     if (!trust.trusted) {
-      throw new Error(`MCP server ${mcpName} requires trust before authentication`)
+      throw new TrustRequiredError({
+        server: mcpName,
+        fingerprint: trust.fingerprint,
+        message: `MCP server ${mcpName} requires trust before authentication`,
+      })
     }
 
     // SSRF guard: validate the URL before initiating OAuth flow (BUG-003)
@@ -2696,7 +2727,10 @@ export namespace MCP {
     const transport = pendingOAuthTransports.get(key)
 
     if (!transport) {
-      throw new Error(`No pending OAuth flow for MCP server: ${mcpName}`)
+      throw new NoPendingAuthError({
+        server: mcpName,
+        message: `No pending OAuth flow for MCP server: ${mcpName}`,
+      })
     }
 
     try {

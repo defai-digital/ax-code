@@ -17166,6 +17166,10 @@ export type McpAuthStartErrors = {
    * Not found
    */
   404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 /** Error response payload for `POST /mcp/{name}/auth` — Start MCP OAuth */
@@ -17256,6 +17260,10 @@ export type McpAuthAuthenticateErrors = {
    * Not found
    */
   404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 /** Error response payload for `POST /mcp/{name}/auth/authenticate` — Authenticate MCP OAuth */
@@ -17283,6 +17291,17 @@ export type McpConnectData = {
   }
   url: "/mcp/{name}/connect"
 }
+
+/** Error response payloads for `POST /mcp/{name}/connect` — Connect an MCP server */
+export type McpConnectErrors = {
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /mcp/{name}/connect` — Connect an MCP server */
+export type McpConnectError = McpConnectErrors[keyof McpConnectErrors]
 
 /** Success response payloads for `POST /mcp/{name}/connect` — Connect an MCP server */
 export type McpConnectResponses = {

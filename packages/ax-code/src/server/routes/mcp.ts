@@ -39,6 +39,20 @@ async function oauthNotSupportedResponse(c: any, name: string) {
   })
 }
 
+/**
+ * A server that the user has not trusted yet cannot start an OAuth flow. The
+ * trust grant is a deliberate gesture, so the refusal mirrors the trust
+ * routes' conflict shape and carries the fingerprint the grant has to cover.
+ */
+function trustRequiredResponse(c: any, error: InstanceType<typeof MCP.TrustRequiredError>) {
+  return appErrorResponse(c, {
+    name: "ConflictError",
+    message: error.data.message,
+    status: 409,
+    details: { reason: "trust_required", fingerprint: error.data.fingerprint, resource: "mcpServer" },
+  })
+}
+
 export const McpRoutes = lazy(() =>
   new Hono()
     .use(async (c, next) => {
@@ -262,15 +276,20 @@ export const McpRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400, 404),
+          ...errors(400, 404, 409),
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
       withMcpName(async (name, c) => {
         const unsupported = await oauthNotSupportedResponse(c, name)
         if (unsupported) return unsupported
-        const result = await MCP.startAuth(name)
-        return c.json(result)
+        try {
+          const result = await MCP.startAuth(name)
+          return c.json(result)
+        } catch (error) {
+          if (MCP.TrustRequiredError.isInstance(error)) return trustRequiredResponse(c, error)
+          throw error
+        }
       }),
     )
     .post(
@@ -307,8 +326,18 @@ export const McpRoutes = lazy(() =>
         const unsupported = await oauthNotSupportedResponse(c, name)
         if (unsupported) return unsupported
         const { code, iss } = c.req.valid("json")
-        const status = await MCP.finishAuth(name, code, iss)
-        return c.json(status)
+        try {
+          const status = await MCP.finishAuth(name, code, iss)
+          return c.json(status)
+        } catch (error) {
+          if (MCP.NoPendingAuthError.isInstance(error)) {
+            return invalidRequest(c, {
+              message: error.data.message,
+              details: { reason: "no_pending_oauth_flow", resource: "mcpServer" },
+            })
+          }
+          throw error
+        }
       }),
     )
     .post(
@@ -326,15 +355,20 @@ export const McpRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400, 404),
+          ...errors(400, 404, 409),
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
       withMcpName(async (name, c) => {
         const unsupported = await oauthNotSupportedResponse(c, name)
         if (unsupported) return unsupported
-        const status = await MCP.authenticate(name)
-        return c.json(status)
+        try {
+          const status = await MCP.authenticate(name)
+          return c.json(status)
+        } catch (error) {
+          if (MCP.TrustRequiredError.isInstance(error)) return trustRequiredResponse(c, error)
+          throw error
+        }
       }),
     )
     .delete(
@@ -381,10 +415,17 @@ export const McpRoutes = lazy(() =>
               },
             },
           },
+          ...errors(404),
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
       withMcpName(async (name, c) => {
+        // The route declares 404: an unknown server must not report a
+        // successful connection.
+        const entry = await Config.mcpEntry(name)
+        if (!entry?.config) {
+          return notFound(c, { message: `MCP server not found: ${name}`, resource: "mcpServer" })
+        }
         await MCP.connect(name)
         return c.json(true)
       }),
