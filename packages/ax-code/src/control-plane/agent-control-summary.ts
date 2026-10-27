@@ -51,6 +51,10 @@ export namespace AgentControlSummary {
         case "agent.phase.changed":
           summary.phase = event.phase
           summary.phaseReason = event.reason
+          // A phase change supersedes a gate block; its reason must not
+          // outlive the "blocked" phase it explained.
+          if (gateBlockReason !== undefined && summary.blockedReason === gateBlockReason)
+            summary.blockedReason = undefined
           gateBlockReason = undefined
           break
         case "agent.reasoning.selected":
@@ -96,6 +100,8 @@ export namespace AgentControlSummary {
           summary.phase = "complete"
           summary.validationStatus = event.validationStatus
           summary.completed = true
+          if (gateBlockReason !== undefined && summary.blockedReason === gateBlockReason)
+            summary.blockedReason = undefined
           gateBlockReason = undefined
           break
         case "agent.safety.decided":

@@ -145,6 +145,34 @@ describe("AgentControlSummary", () => {
     expect(AgentControlSummary.statusLine(summary)).not.toContain("blocked")
   })
 
+  test("a phase change or completion after a gate block clears the gate's reason", () => {
+    const blockedThenPhase = AgentControlSummary.fromEvents([
+      AgentControlEvents.completionGateDecided({
+        sessionID: "ses_123",
+        status: "blocked",
+        reason: "empty_subagent_result",
+        message: "Subagent returned no usable final response.",
+      }),
+      AgentControlEvents.phaseChanged({ sessionID: "ses_123", phase: "plan", reason: "plan_approved" }),
+      AgentControlEvents.completionGateDecided({ sessionID: "ses_123", status: "allow", reason: "none" }),
+    ])
+    expect(blockedThenPhase.phase).toBe("plan")
+    expect(blockedThenPhase.blockedReason).toBeUndefined()
+    expect(AgentControlSummary.statusLine(blockedThenPhase)).not.toContain("blocked")
+
+    const blockedThenCompleted = AgentControlSummary.fromEvents([
+      AgentControlEvents.completionGateDecided({
+        sessionID: "ses_123",
+        status: "blocked",
+        reason: "unfinished_todos",
+        message: "Todos remain.",
+      }),
+      AgentControlEvents.completed({ sessionID: "ses_123", validationStatus: "passed" }),
+    ])
+    expect(blockedThenCompleted.completed).toBe(true)
+    expect(blockedThenCompleted.blockedReason).toBeUndefined()
+  })
+
   test("a completion-gate allow does not clear an independent agent block", () => {
     const summary = AgentControlSummary.fromEvents([
       AgentControlEvents.phaseChanged({
