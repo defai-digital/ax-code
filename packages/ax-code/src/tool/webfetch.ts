@@ -71,7 +71,7 @@ export const WebFetchTool = Tool.define("webfetch", {
 
     const timeout = Math.min((params.timeout ?? DEFAULT_TIMEOUT / 1000) * 1000, MAX_TIMEOUT)
 
-    const { signal, clearTimeout } = abortAfterAny(timeout, ctx.abort)
+    let { signal, clearTimeout } = abortAfterAny(timeout, ctx.abort)
 
     const acceptHeaderByFormat = {
       markdown: "text/markdown;q=1.0, text/x-markdown;q=0.9, text/plain;q=0.8, text/html;q=0.7, */*;q=0.1",
@@ -131,6 +131,10 @@ export const WebFetchTool = Tool.define("webfetch", {
           const next = nextUrl.toString()
           await assertPublicUrl(next)
           if (!approvedOrigins.has(nextUrl.origin)) {
+            // The timeout bounds the network, not the user: stop the clock
+            // while the redirect prompt waits and start a fresh one after it,
+            // as the first prompt (asked before the clock starts) gets.
+            clearTimeout()
             await ctx.ask({
               permission: "webfetch",
               patterns: [next],
@@ -143,6 +147,7 @@ export const WebFetchTool = Tool.define("webfetch", {
               },
             })
             approvedOrigins.add(nextUrl.origin)
+            ;({ signal, clearTimeout } = abortAfterAny(timeout, ctx.abort))
           }
           currentUrl = next
           continue

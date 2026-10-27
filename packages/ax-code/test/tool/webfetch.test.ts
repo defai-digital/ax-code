@@ -470,6 +470,41 @@ describe("tool.webfetch", () => {
     )
   })
 
+  test("the request timeout does not run while a redirect prompt waits for the user", async () => {
+    let calls = 0
+    await withFetch(
+      async (_input, init) => {
+        init?.signal?.throwIfAborted()
+        calls++
+        if (calls === 1) {
+          return new Response(null, { status: 302, headers: { location: "https://93.184.216.35/final.txt" } })
+        }
+        return new Response("redirected", { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } })
+      },
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            let asks = 0
+            const result = await webfetch.execute(
+              { url: "https://93.184.216.34/start.txt", format: "text", timeout: 1 },
+              {
+                ...ctx,
+                ask: async () => {
+                  // The user takes longer than the whole request budget to
+                  // approve the cross-origin redirect.
+                  if (asks++ === 1) await new Promise((resolve) => setTimeout(resolve, 1_300))
+                },
+              },
+            )
+            expect(result.output).toBe("redirected")
+          },
+        })
+      },
+    )
+  })
+
   test("cancels non-ok response bodies before throwing", async () => {
     let cancelled = 0
     const body = new ReadableStream({
