@@ -58,6 +58,22 @@ describe("GoalPlan parser", () => {
     expect(GoalPlan.digestOf(parsed)).toBe(GoalPlan.digestOf(contract))
   })
 
+  test("round-trips free-text fields that begin with a markdown header marker", () => {
+    const contract = GoalPlan.fromFields({
+      kind: "code-change",
+      acceptance: [{ text: "the feature works" }],
+      verification: [{ tag: "gating", action: "run tests", observation: "they pass" }],
+      nonGoals: ["unrelated changes"],
+      assumedScope: "# only the login screen",
+      implementationApproach: "## reuse the existing session helper",
+      taskChecklist: ["implement", "verify"],
+    })
+    const parsed = GoalPlan.parse(GoalPlan.render(contract))
+    expect(parsed.assumedScope).toBe("# only the login screen")
+    expect(parsed.implementationApproach).toBe("## reuse the existing session helper")
+    expect(GoalPlan.digestOf(parsed)).toBe(GoalPlan.digestOf(contract))
+  })
+
   test("collapses embedded newlines so multi-line fields round-trip", () => {
     const contract = GoalPlan.fromFields({
       kind: "code-change",

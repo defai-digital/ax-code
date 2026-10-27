@@ -172,13 +172,13 @@ export namespace GoalPlan {
       ...contract.nonGoals.map((item) => `- ${item}`),
       "",
       "## Assumed scope",
-      contract.assumedScope,
+      bareField(contract.assumedScope),
     ]
     if (contract.kind === "code-change") {
       lines.push(
         "",
         "## Implementation approach",
-        contract.implementationApproach ?? "",
+        bareField(contract.implementationApproach ?? ""),
         "",
         "## Task checklist",
         ...(contract.taskChecklist ?? []).map((item) => `- [ ] ${item}`),
@@ -649,6 +649,13 @@ export namespace GoalPlan {
       items.push({ tag, action, observation })
     }
     return items
+  }
+
+  // Free-text section bodies render as a bare line, and parse reads any line
+  // starting with "#" plus whitespace as a section header. Indent such a value
+  // so it stays body text; parse trims the indent back off.
+  function bareField(value: string) {
+    return /^#{1,6}\s/.test(value) ? ` ${value}` : value
   }
 
   function escapeVerificationField(value: string) {
