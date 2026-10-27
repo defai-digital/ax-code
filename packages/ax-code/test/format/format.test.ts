@@ -292,6 +292,54 @@ describe("Format", () => {
     expect(await readFile(file, "utf-8")).toBe("xAB")
   })
 
+  test("a hung formatter is killed inside the Bus subscriber deadline", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({
+      config: {
+        formatter: {
+          hung: { command: ["hung-formatter", "$FILE"], extensions: [".hang"] },
+        },
+      },
+    })
+    const file = `${tmp.path}/test.hang`
+    await writeFile(file, "x")
+
+    // Run the formatter timeout immediately, but only when it fits inside the
+    // Bus deadline; the Bus's own 16 s timer keeps its real duration.
+    const formatterTimeouts: number[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = ((handler: (...args: any[]) => void, timeout?: number, ...args: any[]) => {
+      if (timeout !== undefined && timeout > 12_000 && timeout < Bus.SUBSCRIBER_TIMEOUT_MS) {
+        formatterTimeouts.push(timeout)
+        return originalSetTimeout(handler, 1, ...args)
+      }
+      return originalSetTimeout(handler, timeout, ...args)
+    }) as typeof globalThis.setTimeout
+    const spawnSpy = vi.spyOn(Process, "spawn").mockReturnValue({
+      exited: new Promise<number>(() => {}),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+    } as any)
+    const killSpy = vi.spyOn(Process, "killProcessTree").mockResolvedValue(undefined)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await Format.init()
+          await Bus.publish(File.Event.Edited, { file })
+        },
+      })
+      expect(formatterTimeouts).toHaveLength(1)
+      expect(formatterTimeouts[0]).toBeLessThan(Bus.SUBSCRIBER_TIMEOUT_MS)
+      expect(killSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      spawnSpy.mockRestore()
+      killSpy.mockRestore()
+    }
+  })
+
   test.each(["premature-close", "spawn-error"])(
     "formatter probe failure is unavailable after cleanup: %s",
     async (failure) => {

@@ -11,6 +11,8 @@ import { Log } from "../util/log"
 import * as Formatter from "./formatter"
 import { normalizeCommand } from "@ax-code/util/command"
 
+const FORMAT_KILL_MARGIN_MS = 2_000
+
 export namespace Format {
   const log = Log.create({ service: "format" })
 
@@ -116,8 +118,18 @@ export namespace Format {
           const file = payload.properties.file
           log.info("formatting", { file })
           const ext = path.extname(file)
+          // Edit tools await this event, and Bus.publish stops waiting after
+          // SUBSCRIBER_TIMEOUT_MS. Every formatter for the file shares one
+          // budget inside it (with room to kill a timed-out process tree), so
+          // a slow formatter cannot rewrite the file after the edit returned.
+          const deadline = Date.now() + Bus.SUBSCRIBER_TIMEOUT_MS - FORMAT_KILL_MARGIN_MS
 
           for (const item of await getFormatter(ext)) {
+            const remaining = deadline - Date.now()
+            if (remaining <= 0) {
+              log.warn("format budget exhausted; skipping formatter", { command: item.command, file })
+              continue
+            }
             log.info("running", { command: item.command })
             try {
               const proc = Process.spawn(
@@ -131,7 +143,6 @@ export namespace Format {
                   stderr: "ignore",
                 },
               )
-              const FORMATTER_TIMEOUT = 30_000
               let timer: ReturnType<typeof setTimeout> | undefined
               let timeoutKill: Promise<void> = Promise.resolve()
               let timedOut = false
@@ -145,7 +156,7 @@ export namespace Format {
                       timeoutKill = Process.killProcessTree(proc).catch(() => undefined)
                       log.warn("formatter timed out", { command: item.command, file })
                       resolve(-1)
-                    }, FORMATTER_TIMEOUT)
+                    }, remaining)
                   }),
                 ])
               } finally {
