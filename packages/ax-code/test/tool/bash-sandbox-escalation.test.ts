@@ -386,4 +386,33 @@ describe("tool.bash sandbox-denial escalation", () => {
       },
     })
   })
+
+  test("a rejected permission prompt removes the seatbelt profile written for the wrap", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        vi.spyOn(OsSandbox, "wrapCommand").mockReturnValue({
+          ...seatbeltWrap,
+          profilePath: "/tmp/ax-code-test-rejected-ask-profile.sb",
+        } as OsSandbox.WrapResult)
+        const cleanup = vi.spyOn(OsSandbox, "cleanupProfile").mockImplementation(() => {})
+        await expect(
+          bash.execute(
+            { command: "echo never-runs", description: "Rejected before spawn" },
+            {
+              ...ctx,
+              extra: { isolation },
+              ask: async () => {
+                throw new Error("rejected by user")
+              },
+            },
+          ),
+        ).rejects.toThrow("rejected by user")
+        expect(cleanup).toHaveBeenCalledWith("/tmp/ax-code-test-rejected-ask-profile.sb")
+      },
+    })
+  })
 })

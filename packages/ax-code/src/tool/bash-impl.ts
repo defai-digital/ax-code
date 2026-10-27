@@ -1631,84 +1631,93 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         }
       }
 
-      if (directories.size > 0) {
-        const globs = Array.from(directories).map((dir) => {
-          // Preserve POSIX-looking paths with /s, even on Windows
-          if (dir.startsWith("/")) return `${dir.replace(/[\\/]+$/, "")}/*`
-          return path.join(dir, "*")
-        })
-        await ctx.ask({
-          permission: "external_directory",
-          patterns: globs,
-          always: globs,
-          metadata: {},
-        })
-      }
-
-      // If tree-sitter found no command nodes at all (e.g. parsing edge
-      // cases, subshells, or unusual syntax), fall back to prompting for
-      // the entire raw command so the permission check is never bypassed.
-      // Don't fall back if we found commands but intentionally skipped
-      // them (e.g. cd-only commands are handled by the directory check).
-      if (patterns.size === 0 && !foundCommands) {
-        patterns.add(normalizePermissionCommand(params.command))
-        always.add(normalizePermissionCommand(params.command))
-      }
-
-      // Destructive commands always require interactive confirmation:
-      // `bash_destructive` is in the permission layer's INTERACTIVE_ONLY set,
-      // so neither wildcard allow rules nor autonomous auto-approval can skip
-      // this ask. No `always` patterns are offered — approval is per call.
-      if (destructiveCommands.size > 0) {
-        // Cloud-operations strict mode (PRD-2026-09-04 P2): when `ops.strict`
-        // is enabled, the ask is replaced by a hard deny (enforceSafetyPolicy
-        // style) that directs the model to the ops plan/apply workflow. The
-        // flag is global config, so this also applies to subagent bash calls.
-        if (config.ops?.strict === true) denyDestructiveInOpsStrict(destructiveCommands)
-
-        await ctx.ask({
-          permission: "bash_destructive",
-          patterns: Array.from(destructiveCommands.keys()),
-          always: [],
-          metadata: {
-            tool: "bash",
-            reasons: Object.fromEntries(destructiveCommands),
-          },
-        })
-
-        // Journal linkage (PRD sequencing item 3): record the approval next to
-        // the active operation plan — or the unplanned-mutations sentinel when
-        // no approved plan exists. Best-effort by contract: recordDestructive
-        // Approval never throws, so a journaling failure can never block or
-        // fail the command on this hot path.
-        try {
-          recordDestructiveApproval({
-            projectID: Instance.project.id,
-            sessionID: ctx.sessionID,
-            commands: Array.from(destructiveCommands.keys()),
-            reason: [...new Set(destructiveCommands.values())].join("; "),
+      // The prompts below can reject (or ops strict mode can deny) after the
+      // sandbox profile was written and the egress proxy started; neither
+      // reaches the spawn cleanup, so release them here.
+      try {
+        if (directories.size > 0) {
+          const globs = Array.from(directories).map((dir) => {
+            // Preserve POSIX-looking paths with /s, even on Windows
+            if (dir.startsWith("/")) return `${dir.replace(/[\\/]+$/, "")}/*`
+            return path.join(dir, "*")
           })
-        } catch (error) {
-          log.warn("failed to journal bash_destructive approval; continuing", { error: toErrorMessage(error) })
+          await ctx.ask({
+            permission: "external_directory",
+            patterns: globs,
+            always: globs,
+            metadata: {},
+          })
         }
-      }
 
-      if (patterns.size > 0) {
-        await ctx.ask({
-          permission: "bash",
-          patterns: Array.from(patterns),
-          always: Array.from(always),
-          // Include parsed redirect/write targets for the auto-accept protected-path gate.
-          metadata: {
-            paths: [...new Set([...resolvedPathsList, ...redirectWritePaths])],
-            command: Env.redactForRecord(params.command),
-            // Never publish raw credentials or approve a truncated/redacted approximation.
-            ...(params.command.length <= MAX_AUTO_ACCEPT_COMMAND &&
-            Env.redactForRecord(params.command) === params.command
-              ? { bashCommand: params.command, bashCwd: cwd }
-              : {}),
-          },
-        })
+        // If tree-sitter found no command nodes at all (e.g. parsing edge
+        // cases, subshells, or unusual syntax), fall back to prompting for
+        // the entire raw command so the permission check is never bypassed.
+        // Don't fall back if we found commands but intentionally skipped
+        // them (e.g. cd-only commands are handled by the directory check).
+        if (patterns.size === 0 && !foundCommands) {
+          patterns.add(normalizePermissionCommand(params.command))
+          always.add(normalizePermissionCommand(params.command))
+        }
+
+        // Destructive commands always require interactive confirmation:
+        // `bash_destructive` is in the permission layer's INTERACTIVE_ONLY set,
+        // so neither wildcard allow rules nor autonomous auto-approval can skip
+        // this ask. No `always` patterns are offered — approval is per call.
+        if (destructiveCommands.size > 0) {
+          // Cloud-operations strict mode (PRD-2026-09-04 P2): when `ops.strict`
+          // is enabled, the ask is replaced by a hard deny (enforceSafetyPolicy
+          // style) that directs the model to the ops plan/apply workflow. The
+          // flag is global config, so this also applies to subagent bash calls.
+          if (config.ops?.strict === true) denyDestructiveInOpsStrict(destructiveCommands)
+
+          await ctx.ask({
+            permission: "bash_destructive",
+            patterns: Array.from(destructiveCommands.keys()),
+            always: [],
+            metadata: {
+              tool: "bash",
+              reasons: Object.fromEntries(destructiveCommands),
+            },
+          })
+
+          // Journal linkage (PRD sequencing item 3): record the approval next to
+          // the active operation plan — or the unplanned-mutations sentinel when
+          // no approved plan exists. Best-effort by contract: recordDestructive
+          // Approval never throws, so a journaling failure can never block or
+          // fail the command on this hot path.
+          try {
+            recordDestructiveApproval({
+              projectID: Instance.project.id,
+              sessionID: ctx.sessionID,
+              commands: Array.from(destructiveCommands.keys()),
+              reason: [...new Set(destructiveCommands.values())].join("; "),
+            })
+          } catch (error) {
+            log.warn("failed to journal bash_destructive approval; continuing", { error: toErrorMessage(error) })
+          }
+        }
+
+        if (patterns.size > 0) {
+          await ctx.ask({
+            permission: "bash",
+            patterns: Array.from(patterns),
+            always: Array.from(always),
+            // Include parsed redirect/write targets for the auto-accept protected-path gate.
+            metadata: {
+              paths: [...new Set([...resolvedPathsList, ...redirectWritePaths])],
+              command: Env.redactForRecord(params.command),
+              // Never publish raw credentials or approve a truncated/redacted approximation.
+              ...(params.command.length <= MAX_AUTO_ACCEPT_COMMAND &&
+              Env.redactForRecord(params.command) === params.command
+                ? { bashCommand: params.command, bashCwd: cwd }
+                : {}),
+            },
+          })
+        }
+      } catch (error) {
+        OsSandbox.cleanupProfile(osWrap?.active === true ? osWrap.profilePath : undefined)
+        void egressProxy?.stop()
+        throw error
       }
 
       // Background shells keep stdin open ("pipe") so bash_input can write
