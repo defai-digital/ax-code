@@ -375,11 +375,15 @@ export const GithubRunCommand = cmd({
         core.setFailed(msg)
       } finally {
         if (!useGithubToken) {
-          if (gitConfigured) {
-            await restoreGitConfig(gitRun, isMock, savedUserName, savedUserEmail, savedGitConfig)
-          }
-          if (credentialsReady) {
-            await revokeAppToken(appToken!)
+          try {
+            if (gitConfigured) {
+              await restoreGitConfig(gitRun, isMock, savedUserName, savedUserEmail, savedGitConfig)
+            }
+          } finally {
+            // A failed restore must not leave the app token unrevoked.
+            if (credentialsReady) {
+              await revokeAppToken(appToken!)
+            }
           }
         }
       }

@@ -211,18 +211,28 @@ export async function restoreGitConfig(
   savedGitConfig: string | undefined,
 ) {
   if (isMock) return
+  // `git config --unset-all` exits 5 when the key is already gone; that is
+  // the state restore wants, not a failure.
+  const unset = (key: string) =>
+    gitRun(["config", "--local", "--unset-all", key]).catch((error) => {
+      if (error instanceof Process.RunFailedError && error.code === 5) return
+      throw error
+    })
   if (savedUserName !== undefined) {
     await gitRun(["config", "--local", "user.name", savedUserName])
   } else {
-    await gitRun(["config", "--local", "--unset-all", "user.name"])
+    await unset("user.name")
   }
   if (savedUserEmail !== undefined) {
     await gitRun(["config", "--local", "user.email", savedUserEmail])
   } else {
-    await gitRun(["config", "--local", "--unset-all", "user.email"])
+    await unset("user.email")
   }
+  const config = "http.https://github.com/.extraheader"
   if (savedGitConfig !== undefined) {
-    const config = "http.https://github.com/.extraheader"
     await gitRun(["config", "--local", config, savedGitConfig])
+  } else {
+    // Without this the app token configureGit wrote stays in .git/config.
+    await unset(config)
   }
 }
