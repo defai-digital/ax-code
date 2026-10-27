@@ -79,6 +79,17 @@ export namespace JsonMigration {
     return toErrorMessage(error)
   }
 
+  /** The main database file of an open connection; undefined for an in-memory one. */
+  export function mainDatabaseFile(sqlite: SqliteHandle): string | undefined {
+    try {
+      const rows = sqlite.prepare("PRAGMA database_list").all() as { name?: unknown; file?: unknown }[]
+      const file = rows.find((row) => row.name === "main")?.file
+      return typeof file === "string" && file.length > 0 ? file : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   export async function run(sqlite: SqliteHandle, options?: Options) {
     const storageDir = path.join(Global.Path.data, "storage")
 
@@ -109,10 +120,13 @@ export namespace JsonMigration {
     // Mirror Database.applyStartupPragmas: WAL only where it is safe. Forcing
     // WAL here would put the -shm sidecar on a network filesystem (the exact
     // ADR-210 hazard), and NORMAL is not corruption-safe in rollback modes.
-    // The path mirrors Database.Path (importing db.ts here would close a
-    // module cycle through its lazy import of this file).
-    // @scan-suppress security_scan - The database path is a fixed leaf in the application data directory.
-    const journalMode = resolveSqliteJournalMode({ path: path.join(Global.Path.data, "ax-code.db") })
+    // Probe the file this connection actually opened: Database.Path follows
+    // AX_CODE_DB and the release channel, so a fixed default path could
+    // report WAL for a database that lives on a network share.
+    // @scan-suppress security_scan - The fallback path is a fixed leaf in the application data directory.
+    const journalMode = resolveSqliteJournalMode({
+      path: mainDatabaseFile(sqlite) ?? path.join(Global.Path.data, "ax-code.db"),
+    })
     // @scan-suppress security_scan - resolveSqliteJournalMode returns a validated SQLite journal-mode enum, not arbitrary SQL.
     sqlite.exec(`PRAGMA journal_mode = ${journalMode}`)
     // @scan-suppress security_scan - resolveSqliteSynchronous returns only FULL or NORMAL.
