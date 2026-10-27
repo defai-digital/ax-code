@@ -35,9 +35,16 @@ export function buildAgentCreatePermission(selectedTools: string[]) {
   const selected = new Set(selectedTools)
   if (AVAILABLE_TOOLS.every((tool) => selected.has(tool))) return undefined
 
-  return Object.fromEntries(
-    AVAILABLE_TOOLS.map((tool) => [tool, selected.has(tool) ? "allow" : "deny"] as const),
-  ) satisfies Record<string, "allow" | "deny">
+  // Rules are keyed by permission, not tool id: `write` asks for the `edit`
+  // permission, so a `write: allow` rule was a no-op and `edit: deny` blocked
+  // it. Either selection allows `edit`.
+  const permission: Record<string, "allow" | "deny"> = {}
+  for (const tool of AVAILABLE_TOOLS) {
+    const key = tool === "write" ? "edit" : tool
+    if (selected.has(tool)) permission[key] = "allow"
+    else permission[key] ??= "deny"
+  }
+  return permission
 }
 
 export function buildAgentCreateFrontmatter(input: {
