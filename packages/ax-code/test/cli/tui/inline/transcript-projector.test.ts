@@ -85,6 +85,19 @@ describe("inline transcript projection", () => {
     ])
   })
 
+  test("a part-level revert keeps the boundary message up to the reverted part", () => {
+    const blocks = createTranscriptProjector().project({ ...snapshot(), revert: "m2", revertPart: "t" })
+    const kinds = blocks.map((block) => block.kind)
+    expect(blocks.find((block) => block.kind === "assistant")?.text).toBe("answer")
+    expect(kinds).not.toContain("tool")
+  })
+
+  test("a message revert hides the boundary message", () => {
+    const blocks = createTranscriptProjector().project({ ...snapshot(), revert: "m2" })
+    expect(blocks.map((block) => block.kind)).not.toContain("assistant")
+    expect(blocks.find((block) => block.kind === "user")?.text).toBe("hello")
+  })
+
   test("session, revert and compaction markers append without replaying old content", () => {
     const projector = createTranscriptProjector()
     const input = snapshot()

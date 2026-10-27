@@ -272,13 +272,15 @@ function InlineSession(props: {
       untrack(() => preview.update("", 0, true))
       return
     }
+    const revert = sync.data.session.find((item) => item.id === id)?.revert
     const blocks = projector.project({
       sessionID: id,
       messages: sync.data.message[id] ?? [],
       parts: sync.data.part,
       status: sync.data.session_status[id],
       error: sync.data.session_error[id],
-      revert: sync.data.session.find((item) => item.id === id)?.revert?.messageID,
+      revert: revert?.messageID,
+      revertPart: revert?.partID,
     })
     let tail = ""
     let length = 0

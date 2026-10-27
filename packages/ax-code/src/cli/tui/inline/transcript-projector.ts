@@ -11,6 +11,8 @@ export type TranscriptSnapshot = {
   status?: SessionStatus
   error?: unknown
   revert?: string
+  /** Part-level revert: the boundary message stays, cut before this part. */
+  revertPart?: string
   requests?: readonly { id: string; kind: "permission" | "question" }[]
 }
 
@@ -55,8 +57,17 @@ export function createTranscriptProjector(text: InlineText = DEFAULT_INLINE_TEXT
       }
       let blocked = false
       for (const message of input.messages) {
-        if (input.revert && message.id >= input.revert) break
-        for (const part of input.parts[message.id] ?? []) {
+        // Mirror the full-screen view (routes/session/revert.ts): a message
+        // revert hides the boundary message, a part-level revert keeps it up
+        // to the reverted part.
+        const boundary = input.revert !== undefined && message.id === input.revert
+        if (input.revert && message.id >= input.revert && !(boundary && input.revertPart)) break
+        let parts = input.parts[message.id] ?? []
+        if (boundary) {
+          const cut = parts.findIndex((part) => part.id === input.revertPart)
+          parts = cut === -1 ? [] : parts.slice(0, cut)
+        }
+        for (const part of parts) {
           const key = `${sid}:${message.id}:${part.id}`
           if (committed.has(key)) continue
           if (part.type === "text" || part.type === "reasoning") {
@@ -91,7 +102,7 @@ export function createTranscriptProjector(text: InlineText = DEFAULT_INLINE_TEXT
             add({ key, kind: "user", text: `[file: ${singleLine(part.filename ?? part.mime)}]` })
           }
         }
-        if (blocked) break
+        if (blocked || boundary) break
         if (message.role === "assistant" && message.error) {
           const error = message.error
           add({
