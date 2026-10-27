@@ -794,10 +794,22 @@ export namespace SessionCompaction {
 
     let messages = input.messages
     let replay: MessageV2.WithParts | undefined
-    if (input.overflow) {
+    // The replay candidate is the newest real (non-marker) user turn before
+    // the compaction marker. The overflow path always replays it — the
+    // request died mid-turn, so the turn must be retried verbatim. A
+    // proactive (non-overflow) auto compaction must replay it too when
+    // nothing has answered it yet: a prompt preflight fires before the new
+    // prompt is ever sent, and folding an unanswered turn into the summary
+    // would leave only the synthetic "Continue..." text — the user's exact
+    // words would reach the next request as the summarizer's paraphrase.
+    // Once an assistant message sits between the turn and the marker, the
+    // turn was answered; the summary plus synthetic continue stays the shape.
+    // Manual compaction never replays (same as before).
+    if (input.overflow || input.auto) {
       const idx = input.messages.findIndex((m) => m.info.id === input.parentID)
       for (let i = idx - 1; i >= 0; i--) {
         const msg = input.messages[i]
+        if (!input.overflow && msg.info.role === "assistant") break
         if (msg.info.role === "user" && !msg.parts.some((p) => p.type === "compaction")) {
           const parts = projectReplayParts(msg.parts, input.triggerReason)
           if (parts.length === 0) continue

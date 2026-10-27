@@ -145,7 +145,8 @@ export type PreflightCompactionResult =
     }
 
 // Below this amount there is no meaningful history for compaction to shrink.
-// The current user turn and fixed system/tool payload survive compaction, so
+// The current user turn (replayed verbatim after the summary while it is
+// unanswered) and the fixed system/tool payload survive compaction, so
 // compacting a greeting-sized session only creates a misleading summary and
 // retries the same oversized request (#344, #345).
 const MIN_COMPACTABLE_HISTORY_TOKENS = 512
@@ -229,9 +230,10 @@ export async function maybeSchedulePreflightCompaction(input: {
   const fitsInWindow = estimatedTokens < inputCap && fixedTokens < inputCap
 
   // Compaction can only shrink prior message history. It cannot reduce the
-  // system prompt, tool schemas, or current user turn. Block only when the
-  // request cannot fit the model's actual input window; otherwise send a
-  // still-fitting tiny request or compact a large history.
+  // system prompt, tool schemas, or current user turn (an unanswered turn is
+  // replayed verbatim after the summary; an answered one stays summarized).
+  // Block only when the request cannot fit the model's actual input window;
+  // otherwise send a still-fitting tiny request or compact a large history.
   if (!fitsInWindow && (fixedTokens >= inputCap || historyTooSmall)) {
     log.info("blocking futile preflight compaction", {
       sessionID: input.sessionID,
