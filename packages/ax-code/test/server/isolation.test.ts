@@ -303,7 +303,8 @@ describe("isolation route", () => {
           expect(updated).toContain("// keep this comment")
           expect(updated).toContain('"model": "alibaba-token-plan/qwen3.8-max"')
           expect(updated).toContain('"mode": "full-access"')
-          expect(updated).toContain('"network": true')
+          // A mode-only PUT keeps the configured network policy.
+          expect(updated).toContain('"network": false')
         },
       })
     })
@@ -330,7 +331,32 @@ describe("isolation route", () => {
           expect(await put.json()).toEqual({ mode: "full-access", network: true })
           expect(process.env.AX_CODE_ISOLATION_MODE).toBe("full-access")
           const updated = JSON.parse(await readFile(configPath, "utf-8"))
-          expect(updated.isolation).toEqual({ mode: "workspace-write", network: false })
+          expect(updated.isolation).toEqual({ mode: "workspace-write" })
+        },
+      })
+    })
+  })
+
+  test("toggling the mode off and back keeps a configured network allowlist", async () => {
+    await withCleanIsolationEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      const network = { allowed_domains: ["example.com"] }
+      await writeFile(configPath, JSON.stringify({ isolation: { mode: "workspace-write", network } }))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const put = (mode: string) =>
+            Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ mode }),
+            })
+          expect(await (await put("full-access")).json()).toEqual({ mode: "full-access", network: true })
+          expect((await put("workspace-write")).status).toBe(200)
+          const updated = JSON.parse(await readFile(configPath, "utf-8"))
+          expect(updated.isolation).toEqual({ mode: "workspace-write", network })
         },
       })
     })

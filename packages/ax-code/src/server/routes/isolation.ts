@@ -83,7 +83,11 @@ export const IsolationRoutes = lazy(() =>
         // Accept an explicit network flag from the client instead of forcing it
         // to false for workspace-write. See #240.
         const requestedNetwork = c.req.valid("json").network
-        const network = mode === "read-only" ? false : (requestedNetwork ?? mode === "full-access")
+        // Without an explicit flag, a write-capable mode keeps the configured
+        // network policy: full-access is networked regardless, and writing the
+        // derived boolean back clobbered `network: true` or an allowed_domains
+        // allowlist whenever the TUI toggled the sandbox off and on again.
+        const network = mode === "read-only" ? false : requestedNetwork
         await persistProjectConfigResponse({
           log,
           context: "isolation mode",
@@ -92,7 +96,7 @@ export const IsolationRoutes = lazy(() =>
             // the whole object with { mode, network } dropped OS sandbox
             // backend and custom protected paths on every UI mode toggle.
             const prev = config.isolation && typeof config.isolation === "object" ? { ...config.isolation } : {}
-            config.isolation = { ...prev, mode, network }
+            config.isolation = network === undefined ? { ...prev, mode } : { ...prev, mode, network }
           },
         })
         // Refresh the per-directory config cache so tool execution observes
