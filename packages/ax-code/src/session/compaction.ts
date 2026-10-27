@@ -804,8 +804,10 @@ export namespace SessionCompaction {
     // words would reach the next request as the summarizer's paraphrase.
     // Once an assistant message sits between the turn and the marker, the
     // turn was answered; the summary plus synthetic continue stays the shape.
-    // Manual compaction never replays (same as before).
-    if (input.overflow || input.auto) {
+    // Manual compaction never replays (same as before), and neither does one
+    // with a keep window (ADR-225): the window keeps the newest pre-marker
+    // turn verbatim, so a replay would send the same words twice.
+    if ((input.overflow || input.auto) && input.keep === undefined) {
       const idx = input.messages.findIndex((m) => m.info.id === input.parentID)
       for (let i = idx - 1; i >= 0; i--) {
         const msg = input.messages[i]

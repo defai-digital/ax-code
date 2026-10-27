@@ -227,6 +227,46 @@ describe("session.compaction preflight replay", () => {
     })
   })
 
+  test("an auto compaction with a keep window sends the unanswered turn exactly once", async () => {
+    await using tmp = await tmpdir({ config: { username: "test" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await withCompactionModelMocks(async () => {
+          const session = await Session.create({})
+          await createAnsweredTurn(session.id, ANSWERED_PROMPT)
+          await createUserTurn(session.id, PENDING_PROMPT)
+          await SessionCompaction.create({
+            sessionID: session.id,
+            agent: "build",
+            model: userModel(),
+            auto: true,
+            keep: 1,
+            triggerReason: "manual",
+          })
+          const messages = await Session.messages({ sessionID: session.id })
+          const parentID = messages.at(-1)!.info.id
+
+          const result = await SessionCompaction.process({
+            parentID,
+            messages,
+            sessionID: session.id,
+            abort: new AbortController().signal,
+            auto: true,
+            keep: 1,
+            triggerReason: "manual",
+          })
+
+          expect(result).toBe("continue")
+          const { surviving } = await continuedContext(session.id)
+          // The keep window already carries the turn verbatim; a replay on top
+          // would send the same words twice.
+          expect(userTextParts(surviving).filter((part) => part.text.includes(PENDING_PROMPT))).toHaveLength(1)
+        })
+      },
+    })
+  })
+
   test("a usage compaction after a finished turn does not replay the answered user message", async () => {
     await using tmp = await tmpdir({ config: { username: "test" } })
     await Instance.provide({
