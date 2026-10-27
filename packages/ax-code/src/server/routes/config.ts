@@ -153,6 +153,23 @@ function stripRedactedProviderModels<T extends RedactableModel>(
   )
 }
 
+// A remote MCP URL can carry credentials as userinfo (user:token@host).
+// The redacted form still parses as a URL so a GET body passes PATCH
+// validation, and PATCH drops it so the stored URL is kept.
+function redactUrlUserinfo(value: string): string {
+  try {
+    const url = new URL(value)
+    if (!url.username && !url.password) return value
+    return `${url.protocol}//${REDACTED}@${url.host}${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return value
+  }
+}
+
+function hasRedactedUserinfo(value: string): boolean {
+  return value.includes(`//${REDACTED}@`) || value.includes(`//${encodeURIComponent(REDACTED)}@`)
+}
+
 export function stripRedactedConfig(config: Config.Info): Config.Info {
   const result: Config.Info = { ...config }
   // Only rewrite provider/mcp when the caller actually sent them. Setting
@@ -178,10 +195,12 @@ export function stripRedactedConfig(config: Config.Info): Config.Info {
       Object.entries(config.mcp).map(([name, m]) => {
         if (!("type" in m)) return [name, m]
         if (m.type === "remote") {
+          const { url, ...rest } = m
           return [
             name,
             {
-              ...m,
+              ...rest,
+              ...(hasRedactedUserinfo(url) ? {} : { url }),
               headers: stripRedactedRecord(m.headers),
               oauth:
                 m.oauth && typeof m.oauth === "object" && m.oauth.clientSecret === REDACTED
@@ -235,6 +254,7 @@ export function redactConfig(config: Config.Info): Config.Info {
                 name,
                 {
                   ...m,
+                  url: redactUrlUserinfo(m.url),
                   headers: maskRecord(m.headers),
                   oauth:
                     m.oauth && typeof m.oauth === "object"

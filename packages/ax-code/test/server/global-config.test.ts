@@ -507,6 +507,37 @@ describe("/global/config redaction", () => {
     }
   })
 
+  test("config GET redacts credentials in a remote MCP URL and PATCH keeps the stored URL", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+
+    await using tmp = await tmpdir({ git: true })
+    const configPath = path.join(tmp.path, "ax-code.json")
+    const url = "https://fixture-user:fixture-pass@remote.test/mcp?x=1"
+    await Filesystem.write(configPath, JSON.stringify({ mcp: { remote: { type: "remote", url } } }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const query = `directory=${encodeURIComponent(tmp.path)}`
+        const read = await Server.Default().request(`/config?${query}`)
+        expect(read.status).toBe(200)
+        const body = (await read.json()) as { mcp?: Record<string, { url?: string }> }
+        expect(body.mcp?.remote?.url).toBe("https://[redacted]@remote.test/mcp?x=1")
+        expect(JSON.stringify(body)).not.toContain("fixture-pass")
+
+        const write = await Server.Default().request(`/config?${query}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ mcp: body.mcp }),
+        })
+        expect(write.status).toBe(200)
+      },
+    })
+
+    const stored = JSON.parse(await Filesystem.readText(configPath)) as { mcp: Record<string, { url: string }> }
+    expect(stored.mcp.remote.url).toBe(url)
+  })
+
   test("project config patch ignores redacted sentinels", async () => {
     // This test verifies preservation of existing project-level credentials,
     // which are available only after the checkout has been explicitly trusted.
