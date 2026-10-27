@@ -128,6 +128,11 @@ export namespace SessionSummary {
     if (failures.length > 0) throw failures[0]
   }
 
+  /** Recompute the session-wide summary and session_diff from the transcript. */
+  export async function refreshSession(sessionID: SessionID) {
+    await summarizeSession({ sessionID, messages: await Session.messages({ sessionID }) })
+  }
+
   async function summarizeSession(input: { sessionID: SessionID; messages: MessageV2.WithParts[] }) {
     const diffs = await computeDiff({ messages: input.messages })
     await Session.setSummary({

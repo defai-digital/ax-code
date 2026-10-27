@@ -5,6 +5,8 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionRevert } from "../../src/session/revert"
 import { Snapshot } from "../../src/snapshot"
+import { SessionSummary } from "../../src/session/summary"
+import { Storage } from "../../src/storage/storage"
 import { MessageID, PartID } from "../../src/session/schema"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { hiddenMessageIDs } from "../../src/cli/tui/routes/session/revert"
@@ -131,7 +133,13 @@ test("two undo levels and redo restore files and messages while preserving unrel
       } finally {
         clear.mockRestore()
       }
+      // The undo replaced session_diff with the undone changes; the redo must
+      // not leave that description behind.
+      expect(await Storage.read(["session_diff", session.id])).not.toEqual([])
       await SessionRevert.unrevert({ sessionID: session.id })
+      expect(await Storage.read(["session_diff", session.id])).toEqual(
+        await SessionSummary.computeDiff({ messages: await Session.messages({ sessionID: session.id }) }),
+      )
       expect(await read("中文 文件.txt")).toBe("第二轮\r\n")
       expect(await read("second.txt")).toBe("second\n")
       expect(await read("added.txt")).toBe("new\n")

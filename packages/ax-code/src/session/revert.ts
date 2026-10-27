@@ -11,6 +11,7 @@ import { MessageTable, PartTable } from "./session.sql"
 import { Storage } from "@/storage/storage"
 import { Bus } from "../bus"
 import { SessionPrompt } from "./prompt"
+import { SessionSummary } from "./summary"
 import { SessionShard } from "./shard"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
@@ -447,8 +448,9 @@ export namespace SessionRevert {
     // Restore only this undo's paths. Snapshot.revert also removes paths absent
     // from the target tree, while a whole-tree checkout leaves deleted files.
     await Snapshot.revert([{ hash: session.revert.snapshot, files }])
+    let next: Session.Info
     try {
-      return await Session.clearRevert(input.sessionID)
+      next = await Session.clearRevert(input.sessionID)
     } catch (error) {
       if (before && files.length > 0) {
         await Snapshot.revert([{ hash: before, files }]).catch((rollbackError) => {
@@ -460,6 +462,12 @@ export namespace SessionRevert {
       }
       throw error
     }
+    // revert() replaced the session summary and session_diff with the undone
+    // changes; once they are back, describe the whole session again.
+    await SessionSummary.refreshSession(input.sessionID).catch((error) => {
+      log.error("failed to refresh session diff after unrevert", { sessionID: input.sessionID, error })
+    })
+    return next
   }
 
   export async function cleanup(session: Session.Info) {
