@@ -163,3 +163,10 @@ test("programmatic agent run timed out session guard handles races before and af
   expect(block).toContain("activeSessions.delete(timedOutSession)")
   expect(block).toContain("void sdk.session.abort({ sessionID: timedOutSession }).catch(() => {})")
 })
+
+test("programmatic tool argument formatting keeps a shared non-circular value", () => {
+  const shared = { pattern: "x" }
+  expect(formatToolArgumentsForPrompt({ primary: shared, mirror: shared, list: [shared, shared] })).toBe(
+    '{"primary":{"pattern":"x"},"mirror":{"pattern":"x"},"list":[{"pattern":"x"},{"pattern":"x"}]}',
+  )
+})

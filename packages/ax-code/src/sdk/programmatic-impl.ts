@@ -97,14 +97,17 @@ function getFinalAssistantText(message: AssistantMessageRecord | undefined) {
 }
 
 export function formatToolArgumentsForPrompt(input: Record<string, unknown>): string {
-  const seen = new WeakSet<object>()
+  // Track the current ancestor chain, not every object seen: a value shared
+  // by two siblings is not a cycle and must serialize both times.
+  const ancestors: object[] = []
   try {
     return (
-      JSON.stringify(input, (_key, value) => {
+      JSON.stringify(input, function (this: unknown, _key, value) {
         if (typeof value === "bigint") return value.toString()
         if (value && typeof value === "object") {
-          if (seen.has(value)) return "[Circular]"
-          seen.add(value)
+          while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) ancestors.pop()
+          if (ancestors.includes(value)) return "[Circular]"
+          ancestors.push(value)
         }
         return value
       }) ?? "{}"
