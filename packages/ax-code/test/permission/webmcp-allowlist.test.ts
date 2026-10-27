@@ -191,6 +191,44 @@ test("an earlier once reply prevents save; an explicit save reserves against com
   })
 })
 
+test("a session-wide reject of another prompt skips an approval that is mid-save", async () => {
+  await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const first = await ask()
+      const sibling = Permission.ask({
+        sessionID,
+        permission: "bash",
+        patterns: ["echo hi"],
+        always: [],
+        metadata: { requireInteractive: true },
+        ruleset: [],
+      })
+      const siblingRejected = expect(sibling).rejects.toThrow()
+      await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(2))
+      const siblingID = (await Permission.list()).find((item) => item.permission === "bash")!.id
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => (release = resolve))
+      const write = Filesystem.writeJson
+      vi.spyOn(Filesystem, "writeJson").mockImplementationOnce(async (...args) => {
+        await gate
+        await write(...args)
+      })
+      const save = Permission.saveWebMcpApproval(first.request.id)
+      await vi.waitFor(() => expect(Filesystem.writeJson).toHaveBeenCalled())
+      expect(await Permission.reply({ requestID: siblingID, reply: "reject" })).toBe(true)
+      await siblingRejected
+      release()
+      // The explicit save was already reserved; an unrelated reject must not
+      // cancel it out from under the user.
+      expect(await save).toBe(true)
+      await first.pending
+      expect(await WebMcpApprovals.list("bridge")).toHaveLength(1)
+    },
+  })
+})
+
 test("failed saves leave a pending request retryable", async () => {
   await using tmp = await tmpdir({ git: true, config: { mcp: { bridge: entry() } } })
   await Instance.provide({

@@ -922,7 +922,9 @@ export namespace Permission {
         if (pending.get(input.requestID) !== existing || existing.saving) return false
         let rejectedTarget = false
         for (const [id, entry] of [...pending.entries()]) {
-          if (entry.info.sessionID !== existing.info.sessionID) continue
+          // A request mid-save already holds the user's explicit choice; the
+          // always sweep skips it for the same reason.
+          if (entry.info.sessionID !== existing.info.sessionID || entry.saving) continue
           if (id === input.requestID) rejectedTarget = true
           clearIdleOnceTimer(entry)
           pending.delete(id)
