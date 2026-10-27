@@ -619,6 +619,23 @@ test("wrapSSE cancels the underlying reader when the outer abort signal fires", 
   expect(cancelReason).toBe(reason)
 })
 
+test("wrapSSE fails the consumer's read when the outer abort signal fires mid-stream", async () => {
+  const body = new ReadableStream<Uint8Array>({
+    pull() {
+      return new Promise(() => {})
+    },
+  })
+  const response = new Response(body, { headers: { "content-type": "text/event-stream" } })
+  const outerAbort = new AbortController()
+  const wrapped = Provider.wrapSSE(response, 60_000, new AbortController(), outerAbort.signal)
+  const reader = wrapped.body!.getReader()
+  const pendingRead = reader.read()
+  const reason = new Error("session aborted")
+  outerAbort.abort(reason)
+  // An aborted stream must not look like a complete response.
+  await expect(pendingRead).rejects.toBe(reason)
+})
+
 test("wrapSSE removes the outer abort listener when the chunk timeout fires", async () => {
   let removed = 0
   const body = new ReadableStream<Uint8Array>({

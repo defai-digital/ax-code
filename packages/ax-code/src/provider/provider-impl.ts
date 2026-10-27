@@ -353,6 +353,10 @@ export namespace Provider {
 
     const reader = res.body.getReader()
     let settled = false
+    // Set when the caller's signal aborts the stream. Cancelling the reader
+    // resolves a pending read as done, which would look like a complete
+    // response; pull() errors with this reason instead.
+    let aborted: { reason: unknown } | undefined
     const cleanup = () => {
       if (signal) signal.removeEventListener("abort", onAbort)
     }
@@ -367,13 +371,15 @@ export namespace Provider {
       ctl.abort(reason)
       void reader.cancel(reason).catch(() => {})
     }
-    const onAbort = () => abortReader(signal?.reason)
+    const onAbort = () => {
+      if (settled) return
+      aborted = { reason: signal?.reason }
+      abortReader(signal?.reason)
+    }
 
     if (signal) {
       signal.addEventListener("abort", onAbort, { once: true })
-      if (signal.aborted) {
-        abortReader(signal.reason)
-      }
+      if (signal.aborted) onAbort()
     }
 
     const body = new ReadableStream<Uint8Array>({
@@ -403,7 +409,8 @@ export namespace Provider {
 
         if (part.done) {
           finish()
-          ctrl.close()
+          if (aborted) ctrl.error(aborted.reason)
+          else ctrl.close()
           return
         }
 
