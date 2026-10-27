@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import path from "path"
 import { isDangerousRoot, requestDirectory } from "../../src/server/request-directory"
 import { Filesystem } from "../../src/util/filesystem"
+import { withDirectoryHeaders } from "../../src/util/directory-headers"
 import { tmpdir } from "../fixture/fixture"
 
 // Minimal Hono context: requestDirectory only reads query/header and (on
@@ -18,6 +19,38 @@ function fakeContext(directory?: string): Context {
       new Response(JSON.stringify(body), { status: init?.status ?? 200 }),
   } as unknown as Context
 }
+
+function headerContext(headers: Record<string, string>): Context {
+  return {
+    req: { query: () => undefined, header: (name: string) => headers[name.toLowerCase()] },
+    json: (body: unknown, init?: { status?: number }) =>
+      new Response(JSON.stringify(body), { status: init?.status ?? 200 }),
+  } as unknown as Context
+}
+
+describe("requestDirectory percent handling", () => {
+  test("round-trips a directory with a literal percent escape through the header", async () => {
+    await using tmp = await tmpdir()
+    const target = path.join(tmp.path, "x%41y")
+    await fs.mkdir(target)
+    await fs.mkdir(path.join(tmp.path, "xAy"))
+    const headers = withDirectoryHeaders({}, target)
+    expect(requestDirectory(headerContext(headers))).toBe(Filesystem.resolve(target))
+  })
+
+  test("does not decode the cwd fallback", async () => {
+    await using tmp = await tmpdir()
+    const cwd = path.join(tmp.path, "x%41y")
+    await fs.mkdir(cwd)
+    await fs.mkdir(path.join(tmp.path, "xAy"))
+    const spy = vi.spyOn(process, "cwd").mockReturnValue(cwd)
+    try {
+      expect(requestDirectory(headerContext({}))).toBe(Filesystem.resolve(cwd))
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
 
 describe("isDangerousRoot", () => {
   test("blocks POSIX system roots", () => {

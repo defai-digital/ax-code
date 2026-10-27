@@ -58,9 +58,11 @@ export function headersToRecord(headers: RequestInit["headers"] | undefined): Re
   return { ...headers }
 }
 
-/** Percent-encode a directory value when it contains non-ASCII characters. */
+/** Percent-encode a directory value when it contains non-ASCII characters or `%`. */
 export function encodeDirectoryHeader(directory: string) {
-  return /[^\x00-\x7F]/.test(directory) ? encodeURIComponent(directory) : directory
+  // The server percent-decodes the header, so a literal `%` must be encoded
+  // too or `/a/x%41y` would arrive as `/a/xAy`.
+  return /[^\x00-\x7F]|%/.test(directory) ? encodeURIComponent(directory) : directory
 }
 
 /** Add the directory scoping headers (current + legacy) to a header set. */

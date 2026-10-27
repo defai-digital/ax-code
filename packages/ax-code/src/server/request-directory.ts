@@ -65,11 +65,13 @@ export function requestDirectory(c: Context): string | Response {
   const headerDirectory = c.req.header(AX_CODE_DIRECTORY_HEADER) || c.req.header(LEGACY_OPENCODE_DIRECTORY_HEADER)
   const decoded = (() => {
     if (queryDirectory) return queryDirectory
-    const raw = headerDirectory || process.cwd()
+    // Only the header is percent-encoded; decoding the cwd fallback turned a
+    // `%41` in the server's own directory into another path.
+    if (!headerDirectory) return process.cwd()
     try {
-      return decodeURIComponent(raw)
+      return decodeURIComponent(headerDirectory)
     } catch {
-      return raw
+      return headerDirectory
     }
   })()
   if (decoded === process.cwd()) return Filesystem.resolve(decoded)
