@@ -6,6 +6,7 @@ const placeholderRegex = /\$(\d+)(?![A-Za-z0-9_])/g
 const argumentsPlaceholderRegex = /\$ARGUMENTS(?![A-Za-z0-9_])/g
 const quoteTrimRegex = /^["']|["']$/g
 const bashRegex = /!`([^`]+)`/g
+const COMMAND_SHELL_TIMEOUT_MS = 300_000
 
 function commandArgs(input: string) {
   const raw = input.match(argsRegex) ?? []
@@ -50,6 +51,7 @@ export async function commandTemplateText(input: {
   arguments: string
   run?: (cmd: string) => Promise<string>
   allowShell?: boolean
+  timeoutMs?: number
 }) {
   let text = commandTemplate(input.template, input.arguments)
   if (input.allowShell === false) return text.trim()
@@ -59,7 +61,12 @@ export async function commandTemplateText(input: {
   const run =
     input.run ??
     (async (cmd: string) => {
-      const out = await Process.text(Process.shellCommand(cmd), { nothrow: true })
+      // Bounded like the `!` shell command path: a hung substitution must not
+      // hold the command forever; the timeout kills the process tree.
+      const out = await Process.text(Process.shellCommand(cmd), {
+        nothrow: true,
+        timeout: input.timeoutMs ?? COMMAND_SHELL_TIMEOUT_MS,
+      })
       return out.text
     })
 

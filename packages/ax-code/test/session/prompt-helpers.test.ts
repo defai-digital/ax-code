@@ -249,6 +249,14 @@ describe("session.prompt helpers", () => {
     })
   })
 
+  test("bounds a hung shell substitution with a timeout", async () => {
+    const outcome = await Promise.race([
+      commandTemplateText({ template: "before !`sleep 30` after", arguments: "", timeoutMs: 200 }).then(() => "done"),
+      new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 10_000)),
+    ])
+    expect(outcome).toBe("done")
+  })
+
   test("splits quoted and image arguments", async () => {
     await expect(
       commandTemplateText({
