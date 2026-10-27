@@ -92,6 +92,22 @@ describe("other image providers", () => {
     expect(fetchMock.mock.calls[0][1]?.signal).toBe(signal)
   })
 
+  test("sends Stability an aspect ratio it accepts for every image_gen size", async () => {
+    const fetchMock = vi.fn(async (_input: Parameters<typeof fetch>[0], _init?: RequestInit) => {
+      return new Response(imageBytes, { status: 200, headers: { "content-type": "image/png" } })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const provider = new StabilityImageProvider({ options: { apiKey: "test-key" } })
+    const ratios: unknown[] = []
+    for (const size of ["1024x1024", "1536x1024", "1024x1536", "1792x1024", "1024x1792"]) {
+      await provider.generate({ prompt: "draw an otter", size, name: "otter" })
+      ratios.push((fetchMock.mock.calls.at(-1)?.[1]?.body as FormData).get("aspect_ratio"))
+    }
+
+    expect(ratios).toEqual(["1:1", "3:2", "2:3", "16:9", "9:16"])
+  })
+
   test("rejects private provider-returned image URLs", async () => {
     const fetchMock = vi.fn(async (_input: Parameters<typeof fetch>[0], _init?: RequestInit) => {
       return new Response(JSON.stringify({ data: [{ url: "http://127.0.0.1/private.png" }] }), {

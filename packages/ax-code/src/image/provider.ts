@@ -183,16 +183,26 @@ export class CustomImageProvider implements ImageProvider {
   }
 }
 
+// The aspect ratios Stability's generate endpoints accept. Any other ratio,
+// such as 7:4 from a 1792x1024 request, is rejected with a 400.
+const STABILITY_ASPECT_RATIOS = ["21:9", "16:9", "3:2", "5:4", "1:1", "4:5", "2:3", "9:16", "9:21"] as const
+
 function normalizeAspectRatio(width: number, height: number): string {
   // `size` is a free-form "WxH" string at this interface (only the
-  // image_gen tool's zod enum happens to constrain it today). A
-  // non-numeric or non-positive component never makes `b` reach exactly
-  // 0 in Euclid's algorithm, so gcd would recurse forever and crash the
-  // process with a stack overflow instead of surfacing a normal error.
+  // image_gen tool's zod enum happens to constrain it today).
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return "1:1"
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b))
-  const d = gcd(width, height)
-  return `${width / d}:${height / d}`
+  const target = Math.log(width / height)
+  let best: string = "1:1"
+  let distance = Infinity
+  for (const ratio of STABILITY_ASPECT_RATIOS) {
+    const [w, h] = ratio.split(":").map(Number)
+    const next = Math.abs(Math.log(w! / h!) - target)
+    if (next < distance) {
+      best = ratio
+      distance = next
+    }
+  }
+  return best
 }
 
 export function createImageProvider(config: ImageProviderConfig): ImageProvider {
