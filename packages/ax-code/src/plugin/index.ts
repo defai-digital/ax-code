@@ -182,12 +182,21 @@ export namespace Plugin {
             }),
           )
           if (pluginName) {
-            await owner.run(() =>
-              Session.setMetadata({
-                sessionID: created.id,
-                metadata: { createdByPlugin: pluginName },
-              }),
-            )
+            await owner
+              .run(() =>
+                Session.setMetadata({
+                  sessionID: created.id,
+                  metadata: { createdByPlugin: pluginName },
+                }),
+              )
+              .catch(async (error) => {
+                // Untagged, the session would be one this plugin can never
+                // compact or remove again, so undo the create.
+                await Session.remove(created.id).catch((removeError) =>
+                  log.warn("failed to remove untagged plugin session", { sessionID: created.id, error: removeError }),
+                )
+                throw error
+              })
           }
           return { ok: true, sessionID: created.id }
         } catch (error) {

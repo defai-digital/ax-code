@@ -176,6 +176,21 @@ describe("plugin session ownership and trust", () => {
     })
   })
 
+  test("session.create does not leave an untagged session behind when tagging fails", async () => {
+    await withApiPlugin(captureSource, "orphan-plugin", async (probe) => {
+      const session = probe.sessionAPI as {
+        create: (input: { title?: string }) => Promise<{ ok: true; sessionID: string } | { ok: false; error: string }>
+      }
+      vi.spyOn(Session, "setMetadata").mockRejectedValueOnce(new Error("disk full"))
+      const created = await session.create({ title: "orphan-probe" })
+      expect(created.ok).toBe(false)
+      const rows = Database.use((db) =>
+        db.select().from(SessionTable).where(eq(SessionTable.title, "orphan-probe")).all(),
+      )
+      expect(rows).toEqual([])
+    })
+  })
+
   test("session.create refuses a parent the plugin does not own", async () => {
     await withApiPlugin(captureSource, "parent-plugin", async (probe) => {
       const session = probe.sessionAPI as {
