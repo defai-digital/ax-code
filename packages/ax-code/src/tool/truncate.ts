@@ -211,9 +211,12 @@ export namespace Truncate {
           // The line alone exceeds the budget, so no complete line fits.
           // Preview a byte-capped prefix of it instead of showing nothing.
           // Only blank lines so far counts as nothing shown.
-          if (!out.some((line) => line !== "")) {
-            const separator = i > 0 ? 1 : 0
-            const prefix = utf8Prefix(lines[i], Math.max(0, maxBytes - bytes - separator))
+          // Skip it when the blank lines already used the budget: the
+          // separator alone would push the preview past maxBytes.
+          const separator = i > 0 ? 1 : 0
+          const room = maxBytes - bytes - separator
+          if (room > 0 && !out.some((line) => line !== "")) {
+            const prefix = utf8Prefix(lines[i], room)
             out.push(prefix)
             bytes += Buffer.byteLength(prefix, "utf-8") + separator
           }
@@ -231,9 +234,10 @@ export namespace Truncate {
           // Preview a byte-capped suffix of it instead of showing nothing.
           // Trailing blank lines can precede the oversized line in `out`, so
           // test for content rather than the line count.
-          if (!out.some((line) => line !== "")) {
-            const separator = out.length > 0 ? 1 : 0
-            const suffix = utf8Suffix(lines[i], Math.max(0, maxBytes - bytes - separator))
+          const separator = out.length > 0 ? 1 : 0
+          const room = maxBytes - bytes - separator
+          if (room > 0 && !out.some((line) => line !== "")) {
+            const suffix = utf8Suffix(lines[i], room)
             out.unshift(suffix)
             bytes += Buffer.byteLength(suffix, "utf-8") + separator
           }

@@ -59,6 +59,17 @@ describe("Truncate", () => {
       expect(result.content).toContain("truncated...")
     })
 
+    test("keeps the preview within maxBytes after leading or trailing blank lines", async () => {
+      for (const [content, direction] of [
+        ["\n\n\nabcdef", "head"],
+        ["abcdef\n\n\n\n", "tail"],
+      ] as const) {
+        const result = await Truncate.output(content, { maxBytes: 1, maxLines: 5, direction })
+        expect(result.truncated).toBe(true)
+        if (result.truncated) expect(result.truncatedTo).toBeLessThanOrEqual(1)
+      }
+    })
+
     test("truncates from head by default", async () => {
       const lines = Array.from({ length: 10 }, (_, i) => `line${i}`).join("\n")
       const result = await Truncate.output(lines, { maxLines: 3 })
