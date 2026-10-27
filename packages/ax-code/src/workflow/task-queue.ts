@@ -52,6 +52,10 @@ export namespace WorkflowTaskQueue {
     if (detail.status === "cancelled") return detail
 
     const childStatus = childStatusFromQueueStatus(item.status)
+    // Pausing a running child cancels its turn, so the item later settles as
+    // failed/cancelled. That is the pause landing, not a failure: keep the child
+    // paused; resume() retries the item.
+    if (child.status === "paused" && (childStatus === "failed" || childStatus === "cancelled")) return detail
     const childBudgetStopped =
       child.status === "failed" &&
       detail.budgetLedger.some((entry) => entry.kind === "exceeded" && entry.childID === child.id)

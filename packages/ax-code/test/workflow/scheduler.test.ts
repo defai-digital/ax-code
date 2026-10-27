@@ -1499,6 +1499,48 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("keeps a run paused when the paused running child's cancelled turn settles later", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "pause-running-child",
+            name: "Pause Running Child",
+            description: "Pausing a run with a running child keeps it paused.",
+            budget: { maxConcurrentAgents: 2, maxTotalAgents: 3 },
+            phases: [{ id: "work", name: "Work", kind: "fanout", inputs: ["a"], maxParallel: 1, mergeStrategy: "all" }],
+          })
+          const run = await WorkflowRun.create({ spec })
+          await WorkflowScheduler.start(run.id, { autoStartChildren: false })
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const [item] = await TaskQueue.list()
+          await TaskQueue.setStatus({ id: item!.id, status: "running" })
+
+          const paused = await WorkflowScheduler.pause(run.id)
+          expect(paused.status).toBe("paused")
+          // The executor drains the turn the pause cancelled.
+          await TaskQueue.setStatus({
+            id: item!.id,
+            status: "failed",
+            error: "Session was aborted before completing the task",
+          })
+
+          const after = await WorkflowRun.getDetail(run.id)
+          expect(after.status).toBe("paused")
+          expect(after.children[0]?.status).toBe("paused")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("retries failed workflow queue children", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
