@@ -42,6 +42,21 @@ describe("file routes", () => {
     })
   })
 
+  test("find text answers an invalid regex with a 400 that keeps ripgrep's diagnostic", async () => {
+    await using tmp = await tmpdir({ git: true })
+    fs.writeFileSync(path.join(tmp.path, "a.txt"), "needle\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const dir = `directory=${encodeURIComponent(tmp.path)}`
+        const response = await Server.Default().request(`/find?pattern=${encodeURIComponent("(")}&${dir}`)
+        expect(response.status).toBe(400)
+        expect(JSON.stringify(await response.json())).toContain("regex parse error")
+      },
+    })
+  })
+
   test("find symbol delegates to LSP workspaceSymbol", async () => {
     await using tmp = await tmpdir({ git: true })
 
