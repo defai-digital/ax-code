@@ -1,3 +1,4 @@
+import type { LookupFunction } from "node:net"
 import { Log } from "@/util/log"
 import { EventQuery } from "@/replay/query"
 import type { ReplayEvent } from "@/replay/event"
@@ -44,11 +45,15 @@ export namespace Telemetry {
         const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = await import("@opentelemetry/semantic-conventions")
 
         if (!endpointUrl) return
+        // The HTTP exporter sends through node http(s).request and has no
+        // fetch option (a `fetch` passed here was silently ignored, leaving
+        // only the init-time assertPublicUrl check). Its agent options reach
+        // the socket connect, so a validating lookup pins every export to
+        // the public address it just checked.
         exporter = new OTLPTraceExporter({
           url: endpointUrl,
-          fetch: (url: string | URL, init?: RequestInit) =>
-            Ssrf.pinnedFetch(url.toString(), { ...init, label: "AX_CODE_OTLP_ENDPOINT" }),
-        } as any)
+          httpAgentOptions: { lookup: Ssrf.publicLookup("AX_CODE_OTLP_ENDPOINT") as LookupFunction },
+        })
         provider = new NodeTracerProvider({
           resource: resourceFromAttributes({
             [ATTR_SERVICE_NAME]: "ax-code",

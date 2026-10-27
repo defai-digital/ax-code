@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest"
 
 let registers = 0
+let exporterInput: any
 let shutdowns = 0
 
 type FakeSpan = {
@@ -67,7 +68,9 @@ vi.mock("@opentelemetry/sdk-trace-node", () => ({
 
 vi.mock("@opentelemetry/exporter-trace-otlp-http", () => ({
   OTLPTraceExporter: class {
-    constructor(_input: unknown) {}
+    constructor(input: unknown) {
+      exporterInput = input
+    }
 
     async shutdown() {}
   },
@@ -103,6 +106,17 @@ test("Telemetry.init deduplicates concurrent initialization", async () => {
 
   await Telemetry.shutdown()
   expect(shutdowns).toBe(1)
+})
+
+test("Telemetry.init pins exporter connections with a validating lookup, not an ignored fetch", async () => {
+  process.env.AX_CODE_OTLP_ENDPOINT = "https://1.1.1.1/v1/traces"
+
+  const { Telemetry } = await import("../../src/telemetry")
+  await Telemetry.init()
+
+  expect(exporterInput.fetch).toBeUndefined()
+  expect(typeof exporterInput.httpAgentOptions?.lookup).toBe("function")
+  await Telemetry.shutdown()
 })
 
 test("Telemetry.init rejects private OTLP endpoints before exporter setup", async () => {

@@ -268,3 +268,44 @@ test.each(["GET", "HEAD"])("pinned %s rejects a body before opening a request", 
     request.mockRestore()
   }
 })
+
+test("publicLookup refuses a hostname resolving to a private address", async () => {
+  const lookup = Ssrf.publicLookup("test", async () => [{ address: "127.0.0.1", family: 4 }])
+  const error = await new Promise<Error | null>((resolve) => lookup("rebind.example", {}, (err) => resolve(err)))
+  expect(error?.message).toContain("private/reserved address 127.0.0.1")
+})
+
+test("publicLookup returns the validated public address in single and all modes", async () => {
+  const lookup = Ssrf.publicLookup("test", async () => [{ address: "93.184.216.34", family: 4 }])
+  const single = await new Promise<[unknown, unknown]>((resolve) =>
+    lookup("public.example", {}, (err, address, family) => resolve([address, family])),
+  )
+  expect(single).toEqual(["93.184.216.34", 4])
+  const all = await new Promise<unknown>((resolve) =>
+    lookup("public.example", { all: true }, (_err, address) => resolve(address)),
+  )
+  expect(all).toEqual([{ address: "93.184.216.34", family: 4 }])
+})
+
+test("publicLookup blocks a real http.Agent connection to a rebound private address", async () => {
+  const server = http.createServer((_req, res) => res.end("reached"))
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()))
+  const port = (server.address() as { port: number }).port
+  const agent = new http.Agent({
+    lookup: Ssrf.publicLookup("test", async () => [{ address: "127.0.0.1", family: 4 }]) as any,
+  })
+  try {
+    const outcome = await new Promise<string>((resolve) => {
+      http
+        .get({ host: "rebind.example", port, path: "/", agent }, (res) => {
+          res.resume()
+          resolve("connected")
+        })
+        .on("error", (error) => resolve(error.message))
+    })
+    expect(outcome).toContain("private/reserved address")
+  } finally {
+    agent.destroy()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+})

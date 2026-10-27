@@ -478,6 +478,49 @@ export namespace Ssrf {
     })
   }
 
+  /**
+   * A `net` lookup function that resolves the hostname, refuses any
+   * private/reserved address, and hands the socket the address it just
+   * validated. Pass it as `lookup` to an http(s) Agent when the client cannot
+   * take a custom fetch (e.g. the OTLP HTTP exporter): validation and
+   * connection then share one resolution, so DNS rebinding cannot swap in a
+   * private address between them.
+   */
+  export function publicLookup(
+    label = "ssrf",
+    resolve: DnsResolveFn = (hostname) => dns.lookup(hostname, { all: true }),
+  ) {
+    return (
+      hostname: string,
+      options: { all?: boolean } | number | undefined,
+      callback: (error: NodeJS.ErrnoException | null, address: string | ResolvedAddress[], family?: number) => void,
+    ) => {
+      const all = typeof options === "object" && options?.all === true
+      const literal = ipFromHostname(hostname)
+      withTimeout(
+        net.isIP(literal) ? Promise.resolve([{ address: literal, family: net.isIP(literal) }]) : resolve(hostname),
+        5_000,
+        `${label}: DNS lookup timed out after 5s: ${hostname}`,
+      ).then(
+        (addresses) => {
+          if (addresses.length === 0)
+            return callback(new Error(`${label}: could not resolve hostname: ${hostname}`), "")
+          const bad = addresses.find(({ address }) => isPrivateAddress(address))
+          if (bad)
+            return callback(
+              new Error(
+                `${label}: refusing to connect to ${hostname} — resolves to private/reserved address ${bad.address}`,
+              ),
+              "",
+            )
+          if (all) return callback(null, addresses)
+          callback(null, addresses[0].address, addresses[0].family)
+        },
+        (error) => callback(error instanceof Error ? error : new Error(String(error)), ""),
+      )
+    }
+  }
+
   export async function pinnedFetch(
     url: string,
     init?: PinnedFetchInit,
