@@ -4284,6 +4284,7 @@ export type SessionRiskDetail = {
         name: string
         status: "pass" | "warn" | "fail"
         detail: string
+        commands?: Array<string>
       }>
     } | null
     debug: {
@@ -4308,6 +4309,7 @@ export type SessionRiskDetail = {
         name: string
         status: "pass" | "warn" | "fail"
         detail: string
+        commands?: Array<string>
       }>
     } | null
     qa: {
@@ -4332,6 +4334,7 @@ export type SessionRiskDetail = {
         name: string
         status: "pass" | "warn" | "fail"
         detail: string
+        commands?: Array<string>
       }>
     } | null
   }
