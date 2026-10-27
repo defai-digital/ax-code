@@ -130,8 +130,9 @@ export function QuestionPrompt(props: {
         // Reset the in-flight guard on failure (including the timeout above) so
         // a transient API/network error does not permanently wedge the prompt.
         // The prompt stays mounted on failure, so the user can retry. See
-        // #255, #341.
-        setStore("submitting", false)
+        // #255, #341. A late failure for a request that was already replaced
+        // by the next queued one must not clear that request's guard.
+        if (props.request.id === id) setStore("submitting", false)
         log.warn(failureLabel, { error, requestID: id })
         toast.show({
           message: error instanceof Error ? error.message : failureMessage,

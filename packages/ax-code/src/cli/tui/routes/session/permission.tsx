@@ -34,7 +34,7 @@ import {
 import { webMcpApprovalLines } from "@/mcp/webmcp-approval"
 import {
   createPermissionSubmitLatch,
-  endPermissionSubmit,
+  endPermissionSubmitFor,
   tryBeginPermissionSubmit,
   type PermissionSubmitLatch,
 } from "../../util/permission-submit-latch"
@@ -383,7 +383,7 @@ export function PermissionPrompt(props: {
         // so a transient API/network error does not permanently wedge the
         // prompt. The prompt stays mounted on failure, so the user can
         // retry. See #255, #341.
-        setStore("latch", endPermissionSubmit(store.latch))
+        setStore("latch", endPermissionSubmitFor(store.latch, id))
         log.warn(failureLabel, { error, requestID: id })
         toast.show({
           message: error instanceof Error ? error.message : failureMessage,

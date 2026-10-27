@@ -44,6 +44,16 @@ export function endPermissionSubmit(state: PermissionSubmitLatch): PermissionSub
   return { ...state, submitting: false }
 }
 
+/**
+ * Clear submitting for the reply to `requestId` only. A slow reply can fail
+ * after the latch was re-armed for the next queued request; clearing then
+ * would drop that request's in-flight guard and allow a double submit.
+ */
+export function endPermissionSubmitFor(state: PermissionSubmitLatch, requestId: string): PermissionSubmitLatch {
+  if (state.armedForId !== requestId) return state
+  return endPermissionSubmit(state)
+}
+
 export function canSubmitPermission(state: PermissionSubmitLatch, requestId: string): boolean {
   return tryBeginPermissionSubmit(state, requestId) !== null
 }
