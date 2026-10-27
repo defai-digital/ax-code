@@ -1,7 +1,6 @@
 import { Log } from "@/util/log"
 import { Process } from "@/util/process"
 import { toErrorMessage } from "@/util/error-message"
-import { text } from "node:stream/consumers"
 
 let shellEnvReady: Promise<void> | undefined
 let shellEnvProc: Process.Child | undefined
@@ -34,8 +33,10 @@ export async function waitForShellEnvCapture(
 
     Promise.all([
       proc.exited,
-      proc.stdout ? text(proc.stdout) : Promise.resolve(""),
-      proc.stderr ? text(proc.stderr) : Promise.resolve(""),
+      // A profile that starts a background agent leaves the pipe open, and
+      // Process.spawn destroys it after exit; a strict consumer would reject.
+      proc.stdout ? Process.drain(proc.stdout).then(String) : Promise.resolve(""),
+      proc.stderr ? Process.drain(proc.stderr).then(String) : Promise.resolve(""),
     ]).then(
       ([code, stdout, stderr]) => finish([code, stdout, stderr]),
       () => finish(undefined),

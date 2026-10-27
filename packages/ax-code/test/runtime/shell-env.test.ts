@@ -28,4 +28,24 @@ describe("shell environment capture", () => {
     expect(stdout.destroyed).toBe(true)
     expect(stderr.destroyed).toBe(true)
   })
+
+  test("keeps the env when a background child left the pipe open and it was destroyed after exit", async () => {
+    // e.g. a profile that starts ssh-agent: Process.spawn destroys the pipe
+    // after exit, which closes it without an end event.
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    stdout.write("API_HOST=example.test\0")
+    setTimeout(() => {
+      stdout.destroy()
+      stderr.destroy()
+    }, 5)
+
+    const result = await waitForShellEnvCapture(
+      { exited: Promise.resolve(0), stdout, stderr, unref: vi.fn() },
+      5_000,
+      vi.fn(),
+    )
+
+    expect(result).toEqual([0, "API_HOST=example.test\0", ""])
+  })
 })
