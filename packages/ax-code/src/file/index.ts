@@ -604,13 +604,19 @@ export namespace File {
           cwd: Instance.directory,
         })
       ).text()
-    const [diffOutput, untrackedOutput, deletedNumstat] = await Promise.all([
+    const [diffOutput, untrackedOutput, deletedNumstat, stagedAddedOutput] = await Promise.all([
       gitText(["diff", "--relative", "--no-renames", "--numstat", "--diff-filter=d", "HEAD"]),
       gitText(["ls-files", "--others", "--exclude-standard"]),
       gitText(["diff", "--relative", "--no-renames", "--numstat", "--diff-filter=D", "HEAD"]),
+      gitText(["diff", "--relative", "--no-renames", "--name-only", "--diff-filter=A", "HEAD"]),
     ])
 
-    const changed: File.Info[] = parseModifiedNumstat(diffOutput)
+    // A new file that is staged but not committed is in the diff against HEAD,
+    // not in `ls-files --others`, and is still an addition.
+    const stagedAdded = new Set(stagedAddedOutput.split("\n").map(parsePathLine))
+    const changed: File.Info[] = parseModifiedNumstat(diffOutput).map((item) =>
+      stagedAdded.has(item.path) ? { ...item, status: "added" } : item,
+    )
 
     // A path staged for deletion but still present on disk shows up in both
     // diff-filter=D and `ls-files --others` (git no longer tracks it), so it
@@ -651,7 +657,8 @@ export namespace File {
           const info = await fs.promises.lstat(full)
           if (!info.isFile()) return untrackedFileStatus(file, "")
           const content = await Filesystem.readText(full)
-          return untrackedFileStatus(file, content)
+          // Count no lines for binary content, as git's numstat does.
+          return untrackedFileStatus(file, content.includes("\0") ? "" : content)
         } catch (error) {
           const code = (error as NodeJS.ErrnoException | undefined)?.code
           if (code === "ENOENT" || code === "ENOTDIR") return null

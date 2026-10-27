@@ -109,3 +109,19 @@ test("reports tracked paths relative to the active project directory", async () 
     },
   })
 })
+
+test("reports a staged new file as added and a binary untracked file without lines", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Filesystem.write(path.join(tmp.path, "new.txt"), "one\ntwo\n")
+      expect((await git(["add", "--", "new.txt"], { cwd: tmp.path })).exitCode).toBe(0)
+      await fs.writeFile(path.join(tmp.path, "blob.png"), Buffer.from([0x89, 0x50, 0x0a, 0x00, 0x0a, 0x0a]))
+
+      const status = await File.status()
+      expect(status).toContainEqual({ path: "new.txt", added: 2, removed: 0, status: "added" })
+      expect(status).toContainEqual({ path: "blob.png", added: 0, removed: 0, status: "added" })
+    },
+  })
+})
