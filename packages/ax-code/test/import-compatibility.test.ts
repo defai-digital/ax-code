@@ -257,6 +257,29 @@ describe("CompatibilityImport MCP servers (ADR-220)", () => {
     })
   })
 
+  test("a non-string arg skips the server instead of importing a different command", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, ".mcp.json"),
+          JSON.stringify({
+            mcpServers: {
+              mixed: { command: "npx", args: ["-y", "@modelcontextprotocol/server-github", 42] },
+              ok: { command: "npx", args: ["srv"] },
+            },
+          }),
+          "utf-8",
+        )
+      },
+    })
+
+    const result = await CompatibilityImport.run({ source: "claude", directory: tmp.path, write: true })
+    expect(JSON.stringify(result)).toContain("unsupported_mcp_args")
+    const config = JSON.parse(await fs.readFile(path.join(tmp.path, "ax-code.json"), "utf-8"))
+    expect(config.mcp.mixed).toBeUndefined()
+    expect(config.mcp.ok.command).toEqual(["npx", "srv"])
+  })
+
   test("an env value keeps only an exact reference, never a scheme prefix", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

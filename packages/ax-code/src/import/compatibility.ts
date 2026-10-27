@@ -243,6 +243,17 @@ export namespace CompatibilityImport {
   }
 
   /** Map one Claude-style MCP server entry onto the AX Code MCP config shape. */
+  /**
+   * Local MCP args must all be strings. Dropping the whole list (the old
+   * behavior) or only the bad entries would import a different command
+   * silently, so a malformed list skips the server with a visible reason.
+   */
+  function mcpArgs(raw: unknown): string[] | undefined {
+    if (raw === undefined) return []
+    if (!Array.isArray(raw) || !raw.every((arg) => typeof arg === "string")) return undefined
+    return raw
+  }
+
   function mapMcpServer(raw: unknown): { server?: Record<string, unknown>; warnings?: string[]; reason?: string } {
     if (!isRecord(raw)) return { reason: "unsupported_mcp_shape" }
     // Claude's flat .mcp.json lets a legacy remote omit `type`, which means
@@ -265,7 +276,8 @@ export namespace CompatibilityImport {
       }
     }
     if (typeof raw.command === "string" && raw.command.trim().length > 0) {
-      const args = Array.isArray(raw.args) && raw.args.every((arg) => typeof arg === "string") ? raw.args : []
+      const args = mcpArgs(raw.args)
+      if (!args) return { reason: "unsupported_mcp_args" }
       const environment = redactMcpValues("env", raw.env)
       return {
         server: {
@@ -452,7 +464,8 @@ export namespace CompatibilityImport {
       return { server, ...(warnings.length > 0 ? { warnings } : {}) }
     }
     if (typeof raw.command === "string" && raw.command.trim().length > 0) {
-      const args = Array.isArray(raw.args) && raw.args.every((arg) => typeof arg === "string") ? raw.args : []
+      const args = mcpArgs(raw.args)
+      if (!args) return { reason: "unsupported_mcp_args" }
       const environment = redactMcpValues("env", raw.env)
       const warnings = [...environment.warnings, ...(omitsStartupTimeout ? ["startup_timeout_omitted"] : [])]
       const server: Record<string, unknown> = {
