@@ -345,6 +345,10 @@ async function runOneTask(input: {
   agent: Agent.Info
   constraints: Awaited<ReturnType<typeof taskParentConstraints>>
   onSessionCreated?: (sessionID: SessionID) => void
+  // True once the swarm cancelled its members (a sibling failed, or the call
+  // deadline passed). Cancelling a session whose prompt has not started yet
+  // is a no-op, so a member that got this far must check before prompting.
+  cancelled?: () => boolean
   // ADR-231: when set, allocate a Worktree.createReady worktree for this
   // writer before doing anything else. Creation failure surfaces as a
   // member failure (not a thrown error) so the rest of the swarm keeps
@@ -396,6 +400,7 @@ async function runOneTask(input: {
           constraints,
           canFanOut,
           onSessionCreated: input.onSessionCreated,
+          cancelled: input.cancelled,
         }),
     })
     return { ...outcome, worktree: { info: worktreeInfo, startPoint: worktreeSetup.startPoint } }
@@ -410,6 +415,7 @@ async function runOneTask(input: {
     constraints,
     canFanOut,
     onSessionCreated: input.onSessionCreated,
+    cancelled: input.cancelled,
   })
 }
 
@@ -426,6 +432,7 @@ async function runMemberInsideInstance(input: {
   constraints: Awaited<ReturnType<typeof taskParentConstraints>>
   canFanOut: boolean
   onSessionCreated?: (sessionID: SessionID) => void
+  cancelled?: () => boolean
 }): Promise<TaskOutcome> {
   const { params, ctx, model, config, agent, constraints, canFanOut } = input
 
@@ -463,9 +470,9 @@ async function runMemberInsideInstance(input: {
   const structuredFormat = params.output_schema ? TaskOutputSchema.toFormat(params.output_schema) : undefined
 
   try {
-    if (ctx.abort.aborted) throw new DOMException("Aborted", "AbortError")
+    if (ctx.abort.aborted || input.cancelled?.()) throw new DOMException("Aborted", "AbortError")
     const promptParts = await resolvePromptParts(params.prompt)
-    if (ctx.abort.aborted) throw new DOMException("Aborted", "AbortError")
+    if (ctx.abort.aborted || input.cancelled?.()) throw new DOMException("Aborted", "AbortError")
     let result = await withTimeout(
       SessionPrompt.prompt({
         messageID: MessageID.ascending(),
@@ -807,6 +814,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
                 started.push({ sessionID, agent: agent.name })
                 if (failed) void cancelChild(sessionID)
               },
+              cancelled: () => failed,
               ...(worktreeSetup ? { worktreeSetup } : {}),
             })
           } catch (error) {

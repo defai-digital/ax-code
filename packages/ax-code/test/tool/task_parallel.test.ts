@@ -293,7 +293,10 @@ describe("task_parallel sibling lifecycle", () => {
             },
             ctx,
           )
-          await started
+          // The sibling's prompt may or may not have begun when the failure
+          // lands (a member that has not prompted yet skips its prompt), so
+          // wait for whichever comes first.
+          await Promise.race([started, run])
           // The failing member is reported, and the already-started sibling is
           // still cancelled; the call returns a partial result rather than
           // discarding whatever else had finished.
@@ -641,6 +644,67 @@ describe("task_parallel swarm shape", () => {
 })
 
 describe("task_parallel swarm failure polarity", () => {
+  test("a member whose session appears after a sibling failed never starts its prompt", async () => {
+    // Cancelling a session whose prompt has not started is a no-op in the real
+    // SessionPrompt, so the member itself must notice the swarm was cancelled.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const originalCreate = Session.create
+        let releaseFirst!: () => void
+        const firstHeld = new Promise<void>((resolve) => (releaseFirst = resolve))
+        vi.spyOn(Session, "create").mockImplementation((async (input: any) => {
+          if (input?.title?.includes("one")) {
+            await firstHeld
+            return originalCreate(input)
+          }
+          if (input?.title?.includes("two")) {
+            // Fail once member one is parked inside session creation, then let
+            // it finish creating its session after the failure.
+            setTimeout(releaseFirst, 20)
+            throw new Error("database busy")
+          }
+          return originalCreate(input)
+        }) as any)
+        vi.spyOn(SessionPrompt, "cancel").mockImplementation((async () => undefined) as any)
+        const prompted: string[] = []
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          prompted.push(input.sessionID)
+          return {
+            info: {
+              id: input.messageID,
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: [{ type: "text", text: "done" }],
+          } as any
+        }) as any)
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute(
+            {
+              items: ["one", "two"],
+              prompt_template: "check {{item}}",
+              subagent_type: "explore",
+              concurrency: 2,
+            } as any,
+            ctx,
+          )
+          const metadata = result.metadata as any
+          expect(metadata.results[1].error).toContain("database busy")
+          expect(metadata.results[0].ok).toBe(false)
+          expect(prompted).toEqual([])
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+
   test("a member that throws before its session exists cancels only the started siblings", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
