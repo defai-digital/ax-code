@@ -18,24 +18,31 @@ const DEFAULT_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQU
 export function registerShutdownSignals(callback: ShutdownCallback, options?: RegisterOptions): () => void {
   const signals = options?.signals ?? DEFAULT_SIGNALS
   let handled = false
+  const remove = () => {
+    for (const sig of signals) process.off(sig, onSignal)
+  }
+  // A failed shutdown leaves `handled` latched, so without this the next
+  // signal would be swallowed too and the process could only be SIGKILLed.
+  // Dropping the listeners restores the default disposition: the next signal
+  // terminates the process.
+  const fail = (signal: NodeJS.Signals, verb: string, error: unknown) => {
+    // The process is on its way out; stderr is the last place the failure
+    // can still surface.
+    console.error(`shutdown callback ${verb} on ${signal}`, toErrorMessage(error))
+    remove()
+  }
   const onSignal = (signal: NodeJS.Signals) => {
     if (handled) return
     handled = true
     try {
       const result = callback(signal)
       if (result && typeof (result as Promise<void>).catch === "function") {
-        ;(result as Promise<void>).catch((error) => {
-          // The process is on its way out; stderr is the last place the
-          // failure can still surface.
-          console.error(`shutdown callback rejected on ${signal}`, toErrorMessage(error))
-        })
+        ;(result as Promise<void>).catch((error) => fail(signal, "rejected", error))
       }
     } catch (error) {
-      console.error(`shutdown callback threw on ${signal}`, toErrorMessage(error))
+      fail(signal, "threw", error)
     }
   }
   for (const sig of signals) process.on(sig, onSignal)
-  return () => {
-    for (const sig of signals) process.off(sig, onSignal)
-  }
+  return remove
 }
