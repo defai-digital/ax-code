@@ -3,6 +3,7 @@ import { Filesystem } from "@/util/filesystem"
 import {
   createHeadlessConsoleEventSinks,
   createHeadlessIdleAbort,
+  headlessInterruptExitCode,
   headlessBackendOptions,
   resolveHeadlessWorkdir,
   withHeadlessBackend,
@@ -136,7 +137,11 @@ export const HeadlessRunCommand = cmd({
           },
         })
         idle.stop()
-        if (idle.timedOut) {
+        const interrupted = headlessInterruptExitCode(idle)
+        if (interrupted !== undefined) {
+          process.stderr.write(`headless-run cancelled by ${idle.interruptedBy}\n`)
+          process.exitCode = interrupted
+        } else if (idle.timedOut) {
           const target = args["transport-smoke"] || args["command-smoke"] ? "server.connected" : "session idle"
           process.stderr.write(`headless-run aborted: no events for ${idle.timeoutMs}ms while waiting for ${target}\n`)
           process.exitCode = 124

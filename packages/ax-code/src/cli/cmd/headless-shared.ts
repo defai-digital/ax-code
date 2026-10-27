@@ -86,11 +86,19 @@ export function resolveHeadlessWorkdir(
 
 export type HeadlessIdleAbort = {
   abort: AbortController
-  onSignal: () => void
+  onSignal: (signal?: NodeJS.Signals) => void
   arm: () => void
   stop: () => void
   timeoutMs: number | undefined
   readonly timedOut: boolean
+  readonly interruptedBy: NodeJS.Signals | undefined
+}
+
+/** Conventional 128+signal exit code when a SIGINT/SIGTERM ended the run. */
+export function headlessInterruptExitCode(idle: HeadlessIdleAbort): number | undefined {
+  if (idle.interruptedBy === "SIGINT") return 130
+  if (idle.interruptedBy === "SIGTERM") return 143
+  return undefined
 }
 
 /**
@@ -101,7 +109,11 @@ export type HeadlessIdleAbort = {
  */
 export function createHeadlessIdleAbort(idleTimeoutMs: number | undefined): HeadlessIdleAbort {
   const abort = new AbortController()
-  const onSignal = () => abort.abort()
+  let interruptedBy: NodeJS.Signals | undefined
+  const onSignal = (signal?: NodeJS.Signals) => {
+    interruptedBy = interruptedBy ?? signal ?? "SIGINT"
+    abort.abort()
+  }
   const timeoutMs =
     typeof idleTimeoutMs === "number" && Number.isFinite(idleTimeoutMs) && idleTimeoutMs > 0 ? idleTimeoutMs : undefined
   let timedOut = false
@@ -128,6 +140,9 @@ export function createHeadlessIdleAbort(idleTimeoutMs: number | undefined): Head
     },
     get timedOut() {
       return timedOut
+    },
+    get interruptedBy() {
+      return interruptedBy
     },
   }
 }

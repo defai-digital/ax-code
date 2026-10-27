@@ -1936,3 +1936,18 @@ test("run --runtime exits with an attach error when no managed runtime is runnin
     process.exitCode = undefined
   }
 })
+
+test("headless-run reports a SIGINT or SIGTERM interruption instead of success", async () => {
+  const { createHeadlessIdleAbort, headlessInterruptExitCode } = await import("../../src/cli/cmd/headless-shared")
+  for (const [signal, code] of [
+    ["SIGINT", 130],
+    ["SIGTERM", 143],
+  ] as const) {
+    const idle = createHeadlessIdleAbort(undefined)
+    idle.onSignal(signal)
+    expect(idle.abort.signal.aborted).toBe(true)
+    expect(idle.interruptedBy).toBe(signal)
+    expect(headlessInterruptExitCode(idle)).toBe(code)
+  }
+  expect(headlessInterruptExitCode(createHeadlessIdleAbort(undefined))).toBeUndefined()
+})
