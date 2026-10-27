@@ -387,6 +387,46 @@ describe("tool.bash permissions", () => {
     })
   })
 
+  // Wildcard rules spell one literal space per separator, so a raw pattern with
+  // a tab, a repeated space, or a backslash-newline continuation would never
+  // match a rule such as "rm *" and the command would be allowed. The requested
+  // patterns must use the same single-space form the rules are written in.
+  describe("normalizes permission patterns", () => {
+    // The .username/.model pair keeps Config.loadState from calling
+    // os.userInfo(), which returns ENOENT in the sandboxed test runner (same
+    // workaround as the ADR-235 block below).
+    const tmpConfig = { git: true, config: { model: "test/model", username: "testuser" } } as const
+
+    async function askedBashPatterns(command: string) {
+      await using tmp = await tmpdir(tmpConfig)
+      // Await inside the fixture scope: returning the promise directly disposes
+      // the temp dir (config included) before Instance.provide reads it.
+      return await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const requests = await collectPermissionRequests(
+            (testCtx) => bash.execute({ command, description: "Normalize pattern" }, testCtx),
+            (req) => req.permission === "bash",
+          )
+          return requests.find((r) => r.permission === "bash")?.patterns
+        },
+      })
+    }
+
+    test("collapses a tab between the command and its flags", async () => {
+      expect(await askedBashPatterns("rm\t-rf nothing_here")).toEqual(["rm -rf nothing_here"])
+    })
+
+    test("collapses repeated spaces", async () => {
+      expect(await askedBashPatterns("echo  hello   world")).toEqual(["echo hello world"])
+    })
+
+    test("collapses a backslash-newline continuation", async () => {
+      expect(await askedBashPatterns("git \\\n  push origin main")).toEqual(["git push origin main"])
+    })
+  })
+
   // ADR-235: shell-level writes to .git/ control paths (hooks, config,
   // HEAD, refs, info) require an edit-permission ask instead of the
   // historical isolation-throw, so the user (or autonomous guardian) gets

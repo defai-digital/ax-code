@@ -197,6 +197,20 @@ function isGitControlPath(absolutePath: string): boolean {
   return /(^|\/)\.git(\/|$)/.test(normalized)
 }
 
+// Permission rules are matched as wildcards whose spaces are literal: "git push
+// *" compiles to ^git push( .*)?$, so a tab, a run of spaces, or a
+// backslash-newline continuation in the requested pattern never matches a deny
+// rule like "rm *" and the command would be allowed. tree-sitter keeps the
+// source spelling verbatim, so normalize the pattern text to the single-space
+// form the rules are written in. Collapsing whitespace cannot widen a grant:
+// every pattern is normalized the same way, and the wildcard stays anchored.
+function normalizePermissionCommand(text: string): string {
+  return text
+    .replace(/\\\r?\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 const log = Log.create({ service: "bash-tool" })
 const CLEANUP_KILL_TIMEOUT_MS = 250
 const isBunRuntime = Boolean((process.versions as Record<string, string | undefined>).bun)
@@ -1300,11 +1314,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // command, not `cd *`, which would allow any later redirected cd.
         const redirectedStatement = node.parent?.type === "redirected_statement"
         if (command.length && command[0] !== "cd") {
-          patterns.add(commandText)
-          always.add(BashArity.prefix(command).join(" ") + " *")
+          patterns.add(normalizePermissionCommand(commandText))
+          always.add(normalizePermissionCommand(BashArity.prefix(command).join(" ") + " *"))
         } else if (command.length && command[0] === "cd" && redirectedStatement) {
-          patterns.add(commandText)
-          always.add(commandText)
+          patterns.add(normalizePermissionCommand(commandText))
+          always.add(normalizePermissionCommand(commandText))
         }
         if (command.length) foundCommands = true
       }
@@ -1633,8 +1647,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // Don't fall back if we found commands but intentionally skipped
       // them (e.g. cd-only commands are handled by the directory check).
       if (patterns.size === 0 && !foundCommands) {
-        patterns.add(params.command)
-        always.add(params.command)
+        patterns.add(normalizePermissionCommand(params.command))
+        always.add(normalizePermissionCommand(params.command))
       }
 
       // Destructive commands always require interactive confirmation:

@@ -85,6 +85,16 @@ describe("ops read-only commands", () => {
     expect(() => OpsExec.assertReadOnly("git --config-env=diff.external=GIT_EXT diff")).toThrow(OpsReadOnlyCommandError)
     expect(() => OpsExec.assertReadOnly("git diff --ext-diff")).toThrow(OpsReadOnlyCommandError)
   })
+
+  test("rejects backslash-escaped quotes that smuggle mutating operations past argv parsing", () => {
+    // The query value is really `" describe "` (escaped quotes), so the
+    // mutating `ec2 terminate-instances` operation must not be mistaken for
+    // the allowlisted `describe` prefix.
+    expect(() =>
+      OpsExec.assertReadOnly('aws --query "\\" describe \\"" ec2 terminate-instances --instance-ids i-1'),
+    ).toThrow(OpsReadOnlyCommandError)
+    expect(() => OpsExec.assertReadOnly('git -c "a.b=\\"" reset --hard "\\""')).toThrow(OpsReadOnlyCommandError)
+  })
 })
 
 async function createPlan(ctx: ReturnType<typeof makeCtx>, input: typeof PLAN_INPUT = PLAN_INPUT) {
