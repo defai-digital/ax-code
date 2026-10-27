@@ -122,6 +122,14 @@ export namespace Ripgrep {
     "x64-win32": { platform: "x86_64-pc-windows-msvc", extension: "zip" },
   } as const
 
+  // A pattern ripgrep cannot compile is the caller's input, not a server fault.
+  export const InvalidPatternError = NamedError.create(
+    "RipgrepInvalidPatternError",
+    z.object({
+      message: z.string(),
+    }),
+  )
+
   export const ExtractionFailedError = NamedError.create(
     "RipgrepExtractionFailedError",
     z.object({
@@ -521,7 +529,11 @@ export namespace Ripgrep {
       nothrow: true,
     })
     if (result.code === 2) {
-      if (!result.text.trim()) throw new Error(`ripgrep failed: ${result.stderr}`)
+      if (!result.text.trim()) {
+        const message = `ripgrep failed: ${result.stderr}`
+        if (/regex parse error/i.test(String(result.stderr))) throw new InvalidPatternError({ message })
+        throw new Error(message)
+      }
       // Exit 2 marks partial errors (an unreadable file, a vanished directory);
       // stdout still carries every match already found, so keep parsing it.
       log.warn("ripgrep error", { code: result.code, stderr: result.stderr })

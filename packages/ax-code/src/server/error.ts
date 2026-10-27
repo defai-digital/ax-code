@@ -137,6 +137,16 @@ function namedErrorEnvelope(error: NamedError, logRef?: string): AppErrorEnvelop
       details: { resource: "providerAuth" },
     }
   }
+  if (error.name === "RipgrepInvalidPatternError") {
+    const data = namedErrorData(error)
+    return {
+      name: "InvalidRequestError",
+      message: typeof data.message === "string" ? data.message : "Invalid search pattern",
+      status: 400,
+      details: { resource: "search" },
+      retryable: false,
+    }
+  }
   if (error.name === "ScheduledTaskInvalidSchedule") {
     const data = namedErrorData(error)
     const resource = typeof data.resource === "string" ? data.resource : undefined
