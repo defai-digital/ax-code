@@ -371,6 +371,10 @@ export namespace Command {
         location: skill.location,
         argumentHint: skill.argumentHint,
         requiresArguments: skillRequiresArguments(skill),
+        // Like file commands, a skill from the repository, a config path or a
+        // URL must not run `!`cmd`` substitutions; only the user's own home
+        // skills may.
+        ...(skill.scope === "user" || skill.scope === "builtin" ? {} : { allowShell: false }),
         get template() {
           return skill.content
         },

@@ -203,3 +203,15 @@ test("tool validates discovery mode and returns bounded pages with continuation"
     },
   })
 })
+
+test("a project skill used as a slash command cannot run shell substitutions", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await writeSkill(tmp.path, "repo-skill")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(await Skill.get("repo-skill")).toMatchObject({ scope: "project" })
+      expect(await Command.get("repo-skill")).toMatchObject({ source: "skill", allowShell: false })
+    },
+  })
+})
