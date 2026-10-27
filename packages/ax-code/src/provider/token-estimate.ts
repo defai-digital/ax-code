@@ -51,8 +51,36 @@ export namespace TokenEstimate {
     return { tokens: 0, unestimated: false }
   }
 
+  /**
+   * Media/text entries nested one level down in a tool-result `content`
+   * output. Tool results carry attachments this way (session/message-v2-impl.ts
+   * converts each one to `{type:"media", mediaType, data}`), so serializing the
+   * wrapper would price a 1 MB screenshot as ~250k text tokens instead of one
+   * image. Returns undefined for every other part shape so the whole-array
+   * serialization fast path is untouched.
+   */
+  function nestedContentEntries(part: unknown): ContentPart[] | undefined {
+    if (!isRecord(part) || part.type !== "tool-result") return undefined
+    const output = part.output
+    if (!isRecord(output) || output.type !== "content") return undefined
+    const value = output.value
+    return Array.isArray(value) ? value.filter(isRecord) : undefined
+  }
+
+  /** Entries a part contributes to the estimate: nested tool-result content, or the part itself. */
+  function mediaEntries(part: unknown): ContentPart[] {
+    const nested = nestedContentEntries(part)
+    if (nested) return nested
+    return isRecord(part) ? [part] : []
+  }
+
+  function isMediaEntry(entry: ContentPart): boolean {
+    const media = mediaTokens(entry)
+    return media.tokens > 0 || media.unestimated
+  }
+
   function isMediaPart(part: unknown): boolean {
-    return mediaTokens(part).tokens > 0 || mediaTokens(part).unestimated
+    return mediaEntries(part).some(isMediaEntry)
   }
 
   // Per-message estimate cache. Serializing a message's content dominates the
@@ -64,8 +92,9 @@ export namespace TokenEstimate {
 
   /**
    * Estimated tokens for one message: string content as-is, parts serialized
-   * to JSON, plus the fixed per-message framing overhead. Media parts are
-   * priced at the fixed media constants instead of their serialized form.
+   * to JSON, plus the fixed per-message framing overhead. Media parts — and
+   * media entries nested in tool-result content — are priced at the fixed
+   * media constants instead of their serialized form.
    */
   export function messageTokens(message: ModelMessage): number {
     if (typeof message.content === "string") {
@@ -83,13 +112,15 @@ export namespace TokenEstimate {
     } else {
       estimate = 0
       for (const part of parts) {
-        const media = mediaTokens(part)
-        if (media.unestimated) continue
-        if (media.tokens > 0) {
-          estimate += media.tokens
-          continue
+        for (const entry of mediaEntries(part)) {
+          const media = mediaTokens(entry)
+          if (media.unestimated) continue
+          if (media.tokens > 0) {
+            estimate += media.tokens
+            continue
+          }
+          estimate += textTokens(JSON.stringify(entry))
         }
-        estimate += textTokens(JSON.stringify(part))
       }
     }
     const total = estimate + MESSAGE_OVERHEAD_TOKENS
@@ -135,15 +166,17 @@ export namespace TokenEstimate {
     return total
   }
 
-  /** Sum of the fixed media constants across all media parts in the messages. */
+  /** Sum of the fixed media constants across all media parts in the messages, including tool-result content. */
   export function mediaTokenTotal(messages: ModelMessage[]) {
     let total = 0
     for (const message of messages) {
       if (typeof message.content === "string") continue
       const parts = Array.isArray(message.content) ? message.content : []
       for (const part of parts) {
-        const media = mediaTokens(part)
-        if (!media.unestimated) total += media.tokens
+        for (const entry of mediaEntries(part)) {
+          const media = mediaTokens(entry)
+          if (!media.unestimated) total += media.tokens
+        }
       }
     }
     return total
@@ -155,7 +188,7 @@ export namespace TokenEstimate {
       if (typeof message.content === "string") continue
       const parts = Array.isArray(message.content) ? message.content : []
       for (const part of parts) {
-        if (mediaTokens(part).unestimated) return true
+        if (mediaEntries(part).some((entry) => mediaTokens(entry).unestimated)) return true
       }
     }
     return false
