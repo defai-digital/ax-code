@@ -396,6 +396,24 @@ test("partial higher-precedence isolation config preserves an explicit restricte
   })
 })
 
+test("an {env:} name that is an Object.prototype member resolves to empty", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+        username: "a{env:toString}b{env:constructor}c",
+      })
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.username).toBe("abc")
+    },
+  })
+})
+
 test("handles environment variable substitution", async () => {
   const originalEnv = process.env["TEST_VAR"]
   process.env["TEST_VAR"] = "test-user"

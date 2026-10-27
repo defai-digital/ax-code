@@ -218,9 +218,11 @@ export namespace ConfigPaths {
         const varName = match[1]!
         const index = match.index!
         out += text.slice(cursor, index)
-        const value = envSource[varName]
+        // Own properties only: {env:toString} would otherwise read the
+        // inherited function, and JSON.stringify(fn) is undefined.
+        const value = Object.hasOwn(envSource, varName) ? envSource[varName] : undefined
         let replacement: string
-        if (value !== undefined) {
+        if (typeof value === "string") {
           // Tokens appear inside JSONC strings, so splice the escaped
           // string contents rather than raw environment bytes. This
           // mirrors {file:} substitution below and preserves quotes,
