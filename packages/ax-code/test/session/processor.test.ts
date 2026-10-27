@@ -2588,6 +2588,50 @@ test("whitespace-only text does not lock replay when the stream ends without fin
   })
 })
 
+// Policy (exact tokens only): an attempt that finished a step and then lost
+// its connection really spent those tokens, and its step-finish part is the
+// per-step record of that spend (context gauge, ACP usage and harness metrics
+// read step parts). A replay-safe retry keeps both the tokens and the step
+// record instead of rewriting history to look like one attempt.
+test("a replay-safe retry after finish-step keeps the abandoned attempt's tokens and step record", async () => {
+  await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const stream = vi
+        .fn()
+        .mockResolvedValueOnce({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
+          })(),
+        } as unknown as Awaited<ReturnType<typeof LLM.stream>>)
+        .mockResolvedValueOnce(successfulTextStream("recovered"))
+      const sleep = vi.fn(async () => {})
+      const { processor, streamInput } = await createProcessorFixture(
+        tmp.path,
+        processorDependencies({ stream, sleep }),
+      )
+
+      expect(await processor.process(streamInput)).toBe("continue")
+      expect(stream).toHaveBeenCalledTimes(2)
+      expect(processor.message.tokens.input).toBe(200)
+      expect(processor.message.tokens.output).toBe(20)
+
+      const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+      const steps = saved.parts.filter((part) => part.type === "step-finish")
+      expect(steps).toHaveLength(2)
+      const stepInput = steps.reduce((sum, part) => sum + (part.type === "step-finish" ? part.tokens.input : 0), 0)
+      expect(stepInput).toBe(processor.message.tokens.input)
+    },
+  })
+})
+
 test("tool input start locks automatic replay before tool-call", async () => {
   await using tmp = await tmpdir({ git: true, config: { username: "test" } })
   await Instance.provide({
