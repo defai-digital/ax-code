@@ -427,6 +427,7 @@ export namespace Env {
   // `O'Brien`). The value then runs to the end of the line, so the remainder
   // must be redacted as pairs instead of copied verbatim.
   const PAIR_CONTINUATION = /[;,][ \t]*[!#$%&'*+\-.^_`|~0-9A-Za-z]+[ \t]*=/
+  const LEADING_PAIR_CONTINUATION = new RegExp(`^[ \\t]*${PAIR_CONTINUATION.source}`)
 
   function redactPairTail(text: string, setCookie: boolean): string {
     if (!PAIR_TAIL.test(text)) return text
@@ -463,14 +464,20 @@ export namespace Env {
       // A quote followed by more cookie pairs is a nested quoted value (or an
       // apostrophe in the value), not the enclosing close: the value runs to
       // the next matching quote when one closes on this line.
+      // The continuing pair must sit before that next quote (an apostrophe in
+      // the value) or right after it (a nested quoted value): one found only
+      // further along belongs to another quoted header on the line, and taking
+      // it as proof ate this header's closing quote.
       let shellQuoteEnd = firstQuoteEnd
-      if (
-        firstQuoteEnd !== undefined &&
-        firstQuoteEnd < lineEnd &&
-        PAIR_CONTINUATION.test(value.slice(firstQuoteEnd, lineEnd))
-      ) {
+      if (firstQuoteEnd !== undefined && firstQuoteEnd < lineEnd) {
         const nextQuoteEnd = closingQuote(value, firstQuoteEnd + 1, quoteState!)
-        if (nextQuoteEnd < lineEnd) shellQuoteEnd = nextQuoteEnd
+        if (
+          nextQuoteEnd < lineEnd &&
+          (PAIR_CONTINUATION.test(value.slice(firstQuoteEnd, nextQuoteEnd)) ||
+            LEADING_PAIR_CONTINUATION.test(value.slice(nextQuoteEnd + 1, lineEnd)))
+        ) {
+          shellQuoteEnd = nextQuoteEnd
+        }
       }
       // The value ends at the enclosing shell quote when it closes on this
       // line, and at the line end otherwise.

@@ -428,6 +428,13 @@ describe("Env.sanitize", () => {
     expect(Env.redactSecrets("curl -H 'Cookie: zz=O'Brien; sid=SECRET123'")).toBe("curl -H 'Cookie: zz=[redacted]'")
   })
 
+  test("keeps the closing quote of a quoted Cookie header followed by another quoted header", () => {
+    const input = 'msg="Cookie: sid=X" "Set-Cookie: sid=Y; Path=/"'
+    const once = Env.redactSecrets(input)
+    expect(once).toBe('msg="Cookie: sid=[redacted]" "Set-Cookie: sid=[redacted]; Path=/"')
+    expect(Env.redactForRecord(once)).toBe(once)
+  })
+
   test("does not trust a Path attribute that runs into another cookie header", () => {
     for (const separator of [" ", "\t", " | "]) {
       const redacted = Env.redactForRecord(`Set-Cookie: a=1; Path=/${separator}Set-Cookie: sid=S3CR3T; Path=/`)
