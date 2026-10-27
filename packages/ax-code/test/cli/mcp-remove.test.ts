@@ -83,3 +83,18 @@ test.each([false, true])("MCP removal preserves comments and unrelated entries (
   expect(result).not.toContain('"example"')
   expect(process.exitCode).not.toBe(1)
 })
+
+test("MCP removal finds a server defined in the live ax-code.jsonc next to an ax-code.json", async () => {
+  await using project = await tmpdir({ git: true })
+  await using user = await tmpdir()
+  const json = path.join(project.path, "ax-code.json")
+  const jsonc = path.join(project.path, "ax-code.jsonc")
+  await fs.writeFile(json, '{ "mcp": {} }\n')
+  await fs.writeFile(jsonc, '{\n  // live\n  "mcp": { "example": { "type": "local", "command": ["example"] } }\n}\n')
+
+  await remove(project.path, user.path, "example")
+
+  expect(process.exitCode).not.toBe(1)
+  expect(await fs.readFile(jsonc, "utf8")).not.toContain('"example"')
+  expect(await fs.readFile(json, "utf8")).toBe('{ "mcp": {} }\n')
+})

@@ -723,14 +723,18 @@ export const McpUntrustCommand = cmd({
   },
 })
 
-async function resolveConfigPath(baseDir: string, global = false) {
-  // Check for existing config files (prefer .jsonc over .json, check .ax-code/ subdirectory too)
-  const candidates = [path.join(baseDir, "ax-code.json"), path.join(baseDir, "ax-code.jsonc")]
-
+function configCandidates(baseDir: string, global = false) {
+  // Prefer .jsonc over .json: the loader reads .json first and .jsonc after,
+  // so the .jsonc is the live file when both exist.
+  const candidates = [path.join(baseDir, "ax-code.jsonc"), path.join(baseDir, "ax-code.json")]
   if (!global) {
-    candidates.push(path.join(baseDir, ".ax-code", "ax-code.json"), path.join(baseDir, ".ax-code", "ax-code.jsonc"))
+    candidates.push(path.join(baseDir, ".ax-code", "ax-code.jsonc"), path.join(baseDir, ".ax-code", "ax-code.json"))
   }
+  return candidates
+}
 
+async function resolveConfigPath(baseDir: string, global = false) {
+  const candidates = configCandidates(baseDir, global)
   for (const candidate of candidates) {
     if (await Filesystem.exists(candidate)) {
       return candidate
@@ -738,7 +742,7 @@ async function resolveConfigPath(baseDir: string, global = false) {
   }
 
   // Default to ax-code.json if none exist
-  return candidates[0]
+  return candidates[1]!
 }
 
 async function addMcpToConfig(name: string, mcpConfig: McpConfig, configPath: string) {
@@ -815,11 +819,21 @@ export const McpRemoveCommand = cmd({
         UI.empty()
         prompts.intro("Remove MCP server")
 
-        const configPath = await resolveConfigPath(args.global ? Global.Path.config : Instance.worktree, args.global)
+        const baseDir = args.global ? Global.Path.config : Instance.worktree
 
         const hasName = async (configPath: string) => {
           if (!(await Filesystem.exists(configPath))) return false
           return hasMcpName(await Filesystem.readText(configPath), name, configPath)
+        }
+
+        // Every config file in the scope is merged, so the server may be
+        // defined in any of them, not only the preferred one.
+        let configPath = await resolveConfigPath(baseDir, args.global)
+        for (const candidate of configCandidates(baseDir, args.global)) {
+          if (await hasName(candidate)) {
+            configPath = candidate
+            break
+          }
         }
 
         if (!(await hasName(configPath))) {
