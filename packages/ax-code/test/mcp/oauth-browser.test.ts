@@ -277,3 +277,73 @@ test("open() is called with the authorization URL", async () => {
     },
   })
 })
+
+test("a callback cancelled while the browser opens is not an unhandled rejection", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeFile(
+        `${dir}/ax-code.json`,
+        JSON.stringify({ mcp: { "test-oauth-cancel": { type: "remote", url: "https://example.com/mcp" } } }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await trustConfiguredMcp("test-oauth-cancel")
+      // The spy wraps returned promises (which attaches a handler), so this
+      // case needs the real waiter. Kept last in the file for that reason.
+      waitSpy.mockRestore()
+      // The flow is cancelled inside open()'s 500 ms grace window, before
+      // authenticate reaches its await on the callback.
+      setTimeout(() => McpOAuthCallback.cancelPending(`${Instance.directory}\0test-oauth-cancel`), 50)
+      const unhandled: unknown[] = []
+      const onUnhandled = (reason: unknown) => unhandled.push(reason)
+      process.on("unhandledRejection", onUnhandled)
+      try {
+        await expect(MCP.authenticate("test-oauth-cancel")).rejects.toThrow("Authorization cancelled")
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(unhandled).toEqual([])
+      } finally {
+        process.off("unhandledRejection", onUnhandled)
+      }
+    },
+  })
+})
+
+test("a superseded concurrent authenticate leaves the newer flow's transport pending", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeFile(
+        `${dir}/ax-code.json`,
+        JSON.stringify({ mcp: { "test-oauth-race": { type: "remote", url: "https://example.com/mcp" } } }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await trustConfiguredMcp("test-oauth-race")
+      // Uses the real waiter (restored by the previous test) so the second
+      // flow's registration really supersedes the first.
+      const first = MCP.authenticate("test-oauth-race")
+      const firstSettled = first.then(
+        () => "resolved",
+        (error: Error) => error.message,
+      )
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const second = MCP.authenticate("test-oauth-race").catch(() => undefined)
+      expect(await firstSettled).toContain("superseded")
+      // The user completes the newer flow in the browser.
+      const finished = await MCP.finishAuth("test-oauth-race", "code").then(
+        () => "ok",
+        (error: Error) => error.name,
+      )
+      expect(finished).not.toBe("MCPNoPendingAuthError")
+      McpOAuthCallback.cancelPending(`${Instance.directory}\0test-oauth-race`)
+      await second
+    },
+  })
+})

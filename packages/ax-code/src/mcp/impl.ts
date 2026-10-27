@@ -2691,8 +2691,13 @@ export namespace MCP {
    * Opens the browser and waits for callback.
    */
   export async function authenticate(mcpName: string): Promise<Status> {
+    // The transport this flow registered. A concurrent authenticate for the
+    // same server replaces it, and this flow's failure (it is superseded)
+    // must not then close the replacement's transport.
+    let ownTransport: TransportWithAuth | undefined
     try {
       const { authorizationUrl, oauthState } = await startAuth(mcpName)
+      ownTransport = pendingOAuthTransports.get(oauthFlowKey(mcpName))
 
       if (!authorizationUrl) {
         // Already authenticated: startAuth attached the live client, so the
@@ -2712,6 +2717,9 @@ export namespace MCP {
       // Register the callback BEFORE opening the browser to avoid race condition
       // when the IdP has an active SSO session and redirects immediately
       const callbackPromise = McpOAuthCallback.waitForCallback(oauthState, oauthFlowKey(mcpName))
+      // Awaited only after the browser-open grace below; a cancel or a
+      // superseding flow can reject it before then.
+      callbackPromise.catch(() => undefined)
 
       // Browser opening failed (e.g., in remote/headless sessions like SSH,
       // devcontainers) — emit an event so the CLI can display the URL for
@@ -2773,7 +2781,8 @@ export namespace MCP {
       // Finish auth
       return await finishAuth(mcpName, callback.code, callback.iss)
     } catch (error) {
-      await closePendingOAuthTransport(mcpName)
+      const current = pendingOAuthTransports.get(oauthFlowKey(mcpName))
+      if (!ownTransport || current === ownTransport) await closePendingOAuthTransport(mcpName)
       throw error
     } finally {
       await stopOAuthCallbackIfIdle("authenticate completed")
