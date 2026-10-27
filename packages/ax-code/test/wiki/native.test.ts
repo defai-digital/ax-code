@@ -181,7 +181,11 @@ async function runNative(
 async function runNativeSequence(
   tmpPath: string,
   results: Array<{ streamError?: unknown }>,
-  overrides: { failedPages?: { path: string; error: string }[]; errorAfterGeneration?: string } = {},
+  overrides: {
+    failedPages?: { path: string; error: string }[]
+    generatedPages?: string[]
+    errorAfterGeneration?: string
+  } = {},
 ): Promise<void> {
   const queue = [...results]
   vi.mocked(generateObject).mockImplementation(async () => ({ ...generatedPage(), ...(queue.shift() ?? {}) }))
@@ -337,6 +341,18 @@ describe("wiki native generator", () => {
     expect(report?.failed?.path).toBe("modules/ax-code.md")
     // The page that succeeded is still recorded as written.
     expect(report?.written).toContain(PAGE.path)
+  })
+
+  test("records a failed build report when an update's pages all failed and nothing was written", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await runNativeSequence(tmp.path, [{}], {
+      failedPages: [{ path: PAGE.path, error: "page generation failed" }],
+      generatedPages: [],
+    })
+
+    const report = await readBuildReport(tmp.path)
+    expect(report?.outcome).toBe("failed")
+    expect(report?.written).toEqual([])
   })
 
   test("sends a bounded output limit on every page generateObject call", async () => {
