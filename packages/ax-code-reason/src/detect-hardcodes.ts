@@ -80,6 +80,28 @@ function shannonEntropy(s: string): number {
 // open and close on the same line). Multi-line block comments are
 // tracked by the scanner loop in scanFile — this helper only handles
 // what it can see on the line in front of it. See issue #23.
+// Index of the first `/*` at or after `from` that opens a real block
+// comment: one inside a string literal (`"/*"`) or after a `//` line comment
+// is text, and taking it as an opener hid the rest of the file from the scan.
+function findBlockCommentOpen(line: string, from: number): number {
+  let quote: string | undefined
+  for (let i = 0; i < line.length - 1; i++) {
+    const char = line[i]
+    if (quote) {
+      if (char === "\\") i++
+      else if (char === quote) quote = undefined
+      continue
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char
+      continue
+    }
+    if (char === "/" && line[i + 1] === "/") return -1
+    if (char === "/" && line[i + 1] === "*" && i >= from) return i
+  }
+  return -1
+}
+
 function stripComments(line: string): string {
   // Inline block comments `/* ... */`. Repeat the strip until the
   // pattern is gone: a single line can carry multiple blocks like
@@ -308,7 +330,7 @@ async function scanFile(
     // closed on the same line. Anything after the unclosed opener
     // belongs to the block and must be stripped; we also flip the
     // state so subsequent lines know we're still inside.
-    let openIdx = remaining.indexOf("/*")
+    let openIdx = findBlockCommentOpen(remaining, 0)
     while (openIdx !== -1) {
       const closeIdx = remaining.indexOf("*/", openIdx + 2)
       if (closeIdx === -1) {
@@ -318,7 +340,7 @@ async function scanFile(
       } else {
         remaining = remaining.slice(0, openIdx) + " ".repeat(closeIdx + 2 - openIdx) + remaining.slice(closeIdx + 2)
       }
-      openIdx = remaining.indexOf("/*", openIdx + 1)
+      openIdx = findBlockCommentOpen(remaining, openIdx + 1)
     }
     if (remaining.trim().length === 0) continue
 

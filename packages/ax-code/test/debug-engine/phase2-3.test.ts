@@ -482,6 +482,24 @@ describe("detectHardcodes", () => {
     })
   })
 
+  test("a /* inside a string or line comment does not hide the rest of the file", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "strings.ts"),
+      ['const open = "/*"', "// see /* note", "export const port = run(8123)", "const other = 7777"].join("\n"),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const report = await DebugEngine.detectHardcodes(Instance.project.id, { patterns: ["magic_number"] })
+        const values = report.findings.filter((f) => f.kind === "magic_number").map((f) => f.value)
+        expect(values).toContain("8123")
+        expect(values).toContain("7777")
+      },
+    })
+  })
+
   test("ignores numbers inside named const declarations", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(

@@ -527,6 +527,33 @@ fn magic_numbers(line: &str) -> Vec<(usize, &str)> {
     result
 }
 
+// Byte index of the first `/*` at or after `from` that opens a real block
+// comment, mirroring findBlockCommentOpen in detect-hardcodes.ts: one inside a
+// string literal or after a `//` line comment is text.
+fn find_block_comment_open(line: &str, from: usize) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut quote: Option<u8> = None;
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        let byte = bytes[i];
+        if let Some(open) = quote {
+            if byte == b'\\' {
+                i += 1;
+            } else if byte == open {
+                quote = None;
+            }
+        } else if byte == b'"' || byte == b'\'' || byte == b'`' {
+            quote = Some(byte);
+        } else if byte == b'/' && bytes[i + 1] == b'/' {
+            return None;
+        } else if byte == b'/' && bytes[i + 1] == b'*' && i >= from {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
 fn hardcodes(
     source: &str,
     file: &str,
@@ -551,8 +578,7 @@ fn hardcodes(
             in_block = false;
         }
         let mut search = 0;
-        while let Some(rel) = remaining[search..].find("/*") {
-            let start = search + rel;
+        while let Some(start) = find_block_comment_open(&remaining, search) {
             if let Some(rel_end) = remaining[start + 2..].find("*/") {
                 let end = start + 2 + rel_end + 2;
                 let padding = " ".repeat(units(&remaining[start..end]));
