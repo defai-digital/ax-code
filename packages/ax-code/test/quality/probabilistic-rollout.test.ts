@@ -970,7 +970,14 @@ describe("ProbabilisticRollout.summarizeReplayReadiness", () => {
       name: "targeted-test-recommendation",
       status: "pass",
       detail: "prioritize these QA command(s): bun test test/auth.test.ts",
+      commands: ["bun test test/auth.test.ts"],
     })
+
+    // A piped command contains the " | " the gate detail joins commands with.
+    const piped = "bun test test/auth.test.ts 2>&1 | tail -20"
+    const pipedReplay = JSON.parse(JSON.stringify(replay).replaceAll("bun test test/auth.test.ts", piped))
+    const pipedSummary = ProbabilisticRollout.summarizeReplayReadiness({ replay: pipedReplay })
+    expect(ProbabilisticRollout.targetedTestRecommendations(pipedSummary)).toEqual([piped])
   })
 
   test("derives shared user-facing readiness states from replay summaries", () => {

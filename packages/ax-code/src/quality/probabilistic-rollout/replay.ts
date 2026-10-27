@@ -436,6 +436,7 @@ export function summarizeReplayReadiness(input: { replay: ReplayExport; labels?:
         qaRecommendedCommands.length > 0
           ? `prioritize these QA command(s): ${qaRecommendedCommands.join(" | ")}`
           : "no targeted QA command recommendation could be derived from the recorded test evidence",
+      ...(qaRecommendedCommands.length > 0 ? { commands: [...qaRecommendedCommands] } : {}),
     })
   }
 

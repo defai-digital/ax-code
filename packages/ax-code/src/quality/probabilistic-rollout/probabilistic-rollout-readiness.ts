@@ -197,6 +197,8 @@ export function targetedTestRecommendations(summary: Pick<ReplayReadinessSummary
   if (summary.workflow !== "qa") return []
   const gate = summary.gates.find((item) => item.name === "targeted-test-recommendation")
   if (!gate) return []
+  if (gate.commands) return gate.commands
+  // Summaries written before gates carried commands only have the joined detail.
   const separator = gate.detail.indexOf(":")
   if (separator === -1) return []
   return gate.detail

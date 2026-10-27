@@ -154,6 +154,9 @@ export const ReplayReadinessGate = z.object({
   name: z.string(),
   status: z.enum(["pass", "warn", "fail"]),
   detail: z.string(),
+  // The recommended commands verbatim; the detail joins them with " | ",
+  // which a piped command also contains.
+  commands: z.string().array().optional(),
 })
 export type ReplayReadinessGate = z.output<typeof ReplayReadinessGate>
 
