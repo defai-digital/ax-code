@@ -1081,7 +1081,12 @@ export namespace Worktree {
         branch = (await ownsBranch(checkedOut, repository)) ? checkedOut : undefined
         if (!branch) return
         const deleted = await git(["branch", "-D", branch], { cwd: repository })
-        if (deleted.exitCode !== 0) {
+        // A concurrent remover may have deleted the branch first; a missing
+        // branch is the state this removal wanted.
+        if (
+          deleted.exitCode !== 0 &&
+          (await git(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd: repository })).exitCode !== 1
+        ) {
           branchError = new RemoveFailedError({
             message: errorText(deleted) || "Failed to delete worktree branch",
           })

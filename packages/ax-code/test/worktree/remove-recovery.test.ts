@@ -5,6 +5,7 @@ import { afterEach, expect, test, vi } from "vitest"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Worktree } from "@/worktree"
+import * as GitUtil from "@/util/git"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -177,3 +178,35 @@ test.skipIf(process.platform === "win32")(
     expect(await fs.readFile(path.join(tracked, "keep.txt"), "utf8")).toBe("tracked\n")
   },
 )
+
+test("treats a worktree branch deleted by a concurrent remover as removed", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await using external = await tmpdir()
+  const directory = path.join(external.path, "RacedWorktree")
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: tmp.path, encoding: "utf8", stdio: "pipe" })
+  git("worktree", "add", "-b", "ax-code/raced-remove", directory)
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Project.addSandbox(Instance.project.id, directory)
+        const real = GitUtil.git
+        const spy = vi.spyOn(GitUtil, "git").mockImplementation(async (args, options) => {
+          // Another remover deletes the branch just before this one does.
+          if (args[0] === "branch" && args[1] === "-D") git("branch", "-D", args[2]!)
+          return real(args, options)
+        })
+        try {
+          await expect(Worktree.remove({ directory })).resolves.toBe(true)
+        } finally {
+          spy.mockRestore()
+        }
+        expect(git("branch", "--list", "ax-code/raced-remove").trim()).toBe("")
+        expect(Project.get(Instance.project.id)?.sandboxes).toEqual([])
+      },
+    })
+  } finally {
+    git("worktree", "prune")
+  }
+})
