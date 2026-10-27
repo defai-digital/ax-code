@@ -422,6 +422,43 @@ describe("SessionVerifications.load", () => {
     })
   })
 
+  test("keeps the latest copy of a re-emitted envelope, so its source state is current", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const base = buildEnvelope({ source: { tool: "refactor_apply", version: "4.x.x", runId: session.id } })
+        const older = { ...base, sourceState: { available: true, commit: "a", dirtyDigest: "old" } }
+        const newer = { ...base, sourceState: { available: true, commit: "a", dirtyDigest: "new" } }
+        // sourceState is not part of the envelope id: both copies share one id.
+        expect(computeEnvelopeId(older)).toBe(computeEnvelopeId(newer))
+
+        Recorder.begin(session.id)
+        for (const [callID, envelope] of [
+          ["call-1", older],
+          ["call-2", newer],
+        ] as const) {
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: session.id,
+            tool: "refactor_apply",
+            callID,
+            status: "completed",
+            metadata: { verificationEnvelopes: [envelope] },
+            durationMs: 1,
+          })
+        }
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const runs = SessionVerifications.loadRunsWithIds(session.id)
+        expect(runs.map((run) => run.callID)).toEqual(["call-2"])
+        expect(SessionVerifications.load(session.id).map((env) => env.sourceState?.dirtyDigest)).toEqual(["new"])
+      },
+    })
+  })
+
   test("ignores tool.result events with status: 'error'", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

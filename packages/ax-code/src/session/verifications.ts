@@ -39,11 +39,14 @@ export namespace SessionVerifications {
     const events = EventQuery.bySession(sessionID)
     // Dedup by computeEnvelopeId (deterministic hash of envelope content).
     // Re-running refactor_apply on the same plan in the same session
-    // produces identical envelopes; we keep the first so consumers and
-    // sidebar counts don't double-count the same verification run.
+    // produces identical envelopes; keep one so consumers and sidebar counts
+    // don't double-count the same verification run. Keep the LATEST copy:
+    // sourceState is not part of the id, and the freshness check of a cited
+    // envelope must see the source state of the most recent run, not one
+    // taken before later edits. Walk newest-first, then restore event order.
     const seen = new Set<string>()
     const runs: LoadedEnvelopeRun[] = []
-    for (const event of events) {
+    for (const event of [...events].reverse()) {
       if (event.type !== "tool.result") continue
       if (event.status !== "completed") continue
       const candidate = event.metadata?.verificationEnvelopes
@@ -63,13 +66,18 @@ export namespace SessionVerifications {
         }
         const id = computeEnvelopeId(parsed.data)
         if (seen.has(id)) continue
-        seen.add(id)
         envelopes.push({ envelope: parsed.data, envelopeId: id })
       }
-      if (envelopes.length > 0)
-        runs.push({ tool: event.tool, callID: event.callID, metadata: event.metadata, envelopes })
+      // Mark ids only after the whole run, so duplicates inside one run are
+      // still collapsed below while an older run cannot claim them.
+      const unique = envelopes.filter(
+        (item, index) => envelopes.findIndex((other) => other.envelopeId === item.envelopeId) === index,
+      )
+      for (const item of unique) seen.add(item.envelopeId)
+      if (unique.length > 0)
+        runs.push({ tool: event.tool, callID: event.callID, metadata: event.metadata, envelopes: unique })
     }
-    return runs
+    return runs.reverse()
   }
 
   export function load(sessionID: SessionID): VerificationEnvelope[] {
