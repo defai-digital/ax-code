@@ -451,13 +451,14 @@ const log = Log.create({ service: "wiki" })
 /**
  * Model precedence for Wiki generation: an explicit pin first, then the
  * invoking session's model (the model the user runs the session with),
- * then the AX Code default. Failures resolving the session model fall
- * back to the default with a warning instead of failing the build.
+ * then the AX Code default. An explicit pin stays exact (model recovery
+ * guide: invalid pins fail rather than move), so an unavailable pin fails
+ * the build before any page is generated. The session model is only
+ * inherited, so when it is no longer available the build falls back to the
+ * default with a warning.
  */
 export async function resolveWikiModelRef(input: { model?: string; sessionID?: SessionID }) {
   const pinned = input.model ? await Provider.resolvePinnedModel(Provider.parseModel(input.model)) : undefined
-  if (input.model && !pinned)
-    log.warn("wiki model is unavailable; trying the session or default model", { model: input.model })
   if (pinned) return pinned
   if (input.sessionID) {
     const session = await resolveSessionModelRef(input.sessionID)
@@ -474,7 +475,12 @@ async function resolveSessionModelRef(sessionID: SessionID) {
       | undefined
     const model = lastUser?.model
     if (!model?.providerID || !model?.modelID) return undefined
-    return Provider.resolveRequestedModel({ providerID: model.providerID, modelID: model.modelID })
+    const reference = await Provider.resolveRequestedModel({ providerID: model.providerID, modelID: model.modelID })
+    // resolveRequestedModel keeps the pair exact without checking it, so
+    // availability is only known from getModel. Check here, where an
+    // unavailable session model can still fall back to the default.
+    await Provider.getModel(reference.providerID, reference.modelID)
+    return reference
   } catch (error) {
     log.warn("wiki session model is unavailable; using the default model", {
       sessionID,
