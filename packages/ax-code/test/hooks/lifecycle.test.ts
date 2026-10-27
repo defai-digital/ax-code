@@ -926,13 +926,29 @@ describe("LifecycleHooks session lifecycle firing sites", () => {
 })
 
 describe("LifecycleHooks hook timeout", () => {
-  test("settles at the timeout when a descendant keeps the pipes open", async () => {
+  test("a shell still running at the deadline is a real timeout (124) and keeps blocking", async () => {
     vi.stubEnv("AX_CODE_HOOK_TIMEOUT_MS", "300")
-    // `shell: true` runs this through sh; the launched node exits, but it leaves
-    // a detached grandchild (its own process group, so the timeout's group kill
-    // misses it) inheriting stdout for 6s. Without settling on the timer the hook
-    // promise — and the slot runHook holds in its finally — would hang until that
-    // child ends.
+    // No background trick here: the shell itself never exits before the
+    // deadline. It must settle as 124, and blockOnFailure must keep vetoing.
+    const started = Date.now()
+    const result = await LifecycleHooks.runHooks(
+      [{ event: "PreToolUse", matcher: "bash", blockOnFailure: true, command: "sleep 5" }],
+      { event: "PreToolUse", tool: "bash", args: { command: "echo hi" }, cwd: process.cwd() },
+    )
+    expect(result.outputs[0]?.exit).toBe(124)
+    expect(result.blocked).toBe(true)
+    expect(Date.now() - started).toBeLessThan(3000)
+  }, 20000)
+
+  test("settles without hanging when a detached descendant keeps the pipes open", async () => {
+    vi.stubEnv("AX_CODE_HOOK_TIMEOUT_MS", "1500")
+    // `shell: true` runs this through sh; the launched node exits 0, but it
+    // leaves a detached grandchild (its own process group, so the group kill
+    // misses it) inheriting stdout for 6s. The shell actually exited 0, so
+    // the run now settles through the post-exit drain grace with the real
+    // status instead of the fake 124 the deadline-only path used to report;
+    // the assertion that still matters is that a never-closing pipe cannot
+    // hang the hook promise — or the slot runHook holds in its finally.
     const command =
       `node -e "const {spawn}=require('node:child_process');` +
       `const c=spawn(process.execPath,['-e','setTimeout(()=>{},6000)'],{stdio:'inherit',detached:true});` +
@@ -944,7 +960,47 @@ describe("LifecycleHooks hook timeout", () => {
       args: {},
       cwd: process.cwd(),
     })
-    expect(result.outputs[0]?.exit).toBe(124)
+    expect(result.outputs[0]?.exit).toBe(0)
     expect(Date.now() - started).toBeLessThan(3000)
+  }, 20000)
+
+  test("reports the real exit status when a background job holds the pipes open", async () => {
+    vi.stubEnv("AX_CODE_HOOK_TIMEOUT_MS", "1500")
+    // The shell exits 0 at once, but the backgrounded sleep inherits stdout
+    // for 5s, so 'close' cannot fire before the deadline. The real status
+    // (and the stdout captured so far) must win over a fake 124, and a
+    // blockOnFailure hook must not see a phantom failure.
+    const started = Date.now()
+    const result = await LifecycleHooks.runHooks(
+      [{ event: "PreToolUse", matcher: "bash", blockOnFailure: true, command: "sleep 5 & echo started; exit 0" }],
+      { event: "PreToolUse", tool: "bash", args: { command: "echo hi" }, cwd: process.cwd() },
+    )
+    expect(result.outputs[0]?.exit).toBe(0)
+    expect(result.outputs[0]?.stdout.trim()).toBe("started")
+    expect(result.blocked).toBe(false)
+    expect(Date.now() - started).toBeLessThan(2000)
+  }, 20000)
+
+  test("keeps a claude-code deny when a background job holds the pipes open", async () => {
+    vi.stubEnv("AX_CODE_HOOK_TIMEOUT_MS", "1500")
+    // Regression (security): exit 0 with a stdout deny, but the pipes are
+    // held open by a background sleep. Settling as a fake 124 treated the
+    // deny as "any other exit" and dropped it — fail-open. The deny must
+    // survive with the real exit status.
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          matcher: "bash",
+          protocol: "claude-code",
+          command: `sleep 5 & echo '{"permissionDecision":"deny","reason":"policy denies this"}'; exit 0`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: { command: "rm -rf tmp" }, cwd: process.cwd() },
+    )
+    expect(result.outputs[0]?.exit).toBe(0)
+    expect(result.blocked).toBe(true)
+    expect(result.ok).toBe(false)
+    expect(result.blockReason).toBe("policy denies this")
   }, 20000)
 })

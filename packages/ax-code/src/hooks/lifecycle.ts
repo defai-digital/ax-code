@@ -69,6 +69,14 @@ const log = Log.create({ service: "hooks.lifecycle" })
 export namespace LifecycleHooks {
   const HOOK_TIMEOUT_MS = 30_000
   const MAX_TIMER_MS = 2_147_483_647
+  /**
+   * Grace period after the hook shell itself exits for its inherited pipes
+   * to drain — letting 'close' fire naturally with any trailing output —
+   * before stragglers still holding the pipes open are killed and the run
+   * settles with the real exit status. Short enough to keep the no-hang
+   * guarantee.
+   */
+  const PIPE_DRAIN_GRACE_MS = 200
   const MAX_CONCURRENT_HOOKS = 4
   const MAX_CAPTURE_BYTES = 1024 * 1024
   /** Read per call so tests can shorten it; an invalid value falls back. */
@@ -683,14 +691,28 @@ export namespace LifecycleHooks {
     child.stdin.end(argsJson)
 
     const exit = await new Promise<number>((resolve) => {
+      // The shell's real status, recorded from the 'exit' event. 'close' —
+      // the preferred signal — also waits for stdout/stderr to end, which
+      // never happens while a background descendant (`sleep 5 &`) holds the
+      // inherited pipes open. Settling only on 'close' (or the deadline)
+      // masked the real status as a fake 124 timeout and dropped an
+      // already-captured stdout deny — fail-open.
+      let exited: number | undefined
+      let graceTimer: NodeJS.Timeout | undefined
       const finish = (code: number) => {
         if (settled) return
         settled = true
         clearTimeout(timer)
+        if (graceTimer !== undefined) clearTimeout(graceTimer)
         resolve(code)
       }
-      const timer = setTimeout(() => {
-        timedOut = true
+      // Kill whatever is left in the hook's process group and drop our pipe
+      // ends: a descendant that survives the kill (Windows: detached is
+      // false, so only cmd.exe is killed; POSIX: a child that escaped the
+      // group) keeps the pipes open, so 'close' never fires and this promise
+      // — and the hook slot `runHook` holds in its finally — would hang
+      // forever.
+      const reapStragglers = () => {
         if (detached && child.pid) {
           try {
             process.kill(-child.pid, "SIGKILL")
@@ -700,20 +722,34 @@ export namespace LifecycleHooks {
         } else {
           child.kill("SIGKILL")
         }
-        // A hook whose descendant survives the kill (Windows: detached is false,
-        // so only cmd.exe is killed; POSIX: a child that escaped the group) keeps
-        // the inherited stdout/stderr pipes open, so 'close' never fires and this
-        // promise — and the hook slot `runHook` holds in its finally — would hang
-        // forever. Drop our pipe ends and settle at the timeout instead.
         child.stdout?.destroy()
         child.stderr?.destroy()
         child.stdin?.destroy()
-        finish(124)
+      }
+      const timer = setTimeout(() => {
+        if (settled) return
+        // Only a shell still running at the deadline is a genuine timeout; a
+        // shell that already exited keeps its real status.
+        timedOut = exited === undefined
+        reapStragglers()
+        finish(exited ?? 124)
       }, hookTimeoutMs())
       timer.unref?.()
       child.once("error", (error) => {
         stderr.append(error instanceof Error ? error.message : String(error))
         finish(1)
+      })
+      child.once("exit", (code, signal) => {
+        if (settled) return
+        exited = code ?? (signal ? 1 : 0)
+        // The shell is gone; give short-lived writers a moment to drain, then
+        // settle with the real status and the output captured so far.
+        graceTimer = setTimeout(() => {
+          if (settled) return
+          reapStragglers()
+          finish(exited ?? 0)
+        }, PIPE_DRAIN_GRACE_MS)
+        graceTimer.unref?.()
       })
       child.once("close", (code, signal) => finish(timedOut ? 124 : (code ?? (signal ? 1 : 0))))
     })
