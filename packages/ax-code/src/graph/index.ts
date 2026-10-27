@@ -138,6 +138,7 @@ export namespace ExecutionGraph {
     const tools = new Set<string>()
     let prevID: string | undefined
     let currentStepID: string | undefined
+    const routesBetweenSteps: string[] = []
     let totalInput = 0
     let totalOutput = 0
     let stepCount = 0
@@ -299,6 +300,16 @@ export namespace ExecutionGraph {
 
       if (currentStepID && node.type !== "step" && node.type !== "session") {
         edges.push({ from: currentStepID, to: node.id, type: "step_contains" })
+      }
+      // A mid-session route is recorded when the user message arrives: after
+      // the previous step.finish and before the next step.start. Attach it to
+      // the step it routed, or the step-based renderers (timeline, ascii,
+      // markdown, topology) drop it. Routes before the first step stay with
+      // the session lead.
+      if (!currentStepID && stepCount > 0 && node.type === "agent_route") routesBetweenSteps.push(node.id)
+      if (node.type === "step") {
+        for (const routeID of routesBetweenSteps) edges.push({ from: node.id, to: routeID, type: "step_contains" })
+        routesBetweenSteps.length = 0
       }
     }
 

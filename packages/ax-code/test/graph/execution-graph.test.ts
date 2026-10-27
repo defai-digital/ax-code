@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 
 import { ExecutionGraph } from "../../src/graph"
+import { GraphFormat } from "../../src/graph/format"
 import { Instance } from "../../src/project/instance"
 import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
@@ -86,6 +87,58 @@ describe("ExecutionGraph.build", () => {
         expect(step).toMatchObject({ tokens: { input: 0, output: 0 } })
         expect(llm).toMatchObject({ tokens: { input: 0, output: 0 }, duration: 0 })
         expect(graph.metadata.tokens).toEqual({ input: 0, output: 0 })
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
+  test("a route recorded between steps renders with the step it routed", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: "review",
+          model: "test/model",
+          directory: tmp.path,
+        })
+        Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 } as any)
+        Recorder.emit({
+          type: "step.finish",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: { input: 1, output: 1 },
+        } as any)
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: sid,
+          fromAgent: "review",
+          toAgent: "build",
+          confidence: 0.9,
+        } as any)
+        Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 } as any)
+        Recorder.emit({
+          type: "step.finish",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: { input: 1, output: 1 },
+        } as any)
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const graph = ExecutionGraph.build(sid)
+        const route = graph.nodes.find((node) => node.type === "agent_route")!
+        expect(graph.edges).toContainEqual({ from: "step-2", to: route.id, type: "step_contains" })
+        expect(GraphFormat.timeline(graph).some((line) => line.kind === "route")).toBe(true)
+        expect(GraphFormat.topology(graph).join("\n")).toContain(route.label)
 
         EventQuery.deleteBySession(sid)
       },
