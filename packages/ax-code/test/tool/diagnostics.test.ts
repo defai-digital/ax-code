@@ -3,7 +3,10 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { collectDiagnostics } from "../../src/tool/diagnostics"
 import { LSP } from "@ax-code/ax-code-intel"
 import { Log } from "../../src/util/log"
-import { DebugEngine } from "@ax-code/ax-code-reason"
+import { DebugEngine, DiagnosticCorrelation } from "@ax-code/ax-code-reason"
+import { Filesystem } from "../../src/util/filesystem"
+import { Instance } from "../../src/project/instance"
+import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
@@ -39,6 +42,34 @@ describe("tool diagnostics", () => {
     expect(touchFileSpy).toHaveBeenCalledTimes(2)
     expect(maxInflight).toBe(2)
     expect(diagnosticsSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test("correlates an edited file passed by a non-canonical path", async () => {
+    await using tmp = await tmpdir({ git: true })
+    touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1)
+    diagnosticsSpy = vi.spyOn(LSP, "diagnostics").mockResolvedValue({
+      "/repo/a.ts": [
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+          severity: 1,
+          message: "type error",
+        },
+      ],
+    })
+    const normalize = vi.spyOn(Filesystem, "normalizePath").mockImplementation((p) => p.toLowerCase())
+    const correlate = vi.spyOn(DiagnosticCorrelation, "correlateNow").mockResolvedValue([])
+    analyzeImpactSpy = vi.spyOn(DebugEngine, "analyzeImpact").mockResolvedValue({ affectedFiles: [] } as never)
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: () => collectDiagnostics(["/Repo/A.ts"]),
+      })
+      expect(correlate).toHaveBeenCalledWith("/repo/a.ts")
+      expect(analyzeImpactSpy).toHaveBeenCalled()
+    } finally {
+      normalize.mockRestore()
+      correlate.mockRestore()
+    }
   })
 
   test("skips DRE impact prewarm when edited files have no LSP errors", async () => {

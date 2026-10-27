@@ -201,6 +201,11 @@ async function runCorrelationAndPrewarm(
   diagnostics: Record<string, import("@ax-code/ax-code-intel/client").LSPClient.Diagnostic[]>,
 ): Promise<Map<string, DebugEngine.CorrelatedDiagnostic[]>> {
   const correlationMap = new Map<string, DebugEngine.CorrelatedDiagnostic[]>()
+  // Diagnostics are keyed by the normalized path (realpath and case on macOS
+  // and Windows), but tools pass the path as the model typed it: a symlinked
+  // or differently-cased path never matched and correlation silently skipped
+  // a file whose errors were still rendered.
+  editedFiles = uniqueStrings(editedFiles.map(Filesystem.normalizePath))
 
   // Run correlation for each edited file that has errors.
   const filesWithErrors = editedFiles.filter((file) => {
