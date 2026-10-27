@@ -181,7 +181,7 @@ export const AppRoutes = lazy(() =>
       }),
       async (c) => {
         const commands = await Command.list()
-        return c.json(commands)
+        return c.json(await Promise.all(commands.map(Command.serialize)))
       },
     )
     .get(

@@ -5,6 +5,7 @@ import { Command } from "../../src/command"
 import { Config } from "../../src/config/config"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
+import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -69,4 +70,30 @@ test("Command.get returns the same MCP commit prompt Command.list would", async 
     Global.Path.config = previousConfig
     Config.global.reset()
   }
+})
+
+test("GET /command sends string templates and serialize never fetches an MCP prompt", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const response = await Server.Default().request("/command")
+      expect(response.status).toBe(200)
+      const commands = (await response.json()) as { name: string; template: unknown }[]
+      expect(commands.find((command) => command.name === "review")?.template).toBeTypeOf("string")
+
+      let fetched = 0
+      const mcp: Command.Info = {
+        name: "remote",
+        source: "mcp",
+        hints: [],
+        get template() {
+          fetched++
+          return Promise.reject(new Error("mcp down"))
+        },
+      }
+      expect(await Command.serialize(mcp)).toEqual({ name: "remote", source: "mcp", hints: [], template: "" })
+      expect(fetched).toBe(0)
+    },
+  })
 })

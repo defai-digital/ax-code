@@ -430,6 +430,20 @@ export namespace Command {
     return merged[name]
   }
 
+  /**
+   * The JSON form of a command. Serializing an Info directly reads its lazy
+   * template getter, so an async template became `{}` and an MCP prompt was
+   * fetched on every listing. MCP templates are fetched only on execution.
+   */
+  export async function serialize(info: Info): Promise<z.infer<typeof Info>> {
+    const fields = Object.fromEntries(
+      Object.entries(Object.getOwnPropertyDescriptors(info)).flatMap(([key, descriptor]) =>
+        key === "template" ? [] : [[key, descriptor.get ? descriptor.get.call(info) : descriptor.value]],
+      ),
+    ) as Omit<Info, "template">
+    return { ...fields, template: info.source === "mcp" ? "" : await info.template }
+  }
+
   export async function list(input: { mcp?: boolean } = {}) {
     const current = await state()
     const commands = input.mcp === false ? current.commands : await mergeMcpPrompts(current.commands)
