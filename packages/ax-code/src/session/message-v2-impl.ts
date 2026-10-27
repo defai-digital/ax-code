@@ -12,6 +12,7 @@ import { SessionShard } from "./shard"
 import { ProviderError } from "@/provider/error"
 import { ObservedWindow } from "@/provider/observed-window"
 import { AxEngineStartupError } from "@/provider/ax-engine/errors"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
 import { isRecord } from "@/util/record"
@@ -1339,13 +1340,29 @@ export namespace MessageV2 {
     "connection terminated",
   ]
 
-  /** Socket, HTTP/2, and stream interruptions worth an identical retry. */
-  export function isTransientNetworkError(e: unknown): boolean {
+  function matchesTransientCodeOrPattern(e: unknown): boolean {
     if ((e as SystemError)?.code && TRANSIENT_CODES.has((e as SystemError).code!)) return true
     const msg = e instanceof Error ? e.message : typeof e === "string" ? e : ""
     const lower = msg.toLowerCase()
-    if (TRANSIENT_PATTERNS.some((p) => lower.includes(p.toLowerCase()))) return true
-    return isNetworkInterruption(e)
+    return TRANSIENT_PATTERNS.some((p) => lower.includes(p.toLowerCase()))
+  }
+
+  /** Socket, HTTP/2, and stream interruptions worth an identical retry. */
+  function isTransientNetworkError(e: unknown): boolean {
+    return matchesTransientCodeOrPattern(e) || isNetworkInterruption(e)
+  }
+
+  // A local AX Engine stream that only sent keep-alives and then closed
+  // (undici "terminated" / "other side closed") means a dead or wedged
+  // engine. Replaying it repeats the same failure, so it stays unclassified
+  // and the prompt loop stops once (isAxEngineStreamStall).
+  function isAxEngineStreamClose(e: unknown, providerID: ProviderID): boolean {
+    return providerID === AX_ENGINE_PROVIDER_ID && !matchesTransientCodeOrPattern(e) && isNetworkInterruption(e)
+  }
+
+  /** A transient network failure an identical request may recover from on this provider. */
+  export function isReplayableNetworkError(e: unknown, providerID: ProviderID): boolean {
+    return isTransientNetworkError(e) && !isAxEngineStreamClose(e, providerID)
   }
 
   // AX Trust gateway SSE reports upstream provider failures as the exact
@@ -1522,6 +1539,8 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
+      case isAxEngineStreamClose(e, ctx.providerID):
+        return new NamedError.Unknown({ message: NamedError.message(e) }, { cause: e }).toObject()
       case isTransientNetworkError(e) || isGatewayUpstreamStreamFailure(e):
         return new MessageV2.APIError(
           {

@@ -4,6 +4,7 @@ import { NamedError } from "@ax-code/util/error"
 import { toErrorMessage } from "@/util/error-message"
 import { parseJsonResult } from "@/util/json-value"
 import { isRecord } from "@/util/record"
+import { isNetworkInterruption } from "@/util/network-interruption"
 
 type JsonSchema = boolean | Record<string, unknown>
 type RunOutputPartRecord = {
@@ -139,6 +140,8 @@ const RUN_CONNECTION_ERROR_CODES: ReadonlySet<string> = new Set([
 function isRunConnectionFailure(error: unknown, seen: Set<object> = new Set()): boolean {
   if (typeof error !== "object" || error === null || seen.has(error)) return false
   seen.add(error)
+  // A server connection cut mid-stream: undici "terminated" or an HTTP/2 reset.
+  if (isNetworkInterruption(error)) return true
   const record = error as { name?: unknown; message?: unknown; code?: unknown; cause?: unknown }
   if (
     typeof record.code === "string" &&

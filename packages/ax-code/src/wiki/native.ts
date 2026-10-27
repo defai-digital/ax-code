@@ -49,6 +49,7 @@ import { Log } from "../util/log"
 import { ProviderTransform } from "../provider/transform"
 import { Session } from "../session"
 import { MessageV2 } from "../session/message-v2"
+import type { ProviderID } from "../provider/schema"
 import type { SessionID } from "../session/schema"
 import { writeWikiBuildReport, WIKI_BUILD_REPORT_SCHEMA_VERSION, type WikiBuildReportPageOutcome } from "./build-report"
 import { engineConfig, resolveWikiRuntimeConfig } from "./config"
@@ -359,13 +360,13 @@ type WikiPageRetry = {
 
 const WIKI_PAGE_FORMAT_RETRY_FEEDBACK = `\nThe previous attempt did not produce a valid page object. Return only one complete JSON object, without code fences or surrounding prose, respecting the field limits: summary at most ${PAGE_SUMMARY_MAX} characters, at most ${PAGE_SYMBOLS_MAX} symbols, at most ${SYMBOL_SUMMARIES_MAX} symbolSummaries, each symbol name at most ${PAGE_SYMBOL_NAME_MAX} characters and each symbolSummary.summary at most ${SYMBOL_SUMMARY_MAX} characters. Escape newlines and quotes inside JSON strings and close every string, array, and object.`
 
-function wikiPageFailure(error: unknown): WikiPageFailure | undefined {
+function wikiPageFailure(error: unknown, providerID: ProviderID): WikiPageFailure | undefined {
   if (WikiPageValidationError.isInstance(error)) return "validation"
   if (NoObjectGeneratedError.isInstance(error)) return error.finishReason === "length" ? "length" : "format"
   if (APICallError.isInstance(error) && error.isRetryable) return "transient"
   // A stream cut mid-response surfaces as undici's raw TypeError, not an
   // APICallError, so classify it the same way as the session processor.
-  if (MessageV2.isTransientNetworkError(error)) return "transient"
+  if (MessageV2.isReplayableNetworkError(error, providerID)) return "transient"
   return undefined
 }
 
@@ -909,7 +910,7 @@ export async function runNativeWiki(input: {
               })
               throw new Error(`Wiki page generation timed out: ${request.page.path}`)
             }
-            const failure = wikiPageFailure(error)
+            const failure = wikiPageFailure(error, model.reference.providerID)
             const structured = NoObjectGeneratedError.isInstance(error)
             log.warn("wiki page generation failed", {
               page: request.page.path,

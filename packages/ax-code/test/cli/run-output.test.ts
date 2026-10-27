@@ -444,6 +444,15 @@ test("classifyRunFailure maps unknown rejections to structured codes and readabl
     code: "attach",
     message: "fetch failed",
   })
+  // A server connection cut mid-stream: undici terminated with an HTTP/2 reset cause.
+  const reset = Object.assign(new Error("Stream closed with error code NGHTTP2_INTERNAL_ERROR"), {
+    code: "ERR_HTTP2_STREAM_ERROR",
+  })
+  expect(classifyRunFailure(new TypeError("terminated", { cause: reset }))).toEqual({
+    code: "attach",
+    message: "Stream closed with error code NGHTTP2_INTERNAL_ERROR",
+  })
+  expect(classifyRunFailure(new TypeError("terminated"))).toEqual({ code: "attach", message: "terminated" })
   // Direct socket errors carrying the errno code.
   const dns = Object.assign(new Error("getaddrinfo ENOTFOUND ax-code.local"), { code: "ENOTFOUND" })
   expect(classifyRunFailure(dns)).toEqual({ code: "attach", message: "getaddrinfo ENOTFOUND ax-code.local" })

@@ -50,6 +50,38 @@ describe("gateway stream interruption classification", () => {
       expect(SessionRetry.retryable(result, providerID)).toBeDefined()
     })
   }
+  test("an AX Engine stream closed with terminated is not replayed by the processor", () => {
+    // A local engine that sent only keep-alives and closed is dead or wedged;
+    // the prompt loop stops it once (isAxEngineStreamStall) instead.
+    const axEngine = ProviderID.make("ax-engine")
+    for (const input of [
+      new TypeError("terminated"),
+      new TypeError("other side closed"),
+      new TypeError("terminated", {
+        cause: Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" }),
+      }),
+    ]) {
+      const result = MessageV2.fromError(input, { providerID: axEngine })
+      expect(result).toMatchObject({ name: "UnknownError", data: { message: input.message } })
+      expect(SessionRetry.retryable(result, axEngine)).toBeUndefined()
+    }
+    // Connection-level failures to the engine keep their existing retry.
+    const refused = MessageV2.fromError(
+      new TypeError("fetch failed", {
+        cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }),
+      }),
+      { providerID: axEngine },
+    )
+    expect(refused).toMatchObject({ name: "APIError", data: { isRetryable: true } })
+  })
+  test("isReplayableNetworkError skips only the AX Engine stream close", () => {
+    const terminated = new TypeError("terminated")
+    expect(MessageV2.isReplayableNetworkError(terminated, providerID)).toBe(true)
+    expect(MessageV2.isReplayableNetworkError(terminated, ProviderID.make("ax-engine"))).toBe(false)
+    const reset = Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" })
+    expect(MessageV2.isReplayableNetworkError(reset, ProviderID.make("ax-engine"))).toBe(true)
+    expect(MessageV2.isReplayableNetworkError(new Error("stream disconnected"), providerID)).toBe(false)
+  })
   test("socket cause code enters bounded provider retry", () => {
     const cause = Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" })
     const result = MessageV2.fromError(new TypeError("fetch interrupted", { cause }), { providerID })
