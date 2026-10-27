@@ -1548,6 +1548,27 @@ describe("patch content worker authority", () => {
     })
   })
 
+  test.each([
+    ["a small file", ""],
+    ["a file large enough for the worker lane", "filler\n".repeat(12_000)],
+  ])("keeps untouched lines' own endings in a mixed-ending file (%s)", async (_label, filler) => {
+    await using fixture = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "mixed.txt")
+        const original = "alpha\nbeta\r\ngamma\n" + filler
+        await writeAndTrack(target, original)
+        const { ctx } = makeCtx()
+        await execute(
+          { patchText: "*** Begin Patch\n*** Update File: mixed.txt\n@@\n alpha\n-beta\n+BETA\n gamma\n*** End Patch" },
+          ctx,
+        )
+        expect(await fs.readFile(target, "utf8")).toBe("alpha\nBETA\r\ngamma\n" + filler)
+      },
+    })
+  })
+
   test("rejects an update changed while its worker was running", async () => {
     await using fixture = await tmpdir({ git: true })
     await Instance.provide({

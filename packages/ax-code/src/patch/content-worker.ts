@@ -2,6 +2,7 @@ import { WorkQueue } from "@ax-code/util/work-queue"
 import { NativeAddon } from "../native/addon"
 import { NativePerf } from "../perf/native"
 import type { Patch } from "./index"
+import { hasMixedLineEndings } from "../tool/edit-helpers"
 
 const MAX_BYTES = 32 * 1024 * 1024
 export const PATCH_MAX_OUTPUT = 16 * 1024 * 1024
@@ -59,7 +60,15 @@ export async function patchContent(
   const expensive = original.length + json.length >= PATCH_WORKER_THRESHOLD || chunks.length >= 32
   return queue.run(async (workSignal) => {
     const native = NativeAddon.diff()
-    if (expensive && wellFormed && native?.applyPatchContentAsync && native.PatchCancellation) {
+    // The native lane converts a mixed-ending file wholesale to CRLF; the JS
+    // lane keeps untouched lines' own endings.
+    if (
+      expensive &&
+      wellFormed &&
+      native?.applyPatchContentAsync &&
+      native.PatchCancellation &&
+      !hasMixedLineEndings(original)
+    ) {
       const cancellation = new native.PatchCancellation()
       const cancel = () => cancellation.cancel()
       workSignal.addEventListener("abort", cancel, { once: true })

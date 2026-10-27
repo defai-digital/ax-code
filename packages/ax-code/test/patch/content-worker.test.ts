@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { NativeAddon } from "../../src/native/addon"
 import { Patch } from "../../src/patch"
+import { hasMixedLineEndings } from "../../src/tool/edit-helpers"
 
 const native = NativeAddon.diff()
 const enabled = !!native?.applyPatchContentAsync && !!native.PatchCancellation
@@ -69,6 +70,8 @@ describe.skipIf(!enabled)("native patch content worker", () => {
       const end = at + 1 + pick(lines.length - at)
       const ending = pick(2) ? "\n" : "\r\n"
       const original = lines.join(ending) + (pick(2) ? ending : "")
+      // Mixed-ending originals stay on the JS lane, which keeps each untouched line's ending.
+      if (hasMixedLineEndings(original)) continue
       const chunks = [
         update(lines.slice(at, end), [words[pick(words.length)], words[pick(words.length)]], {
           is_end_of_file: !!pick(2),

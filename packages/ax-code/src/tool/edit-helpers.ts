@@ -8,6 +8,15 @@ export function detectLineEnding(text: string): LineEnding {
   return text.includes("\r\n") ? "\r\n" : "\n"
 }
 
+/** True when the text uses both CRLF and bare LF line endings. */
+export function hasMixedLineEndings(text: string): boolean {
+  if (!text.includes("\r\n")) return false
+  for (let at = text.indexOf("\n"); at !== -1; at = text.indexOf("\n", at + 1)) {
+    if (at === 0 || text[at - 1] !== "\r") return true
+  }
+  return false
+}
+
 export function convertToLineEnding(text: string, ending: LineEnding): string {
   if (ending === "\n") return text
   return text.replaceAll("\n", "\r\n")

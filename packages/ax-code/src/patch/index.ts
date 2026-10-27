@@ -9,7 +9,7 @@ import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Filesystem } from "../util/filesystem"
 import { toError, toErrorMessage } from "../util/error-message"
-import { convertToLineEnding, detectLineEnding, normalizeLineEndings } from "../tool/edit-helpers"
+import { convertToLineEnding, detectLineEnding, hasMixedLineEndings, normalizeLineEndings } from "../tool/edit-helpers"
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })
@@ -483,6 +483,9 @@ export namespace Patch {
     }
 
     const replacements = computeReplacements(originalLines, filePath, chunks, seek)
+    if (hasMixedLineEndings(originalContent)) {
+      return deriveMixedEndingContent(originalContent, originalLines, replacements, originalEnding, maxOutput)
+    }
     let newLines = applyReplacements(originalLines, replacements)
     let bytes = 0
     for (const line of newLines) {
@@ -500,6 +503,50 @@ export namespace Patch {
     const newContent = convertToLineEnding(newLines.length === 0 ? "" : newLines.join("\n") + "\n", originalEnding)
 
     return newContent
+  }
+
+  // A file with both CRLF and LF lines keeps each untouched line's own ending;
+  // only lines the patch writes take the file's dominant ending. Converting the
+  // whole result would rewrite every LF line the patch never touched.
+  function deriveMixedEndingContent(
+    originalContent: string,
+    originalLines: string[],
+    replacements: Array<[number, number, string[]]>,
+    addedEnding: "\n" | "\r\n",
+    maxOutput: number,
+  ): string {
+    const endings = originalContent.split("\n").map((segment) => (segment.endsWith("\r") ? "\r\n" : "\n"))
+    const out: string[] = []
+    let bytes = 0
+    const push = (line: string, ending: string) => {
+      bytes += Buffer.byteLength(line) + ending.length
+      if (bytes > maxOutput) throw patchLimit()
+      out.push(line + ending)
+    }
+    let cursor = 0
+    for (const [start, removed, added] of replacements) {
+      for (; cursor < start; cursor++) push(originalLines[cursor], endings[cursor] ?? addedEnding)
+      // A replacement spans its context lines too; the unchanged lines at
+      // either end of it are still original lines and keep their endings.
+      let head = 0
+      while (head < added.length && head < removed && added[head] === originalLines[start + head]) head++
+      let tail = 0
+      while (
+        tail < added.length - head &&
+        tail < removed - head &&
+        added[added.length - 1 - tail] === originalLines[start + removed - 1 - tail]
+      )
+        tail++
+      added.forEach((line, index) => {
+        const kept =
+          index < head ? start + index : index >= added.length - tail ? start + removed - (added.length - index) : -1
+        if (kept >= 0) push(line, endings[kept] ?? addedEnding)
+        else push(convertToLineEnding(line, addedEnding), addedEnding)
+      })
+      cursor = start + removed
+    }
+    for (; cursor < originalLines.length; cursor++) push(originalLines[cursor], endings[cursor] ?? addedEnding)
+    return out.join("")
   }
 
   function computeReplacements(
