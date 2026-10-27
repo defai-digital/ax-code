@@ -20,6 +20,7 @@ function fixture(write?: (frame: EventStream.Frame) => Promise<void>) {
   })
   const writer: EventStream.Writer & { aborted: boolean } = {
     aborted: false,
+    abort: vi.fn(),
     onAbort(listener) {
       onAbort = listener
     },
@@ -320,6 +321,8 @@ describe("EventStream", () => {
     await running
     expect(f.unsubscribe).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith("event write stalled; closing connection", { stream: "test" })
+    // The response itself is torn down, not only the subscription.
+    expect(f.writer.abort).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(0)
   })
 })

@@ -17,6 +17,8 @@ export namespace EventStream {
     readonly aborted: boolean
     onAbort(listener: () => void): void
     writeSSE(frame: Frame): Promise<void>
+    /** Tear the response down; a stalled write otherwise keeps it open. */
+    abort?(): void
   }
   export type Subscription<T> = {
     cursor: string
@@ -190,6 +192,14 @@ export namespace EventStream {
           // awaited next() that `break` cannot interrupt, so stop() releases the
           // pending read (CLOSED) and lets the for-await terminate cleanly.
           stop()
+          // Returning alone is not a close: the stream's own close() waits on
+          // the write that never settles, and the server disables idle
+          // timeouts for SSE, so the socket would stay open for good.
+          try {
+            stream.abort?.()
+          } catch (error) {
+            log.warn("event stream abort failed", { stream: options.label, error })
+          }
           break
         }
       }
