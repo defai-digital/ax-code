@@ -542,6 +542,14 @@ export namespace GoalPlan {
     if (contract.verification.length < 1) {
       throw new Error("invalid", "Verification plan must contain at least one step")
     }
+    // A blank observation renders as "action — " and parses back with the
+    // separator in the action and the action copied into the observation, so
+    // the frozen contract would pin a step with no falsifiable outcome.
+    for (const [index, item] of contract.verification.entries()) {
+      if (!item.observation) {
+        throw new Error("invalid", `Verification step ${index + 1} needs an expected observation`)
+      }
+    }
     if (contract.nonGoals.length < 1) {
       throw new Error("invalid", "Non-goals must contain at least one item")
     }

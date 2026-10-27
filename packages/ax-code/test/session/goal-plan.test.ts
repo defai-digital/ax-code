@@ -58,6 +58,20 @@ describe("GoalPlan parser", () => {
     expect(GoalPlan.digestOf(parsed)).toBe(GoalPlan.digestOf(contract))
   })
 
+  test("rejects a verification step whose observation is blank", () => {
+    expect(() =>
+      GoalPlan.fromFields({
+        kind: "code-change",
+        acceptance: [{ text: "the feature works" }],
+        verification: [{ tag: "gating", action: "run tests", observation: "   " }],
+        nonGoals: ["unrelated changes"],
+        assumedScope: "src",
+        implementationApproach: "keep the change small",
+        taskChecklist: ["implement", "verify"],
+      }),
+    ).toThrow(/observation/i)
+  })
+
   test("round-trips free-text fields that begin with a markdown header marker", () => {
     const contract = GoalPlan.fromFields({
       kind: "code-change",
