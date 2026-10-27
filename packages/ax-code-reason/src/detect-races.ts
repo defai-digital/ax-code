@@ -458,6 +458,8 @@ export async function detectRacesImpl(input: DetectRacesInput): Promise<DebugEng
   if (excludeTests) heuristics.push("exclude-tests")
 
   const cwd = codeReasonHost().projectRoot()
+  const signal = input.signal ?? codeReasonHost().abort()
+  signal.throwIfAborted()
 
   const fileBatch = await collectScannerFileBatch(input, { cwd, include, excludeTests, maxFiles })
   heuristics.push(...scannerFileBatchHeuristics(fileBatch))
@@ -466,6 +468,7 @@ export async function detectRacesImpl(input: DetectRacesInput): Promise<DebugEng
     scanFile(file, enabledPatterns, maxPerFile, content),
   )
   if (usedNativeBatchRead) heuristics.push("native-batch-read")
+  signal.throwIfAborted()
 
   sortScannerFindings(findings)
 
