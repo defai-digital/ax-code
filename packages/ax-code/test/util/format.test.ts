@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { formatDuration, truncate } from "../../src/util/format"
+import { formatDuration, sliceCodeUnits, truncate } from "../../src/util/format"
 
 describe("util.format", () => {
   describe("truncate", () => {
@@ -74,5 +74,15 @@ describe("util.format", () => {
       expect(formatDuration(604799)).toBe("~6 days")
       expect(formatDuration(604800)).toBe("~1 week")
     })
+  })
+})
+
+describe("sliceCodeUnits", () => {
+  test("never ends on half of a surrogate pair", () => {
+    const text = "x".repeat(3) + "😀" + "tail"
+    expect(sliceCodeUnits(text, 4)).toBe("xxx")
+    expect(sliceCodeUnits(text, 5)).toBe("xxx😀")
+    expect(sliceCodeUnits(text, 0)).toBe("")
+    expect(truncate("y".repeat(5) + "😀zzzz", 9)).toBe("yyyyy...")
   })
 })

@@ -4,8 +4,17 @@
 // make the result longer than `max`.
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s
-  if (max <= 3) return s.slice(0, Math.max(0, max))
-  return s.slice(0, max - 3) + "..."
+  if (max <= 3) return sliceCodeUnits(s, Math.max(0, max))
+  return sliceCodeUnits(s, max - 3) + "..."
+}
+
+// The first `end` UTF-16 code units of `s`, one fewer when `end` would split
+// a surrogate pair and leave a lone high surrogate (shown as U+FFFD).
+export function sliceCodeUnits(s: string, end: number): string {
+  if (end <= 0) return ""
+  if (end >= s.length) return s
+  const last = s.charCodeAt(end - 1)
+  return s.slice(0, last >= 0xd800 && last <= 0xdbff ? end - 1 : end)
 }
 
 export function formatDuration(secs: number) {

@@ -32,6 +32,7 @@ import { Instance } from "../project/instance"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { Worktree } from "../worktree"
 import { git } from "../util/git"
+import { sliceCodeUnits } from "../util/format"
 
 /**
  * Members a single swarm call may carry. Raised from 8 once the batch deadline
@@ -201,7 +202,7 @@ function swarmMemberDescription(item: string) {
       .split("\n")
       .find((line) => line.trim().length > 0)
       ?.trim() ?? item.trim()
-  const bounded = firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine
+  const bounded = firstLine.length > 60 ? `${sliceCodeUnits(firstLine, 57)}...` : firstLine
   return bounded.length > 0 ? bounded : "swarm member"
 }
 
@@ -922,7 +923,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
         // text stays in the member's own session, reachable by task_id.
         const truncated = full.length > MEMBER_TEXT_INLINE_LIMIT
         const body = truncated
-          ? `${full.slice(0, MEMBER_TEXT_INLINE_LIMIT)}\n\n[truncated at ${MEMBER_TEXT_INLINE_LIMIT} characters; the member session ${result.task_id} holds the full text]`
+          ? `${sliceCodeUnits(full, MEMBER_TEXT_INLINE_LIMIT)}\n\n[truncated at ${MEMBER_TEXT_INLINE_LIMIT} characters; the member session ${result.task_id} holds the full text]`
           : full
         const worktree = worktreeReports[index]
         return [
