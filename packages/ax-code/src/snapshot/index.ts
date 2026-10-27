@@ -1440,7 +1440,9 @@ export namespace Snapshot {
     }
     if (baselines.size === 0) return []
 
-    const currentHash = await track()
+    // Like revert, preview needs a fresh tree: a fail-open stale baseline would
+    // diff against itself and claim the undo changes nothing.
+    const currentHash = await track({ requireFresh: true })
     if (!currentHash) return []
     const filesByHash = new Map<string, Set<string>>()
     for (const item of baselines.values()) {

@@ -107,6 +107,29 @@ test("previewRevert diffs only the requested files", async () => {
   })
 })
 
+test("previewRevert fails instead of previewing nothing when staging the current tree fails", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "a.txt")
+      await fs.writeFile(file, "v1\n")
+      const baseline = await Snapshot.track()
+      expect(baseline).toBeDefined()
+      await fs.writeFile(file, "v2\n")
+      const git = Git.git
+      vi.spyOn(Git, "git").mockImplementation((args, options) =>
+        args.includes("add")
+          ? git(["rev-parse", "--verify", "refs/heads/does-not-exist"], options)
+          : git(args, options),
+      )
+      await expect(Snapshot.previewRevert([{ hash: baseline!, files: [file] }])).rejects.toThrow(
+        "Snapshot staging failed",
+      )
+    },
+  })
+})
+
 test.each(["ls-tree", "cat-file"])(
   "diffFull rejects failed %s content reads instead of returning empty contents",
   async (command) => {
