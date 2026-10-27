@@ -962,14 +962,17 @@ export namespace ACP {
         .trim()
       const cmd = parseSlashCommand(textContent)
       const runPrompt = async () => {
-        const response = await this.sdk.session.prompt({
-          sessionID,
-          model: { providerID: model.providerID, modelID: model.modelID },
-          variant: this.sessionManager.getVariant(sessionID),
-          parts,
-          agent,
-          directory,
-        })
+        const response = await this.sdk.session.prompt(
+          {
+            sessionID,
+            model: { providerID: model.providerID, modelID: model.modelID },
+            variant: this.sessionManager.getVariant(sessionID),
+            parts,
+            agent,
+            directory,
+          },
+          { throwOnError: true },
+        )
         const msg = response.data?.info
         await sendUsageUpdate(this.connection, this.sdk, sessionID, directory)
         return { stopReason: "end_turn" as const, usage: msg ? buildUsage(msg) : undefined, _meta: {} }
@@ -979,17 +982,20 @@ export namespace ACP {
       if (!commandResp.data) throw new Error(`ACP command.list: empty response for ${directory}`)
       const command = commandResp.data.find((c) => c.name === cmd.name)
       if (command) {
-        const response = await this.sdk.session.command({
-          sessionID,
-          command: command.name,
-          arguments: cmd.args,
-          model: providerModelKey(model),
-          // Same variant as the direct prompt path, so a slash command does not
-          // silently run on the model's default variant.
-          variant: this.sessionManager.getVariant(sessionID),
-          agent,
-          directory,
-        })
+        const response = await this.sdk.session.command(
+          {
+            sessionID,
+            command: command.name,
+            arguments: cmd.args,
+            model: providerModelKey(model),
+            // Same variant as the direct prompt path, so a slash command does not
+            // silently run on the model's default variant.
+            variant: this.sessionManager.getVariant(sessionID),
+            agent,
+            directory,
+          },
+          { throwOnError: true },
+        )
         const msg = response.data?.info
         await sendUsageUpdate(this.connection, this.sdk, sessionID, directory)
         return { stopReason: "end_turn" as const, usage: msg ? buildUsage(msg) : undefined, _meta: {} }

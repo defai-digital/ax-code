@@ -4,7 +4,8 @@ import type { AgentSideConnection } from "@agentclientprotocol/sdk"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
-function createPromptAgent() {
+function createPromptAgent(options?: { failOnThrowOnError?: boolean }) {
+  const failOnThrowOnError = options?.failOnThrowOnError ?? false
   const promptCalls: any[] = []
   const commandCalls: any[] = []
   const connectionAbort = new AbortController()
@@ -37,8 +38,14 @@ function createPromptAgent() {
           time: { created: new Date().toISOString() },
         },
       }),
-      prompt: async (params: any) => {
+      prompt: async (params: any, request?: any) => {
         promptCalls.push(params)
+        if (failOnThrowOnError) {
+          // hey-api v2 only rejects when the caller opts in via throwOnError;
+          // otherwise a non-2xx response resolves with no data.
+          if (request?.throwOnError) throw new Error("session.prompt failed: 500 Internal Server Error")
+          return { data: undefined, error: { message: "Internal Server Error" } }
+        }
         return {
           data: {
             info: {
@@ -51,8 +58,12 @@ function createPromptAgent() {
         }
       },
       messages: async () => ({ data: [] }),
-      command: async (params: any) => {
+      command: async (params: any, request?: any) => {
         commandCalls.push(params)
+        if (failOnThrowOnError) {
+          if (request?.throwOnError) throw new Error("session.command failed: 500 Internal Server Error")
+          return { data: undefined, error: { message: "Internal Server Error" } }
+        }
         return { data: { info: { role: "assistant", tokens: { input: 0, output: 0, reasoning: 0 } } } }
       },
     },
@@ -165,6 +176,51 @@ describe("ACP agent prompt", () => {
 
           expect(commandCalls).toHaveLength(1)
           expect(commandCalls[0]).toMatchObject({ command: "review", variant: "high" })
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("a failed session.prompt rejects instead of reporting end_turn", async () => {
+    // `config.username` keeps this hermetic where os.userInfo() is unavailable.
+    await using tmp = await tmpdir({ config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, promptCalls, stop } = createPromptAgent({ failOnThrowOnError: true })
+
+        try {
+          const { sessionId } = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any)
+
+          await expect(agent.prompt({ sessionId, prompt: [{ type: "text", text: "hello" }] } as any)).rejects.toThrow(
+            /session\.prompt failed/,
+          )
+          expect(promptCalls).toHaveLength(1)
+        } finally {
+          stop()
+        }
+      },
+    })
+  })
+
+  test("a failed session.command rejects instead of reporting end_turn", async () => {
+    await using tmp = await tmpdir({ config: { username: "test" } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, commandCalls, stop } = createPromptAgent({ failOnThrowOnError: true })
+
+        try {
+          const { sessionId } = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any)
+
+          await expect(
+            agent.prompt({ sessionId, prompt: [{ type: "text", text: "/review src" }] } as any),
+          ).rejects.toThrow(/session\.command failed/)
+          expect(commandCalls).toHaveLength(1)
         } finally {
           stop()
         }
