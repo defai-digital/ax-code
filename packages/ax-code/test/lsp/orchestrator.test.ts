@@ -142,6 +142,17 @@ describe("LSP broken server backoff", () => {
     expect(broken.has("root-124:typescript")).toBe(true)
   })
 
+  test("markBroken keeps a re-failing server when the cache is full", () => {
+    const broken = new Map<string, BrokenEntry>()
+    markBroken(broken, "root-a:typescript")
+    for (let i = 0; i < 99; i++) markBroken(broken, `root-${i}:typescript`)
+    markBroken(broken, "root-a:typescript")
+    markBroken(broken, "root-new:typescript")
+
+    expect(broken.size).toBeLessThanOrEqual(100)
+    expect(broken.get("root-a:typescript")?.failures).toBe(2)
+  })
+
   // The failure that lands right after a max-length (60 min) cooldown must
   // compound the previous failures, not restart from 1. Retention measured
   // from the START of the cooldown expires the entry at exactly that moment

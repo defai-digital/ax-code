@@ -57,6 +57,10 @@ export function markBroken(broken: Map<string, BrokenEntry>, key: string) {
   const existing = broken.get(key)
   const failures = (existing?.failures ?? 0) + 1
   const backoffMs = computeBackoff(failures)
+  // Move the key to the end: eviction drops the first-inserted key, and a
+  // server that keeps failing was usually inserted first, so without this the
+  // entry with the longest backoff was evicted and its count reset to 1.
+  broken.delete(key)
   broken.set(key, {
     failures,
     nextAttempt: now + backoffMs,
