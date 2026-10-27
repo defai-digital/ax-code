@@ -716,6 +716,25 @@ describe("builder.indexFile hash-skip fast path", () => {
 })
 
 describe("builder.indexFiles batch behavior", () => {
+  test("a completed batch gives the graph a revision", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        expect(CodeIntelligence.status(projectID).revision).toBeNull()
+
+        const a = path.join(tmp.path, "a.ts")
+        await writeFile(a, "export function foo() {\n  return 1\n}\n")
+        await CodeGraphBuilder.indexFiles(projectID, [a], { lock: "none" })
+        expect(CodeIntelligence.status(projectID).revision).toEqual(expect.any(String))
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
   test("reindexing one file keeps the edges other files own into it", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

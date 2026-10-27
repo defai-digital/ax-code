@@ -523,15 +523,17 @@ export namespace CodeIntelligence {
   // the live counts catch incremental updates the cursor summary missed.
   // Any of the four inputs changing ⇒ new hash ⇒ stale-by-definition for
   // incremental consumers. Null inputs collapse to the documented "no
-  // cursor" signature.
+  // cursor" signature. The builder records no commit sha (it writes null),
+  // so only a missing cursor — no `time_updated` — means "no revision";
+  // requiring a sha made every revision null and disabled its consumers.
   function computeGraphRevision(
     commitSha: string | null,
     timeUpdated: number | null,
     nodeCount: number,
     edgeCount: number,
   ): string | null {
-    if (commitSha === null || timeUpdated === null) return null
-    return Hash.fast(`${commitSha}|${timeUpdated}|${nodeCount}|${edgeCount}`)
+    if (timeUpdated === null) return null
+    return Hash.fast(`${commitSha ?? ""}|${timeUpdated}|${nodeCount}|${edgeCount}`)
   }
 
   // Test helper. Production code should not need this — the graph is
