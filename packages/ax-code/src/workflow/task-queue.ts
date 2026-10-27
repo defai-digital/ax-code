@@ -102,6 +102,9 @@ export namespace WorkflowTaskQueue {
     // The phase write (when it happened) is the only mutation since `afterMerge`
     // was read; a no-op sync keeps using `afterMerge` instead of rebuilding it.
     const latest = phaseChanged ? await WorkflowRun.getDetail(payload.workflow.runID) : afterMerge
+    // A cancel can land during the awaits above; it stays authoritative, as at
+    // the top of this sync.
+    if (latest.status === "cancelled") return latest
     const runStatus = aggregateRunStatus(latest.phases)
     // Same deliberate-stop rule at the run level: a budget-failed run stays
     // failed even when the aggregate would call it running or completed again.

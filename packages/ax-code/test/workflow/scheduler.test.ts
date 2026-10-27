@@ -1541,6 +1541,64 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("keeps a run cancelled when the cancel lands while a child completion is syncing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "cancel-mid-sync",
+            name: "Cancel Mid Sync",
+            description: "A cancel landing mid-sync stays authoritative.",
+            budget: { maxConcurrentAgents: 2, maxTotalAgents: 3 },
+            phases: [
+              {
+                id: "work",
+                name: "Work",
+                kind: "fanout",
+                inputs: ["a", "b"],
+                maxParallel: 2,
+                mergeStrategy: "first-success",
+              },
+              { id: "summarize", name: "Summarize", kind: "synthesis", dependsOn: ["work"] },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          await WorkflowScheduler.start(run.id, { autoStartChildren: false })
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const detail = await WorkflowRun.getDetail(run.id)
+          const first = detail.children.find((child) => child.phaseID === detail.phases[0]!.id)!
+          const setChildStatus = WorkflowRun.setChildStatus
+          let cancelled = false
+          vi.spyOn(WorkflowRun, "setChildStatus").mockImplementation(async (input) => {
+            const result = await setChildStatus(input)
+            // The user's cancel lands right after the completed child is written.
+            if (!cancelled && input.status === "completed") {
+              cancelled = true
+              await WorkflowScheduler.cancel(run.id)
+            }
+            return result
+          })
+          try {
+            await TaskQueue.setStatus({ id: first.taskQueueID!, status: "completed" })
+          } finally {
+            vi.restoreAllMocks()
+          }
+
+          expect(cancelled).toBe(true)
+          expect((await WorkflowRun.get(run.id)).status).toBe("cancelled")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("retries failed workflow queue children", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
