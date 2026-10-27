@@ -269,6 +269,29 @@ describe("control-plane/session-proxy-middleware", () => {
     ])
   })
 
+  test("strips current x-ax-code routing and auth headers before forwarding", async () => {
+    const state: State = {
+      workspace: "first",
+      calls: [],
+      headers: [],
+    }
+
+    const ctx = await setup(state)
+
+    await ctx.request("http://workspace.test/session/foo", {
+      method: "POST",
+      body: "payload",
+      headers: {
+        "x-ax-code-directory": "/attacker-chosen-dir",
+        "x-ax-code-workspace": "wrk_attacker",
+        "x-ax-code-runtime-token": "local-runtime-token",
+        "content-type": "text/plain",
+      },
+    })
+
+    expect(state.headers).toEqual([{ "content-type": "text/plain" }])
+  })
+
   test("strips proxy identity headers and caps forwarded header volume", async () => {
     const state: State = {
       workspace: "first",

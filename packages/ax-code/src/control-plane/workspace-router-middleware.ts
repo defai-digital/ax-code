@@ -45,7 +45,9 @@ function sanitizeForwardedHeaders(input: Headers): Headers {
   for (const [name, value] of input.entries()) {
     const lower = name.toLowerCase()
     if (BLOCKED_FORWARDED_HEADERS.has(lower)) continue
-    if (lower.startsWith("x-opencode-")) continue
+    // Directory, workspace and runtime-token headers are local routing and
+    // auth state under either spelling; the remote must not trust a caller's.
+    if (lower.startsWith("x-opencode-") || lower.startsWith("x-ax-code-")) continue
     const bytes = textEncoder.encode(name).byteLength + textEncoder.encode(value).byteLength
     if (bytes > MAX_FORWARDED_HEADER_BYTES) continue
     if (count >= MAX_FORWARDED_HEADERS) continue
