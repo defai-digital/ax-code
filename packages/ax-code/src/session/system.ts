@@ -453,8 +453,11 @@ export namespace SystemPrompt {
 
   export function extractFilePaths(messages: MessageV2.WithParts[]): string[] {
     const worktree = Instance.worktree
+    const directory = Instance.directory
     const result = new Set<string>()
-    const addRelativePath = (filePath: string) => result.add(path.relative(worktree, filePath))
+    // Tool inputs are raw model args: a relative path is relative to the
+    // session directory (as the tools resolve it), not to process.cwd().
+    const addRelativePath = (filePath: string) => result.add(path.relative(worktree, path.resolve(directory, filePath)))
 
     for (const msg of messages) {
       for (const part of msg.parts) {

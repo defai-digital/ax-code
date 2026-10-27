@@ -350,6 +350,40 @@ describe("session.system", () => {
     })
   })
 
+  test("extractFilePaths resolves relative tool paths against the session directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const directory = path.join(tmp.path, "packages", "app")
+    await mkdir(directory, { recursive: true })
+
+    await Instance.provide({
+      directory,
+      fn: async () => {
+        const messages = [
+          {
+            info: { id: "m1", sessionID: "s1", role: "assistant" as const },
+            parts: [
+              {
+                type: "tool" as const,
+                callID: "c1",
+                tool: "read",
+                state: {
+                  status: "completed" as const,
+                  input: { filePath: "src/index.ts" },
+                  output: "file content",
+                  title: "Read file",
+                  metadata: {},
+                  time: { start: 1, end: 2 },
+                },
+              },
+            ],
+          },
+        ] as any
+
+        expect(SystemPrompt.extractFilePaths(messages)).toEqual([path.join("packages", "app", "src", "index.ts")])
+      },
+    })
+  })
+
   test("environment includes autonomous PRD/ADR workflow when enabled", async () => {
     await using tmp = await tmpdir({ git: true })
     const original = process.env.AX_CODE_AUTONOMOUS
