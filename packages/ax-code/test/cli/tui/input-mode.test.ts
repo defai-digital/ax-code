@@ -104,6 +104,31 @@ describe("installResizeInputGuard", () => {
     expect(stdout.size("resize")).toBe(0)
   })
 
+  test("a trailing restore queued before cleanup does not run after it", () => {
+    const proc = createEmitter() as ReturnType<typeof createEmitter> & { platform: string }
+    proc.platform = "darwin"
+    const stdout = Object.assign(createEmitter(), { isTTY: true })
+    const scheduled: Array<() => void> = []
+    let restoreCalls = 0
+    const cleanup = installResizeInputGuard({
+      stdin: { isTTY: true },
+      stdout,
+      process: proc,
+      restore: () => {
+        restoreCalls++
+      },
+      schedule: (listener) => {
+        scheduled.push(listener)
+      },
+    })
+
+    proc.emit("SIGWINCH")
+    expect(restoreCalls).toBe(1)
+    cleanup()
+    scheduled.shift()?.()
+    expect(restoreCalls).toBe(1)
+  })
+
   test("uses stdout resize without SIGWINCH on Windows", () => {
     const proc = createEmitter() as ReturnType<typeof createEmitter> & { platform: string }
     proc.platform = "win32"

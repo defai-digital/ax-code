@@ -92,12 +92,17 @@ export function installResizeInputGuard(
   // schedule()'d restore catches the post-drag final dimensions. Any
   // additional events while a restore is already pending are dropped.
   let pendingRestore = false
+  // The trailing restore can still be queued when cleanup runs during
+  // teardown; firing it then would put the tty back into raw mode after
+  // terminal cleanup turned raw mode off.
+  let disposed = false
   const handleResize = () => {
     if (pendingRestore) return
     pendingRestore = true
     restore()
     schedule(() => {
       pendingRestore = false
+      if (disposed) return
       restore()
     })
   }
@@ -106,6 +111,7 @@ export function installResizeInputGuard(
   if (stdout.isTTY) stdout.on?.("resize", handleResize)
 
   return () => {
+    disposed = true
     if (proc.platform !== "win32") proc.off("SIGWINCH", handleResize)
     if (stdout.isTTY) stdout.off?.("resize", handleResize)
   }
