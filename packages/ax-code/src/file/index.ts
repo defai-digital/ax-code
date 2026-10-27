@@ -356,12 +356,61 @@ export namespace File {
     })
   }
 
+  // `rev-parse` answers relative to the checkout (`.git/info/exclude`), so the
+  // result is resolved against the caller's root before it is read.
+  async function gitPath(root: string, args: string[]) {
+    const result = await git(args, { cwd: root })
+    if (result.exitCode !== 0) return undefined
+    const value = result.text().trim()
+    return value ? path.resolve(root, value) : undefined
+  }
+
+  // Git also reads two exclude sources that no directory walk finds:
+  // `$GIT_DIR/info/exclude` and the user's `core.excludesFile`. Both anchor at
+  // the checkout root and rank below every .gitignore, so they form one
+  // lowest-precedence context ahead of the per-directory chain (`ignore` keeps
+  // the last matching rule, so the user file is added before info/exclude). A
+  // linked worktree keeps info/exclude in the common dir, which is why the path
+  // comes from git rather than from the checkout itself. `core.excludesFile` is
+  // one file shared by every checkout, so the lookup is cached per instance,
+  // and a missing git binary or unreadable file simply contributes no patterns.
+  const repoIgnoreContext = Instance.state(async (): Promise<IgnoreContext | undefined> => {
+    const root = Instance.worktree
+    if (Instance.project.vcs !== "git" || root === "/") return undefined
+    const patterns: string[] = []
+    const add = async (file: string | undefined) => {
+      if (!file) return
+      const text = await readIgnoreFile(file).catch((error) => {
+        log.debug("skipping unreadable exclude file", { file, error })
+        return undefined
+      })
+      if (text?.trim()) patterns.push(text)
+    }
+    await add(await gitPath(root, ["config", "--path", "--get", "core.excludesFile"]))
+    const excludes = new Set<string>()
+    const infoExclude = await gitPath(root, ["rev-parse", "--git-path", "info/exclude"])
+    if (infoExclude) excludes.add(infoExclude)
+    // A linked worktree resolves `info/exclude` through the common dir; keep that
+    // as a second candidate so a checkout-relative answer cannot hide the shared
+    // file.
+    const commonDir = await gitPath(root, ["rev-parse", "--git-common-dir"])
+    if (commonDir) excludes.add(path.join(commonDir, "info", "exclude"))
+    for (const file of excludes) await add(file)
+    if (!patterns.length) return undefined
+    return { base: root, matcher: ignore().add(patterns) }
+  })
+
   async function ignoreContextsFor(directory: string) {
     if (Instance.project.vcs !== "git") return [] as IgnoreContext[]
+    // The chain is anchored at the current checkout, not at the project's main
+    // worktree: inside a linked worktree every path used to look "outside", so
+    // only the listed directory's own ignore files were read.
+    const root = Instance.worktree
+    const relativeFromWorktree = root === "/" ? ".." : path.relative(root, directory)
+    const insideCheckout = !Filesystem.isOutsideRelative(relativeFromWorktree)
     const bases: string[] = []
-    const relativeFromWorktree = path.relative(Instance.project.worktree, directory)
-    if (!Filesystem.isOutsideRelative(relativeFromWorktree)) {
-      let current = Instance.project.worktree
+    if (insideCheckout) {
+      let current = root
       bases.push(current)
       for (const segment of relativeFromWorktree.split(path.sep).filter(Boolean)) {
         current = path.join(current, segment)
@@ -371,7 +420,8 @@ export namespace File {
       bases.push(directory)
     }
     const contexts = await Promise.all(bases.map(readIgnoreContext))
-    return contexts.filter((context): context is IgnoreContext => context !== undefined)
+    const repo = insideCheckout ? await repoIgnoreContext() : undefined
+    return [repo, ...contexts].filter((context): context is IgnoreContext => context !== undefined)
   }
 
   // Contexts run from the work-tree root to the deepest directory. Like git, a
