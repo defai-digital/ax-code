@@ -30,6 +30,11 @@ export namespace Telemetry {
     return !!endpoint()
   }
 
+  /** Whether init() set up an exporter. enabled() only means an endpoint is configured. */
+  export function ready(): boolean {
+    return initialized
+  }
+
   export async function init() {
     if (initialized || !enabled()) return
     if (initPromise) return initPromise

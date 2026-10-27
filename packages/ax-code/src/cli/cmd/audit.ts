@@ -191,6 +191,15 @@ const AuditOtlpCommand = cmd({
         process.stderr.write(`Set AX_CODE_OTLP_ENDPOINT to enable OTLP export${EOL}`)
         process.exit(1)
       }
+      // init() logs and swallows a rejected endpoint (private address, bad
+      // URL), after which exportSession() silently sends nothing.
+      await Telemetry.init()
+      if (!Telemetry.ready()) {
+        process.stderr.write(
+          `OTLP export could not start for ${Telemetry.endpoint()}; see the log for the reason${EOL}`,
+        )
+        process.exit(1)
+      }
       const sid = SessionID.make(args.sessionID)
       const count = EventQuery.count(sid)
       if (count === 0) {

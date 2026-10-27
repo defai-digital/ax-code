@@ -126,6 +126,9 @@ test("Telemetry.init rejects private OTLP endpoints before exporter setup", asyn
   await Telemetry.init()
 
   expect(registers).toBe(0)
+  // enabled() only reports a configured endpoint; ready() reports the exporter.
+  expect(Telemetry.enabled()).toBe(true)
+  expect(Telemetry.ready()).toBe(false)
 })
 
 test("Telemetry.exportSession uses recorded event timestamps, not export-time `now`", async () => {
