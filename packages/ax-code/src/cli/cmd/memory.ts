@@ -1,7 +1,7 @@
 import { cmd } from "./cmd"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
-import { generate } from "../../memory/generator"
+import { generate, saveGenerated } from "../../memory/generator"
 import * as store from "../../memory/store"
 import { getMetadata } from "../../memory/injector"
 import { recordEntry, removeEntry, listEntries } from "../../memory/recorder"
@@ -125,9 +125,9 @@ export const MemoryWarmupCommand = cmd({
       return
     }
 
-    const savePath = await store.save(process.cwd(), memory)
-    prompts.log.success(`Saved to ${savePath}`)
-    prompts.outro(`Memory cached: ${memory.totalTokens} tokens`)
+    const saved = await saveGenerated(process.cwd(), memory)
+    prompts.log.success(`Saved to ${saved.savePath}`)
+    prompts.outro(`Memory cached: ${saved.memory.totalTokens} tokens`)
   },
 })
 

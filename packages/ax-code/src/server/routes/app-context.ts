@@ -6,7 +6,7 @@ import { Filesystem } from "@/util/filesystem"
 import { InstructionPrompt } from "@/session/instruction"
 import * as MemoryStore from "@/memory/store"
 import { getMetadata as getMemoryMetadata } from "@/memory/injector"
-import { generate as generateMemory } from "@/memory/generator"
+import { generate as generateMemory, saveGenerated } from "@/memory/generator"
 import { Instance } from "@/project/instance"
 import { lazy } from "@/util/lazy"
 import { contextChecks } from "./app-context-checks"
@@ -144,14 +144,16 @@ export const AppContextRoutes = lazy(() =>
           maxTokens: 4000,
           depth: 3,
         })
-        await MemoryStore.save(root, memory)
+        // Merge under the memory write lock: a `memory remember` that lands
+        // during the scan must survive the refresh.
+        const saved = await saveGenerated(root, memory)
         return c.json({
           exists: true,
-          totalTokens: memory.totalTokens,
-          lastUpdated: memory.updated,
-          contentHash: memory.contentHash,
-          sections: Object.keys(memory.sections).filter((key) => {
-            const section = memory.sections[key as keyof typeof memory.sections]
+          totalTokens: saved.memory.totalTokens,
+          lastUpdated: saved.memory.updated,
+          contentHash: saved.memory.contentHash,
+          sections: Object.keys(saved.memory.sections).filter((key) => {
+            const section = saved.memory.sections[key as keyof typeof saved.memory.sections]
             return !!section && section.tokens > 0
           }),
         })

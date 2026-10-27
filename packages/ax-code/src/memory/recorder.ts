@@ -15,8 +15,7 @@ import * as store from "./store"
 import { generate } from "./generator"
 import { computeContentHash, renderEntry } from "./hash"
 import type { EntrySection, MemoryEntry, MemoryEntryKind, ProjectMemory } from "./types"
-import { FileLock } from "../util/filelock"
-import { Lock } from "../util/lock"
+import { withMemoryWriteLock } from "./write-lock"
 import { uniqueStrings } from "../util/string-list"
 import { TokenEstimate } from "../provider/token-estimate"
 import { scanMemoryEntry } from "./threat-patterns"
@@ -137,12 +136,6 @@ function nameKey(value: string) {
 
 function memoryPath(projectRoot: string, isGlobal: boolean) {
   return isGlobal ? store.getGlobalMemoryPath() : store.getMemoryPath(projectRoot)
-}
-
-async function withMemoryWriteLock<T>(path: string, fn: () => Promise<T>): Promise<T> {
-  using _process = await Lock.write(path)
-  using _crossProcess = await FileLock.acquire(path)
-  return await fn()
 }
 
 /**

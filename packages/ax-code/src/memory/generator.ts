@@ -8,6 +8,7 @@ import path from "path"
 import type { ProjectMemory, MemorySection, WarmupOptions } from "./types"
 import * as store from "./store"
 import { computeContentHash } from "./hash"
+import { withMemoryWriteLock } from "./write-lock"
 import {
   decodePackageJsonObject,
   packageJsonObjectKeys,
@@ -264,6 +265,10 @@ async function scanPatterns(root: string): Promise<MemorySection> {
  * Recorded entries (userPrefs, feedback, decisions, reference) on disk are preserved —
  * `generate()` only refreshes scanned sections. This lets the warmup CLI run
  * on a schedule without wiping user-curated memories.
+ *
+ * The snapshot is taken before the scan, so persisting the result must go
+ * through `saveGenerated()`: a plain save would drop entries recorded while
+ * the scan ran.
  */
 export async function generate(root: string, options?: WarmupOptions): Promise<ProjectMemory> {
   const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS
@@ -337,4 +342,68 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
   // Canonical hash via shared helper so warmup and recorder paths agree.
   draft.contentHash = computeContentHash(draft)
   return draft
+}
+
+/** Sections that are user-curated rather than produced by the scan. */
+const ENTRY_SECTION_KEYS = ["userPrefs", "feedback", "decisions", "reference"] as const
+
+/**
+ * Keep the on-disk entry sections, take the scanned sections from the draft.
+ *
+ * A key absent on disk is deleted rather than copied from the draft: an entry
+ * removed (or curated away) during the scan must not be resurrected by the
+ * stale draft that still held it.
+ */
+function mergeEntrySections(
+  draft: ProjectMemory["sections"],
+  current: ProjectMemory["sections"] | undefined,
+): ProjectMemory["sections"] {
+  const merged: ProjectMemory["sections"] = { ...draft }
+  for (const key of ENTRY_SECTION_KEYS) {
+    const latest = current?.[key]
+    if (latest) merged[key] = latest
+    else delete merged[key]
+  }
+  return merged
+}
+
+export interface SavedGeneratedMemory {
+  /** The memory as persisted, after merging concurrent entries. */
+  memory: ProjectMemory
+  savePath: string
+}
+
+/**
+ * Persist a `generate()` draft without losing concurrently recorded entries.
+ *
+ * `generate()` snapshots memory.json before its multi-step scan, so saving the
+ * draft directly let a `recordEntry`/`removeEntry` that landed during the scan
+ * be overwritten (warmup or the app-context refresh dropping a fresh
+ * `memory remember`). The slow scan stays outside the lock; here we take the
+ * same per-file write lock `recordEntry` uses, re-read the file, keep its
+ * current entry sections, and write the draft's fresh scan sections.
+ *
+ * Corrupt-JSON errors propagate, matching `generate()`: an unreadable file may
+ * still hold recoverable entries and must not be replaced.
+ */
+export async function saveGenerated(root: string, draft: ProjectMemory): Promise<SavedGeneratedMemory> {
+  return withMemoryWriteLock(store.getMemoryPath(root), async () => {
+    const current = await store.load(root)
+    const sections = mergeEntrySections(draft.sections, current?.sections)
+    const memory: ProjectMemory = {
+      ...draft,
+      version: current?.version ?? draft.version,
+      created: current?.created ?? draft.created,
+      updated: new Date().toISOString(),
+      sections,
+      // Entry sections may have grown after the draft budgeted for them, so
+      // the total can exceed `maxTokens` — same as recording an entry after a
+      // warmup. The scanned sections can no longer be shrunk to compensate.
+      totalTokens: Object.values(sections).reduce((sum, section) => sum + (section?.tokens ?? 0), 0),
+      contentHash: "",
+    }
+    memory.contentHash = computeContentHash(memory)
+    const savePath = await store.save(root, memory)
+    return { memory, savePath }
+  })
 }
