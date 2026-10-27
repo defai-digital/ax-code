@@ -469,7 +469,9 @@ export namespace Risk {
             ...patchText.matchAll(/^[+-]{3}\s+[ab]\/(.+)$/gm),
           ]
           for (const item of list) {
-            const f = item[1]?.replace(/^[ab]\//, "")
+            // The unified-diff pattern already consumed the a/ or b/ prefix;
+            // stripping again would drop a real top-level a/ or b/ directory.
+            const f = item[1]
             if (f && f !== "/dev/null") files.add(f)
           }
           if (!diff) {
@@ -567,12 +569,12 @@ export namespace Risk {
     if (input.exit !== undefined && input.exit !== 0) return true
     if (!testCommand(input.command)) return false
     const txt = input.output.toLowerCase()
+    // A nonzero failure count wins over a zero one: jest prints
+    // "Tests: 2 failed" next to "Snapshots: 0 failed".
+    if (/\b[1-9]\d*\s+fail(?:ed|ures?)?\b/.test(txt) || /\btest suites:\s*[1-9]\d*\s+failed\b/i.test(input.output))
+      return true
     if (/\b0\s+fail(?:ed|ures?)?\b/.test(txt) || /\b0\s+errors?\b/.test(txt)) return false
-    return (
-      /\b[1-9]\d*\s+fail(?:ed|ures?)?\b/.test(txt) ||
-      /\btest suites:\s*[1-9]\d*\s+failed\b/i.test(input.output) ||
-      /\bFAIL\b/.test(input.output)
-    )
+    return /\bFAIL\b/.test(input.output)
   }
 
   export function top(assessment: Assessment, limit = 3) {

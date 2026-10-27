@@ -980,6 +980,114 @@ describe("session.risk", () => {
     })
   })
 
+  test("a nonzero test failure count is not masked by a zero count elsewhere", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        try {
+          Recorder.begin(sid)
+          Recorder.emit({
+            type: "session.start",
+            sessionID: sid,
+            agent: "build",
+            model: "test/model",
+            directory: tmp.path,
+          })
+          Recorder.emit({
+            type: "tool.call",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call_jest",
+            input: { command: "pnpm exec jest src | tee out.log" },
+          } as any)
+          // The pipeline masks jest's exit code; its summary reports failed
+          // tests next to "Snapshots: 0 failed".
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "bash",
+            callID: "call_jest",
+            status: "completed",
+            output: "Tests:       2 failed, 3 passed, 5 total\nSnapshots:   0 failed, 2 passed, 2 total\n",
+            metadata: { exit: 0 },
+            durationMs: 100,
+          } as any)
+          Recorder.emit({ type: "session.end", sessionID: sid, reason: "completed", totalSteps: 2 })
+          Recorder.end(sid)
+
+          await new Promise((resolve) => setTimeout(resolve, 50))
+
+          const assessment = Risk.fromSession(sid)
+          expect(assessment.readiness).toBe("blocked")
+          expect(assessment.summary).toContain("validation failed")
+        } finally {
+          await Session.remove(sid)
+        }
+      },
+    })
+  })
+
+  test("patch file paths keep a real top-level a/ or b/ directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        try {
+          Recorder.begin(sid)
+          Recorder.emit({
+            type: "session.start",
+            sessionID: sid,
+            agent: "build",
+            model: "test/model",
+            directory: tmp.path,
+          })
+          for (const [callID, tool, input] of [
+            [
+              "call_apply",
+              "apply_patch",
+              { patchText: "*** Begin Patch\n*** Update File: a/src/x.ts\n@@\n-old\n+new\n*** End Patch\n" },
+            ],
+            [
+              "call_refactor",
+              "refactor_apply",
+              { planId: "plan-1", patch: "--- a/src/x.ts\n+++ b/src/x.ts\n@@\n-old\n+new\n" },
+            ],
+          ] as const) {
+            Recorder.emit({ type: "tool.call", sessionID: sid, tool, callID, input } as any)
+            Recorder.emit({
+              type: "tool.result",
+              sessionID: sid,
+              tool,
+              callID,
+              status: "completed",
+              output: "applied",
+              metadata: {},
+              durationMs: 1,
+            } as any)
+          }
+          Recorder.emit({ type: "session.end", sessionID: sid, reason: "completed", totalSteps: 2 })
+          Recorder.end(sid)
+
+          await new Promise((resolve) => setTimeout(resolve, 50))
+
+          // a/src/x.ts and src/x.ts are different files.
+          expect(Risk.fromSession(sid).signals.filesChanged).toBe(2)
+        } finally {
+          await Session.remove(sid)
+        }
+      },
+    })
+  })
+
   test("a backgrounded validation without an exit code is not scored as a pass", async () => {
     await using tmp = await tmpdir({ git: true })
 
