@@ -1406,6 +1406,19 @@ describe("ProviderTransform.schema - gemini nullable type arrays", () => {
     expect(result.properties.mode.enum).toEqual(["a", "b"])
   })
 
+  test("drops a boolean enum instead of stringifying it under a boolean type", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        flag: { type: "boolean", enum: [true, false] },
+      },
+    } as any
+
+    const result = ProviderTransform.schema(geminiModel, schema) as any
+
+    expect(result.properties.flag).toEqual({ type: "boolean" })
+  })
+
   test("leaves plain integer enums byte-identical", () => {
     const schema = {
       type: "object",

@@ -1769,6 +1769,9 @@ export namespace ProviderTransform {
           if (Array.isArray(result.enum) && isNumberType(primaryTypeOf(result.type))) {
             result.type = nullable ? ["string", "null"] : "string"
           }
+          // Gemini allows enum only on strings; a boolean already has just two
+          // values, so drop the enum rather than turn the boolean into a string.
+          if (Array.isArray(result.enum) && primaryTypeOf(result.type) === "boolean") delete result.enum
           // Type checks below reduce a nullable type array to its non-null
           // member so ["object","null"] still behaves like an object node.
           const primary = primaryTypeOf(result.type)
