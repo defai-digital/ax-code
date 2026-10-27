@@ -166,6 +166,16 @@ export namespace SessionSummary {
       messageID: MessageID.zod.optional(),
     }),
     async (input) => {
+      // A message's own changes live on its summary (written by summarize);
+      // the session-wide session_diff covers every turn.
+      if (input.messageID) {
+        const message = await MessageV2.get({ sessionID: input.sessionID, messageID: input.messageID }).catch((err) => {
+          if (NotFoundError.isInstance(err)) return undefined
+          throw err
+        })
+        if (message?.info.role !== "user") return []
+        return message.info.summary?.diffs ?? []
+      }
       const raw = await Storage.read<unknown>(["session_diff", input.sessionID]).catch((err) => {
         if (Storage.NotFoundError.isInstance(err)) return []
         throw err

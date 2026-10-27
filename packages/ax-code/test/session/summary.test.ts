@@ -6,6 +6,7 @@ import { NotFoundError } from "../../src/storage/db"
 import { Bus } from "../../src/bus"
 import { Storage } from "../../src/storage/storage"
 import { Snapshot } from "../../src/snapshot"
+import { MessageV2 } from "../../src/session/message-v2"
 
 describe("session.summary", () => {
   test("does not mutate the cached message object passed into summarize", async () => {
@@ -50,6 +51,30 @@ describe("session.summary", () => {
       updateMessage.mockRestore()
       publish.mockRestore()
       storageWrite.mockRestore()
+    }
+  })
+
+  test("diff for one message returns that message's changes, not the whole session's", async () => {
+    const sessionID = SessionID.make("ses_summary_per_message")
+    const messageID = MessageID.make("msg_summary_per_message")
+    const entry = (file: string) => ({
+      file,
+      before: "old",
+      after: "new",
+      additions: 1,
+      deletions: 1,
+      status: "modified" as const,
+    })
+    const storageRead = vi.spyOn(Storage, "read").mockResolvedValue([entry("target.ts"), entry("other.ts")] as any)
+    const get = vi.spyOn(MessageV2, "get").mockResolvedValue({
+      info: { id: messageID, sessionID, role: "user", summary: { diffs: [entry("target.ts")] } },
+      parts: [],
+    } as any)
+    try {
+      expect((await SessionSummary.diff({ sessionID, messageID })).map((d) => d.file)).toEqual(["target.ts"])
+    } finally {
+      storageRead.mockRestore()
+      get.mockRestore()
     }
   })
 
