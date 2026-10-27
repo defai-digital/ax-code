@@ -415,6 +415,37 @@ describe("extractOfficeText - pptx", () => {
     expect(result.text).toContain("# Notes 1")
     expect(result.text).toContain("speaker note")
   })
+
+  test("pairs notes with slides through the slide relationships, not file numbers", async () => {
+    await using tmp = await tmpdir()
+    const part = (root: string, text: string) => `<?xml version="1.0"?>
+<p:${root} xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree>
+    <p:sp><p:txBody><a:p><a:r><a:t>${text}</a:t></a:r></a:p></p:txBody></p:sp>
+  </p:spTree></p:cSld>
+</p:${root}>`
+    const rels = (target: string) => `<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="${target}"/>
+</Relationships>`
+    // Slides reordered after their notes were created: notesSlide numbers no
+    // longer match the slide numbers.
+    const filePath = path.join(tmp.path, "reordered.pptx")
+    const buf = buildZip([
+      { name: "ppt/slides/slide1.xml", data: Buffer.from(part("sld", "first slide")) },
+      { name: "ppt/slides/slide2.xml", data: Buffer.from(part("sld", "second slide")) },
+      { name: "ppt/slides/_rels/slide1.xml.rels", data: Buffer.from(rels("../notesSlides/notesSlide2.xml")) },
+      { name: "ppt/slides/_rels/slide2.xml.rels", data: Buffer.from(rels("../notesSlides/notesSlide1.xml")) },
+      { name: "ppt/notesSlides/notesSlide1.xml", data: Buffer.from(part("notes", "note for second")) },
+      { name: "ppt/notesSlides/notesSlide2.xml", data: Buffer.from(part("notes", "note for first")) },
+    ])
+    await writeFile(filePath, buf)
+
+    const result = await extractOfficeText(filePath)
+    expect(result.text).toContain("# Notes 1\nnote for first")
+    expect(result.text).toContain("# Notes 2\nnote for second")
+  })
 })
 
 describe("extractOfficeText - safety", () => {

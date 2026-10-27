@@ -9,6 +9,7 @@
 // every Office Open XML writer emits (data descriptor optional, no Zip64
 // needed for the small documents the `read` tool sees).
 
+import path from "node:path"
 import zlib from "node:zlib"
 import { Filesystem } from "../util/filesystem"
 
@@ -403,6 +404,26 @@ export async function extractOfficeText(filePath: string): Promise<OfficeExtract
   }
 }
 
+// A slide's notes part is named by its relationship, not by number: notes
+// slides are numbered in creation order, so after slides are reordered
+// notesSlideN belongs to some other slide. Fall back to the matching number
+// only for a slide without a relationships part (minimal generators).
+function notesPartFor(slide: string, inflated: Map<string, Buffer>): string {
+  const rels = inflated.get(slide.replace(/slides\/(slide\d+\.xml)$/, "slides/_rels/$1.rels"))
+  if (!rels) return slide.replace(/slides\/slide(\d+)\.xml$/, "notesSlides/notesSlide$1.xml")
+  for (const tag of decodeXmlUtf8(rels).match(/<Relationship\b[^>]*>/g) ?? []) {
+    if (!/\bType="[^"]*\/notesSlide"/.test(tag)) continue
+    const raw = tag.match(/\bTarget="([^"]+)"/)?.[1]
+    if (!raw) continue
+    // Targets are relative to ppt/slides/, or package-absolute with a leading "/".
+    const target = decodeXmlEntities(raw)
+    return target.startsWith("/")
+      ? path.posix.normalize(target.slice(1))
+      : path.posix.normalize(path.posix.join("ppt/slides", target))
+  }
+  return ""
+}
+
 async function extractBody(kind: OfficeKind, inflated: Map<string, Buffer>): Promise<string> {
   if (kind === "docx") {
     const doc = inflated.get("word/document.xml")
@@ -456,8 +477,7 @@ async function extractBody(kind: OfficeKind, inflated: Map<string, Buffer>): Pro
     const slideNum = Number(name.match(/slide(\d+)/)?.[1] ?? 0)
     const text = extractPptxText(decodeXmlUtf8(buf))
     if (text) out.push(`# Slide ${slideNum}\n${text}`)
-    const notesName = name.replace(/slides\/slide(\d+)\.xml$/, "notesSlides/notesSlide$1.xml")
-    const notes = inflated.get(notesName)
+    const notes = inflated.get(notesPartFor(name, inflated))
     if (notes) {
       const noteText = extractPptxText(decodeXmlUtf8(notes))
       if (noteText) out.push(`# Notes ${slideNum}\n${noteText}`)
