@@ -279,6 +279,21 @@ describe("AuditReport.generate", () => {
     })
   })
 
+  test("redacts credentials in the session title heading", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // Titles are usually generated from the first prompt, which the
+        // report already redacts as the goal.
+        const session = await Session.create({ title: "Deploy with API_TOKEN=title-secret-value" })
+        const report = await AuditReport.generate(session.id)
+        expect(report).toContain("# Audit Report: Deploy with API_TOKEN=")
+        expect(report).not.toContain("title-secret-value")
+      },
+    })
+  })
+
   test("renders validation from structured verification envelopes", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

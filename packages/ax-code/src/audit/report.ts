@@ -292,7 +292,8 @@ export namespace AuditReport {
     // Build markdown
     const lines: string[] = []
 
-    lines.push(`# Audit Report: ${info.title}`)
+    // Titles are usually generated from the first prompt, so redact them like the goal.
+    lines.push(`# Audit Report: ${redactAuditText(info.title).replace(/\n/g, " ")}`)
     lines.push("")
 
     // Goal
