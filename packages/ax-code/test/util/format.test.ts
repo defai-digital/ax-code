@@ -1,7 +1,26 @@
 import { describe, expect, test } from "vitest"
-import { formatDuration } from "../../src/util/format"
+import { formatDuration, truncate } from "../../src/util/format"
 
 describe("util.format", () => {
+  describe("truncate", () => {
+    test("returns the string unchanged when it fits", () => {
+      expect(truncate("abc", 3)).toBe("abc")
+      expect(truncate("abc", 5)).toBe("abc")
+    })
+
+    test("replaces the tail with an ellipsis when it overflows", () => {
+      expect(truncate("abcdef", 5)).toBe("ab...")
+      expect(truncate("abcdef", 4)).toBe("a...")
+    })
+
+    test("never exceeds max when max is too small for the ellipsis", () => {
+      expect(truncate("abcdef", 2)).toBe("ab")
+      expect(truncate("abcdef", 1)).toBe("a")
+      expect(truncate("abcdef", 0)).toBe("")
+      expect(truncate("abcdef", -1)).toBe("")
+    })
+  })
+
   describe("formatDuration", () => {
     test("returns empty string for zero or negative values", () => {
       expect(formatDuration(0)).toBe("")

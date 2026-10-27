@@ -6,18 +6,50 @@
 // Parse a unified-diff string and return hunk/added/removed counts.
 // Returns undefined when the input is empty or contains no hunks so
 // callers can `<Show when={summary()}>` without rendering a noisy chip
-// on binary/empty patches. Lines starting with `+++` / `---` are file
-// headers, not content, and are excluded from the +/− tallies.
+// on binary/empty patches. File headers (`---` / `+++`) are excluded from
+// the +/− tallies only outside a hunk: inside a hunk those prefixes are
+// content (removing the SQL comment `-- note` renders as `--- note`).
+// Hunk extent comes from the `@@ -a,b +c,d @@` line counts (b and d
+// default to 1 when omitted); `\ No newline at end of file` consumes
+// nothing.
 export type DiffSummary = { hunks: number; added: number; removed: number }
 export const diffSummary = (diff?: string): DiffSummary | undefined => {
   if (!diff) return undefined
   let hunks = 0
   let added = 0
   let removed = 0
+  let oldRemaining = 0
+  let newRemaining = 0
+  const parseCount = (raw: string | undefined, fallback: number) => (raw === undefined ? fallback : Number(raw))
   for (const line of diff.split("\n")) {
-    if (line.startsWith("@@")) hunks++
-    else if (line.startsWith("+++")) continue
-    else if (line.startsWith("---")) continue
+    if (line.startsWith("@@")) {
+      hunks++
+      const header = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(line)
+      // Omitted counts default to 1 (`@@ -1 +1 @@`); an unparsed header
+      // leaves the extent empty so later ---/+++ lines stay file headers.
+      oldRemaining = header ? parseCount(header[1], 1) : 0
+      newRemaining = header ? parseCount(header[2], 1) : 0
+      continue
+    }
+    const inHunk = oldRemaining > 0 || newRemaining > 0
+    if (inHunk) {
+      if (line.startsWith("\\")) continue
+      if (line.startsWith("+")) {
+        added++
+        if (newRemaining > 0) newRemaining--
+        continue
+      }
+      if (line.startsWith("-")) {
+        removed++
+        if (oldRemaining > 0) oldRemaining--
+        continue
+      }
+      // Context line (or its empty stand-in): feeds both sides.
+      if (oldRemaining > 0) oldRemaining--
+      if (newRemaining > 0) newRemaining--
+      continue
+    }
+    if (line.startsWith("+++") || line.startsWith("---")) continue
     else if (line.startsWith("+")) added++
     else if (line.startsWith("-")) removed++
   }

@@ -1,9 +1,11 @@
 // Shorten `s` to at most `max` characters, replacing the tail with an
-// ellipsis ("...") when it overflows. The 3-char budget for the ellipsis is
-// clamped so very small `max` values never produce a negative slice.
+// ellipsis ("...") when it overflows. A budget too small to fit the
+// ellipsis (`max <= 3`) hard-truncates instead: appending "..." would
+// make the result longer than `max`.
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s
-  return s.slice(0, Math.max(0, max - 3)) + "..."
+  if (max <= 3) return s.slice(0, Math.max(0, max))
+  return s.slice(0, max - 3) + "..."
 }
 
 export function formatDuration(secs: number) {
