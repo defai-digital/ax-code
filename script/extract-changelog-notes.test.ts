@@ -83,6 +83,14 @@ describe("release note formatting", () => {
     expect(notes).toContain("compare/v7.6.4...v7.7.0")
   })
 
+  test("building notes from already-built notes is idempotent", () => {
+    const input = { channel: "cli", version: "7.7.0", changelog: sample, siblingTag: "desktop-v7.7.0" }
+    const first = buildReleaseNotes({ ...input, body: "" })
+    const second = buildReleaseNotes({ ...input, body: first })
+    expect(second).toBe(first)
+    expect(buildReleaseNotes({ ...input, body: second })).toBe(first)
+  })
+
   test("wraps existing custom notes instead of replacing them", () => {
     const existing = "# AX Code v7.4.0\n\n## Highlights\n\n- Image generation.\n"
     expect(classifyReleaseBody(existing)).toBe("custom-prose")

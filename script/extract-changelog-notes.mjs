@@ -139,8 +139,12 @@ export function formatReleaseNotes({ channel, version, section, siblingTag, prev
 
 export function wrapExistingNotes({ channel, version, body, siblingTag }) {
   const title = releaseTitle(channel, version)
-  const rest = stripExistingTitle((body ?? "").trim(), version)
-  const header = `# ${title}\n\n${productBlurb(channel, version, siblingTag)}`
+  const blurb = productBlurb(channel, version, siblingTag)
+  let rest = stripExistingTitle((body ?? "").trim(), version)
+  // Our own notes already carry the product blurb under the title; strip it
+  // too, or every sync --apply re-wraps them with one more copy.
+  if (rest === blurb || rest.startsWith(`${blurb}\n`)) rest = rest.slice(blurb.length).trim()
+  const header = `# ${title}\n\n${blurb}`
   if (!rest) return `${header}\n`
   if (rest.startsWith(`# ${title}`)) return `${rest}\n`
   return `${header}\n\n${rest}\n`
