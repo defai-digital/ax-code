@@ -7,6 +7,7 @@ import { Curation } from "../../src/memory/curate"
 import { recordEntry, listEntries } from "../../src/memory/recorder"
 import * as store from "../../src/memory/store"
 import { Filesystem } from "../../src/util/filesystem"
+import { getContext } from "../../src/memory/injector"
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -69,6 +70,29 @@ describe("memory.usage", () => {
     // The oldest 50 were evicted; the newest survive.
     expect(names).not.toContain("skill:s0")
     expect(names).toContain(`skill:s${UsageRecord.MAX_ENTRIES + 49}`)
+  })
+
+  test("records injected entries under the session root when the stored root is stale", async () => {
+    await using tmp = await tmpdir()
+    const savedAt = new Date().toISOString()
+    store._resetReadCache()
+    await store.save(tmp.path, {
+      version: 1,
+      created: savedAt,
+      updated: savedAt,
+      projectRoot: path.join(tmp.path, "moved-away"),
+      contentHash: "x",
+      maxTokens: 4000,
+      totalTokens: 10,
+      sections: { feedback: { tokens: 10, entries: [{ name: "keep-this", body: "Always run the suite", savedAt }] } },
+    })
+
+    expect(await getContext(tmp.path, { agent: "build" })).toContain("Always run the suite")
+    await UsageRecord.flush(tmp.path)
+
+    expect((await UsageRecord.read(tmp.path)).entries[UsageRecord.memoryKey("feedback", "keep-this")]?.use_count).toBe(
+      1,
+    )
   })
 
   test("treats a corrupt record as empty instead of throwing", async () => {

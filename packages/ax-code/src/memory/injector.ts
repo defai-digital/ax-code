@@ -379,7 +379,12 @@ export async function getContext(projectRoot: string, opts: Omit<BuildContextOpt
     flush()
     return context
   }
-  const context = buildContext(memory!, { ...opts, global: sharedSource ? memory : global })
+  // Usage is recorded and flushed under the session's root. The stored root is
+  // stale once the repo moves or the memory file is copied to another clone,
+  // and recording under it orphaned every count, so curate proposed live
+  // entries as unused.
+  const live = { ...memory!, projectRoot }
+  const context = buildContext(live, { ...opts, global: sharedSource ? live : global })
   flush()
   return context
 }
