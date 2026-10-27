@@ -124,6 +124,9 @@ export async function fetchExaTool(config: {
     }
   } catch (error) {
     if (isAbortError(error)) {
+      // The shared signal also carries the caller's cancellation; only the
+      // timer's abort is a timeout.
+      if (config.abort?.aborted) throw new Error(`${config.errorPrefix}: request cancelled`, { cause: error })
       throw new Error(`${config.errorPrefix} timed out`, { cause: error })
     }
 
