@@ -33,7 +33,7 @@ export const ExportCommand = cmd({
           output: process.stderr,
         })
 
-        const sessions = [...Session.list()]
+        const sessions = [...Session.list({ limit: Number.MAX_SAFE_INTEGER })]
 
         if (sessions.length === 0) {
           prompts.log.error("No sessions found", {

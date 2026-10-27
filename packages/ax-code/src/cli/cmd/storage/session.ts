@@ -134,7 +134,8 @@ type ProjectCleanupSessionContext = CurrentProjectSessionContext & {
 async function getCurrentProjectSessionContext(): Promise<CurrentProjectSessionContext> {
   const { Session } = await import("../../../session")
   return {
-    sessions: [...Session.list()],
+    // Project-wide commands must see every session, not the default 100 most recent.
+    sessions: [...Session.list({ limit: Number.MAX_SAFE_INTEGER })],
     duplicateProjectIdentities: await getDuplicateProjectIdentities(),
   }
 }

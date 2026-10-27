@@ -26,6 +26,36 @@ describe("session clear-project", () => {
     }
   }
 
+  test("clears every session of a project, not just the 100 most recent", async () => {
+    await using caller = await tmpdir({ git: true })
+    await using target = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: target.path,
+      fn: async () => {
+        for (let i = 0; i < 105; i++) await Session.create({ title: `s${i}` })
+      },
+    })
+    await withCwd(caller.path, () =>
+      SessionClearProjectCommand.handler({
+        dir: target.path,
+        yes: true,
+        backupDir: "backups",
+        $0: "ax-code",
+        _: ["session", "clear-project"],
+      } as never),
+    )
+    await Instance.provide({
+      directory: target.path,
+      fn: async () => {
+        expect([...Session.list({ limit: Number.MAX_SAFE_INTEGER })]).toEqual([])
+      },
+    })
+    const backup = path.join(caller.path, "backups")
+    const entries = (await readdir(backup)).filter((name) => name.endsWith(".json"))
+    const archive = JSON.parse(await readFile(path.join(backup, entries[0]!), "utf8"))
+    expect(archive.sessions).toHaveLength(105)
+  })
+
   test("--dir backs up and clears only the selected project; relative backup paths use the caller cwd", async () => {
     await using caller = await tmpdir({ git: true })
     await using target = await tmpdir({ git: true })
