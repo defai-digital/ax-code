@@ -215,3 +215,29 @@ test("Instance.disposeAll does not hang on a stuck dispose hook", async () => {
   // Cap is 5s per entry; allow headroom for scheduling under load.
   expect(elapsed).toBeLessThan(15_000)
 })
+
+test("an invalidate during dispose neither repeats the hook nor orphans a rebuilt entry", async () => {
+  const { State } = await import("../../src/project/state")
+  const key = `state-race-${Math.random()}`
+  const disposed: number[] = []
+  let next = 0
+  const getter = State.create(
+    () => key,
+    () => ({ id: ++next }),
+    async (state) => {
+      await sleep(50)
+      disposed.push(state.id)
+    },
+  )
+
+  expect(getter().id).toBe(1)
+  const disposing = State.dispose(key)
+  await getter.invalidate()
+  expect(getter().id).toBe(2)
+  await disposing
+  expect(disposed).toEqual([1])
+
+  // The rebuilt entry is still owned and disposed by the next dispose.
+  await State.dispose(key)
+  expect(disposed).toEqual([1, 2])
+})

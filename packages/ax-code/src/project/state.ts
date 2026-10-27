@@ -9,6 +9,9 @@ export namespace State {
 
   const log = Log.create({ service: "state" })
   const recordsByKey = new Map<string, Map<Function, Entry>>()
+  // Entries a running dispose() owns. invalidate() must not run their hook a
+  // second time, and dispose() must not clear entries created while it waits.
+  const disposing = new WeakSet<Entry>()
 
   // Cap how long one entry can block Instance.dispose / Config.updateGlobal.
   // Pending async inits (LSP initialize, MCP connect, provider discovery) can
@@ -70,7 +73,7 @@ export namespace State {
       const entry = entries.get(init)
       if (!entry) return
       entries.delete(init)
-      if (!entry.dispose) return
+      if (!entry.dispose || disposing.has(entry)) return
       // Run the dispose hook on the cached state. Await the state
       // first in case it's a Promise — matches the pattern in
       // dispose() below, which also tolerates async init functions.
@@ -100,8 +103,10 @@ export namespace State {
       }
     }, 10000).unref()
 
+    const owned = [...entries]
+    for (const [, entry] of owned) disposing.add(entry)
     const tasks: Promise<void>[] = []
-    for (const [init, entry] of entries) {
+    for (const [init, entry] of owned) {
       if (!entry.dispose) continue
 
       const label = typeof init === "function" ? init.name || "anonymous" : String(init)
@@ -118,8 +123,10 @@ export namespace State {
     }
     await Promise.all(tasks)
 
-    entries.clear()
-    recordsByKey.delete(key)
+    for (const [init, entry] of owned) {
+      if (entries.get(init) === entry) entries.delete(init)
+    }
+    if (entries.size === 0 && recordsByKey.get(key) === entries) recordsByKey.delete(key)
 
     disposalFinished = true
     log.info("state disposal completed", { key })
