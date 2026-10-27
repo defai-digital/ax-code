@@ -20,6 +20,7 @@ export namespace File {
   // Thrown when a requested path escapes the project directory (directly or via
   // a symlink). Surfaced as a 403 by the server error mapper instead of a 500.
   export const AccessDeniedError = NamedError.create("FileAccessDenied", z.object({ message: z.string() }))
+  export const NotAFileError = NamedError.create("FileNotAFile", z.object({ message: z.string() }))
 
   function assertSafePathInput(file: string) {
     if (file.includes("\0")) {
@@ -705,6 +706,9 @@ export namespace File {
     }
     const readTarget = realFull ?? full
     const exists = await Filesystem.exists(full)
+    if (exists && (await Filesystem.isDir(readTarget))) {
+      throw new NotAFileError({ message: `Not a file: ${file}` })
+    }
 
     if (isImageByExtension(file)) {
       if (exists) {

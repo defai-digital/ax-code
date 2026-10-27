@@ -186,6 +186,16 @@ function namedErrorEnvelope(error: NamedError, logRef?: string): AppErrorEnvelop
       details: { resource: "file" },
     }
   }
+  if (error.name === "FileNotAFile") {
+    const data = namedErrorData(error)
+    return {
+      name: "InvalidRequestError",
+      message: typeof data.message === "string" ? data.message : "Not a file",
+      status: 400,
+      details: { resource: "file" },
+      retryable: false,
+    }
+  }
   if (error.name.startsWith("Worktree")) {
     return {
       name: "InvalidRequestError",

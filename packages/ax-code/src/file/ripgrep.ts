@@ -506,6 +506,8 @@ export namespace Ripgrep {
   }) {
     const limit = normalizeLimit(input.limit)
     if (limit === 0) return []
+    // A NUL cannot travel in a process argument; spawn would throw a TypeError.
+    if (input.pattern.includes("\0")) throw new InvalidPatternError({ message: "Search pattern contains a NUL byte" })
     const args = [`${await filepath()}`, "--json", "--hidden"]
     if (input.follow) args.push("--follow")
 

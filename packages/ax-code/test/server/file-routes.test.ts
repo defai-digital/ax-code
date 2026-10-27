@@ -121,6 +121,39 @@ describe("file routes", () => {
     })
   })
 
+  test("find text answers a NUL in the pattern with a 400", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const dir = `directory=${encodeURIComponent(tmp.path)}`
+        const response = await Server.Default().request(`/find?pattern=${encodeURIComponent("a\0b")}&${dir}`)
+        expect(response.status).toBe(400)
+      },
+    })
+  })
+
+  test("reading a directory as file content returns 400 instead of 500", async () => {
+    await using tmp = await tmpdir({ git: true })
+    fs.mkdirSync(path.join(tmp.path, "src"))
+    fs.mkdirSync(path.join(tmp.path, "logo.png"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const dir = `directory=${encodeURIComponent(tmp.path)}`
+        for (const target of ["src", "logo.png"]) {
+          const response = await Server.Default().request(`/file/content?path=${encodeURIComponent(target)}&${dir}`)
+          expect(response.status).toBe(400)
+          const body = (await response.json()) as { name: string; details?: { resource?: string } }
+          expect(body.name).toBe("InvalidRequestError")
+          expect(body.details?.resource).toBe("file")
+        }
+      },
+    })
+  })
+
   test("null byte read path returns 403 instead of 500", async () => {
     await using tmp = await tmpdir({ git: true })
 
