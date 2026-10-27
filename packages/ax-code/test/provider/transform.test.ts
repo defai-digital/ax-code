@@ -2156,6 +2156,27 @@ describe("ProviderTransform.message - empty image handling", () => {
     })
   })
 
+  test("should replace an empty image file part as the request middleware sees it", () => {
+    for (const data of [new Uint8Array(0), "", "data:image/png;base64,"]) {
+      const msgs = [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "What is in this image?" },
+            { type: "file", mediaType: "image/png", data },
+          ],
+        },
+      ] as any[]
+
+      const result = ProviderTransform.message(msgs, mockModel, {})
+
+      expect(result[0].content[1]).toEqual({
+        type: "text",
+        text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
+      })
+    }
+  })
+
   test("should replace empty base64 image with case-insensitive data URL scheme", () => {
     const msgs = [
       {

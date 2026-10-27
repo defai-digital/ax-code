@@ -25,6 +25,14 @@ function mimeToModality(mime: string): Modality | undefined {
   return undefined
 }
 
+function emptyFileData(data: unknown): boolean {
+  if (data instanceof Uint8Array || data instanceof ArrayBuffer) return data.byteLength === 0
+  if (typeof data !== "string") return false
+  if (data.length === 0) return true
+  // A data: URL whose base64 payload is empty.
+  return /^data:[^,]*;base64,$/i.test(data)
+}
+
 export namespace ProviderTransform {
   const log = Log.create({ service: "provider.transform" })
   export const OUTPUT_TOKEN_MAX = Flag.AX_CODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
@@ -285,6 +293,14 @@ export namespace ProviderTransform {
           }
         } else {
           mime = part.mediaType
+          // In the request middleware the SDK has already converted image
+          // parts to file parts with `data`, so an empty image arrives here.
+          if (mime.toLowerCase().startsWith("image/") && emptyFileData(part.data)) {
+            return {
+              type: "text" as const,
+              text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
+            }
+          }
         }
         const filename = part.type === "file" ? part.filename : undefined
         const modality = mimeToModality(mime)
