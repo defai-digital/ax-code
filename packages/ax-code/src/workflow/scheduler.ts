@@ -489,7 +489,7 @@ async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {
   const TaskQueue = await loadTaskQueue()
   const detail = await WorkflowRun.getDetail(runID)
   if (phaseID && !detail.phases.some((phase) => phase.id === phaseID)) {
-    throw new Error(`Workflow phase ${phaseID} does not belong to workflow run ${runID}.`)
+    throw new WorkflowPhaseNotInRunError(phaseID, runID)
   }
   const children = phaseID ? detail.children.filter((child) => child.phaseID === phaseID) : detail.children
   const retryableChildren = children.filter((child) => child.status === "failed" || child.status === "cancelled")
@@ -611,4 +611,11 @@ function shouldAutoStartWorkflowQueueItem(item: TaskQueue.Info) {
   if (!workflow || typeof workflow !== "object") return true
   const startOptions = (workflow as { startOptions?: unknown }).startOptions
   return WorkflowScheduler.StartOptions.parse(startOptions ?? {}).autoStartChildren
+}
+
+export class WorkflowPhaseNotInRunError extends Error {
+  constructor(phaseID: WorkflowPhaseID, runID: WorkflowRunID) {
+    super(`Workflow phase ${phaseID} does not belong to workflow run ${runID}.`)
+    this.name = "WorkflowPhaseNotInRunError"
+  }
 }

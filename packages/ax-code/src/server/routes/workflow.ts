@@ -13,9 +13,14 @@ import {
   listWorkflowEvalCases,
 } from "@/workflow/eval-corpus"
 import { WorkflowRunProjection, summarizeWorkflowRunDetail } from "@/workflow/projection"
-import { WorkflowRoutineDisabledError, WorkflowRoutineNotFoundError, WorkflowRoutineScheduleError, WorkflowRoutineTrigger } from "@/workflow/routine"
+import {
+  WorkflowRoutineDisabledError,
+  WorkflowRoutineNotFoundError,
+  WorkflowRoutineScheduleError,
+  WorkflowRoutineTrigger,
+} from "@/workflow/routine"
 import { WorkflowRun } from "@/workflow/run"
-import { WorkflowScheduler } from "@/workflow/scheduler"
+import { WorkflowPhaseNotInRunError, WorkflowScheduler } from "@/workflow/scheduler"
 import {
   WorkflowInputValues,
   WorkflowModelPolicyOverride,
@@ -23,7 +28,13 @@ import {
   applyWorkflowModelPolicyOverride,
   isWorkflowRuntimeEnabled,
 } from "@/workflow/spec"
-import { WorkflowTemplate, WorkflowTemplateNotFoundError, WorkflowTemplatePromotionError, WorkflowTemplateRemovalError } from "@/workflow/template"
+import {
+  WorkflowTemplate,
+  WorkflowTemplateNotFoundError,
+  WorkflowTemplatePromotionError,
+  WorkflowTemplateRemovalError,
+  WorkflowTemplateUntrustedError,
+} from "@/workflow/template"
 import {
   WorkflowArtifactEventRecord,
   WorkflowArtifactID,
@@ -214,15 +225,22 @@ export const WorkflowRunRoutes = lazy(() =>
       async (c) => {
         const body = c.req.valid("json")
         if (body.templateID) {
-          return c.json(
-            await WorkflowTemplate.createRun({
-              templateID: body.templateID as WorkflowTemplate.ID,
-              parentSessionID: body.parentSessionID,
-              sourceTaskID: body.sourceTaskID,
-              modelPolicy: body.modelPolicy,
-              inputValues: body.inputValues,
-            }),
-          )
+          try {
+            return c.json(
+              await WorkflowTemplate.createRun({
+                templateID: body.templateID as WorkflowTemplate.ID,
+                parentSessionID: body.parentSessionID,
+                sourceTaskID: body.sourceTaskID,
+                modelPolicy: body.modelPolicy,
+                inputValues: body.inputValues,
+              }),
+            )
+          } catch (error) {
+            if (error instanceof WorkflowTemplateNotFoundError) throw new HTTPException(404, { message: error.message })
+            if (error instanceof WorkflowTemplateUntrustedError)
+              throw new HTTPException(400, { message: error.message })
+            throw error
+          }
         }
         return c.json(
           await WorkflowRun.create({
@@ -479,13 +497,18 @@ export const WorkflowRunRoutes = lazy(() =>
       validator("query", WorkflowRetryQuery),
       async (c) => {
         const query = c.req.valid("query")
-        return c.json(
-          compactWorkflowRunDetail(
-            query.phaseID
-              ? await WorkflowScheduler.retryPhase(runID(c), query.phaseID as WorkflowPhaseID)
-              : await WorkflowScheduler.retry(runID(c)),
-          ),
-        )
+        try {
+          return c.json(
+            compactWorkflowRunDetail(
+              query.phaseID
+                ? await WorkflowScheduler.retryPhase(runID(c), query.phaseID as WorkflowPhaseID)
+                : await WorkflowScheduler.retry(runID(c)),
+            ),
+          )
+        } catch (error) {
+          if (error instanceof WorkflowPhaseNotInRunError) throw new HTTPException(400, { message: error.message })
+          throw error
+        }
       },
     ),
 )

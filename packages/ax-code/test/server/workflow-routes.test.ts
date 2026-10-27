@@ -3,6 +3,7 @@ import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { WorkflowFixtureSpecs, WorkflowTemplate, parseWorkflowSpecV1 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
+import { WorkflowPhaseID } from "../../src/workflow/state"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -539,6 +540,28 @@ describe("workflow routes", () => {
         source: "project",
         trust: "candidate",
       })
+
+      const runCandidate = await app.request(`/workflow-runs?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateID: "project:noop-dry-run" }),
+      })
+      expect(runCandidate.status).toBe(400)
+      expect(JSON.stringify(await runCandidate.json())).toContain("must be promoted")
+
+      const runMissing = await app.request(`/workflow-runs?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateID: "user:nope" }),
+      })
+      expect(runMissing.status).toBe(404)
+
+      const foreignPhase = WorkflowPhaseID.ascending()
+      const retryForeign = await app.request(
+        `/workflow-runs/${created.id}/retry?phaseID=${foreignPhase}&${directoryQuery}`,
+        { method: "POST" },
+      )
+      expect(retryForeign.status).toBe(400)
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
