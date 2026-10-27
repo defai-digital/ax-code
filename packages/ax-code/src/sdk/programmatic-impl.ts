@@ -199,9 +199,14 @@ async function autoDetectAuth(): Promise<void> {
 
 type StreamHandleCleanup = (() => Promise<void> | void) | undefined
 
-function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: StreamHandleCleanup): StreamHandle {
+/** @internal Exported for tests. */
+export function createStreamHandle(
+  source: AsyncIterable<StreamEvent>,
+  onInterrupted?: StreamHandleCleanup,
+): StreamHandle {
   const listeners: Record<string, Function[]> = {}
   let cachedResult: RunResult | undefined
+  let streamError: Error | undefined
   let iteratorStarted = false
   let completed = false
   let cancelled = false
@@ -244,6 +249,7 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: 
           emit("reasoning", (cb) => cb(event.text))
         }
         if (event.type === "error") {
+          streamError = event.error
           emit("error", (cb) => cb(event.error))
         }
         if (cancelled) return
@@ -277,6 +283,17 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: 
     return generator
   }
 
+  // Every consumer shares one generator, so a `done` event drained by an
+  // earlier or concurrent consumer (another text()/result(), or done() with
+  // callbacks) is only visible through cachedResult afterwards.
+  async function settle(): Promise<RunResult | undefined> {
+    if (cachedResult) return cachedResult
+    for await (const event of handle) {
+      if (event.type === "done") return event.result
+    }
+    return cachedResult
+  }
+
   const handle: StreamHandle = {
     [Symbol.asyncIterator]() {
       iteratorStarted = true
@@ -284,18 +301,13 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: 
     },
 
     async text(): Promise<string> {
-      for await (const event of handle) {
-        if (event.type === "done") return event.result.text
-      }
-      return ""
+      return (await settle())?.text ?? ""
     },
 
     async result(): Promise<RunResult> {
-      if (cachedResult) return cachedResult
-      for await (const event of handle) {
-        if (event.type === "done") return event.result
-      }
-      throw new Error("Stream ended without a result")
+      const result = await settle()
+      if (result) return result
+      throw streamError ?? new Error("Stream ended without a result")
     },
 
     on(event: string, callback: Function): StreamHandle {
