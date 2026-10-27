@@ -991,3 +991,32 @@ test("custom agents default to specialist tier", async () => {
     },
   })
 })
+
+test("Agent.get resolves own agents only, not Object.prototype members", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(await Agent.get("toString")).toBeUndefined()
+      expect(await Agent.get("constructor")).toBeUndefined()
+      expect((await Agent.get("build"))?.name).toBe("build")
+    },
+  })
+})
+
+test("a default agent renamed by config resolves back through Agent.get", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      default_agent: "reviewer",
+      agent: { reviewer: { name: "Code Reviewer", mode: "primary", description: "Reviews code" } },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const name = await Agent.defaultAgent()
+      expect(name).toBe("Code Reviewer")
+      expect((await Agent.get(name))?.description).toBe("Reviews code")
+    },
+  })
+})

@@ -522,7 +522,14 @@ export namespace Agent {
       )
     }
 
-    const get = (agent: string) => agents[agent] as Agent.Info
+    // Own keys only: `agents` is a plain object, so "toString" or
+    // "constructor" must not resolve to an Object.prototype member. A config
+    // `name` can rename an agent away from its key, and defaultAgent()/list()
+    // report that name, so a name must resolve back to its agent too.
+    const get = (agent: string) =>
+      (Object.hasOwn(agents, agent)
+        ? agents[agent]
+        : Object.values(agents).find((item) => item.name === agent)) as Agent.Info
 
     const list = async () => {
       const cfg = await Config.get()
@@ -541,7 +548,7 @@ export namespace Agent {
     const defaultAgent = async () => {
       const c = await Config.get()
       if (c.default_agent) {
-        const agent = agents[c.default_agent]
+        const agent = get(c.default_agent)
         if (!agent) throw new Error(`default agent "${c.default_agent}" not found`)
         const tier = resolveTier(agent)
         if (tier === "subagent") throw new Error(`default agent "${c.default_agent}" is a subagent`)
