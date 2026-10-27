@@ -76,11 +76,14 @@ export namespace ConfigMarkdown {
   // frontmatter size and reject alias/merge-key syntax outright. See #251.
   const MAX_FRONTMATTER_BYTES = 256 * 1024
   const MAX_FRONTMATTER_LINES = 4000
-  // Matches YAML anchors (&anchor), aliases (*alias), and merge keys (<<:).
+  // Matches YAML anchors (&anchor), aliases (*alias), and merge keys (<<:)
+  // where YAML can start a node: a line start, after a `:`/`-`/`?` indicator
+  // and whitespace, or inside flow `[`/`{`/`,` collections. Mid-scalar text
+  // such as `Use *glob* patterns` is literal in YAML and stays accepted.
   // Anchor/alias names must start with a letter or underscore and contain only
   // word characters and hyphens, so glob patterns like `**/*.css` are not
   // false-positive matches.
-  const YAML_ALIAS_PATTERN = /(^|\s)[&*][a-zA-Z_][\w-]*|^<<:/m
+  const YAML_ALIAS_PATTERN = /(?:^[ \t]*|[:?-][ \t]+|[[{,][ \t]*)(?:[&*][a-zA-Z_][\w-]*|<<[ \t]*:)/m
 
   function isInsideBacktickSpan(text: string, index: number) {
     let inside = false

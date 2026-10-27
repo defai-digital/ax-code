@@ -55,6 +55,19 @@ describe("ConfigMarkdown: parser boundaries", () => {
       })
     }
   })
+
+  test("rejects flow-style and indented merge keys", async () => {
+    for (const text of ["---\nm: {<<: {a: 1}, b: 2}\n---\nBody", "---\nm:\n  <<: {a: 1}\n  b: 2\n---\nBody"]) {
+      await expect(ConfigMarkdown.parseText("merge.md", text)).rejects.toMatchObject({
+        name: "ConfigFrontmatterError",
+      })
+    }
+  })
+
+  test("accepts an asterisk or ampersand inside a plain scalar value", async () => {
+    const parsed = await ConfigMarkdown.parseText("glob.md", "---\ndescription: Use *glob* patterns & &more\n---\nBody")
+    expect(parsed.data.description).toBe("Use *glob* patterns & &more")
+  })
 })
 
 describe("ConfigMarkdown: normal template", () => {
