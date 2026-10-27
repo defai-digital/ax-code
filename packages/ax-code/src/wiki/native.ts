@@ -363,6 +363,9 @@ function wikiPageFailure(error: unknown): WikiPageFailure | undefined {
   if (WikiPageValidationError.isInstance(error)) return "validation"
   if (NoObjectGeneratedError.isInstance(error)) return error.finishReason === "length" ? "length" : "format"
   if (APICallError.isInstance(error) && error.isRetryable) return "transient"
+  // A stream cut mid-response surfaces as undici's raw TypeError, not an
+  // APICallError, so classify it the same way as the session processor.
+  if (MessageV2.isTransientNetworkError(error)) return "transient"
   return undefined
 }
 

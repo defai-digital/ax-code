@@ -284,6 +284,18 @@ describe("wiki native generator", () => {
     expect(retry.messages[0].content).not.toContain("did not produce a valid page object")
   })
 
+  test("retries a stream the provider cut off mid-response", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const cause = Object.assign(new Error("Stream closed with error code NGHTTP2_INTERNAL_ERROR"), {
+      code: "ERR_HTTP2_STREAM_ERROR",
+    })
+    await runNativeSequence(tmp.path, [{ streamError: new TypeError("terminated", { cause }) }, {}])
+
+    expect(generateObject).toHaveBeenCalledTimes(2)
+    const retry = vi.mocked(generateObject).mock.calls[1]?.[0] as { messages: Array<{ content: string }> }
+    expect(retry.messages[0].content).not.toContain("did not produce a valid page object")
+  })
+
   test("does not retry an unclassified stream error", async () => {
     await using tmp = await tmpdir({ git: true })
     await expect(runNativeSequence(tmp.path, [{ streamError: new Error("stream disconnected") }])).rejects.toThrow(

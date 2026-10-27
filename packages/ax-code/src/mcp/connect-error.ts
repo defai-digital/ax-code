@@ -1,6 +1,7 @@
 import { UnauthorizedError } from "@modelcontextprotocol/client"
 import { toErrorMessage } from "../util/error-message"
 import { Filesystem } from "../util/filesystem"
+import { isNetworkInterruption } from "../util/network-interruption"
 import { FIGMA_DESKTOP_MCP_URL, FIGMA_MCP_ORIGIN, FIGMA_MCP_DOCS_URL } from "./constants"
 
 const TRANSIENT_ERRNO = new Set([
@@ -26,6 +27,7 @@ export function isTransientMcpConnectError(error: unknown): boolean {
   if (/\b(401|403|404)\b/.test(message) && !/\b(502|503|504)\b/.test(message)) return false
   const code = Filesystem.errnoCode(error)
   if (code && TRANSIENT_ERRNO.has(code)) return true
+  if (isNetworkInterruption(error)) return true
   return TRANSIENT_MESSAGE.test(message)
 }
 

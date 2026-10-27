@@ -31,6 +31,14 @@ describe("mcp connect-error", () => {
     expect(isTransientMcpConnectError(new Error("upstream 503 temporarily unavailable"))).toBe(true)
   })
 
+  test("retries a response stream the server cut off", () => {
+    const reset = Object.assign(new Error("Stream closed with error code NGHTTP2_INTERNAL_ERROR"), {
+      code: "ERR_HTTP2_STREAM_ERROR",
+    })
+    expect(isTransientMcpConnectError(new TypeError("terminated", { cause: reset }))).toBe(true)
+    expect(isTransientMcpConnectError(new TypeError("other side closed"))).toBe(true)
+  })
+
   test("does not retry auth, registration, or budget timeouts", () => {
     expect(isTransientMcpConnectError(new UnauthorizedError("redirect"))).toBe(false)
     expect(isTransientMcpConnectError(new Error("HTTP 403: Invalid OAuth error response: SyntaxError"))).toBe(false)
