@@ -6,6 +6,7 @@ import type { Session } from "../../session"
 import type { MessageV2 } from "../../session/message-v2"
 import type { Provider } from "../../provider/provider"
 import { EOL } from "os"
+import { effectiveTokenTotal } from "../../session/compaction-budget"
 
 export type ContextJSONDocument = {
   session: string
@@ -140,6 +141,9 @@ export const ContextCommand = cmd({
       let outputTokens = 0
       let reasoningTokens = 0
       let cachedTokens = 0
+      // Each turn's input already contains the conversation so far, so the
+      // context in use is the latest turn's total, not a sum over turns.
+      let contextTokens = 0
       let toolCalls = 0
       let providerID = ""
       let modelID = ""
@@ -155,6 +159,8 @@ export const ContextCommand = cmd({
             outputTokens += tokens.output ?? 0
             reasoningTokens += tokens.reasoning ?? 0
             cachedTokens += tokens.cache?.read ?? 0
+            const total = effectiveTokenTotal(tokens)
+            if (total > 0) contextTokens = total
           }
           providerID = info.providerID ?? providerID
           modelID = info.modelID ?? modelID
@@ -197,7 +203,7 @@ export const ContextCommand = cmd({
         systemPromptLength: 0,
         toolCount: toolCalls,
         memoryTokens: 0,
-        historyTokens: inputTokens,
+        historyTokens: contextTokens,
       })
 
       // Print breakdown

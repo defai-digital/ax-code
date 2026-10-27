@@ -110,6 +110,30 @@ describe("context command session selection (#402)", () => {
     expect(captured.output()).not.toContain(ghost.id)
   })
 
+  test("conversation history is the latest turn's context, not a sum over turns", async () => {
+    await using project = await tmpdir({ git: true })
+    const session = await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const created = await Session.create({ title: "three turns" })
+        // Each turn reports input 10 + output 5; a sum would show 30 input.
+        for (let i = 0; i < 3; i++) await addAssistantExchange(created.id, project.path)
+        return created
+      },
+    })
+
+    const captured = captureOutput()
+    try {
+      await withCwd(project.path, () =>
+        ContextCommand.handler({ sessionID: session.id, $0: "ax-code", _: ["context"] } as never),
+      )
+    } finally {
+      captured.restore()
+    }
+
+    expect(captured.output()).toMatch(/Conversation history\s+15\b/)
+  })
+
   test("reports when no session has model context", async () => {
     await using project = await tmpdir({ git: true })
     await Instance.provide({
