@@ -510,6 +510,55 @@ describe("acp.agent event subscription", () => {
     })
   })
 
+  test("replies to an approved edit while the edit tool holds the file lock", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { FileTime } = await import("../../src/file/time")
+        const replies: string[] = []
+        const { agent, controller, fileWrites, stop, sdk } = createFakeAgent()
+        sdk.permission.reply = async (params: any) => {
+          replies.push(params.requestID)
+          return { data: true }
+        }
+        const filepath = path.join(tmp.path, "locked.txt")
+        await fs.writeFile(filepath, "hello\n")
+        const sessionId = await agent.newSession({ cwd: tmp.path, mcpServers: [] } as any).then((x) => x.sessionId)
+        // The edit tool asks for permission inside FileTime.withLock and holds
+        // it until the reply arrives.
+        let release!: () => void
+        const held = FileTime.withLock(filepath, () => new Promise<void>((resolve) => (release = resolve)))
+        try {
+          controller.push({
+            directory: tmp.path,
+            payload: {
+              type: "permission.asked",
+              properties: {
+                id: "perm_locked_edit",
+                sessionID: sessionId,
+                permission: "edit",
+                patterns: [filepath],
+                metadata: {
+                  filepath,
+                  diff: "--- a/locked.txt\n+++ b/locked.txt\n@@ -1 +1 @@\n-hello\n+bye\n",
+                },
+                always: [],
+              },
+            },
+          } as any)
+
+          await vi.waitFor(() => expect(replies).toEqual(["perm_locked_edit"]))
+          expect(fileWrites[0]).toMatchObject({ sessionId, path: filepath, content: "bye\n" })
+        } finally {
+          release()
+          await held
+          stop()
+        }
+      },
+    })
+  })
+
   test("permission prompt on session A does not block message updates for session B", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

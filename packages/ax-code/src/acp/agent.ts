@@ -29,7 +29,6 @@ import {
 import { Log } from "../util/log"
 import { pathToFileURL } from "url"
 import { Filesystem } from "../util/filesystem"
-import { FileTime } from "../file/time"
 import { Hash } from "../util/hash"
 import { Lock } from "../util/lock"
 import { ACPSessionManager } from "./session"
@@ -661,13 +660,15 @@ export namespace ACP {
         const filepath = typeof metadata["filepath"] === "string" ? metadata["filepath"] : ""
         const diff = typeof metadata["diff"] === "string" ? metadata["diff"] : ""
         if (filepath) {
-          await FileTime.withLock(filepath, async () => {
+          // No FileTime lock here: the edit tool asks for this permission
+          // while holding that lock, and cannot write until we reply.
+          await (async () => {
             const content = (await Filesystem.exists(filepath)) ? await Filesystem.readText(filepath) : ""
             const newContent = getNewContent(content, diff)
             if (newContent !== undefined) {
               await this.connection.writeTextFile({ sessionId: session.id, path: filepath, content: newContent })
             }
-          }).catch((error) => {
+          })().catch((error) => {
             log.error("failed to apply ACP optimistic edit write", {
               error,
               permissionID: permission.id,
