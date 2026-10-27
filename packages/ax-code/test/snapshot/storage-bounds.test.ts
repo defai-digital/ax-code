@@ -294,9 +294,9 @@ test("a clean recapture does not inherit exclusions from an identical tree", asy
       const clean = (await Snapshot.track())!
       await fs.writeFile(file, "new small file")
       // Older turns still lack coverage; a new clean baseline has coverage.
-      expect((await Snapshot.patch(excluded)).files).not.toContain(file)
+      expect((await Snapshot.patch(excluded)).files).not.toContain(file.split(path.sep).join("/"))
       const patch = await Snapshot.patch(clean)
-      expect(patch.files).toContain(file)
+      expect(patch.files).toContain(file.split(path.sep).join("/"))
       await Snapshot.revert([patch])
       await expect(fs.stat(file)).rejects.toMatchObject({ code: "ENOENT" })
     },
@@ -318,9 +318,9 @@ test("clean recapture preserves coverage records from legacy tree-only snapshots
       expect(await fs.readFile(record, "utf8")).toBe('["legacy.bin"]')
       const file = path.join(tmp.path, "legacy.bin")
       await fs.writeFile(file, "new content")
-      expect((await Snapshot.patch(legacy)).files).not.toContain(file)
+      expect((await Snapshot.patch(legacy)).files).not.toContain(file.split(path.sep).join("/"))
       const patch = await Snapshot.patch(clean)
-      expect(patch.files).toContain(file)
+      expect(patch.files).toContain(file.split(path.sep).join("/"))
       await Snapshot.revert([patch])
       await expect(fs.stat(file)).rejects.toMatchObject({ code: "ENOENT" })
     },
