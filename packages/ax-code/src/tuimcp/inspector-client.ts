@@ -80,7 +80,12 @@ async function rpc(name, args = {}, present = true, signal) {
       signal?.throwIfAborted()
       throw new Error("Inspector returned an invalid response (HTTP " + response.status + ")")
     }
-    if (!response.ok) throw new Error("Inspector request failed: " + (result.code ?? "HTTP " + response.status))
+    // The inspector refuses a request before dispatch (busy, invalid_request,
+    // unauthorized) with an HTTP error and a rejection body. For a mutation
+    // that is a definite refusal, not an unknown outcome.
+    const mutation = name === "tui_input" || name === "select_session"
+    if (!response.ok && !(mutation && result?.status === "rejected" && typeof result.code === "string"))
+      throw new Error("Inspector request failed: " + (result.code ?? "HTTP " + response.status))
     if (result.status === "rejected" && requestEpoch === epoch) invalidate(result.code)
     return show(result, requestSequence, requestEpoch, present, name === "tui_input" || name === "select_session")
   } catch (error) {

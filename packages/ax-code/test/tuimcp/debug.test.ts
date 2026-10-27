@@ -580,6 +580,18 @@ describe.skipIf(process.platform === "win32")("native TUI developer transports",
     expect(h.element("click-submit").disabled).toBe(false)
     expect(f.actions).toHaveLength(0)
   })
+  test("an inspector refusal before dispatch is a definite rejection, not an unknown outcome", async () => {
+    const f = fixture()
+    await using h = await browserFixture(f, async (name, next) =>
+      name === "tui_input" ? Response.json({ status: "rejected", code: "busy" }, { status: 429 }) : next(),
+    )
+    const mutate = h.registered.find((tool) => tool.name === "tui_input")!
+    const { operation: _, ...args } = f.input()
+    expect(parseJsonStrict(await mutate.execute(args))).toMatchObject({ status: "rejected", code: "busy" })
+    expect(h.element("receipts").textContent).not.toContain("outcome_unknown")
+    expect(f.actions).toHaveLength(0)
+  })
+
   test("manual transport failure retains the explicit unknown-outcome warning", async () => {
     const f = fixture()
     await using h = await browserFixture(f, async (name, next) => {
