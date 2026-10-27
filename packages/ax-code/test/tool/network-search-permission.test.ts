@@ -71,4 +71,23 @@ describe("network search tool permissions", () => {
       metadata: { query, tokensNum: 5000 },
     })
   })
+  test.each([
+    ["websearch", "*"],
+    ["codesearch", "react *"],
+  ] as const)("%s offers no persistent rule for a query that reads as a wildcard (%s)", async (name, query) => {
+    const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
+    const tool = await (name === "websearch" ? WebSearchTool : CodeSearchTool).init()
+
+    await expect(
+      tool.execute({ query, tokensNum: 5000 } as never, {
+        ...baseCtx,
+        ask: async (request) => {
+          requests.push(request)
+          throw stopAfterPermission
+        },
+      }),
+    ).rejects.toBe(stopAfterPermission)
+
+    expect(requests[0]).toMatchObject({ permission: name, patterns: [query], always: [] })
+  })
 })

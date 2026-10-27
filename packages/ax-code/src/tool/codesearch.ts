@@ -27,7 +27,8 @@ export const CodeSearchTool = Tool.define("codesearch", {
     await ctx.ask({
       permission: "codesearch",
       patterns: [params.query],
-      always: [params.query],
+      // Wildcard has no escape; a query with * or ? must not become a rule.
+      always: /[*?]/.test(params.query) ? [] : [params.query],
       metadata: {
         query: params.query,
         tokensNum: params.tokensNum,

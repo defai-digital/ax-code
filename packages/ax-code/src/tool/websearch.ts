@@ -45,7 +45,10 @@ export const WebSearchTool = Tool.define("websearch", async () => {
       await ctx.ask({
         permission: "websearch",
         patterns: [params.query],
-        always: [params.query],
+        // An "always" answer stores the query as a wildcard rule, and Wildcard
+        // has no escape: a model-written query of "*" approved once would
+        // allow every later search. Offer no always rule for such a query.
+        always: /[*?]/.test(params.query) ? [] : [params.query],
         metadata: {
           query: params.query,
           numResults: params.numResults,
