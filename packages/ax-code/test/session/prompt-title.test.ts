@@ -25,6 +25,22 @@ describe("session prompt title", () => {
     expect(cleanGeneratedTitle("   ")).toBeUndefined()
   })
 
+  test("cleanGeneratedTitle strips quotes inside a Title: label", () => {
+    expect(cleanGeneratedTitle('Title: "Fix login bug"')).toBe("Fix login bug")
+    expect(cleanGeneratedTitle("Title: 'Fix login bug'")).toBe("Fix login bug")
+    expect(cleanGeneratedTitle('"Title: Fix login bug"')).toBe("Fix login bug")
+  })
+
+  test("cleanGeneratedTitle keeps titles that start with 'The title' but drops preambles", () => {
+    expect(cleanGeneratedTitle("The title bar overlaps the sidebar")).toBe("The title bar overlaps the sidebar")
+    expect(cleanGeneratedTitle("The Title component crashes on resize")).toBe("The Title component crashes on resize")
+    expect(cleanGeneratedTitle("Here's a concise title:\nFix login bug")).toBe("Fix login bug")
+    expect(cleanGeneratedTitle("Here is the title:\nFix login bug")).toBe("Fix login bug")
+    expect(cleanGeneratedTitle("The title is:\nFix login bug")).toBe("Fix login bug")
+    expect(cleanGeneratedTitle("The session title would be\nFix login bug")).toBe("Fix login bug")
+    expect(cleanGeneratedTitle("Here's a title\nFix login bug")).toBe("Fix login bug")
+  })
+
   test("fallbackTitleFromUserText uses the first non-empty line", () => {
     expect(fallbackTitleFromUserText("count the line of code")).toBe("count the line of code")
     expect(fallbackTitleFromUserText("\n\n  hello world  \nmore")).toBe("hello world")

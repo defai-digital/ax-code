@@ -76,6 +76,22 @@ export function titleContextMessages(contextMessages: MessageV2.WithParts[]): Mo
   return [{ role: "user", content }]
 }
 
+function stripQuotes(text: string) {
+  return text
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim()
+}
+
+// "Here's a title:" or "The title is:" introduce the title; "The title bar
+// overlaps" is the title itself.
+function isTitlePreamble(line: string) {
+  return (
+    /^here(?:'?s| is)\s+(?:a|an|the|your|my)?\s*(?:\w+\s+){0,2}title\b/i.test(line) ||
+    /^the\s+(?:\w+\s+)?title\s*(?::|(?:is|would be|could be|should be)\b)/i.test(line)
+  )
+}
+
 /** Normalize model output into a single-line session title, or undefined if unusable. */
 export function cleanGeneratedTitle(text: string): string | undefined {
   const withoutBlocks = stripThinkTags(text)
@@ -85,14 +101,10 @@ export function cleanGeneratedTitle(text: string): string | undefined {
 
   const line = withoutBlocks
     .split("\n")
-    .map((raw) =>
-      raw
-        .trim()
-        .replace(/^["'`]+|["'`]+$/g, "")
-        .replace(/^(title|thread title)\s*:\s*/i, "")
-        .trim(),
-    )
-    .find((candidate) => candidate.length > 0 && !/^(here'?s|the)\s+(a\s+)?title\b/i.test(candidate))
+    // Quotes are stripped on both sides of the label so `Title: "X"` loses
+    // the inner quotes too.
+    .map((raw) => stripQuotes(stripQuotes(raw).replace(/^(title|thread title)\s*:\s*/i, "")))
+    .find((candidate) => candidate.length > 0 && !isTitlePreamble(candidate))
 
   if (!line) return undefined
   const capped = line.length > TITLE_MAX_LEN ? line.substring(0, TITLE_MAX_LEN - 3) + "..." : line
