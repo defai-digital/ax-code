@@ -77,3 +77,29 @@ describe("design check", () => {
     expect(result.files.map((entry) => path.basename(entry.file))).toEqual(["card.tsx"])
   })
 })
+
+describe("design check rules", () => {
+  async function scan(name: string, content: string) {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, name)
+    await fs.writeFile(file, content)
+    const result = await runDesignCheck([tmp.path])
+    return result.files.flatMap((entry) => entry.violations.map((violation) => violation.rule))
+  }
+
+  test("data-testid does not count as a form label", async () => {
+    expect(await scan("form.tsx", '<input data-testid="email-input" />\n')).toContain("missing-form-labels")
+    expect(await scan("form.tsx", '<input id="email" />\n')).not.toContain("missing-form-labels")
+  })
+
+  test("a line opening a block comment is not checked for spacing or inline styles", async () => {
+    const rules = await scan("card.tsx", "/* padding: 10px; style={{ top: 10 }} */\n")
+    expect(rules).not.toContain("no-raw-spacing")
+    expect(rules).not.toContain("no-inline-styles")
+  })
+
+  test("a fragment link is not a hardcoded color", async () => {
+    expect(await scan("nav.tsx", '<a href="#add">Add</a>\n')).not.toContain("no-hardcoded-colors")
+    expect(await scan("nav.tsx", '<div style="color: #add">Add</div>\n')).toContain("no-hardcoded-colors")
+  })
+})

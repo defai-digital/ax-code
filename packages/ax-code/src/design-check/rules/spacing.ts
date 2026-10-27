@@ -19,7 +19,7 @@ export const noRawSpacing: Rule = {
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
-      if (line.trim().startsWith("//") || line.trim().startsWith("*")) continue
+      if (line.trim().startsWith("//") || line.trim().startsWith("*") || line.trim().startsWith("/*")) continue
 
       PX_PATTERN.lastIndex = 0
       let match: RegExpExecArray | null

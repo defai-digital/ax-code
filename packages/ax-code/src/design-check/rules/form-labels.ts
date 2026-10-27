@@ -26,7 +26,7 @@ export const missingFormLabels: Rule = {
         // Skip hidden inputs and buttons
         if (tag.includes('type="hidden"') || tag.includes('type="submit"') || tag.includes('type="button"')) continue
 
-        const hasLabel = tag.includes("aria-label") || tag.includes("aria-labelledby") || tag.includes("id=")
+        const hasLabel = tag.includes("aria-label") || tag.includes("aria-labelledby") || /\sid\s*=/.test(tag)
         // Check if there's a <label> nearby (simple heuristic: within 2 lines before)
         const prevLines = lines.slice(Math.max(0, i - 2), i + 1).join("\n")
         const hasLabelElement = prevLines.includes("<label") || prevLines.includes("<Label")

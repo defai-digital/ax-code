@@ -6,6 +6,8 @@
 import type { Rule, Violation } from "../types"
 
 const HEX_PATTERN = /#(?:[0-9a-fA-F]{3,4}){1,2}\b/g
+// A fragment link such as href="#add" is spelled like a hex color.
+const FRAGMENT_LINK_PREFIX = /\b(?:href|to)\s*=\s*\{?\s*["'`]$/
 const RGB_PATTERN = /rgba?\s*\([^)]+\)/g
 const HSL_PATTERN = /hsla?\s*\([^)]+\)/g
 
@@ -28,6 +30,7 @@ export const noHardcodedColors: Rule = {
       let match: RegExpExecArray | null
       HEX_PATTERN.lastIndex = 0
       while ((match = HEX_PATTERN.exec(line)) !== null) {
+        if (FRAGMENT_LINK_PREFIX.test(line.slice(0, match.index))) continue
         violations.push({
           rule: "no-hardcoded-colors",
           severity: "error",
