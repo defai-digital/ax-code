@@ -9,6 +9,12 @@ const log = Log.create({ service: "lsp" })
 const BROKEN_BACKOFF_BASE_MS = 30_000
 const BROKEN_BACKOFF_MAX_MS = 60 * 60 * 1000
 const BROKEN_SERVER_CACHE_MAX = 100
+// Retention window for a kept entry, measured from the END of its cooldown
+// (nextAttempt) so every entry strictly outlives its own backoff: the
+// failure landing right after a max-length (60 min) cooldown compounds
+// instead of resetting the count to 1. Measured from the cooldown start, a
+// TTL equal to the max backoff would expire the entry at exactly that
+// moment and cycle 0.5m, 2m, 8m, 32m, 60m, 0.5m, ...
 const BROKEN_SERVER_TTL_MS = 60 * 60 * 1000
 
 export type BrokenEntry = {
@@ -33,7 +39,7 @@ export function isBroken(broken: Map<string, BrokenEntry>, key: string): boolean
 
 function pruneBrokenServers(broken: Map<string, BrokenEntry>, now: number) {
   for (const [key, entry] of broken) {
-    if (now - (entry.nextAttempt - computeBackoff(entry.failures)) > BROKEN_SERVER_TTL_MS) {
+    if (now - entry.nextAttempt > BROKEN_SERVER_TTL_MS) {
       broken.delete(key)
     }
   }

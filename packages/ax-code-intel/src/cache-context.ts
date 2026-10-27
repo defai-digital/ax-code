@@ -6,7 +6,7 @@
 // server set or the host's LSP configuration changes. This module computes
 // the context that cache-probe folds into the key alongside the content hash:
 //
-//   <pinned-server fingerprint>:<lsp config fingerprint>[:gen<workspace generation>]
+//   <pinned-server fingerprint>:<lsp config fingerprint>[:<boot-scoped workspace generation>]
 //
 // The workspace generation is a monotonic counter bumped whenever a workspace
 // file change is observed, through two channels:
@@ -15,9 +15,18 @@
 //   - the LSP clients themselves, when they push didChange / delete
 //     notifications (covers environments where no watcher is running)
 //
+// The counter restarts at 0 in every process, but the cache store persists
+// rows across processes (ax-code keeps them for 24 h). Without a per-boot
+// nonce a restarted process would recompute a previous process's generation
+// numbers and read its stale rows, so the generation component is scoped to
+// the process: cross-process reuse of workspace-dependent entries is
+// impossible and those rows simply age out via TTL. Within a process the
+// counter alone still governs invalidation.
+//
 // Over-invalidation is safe — a cache miss just costs a live query.
 // Under-invalidation is the bug this module exists to prevent.
 
+import { randomBytes } from "node:crypto"
 import { codeIntelHostMaybe } from "./host"
 import { PINNED_GITHUB_LSP_RELEASES, PINNED_CHECKSUM_LSP_RELEASES, PINNED_DIRECT_LSP_RELEASES } from "./server-releases"
 import { fingerprintHash } from "./internal/fingerprint"
@@ -35,6 +44,11 @@ const serverFingerprint = fingerprintHash(
     direct: PINNED_DIRECT_LSP_RELEASES,
   }),
 )
+
+// Random per-boot nonce (see the header comment): makes the generation
+// component unique to this process so another process can never recompute a
+// matching key.
+const bootNonce = randomBytes(8).toString("hex")
 
 let generation = 0
 
@@ -80,7 +94,7 @@ export async function contextFor(operation: string): Promise<string> {
         .catch(() => undefined)
     : undefined
   const parts = [serverFingerprint, fingerprintHash(JSON.stringify(config ?? null))]
-  if (operation === "references") parts.push(`gen${generation}`)
+  if (operation === "references") parts.push(`gen${bootNonce}-${generation}`)
   return parts.join(":")
 }
 

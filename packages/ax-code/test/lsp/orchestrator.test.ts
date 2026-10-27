@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import type { LSPClient } from "@ax-code/ax-code-intel/client"
 import type { LSPServer } from "@ax-code/ax-code-intel/server"
 import { computeBackoff, isBroken, markBroken, type BrokenEntry } from "@ax-code/ax-code-intel/broken-server"
@@ -140,6 +140,65 @@ describe("LSP broken server backoff", () => {
     expect(broken.size).toBeLessThanOrEqual(100)
     expect(broken.has("root-0:typescript")).toBe(false)
     expect(broken.has("root-124:typescript")).toBe(true)
+  })
+
+  // The failure that lands right after a max-length (60 min) cooldown must
+  // compound the previous failures, not restart from 1. Retention measured
+  // from the START of the cooldown expires the entry at exactly that moment
+  // (TTL == max backoff), cycling 0.5m, 2m, 8m, 32m, 60m, 0.5m, ... and
+  // hammering an unrecoverable server four extra times per cycle.
+  test("backoff keeps compounding after a max-length cooldown", () => {
+    vi.useFakeTimers()
+    try {
+      const broken = new Map<string, BrokenEntry>()
+      const failAfterCooldown = () => {
+        // The retry happens just after the cooldown allows it.
+        vi.setSystemTime(broken.get("key")!.nextAttempt + 1)
+        markBroken(broken, "key")
+        return broken.get("key")!
+      }
+
+      markBroken(broken, "key")
+      let entry = broken.get("key")!
+      expect(entry.failures).toBe(1)
+
+      for (let i = 2; i <= 5; i++) {
+        entry = failAfterCooldown()
+        expect(entry.failures).toBe(i)
+      }
+      // Failure 5 scheduled the max cooldown.
+      expect(entry.nextAttempt - Date.now()).toBe(computeBackoff(5))
+
+      // The failures landing right after each 60 min max cooldown keep
+      // compounding, so the server is retried at most once per hour forever.
+      entry = failAfterCooldown()
+      expect(entry.failures).toBe(6)
+      expect(entry.nextAttempt - Date.now()).toBe(computeBackoff(6))
+
+      entry = failAfterCooldown()
+      expect(entry.failures).toBe(7)
+      expect(entry.nextAttempt - Date.now()).toBe(computeBackoff(7))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("an entry untouched past its cooldown plus retention window is forgotten", () => {
+    vi.useFakeTimers()
+    try {
+      const broken = new Map<string, BrokenEntry>()
+      markBroken(broken, "key")
+      expect(broken.get("key")?.failures).toBe(1)
+
+      // The cooldown (30 s) plus the whole retention window elapsed with no
+      // further failure: the next failure starts from 1 again instead of
+      // compounding a long-forgotten outage.
+      vi.setSystemTime(broken.get("key")!.nextAttempt + 60 * 60 * 1000 + 1)
+      markBroken(broken, "key")
+      expect(broken.get("key")?.failures).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
