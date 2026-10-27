@@ -599,7 +599,15 @@ export namespace Auth {
   ): Promise<{ created: string[]; skipped: { providerID: string; reason: string }[] }> {
     const created: string[] = []
     const skipped = [...plan.willSkip]
+    // The plan can be stale: the CLI confirms it interactively, and another
+    // process may connect one of these providers meanwhile. Re-read so an
+    // entry created after planning is still never overwritten.
+    const existing = await all()
     for (const providerID of plan.willCreate) {
+      if (existing[providerID]) {
+        skipped.push({ providerID, reason: "exists" })
+        continue
+      }
       const entry = envelope.providers[providerID]
       if (!entry || entry.type !== "credential_source") {
         skipped.push({ providerID, reason: "missing or unsupported entry" })

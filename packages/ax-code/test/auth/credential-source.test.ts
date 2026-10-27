@@ -179,3 +179,23 @@ test("the exported file can be imported again from disk (dry-run, then --write)"
     await fs.rm(exported, { force: true })
   }
 })
+
+test("applyImport skips a provider connected after the plan was made", async () => {
+  const envelope: Auth.ExportEnvelope = {
+    version: 1,
+    exportedAt: "2026-10-27T00:00:00.000Z",
+    providers: {
+      "aws-bedrock": { type: "credential_source", source: { kind: "aws_profile", profile: "p", region: "us-east-1" } },
+    },
+  }
+  const plan = await Auth.planImport(envelope)
+  expect(plan.willCreate).toEqual(["aws-bedrock"])
+
+  // Another process connects the provider while the CLI waits for confirmation.
+  await Auth.set("aws-bedrock", { type: "api", key: "connected-after-plan" })
+
+  const result = await Auth.applyImport(envelope, plan)
+  expect(result.created).toEqual([])
+  expect(result.skipped).toEqual([{ providerID: "aws-bedrock", reason: "exists" }])
+  expect(await Auth.get("aws-bedrock")).toEqual({ type: "api", key: "connected-after-plan" })
+})
