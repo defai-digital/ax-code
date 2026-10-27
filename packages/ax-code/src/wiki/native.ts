@@ -1056,7 +1056,14 @@ export async function runNativeWiki(input: {
             await writeWikiBuildReport(input.root, config.dir, {
               schemaVersion: WIKI_BUILD_REPORT_SCHEMA_VERSION,
               action: input.action,
-              outcome: failure !== undefined ? "failed" : failed !== undefined ? "partial" : "completed",
+              // A failed page with nothing published is a failed build, not a
+              // partial one: an update that keeps the old wiki published nothing.
+              outcome:
+                failure !== undefined || (failed !== undefined && (result?.generatedPages.length ?? 0) === 0)
+                  ? "failed"
+                  : failed !== undefined
+                    ? "partial"
+                    : "completed",
               model: model.label,
               reasoningMode: model.reasoningMode,
               generator: { version: Installation.VERSION, promptVersion: WIKI_PROMPT_VERSION },
@@ -1073,7 +1080,8 @@ export async function runNativeWiki(input: {
                 published: result?.generatedPages.includes(outcome.path) ?? false,
               })),
               failed,
-              notAttemptedCount: Math.max(0, (pageCount ?? attempted) - attempted),
+              // A cache hit emits page_cached, never page_start; it was handled.
+              notAttemptedCount: Math.max(0, (pageCount ?? attempted) - attempted - cached.length),
               planHash: result?.manifest?.planHash,
               error: failure,
             })
