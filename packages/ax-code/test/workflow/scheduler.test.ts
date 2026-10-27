@@ -1750,6 +1750,32 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("pause leaves a settled workflow run settled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
+          const cancelled = await WorkflowScheduler.cancel(run.id)
+          expect(cancelled.status).toBe("cancelled")
+
+          const paused = await WorkflowScheduler.pause(run.id)
+
+          expect(paused.status).toBe("cancelled")
+          expect(paused.time.completed).toBe(cancelled.time.completed)
+          expect((await WorkflowScheduler.resume(run.id)).status).toBe("cancelled")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("resume leaves a cancelled workflow run cancelled when nothing was paused", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

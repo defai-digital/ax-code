@@ -250,6 +250,9 @@ export namespace WorkflowScheduler {
     const TaskQueue = await loadTaskQueue()
     const detail = await WorkflowRun.getDetail(runID)
     await assertEnabledForSpec(detail.spec.id)
+    // Pausing a settled run would overwrite its outcome and completion time
+    // with "paused", and a later resume would strand it in "running".
+    if (WorkflowRun.isTerminalRunStatus(detail.status)) return detail
     for (const child of detail.children) {
       if (WorkflowRun.isTerminalChildStatus(child.status) || child.status === "paused") continue
       if (child.taskQueueID) {
