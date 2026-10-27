@@ -1,4 +1,5 @@
 import fs from "fs/promises"
+import { createHash } from "node:crypto"
 import path from "path"
 import z from "zod"
 import { Config } from "../config/config"
@@ -239,23 +240,6 @@ export namespace Snapshot {
 
   async function remove(file: string) {
     await fs.rm(file, { force: true })
-  }
-
-  /**
-   * A deleted file can leave the directories the turn created for it behind,
-   * and a leftover directory blocks restoring a snapshot file at that path.
-   * Remove each parent while it is empty; never recurse into content.
-   */
-  async function pruneEmptyParents(worktree: string, file: string) {
-    let parent = path.dirname(file)
-    while (parent !== worktree && Filesystem.contains(worktree, parent)) {
-      const removed = await fs.rmdir(parent).then(
-        () => true,
-        () => false,
-      )
-      if (!removed) return
-      parent = path.dirname(parent)
-    }
   }
 
   async function revertPath(current: State, file: string, realWorktree?: string) {
@@ -904,7 +888,7 @@ export namespace Snapshot {
           })
           throw new Error(`Snapshot untracked check failed: git ls-files exited with code ${untracked.code}`)
         }
-        if (untracked.text.length === 0) {
+        if (untracked.text.length === 0 && (await snapshotExclusions(current, current.prevHash)).size === 0) {
           log.info("tracking (unchanged)", { hash: current.prevHash })
           return current.prevHash
         }
@@ -942,10 +926,39 @@ export namespace Snapshot {
       })
       throw captureFailure("Snapshot tracking failed: write-tree", result.code, result.stderr)
     }
-    const hash = result.text.trim()
+    let hash = result.text.trim()
     if (!valid(hash)) {
       log.error("failed to validate snapshot tree hash", { hash })
       throw new Error("Snapshot tracking failed: write-tree returned an invalid hash")
+    }
+    // Tree content alone cannot identify capture coverage. Preserve older
+    // exclusion records and give each excluded set a stable Git object identity.
+    // Git accepts these parentless commits anywhere it accepts a tree-ish.
+    if (staged.length > 0 || (await snapshotExclusions(current, hash)).size > 0) {
+      const coverage = createHash("sha256")
+        .update(JSON.stringify(staged.map((file) => file.path).sort()))
+        .digest("hex")
+      const identity = await runGit(
+        args(current, ["commit-tree", hash, "-m", `AX Code snapshot coverage ${coverage}`]),
+        {
+          cwd: current.worktree,
+          env: {
+            ...Object.fromEntries(
+              Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+            ),
+            GIT_AUTHOR_NAME: "AX Code",
+            GIT_AUTHOR_EMAIL: "snapshot@ax-code.local",
+            GIT_COMMITTER_NAME: "AX Code",
+            GIT_COMMITTER_EMAIL: "snapshot@ax-code.local",
+            GIT_AUTHOR_DATE: "@0 +0000",
+            GIT_COMMITTER_DATE: "@0 +0000",
+          },
+        },
+      )
+      if (identity.code !== 0)
+        throw captureFailure("Snapshot tracking failed: commit-tree", identity.code, identity.stderr)
+      hash = identity.text.trim()
+      if (!valid(hash)) throw new Error("Snapshot tracking failed: commit-tree returned an invalid hash")
     }
     const updateRef = await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], {
       cwd: current.directory,
@@ -1184,6 +1197,14 @@ export namespace Snapshot {
     const stat = await fs.lstat(file).catch(() => undefined)
     if (!stat?.isDirectory()) return
     try {
+      // Only a path explicitly being restored as a file may lose its empty
+      // directory tree. Ordinary file deletion must preserve pre-existing cwd
+      // and user directories, which Git trees do not record.
+      const entries = await fs.readdir(file, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!entry.isDirectory()) throw new Error(`Snapshot revert failed: ${file} is a non-empty directory`)
+        await clearRestoreTarget(path.join(file, entry.name))
+      }
       await fs.rmdir(file)
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
@@ -1286,7 +1307,6 @@ export namespace Snapshot {
           }
           log.info("file did not exist in snapshot, deleting", target)
           await remove(target.file)
-          await pruneEmptyParents(path.resolve(current.worktree), target.file)
         }
       }
 
@@ -1324,7 +1344,6 @@ export namespace Snapshot {
             applied.push(target)
             log.info("file did not exist in snapshot, deleting", target)
             await remove(target.file)
-            await pruneEmptyParents(path.resolve(current.worktree), target.file)
           }
           if (restore.length > 0) {
             applied.push(...restore)

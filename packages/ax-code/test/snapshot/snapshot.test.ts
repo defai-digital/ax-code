@@ -1789,7 +1789,7 @@ test("revert undoes a nested directory tree that replaced a file", async () => {
   })
 })
 
-test("revert removes the empty directories a deleted new file left behind", async () => {
+test("revert preserves empty parent directories after deleting a new file", async () => {
   await using tmp = await tmpdir({
     git: true,
     config: { username: "test" },
@@ -1810,7 +1810,7 @@ test("revert removes the empty directories a deleted new file left behind", asyn
       const patch = await Snapshot.patch(before!)
       await Snapshot.revert([{ ...patch, files: patch.files.filter((file) => file.includes("/new/")) }])
 
-      await expect(fs.stat(path.join(tmp.path, "new"))).rejects.toThrow()
+      expect((await fs.stat(path.join(tmp.path, "new"))).isDirectory()).toBe(true)
       expect(await fs.readFile(path.join(tmp.path, "shared", "user.txt"), "utf8")).toBe("user")
     },
   })
@@ -1907,3 +1907,24 @@ test("revert with overlapping files across patches uses first patch hash", async
     },
   })
 })
+
+for (const subdirectory of ["", "pkg/new"]) {
+  test(`revert preserves pre-existing empty directories with session cwd ${subdirectory || "."}`, async () => {
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+    const directory = path.join(tmp.path, subdirectory)
+    const existing = path.join(directory, "out")
+    await fs.mkdir(existing, { recursive: true })
+    await Instance.provide({
+      directory,
+      fn: async () => {
+        const before = (await Snapshot.track())!
+        const file = path.join(existing, "new.txt")
+        await fs.writeFile(file, "new")
+        await Snapshot.revert([await Snapshot.patch(before)])
+        expect((await fs.stat(existing)).isDirectory()).toBe(true)
+        expect((await fs.stat(directory)).isDirectory()).toBe(true)
+        await expect(fs.stat(file)).rejects.toMatchObject({ code: "ENOENT" })
+      },
+    })
+  })
+}

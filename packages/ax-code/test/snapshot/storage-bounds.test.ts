@@ -280,3 +280,49 @@ test("cleanup removes sample hooks from older stores but keeps a hooks directory
     },
   })
 }, 60_000)
+
+test("a clean recapture does not inherit exclusions from an identical tree", async () => {
+  vi.stubEnv("AX_CODE_SNAPSHOT_MAX_FILE_MB", "0.001")
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "big.bin")
+      await fs.writeFile(file, Buffer.alloc(8192, 1))
+      const excluded = (await Snapshot.track())!
+      await fs.rm(file)
+      const clean = (await Snapshot.track())!
+      await fs.writeFile(file, "new small file")
+      // Older turns still lack coverage; a new clean baseline has coverage.
+      expect((await Snapshot.patch(excluded)).files).not.toContain(file)
+      const patch = await Snapshot.patch(clean)
+      expect(patch.files).toContain(file)
+      await Snapshot.revert([patch])
+      await expect(fs.stat(file)).rejects.toMatchObject({ code: "ENOENT" })
+    },
+  })
+})
+
+test("clean recapture preserves coverage records from legacy tree-only snapshots", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const legacy = (await Snapshot.track())!
+      const record = path.join(gitdirFor(), "ax-code", "excluded", legacy)
+      await fs.mkdir(path.dirname(record), { recursive: true })
+      await fs.writeFile(record, '["legacy.bin"]')
+      const clean = (await Snapshot.track())!
+      expect(clean).not.toBe(legacy)
+      expect(await Snapshot.track()).toBe(clean)
+      expect(await fs.readFile(record, "utf8")).toBe('["legacy.bin"]')
+      const file = path.join(tmp.path, "legacy.bin")
+      await fs.writeFile(file, "new content")
+      expect((await Snapshot.patch(legacy)).files).not.toContain(file)
+      const patch = await Snapshot.patch(clean)
+      expect(patch.files).toContain(file)
+      await Snapshot.revert([patch])
+      await expect(fs.stat(file)).rejects.toMatchObject({ code: "ENOENT" })
+    },
+  })
+})
