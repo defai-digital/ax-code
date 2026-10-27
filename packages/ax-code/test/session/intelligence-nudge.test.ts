@@ -33,4 +33,22 @@ describe("IntelligenceNudge.evaluate", () => {
     expect(decision.text).toContain("impact_analyze")
     expect(decision.text).toContain("semantic-diff")
   })
+
+  test("counts patch-style mutations by the files they changed", () => {
+    const patch = (...paths: string[]) => ({
+      type: "tool",
+      tool: "apply_patch",
+      state: {
+        status: "completed",
+        input: { patchText: "*** Begin Patch" },
+        metadata: { files: paths.map((filePath) => ({ filePath })) },
+      },
+    })
+    const samefile = IntelligenceNudge.evaluate([
+      { info: { role: "assistant" }, parts: [patch("a.ts"), patch("a.ts")] },
+    ])
+    expect(samefile.active).toBe(false)
+    const twoFiles = IntelligenceNudge.evaluate([{ info: { role: "assistant" }, parts: [patch("a.ts", "b.ts")] }])
+    expect(twoFiles).toMatchObject({ active: true, mutatedFiles: 2 })
+  })
 })

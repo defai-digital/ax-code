@@ -39,8 +39,20 @@ export namespace IntelligenceNudge {
           (typeof input?.["path"] === "string" && input["path"]) ||
           (typeof input?.["file"] === "string" && input["file"]) ||
           undefined
-        if (path) files.add(path)
-        else files.add(`${tool}:${files.size}`)
+        if (path) {
+          files.add(path)
+          continue
+        }
+        // Patch-style tools (apply_patch, refactor_apply) name their files in
+        // the result metadata. A mutation with no known path is not counted:
+        // giving each call its own key made two patches to one file look like
+        // a multi-file session.
+        const changed = asRecordOrUndefined(state["metadata"])?.["files"]
+        if (!Array.isArray(changed)) continue
+        for (const entry of changed) {
+          const filePath = asRecordOrUndefined(entry)?.["filePath"]
+          if (typeof filePath === "string" && filePath) files.add(filePath)
+        }
       }
     }
 
