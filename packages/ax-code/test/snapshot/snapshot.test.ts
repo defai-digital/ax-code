@@ -1762,6 +1762,60 @@ test("revert undoes a file that replaced a directory", async () => {
   })
 })
 
+test("revert undoes a nested directory tree that replaced a file", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { username: "test" },
+    init: async (dir) => {
+      await Filesystem.write(path.join(dir, "a"), "file content")
+      await $`git add .`.cwd(dir).quiet()
+      await $`git commit --no-gpg-sign -m init`.cwd(dir).quiet()
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await fs.rm(path.join(tmp.path, "a"))
+      await Filesystem.write(path.join(tmp.path, "a", "b", "c.txt"), "nested")
+
+      const patch = await Snapshot.patch(before!)
+      await Snapshot.revert([patch])
+
+      expect(await fs.readFile(path.join(tmp.path, "a"), "utf8")).toBe("file content")
+    },
+  })
+})
+
+test("revert removes the empty directories a deleted new file left behind", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { username: "test" },
+    init: async (dir) => {
+      await Filesystem.write(path.join(dir, "keep.txt"), "keep")
+      await $`git add .`.cwd(dir).quiet()
+      await $`git commit --no-gpg-sign -m init`.cwd(dir).quiet()
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await Filesystem.write(path.join(tmp.path, "new", "deep", "file.txt"), "new")
+      await Filesystem.write(path.join(tmp.path, "shared", "user.txt"), "user")
+      const patch = await Snapshot.patch(before!)
+      await Snapshot.revert([{ ...patch, files: patch.files.filter((file) => file.includes("/new/")) }])
+
+      await expect(fs.stat(path.join(tmp.path, "new"))).rejects.toThrow()
+      expect(await fs.readFile(path.join(tmp.path, "shared", "user.txt"), "utf8")).toBe("user")
+    },
+  })
+})
+
 test("revert undoes a directory that replaced a file", async () => {
   await using tmp = await tmpdir({
     git: true,

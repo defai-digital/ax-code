@@ -241,6 +241,23 @@ export namespace Snapshot {
     await fs.rm(file, { force: true })
   }
 
+  /**
+   * A deleted file can leave the directories the turn created for it behind,
+   * and a leftover directory blocks restoring a snapshot file at that path.
+   * Remove each parent while it is empty; never recurse into content.
+   */
+  async function pruneEmptyParents(worktree: string, file: string) {
+    let parent = path.dirname(file)
+    while (parent !== worktree && Filesystem.contains(worktree, parent)) {
+      const removed = await fs.rmdir(parent).then(
+        () => true,
+        () => false,
+      )
+      if (!removed) return
+      parent = path.dirname(parent)
+    }
+  }
+
   async function revertPath(current: State, file: string, realWorktree?: string) {
     const worktree = path.resolve(current.worktree)
     const resolved = path.resolve(worktree, file)
@@ -1269,6 +1286,7 @@ export namespace Snapshot {
           }
           log.info("file did not exist in snapshot, deleting", target)
           await remove(target.file)
+          await pruneEmptyParents(path.resolve(current.worktree), target.file)
         }
       }
 
@@ -1306,6 +1324,7 @@ export namespace Snapshot {
             applied.push(target)
             log.info("file did not exist in snapshot, deleting", target)
             await remove(target.file)
+            await pruneEmptyParents(path.resolve(current.worktree), target.file)
           }
           if (restore.length > 0) {
             applied.push(...restore)
