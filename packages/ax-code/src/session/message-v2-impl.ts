@@ -1338,11 +1338,40 @@ export namespace MessageV2 {
     "connection terminated",
   ]
 
+  // Codes that only appear on the `cause` of undici's fetch TypeError when the
+  // socket or HTTP/2 stream dies mid-response (e.g. NGHTTP2_INTERNAL_ERROR).
+  const TRANSIENT_CAUSE_CODES = new Set([
+    ...TRANSIENT_CODES,
+    "ERR_HTTP2_STREAM_ERROR",
+    "ERR_HTTP2_SESSION_ERROR",
+    "ERR_HTTP2_STREAM_CANCEL",
+    "ERR_HTTP2_GOAWAY_SESSION",
+    "UND_ERR_SOCKET",
+    "UND_ERR_CLOSED",
+  ])
+  // undici's exact TypeError messages for a response body cut off by the peer.
+  // Exact equality so provider messages that merely contain the word stay
+  // unclassified.
+  const UNDICI_TERMINATED_MESSAGES = new Set(["terminated", "other side closed"])
+
   function isTransientNetworkError(e: unknown): boolean {
     if ((e as SystemError)?.code && TRANSIENT_CODES.has((e as SystemError).code!)) return true
     const msg = e instanceof Error ? e.message : typeof e === "string" ? e : ""
     const lower = msg.toLowerCase()
-    return TRANSIENT_PATTERNS.some((p) => lower.includes(p.toLowerCase()))
+    if (TRANSIENT_PATTERNS.some((p) => lower.includes(p.toLowerCase()))) return true
+    if (e instanceof TypeError && UNDICI_TERMINATED_MESSAGES.has(msg)) return true
+    return transientCause(e) !== undefined
+  }
+
+  /** First error in the `cause` chain carrying a transient network code. */
+  function transientCause(e: unknown): Error | undefined {
+    let cause = e instanceof Error ? e.cause : undefined
+    for (let depth = 0; depth < 5 && cause instanceof Error; depth++) {
+      const code = (cause as SystemError).code
+      if (code && TRANSIENT_CAUSE_CODES.has(code)) return cause
+      cause = cause.cause
+    }
+    return undefined
   }
 
   // AX Trust gateway SSE reports upstream provider failures as the exact
@@ -1367,6 +1396,8 @@ export namespace MessageV2 {
     if (msg.includes("SSE read timed out")) return "Stream stalled — no data received (possible network interruption)"
     if (msg.includes("Stream ended without finish event"))
       return "Stream terminated prematurely — possible network interruption"
+    const cause = transientCause(e)
+    if (cause && cause.message && cause.message !== msg) return `Network error: ${msg} (${cause.message})`
     return `Network error: ${msg}`
   }
 
