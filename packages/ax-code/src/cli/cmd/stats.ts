@@ -430,17 +430,17 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
     console.log("│                      MODEL USAGE                       │")
     console.log("├────────────────────────────────────────────────────────┤")
 
-    for (const [model, usage] of modelsToDisplay) {
+    for (const [index, [model, usage]] of modelsToDisplay.entries()) {
       console.log(`│ ${model.padEnd(54)} │`)
       console.log(renderRow("  Messages", formatCount(usage.messages)))
       console.log(renderRow("  Input Tokens", formatNumber(usage.tokens.input)))
       console.log(renderRow("  Output Tokens", formatNumber(usage.tokens.output)))
       console.log(renderRow("  Cache Read", formatNumber(usage.tokens.cache.read)))
       console.log(renderRow("  Cache Write", formatNumber(usage.tokens.cache.write)))
-      console.log("├────────────────────────────────────────────────────────┤")
+      // A separator between models only; moving the cursor up over a last one
+      // left an escape code and a stray separator in piped output.
+      if (index < modelsToDisplay.length - 1) console.log("├────────────────────────────────────────────────────────┤")
     }
-    // Remove last separator and add bottom border
-    process.stdout.write("\x1B[1A") // Move up one line
     console.log("└────────────────────────────────────────────────────────┘")
   }
   console.log()

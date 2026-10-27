@@ -295,3 +295,41 @@ test("SessionUsageStats.load restricts to the requested sessions and tolerates s
     },
   })
 })
+
+test("displayStats closes the model table without cursor escapes", () => {
+  const output: string[] = []
+  const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
+    output.push(args.join(" "))
+  })
+  const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+    output.push(String(chunk))
+    return true
+  })
+  const tokens = { input: 1, output: 1, cache: { read: 0, write: 0 } }
+  try {
+    displayStats(
+      {
+        totalSessions: 1,
+        totalMessages: 2,
+        totalTokens: { input: 2, output: 2, reasoning: 0, cache: { read: 0, write: 0 } },
+        toolUsage: {},
+        modelUsage: { "a/one": { messages: 1, tokens }, "b/two": { messages: 1, tokens } },
+        dateRange: { earliest: 0, latest: 0 },
+        days: 1,
+        tokensPerSession: 4,
+        medianTokensPerSession: 4,
+      } as any,
+      undefined,
+      Infinity,
+    )
+  } finally {
+    logSpy.mockRestore()
+    writeSpy.mockRestore()
+  }
+
+  const text = output.join("\n")
+  expect(text).not.toContain("\x1B[")
+  const lines = text.split("\n")
+  const bottom = lines.findIndex((line) => line.startsWith("└"))
+  expect(lines[bottom - 1]).not.toMatch(/^├/)
+})
