@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   footerGoalChip,
+  formatGoalSeconds,
   footerSessionStatusOrIdle,
   footerSubagentStatusView,
   footerTokenChip,
@@ -436,5 +437,15 @@ describe("footerSubagentStatusView", () => {
         now,
       })?.label,
     ).toBe("Subagent")
+  })
+})
+
+describe("formatGoalSeconds", () => {
+  test("carries a rounded-up minute into the hour", () => {
+    expect(formatGoalSeconds(45)).toBe("45s")
+    expect(formatGoalSeconds(3540)).toBe("59m")
+    expect(formatGoalSeconds(3575)).toBe("1h")
+    expect(formatGoalSeconds(5400)).toBe("1h30m")
+    expect(formatGoalSeconds(7199)).toBe("2h")
   })
 })

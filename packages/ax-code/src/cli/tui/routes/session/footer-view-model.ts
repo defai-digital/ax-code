@@ -93,9 +93,12 @@ export function formatTokenCount(n: number): string {
 // Compact wall-clock rendering for goal time budgets: 45s, 25m, 2h, 1h30m.
 export function formatGoalSeconds(n: number): string {
   if (n < 60) return `${n}s`
-  if (n < 3600) return `${Math.round(n / 60)}m`
-  const hours = Math.floor(n / 3600)
-  const minutes = Math.round((n % 3600) / 60)
+  // Round to whole minutes before splitting, so 59m30s+ carries into the hour
+  // instead of rendering "60m" or "1h60m".
+  const totalMinutes = Math.round(n / 60)
+  if (totalMinutes < 60) return `${totalMinutes}m`
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
   return minutes === 0 ? `${hours}h` : `${hours}h${minutes}m`
 }
 
