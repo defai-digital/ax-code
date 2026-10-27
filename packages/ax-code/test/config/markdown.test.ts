@@ -166,6 +166,10 @@ describe("ConfigMarkdown: normal template", () => {
     expect(names("```\n@src/fenced.ts\n```\n~~~\n@src/tilde.ts\n~~~\n@src/after.ts")).toEqual(["src/after.ts"])
   })
 
+  test("a bare @ or @. is not a reference to the worktree root", () => {
+    expect(ConfigMarkdown.files("hi @ there, ping @. or @, then @src/a.ts")).toHaveLength(1)
+  })
+
   test("should not match email addresses", () => {
     const emailTest = "Contact user@example.com for help"
     const emailMatches = ConfigMarkdown.files(emailTest)

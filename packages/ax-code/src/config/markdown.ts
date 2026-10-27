@@ -10,6 +10,9 @@ export namespace ConfigMarkdown {
   export function files(template: string) {
     const ranges = codeRanges(template)
     return Array.from(template.matchAll(FILE_REGEX)).filter((match) => {
+      // A bare `@` or `@.` (prose, end of a sentence) has no name; resolving
+      // it would attach the whole worktree root as a directory reference.
+      if (match[1] === "" || match[1] === ".") return false
       const index = match.index ?? 0
       return !ranges.some(([start, end]) => index >= start && index < end)
     })
