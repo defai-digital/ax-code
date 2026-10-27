@@ -60,7 +60,9 @@ function stripLeadingHeading(body: string): string {
   if (!trimmed.startsWith("#")) return trimmed
   let i = 0
   while (i < trimmed.length && trimmed[i] === "#") i++
-  if (i === 0 || (trimmed[i] !== " " && trimmed[i] !== "\t")) return trimmed
+  // Only a top-level H1 duplicates the page title; a leading `## Purpose`
+  // is the body's first section and must stay.
+  if (i !== 1 || (trimmed[i] !== " " && trimmed[i] !== "\t")) return trimmed
   const nl = trimmed.indexOf("\n", i)
   // A body that is only a heading must not survive: the renderer adds the page
   // title H1 itself, and keeping it would duplicate the heading.

@@ -38,6 +38,14 @@ function render(
 }
 
 describe("renderWikiPage / parseFrontmatter round trip", () => {
+  test("keeps a leading H2 section heading and strips only a duplicate H1", () => {
+    const kept = render({ body: "## Purpose\n\nEnough body content to pass the minimum length check." })
+    expect(kept).toContain("## Purpose")
+    const stripped = render({ body: "# Overview\n\n## Purpose\n\nEnough body content to pass the check." })
+    expect(stripped.match(/^# Overview$/gm)).toHaveLength(1)
+    expect(stripped).toContain("## Purpose")
+  })
+
   test("round-trips titles, summaries, symbols, and sources", () => {
     const parsed = parseFrontmatter(render())
     expect(parsed.title).toBe("Overview")
