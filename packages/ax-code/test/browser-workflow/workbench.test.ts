@@ -399,6 +399,12 @@ describe("source mapping and authoring", () => {
     await fs.writeFile(path.join(tmp.path, "big.ts"), "x".repeat(1024 * 1024 + 1))
     await expect(BrowserInventory.sources(tmp.path, ["big.ts"], [], async () => {})).rejects.toThrow("too large")
   })
+  test("template export check accepts names ending in $", () => {
+    expect(BrowserWorkflow.declaresNamedExport("export function jq$(x) {}", "jq$")).toBe(true)
+    expect(BrowserWorkflow.declaresNamedExport("export const a$b = 1", "a$b")).toBe(true)
+    expect(BrowserWorkflow.declaresNamedExport("export function jq$x() {}", "jq$")).toBe(false)
+    expect(BrowserWorkflow.declaresNamedExport("export function lookupAll() {}", "lookup")).toBe(false)
+  })
   test("declarative authoring escapes attributes and keeps explicit human submission", () => {
     const input = BrowserAuthoring.Parameters.parse({
       action: "author",

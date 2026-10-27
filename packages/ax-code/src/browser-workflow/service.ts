@@ -18,6 +18,18 @@ import { isRecord } from "../util/record"
 import { BrowserWorkbench } from "./workbench"
 
 export namespace BrowserWorkflow {
+  /**
+   * Whether `content` declares `export [async] function|const|let <name>`.
+   * The name may end in `$`, so the end of the identifier is "not followed by
+   * an identifier character" rather than `\b` (which needs a word character
+   * on one side and never matches right after `$`).
+   */
+  export function declaresNamedExport(content: string, name: string) {
+    return new RegExp(
+      `\\bexport\\s+(?:async\\s+)?(?:function|const|let)\\s+${name.replace(/[$]/g, "\\$")}(?![\\w$])`,
+    ).test(content)
+  }
+
   const ScenarioParameters = z.discriminatedUnion("action", [
     z.object({ action: z.literal("freeze"), manifest: BrowserScenario.Manifest }).strict(),
     z.object({ action: z.literal("run"), hash: BrowserScenario.Hash, server: z.string().min(1).max(100) }).strict(),
@@ -90,11 +102,7 @@ export namespace BrowserWorkflow {
       const { content } = await readLocalSource(Instance.worktree, args.module, (file) =>
         ctx.ask({ permission: "read", patterns: [file], always: [], metadata: {} }),
       )
-      if (
-        !new RegExp(
-          `\\bexport\\s+(?:async\\s+)?(?:function|const|let)\\s+${args.exportName.replace(/[$]/g, "\\$")}\\b`,
-        ).test(content)
-      )
+      if (!declaresNamedExport(content, args.exportName))
         throw new Error("Named application export could not be verified; use an explicit exported function")
       return {
         title: "WebMCP registration template",
