@@ -78,7 +78,11 @@ export namespace Keybind {
 
     return key.split(",").map((combo) => {
       // Handle <leader> syntax by replacing with leader+
-      const normalized = combo.trim().replace(/<leader>/g, "leader+")
+      let normalized = combo.trim().replace(/<leader>/g, "leader+")
+      // The "+" key itself ("+", "ctrl++", as toString writes it) would be
+      // split away as a separator, leaving a binding with no key.
+      const plusKey = normalized === "+" || normalized.endsWith("++")
+      if (plusKey) normalized = normalized.slice(0, -1)
       const parts = normalized
         .toLowerCase()
         .split("+")
@@ -116,6 +120,7 @@ export namespace Keybind {
             break
         }
       }
+      if (plusKey) info.name = "+"
 
       return info
     })

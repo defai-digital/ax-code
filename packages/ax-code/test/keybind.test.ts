@@ -434,3 +434,10 @@ describe("Keybind.parse", () => {
     ])
   })
 })
+
+test("parse round-trips the plus key", () => {
+  expect(Keybind.parse("ctrl++")).toEqual([{ ctrl: true, meta: false, shift: false, leader: false, name: "+" }])
+  expect(Keybind.parse("+")).toEqual([{ ctrl: false, meta: false, shift: false, leader: false, name: "+" }])
+  const info = { ctrl: true, meta: false, shift: false, leader: false, name: "+" }
+  expect(Keybind.parse(Keybind.toString(info))).toEqual([info])
+})
