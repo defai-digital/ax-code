@@ -15,6 +15,7 @@ import { Process } from "../../src/util/process"
 import { Ssrf } from "../../src/util/ssrf"
 import { ConfigPaths } from "../../src/config/paths"
 import { Installation } from "../../src/installation"
+import { Permission } from "../../src/permission"
 
 // Get managed config directory from environment (set in preload.ts)
 const managedConfigDir = process.env.AX_CODE_TEST_MANAGED_CONFIG_DIR!
@@ -3737,6 +3738,153 @@ describe("project config {file:} substitution is sandboxed", () => {
       if (original === undefined) delete process.env["AX_TEST_JSON_META"]
       else process.env["AX_TEST_JSON_META"] = original
     }
+  })
+})
+
+describe("{file:} and {env:} tokens inside JSONC comments", () => {
+  // Substitution used to skip a token only when the whole line started with
+  // "//", so a token inside a trailing comment or a block comment was still
+  // resolved (and threw "bad file reference ... does not exist" for a
+  // missing file). Commented-out tokens must stay dead text.
+  test("skips a {file:} token in a trailing line comment", async () => {
+    const parsed = await ConfigPaths.parseText('{ "a": 1, // was {file:./missing.txt}\n }', "/tmp/ax-code.jsonc")
+    expect(parsed).toEqual({ a: 1 })
+  })
+
+  test("skips a {file:} token in a block comment", async () => {
+    const parsed = await ConfigPaths.parseText('{ "a": 1 } /* "b": "{file:./missing.txt}" */', "/tmp/ax-code.jsonc")
+    expect(parsed).toEqual({ a: 1 })
+  })
+
+  test("keeps skipping a {file:} token in an own-line comment", async () => {
+    const parsed = await ConfigPaths.parseText('// {file:./missing.txt}\n{ "a": 1 }', "/tmp/ax-code.jsonc")
+    expect(parsed).toEqual({ a: 1 })
+  })
+
+  test("still resolves a {file:} token after a // inside a string value", async () => {
+    // A "//" inside a JSON string is not a comment opener — the token in a
+    // URL is live config text and must keep resolving.
+    await using tmp = await tmpdir({ git: true })
+    await Filesystem.write(path.join(tmp.path, "hosts.txt"), "hosts-value")
+    const parsed = await ConfigPaths.parseText('{"url":"http://x/{file:hosts.txt}"}', {
+      source: path.join(tmp.path, "ax-code.json"),
+      dir: tmp.path,
+    })
+    expect(parsed.url).toBe("http://x/hosts-value")
+  })
+
+  test("does not substitute an {env:} value into a block comment", async () => {
+    // An env value containing "*/" would end the block comment early and
+    // uncomment arbitrary config text, so commented {env:} tokens must not
+    // be substituted at all.
+    const original = process.env["AX_TEST_COMMENT_INJECT"]
+    process.env["AX_TEST_COMMENT_INJECT"] = '*/ "b": "injected"'
+    try {
+      const parsed = await ConfigPaths.parseText('{ "a": 1 } /* {env:AX_TEST_COMMENT_INJECT} */', "/tmp/ax-code.jsonc")
+      expect(parsed).toEqual({ a: 1 })
+    } finally {
+      if (original === undefined) delete process.env["AX_TEST_COMMENT_INJECT"]
+      else process.env["AX_TEST_COMMENT_INJECT"] = original
+    }
+  })
+
+  test("skips an {env:} token in a trailing line comment", async () => {
+    const original = process.env["AX_TEST_COMMENT_UNUSED"]
+    delete process.env["AX_TEST_COMMENT_UNUSED"]
+    try {
+      const parsed = await ConfigPaths.parseText('{ "a": 1, // {env:AX_TEST_COMMENT_UNUSED}\n }', "/tmp/ax-code.jsonc")
+      expect(parsed).toEqual({ a: 1 })
+    } finally {
+      if (original !== undefined) process.env["AX_TEST_COMMENT_UNUSED"] = original
+    }
+  })
+})
+
+describe("authority permission layers order pattern maps last-match-wins", () => {
+  // Permission pattern maps evaluate last-match-wins in key insertion
+  // order, but mergeDeep keeps the earlier source's key order, so an admin
+  // blanket deny merged from the managed layer could still lose to an
+  // earlier source's more-specific allow purely by ordering. The earlier
+  // layer must be a trusted source (inline config): untrusted project
+  // configs are deny-only-filtered (see denyOnlyPermission) and cannot
+  // carry ask/allow patterns at all.
+  const SCHEMA = "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json"
+
+  function bashPatterns(rules: Config.Permission) {
+    const bash = rules.bash
+    return typeof bash === "object" ? Object.keys(bash) : []
+  }
+
+  function withInlineConfig<T>(config: object, fn: () => Promise<T>): Promise<T> {
+    const original = process.env["AX_CODE_CONFIG_CONTENT"]
+    process.env["AX_CODE_CONFIG_CONTENT"] = JSON.stringify(config)
+    return fn().finally(() => {
+      if (original === undefined) delete process.env["AX_CODE_CONFIG_CONTENT"]
+      else process.env["AX_CODE_CONFIG_CONTENT"] = original
+    })
+  }
+
+  test("managed blanket deny beats an earlier trusted curl allow", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeManagedSettings({ permission: { bash: { "*": "deny" } } })
+    await withInlineConfig({ username: "test", permission: { bash: { "*": "ask", "curl *": "allow" } } }, async () => {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const config = await Config.get()
+          // The managed layer's patterns must be ordered last so they win.
+          expect(bashPatterns(config.permission!)).toEqual(["curl *", "*"])
+          expect(
+            Permission.evaluate("bash", "curl https://example.com", Permission.fromConfig(config.permission!)).action,
+          ).toBe("deny")
+        },
+      })
+    })
+  })
+
+  test("managed agent permission blanket deny reorders the same way", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeManagedSettings({ agent: { build: { permission: { bash: { "*": "deny" } } } } })
+    await withInlineConfig(
+      { username: "test", agent: { build: { permission: { bash: { "*": "ask", "curl *": "allow" } } } } },
+      async () => {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const config = await Config.get()
+            const permission = config.agent?.["build"]?.permission
+            expect(bashPatterns(permission!)).toEqual(["curl *", "*"])
+            expect(
+              Permission.evaluate("bash", "curl https://example.com", Permission.fromConfig(permission!)).action,
+            ).toBe("deny")
+          },
+        })
+      },
+    )
+  })
+
+  test("non-managed project sources do not gain reordering", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeConfig(tmp.path, {
+      $schema: SCHEMA,
+      permission: { bash: { "*": "deny" } },
+    })
+    await withInlineConfig({ username: "test", permission: { bash: { "*": "ask", "curl *": "allow" } } }, async () => {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const config = await Config.get()
+          // Existing semantics: a later lower-trust project source wins on
+          // values but not on order, so its blanket deny cannot defeat the
+          // earlier trusted source's specific allow. Only the managed/env
+          // authority layers reorder.
+          expect(bashPatterns(config.permission!)).toEqual(["*", "curl *"])
+          expect(
+            Permission.evaluate("bash", "curl https://example.com", Permission.fromConfig(config.permission!)).action,
+          ).toBe("allow")
+        },
+      })
+    })
   })
 })
 

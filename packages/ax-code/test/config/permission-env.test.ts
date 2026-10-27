@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
 import { Config } from "../../src/config/config"
+import { Flag } from "../../src/flag/flag"
+import { Instance } from "../../src/project/instance"
+import { Permission } from "../../src/permission"
+import { tmpdir } from "../fixture/fixture"
 
 describe("AX_CODE_PERMISSION decoding", () => {
   test("decodes already-parsed permission config values", () => {
@@ -36,6 +40,46 @@ describe("AX_CODE_PERMISSION decoding", () => {
     })
     if (!result.ok && result.reason === "schema") {
       expect(result.errors.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe("AX_CODE_PERMISSION merge", () => {
+  test("env blanket deny beats an earlier trusted curl allow by key order", async () => {
+    // Flag.AX_CODE_PERMISSION is an import-time const, but the compiled
+    // namespace member is a plain writable property and config-impl reads
+    // it live at loadState time, so override it for this test and restore.
+    // The earlier layer is inline (trusted) config: untrusted project
+    // configs are deny-only-filtered and cannot carry ask/allow patterns.
+    const flag = Flag as { AX_CODE_PERMISSION: string | undefined }
+    const previous = flag.AX_CODE_PERMISSION
+    flag.AX_CODE_PERMISSION = JSON.stringify({ bash: { "*": "deny" } })
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const originalInline = process.env["AX_CODE_CONFIG_CONTENT"]
+      process.env["AX_CODE_CONFIG_CONTENT"] = JSON.stringify({
+        username: "test",
+        permission: { bash: { "*": "ask", "curl *": "allow" } },
+      })
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const config = await Config.get()
+            const bash = config.permission?.bash
+            // The env layer's patterns must be ordered last so they win.
+            expect(typeof bash === "object" ? Object.keys(bash) : []).toEqual(["curl *", "*"])
+            expect(
+              Permission.evaluate("bash", "curl https://example.com", Permission.fromConfig(config.permission!)).action,
+            ).toBe("deny")
+          },
+        })
+      } finally {
+        if (originalInline === undefined) delete process.env["AX_CODE_CONFIG_CONTENT"]
+        else process.env["AX_CODE_CONFIG_CONTENT"] = originalInline
+      }
+    } finally {
+      flag.AX_CODE_PERMISSION = previous
     }
   })
 })

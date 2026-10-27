@@ -143,6 +143,47 @@ export namespace ConfigPaths {
     trusted?: boolean
   }
 
+  /**
+   * Character ranges of JSONC comments in text. Respects JSON string
+   * literals — a "//" or "/*" inside a string is not a comment opener —
+   * and skips backslash escapes so an embedded \" does not end the string.
+   */
+  function jsoncCommentRanges(text: string): Array<[number, number]> {
+    const ranges: Array<[number, number]> = []
+    let i = 0
+    while (i < text.length) {
+      const ch = text[i]
+      if (ch === '"') {
+        i++
+        while (i < text.length && text[i] !== '"') {
+          i += text[i] === "\\" ? 2 : 1
+        }
+        i++
+        continue
+      }
+      if (ch === "/" && text[i + 1] === "/") {
+        const start = i
+        const newline = text.indexOf("\n", i)
+        i = newline === -1 ? text.length : newline
+        ranges.push([start, i])
+        continue
+      }
+      if (ch === "/" && text[i + 1] === "*") {
+        const start = i
+        const close = text.indexOf("*/", i + 2)
+        i = close === -1 ? text.length : close + 2
+        ranges.push([start, i])
+        continue
+      }
+      i++
+    }
+    return ranges
+  }
+
+  function overlapsRange(ranges: Array<[number, number]>, start: number, end: number) {
+    return ranges.some(([rangeStart, rangeEnd]) => start < rangeEnd && end > rangeStart)
+  }
+
   /** Apply {env:VAR} and {file:path} substitutions to config text. */
   async function substitute(text: string, input: ParseSource, options: ParseOptions = {}) {
     const missing = options.missing ?? "error"
@@ -164,7 +205,13 @@ export namespace ConfigPaths {
     // reinterpreted as a file reference the config author never wrote.
     const envRanges: Array<[number, number]> = []
     {
-      const envMatches = Array.from(text.matchAll(/\{env:([^}]+)\}/g))
+      // Commented-out {env:} tokens are dead text: substituting them could
+      // splice env bytes into comments — a value containing "*/" would end a
+      // block comment early and uncomment arbitrary config text.
+      const commentRanges = jsoncCommentRanges(text)
+      const envMatches = Array.from(text.matchAll(/\{env:([^}]+)\}/g)).filter(
+        (match) => !overlapsRange(commentRanges, match.index!, match.index! + match[0].length),
+      )
       let out = ""
       let cursor = 0
       for (const match of envMatches) {
@@ -195,8 +242,15 @@ export namespace ConfigPaths {
       text = out
     }
 
+    // Tokens inside JSONC comments (own-line, trailing, or block) are dead
+    // text and must not be resolved — a missing commented-out include is not
+    // an error. Computed on the post-{env:} text so substituted values that
+    // merely look like comment syntax stay inside their string literals.
+    const commentRanges = jsoncCommentRanges(text)
     const fileMatches = Array.from(text.matchAll(/\{file:[^}]+\}/g)).filter(
-      (match) => !envRanges.some(([start, end]) => match.index! < end && match.index! + match[0].length > start),
+      (match) =>
+        !overlapsRange(envRanges, match.index!, match.index! + match[0].length) &&
+        !overlapsRange(commentRanges, match.index!, match.index! + match[0].length),
     )
     if (!fileMatches.length) return text
 
@@ -210,14 +264,6 @@ export namespace ConfigPaths {
       const token = match[0]
       const index = match.index!
       out += text.slice(cursor, index)
-
-      const lineStart = text.lastIndexOf("\n", index - 1) + 1
-      const prefix = text.slice(lineStart, index).trimStart()
-      if (prefix.startsWith("//")) {
-        out += token
-        cursor = index + token.length
-        continue
-      }
 
       const rawRef = token.replace(/^\{file:/, "").replace(/\}$/, "")
       let filePath = rawRef

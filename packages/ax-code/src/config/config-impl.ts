@@ -437,10 +437,67 @@ export namespace Config {
     }
   }
 
+  /**
+   * Permission pattern maps evaluate last-match-wins in key insertion
+   * order, but mergeDeep keeps the earlier source's key order for
+   * surviving keys. An admin blanket deny in an authority layer (managed
+   * config, AX_CODE_PERMISSION env) — `bash: { "*": "deny" }` — merged
+   * onto a lower layer's `{ "*": "ask", "curl *": "allow" }` would leave
+   * that `curl *` allow evaluated after the deny, so curl stays allowed
+   * despite the admin's blanket rule. Rebuild each tool's map so the
+   * authority layer's patterns come last and win. Scoped to the admin
+   * layers only: reordering for project/user/remote sources would let a
+   * lower-trust project override a user's specific deny by key order alone.
+   */
+  function reorderAuthorityPermissionMaps(target: unknown, incoming: unknown, merged: unknown) {
+    if (!isRecord(target) || !isRecord(incoming) || !isRecord(merged)) return
+    for (const tool of Object.keys(incoming)) {
+      const earlier = target[tool]
+      const later = incoming[tool]
+      const mergedTool = merged[tool]
+      // Scalar-vs-map pairs keep the existing merge behavior (see
+      // foldBlanketRules); only two pattern maps reorder.
+      if (!isRecord(earlier) || !isRecord(later) || !isRecord(mergedTool)) continue
+      const rebuilt: Record<string, unknown> = {}
+      for (const pattern of Object.keys(earlier)) {
+        if (!(pattern in later)) rebuilt[pattern] = mergedTool[pattern]
+      }
+      for (const pattern of Object.keys(later)) {
+        rebuilt[pattern] = mergedTool[pattern]
+      }
+      merged[tool] = rebuilt
+    }
+  }
+
+  /** Same authority ordering for the per-agent / per-mode permission surfaces. */
+  function reorderNestedAuthorityPermissionMaps(target: Info, incoming: Info, merged: Info) {
+    reorderAuthorityPermissionMaps(target.permission, incoming.permission, merged.permission)
+    for (const container of ["agent", "mode"] as const) {
+      const targetEntries = target[container] as unknown
+      const incomingEntries = incoming[container] as unknown
+      const mergedEntries = merged[container] as unknown
+      if (!isRecord(targetEntries) || !isRecord(incomingEntries) || !isRecord(mergedEntries)) continue
+      for (const [name, incomingEntry] of Object.entries(incomingEntries)) {
+        if (!isRecord(incomingEntry)) continue
+        const targetEntry = targetEntries[name]
+        const mergedEntry = mergedEntries[name]
+        if (!isRecord(targetEntry) || !isRecord(mergedEntry)) continue
+        reorderAuthorityPermissionMaps(
+          targetEntry["permission"],
+          incomingEntry["permission"],
+          mergedEntry["permission"],
+        )
+      }
+    }
+  }
+
   // Custom merge function that concatenates array fields instead of replacing them
-  function mergeConfigConcatArrays(target: Info, source: Info): Info {
+  function mergeConfigConcatArrays(target: Info, source: Info, opts: { authority?: boolean } = {}): Info {
     const merged = mergeDeep(target, source)
     foldNestedBlanketRules(target, merged)
+    // Only admin-authority sources (managed config) reorder permission
+    // pattern maps so their patterns win; see reorderAuthorityPermissionMaps.
+    if (opts.authority) reorderNestedAuthorityPermissionMaps(target, source, merged)
     const plugin = mergeUniqueStrings(target.plugin, source.plugin)
     if (plugin) {
       merged.plugin = plugin
@@ -608,7 +665,9 @@ export namespace Config {
       if (managedRewriteDisabled) scoped = { ...scoped, hooks: { ...scoped.hooks, allow_input_rewrite: false } }
       if (!sourceTrustedForFloor(source)) scoped = tightenIsolationFloor(result, scoped)
       if (scoped.permission) permissionLayers.push(scoped.permission)
-      result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(scoped))
+      result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(scoped), {
+        authority: source.kind === "managed",
+      })
     }
 
     // Config loading order (low -> high precedence): https://github.com/defai-digital/ax-code#config-precedence-order
@@ -974,7 +1033,14 @@ export namespace Config {
       if (parsed.ok) {
         const { auto_accept: _ignoredAutoAccept, ...rules } = parsed.permission
         permissionLayers.push(rules)
-        result.permission = mergeDeep(result.permission ?? {}, rules)
+        // The env override is an admin-authority layer like managed config:
+        // its patterns must be evaluated last (last match wins) inside each
+        // merged pattern map, which mergeDeep alone does not give. The env
+        // shape is a flat permission map, so no agent/mode nesting applies.
+        const earlier = result.permission ?? {}
+        const merged = mergeDeep(earlier, rules)
+        reorderAuthorityPermissionMaps(earlier, rules, merged)
+        result.permission = merged
       } else if (parsed.reason === "schema") {
         log.warn("AX_CODE_PERMISSION does not match permission schema, ignoring", {
           value: Flag.AX_CODE_PERMISSION,
