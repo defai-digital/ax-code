@@ -30,6 +30,8 @@ const fixtures: Array<[string, string, string, boolean?]> = [
   ["   \n\n", " \n", "new"],
   ["aaabaa", "aa", "b"],
   ["a\r\na\n", "a", "b", true],
+  ["a\r\nb\na\nb\r\n", "a\r\nb", "Z", true],
+  ["foo\nxfoo\n", "foo", "BAR"],
   [`head\n${"a".repeat(2001)}\ntail`, `head\n${"a".repeat(2000)}b\ntail`, "new"],
 ]
 function outcome(run: () => string) {

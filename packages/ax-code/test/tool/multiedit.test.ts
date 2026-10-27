@@ -202,6 +202,52 @@ describe("tool.multiedit", () => {
       },
     })
   })
+
+  test("replaceAll replaces every copy on mixed-ending files", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "mixed.txt")
+    await fs.writeFile(file, "a\r\nb\na\nb\r\n", "utf-8")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await FileTime.read(ctx.sessionID, file)
+        const tool = await MultiEditTool.init()
+        await tool.execute(
+          {
+            filePath: file,
+            edits: [{ filePath: file, oldString: "a\nb", newString: "Z", replaceAll: true }],
+          },
+          ctx,
+        )
+        expect(await fs.readFile(file, "utf8")).toBe("Z\r\nZ\r\n")
+      },
+    })
+  })
+
+  test("fails without writing when an edit's oldString matches multiple times", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "a.txt")
+    await fs.writeFile(file, "foo\nxfoo\n", "utf-8")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await FileTime.read(ctx.sessionID, file)
+        const tool = await MultiEditTool.init()
+        await expect(
+          tool.execute(
+            {
+              filePath: file,
+              edits: [{ filePath: file, oldString: "foo", newString: "BAR" }],
+            },
+            ctx,
+          ),
+        ).rejects.toThrow("Found multiple matches")
+        expect(await fs.readFile(file, "utf8")).toBe("foo\nxfoo\n")
+      },
+    })
+  })
 })
 
 describe("tool.multiedit diagnostics", () => {

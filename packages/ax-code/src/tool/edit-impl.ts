@@ -814,6 +814,25 @@ export function replace(content: string, oldString: string, newString: string, r
   const hasCRLF = content.includes("\r\n")
 
   if (replaceAll) {
+    // Mixed-ending file: the caller converted oldString to the dominant
+    // ending (any \r\n counts as CRLF), so a literal replaceAll would only
+    // touch that variant and silently skip the bare-LF copies. Normalize
+    // both sides so every occurrence is replaced, then splice the changed
+    // region back onto the file's original endings.
+    const mixedEndings = hasCRLF && content.split("\n").length > content.split("\r\n").length
+    if (mixedEndings) {
+      const normalizedContent = normalizeLineEndings(content)
+      const normalizedOld = normalizeLineEndings(oldString)
+      if (!normalizedContent.includes(normalizedOld)) {
+        throw new Error("Could not find oldString in the file. It must match exactly when replaceAll is enabled.")
+      }
+      const normalizedResult = normalizedContent.replaceAll(normalizedOld, () => normalizeLineEndings(newString))
+      return spliceNormalizedReplacement({
+        original: content,
+        normalizedResult,
+        replacementEnding: detectLineEnding(content),
+      })
+    }
     if (!content.includes(oldString)) {
       throw new Error("Could not find oldString in the file. It must match exactly when replaceAll is enabled.")
     }
@@ -869,7 +888,11 @@ export function replace(content: string, oldString: string, newString: string, r
     }
     if (candidates.size === 0) continue
     notFound = false
-    if (candidates.size !== 1) continue
+    // Ambiguity is sticky: once any matcher sees more than one distinct
+    // match, letting a fuzzier matcher pick one occurrence would silently
+    // apply an edit the caller never disambiguated. Stop here and surface
+    // the "Found multiple matches" error edit.txt promises.
+    if (candidates.size !== 1) break
 
     const candidate = candidates.values().next().value
     if (!candidate) continue

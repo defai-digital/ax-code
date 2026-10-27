@@ -895,6 +895,38 @@ describe("tool.edit", () => {
       expectCrlf(output)
     })
 
+    test("replaceAll replaces every copy on mixed-ending files", async () => {
+      // "a\nb" appears once as "a\r\nb" and once with a bare LF; the tool
+      // converts oldString to the dominant CRLF form, which used to replace
+      // only the CRLF copy and report success.
+      await using tmp = await tmpdir({
+        config: { username: "test" },
+        init: async (dir) => {
+          await fs.writeFile(path.join(dir, "test.txt"), "a\r\nb\na\nb\r\n")
+        },
+      })
+      const output = await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          // A dedicated session keeps this test clear of the shared
+          // session's blast-radius write counter, which other tests in
+          // this file inflate past the autonomous cap when they retry.
+          const localCtx = { ...ctx, sessionID: SessionID.make("ses_edit_mixed_replaceall") }
+          const edit = await EditTool.init()
+          const filePath = path.join(tmp.path, "test.txt")
+          await FileTime.read(localCtx.sessionID, filePath)
+          await edit.execute({ filePath, oldString: "a\nb", newString: "Z", replaceAll: true }, localCtx)
+          return await fs.readFile(filePath, "utf-8")
+        },
+      })
+      expect(output).toBe("Z\r\nZ\r\n")
+    })
+
+    test("replaceAll on mixed-ending files replaces both ending variants", () => {
+      expect(replace("a\r\nb\na\nb\r\n", "a\r\nb", "Z", true)).toBe("Z\r\nZ\r\n")
+      expect(replace("a\r\nb\na\nb\r\n", "a\nb", "Z", true)).toBe("Z\r\nZ\r\n")
+    })
+
     test("preserves untouched mixed line endings outside the replaced region", async () => {
       const output = await apply({
         content: "line1\r\nline2\nline3\r\n",
@@ -946,6 +978,18 @@ describe("tool.edit", () => {
 
     test("rejects two exact matches on the same line instead of replacing the first", () => {
       expect(() => replace("keep foo and foo here", "foo", "bar")).toThrow("Found multiple matches")
+    })
+
+    test("rejects a whole-line fuzzy pick when the exact string occurs twice", () => {
+      // The exact matcher sees "foo" at two offsets. The trimmed-line
+      // replacer used to pick the whole-line occurrence and silently apply
+      // one of the two ambiguous matches instead of surfacing the error
+      // edit.txt promises.
+      expect(() => replace("foo\nxfoo\n", "foo", "BAR")).toThrow("Found multiple matches")
+    })
+
+    test("rejects a whole-line fuzzy pick when an exact match is embedded in another line", () => {
+      expect(() => replace("  return x\nlet y = return x\n", "return x", "return z")).toThrow("Found multiple matches")
     })
 
     test("does not delete interior lines when the anchors span a different block length", () => {

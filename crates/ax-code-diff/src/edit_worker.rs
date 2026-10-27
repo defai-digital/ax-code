@@ -175,6 +175,37 @@ fn splice_crlf(original: &str, result: &str) -> Result<String> {
         .map_err(|_| napi::Error::from_reason("Native edit cannot represent output UTF-16"))
 }
 
+fn replace_all_literal(content: &str, old: &str, new: &str, cancel: &AtomicBool) -> Result<String> {
+    if !content.contains(old) {
+        return Err(napi::Error::from_reason(
+            "Could not find oldString in the file. It must match exactly when replaceAll is enabled.",
+        ));
+    }
+    let mut count = 0usize;
+    for _ in content.match_indices(old) {
+        check(cancel)?;
+        count += 1;
+    }
+    let output_size = count
+        .checked_mul(new.len())
+        .and_then(|size| size.checked_add(content.len() - count * old.len()));
+    let Some(output_size) = output_size.filter(|&size| size <= 64 * 1024 * 1024) else {
+        return Err(napi::Error::from_reason(
+            "Native edit output limit exceeded",
+        ));
+    };
+    let mut result = String::with_capacity(output_size);
+    let mut from = 0;
+    for (i, _) in content.match_indices(old) {
+        check(cancel)?;
+        result.push_str(&content[from..i]);
+        result.push_str(new);
+        from = i + old.len();
+    }
+    result.push_str(&content[from..]);
+    return Ok(result);
+}
+
 pub(crate) fn replace(
     content: &str,
     old: &str,
@@ -195,34 +226,20 @@ pub(crate) fn replace(
         return Err(napi::Error::from_reason("Native edit input limit exceeded"));
     }
     if all {
-        if !content.contains(old) {
-            return Err(napi::Error::from_reason(
-                "Could not find oldString in the file. It must match exactly when replaceAll is enabled.",
-            ));
+        // Mixed endings: the caller converted old to the dominant CRLF form, so
+        // a literal pass would skip the bare-LF copies. Replace on the
+        // normalized text and splice the changes back onto the original endings.
+        let crlf_count = content.matches("\r\n").count();
+        if crlf_count > 0 && content.matches('\n').count() > crlf_count {
+            let normalized = replace_all_literal(
+                &content.replace("\r\n", "\n"),
+                &old.replace("\r\n", "\n"),
+                &new.replace("\r\n", "\n"),
+                cancel,
+            )?;
+            return splice_crlf(content, &normalized);
         }
-        let mut count = 0usize;
-        for _ in content.match_indices(old) {
-            check(cancel)?;
-            count += 1;
-        }
-        let output_size = count
-            .checked_mul(new.len())
-            .and_then(|size| size.checked_add(content.len() - count * old.len()));
-        let Some(output_size) = output_size.filter(|&size| size <= 64 * 1024 * 1024) else {
-            return Err(napi::Error::from_reason(
-                "Native edit output limit exceeded",
-            ));
-        };
-        let mut result = String::with_capacity(output_size);
-        let mut from = 0;
-        for (i, _) in content.match_indices(old) {
-            check(cancel)?;
-            result.push_str(&content[from..i]);
-            result.push_str(new);
-            from = i + old.len();
-        }
-        result.push_str(&content[from..]);
-        return Ok(result);
+        return replace_all_literal(content, old, new, cancel);
     }
     let crlf = content.contains("\r\n");
     let normalized_content;
@@ -462,8 +479,10 @@ pub(crate) fn replace(
             continue;
         }
         found = true;
+        // Ambiguity is sticky: a fuzzier strategy must not pick one of several
+        // matches the caller never disambiguated.
         if matches.len() != 1 {
-            continue;
+            break;
         }
         let &(start, end) = matches.iter().next().unwrap();
         let mut result = String::with_capacity(text.len() + next.len());
