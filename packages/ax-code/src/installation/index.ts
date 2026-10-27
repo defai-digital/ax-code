@@ -3,7 +3,6 @@ import { standaloneInstallRoot, isDesktopBundleEntry, isWithinInstallPrefix } fr
 import path from "path"
 import os from "os"
 import fs from "fs/promises"
-import { buffer } from "node:stream/consumers"
 import { createRequire } from "node:module"
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
@@ -101,6 +100,10 @@ export namespace Installation {
   // A version probe runs from a background timer; a stalled connection must
   // not leave the check pending for the whole process lifetime.
   export const VERSION_PROBE_TIMEOUT_MS = 20_000
+  // Installer script, digest and signature downloads run while the upgrade
+  // lock is held (staleMs: Infinity), so a stalled connection must not hold
+  // it for the life of the process.
+  export const INSTALLER_FETCH_TIMEOUT_MS = 60_000
 
   export class UpgradeFailedError extends Error {
     override name: string = "UpgradeFailedError"
@@ -178,7 +181,8 @@ export namespace Installation {
     }
   }
 
-  async function runCommand(cmd: string[], opts: RunOptions = {}): Promise<CommandResult> {
+  // Exported for tests; production code goes through `dependencies.run`.
+  export async function runCommand(cmd: string[], opts: RunOptions = {}): Promise<CommandResult> {
     const proc = Process.spawn(cmd, {
       cwd: opts.cwd,
       env: powershellEnvironment(cmd[0], { ...process.env, ...opts.env }),
@@ -188,7 +192,15 @@ export namespace Installation {
     })
     if (opts.input) proc.stdin?.end(opts.input)
     if (!proc.stdout || !proc.stderr) return { code: 1, stdout: "", stderr: "Process output not available" }
-    const [code, stdout, stderr] = await Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
+    // Process.spawn destroys the pipes shortly after exit, so an installer that
+    // leaves a background descendant holding them closes them early. The
+    // strict stream `buffer()` rejects that as ERR_STREAM_PREMATURE_CLOSE and
+    // turned a successful upgrade into "Upgrade failed"; drain keeps the output.
+    const [code, stdout, stderr] = await Promise.all([
+      proc.exited,
+      Process.drain(proc.stdout),
+      Process.drain(proc.stderr),
+    ])
     return {
       code,
       stdout: stdout.toString(),
@@ -252,13 +264,15 @@ export namespace Installation {
   // proceed only when the caller did not require a digest.
   async function fetchInstallerScript(scriptUrl: string, requireDigest = false) {
     const sha256Url = `${scriptUrl}.sha256`
-    const response = await fetchOk(scriptUrl)
+    const response = await fetchOk(scriptUrl, { signal: AbortSignal.timeout(INSTALLER_FETCH_TIMEOUT_MS) })
     // Preserve the response bytes exactly. Decoding to text and re-encoding
     // can strip a BOM or replace malformed UTF-8, invalidating a legitimate
     // sidecar (or hashing bytes different from those written to disk).
     const bodyBytes = new Uint8Array(await response.arrayBuffer())
     try {
-      const sha256Res = await dependencies.fetch(sha256Url)
+      const sha256Res = await dependencies.fetch(sha256Url, {
+        signal: AbortSignal.timeout(INSTALLER_FETCH_TIMEOUT_MS),
+      })
       if (!sha256Res.ok) {
         if (requireDigest)
           throw new Error(
@@ -284,7 +298,9 @@ export namespace Installation {
     }
     // A same-origin digest detects corruption but does not authenticate the
     // publisher. Verify before writing or executing the downloaded script.
-    const signature = await fetchOk(`${scriptUrl}.minisig`)
+    const signature = await fetchOk(`${scriptUrl}.minisig`, {
+      signal: AbortSignal.timeout(INSTALLER_FETCH_TIMEOUT_MS),
+    })
     dependencies.verifyInstallerSignature(bodyBytes, await signature.text())
     return bodyBytes
   }

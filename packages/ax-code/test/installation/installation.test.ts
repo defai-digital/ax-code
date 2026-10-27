@@ -792,3 +792,14 @@ describe("installation", () => {
     })
   })
 })
+
+test.skipIf(process.platform === "win32")(
+  "runCommand keeps the output of an installer that leaves a background descendant",
+  async () => {
+    // The descendant inherits stdout, so the pipe closes only when
+    // Process.spawn destroys it after exit, not with a normal end of stream.
+    const result = await Installation.runCommand(["sh", "-c", "echo ok; sleep 2 & exit 0"])
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain("ok")
+  },
+)
