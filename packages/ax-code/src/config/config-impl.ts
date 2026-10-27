@@ -945,12 +945,15 @@ export namespace Config {
       result.plugin = [...result.plugin, ...dr.pluginFiles]
 
       if (dr.dependencyManaged && (await hasLocalFilePlugin([...dr.configuredPlugins, ...dr.pluginFiles], dr.dir))) {
-        deps.push(
-          iife(async () => {
-            const shouldInstall = await needsInstall(dr.dir)
-            if (shouldInstall) await installDependencies(dr.dir)
-          }),
-        )
+        const install = iife(async () => {
+          const shouldInstall = await needsInstall(dr.dir)
+          if (shouldInstall) await installDependencies(dr.dir)
+        })
+        // Nothing awaits this until plugin/tool startup calls
+        // waitForDependencies (if ever); a failure before then must not
+        // surface as an unhandled rejection. The waiter still sees it.
+        install.catch((error) => log.warn("config dependency check failed", { dir: dr.dir, error }))
+        deps.push(install)
       }
     }
 

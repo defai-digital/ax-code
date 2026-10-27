@@ -1248,6 +1248,43 @@ test("does not try to install dependencies in read-only AX_CODE_CONFIG_DIR", asy
   }
 })
 
+test("a failing dependency check does not reject unhandled before anyone waits for dependencies", async () => {
+  await using tmp = await tmpdir<string>({
+    init: async (dir) => {
+      const cfg = path.join(dir, "configdir")
+      await fs.mkdir(path.join(cfg, "plugins"), { recursive: true })
+      await fs.mkdir(path.join(cfg, "node_modules"), { recursive: true })
+      await fs.writeFile(path.join(cfg, "plugins", "local.js"), "export default {}\n")
+      // A corrupt package.json makes the install check throw.
+      await fs.writeFile(path.join(cfg, "package.json"), "{ not json")
+      return cfg
+    },
+  })
+
+  const prev = process.env.AX_CODE_CONFIG_DIR
+  process.env.AX_CODE_CONFIG_DIR = tmp.extra
+  const unhandled: unknown[] = []
+  const onUnhandled = (reason: unknown) => unhandled.push(reason)
+  process.on("unhandledRejection", onUnhandled)
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.get()
+        // Plugin and tool startup wait for dependencies only later.
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        expect(unhandled).toEqual([])
+        await Config.waitForDependencies().catch(() => undefined)
+      },
+    })
+  } finally {
+    process.off("unhandledRejection", onUnhandled)
+    if (prev === undefined) delete process.env.AX_CODE_CONFIG_DIR
+    else process.env.AX_CODE_CONFIG_DIR = prev
+  }
+})
+
 test("does not install dependencies in writable AX_CODE_CONFIG_DIR without local plugins", async () => {
   await using tmp = await tmpdir<string>({
     init: async (dir) => {
