@@ -47,7 +47,9 @@ export namespace FileIgnore {
       if (FOLDERS.has(parts[i])) return true
     }
 
-    const extra = opts?.extra || []
+    // Match the native addon's ripgrep `-g` semantics: a pattern with no `/`
+    // matches the basename at any depth.
+    const extra = (opts?.extra || []).map((pattern) => (pattern.includes("/") ? pattern : `**/${pattern}`))
     for (const pattern of [...FILES, ...extra]) {
       if (Glob.match(pattern, filepath)) return true
     }
