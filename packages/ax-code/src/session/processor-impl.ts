@@ -467,6 +467,12 @@ export namespace SessionProcessor {
             }
           }
         }
+        if (tool === "image_gen") {
+          // image_gen takes a prompt and a name; the saved file's path (its
+          // name gains a suffix and an extension) is only in metadata.path.
+          const saved = asRecord(metadata)["path"]
+          if (typeof saved === "string" && saved.length > 0) claimed.push(saved)
+        }
         if (tool === "multiedit") {
           // multiedit can fan out across files: edits[].filePath overrides the
           // top-level filePath per edit (see tool/multiedit.ts).

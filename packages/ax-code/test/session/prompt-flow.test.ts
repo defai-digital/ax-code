@@ -1493,6 +1493,22 @@ describe("session.prompt flow", () => {
       expect(patchPart.externalFiles).toEqual([externalPath])
     })
 
+    test("claims the file image_gen saved, from its result metadata", async () => {
+      await using tmp = await tmpdir({ git: true })
+      const imagePath = path.join(tmp.path, ".ax-code", "images", "logo.png")
+      const externalPath = path.join(tmp.path, "c.ts")
+
+      const patchPart = await runPatchFlow({
+        directory: tmp.path,
+        toolName: "image_gen",
+        toolInput: { prompt: "a logo", name: "logo" },
+        toolMetadata: { provider: "test", path: imagePath, size: "1024x1024", bytes: 1, mimeType: "image/png" },
+        patchFiles: [imagePath, externalPath],
+      })
+
+      expect(patchPart.externalFiles).toEqual([externalPath])
+    })
+
     test("marks every file external when no mutating tool ran", async () => {
       await using tmp = await tmpdir({ git: true })
       const readPath = path.join(tmp.path, "sub", "a.txt")
