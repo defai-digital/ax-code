@@ -11,6 +11,7 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { SessionRollback } from "../../src/session/rollback"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
+import { Filesystem } from "../../src/util/filesystem"
 import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
 import { AX_CODE_DIRECTORY_HEADER } from "../../src/util/directory-headers"
 import { PermissionID } from "../../src/permission/schema"
@@ -290,7 +291,9 @@ describe("server route validation", () => {
             valid: false,
             reason: "target_missing",
             target: {
-              directory: targetDirectory,
+              // A missing target canonicalizes its existing ancestor, so a
+              // symlinked tmpdir (/var -> /private/var on macOS) resolves.
+              directory: Filesystem.resolve(targetDirectory),
               exists: false,
               isDirectory: false,
               sameDirectory: false,

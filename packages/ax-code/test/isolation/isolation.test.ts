@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { Isolation } from "../../src/isolation"
+import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
 const root = "/tmp/project"
@@ -24,8 +25,8 @@ describe("isolation.resolve", () => {
     expect(state.mode).toBe("full-access")
     expect(state.network).toBe(true)
     expect(state.backend).toBe("auto")
-    expect(state.protected).toContain(path.resolve(root, ".git"))
-    expect(state.protected).toContain(path.resolve(root, ".ax-code"))
+    expect(state.protected).toContain(Filesystem.resolve(path.join(root, ".git")))
+    expect(state.protected).toContain(Filesystem.resolve(path.join(root, ".ax-code")))
   })
 
   test("partial config without backend still resolves to auto backend", () => {
@@ -38,7 +39,7 @@ describe("isolation.resolve", () => {
 
   test("applies config protected paths", () => {
     const state = Isolation.resolve({ mode: "workspace-write", network: false, protected: ["secrets"] }, root)
-    expect(state.protected).toContain(path.resolve(root, "secrets"))
+    expect(state.protected).toContain(Filesystem.resolve(path.join(root, "secrets")))
   })
 
   test("env flags override config", () => {
@@ -267,7 +268,7 @@ describe("isolation.DeniedError", () => {
       expect(e).toBeInstanceOf(Isolation.DeniedError)
       const err = e as Isolation.DeniedError
       expect(err.reason).toBe("write")
-      expect(err.path).toBe(path.resolve("/tmp/other/file.txt"))
+      expect(err.path).toBe(Filesystem.resolve("/tmp/other/file.txt"))
     }
   })
 })

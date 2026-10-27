@@ -7,6 +7,7 @@ import { assertExternalDirectory, assertSymlinkInsideProject, fileToolGuard } fr
 import type { Permission } from "../../src/permission"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
+import { Filesystem } from "../../src/util/filesystem"
 
 const baseCtx: Omit<Tool.Context, "ask"> = {
   sessionID: SessionID.make("ses_test"),
@@ -57,6 +58,33 @@ describe("tool.assertExternalDirectory", () => {
     expect(requests.length).toBe(0)
   })
 
+  test.skipIf(process.platform === "win32")(
+    "no-ops for a new nested file reached through a symlink to the project",
+    async () => {
+      await using tmp = await tmpdir()
+      const project = path.join(tmp.path, "project")
+      const link = path.join(tmp.path, "link")
+      await fs.mkdir(project)
+      await fs.symlink(project, link)
+      const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
+      const ctx: Tool.Context = {
+        ...baseCtx,
+        ask: async (req) => {
+          requests.push(req)
+        },
+      }
+
+      await Instance.provide({
+        directory: project,
+        fn: async () => {
+          await assertExternalDirectory(ctx, path.join(link, "new", "sub", "file.ts"))
+        },
+      })
+
+      expect(requests).toEqual([])
+    },
+  )
+
   test("asks with a single canonical glob", async () => {
     const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
     const ctx: Tool.Context = {
@@ -68,7 +96,8 @@ describe("tool.assertExternalDirectory", () => {
 
     const directory = "/tmp/project"
     const target = "/tmp/outside/file.txt"
-    const expected = path.join(path.dirname(target), "*").replaceAll("\\", "/")
+    // The missing target canonicalizes its existing ancestor (/tmp -> /private/tmp on macOS).
+    const expected = path.join(Filesystem.resolve(path.dirname(target)), "*").replaceAll("\\", "/")
 
     await Instance.provide({
       directory,
@@ -94,7 +123,7 @@ describe("tool.assertExternalDirectory", () => {
 
     const directory = "/tmp/project"
     const target = "/tmp/outside"
-    const expected = path.join(target, "*").replaceAll("\\", "/")
+    const expected = path.join(Filesystem.resolve(target), "*").replaceAll("\\", "/")
 
     await Instance.provide({
       directory,

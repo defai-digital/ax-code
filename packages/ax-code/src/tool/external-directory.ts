@@ -14,10 +14,22 @@ type Options = {
   kind?: Kind
 }
 
+/**
+ * A path that does not exist yet canonicalizes its deepest existing ancestor,
+ * so a new file several directories below a symlinked project path still
+ * lands inside Instance.directory. Missing segments are kept as typed.
+ */
+async function canonicalMissing(requested: string): Promise<string> {
+  const parent = path.dirname(requested)
+  if (parent === requested) return requested
+  const real = await fs.realpath(parent).catch(() => undefined)
+  return path.join(real ?? (await canonicalMissing(parent)), path.basename(requested))
+}
+
 async function canonicalizePermissionTarget(target: string, kind: Kind) {
   const requested = path.resolve(target)
   if (kind === "directory") {
-    const parentDir = await fs.realpath(requested).catch(() => requested)
+    const parentDir = await fs.realpath(requested).catch(() => canonicalMissing(requested))
     return {
       filepath: parentDir,
       parentDir,
@@ -33,7 +45,7 @@ async function canonicalizePermissionTarget(target: string, kind: Kind) {
   }
 
   const requestedParent = path.dirname(requested)
-  const parentDir = await fs.realpath(requestedParent).catch(() => requestedParent)
+  const parentDir = await fs.realpath(requestedParent).catch(() => canonicalMissing(requestedParent))
   return {
     filepath: path.join(parentDir, path.basename(requested)),
     parentDir,

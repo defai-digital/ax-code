@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "node:path"
+import { Filesystem } from "../../../src/util/filesystem"
 import { capLines, detail, diagnostics, filetype, normalize, workdir } from "../../../src/cli/tui/routes/session/format"
 
 describe("tui session format", () => {
@@ -33,7 +34,8 @@ describe("tui session format", () => {
     expect(
       diagnostics(
         {
-          [file]: [
+          // LSP records key diagnostics by the normalized path.
+          [Filesystem.normalizePath(file)]: [
             { severity: 1, message: "a" },
             { severity: 2, message: "skip" },
             { severity: 1, message: "b" },
