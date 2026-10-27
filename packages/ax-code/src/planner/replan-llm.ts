@@ -117,14 +117,9 @@ export async function configuredArchitectModel(): Promise<{ providerID: Provider
     log.warn("ignoring malformed planner_architect_model", { value: ref })
     return null
   }
-  // A pin whose provider was disabled follows the SKU to a connected
-  // provider; otherwise the callers fall back to the default model.
-  const resolved = await Provider.resolvePinnedModel(parsed)
-  if (!resolved) {
-    log.warn("planner_architect_model is unavailable; using the default model", { value: ref })
-    return null
-  }
-  return resolved
+  // A configured pin stays exact: an unavailable architect model fails at
+  // getModel instead of moving to the default model (docs/guides/model-recovery.md).
+  return parsed
 }
 
 /**

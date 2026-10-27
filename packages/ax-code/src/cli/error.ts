@@ -17,6 +17,7 @@ export function FormatError(input: unknown) {
       ...(Array.isArray(suggestions) && suggestions.length ? ["Did you mean: " + suggestions.join(", ")] : []),
       `Try: \`ax-code models\` to list available models`,
       `Or check your config (ax-code.json) provider/model names`,
+      `Run \`ax-code debug routing\` to see which configured pin selects this model`,
     ].join("\n")
   }
   if (Provider.InitError.isInstance(input)) {

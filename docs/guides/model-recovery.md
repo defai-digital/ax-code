@@ -71,7 +71,11 @@ ax-code debug routing --model my-gateway/openai/gpt-oss-120b
 ```
 
 This prints the exact primary, ordered fallback, auxiliary selection, agent pins
-and retry limit. It does not send a model request or probe model availability.
+and retry limit. `warnings` lists every pin (`model`, `small_model`,
+`wiki.model`, `experimental.planner_architect_model`, agent models and
+fallback targets) whose provider is not configured or whose model is not in
+that provider's catalog; such a pin fails when it is used. It does not send a
+model request or probe model availability.
 Normal configuration loading may fetch configured remote settings. This is a
 configuration explanation, not a reconstruction of past gateway behavior.
 
