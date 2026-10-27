@@ -18,6 +18,21 @@ import {
   type Value,
 } from "./values"
 
+/**
+ * Array.prototype.join's String(element): a nested array joins with "," and
+ * a cycle back to an enclosing array renders as "", as in JavaScript. Other
+ * objects keep Code Mode's no-implicit-coercion rule.
+ */
+function joinPart(value: Value, seen: Set<Value>): string {
+  if (value == null) return ""
+  if (!tagged(value) || value.kind !== "array") return str(value)
+  if (seen.has(value)) return ""
+  seen.add(value)
+  const output = value.items.map((item) => joinPart(item, seen)).join(",")
+  seen.delete(value)
+  return output
+}
+
 export interface Runtime {
   budget: Budget
   call(fn: Value, args: Value[], receiver?: Value): Promise<Value>
@@ -515,7 +530,7 @@ export async function invoke(fn: Builtin, args: Value[], rt: Runtime): Promise<V
         const separator = first === undefined ? "," : str(first)
         let output = ""
         for (let i = 0; i < length; i++) {
-          const part = items[i] == null ? "" : str(items[i])
+          const part = joinPart(items[i], new Set([receiver]))
           if (output.length + part.length + (i ? separator.length : 0) > b.limits.max_string_bytes)
             b.fail("string_bytes")
           output += (i ? separator : "") + part
@@ -570,9 +585,12 @@ export async function invoke(fn: Builtin, args: Value[], rt: Runtime): Promise<V
         for (let i = start; i < length; i++) {
           b.step()
           const value = items[i]
+          // The second argument is thisArg for every callback method except
+          // reduce, where it is the initial accumulator.
           const result = await rt.call(
             first,
             name === "reduce" ? [accumulator, value, i, receiver] : [value, i, receiver],
+            name === "reduce" ? undefined : second,
           )
           if (name === "map") output.push(result)
           if (name === "filter" && truth(result)) output.push(value)

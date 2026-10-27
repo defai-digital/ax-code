@@ -61,6 +61,12 @@ const cases: [string, string, unknown][] = [
     "let a=[3,1,2]; a.sort((a,b)=>a-b); a.push(4);const p=a.pop();[a.slice(1).join('-'),p,a.includes(2),a.indexOf(3),a.concat([5])]",
     ["2-3", 4, true, 2, [1, 2, 3, 5]],
   ],
+  ["nested array join", "[[[1,2],[3]].join('|'), [1,[2,[3]]].join('-')]", ["1,2|3", "1-2,3"]],
+  [
+    "array callback thisArg",
+    "const o={k:2}; [[1,2].map(function(x){return x*this.k},o), [1].filter(function(){return this===o},o), [1].map(function(){return typeof this},o)]",
+    [[2, 4], [1], ["object"]],
+  ],
   ["array own indexes", "let a=[]; a[2]=3; a.length=4; [a.length, 2 in a, 'map' in a, a[0]]", [4, true, false, null]],
   [
     "strings",
