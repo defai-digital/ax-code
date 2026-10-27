@@ -3422,6 +3422,32 @@ describe("AX_CODE_DISABLE_PROJECT_CONFIG", () => {
     }
   })
 
+  test("AX_CODE_CONFIG_DIR keeps top precedence when it names a directory already searched", async () => {
+    const originalConfigDir = process.env["AX_CODE_CONFIG_DIR"]
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Filesystem.write(path.join(dir, ".ax-code", "ax-code.json"), JSON.stringify({ username: "root-dir" }))
+        await Filesystem.write(
+          path.join(dir, "sub", ".ax-code", "ax-code.json"),
+          JSON.stringify({ username: "sub-dir" }),
+        )
+      },
+    })
+    try {
+      process.env["AX_CODE_CONFIG_DIR"] = path.join(tmp.path, ".ax-code")
+      await Instance.provide({
+        directory: path.join(tmp.path, "sub"),
+        fn: async () => {
+          expect((await Config.get()).username).toBe("root-dir")
+        },
+      })
+    } finally {
+      if (originalConfigDir === undefined) delete process.env["AX_CODE_CONFIG_DIR"]
+      else process.env["AX_CODE_CONFIG_DIR"] = originalConfigDir
+    }
+  })
+
   test("AX_CODE_CONFIG_DIR still works when flag is set", async () => {
     const originalDisable = process.env["AX_CODE_DISABLE_PROJECT_CONFIG"]
     const originalConfigDir = process.env["AX_CODE_CONFIG_DIR"]

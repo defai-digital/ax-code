@@ -843,7 +843,10 @@ export namespace Config {
     // commands, agents, modes, and plugins are independent I/O and can
     // run concurrently. Merge results sequentially afterwards to
     // preserve precedence order (lower-priority directories first).
-    const uniqueDirs = unique(directories)
+    // Keep each directory at its LAST position: a later entry overrides an
+    // earlier one, so AX_CODE_CONFIG_DIR naming a directory already in the
+    // list must keep its top precedence instead of its first, lower slot.
+    const uniqueDirs = unique(directories.toReversed()).toReversed()
     const dirResults = await Promise.all(
       uniqueDirs.map(async (dir) => {
         // Directories come from three sources: Global.Path.config
