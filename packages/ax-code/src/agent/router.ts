@@ -271,7 +271,14 @@ const PLAN_HANDOFF_PATTERNS = [
  * implementing, hand off to the Dev (`build`) agent instead of leaving them
  * stuck behind the plan-mode reminder.
  */
+// A negated approval ("I do not approve this plan", "don't go ahead yet",
+// "不要開始") must not leave read-only plan mode. Staying in plan is the safe
+// side of a miss: the user can still switch agents explicitly.
+const PLAN_HANDOFF_NEGATION =
+  /\b(not|never|no|don'?t|doesn'?t|didn'?t|won'?t|can'?t|cannot|shouldn'?t|hold\s+off)\b|[不別别勿未]|先別|先别/i
+
 export function routePlanHandoff(message: string): RouteResult | null {
+  if (PLAN_HANDOFF_NEGATION.test(message)) return null
   const matched: string[] = []
   for (const kw of PLAN_HANDOFF_KEYWORDS) {
     if (matchesKeyword(message, kw)) matched.push(kw)

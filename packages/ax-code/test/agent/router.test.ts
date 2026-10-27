@@ -164,6 +164,26 @@ describe("v2-style keyword route", () => {
   })
 })
 
+describe("plan handoff negation", () => {
+  test("a negated approval stays in plan mode", () => {
+    for (const message of [
+      "I do not approve this plan, please revise section 2",
+      "don't go ahead with this yet",
+      "not approved",
+      "hold off, do not start implementing",
+      "先別開始做",
+      "不批准",
+    ]) {
+      expect(route(message, "plan")?.agent, message).not.toBe("build")
+    }
+  })
+
+  test("an affirmative approval still hands off to build", () => {
+    expect(route("approved, go ahead", "plan")?.agent).toBe("build")
+    expect(route("可以開始", "plan")?.agent).toBe("build")
+  })
+})
+
 describe("classifyComplexity activation gating", () => {
   const origEnv = process.env["AX_CODE_SMART_LLM"]
 
