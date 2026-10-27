@@ -58,6 +58,28 @@ describe("tool.task", () => {
     })
   })
 
+  test("description keeps $ sequences in a configured agent description literally", async () => {
+    await using tmp = await tmpdir({
+      config: {
+        agent: {
+          dollar: {
+            description: "Costs $& and $` and $' literally",
+            mode: "subagent",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await TaskTool.init({ agent: await Agent.get("build") })
+        expect(tool.description).toContain("- dollar: Costs $& and $` and $' literally")
+        expect(tool.description).not.toContain("{agents}")
+      },
+    })
+  })
+
   test("rejects task calls beyond the max nesting depth", async () => {
     await using tmp = await tmpdir({ git: true })
 

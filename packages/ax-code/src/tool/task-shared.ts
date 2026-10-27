@@ -22,13 +22,13 @@ export async function subagentDescription(template: string, caller: Agent.Info |
   const accessible = caller
     ? agents.filter((a) => Permission.evaluate("task", a.name, caller.permission).action !== "deny")
     : agents
-  return template.replace(
-    "{agents}",
-    accessible
-      .toSorted((a, b) => a.name.localeCompare(b.name))
-      .map((a) => `- ${a.name}: ${a.description ?? "This subagent should only be called manually by the user."}`)
-      .join("\n"),
-  )
+  const list = accessible
+    .toSorted((a, b) => a.name.localeCompare(b.name))
+    .map((a) => `- ${a.name}: ${a.description ?? "This subagent should only be called manually by the user."}`)
+    .join("\n")
+  // A function replacement: descriptions come from user config, and a string
+  // replacement would expand $&, $` and $' inside them.
+  return template.replace("{agents}", () => list)
 }
 
 // Fan-out requires an EXPLICIT allow for the `task` permission
