@@ -547,8 +547,8 @@ export namespace Worktree {
   // copies branch config, and a copied flag must not transfer to the copy.
   type FlagState = "set" | "absent" | "unknown"
 
-  async function branchFlag(branch: string, key: string): Promise<FlagState> {
-    const read = await git(["config", "--get", `branch.${branch}.${key}`], { cwd: Instance.worktree })
+  async function branchFlag(branch: string, key: string, cwd: string = Instance.worktree): Promise<FlagState> {
+    const read = await git(["config", "--get", `branch.${branch}.${key}`], { cwd })
     // `git config --get` exits 1 only when the key is missing; anything else is
     // an unreadable or invalid config and must not be read as "not borrowed".
     if (read.exitCode === 1) return "absent"
@@ -556,8 +556,8 @@ export namespace Worktree {
     return outputText(read.stdout).trim() === branch ? "set" : "unknown"
   }
 
-  async function setBranchFlag(branch: string, key: string) {
-    const written = await git(["config", `branch.${branch}.${key}`, branch], { cwd: Instance.worktree })
+  async function setBranchFlag(branch: string, key: string, cwd: string = Instance.worktree) {
+    const written = await git(["config", `branch.${branch}.${key}`, branch], { cwd })
     if (written.exitCode !== 0) {
       throw new CreateFailedError({ message: errorText(written) || `Failed to mark branch ${branch}` })
     }
@@ -576,10 +576,10 @@ export namespace Worktree {
    * unreadable one, denies. Branches AX Code created carry the owned flag; the `ax-code/` and `opencode/` prefixes cover
    * branches created before the flag existed.
    */
-  export async function ownsBranch(branch: string | undefined) {
+  export async function ownsBranch(branch: string | undefined, cwd: string = Instance.worktree) {
     if (!branch) return false
-    if ((await branchFlag(branch, BORROWED_KEY)) !== "absent") return false
-    const owned = await branchFlag(branch, OWNED_KEY)
+    if ((await branchFlag(branch, BORROWED_KEY, cwd)) !== "absent") return false
+    const owned = await branchFlag(branch, OWNED_KEY, cwd)
     if (owned === "set") return true
     if (owned === "unknown") return false
     return branch.startsWith("ax-code/") || branch.startsWith("opencode/")
@@ -909,6 +909,26 @@ export namespace Worktree {
     // Case-preserving spelling for the Instance cache, which keys on
     // Filesystem.resolve and does not fold case on macOS/Windows.
     const realDirectory = await realOnDiskPath(input.directory)
+    // Git calls in this removal need a cwd that survives it. Instance.worktree
+    // is the CURRENT checkout, which is the very directory being removed when
+    // the caller runs inside its own worktree: after `git worktree remove`
+    // deletes it, every later spawn fails and collapses to exitCode 1
+    // (util/git.ts), which `branchFlag` reads as "absent" — so the owned
+    // branch was never deleted. Project.fromDirectory records the primary
+    // checkout in Instance.project.worktree, which outlives every linked
+    // worktree removal. Only removing the primary itself (git refuses that
+    // below, before deleting anything) can match it; fall back to the common
+    // git dir, captured while it still exists — its parent would be the
+    // checkout being removed.
+    const repository = await (async () => {
+      const primary = await realOnDiskPath(Instance.project.worktree)
+      if ((await canonical(primary)) !== directory) return primary
+      const common = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+        cwd: Instance.worktree,
+      })
+      if (common.exitCode === 0 && outputText(common.stdout)) return realOnDiskPath(outputText(common.stdout))
+      return Instance.worktree
+    })()
     // Capture the recorded spellings before Git or filesystem cleanup removes
     // the paths. Canonical comparison keys may change case on macOS/Windows
     // and cannot replace the original database keys after the directory is gone.
@@ -992,7 +1012,7 @@ export namespace Worktree {
       }
     }
 
-    const list = await git(["worktree", "list", "--porcelain"], { cwd: Instance.worktree })
+    const list = await git(["worktree", "list", "--porcelain"], { cwd: repository })
     if (list.exitCode !== 0) {
       throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
     }
@@ -1028,10 +1048,10 @@ export namespace Worktree {
     cancelPendingStartScripts(entry.path)
     await stop(entry.path)
     const removed = await git(["worktree", "remove", "--force", entry.path], {
-      cwd: Instance.worktree,
+      cwd: repository,
     })
     if (removed.exitCode !== 0) {
-      const next = await git(["worktree", "list", "--porcelain"], { cwd: Instance.worktree })
+      const next = await git(["worktree", "list", "--porcelain"], { cwd: repository })
       if (next.exitCode !== 0) {
         throw new RemoveFailedError({
           message: errorText(removed) || errorText(next) || "Failed to remove git worktree",
@@ -1058,9 +1078,9 @@ export namespace Worktree {
       cleanupError = error
     } finally {
       await withBranchLock(async () => {
-        branch = (await ownsBranch(checkedOut)) ? checkedOut : undefined
+        branch = (await ownsBranch(checkedOut, repository)) ? checkedOut : undefined
         if (!branch) return
-        const deleted = await git(["branch", "-D", branch], { cwd: Instance.worktree })
+        const deleted = await git(["branch", "-D", branch], { cwd: repository })
         if (deleted.exitCode !== 0) {
           branchError = new RemoveFailedError({
             message: errorText(deleted) || "Failed to delete worktree branch",
