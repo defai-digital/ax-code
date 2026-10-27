@@ -1579,6 +1579,41 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("a queued prompt whose stored body no longer parses is failed instead of wedging the session", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue(undefined as never)
+        try {
+          const broken = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "prompt",
+            title: "Broken body",
+            payload: { body: { parts: "not-an-array" } },
+          })
+          const valid = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "prompt",
+            title: "Valid prompt",
+            payload: { text: "Run after the broken row." },
+          })
+
+          const started = await TaskQueueExecutor.drainNextForSession(session.id)
+          expect(started?.id).toBe(valid.id)
+          const failed = await TaskQueue.get(broken.id)
+          expect(failed.status).toBe("failed")
+          expect(failed.error).toContain("Invalid queued payload")
+        } finally {
+          prompt.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("fails and cancels a queue execution that exceeds its configured deadline", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -1598,6 +1633,17 @@ describe("TaskQueue", () => {
             executionTimeoutMs: 1_000,
           })
 
+          const graceTimers: ReturnType<typeof setTimeout>[] = []
+          const realSetTimeout = globalThis.setTimeout
+          const timerSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+            fn: any,
+            ms?: number,
+            ...rest: any[]
+          ) => {
+            const handle = realSetTimeout(fn, ms, ...rest)
+            if (ms === 30_000) graceTimers.push(handle)
+            return handle
+          }) as any)
           await TaskQueueExecutor.start(item)
           await waitForQueueStatus(item.id, "failed")
 
@@ -1605,6 +1651,11 @@ describe("TaskQueue", () => {
           expect(failed.error).toContain("timed out after 1000 ms")
           expect(failed.time.completed).toBeDefined()
           expect(cancel).toHaveBeenCalledWith(session.id)
+          // The execution ignores cancellation, so cleanup waits out its grace;
+          // that wait must not hold a one-shot process open.
+          await vi.waitFor(() => expect(graceTimers.length).toBeGreaterThan(0))
+          timerSpy.mockRestore()
+          expect(graceTimers.every((timer) => !timer.hasRef())).toBe(true)
         } finally {
           prompt.mockRestore()
           cancel.mockRestore()

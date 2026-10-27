@@ -180,7 +180,23 @@ export namespace TaskQueueExecutor {
   export async function drainNextForSession(sessionID: SessionID): Promise<TaskQueue.Info | undefined> {
     const pending = await pendingSessionItems(sessionID)
     for (const item of pending) {
-      if (!queueItemExecution(item)) continue
+      let execution: QueueExecution | undefined
+      try {
+        execution = queueItemExecution(item)
+      } catch (error) {
+        // A row whose stored body no longer parses can never run. Fail it
+        // instead of throwing out of the drain, which left it and every item
+        // queued behind it in the session stuck in "queued" for good.
+        log.warn("failing task queue item with an invalid payload", { taskID: item.id, sessionID, error })
+        await TaskQueue.setStatus({
+          id: item.id,
+          status: "failed",
+          error: `Invalid queued payload: ${NamedError.message(error)}`,
+          onlyFromActive: true,
+        })
+        continue
+      }
+      if (!execution) continue
       return start(item)
     }
     return undefined
@@ -369,10 +385,17 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
         // cleanup after a bounded grace even then — the row is already failed
         // by the deadline race — so the session start key is released and the
         // queue cannot wedge behind a hung teardown.
+        let graceTimer: ReturnType<typeof setTimeout> | undefined
         await Promise.race([
           Promise.allSettled([run, cancellation]),
-          new Promise((resolve) => setTimeout(resolve, CANCELLATION_SETTLE_MS)),
+          new Promise((resolve) => {
+            graceTimer = setTimeout(resolve, CANCELLATION_SETTLE_MS)
+            // Best-effort cleanup only: a hung execution must not keep the
+            // process alive for the grace either.
+            graceTimer.unref?.()
+          }),
         ])
+        clearTimeout(graceTimer)
         if (cleanup.disposed) return
         cleanup.pending.delete(item.id)
         // Settled queue promises do not prove OS-level process quiescence.
