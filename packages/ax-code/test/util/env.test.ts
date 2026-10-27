@@ -428,6 +428,14 @@ describe("Env.sanitize", () => {
     expect(Env.redactSecrets("curl -H 'Cookie: zz=O'Brien; sid=SECRET123'")).toBe("curl -H 'Cookie: zz=[redacted]'")
   })
 
+  test("does not trust a Path attribute that runs into another cookie header", () => {
+    for (const separator of [" ", "\t", " | "]) {
+      const redacted = Env.redactForRecord(`Set-Cookie: a=1; Path=/${separator}Set-Cookie: sid=S3CR3T; Path=/`)
+      expect(redacted).not.toContain("S3CR3T")
+    }
+    expect(Env.redactForRecord("Set-Cookie: a=1; Path=/app")).toBe("Set-Cookie: a=[redacted]; Path=/app")
+  })
+
   test("redacts comma-joined repeated and CRLF-folded cookie headers", () => {
     // Some log sinks join repeated headers with ", ", so a second Set-Cookie
     // header begins mid-line and must still be split as a new pair.

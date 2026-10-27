@@ -237,7 +237,9 @@ export namespace Env {
         value.trim(),
       ),
     "max-age": (value) => /^-?[0-9]+$/.test(value.trim()),
-    path: (value) => value.startsWith("/"),
+    // Anchored like the other shapes: a prefix check let `Path=/ Set-Cookie:
+    // sid=SECRET` pass as one attribute value and leak the next cookie.
+    path: (value) => /^\/[^\s;,]*$/.test(value.trim()),
     priority: (value) => ["low", "medium", "high"].includes(value.trim().toLowerCase()),
     samesite: (value) => ["strict", "lax", "none"].includes(value.trim().toLowerCase()),
     version: (value) => /^[0-9]+$/.test(value.trim()),
