@@ -152,6 +152,71 @@ describe("DiagnosticLog", () => {
     expect(finding.event.summary).toMatchObject({ redacted: true })
   })
 
+  test("redacts paths and messages on cap, skill, safety and completion events", async () => {
+    await using tmp = await tmpdir()
+
+    await DiagnosticLog.configure({
+      enabled: true,
+      dir: tmp.path,
+      includeContent: false,
+      manifest: { component: "test", pid: 4321 },
+    })
+
+    const events = [
+      { type: "autonomous.cap_hit", kind: "blocked_path", current: 1, limit: 0, message: "Refusing SECRET_PATH" },
+      {
+        type: "skill.recommended",
+        agent: "build",
+        source: "path_match",
+        availableSkillCount: 1,
+        filePaths: ["/home/u/SECRET_PATH/a.ts"],
+        skills: [{ name: "s", paths: ["/home/u/SECRET_PATH"] }],
+      },
+      { type: "skill.loaded", skillName: "s", location: "/home/u/SECRET_PATH/SKILL.md" },
+      {
+        type: "agent.safety.decided",
+        action: "allow",
+        risk: "low",
+        reason: "ok",
+        permission: "edit",
+        path: "/home/u/SECRET_PATH/b.ts",
+        checkpointRequired: false,
+      },
+      { type: "agent.completion_gate.decided", status: "blocked", message: "SECRET_MESSAGE" },
+      { type: "agent.completed", phase: "complete", validationStatus: "passed", summary: "SECRET_SUMMARY" },
+      {
+        type: "computer.observe",
+        tool: "computer_snapshot",
+        provider: "p",
+        scope: "window",
+        ok: false,
+        error: "SECRET_ERROR",
+      },
+    ]
+    events.forEach((event, sequence) =>
+      DiagnosticLog.record({ sessionID: "ses_content", ...event } as never, { id: `evt_${sequence}`, sequence }),
+    )
+    await DiagnosticLog.flush()
+
+    const text = await fs.readFile(path.join(tmp.path, "events.jsonl"), "utf8")
+    expect(text.trim().split("\n")).toHaveLength(events.length)
+    expect(text).not.toMatch(/SECRET_/)
+  })
+
+  test("redacts a value glued to a short option in the manifest", async () => {
+    await using tmp = await tmpdir()
+
+    await DiagnosticLog.configure({
+      enabled: true,
+      dir: tmp.path,
+      includeContent: false,
+      manifest: { component: "test", pid: 4322, argv: ["run", "-pS3cr3t", "-v", "--model=x"] },
+    })
+
+    const manifest = JSON.parse(await fs.readFile(path.join(tmp.path, "manifest-test-4322.json"), "utf8"))
+    expect(manifest.args).toEqual(["run", "-p<arg>", "-v", "--model=<arg>"])
+  })
+
   test("preserves structured tool error summaries in replay logs", async () => {
     await using tmp = await tmpdir()
 

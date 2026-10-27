@@ -279,6 +279,45 @@ export namespace DiagnosticLog {
           refusal: redactText(event.refusal),
           reobserveError: redactText(event.reobserveError),
         }
+      case "autonomous.cap_hit":
+        return {
+          ...base,
+          message: redactText(event.message),
+        }
+      case "skill.recommended":
+        return {
+          ...base,
+          filePaths: { redacted: true, count: event.filePaths.length },
+          skills: event.skills.map((skill) => ({
+            ...skill,
+            paths: skill.paths ? { redacted: true, count: skill.paths.length } : undefined,
+          })),
+        }
+      case "skill.loaded":
+        return {
+          ...base,
+          location: redactPath(event.location),
+        }
+      case "agent.safety.decided":
+        return {
+          ...base,
+          path: redactPath(event.path),
+        }
+      case "agent.completion_gate.decided":
+        return {
+          ...base,
+          message: redactText(event.message),
+        }
+      case "agent.completed":
+        return {
+          ...base,
+          summary: redactText(event.summary),
+        }
+      case "computer.observe":
+        return {
+          ...base,
+          error: redactText(event.error),
+        }
       default:
         return base
     }
@@ -342,6 +381,8 @@ function redactArgs(args: string[], includeContent: boolean) {
   let keptCommand = false
   return args.map((arg) => {
     if (arg.startsWith("-") && arg.includes("=")) return arg.replace(/=.*/, "=<arg>")
+    // A value glued to a short option (`-pSECRET`) is still a value.
+    if (/^-[^-]./.test(arg)) return `${arg.slice(0, 2)}<arg>`
     if (arg.startsWith("-")) return arg
     if (!keptCommand) {
       keptCommand = true
