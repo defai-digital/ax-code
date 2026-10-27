@@ -262,6 +262,28 @@ describe("session.fork", () => {
     })
   })
 
+  test("a fork at an unknown message creates no session", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({ title: "fork-unknown-cutoff-probe" })
+        const forkTitle = "fork-unknown-cutoff-probe (fork #1)"
+        const forks = () =>
+          Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.title, forkTitle)).all())
+
+        try {
+          await expect(
+            Session.fork({ sessionID: session.id, messageID: MessageID.make(`msg_${"0".repeat(26)}`) }),
+          ).rejects.toThrow(/Message not found/)
+          expect(forks()).toEqual([])
+        } finally {
+          for (const fork of forks()) await Session.remove(fork.id)
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("does not render unsafe fork suffixes as Infinity", async () => {
     await Instance.provide({
       directory: projectRoot,

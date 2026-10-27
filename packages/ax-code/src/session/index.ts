@@ -390,17 +390,19 @@ export namespace Session {
       const original = await get(input.sessionID)
       if (!original) throw new Error("session not found")
       const title = getForkedTitle(original.title)
+      // Validate the cutoff before creating the child: a throw after
+      // createNext would leave an empty, persisted fork behind.
+      const msgs = await messages({ sessionID: input.sessionID })
+      const cutoff = input.messageID ? msgs.findIndex((msg) => msg.info.id === input.messageID) : msgs.length
+      if (cutoff === -1) throw new NotFoundError({ message: `Message not found: ${input.messageID}` })
       const session = await createNext({
         directory: Instance.directory,
         title,
         permission: original.permission,
       })
-      const msgs = await messages({ sessionID: input.sessionID })
       const idMap = new Map<string, MessageID>()
 
       // Pre-compute all new IDs
-      const cutoff = input.messageID ? msgs.findIndex((msg) => msg.info.id === input.messageID) : msgs.length
-      if (cutoff === -1) throw new NotFoundError({ message: `Message not found: ${input.messageID}` })
       const filtered = msgs.slice(0, cutoff)
       for (const msg of filtered) {
         idMap.set(msg.info.id, MessageID.ascending())
