@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { parseJsonPayload, parseJsonResult, parseJsonStrict } from "../../src/util/json-value"
+import { parseJsonFromText, parseJsonPayload, parseJsonResult, parseJsonStrict } from "../../src/util/json-value"
 
 describe("util.json-value", () => {
   test("parseJsonPayload parses valid JSON values", () => {
@@ -47,5 +47,16 @@ describe("util.json-value", () => {
     } finally {
       JSON.parse = originalParse
     }
+  })
+
+  test("parseJsonFromText finds an object followed by prose that mentions braces", () => {
+    expect(parseJsonFromText('{"verdict":"approve"}\nNote: use {} for an empty object.')).toEqual({
+      verdict: "approve",
+    })
+    expect(parseJsonFromText('Result: {"note":"a } in a string","n":1} and {x} after')).toEqual({
+      note: "a } in a string",
+      n: 1,
+    })
+    expect(parseJsonFromText("no json {here}")).toBeUndefined()
   })
 })

@@ -14,9 +14,32 @@ export function parseJsonFromText(text: string): unknown {
   const start = text.indexOf("{")
   const end = text.lastIndexOf("}")
   if (start >= 0 && end > start) candidates.push(text.slice(start, end + 1))
+  // The outermost span fails when prose after the object mentions a brace;
+  // also try the span that closes the first object.
+  const balanced = start >= 0 ? balancedObjectEnd(text, start) : -1
+  if (balanced > start && balanced !== end) candidates.push(text.slice(start, balanced + 1))
   for (const candidate of candidates) {
     const parsed = parseJsonResult(candidate)
     if (parsed.ok) return parsed.value
   }
   return undefined
+}
+
+// Index of the "}" that closes the object opened at `start`, skipping braces
+// inside JSON strings; -1 when it never closes.
+function balancedObjectEnd(text: string, start: number): number {
+  let depth = 0
+  let inString = false
+  for (let index = start; index < text.length; index++) {
+    const char = text[index]
+    if (inString) {
+      if (char === "\\") index++
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') inString = true
+    else if (char === "{") depth++
+    else if (char === "}" && --depth === 0) return index
+  }
+  return -1
 }
