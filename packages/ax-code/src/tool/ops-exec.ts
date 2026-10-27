@@ -65,6 +65,23 @@ function hasShellControl(input: string): boolean {
   return /\$\(/.test(input)
 }
 
+// ssh options that consume the following argument (OpenSSH ssh(1)).
+const SSH_VALUE_OPTIONS = new Set("BbcDEeFIiJLlmOoPpQRSWw".split("").map((flag) => `-${flag}`))
+
+/** The command ssh sends to the remote host: every word after the destination. */
+function sshRemoteCommand(args: string[]): string | undefined {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!
+    if (arg === "--") return args.slice(index + 2).join(" ") || undefined
+    if (arg.startsWith("-")) {
+      if (SSH_VALUE_OPTIONS.has(arg)) index++
+      continue
+    }
+    return args.slice(index + 1).join(" ") || undefined
+  }
+  return undefined
+}
+
 /** Fail closed for commands executed by read-only ops phases. */
 export function assertOpsReadOnlyCommand(command: string): void {
   const parts = parseShellArgs(command)
@@ -120,8 +137,11 @@ export function assertOpsReadOnlyCommand(command: string): void {
     if (positionals.some((arg) => /^(describe|get|list|show)$/.test(arg.toLowerCase()))) return
   }
   if (name === "ssh") {
-    const remote = args.at(-1)?.trim().toLowerCase()
-    if (remote && /^(show|display|get|list)\b/.test(remote)) return
+    const remote = sshRemoteCommand(args)
+    // The remote shell re-parses these words, so a quoted operator the local
+    // scan skipped is live there: reject any shell control in the remote text.
+    if (remote && /[;|&<>`\n]|\$\(/.test(remote)) deny("ssh remote command cannot contain shell control operators")
+    if (remote && /^(show|display|get|list)\b/i.test(remote.trim())) return
   }
   deny(`Command ${name} is not in the Cloud Operations read-only allowlist`)
 }

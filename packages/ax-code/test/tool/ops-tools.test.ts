@@ -86,6 +86,17 @@ describe("ops read-only commands", () => {
     expect(() => OpsExec.assertReadOnly("git diff --ext-diff")).toThrow(OpsReadOnlyCommandError)
   })
 
+  test("checks the whole remote command an ssh observation runs", () => {
+    // ssh hands its command words to the remote shell, so quoting that hides
+    // an operator from the local scan does not hide it from the remote host.
+    expect(() => OpsExec.assertReadOnly("ssh vyos 'show configuration; configure'")).toThrow(OpsReadOnlyCommandError)
+    expect(() => OpsExec.assertReadOnly('ssh vyos "show interfaces && reboot"')).toThrow(OpsReadOnlyCommandError)
+    expect(() => OpsExec.assertReadOnly("ssh vyos 'show $(reboot)'")).toThrow(OpsReadOnlyCommandError)
+    expect(() => OpsExec.assertReadOnly("ssh vyos commit show")).toThrow(OpsReadOnlyCommandError)
+    expect(() => OpsExec.assertReadOnly("ssh vyos 'show configuration'")).not.toThrow()
+    expect(() => OpsExec.assertReadOnly("ssh -p 2222 -i key vyos show configuration commands")).not.toThrow()
+  })
+
   test("rejects backslash-escaped quotes that smuggle mutating operations past argv parsing", () => {
     // The query value is really `" describe "` (escaped quotes), so the
     // mutating `ec2 terminate-instances` operation must not be mistaken for
