@@ -1,6 +1,8 @@
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio"
 import {
   Client,
+  ProtocolError,
+  ResourceNotFoundError,
   StreamableHTTPClientTransport,
   SSEClientTransport,
   UnauthorizedError,
@@ -273,6 +275,18 @@ export namespace MCP {
     z.object({
       server: z.string(),
       message: z.string(),
+    }),
+  )
+
+  /**
+   * A bounded MCP request exceeded its timeout. `withTimeout`'s error factory
+   * produces this typed error, so callers can tell a timeout apart from an
+   * upstream failure without matching on the message string.
+   */
+  export const ReadTimeoutError = NamedError.create(
+    "MCPReadTimeoutError",
+    z.object({
+      server: z.string(),
     }),
   )
 
@@ -2465,7 +2479,28 @@ export namespace MCP {
     return result
   }
 
-  export async function readResource(clientName: string, resourceUri: string) {
+  export type ReadResourceOutcome =
+    | { status: "ok"; result: Awaited<ReturnType<MCPClient["readResource"]>> }
+    | { status: "not_connected" }
+    | { status: "not_found"; message: string }
+    | { status: "timeout"; message: string }
+    | { status: "failed"; message: string }
+
+  // SDK v2 reconstructs a brand-matched ResourceNotFoundError for a
+  // resources/read miss: the legacy -32002 code and the 2026-07-28 spec's
+  // -32602 whose data is exactly {uri}. A bare -32002 without data.uri stays
+  // a generic ProtocolError, so the numeric code is accepted as well.
+  function isResourceNotFoundError(error: unknown): boolean {
+    return ResourceNotFoundError.isInstance(error) || (ProtocolError.isInstance(error) && error.code === -32002)
+  }
+
+  /**
+   * Read one resource and report WHY the read failed, so the HTTP layer can
+   * answer 503 (not connected), 504 (timeout) or 502 (upstream error) instead
+   * of folding every failure into a 404. Outcome messages are fixed strings
+   * naming the server; the raw upstream error text goes to the log only.
+   */
+  export async function readResourceDetailed(clientName: string, resourceUri: string): Promise<ReadResourceOutcome> {
     const clientsSnapshot = await clients()
     const s = await state()
     const client = clientsSnapshot[clientName]
@@ -2474,27 +2509,53 @@ export namespace MCP {
       log.warn("client not found for resource", {
         clientName: clientName,
       })
-      return undefined
+      return { status: "not_connected" }
     }
 
     const cfg = await Config.get()
     const timeout = requestTimeout(cfg, cfg.mcp?.[clientName])
-    const result = await withTimeout(
-      client.readResource({
-        uri: resourceUri,
-      }),
-      timeout,
-      `reading resource timed out for MCP server ${clientName}`,
-    ).catch((e) => {
+    try {
+      const result = await withTimeout(
+        client.readResource({
+          uri: resourceUri,
+        }),
+        timeout,
+        `reading resource timed out for MCP server ${clientName}`,
+        { error: () => new ReadTimeoutError({ server: clientName }) },
+      )
+      return { status: "ok", result }
+    } catch (e) {
       log.error("failed to read resource from MCP server", {
         clientName: clientName,
         resourceUri: resourceUri,
         error: NamedError.message(e),
       })
-      return undefined
-    })
+      if (ReadTimeoutError.isInstance(e)) {
+        return {
+          status: "timeout",
+          message: `Reading the resource from MCP server ${clientName} timed out`,
+        }
+      }
+      if (isResourceNotFoundError(e)) {
+        return {
+          status: "not_found",
+          message: `MCP server ${clientName} does not have this resource`,
+        }
+      }
+      return {
+        status: "failed",
+        message: `MCP server ${clientName} failed to read the resource`,
+      }
+    }
+  }
 
-    return result
+  /**
+   * Prompt-time entry point: collapses `readResourceDetailed` to the resource
+   * contents or `undefined`, which the prompt caller treats as "skip".
+   */
+  export async function readResource(clientName: string, resourceUri: string) {
+    const outcome = await readResourceDetailed(clientName, resourceUri)
+    return outcome.status === "ok" ? outcome.result : undefined
   }
 
   /**

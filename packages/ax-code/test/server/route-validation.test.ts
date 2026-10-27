@@ -1313,15 +1313,18 @@ describe("server route validation", () => {
             mimeType: "text/markdown",
           },
         })
-        const readSpy = vi.spyOn(MCP, "readResource").mockResolvedValue({
-          contents: [
-            {
-              uri: "mcp://docs/readme.md",
-              mimeType: "text/markdown",
-              text: "# README",
-            },
-          ],
-        } as Awaited<ReturnType<typeof MCP.readResource>>)
+        const readSpy = vi.spyOn(MCP, "readResourceDetailed").mockResolvedValue({
+          status: "ok",
+          result: {
+            contents: [
+              {
+                uri: "mcp://docs/readme.md",
+                mimeType: "text/markdown",
+                text: "# README",
+              },
+            ],
+          },
+        } as Awaited<ReturnType<typeof MCP.readResourceDetailed>>)
 
         try {
           const list = await Server.Default().request("/mcp/resources")
@@ -1354,7 +1357,10 @@ describe("server route validation", () => {
     await Instance.provide({
       directory: root,
       fn: async () => {
-        const readSpy = vi.spyOn(MCP, "readResource").mockResolvedValue(undefined)
+        const readSpy = vi.spyOn(MCP, "readResourceDetailed").mockResolvedValue({
+          status: "not_found",
+          message: "MCP server docs does not have this resource",
+        } as Awaited<ReturnType<typeof MCP.readResourceDetailed>>)
 
         try {
           const res = await Server.Default().request(
@@ -1369,6 +1375,119 @@ describe("server route validation", () => {
         } finally {
           readSpy.mockRestore()
         }
+      },
+    })
+  })
+
+  test("mcp resource read classifies upstream read outcomes end to end", { timeout: 20_000 }, async () => {
+    // A real stdio JSON-RPC server drives the real client: an ok read, the
+    // -32002 resource miss, an upstream error and a slow read must surface
+    // as distinct status codes instead of the blanket 404 from before.
+    const fakeServer = `
+const W=(o)=>process.stdout.write(JSON.stringify(o)+"\\n")
+const R=(id,result)=>{if(id!==undefined)W({jsonrpc:"2.0",id,result})}
+const E=(id,code,message,data)=>{if(id!==undefined)W({jsonrpc:"2.0",id,error:{code,message,...(data?{data}:{})}})}
+require("node:readline").createInterface({input:process.stdin}).on("line",(line)=>{
+let msg
+try{msg=JSON.parse(line)}catch{return}
+if(msg.method==="initialize"){R(msg.id,{protocolVersion:(msg.params&&msg.params.protocolVersion)||"2025-06-18",capabilities:{resources:{}},serverInfo:{name:"fixture",version:"0.0.0"}})}
+else if(msg.method==="tools/list"){R(msg.id,{tools:[]})}
+else if(msg.method==="ping"){R(msg.id,{})}
+else if(msg.method==="resources/read"){const uri=msg.params&&msg.params.uri
+if(uri==="mcp://docs/readme.md"){R(msg.id,{contents:[{uri:uri,mimeType:"text/markdown",text:"# README"}]})}
+else if(uri==="mcp://docs/slow"){setTimeout(()=>R(msg.id,{contents:[{uri:uri,text:"late"}]}),5000)}
+else if(uri==="mcp://docs/broken"){E(msg.id,-32603,"upstream exploded with fixture-upstream-secret-token",{detail:"fixture-upstream-secret-token"})}
+else{E(msg.id,-32002,"Resource not found",{uri:uri})}}
+})
+`.trim()
+
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        username: "test",
+        experimental: { mcp_timeout: 750 },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await MCP.add("docs", { type: "local", command: ["node", "-e", fakeServer] })
+        const headers = {
+          [AX_CODE_DIRECTORY_HEADER]: tmp.path,
+          ...ServerRuntimeAuth.headers(),
+        }
+
+        const read = await Server.Default().request(
+          `/mcp/docs/resource?uri=${encodeURIComponent("mcp://docs/readme.md")}`,
+          { headers },
+        )
+        expect(read.status).toBe(200)
+        expect(await read.json()).toMatchObject({ contents: [{ text: "# README" }] })
+
+        const missing = await Server.Default().request(
+          `/mcp/docs/resource?uri=${encodeURIComponent("mcp://docs/missing.md")}`,
+          { headers },
+        )
+        expect(missing.status).toBe(404)
+        expect(await missing.json()).toMatchObject({
+          name: "NotFoundError",
+          message: "MCP resource not found",
+          details: { resource: "mcpResource" },
+        })
+
+        const failed = await Server.Default().request(
+          `/mcp/docs/resource?uri=${encodeURIComponent("mcp://docs/broken")}`,
+          { headers },
+        )
+        expect(failed.status).toBe(502)
+        const failedBody = await failed.json()
+        expect(failedBody).toMatchObject({
+          name: "BadGatewayError",
+          status: 502,
+          retryable: true,
+          details: { reason: "mcp_upstream_error", resource: "mcpResource" },
+        })
+        expect(JSON.stringify(failedBody)).not.toContain("fixture-upstream-secret-token")
+
+        const slow = await Server.Default().request(`/mcp/docs/resource?uri=${encodeURIComponent("mcp://docs/slow")}`, {
+          headers,
+        })
+        expect(slow.status).toBe(504)
+        expect(await slow.json()).toMatchObject({
+          name: "GatewayTimeoutError",
+          status: 504,
+          retryable: true,
+          details: { reason: "mcp_timeout", resource: "mcpResource" },
+        })
+      },
+    })
+  })
+
+  test("mcp resource read reports a disconnected server as 503", async () => {
+    // No MCP server is configured in the fixture: the read cannot reach a
+    // client, which is a service-availability problem, not a missing resource.
+    await using tmp = await tmpdir({ config: { username: "test" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const res = await Server.Default().request(
+          `/mcp/docs/resource?uri=${encodeURIComponent("mcp://docs/readme.md")}`,
+          {
+            headers: {
+              [AX_CODE_DIRECTORY_HEADER]: tmp.path,
+              ...ServerRuntimeAuth.headers(),
+            },
+          },
+        )
+        expect(res.status).toBe(503)
+        expect(await res.json()).toMatchObject({
+          name: "ServiceUnavailableError",
+          message: "MCP server docs is not connected",
+          status: 503,
+          retryable: true,
+          details: { reason: "mcp_not_connected", resource: "mcpServer" },
+        })
       },
     })
   })

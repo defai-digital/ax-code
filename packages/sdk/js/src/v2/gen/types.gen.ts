@@ -17092,6 +17092,18 @@ export type McpResourceReadErrors = {
    * Not found
    */
   404: AppErrorEnvelope
+  /**
+   * Bad gateway
+   */
+  502: AppErrorEnvelope
+  /**
+   * Service unavailable
+   */
+  503: AppErrorEnvelope
+  /**
+   * Gateway timeout
+   */
+  504: AppErrorEnvelope
 }
 
 /** Error response payload for `GET /mcp/{name}/resource` — Read MCP resource */

@@ -400,6 +400,30 @@ export const ERRORS = {
       },
     },
   },
+  502: {
+    description: "Bad gateway",
+    content: {
+      "application/json": {
+        schema: resolver(AppErrorEnvelope),
+      },
+    },
+  },
+  503: {
+    description: "Service unavailable",
+    content: {
+      "application/json": {
+        schema: resolver(AppErrorEnvelope),
+      },
+    },
+  },
+  504: {
+    description: "Gateway timeout",
+    content: {
+      "application/json": {
+        schema: resolver(AppErrorEnvelope),
+      },
+    },
+  },
 } as const
 
 export function errors(...codes: number[]) {

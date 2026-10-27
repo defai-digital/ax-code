@@ -240,21 +240,48 @@ export const McpRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400, 404),
+          ...errors(400, 404, 502, 503, 504),
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
       validator("query", MCP_RESOURCE_READ_QUERY),
       withMcpName(async (name, c) => {
         const { uri } = c.req.valid("query")
-        const result = await MCP.readResource(name, uri)
-        if (!result) {
+        const outcome = await MCP.readResourceDetailed(name, uri)
+        if (outcome.status === "ok") return c.json(outcome.result)
+        if (outcome.status === "not_found") {
           return notFound(c, {
             message: "MCP resource not found",
             resource: "mcpResource",
           })
         }
-        return c.json(result)
+        // 502/503/504 answer with a fixed message plus the server name: the
+        // upstream error text stays in the log where it is already recorded.
+        if (outcome.status === "not_connected") {
+          return appErrorResponse(c, {
+            name: "ServiceUnavailableError",
+            message: `MCP server ${name} is not connected`,
+            status: 503,
+            retryable: true,
+            details: { reason: "mcp_not_connected", resource: "mcpServer" },
+          })
+        }
+        if (outcome.status === "timeout") {
+          return appErrorResponse(c, {
+            name: "GatewayTimeoutError",
+            message: outcome.message,
+            status: 504,
+            retryable: true,
+            details: { reason: "mcp_timeout", resource: "mcpResource" },
+          })
+        }
+        return appErrorResponse(c, {
+          name: "BadGatewayError",
+          message: outcome.message,
+          status: 502,
+          retryable: true,
+          details: { reason: "mcp_upstream_error", resource: "mcpResource" },
+        })
       }),
     )
     .post(
