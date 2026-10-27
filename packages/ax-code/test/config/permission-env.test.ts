@@ -82,4 +82,32 @@ describe("AX_CODE_PERMISSION merge", () => {
       flag.AX_CODE_PERMISSION = previous
     }
   })
+
+  test("an env pattern map keeps an earlier blanket deny as its floor", async () => {
+    const flag = Flag as { AX_CODE_PERMISSION: string | undefined }
+    const previous = flag.AX_CODE_PERMISSION
+    flag.AX_CODE_PERMISSION = JSON.stringify({ bash: { "git status": "allow" } })
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const originalInline = process.env["AX_CODE_CONFIG_CONTENT"]
+      process.env["AX_CODE_CONFIG_CONTENT"] = JSON.stringify({ username: "test", permission: { bash: "deny" } })
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const config = await Config.get()
+            expect(config.permission?.bash).toEqual({ "*": "deny", "git status": "allow" })
+            const rules = Permission.fromConfig(config.permission!)
+            expect(Permission.evaluate("bash", "rm -rf build", rules).action).toBe("deny")
+            expect(Permission.evaluate("bash", "git status", rules).action).toBe("allow")
+          },
+        })
+      } finally {
+        if (originalInline === undefined) delete process.env["AX_CODE_CONFIG_CONTENT"]
+        else process.env["AX_CODE_CONFIG_CONTENT"] = originalInline
+      }
+    } finally {
+      flag.AX_CODE_PERMISSION = previous
+    }
+  })
 })

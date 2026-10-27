@@ -1047,6 +1047,9 @@ export namespace Config {
         // shape is a flat permission map, so no agent/mode nesting applies.
         const earlier = result.permission ?? {}
         const merged = mergeDeep(earlier, rules)
+        // Like every config source: a pattern map over a blanket deny/ask
+        // keeps the blanket as its "*" floor instead of replacing it.
+        foldBlanketRules(earlier, merged)
         reorderAuthorityPermissionMaps(earlier, rules, merged)
         result.permission = merged
       } else if (parsed.reason === "schema") {
