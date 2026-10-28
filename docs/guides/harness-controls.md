@@ -47,8 +47,10 @@ verification protocols and execution controls remain intact. Compact AX Engine t
 
 `disable_stale_todo_notice` suppresses only the periodic reminder to update stale todos. It preserves live pending
 todos, goal context, interruption/model-switch notices, continuation limits, permission checks and verification gates.
-The two flags do not enable each other. Desktop uses the same runtime configuration; no separate Desktop harness
-setting is required.
+The two flags do not enable each other. They require an AX Code runtime whose configuration schema includes these
+options. Desktop uses the same runtime configuration, with no separate Desktop harness setting, but its bundled
+runtime is pinned independently. Use a compatible runtime containing this change before adding these options;
+an existing Desktop installation does not gain them automatically from a source commit.
 
 Evaluate baseline, slim-prompt-only and stale-notice-disabled-only runs separately, with the same repository revision,
 task, model, permissions and cache conditions. Include frontier API, local/smaller-model and CLI-provider cohorts.
