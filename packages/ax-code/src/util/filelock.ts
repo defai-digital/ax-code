@@ -40,6 +40,14 @@ const POLL_INTERVAL_MS = 50
 const EMPTY_LOCK_GRACE_MS = 60 * 1000
 
 export namespace FileLock {
+  /** The lock stayed held by another process past the acquire deadline. */
+  export class TimeoutError extends Error {
+    constructor(public readonly target: string) {
+      super(`timed out waiting for file lock: ${target}`)
+      this.name = "FileLockTimeoutError"
+    }
+  }
+
   async function writeLockFile(target: string): Promise<ProcessLockBody> {
     const body: ProcessLockBody = createProcessLockBody()
     const handle = await fs.open(target, "wx")
@@ -202,7 +210,7 @@ export namespace FileLock {
         waited = true
       }
       if (Date.now() >= deadline) {
-        throw new Error(`timed out waiting for file lock: ${target}`)
+        throw new TimeoutError(target)
       }
       await sleep(POLL_INTERVAL_MS)
     }

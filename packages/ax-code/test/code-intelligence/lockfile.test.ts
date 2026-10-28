@@ -66,6 +66,25 @@ describe("IndexLock", () => {
     await IndexLock.__reset(id)
   })
 
+  test("an indexing run that times out on a live holder reports LockHeldError", async () => {
+    const { CodeGraphBuilder } = await import("../../src/code-intelligence/builder-impl")
+    const id = mkProjectID("acquire-timeout")
+    await IndexLock.__reset(id)
+    const target = await lockPath(id)
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.writeFile(target, JSON.stringify({ pid: 1, startedAt: Date.now(), host: currentLockHost() }))
+
+    try {
+      // `ax-code index` keys its "another process is indexing" message on
+      // LockHeldError, so the acquire deadline must surface as one.
+      await expect(CodeGraphBuilder.indexFiles(id, [], { lockTimeoutMs: 150 })).rejects.toBeInstanceOf(
+        CodeGraphBuilder.LockHeldError,
+      )
+    } finally {
+      await IndexLock.__reset(id)
+    }
+  })
+
   test("tryAcquire steals a lock whose holder pid is dead", async () => {
     const id = mkProjectID("stale-pid")
     await IndexLock.__reset(id)

@@ -9,6 +9,7 @@ import { CodeGraphQuery } from "./query"
 import { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
 import { SyntacticExtractor } from "./syntactic"
 import { IndexLock } from "./lockfile"
+import { FileLock } from "../util/filelock"
 import { Flag } from "../flag/flag"
 import { NativeStore } from "./native-store"
 import type { CodeNodeKind } from "./schema.sql"
@@ -1294,9 +1295,9 @@ export namespace CodeGraphBuilder {
     force?: boolean
   }
 
-  // Raised when `lock: "try"` is requested and another process holds
-  // the lock. Callers (auto-index) swallow this silently; the CLI
-  // never passes "try".
+  // Raised when another process holds the lock: immediately for `lock:
+  // "try"` (auto-index swallows it silently), or once the `"acquire"`
+  // deadline passes (the CLI reports it).
   export class LockHeldError extends Error {
     constructor(public readonly projectID: ProjectID) {
       super(`code-index lock held by another process for project ${projectID}`)
@@ -1349,6 +1350,9 @@ export namespace CodeGraphBuilder {
       lockHandle = await IndexLock.acquire(projectID, {
         timeoutMs: opts.lockTimeoutMs ?? 10 * 60 * 1000,
         onWait: opts.onLockWait,
+      }).catch((error: unknown) => {
+        if (error instanceof FileLock.TimeoutError) throw new LockHeldError(projectID)
+        throw error
       })
     }
     if (lockMode === "try") {
