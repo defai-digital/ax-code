@@ -110,17 +110,27 @@ export const PrCommand = cmd({
               // Check if remote already exists
               const remotes = (await git(["remote"], { cwd: Instance.worktree })).text().trim()
               if (!remotes.split("\n").includes(remoteName)) {
-                await git(["remote", "add", remoteName, `https://github.com/${forkOwner}/${forkName}.git`], {
-                  cwd: Instance.worktree,
-                })
-                UI.println(`Added fork remote: ${remoteName}`)
+                const added = await git(
+                  ["remote", "add", remoteName, `https://github.com/${forkOwner}/${forkName}.git`],
+                  { cwd: Instance.worktree },
+                )
+                // git() never throws; an unchecked failure would let the run go
+                // on as if pushes were wired to the fork.
+                if (added.exitCode === 0) UI.println(`Added fork remote: ${remoteName}`)
+                else UI.error(`Could not add fork remote ${remoteName}: ${added.stderr.toString().trim()}`)
               }
 
               // Set upstream to the fork so pushes go there
               const headRefName = prInfo.headRefName
-              await git(["branch", `--set-upstream-to=${remoteName}/${headRefName}`, localBranchName], {
-                cwd: Instance.worktree,
-              })
+              const upstream = await git(
+                ["branch", `--set-upstream-to=${remoteName}/${headRefName}`, localBranchName],
+                { cwd: Instance.worktree },
+              )
+              if (upstream.exitCode !== 0) {
+                UI.error(
+                  `Could not track ${remoteName}/${headRefName}; pushes will not go to the fork: ${upstream.stderr.toString().trim()}`,
+                )
+              }
             }
           }
         }
