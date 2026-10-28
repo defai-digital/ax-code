@@ -696,10 +696,13 @@ function validateArray(value: unknown[], schema: Record<string, unknown>, locati
 }
 
 function validateString(value: string, schema: Record<string, unknown>, location: string, errors: string[]) {
-  if (typeof schema.minLength === "number" && value.length < schema.minLength) {
+  // JSON Schema measures string length in code points, not UTF-16 units, so an
+  // emoji counts once.
+  const length = [...value].length
+  if (typeof schema.minLength === "number" && length < schema.minLength) {
     errors.push(`${location} is shorter than ${schema.minLength}`)
   }
-  if (typeof schema.maxLength === "number" && value.length > schema.maxLength) {
+  if (typeof schema.maxLength === "number" && length > schema.maxLength) {
     errors.push(`${location} is longer than ${schema.maxLength}`)
   }
   if (typeof schema.pattern === "string") {

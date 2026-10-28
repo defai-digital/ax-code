@@ -743,3 +743,8 @@ test("redactRunUrlCredentials masks the userinfo password in attach URLs (G5)", 
     expect(redactRunUrlCredentials(url)).not.toMatch(/sekrit|b%40c/)
   }
 })
+
+test("validateJsonSchema measures string length in code points", () => {
+  expect(validateJsonSchema("😀😀", { type: "string", maxLength: 2 })).toEqual({ ok: true })
+  expect(validateJsonSchema("😀", { type: "string", minLength: 2 }).ok).toBe(false)
+})
