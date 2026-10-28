@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import { readFileSync, unlinkSync } from "fs"
 import path from "path"
 import { randomUUID } from "crypto"
+import { DatabaseSync } from "node:sqlite"
 import { Log } from "./log"
 import { sleep } from "./timeout"
 import {
@@ -14,10 +15,12 @@ import {
 
 // Cross-process advisory file lock.
 //
-// Uses atomic O_EXCL file creation as a mutex: `fs.open(path, "wx")`
-// fails with EEXIST if the file already exists. The lockfile contains
-// JSON with `{ pid, startedAt, host }` so we can detect stale locks
-// left behind by crashed processes.
+// A permanent SQLite sidecar holds the OS mutex for the whole acquisition.
+// The JSON O_EXCL lockfile remains for compatibility with older processes.
+// Serializing only its create is insufficient: stale recovery can rename a
+// replacement owner away and admit another writer through the vacant path.
+// SQLite releases the guard on process exit, including a crash during the
+// JSON body write. Never unlink or independently open/read the guard file.
 //
 // Extracted from code-intelligence/lockfile.ts (BUG-12) to provide a
 // general-purpose cross-process lock for Storage.update and any other
@@ -25,10 +28,8 @@ import {
 
 const log = Log.create({ service: "filelock" })
 
-// Locks older than this are treated as abandoned even if a PID still responds
-// to kill(0) (PID reuse after a crash). Keep short enough that a crashed
-// holder cannot block writers for minutes, but long enough that a legitimate
-// multi-second write is never stolen mid-flight.
+// Compatibility files older than this may be abandoned after PID reuse.
+// A live holder of the SQLite guard is never evicted based on this age.
 const DEFAULT_STALE_MS = 60 * 1000 // 60 seconds
 const POLL_INTERVAL_MS = 50
 
@@ -46,6 +47,31 @@ export namespace FileLock {
     constructor(public readonly target: string) {
       super(`timed out waiting for file lock: ${target}`)
       this.name = "FileLockTimeoutError"
+    }
+  }
+
+  function tryGuard(target: string): Disposable | undefined {
+    const guard = new DatabaseSync(target + ".guard", { timeout: 0 })
+    try {
+      // No schema or data writes, no WAL, and no journal. The RESERVED lock
+      // conflicts with other contenders, including connections in this PID.
+      guard.exec("BEGIN IMMEDIATE")
+    } catch (error) {
+      guard.close()
+      if (error && typeof error === "object" && "errcode" in error && error.errcode === 5) return
+      throw error
+    }
+    let released = false
+    return {
+      [Symbol.dispose]() {
+        if (released) return
+        released = true
+        try {
+          guard.exec("ROLLBACK")
+        } finally {
+          guard.close()
+        }
+      },
     }
   }
 
@@ -176,20 +202,32 @@ export namespace FileLock {
   // process holds it.
   async function attempt(target: string, staleMs: number, signal?: AbortSignal): Promise<Disposable | undefined> {
     signal?.throwIfAborted()
-    const created = await writeLockFile(target).catch((err: NodeJS.ErrnoException) => {
-      if (err?.code === "EEXIST") return undefined
-      throw err
-    })
-    if (created) return acquired(target, created, signal)
+    const guard = tryGuard(target)
+    if (!guard) return
+    let transferred = false
+    try {
+      const created = await writeLockFile(target).catch((err: NodeJS.ErrnoException) => {
+        if (err?.code === "EEXIST") return undefined
+        throw err
+      })
+      if (created) {
+        transferred = true
+        return acquired(target, created, guard, signal)
+      }
 
-    signal?.throwIfAborted()
-    const stolen = await maybeSteal(target, staleMs)
-    if (!stolen) return undefined
-    const retry = await writeLockFile(target).catch((err: NodeJS.ErrnoException) => {
-      if (err?.code === "EEXIST") return undefined
-      throw err
-    })
-    return retry ? acquired(target, retry, signal) : undefined
+      signal?.throwIfAborted()
+      const stolen = await maybeSteal(target, staleMs)
+      if (!stolen) return undefined
+      const retry = await writeLockFile(target).catch((err: NodeJS.ErrnoException) => {
+        if (err?.code === "EEXIST") return undefined
+        throw err
+      })
+      if (!retry) return
+      transferred = true
+      return acquired(target, retry, guard, signal)
+    } finally {
+      if (!transferred) guard[Symbol.dispose]()
+    }
   }
 
   /**
@@ -239,8 +277,8 @@ export namespace FileLock {
     }
   }
 
-  function acquired(target: string, owner: ProcessLockBody, signal?: AbortSignal): Disposable {
-    const lock = makeDisposable(target, owner)
+  function acquired(target: string, owner: ProcessLockBody, guard: Disposable, signal?: AbortSignal): Disposable {
+    const lock = makeDisposable(target, owner, guard)
     if (signal?.aborted) {
       lock[Symbol.dispose]()
       signal.throwIfAborted()
@@ -248,8 +286,9 @@ export namespace FileLock {
     return lock
   }
 
-  function makeDisposable(target: string, owner: ProcessLockBody): Disposable {
+  function makeDisposable(target: string, owner: ProcessLockBody, heldGuard: Disposable): Disposable {
     let disposed = false
+    let guard: Disposable | undefined = heldGuard
     return {
       // Symbol.dispose is a synchronous protocol — using fs.unlink (async)
       // here lets the lockfile linger on disk after `using` exits, which
@@ -260,6 +299,10 @@ export namespace FileLock {
         if (disposed) return
         let settled = false
         try {
+          // A failed unlink remains retryable, but must reacquire exclusion
+          // before a later dispose reads and removes the compatibility file.
+          guard ??= tryGuard(target)
+          if (!guard) return
           const body = readLockBodySync(target)
           // Compare with the body this acquisition wrote, not with the ambient
           // host name: a hostname change while the lock is held would
@@ -280,6 +323,12 @@ export namespace FileLock {
             // retryable. Latching `disposed` here would pin the lockfile for
             // the whole stale window with no later release possible.
             log.error("failed to release file lock", { target, err })
+          }
+        } finally {
+          try {
+            guard?.[Symbol.dispose]()
+          } finally {
+            guard = undefined
           }
         }
         if (settled) disposed = true

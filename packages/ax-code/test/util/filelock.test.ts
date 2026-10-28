@@ -2,11 +2,89 @@ import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import os from "node:os"
 import fs from "fs/promises"
+import { spawn } from "node:child_process"
+import { once } from "node:events"
 import { FileLock } from "../../src/util/filelock"
 import { currentLockHost } from "../../src/util/process-lock"
 import { tmpdir } from "../fixture/fixture"
 
 describe("util.filelock", () => {
+  test("a live process keeps exclusion and a killed process releases its guard", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const worker = path.join(tmp.path, "holder.mts")
+    await fs.writeFile(
+      worker,
+      `import { FileLock } from ${JSON.stringify(new URL("../../src/util/filelock.ts", import.meta.url).href)}
+const lock = await FileLock.acquire(process.argv[2])
+process.send("ready")
+setInterval(() => {}, 1000)
+`,
+    )
+    const child = spawn(process.execPath, ["--import", import.meta.resolve("tsx"), worker, filepath], {
+      cwd: path.resolve(import.meta.dirname, "../.."),
+      stdio: ["ignore", "ignore", "pipe", "ipc"],
+    })
+    const exited = once(child, "exit")
+    let stderr = ""
+    child.stderr?.on("data", (chunk) => (stderr += String(chunk)))
+    try {
+      const ready = once(child, "message", { signal: AbortSignal.timeout(15_000) })
+      expect(await Promise.race([ready, exited.then(() => [stderr])])).toEqual(["ready", undefined])
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      const contender = await FileLock.tryAcquire(filepath, { staleMs: 1 })
+      contender?.[Symbol.dispose]()
+      expect(contender).toBeUndefined()
+      child.kill("SIGKILL")
+      await exited
+      using recovered = await FileLock.acquire(filepath, { timeoutMs: 1000, staleMs: 24 * 60 * 60_000 })
+      expect(recovered).toBeDefined()
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL")
+      await exited
+    }
+  })
+
+  test("a stale-lock reclaim never admits a writer through the renamed path", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const lockfile = filepath + ".lock"
+    await fs.writeFile(
+      lockfile,
+      JSON.stringify({ pid: 1, startedAt: Date.now() - 10 * 60_000, host: currentLockHost() }),
+    )
+    const realRename = fs.rename.bind(fs)
+    let admitted = false
+    const rename = vi.spyOn(fs, "rename").mockImplementationOnce(async (from, to) => {
+      await realRename(from, to)
+      const other = await FileLock.tryAcquire(filepath)
+      admitted = other !== undefined
+      other?.[Symbol.dispose]()
+    })
+    try {
+      using lock = await FileLock.acquire(filepath)
+      expect(lock).toBeDefined()
+      expect(admitted).toBe(false)
+    } finally {
+      rename.mockRestore()
+    }
+  })
+
+  test("a live holder remains exclusive past the legacy stale age", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    using holder = await FileLock.acquire(filepath)
+    const now = Date.now()
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now + 120_000)
+    try {
+      const other = await FileLock.tryAcquire(filepath, { staleMs: 60_000 })
+      other?.[Symbol.dispose]()
+      expect(other).toBeUndefined()
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   test("stealing a stale lock leaves a fresh lock another process just took", async () => {
     await using tmp = await tmpdir()
     const filepath = path.join(tmp.path, "state.json")
