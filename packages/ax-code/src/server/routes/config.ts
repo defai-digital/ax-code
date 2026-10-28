@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver } from "hono-openapi"
@@ -27,10 +28,17 @@ function stripRedactedRecord(record: Record<string, string> | undefined) {
 // arrays of option objects), so both the redaction pass and the PATCH strip
 // pass recurse over plain objects and arrays with a shared depth bound.
 // Copy-on-write: subtrees with nothing to change are returned by reference.
-const MAX_REDACT_DEPTH = 8
+// Past the bound the walk fails closed: an object or array there is masked
+// whole (it may hold a secret the walk never reached), and the PATCH strip
+// treats a sentinel at the bound as that echo.
+const MAX_REDACT_DEPTH = 16
+
+function isBoundSentinel(item: unknown, depth: number) {
+  return item === REDACTED && depth >= MAX_REDACT_DEPTH
+}
 
 function redactProviderOptionsDeep(value: unknown, depth: number): unknown {
-  if (depth >= MAX_REDACT_DEPTH) return value
+  if (depth >= MAX_REDACT_DEPTH) return Array.isArray(value) || isRecord(value) ? REDACTED : value
   if (Array.isArray(value)) {
     let changed = false
     const next = value.map((item) => {
@@ -66,49 +74,59 @@ function redactProviderOptions(options: Record<string, unknown>) {
 // unrepresentable as a patch: `mergeDeep` replaces arrays wholesale
 // (see mergeConfigConcatArrays), so returning a partially stripped array would
 // overwrite the stored one and lose every value dropped from it. The parent
-// drops such a key instead and the stored array stands — the same outcome an
-// omitted object key gets.
+// drops such a key when it is an unchanged echo of the stored array (the same
+// outcome an omitted object key gets); an array that was edited while still
+// holding a sentinel cannot be applied, so the PATCH is refused rather than
+// silently ignored.
 function holdsRedactedSecret(value: unknown, depth: number): boolean {
   if (depth >= MAX_REDACT_DEPTH) return false
-  if (Array.isArray(value)) return value.some((item) => holdsRedactedSecret(item, depth + 1))
+  if (Array.isArray(value))
+    return value.some((item) => isBoundSentinel(item, depth + 1) || holdsRedactedSecret(item, depth + 1))
   if (!isRecord(value)) return false
   for (const [key, item] of Object.entries(value)) {
-    if (item === REDACTED && SECRET_OPTION_PATTERN.test(key)) return true
+    if (item === REDACTED && (SECRET_OPTION_PATTERN.test(key) || isBoundSentinel(item, depth + 1))) return true
     if (holdsRedactedSecret(item, depth + 1)) return true
   }
   return false
 }
 
-function stripRedactedProviderOptionsDeep(value: unknown, depth: number): unknown {
+function stripRedactedProviderOptionsDeep(value: unknown, depth: number, stored: unknown, at: string): unknown {
   if (depth >= MAX_REDACT_DEPTH) return value
   if (!isRecord(value)) return value
+  const storedRecord = isRecord(stored) ? stored : undefined
   let changed = false
   const entries: [string, unknown][] = []
   for (const [key, item] of Object.entries(value)) {
     // Drop a redaction sentinel only when it sits on a secret-looking key: a
     // literal "[redacted]" value on a public key is user data, not an echo.
-    if (item === REDACTED && SECRET_OPTION_PATTERN.test(key)) {
+    if (item === REDACTED && (SECRET_OPTION_PATTERN.test(key) || isBoundSentinel(item, depth + 1))) {
       changed = true
       continue
     }
     if (Array.isArray(item)) {
       if (holdsRedactedSecret(item, depth + 1)) {
+        const previous = storedRecord?.[key]
+        if (previous === undefined || !isDeepStrictEqual(redactProviderOptionsDeep(previous, depth + 1), item)) {
+          throw new HTTPException(400, {
+            message: `${at}.${key}: the list still has ${REDACTED} values but was changed; re-enter them to change it`,
+          })
+        }
         changed = true
         continue
       }
       entries.push([key, item])
       continue
     }
-    const stripped = stripRedactedProviderOptionsDeep(item, depth + 1)
+    const stripped = stripRedactedProviderOptionsDeep(item, depth + 1, storedRecord?.[key], `${at}.${key}`)
     if (stripped !== item) changed = true
     entries.push([key, stripped])
   }
   return changed ? Object.fromEntries(entries) : value
 }
 
-function stripRedactedProviderOptions(options: Record<string, unknown> | undefined) {
+function stripRedactedProviderOptions(options: Record<string, unknown> | undefined, stored: unknown, at: string) {
   if (!options) return options
-  return stripRedactedProviderOptionsDeep(options, 0) as Record<string, unknown>
+  return stripRedactedProviderOptionsDeep(options, 0, stored, at) as Record<string, unknown>
 }
 
 function maskRecord(rec: Record<string, string> | undefined) {
@@ -140,6 +158,8 @@ function redactProviderModels<T extends RedactableModel>(
 
 function stripRedactedProviderModels<T extends RedactableModel>(
   models: Record<string, T> | undefined,
+  stored: Record<string, RedactableModel> | undefined,
+  at: string,
 ): Record<string, T> | undefined {
   if (!models) return models
   return Object.fromEntries(
@@ -149,7 +169,13 @@ function stripRedactedProviderModels<T extends RedactableModel>(
         ...(model.headers === undefined ? {} : { headers: stripRedactedRecord(model.headers) }),
         ...(model.options === undefined
           ? {}
-          : { options: stripRedactedProviderOptions(model.options) as T["options"] }),
+          : {
+              options: stripRedactedProviderOptions(
+                model.options,
+                stored?.[id]?.options,
+                `${at}.${id}.options`,
+              ) as T["options"],
+            }),
       } as T
       return [id, next]
     }),
@@ -203,8 +229,20 @@ export function stripRedactedConfig(config: Config.Info, stored?: Config.Info): 
         id,
         {
           ...p,
-          ...(p.options === undefined ? {} : { options: stripRedactedProviderOptions(p.options) }),
-          ...(p.models === undefined ? {} : { models: stripRedactedProviderModels(p.models) }),
+          ...(p.options === undefined
+            ? {}
+            : {
+                options: stripRedactedProviderOptions(
+                  p.options,
+                  stored?.provider?.[id]?.options,
+                  `provider.${id}.options`,
+                ),
+              }),
+          ...(p.models === undefined
+            ? {}
+            : {
+                models: stripRedactedProviderModels(p.models, stored?.provider?.[id]?.models, `provider.${id}.models`),
+              }),
         },
       ]),
     )
@@ -244,7 +282,11 @@ export function stripRedactedConfig(config: Config.Info, stored?: Config.Info): 
   if (config.image_generation?.options) {
     result.image_generation = {
       ...config.image_generation,
-      options: stripRedactedProviderOptions(config.image_generation.options),
+      options: stripRedactedProviderOptions(
+        config.image_generation.options,
+        stored?.image_generation?.options,
+        "image_generation.options",
+      ),
     }
   }
   return result

@@ -395,6 +395,50 @@ describe("/global/config redaction", () => {
     }
   })
 
+  test("secrets nested past the redaction depth bound stay hidden and survive an echo", async () => {
+    const previousConfigPath = Global.Path.config
+    await using tmp = await tmpdir()
+
+    try {
+      ;(Global.Path as { config: string }).config = tmp.path
+      Config.global.reset()
+
+      // A secret 20 levels below options: deeper than any bounded walk reaches.
+      const nest = (leaf: unknown) => {
+        let node: unknown = leaf
+        for (let i = 0; i < 20; i++) node = { level: node }
+        return node
+      }
+      await fs.mkdir(tmp.path, { recursive: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await Filesystem.write(
+        configPath,
+        JSON.stringify({
+          provider: { "custom-gateway": { options: { deep: nest({ apiKey: "deep-secret" }) } } },
+        }),
+      )
+
+      const read = await Server.Default().request("/global/config")
+      expect(read.status).toBe(200)
+      const body = await read.text()
+      expect(body).not.toContain("deep-secret")
+
+      // Echo the GET body back unchanged: the masked subtree must not
+      // overwrite the stored one.
+      const response = await Server.Default().request("/global/config", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body,
+      })
+      expect(response.status).toBe(200)
+      expect(await response.text()).not.toContain("deep-secret")
+      expect(await Filesystem.readText(configPath)).toContain("deep-secret")
+    } finally {
+      ;(Global.Path as { config: string }).config = previousConfigPath
+      Config.global.reset()
+    }
+  })
+
   test("patch of a redacted array keeps the stored element secrets", async () => {
     const previousConfigPath = Global.Path.config
     await using tmp = await tmpdir()
@@ -445,6 +489,46 @@ describe("/global/config redaction", () => {
       // an element would erase the stored credential rather than preserve it
       // the way an omitted object key does.
       expect(endpoints).toEqual([{ url: "https://a.example/v1", apiKey: "endpoint-secret" }])
+    } finally {
+      ;(Global.Path as { config: string }).config = previousConfigPath
+      Config.global.reset()
+    }
+  })
+
+  test("patch refuses an edited array that still holds redacted secrets", async () => {
+    const previousConfigPath = Global.Path.config
+    await using tmp = await tmpdir()
+
+    try {
+      ;(Global.Path as { config: string }).config = tmp.path
+      Config.global.reset()
+
+      await fs.mkdir(tmp.path, { recursive: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      const original = JSON.stringify({
+        provider: {
+          "custom-gateway": {
+            options: { endpoints: [{ url: "https://a.example/v1", apiKey: "endpoint-secret" }] },
+          },
+        },
+      })
+      await Filesystem.write(configPath, original)
+
+      // The url changed but the element still echoes the sentinel: the stored
+      // array cannot take the edit, so a 200 that changes nothing would lie.
+      const response = await Server.Default().request("/global/config", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: {
+            "custom-gateway": {
+              options: { endpoints: [{ url: "https://b.example/v1", apiKey: "[redacted]" }] },
+            },
+          },
+        }),
+      })
+      expect(response.status).toBe(400)
+      expect(JSON.parse(await Filesystem.readText(configPath)).provider).toEqual(JSON.parse(original).provider)
     } finally {
       ;(Global.Path as { config: string }).config = previousConfigPath
       Config.global.reset()
