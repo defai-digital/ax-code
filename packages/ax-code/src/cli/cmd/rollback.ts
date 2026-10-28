@@ -1,5 +1,6 @@
 import { cmd } from "./cmd"
 import { UI } from "../ui"
+import { confirmDestructiveAction } from "../confirm-destructive"
 import { Instance } from "../../project/instance"
 import { getRequiredSession } from "./session-required"
 import type { SessionRevert } from "../../session/revert"
@@ -154,26 +155,7 @@ export const RollbackCommand = cmd({
           return
         }
 
-        if (!args.force) {
-          // Non-interactive stdin (CI, /dev/null, a kept-open pipe) either hangs
-          // on rl.question forever or dies with an unsettled top-level await.
-          // Refuse like the sibling confirmations instead.
-          if (!process.stdin.isTTY) {
-            UI.error("Confirmation required but stdin is not interactive; re-run with --force to proceed")
-            process.exitCode = 1
-            return
-          }
-          const readline = await import("readline")
-          const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-          const answer = await new Promise<string>((resolve) => {
-            rl.question("\nProceed with rollback? (y/N) ", resolve)
-          })
-          rl.close()
-          if (answer.toLowerCase() !== "y") {
-            console.log("Cancelled.")
-            return
-          }
-        }
+        if (!args.force && !(await confirmDestructiveAction("\nProceed with rollback?"))) return
 
         await SessionRollback.apply(target)
         console.log(

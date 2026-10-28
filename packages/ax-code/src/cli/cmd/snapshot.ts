@@ -1,5 +1,6 @@
 import type { Argv } from "yargs"
 import { UI } from "../ui"
+import { confirmDestructiveAction } from "../confirm-destructive"
 import { cmd } from "./cmd"
 import { jsonOption, writeJson } from "./json-output"
 import type { SnapshotStores } from "../../snapshot/stores"
@@ -29,25 +30,6 @@ function table(stores: SnapshotStores.Store[], now: number) {
   const line = (row: string[]) =>
     row.map((cell, i) => (i === row.length - 1 ? cell : cell.padEnd(widths[i]))).join("  ")
   return [line(head), ...rows.map(line)].join("\n")
-}
-
-async function confirm(prompt: string) {
-  if (!process.stdin.isTTY) {
-    UI.error("Confirmation required but stdin is not interactive; re-run with --force to proceed")
-    process.exitCode = 1
-    return false
-  }
-  const readline = await import("readline")
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-  const answer = await new Promise<string>((resolve) => {
-    rl.question(`${prompt} (y/N) `, resolve)
-  })
-  rl.close()
-  if (answer.toLowerCase() !== "y") {
-    UI.println("Cancelled.")
-    return false
-  }
-  return true
 }
 
 const StatusCommand = cmd({
@@ -150,7 +132,7 @@ const PruneCommand = cmd({
     }
     console.log(`Would free ${formatStorageBytes(plan.freedBytes)}`)
     if (args["dry-run"]) return
-    if (!args.force && !(await confirm("Proceed?"))) return
+    if (!args.force && !(await confirmDestructiveAction("Proceed?"))) return
     const done = await SnapshotStores.prune({ stores, ...wanted, dryRun: false, now })
     console.log(
       `Freed ${formatStorageBytes(done.freedBytes)} (${done.removed.length} stores, ${done.garbageFiles} files)`,
