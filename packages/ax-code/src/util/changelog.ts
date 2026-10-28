@@ -88,7 +88,12 @@ export function latestSection(doc: ChangelogDocument): ChangelogSection | undefi
 /** Cap rendered text at `maxBytes`, appending a truncation note when cut. */
 export function capChangelog(text: string, maxBytes: number = CHANGELOG_MAX_BYTES): RenderedChangelog {
   if (Buffer.byteLength(text, "utf8") <= maxBytes) return { text, truncated: false }
-  const sliced = Buffer.from(text, "utf8").subarray(0, maxBytes).toString("utf8")
+  const bytes = Buffer.from(text, "utf8")
+  // Back off to a character boundary: a cut inside a multi-byte sequence
+  // would decode to U+FFFD at the end of the notes.
+  let end = maxBytes
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end--
+  const sliced = bytes.subarray(0, end).toString("utf8")
   return { text: sliced + CHANGELOG_TRUNCATION_NOTE, truncated: true }
 }
 

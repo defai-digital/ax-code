@@ -169,3 +169,10 @@ describe("release-notes command", () => {
     }
   })
 })
+
+test("capChangelog cuts at a character boundary instead of splitting a UTF-8 sequence", () => {
+  const { text, truncated } = capChangelog("字".repeat(20), 10)
+  expect(truncated).toBe(true)
+  expect(text).not.toContain("�")
+  expect(text.startsWith("字字字")).toBe(true)
+})
