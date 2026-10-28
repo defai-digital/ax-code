@@ -36,4 +36,24 @@ describe("uninstall targets", () => {
     expect((await collectRemovalTargets(options, "unknown")).binary).toBeNull()
     expect((await collectRemovalTargets(options, "brew")).binary).toBeNull()
   })
+
+  test.skipIf(process.platform === "win32")("targets both zsh files the installer writes", async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), "ax-uninstall-home-"))
+    const block = "# ax-code\nexport PATH=/home/u/.ax-code/bin:$PATH\n"
+    try {
+      await fs.writeFile(path.join(home, ".zshrc"), block)
+      await fs.writeFile(path.join(home, ".zprofile"), block)
+      vi.spyOn(os, "homedir").mockReturnValue(home)
+      vi.stubEnv("SHELL", "/bin/zsh")
+      vi.stubEnv("ZDOTDIR", "")
+      vi.stubEnv("XDG_CONFIG_HOME", path.join(home, ".config"))
+      vi.spyOn(Installation, "standaloneRoot").mockResolvedValue(undefined)
+      vi.spyOn(Installation, "activeInstallPath").mockResolvedValue(undefined as never)
+      const targets = await collectRemovalTargets(options, "curl")
+      expect(targets.shellConfigs).toEqual([path.join(home, ".zshrc"), path.join(home, ".zprofile")])
+    } finally {
+      vi.unstubAllEnvs()
+      await fs.rm(home, { recursive: true, force: true })
+    }
+  })
 })

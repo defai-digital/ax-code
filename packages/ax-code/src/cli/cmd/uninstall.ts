@@ -19,7 +19,7 @@ interface UninstallArgs {
 
 interface RemovalTargets {
   directories: Array<{ path: string; label: string; keep: boolean }>
-  shellConfig: string | null
+  shellConfigs: string[]
   binary: string | null
 }
 
@@ -96,7 +96,7 @@ export async function collectRemovalTargets(args: UninstallArgs, method: Install
     { path: Global.Path.state, label: "State", keep: false },
   ]
 
-  const shellConfig = method === "curl" ? await getShellConfigFile() : null
+  const shellConfigs = method === "curl" ? await getShellConfigFiles() : []
   const root = method === "curl" ? await Installation.standaloneRoot() : undefined
   let launcher = "ax-code"
   if (root && process.platform === "win32") {
@@ -109,7 +109,7 @@ export async function collectRemovalTargets(args: UninstallArgs, method: Install
   const binary =
     method === "curl" ? (root ? path.join(root, "bin", launcher) : await Installation.activeInstallPath()) : null
 
-  return { directories, shellConfig, binary }
+  return { directories, shellConfigs, binary }
 }
 
 async function showRemovalSummary(targets: RemovalTargets, method: Installation.Method) {
@@ -136,8 +136,8 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
     prompts.log.info(`  ✓ Binary: ${Filesystem.shortenHome(targets.binary, os.homedir())}`)
   }
 
-  if (targets.shellConfig) {
-    prompts.log.info(`  ✓ Shell PATH in ${Filesystem.shortenHome(targets.shellConfig, os.homedir())}`)
+  for (const file of targets.shellConfigs) {
+    prompts.log.info(`  ✓ Shell PATH in ${Filesystem.shortenHome(file, os.homedir())}`)
   }
 
   if (method !== "curl" && method !== "unknown") {
@@ -174,14 +174,14 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     spinner.stop(`Removed ${dir.label}`)
   }
 
-  if (targets.shellConfig) {
+  for (const file of targets.shellConfigs) {
     spinner.start("Cleaning shell config...")
-    const err = await cleanShellConfig(targets.shellConfig).catch((e) => e)
+    const err = await cleanShellConfig(file).catch((e) => e)
     if (err) {
       spinner.error("Failed to clean shell config")
-      errors.push(`Shell config: ${toErrorMessage(err)}`)
+      errors.push(`Shell config ${file}: ${toErrorMessage(err)}`)
     } else {
-      spinner.stop("Cleaned shell config")
+      spinner.stop(`Cleaned ${Filesystem.shortenHome(file, os.homedir())}`)
     }
   }
 
@@ -232,22 +232,27 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
   prompts.log.success("Thank you for using ax-code!")
 }
 
-async function getShellConfigFile(): Promise<string | null> {
+// The installer writes the PATH block to the interactive rc file and, for zsh
+// and bash, to a login startup file as well, so every marked candidate is cleaned.
+async function getShellConfigFiles(): Promise<string[]> {
   const shell = path.basename(process.env.SHELL || "bash")
   const home = os.homedir()
   const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, ".config")
+  const zdotdir = process.env.ZDOTDIR || home
 
   const configFiles: Record<string, string[]> = {
     fish: [path.join(xdgConfig, "fish", "config.fish")],
     zsh: [
       path.join(home, ".zshrc"),
       path.join(home, ".zshenv"),
+      path.join(zdotdir, ".zprofile"),
       path.join(xdgConfig, "zsh", ".zshrc"),
       path.join(xdgConfig, "zsh", ".zshenv"),
     ],
     bash: [
       path.join(home, ".bashrc"),
       path.join(home, ".bash_profile"),
+      path.join(home, ".bash_login"),
       path.join(home, ".profile"),
       path.join(xdgConfig, "bash", ".bashrc"),
       path.join(xdgConfig, "bash", ".bash_profile"),
@@ -256,7 +261,8 @@ async function getShellConfigFile(): Promise<string | null> {
     sh: [path.join(home, ".profile")],
   }
 
-  const candidates = configFiles[shell] || configFiles.bash
+  const candidates = [...new Set(configFiles[shell] || configFiles.bash)]
+  const found: string[] = []
 
   for (const file of candidates) {
     const exists = await fs
@@ -266,12 +272,10 @@ async function getShellConfigFile(): Promise<string | null> {
     if (!exists) continue
 
     const content = await Filesystem.readText(file).catch(() => "")
-    if (content.includes("# ax-code") || content.includes(".ax-code/bin")) {
-      return file
-    }
+    if (content.includes("# ax-code") || content.includes(".ax-code/bin")) found.push(file)
   }
 
-  return null
+  return found
 }
 
 async function cleanShellConfig(file: string) {
