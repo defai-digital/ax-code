@@ -89,7 +89,11 @@ export const ContextCommand = cmd({
       let messages: Awaited<ReturnType<typeof Session.messages>>
 
       if (args.sessionID) {
-        session = sessions.find((s) => s.id === args.sessionID)
+        // Look the id up directly: the recent-sessions window above is only for
+        // picking a default and would hide an older session of this project.
+        const { Instance } = await import("../../project/instance")
+        const found = await Session.get(args.sessionID as Session.Info["id"]).catch(() => undefined)
+        session = found?.projectID === Instance.project.id ? found : undefined
         if (!session) {
           if (args.json) {
             writeContextJsonError("session-not-found", `Session "${args.sessionID}" not found`)

@@ -110,6 +110,36 @@ describe("context command session selection (#402)", () => {
     expect(captured.output()).not.toContain(ghost.id)
   })
 
+  test("finds a session by id even when it is outside the recent-sessions window", async () => {
+    await using project = await tmpdir({ git: true })
+    const [older, newer] = await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const first = await Session.create({ title: "older" })
+        await addAssistantExchange(first.id, project.path)
+        const second = await Session.create({ title: "newer" })
+        return [first, second]
+      },
+    })
+    // Stand in for a project with more sessions than the listing returns.
+    const list = vi.spyOn(Session, "list").mockImplementation(function* () {
+      yield newer
+    })
+
+    const captured = captureOutput()
+    try {
+      await withCwd(project.path, () =>
+        ContextCommand.handler({ sessionID: older.id, $0: "ax-code", _: ["context"] } as never),
+      )
+    } finally {
+      captured.restore()
+      list.mockRestore()
+    }
+
+    expect(captured.output()).not.toContain("not found")
+    expect(captured.output()).toContain("Title: older")
+  })
+
   test("conversation history is the latest turn's context, not a sum over turns", async () => {
     await using project = await tmpdir({ git: true })
     const session = await Instance.provide({
