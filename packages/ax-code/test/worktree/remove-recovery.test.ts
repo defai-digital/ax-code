@@ -218,6 +218,9 @@ test("removes a managed worktree whose directory vanished and was pruned", async
     directory: tmp.path,
     fn: async () => {
       const info = await Worktree.create({ name: "vanished" })
+      // create() checks the files out on the next tick. That git process
+      // still has the directory open on Windows, so rm reports EBUSY.
+      Worktree.cancelPendingStartScripts(info.directory)
       await fs.rm(info.directory, { recursive: true, force: true })
       execFileSync("git", ["worktree", "prune"], { cwd: tmp.path, stdio: "pipe" })
 
