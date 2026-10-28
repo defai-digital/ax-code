@@ -314,9 +314,23 @@ export namespace Worktree {
     return git(["clean", "-ffdx"], { cwd: root })
   }
 
+  /**
+   * Realpath of the nearest existing ancestor joined with the missing tail. A
+   * removed worktree no longer exists, but the managed root it sat under may
+   * still be reached through a symlink (macOS /var → /private/var); falling
+   * back to the literal path would compare it against the resolved root and
+   * miss.
+   */
+  async function realpathAllowMissing(abs: string): Promise<string> {
+    const real = await fs.realpath(abs).catch(() => undefined)
+    if (real !== undefined) return real
+    const parent = path.dirname(abs)
+    if (parent === abs) return abs
+    return path.join(await realpathAllowMissing(parent), path.basename(abs))
+  }
+
   async function canonical(input: string) {
-    const abs = path.resolve(input)
-    const real = await fs.realpath(abs).catch(() => abs)
+    const real = await realpathAllowMissing(path.resolve(input))
     const normalized = path.normalize(real)
     return process.platform === "win32" || process.platform === "darwin" ? normalized.toLowerCase() : normalized
   }
@@ -327,8 +341,7 @@ export namespace Worktree {
    * match them; the lowercased form is for comparison keys (git, sandboxes).
    */
   async function realOnDiskPath(input: string) {
-    const abs = path.resolve(input)
-    const real = await fs.realpath(abs).catch(() => abs)
+    const real = await realpathAllowMissing(path.resolve(input))
     return path.normalize(real)
   }
 

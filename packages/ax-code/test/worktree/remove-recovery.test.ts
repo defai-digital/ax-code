@@ -210,3 +210,21 @@ test("treats a worktree branch deleted by a concurrent remover as removed", asyn
     git("worktree", "prune")
   }
 })
+
+test("removes a managed worktree whose directory vanished and was pruned", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const info = await Worktree.create({ name: "vanished" })
+      await fs.rm(info.directory, { recursive: true, force: true })
+      execFileSync("git", ["worktree", "prune"], { cwd: tmp.path, stdio: "pipe" })
+
+      // The data root can sit under a symlinked ancestor (macOS /var →
+      // /private/var); the missing directory must still be recognized as
+      // living under the managed root.
+      await expect(Worktree.remove({ directory: info.directory })).resolves.toBe(true)
+    },
+  })
+})
