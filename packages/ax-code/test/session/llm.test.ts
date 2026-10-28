@@ -4031,6 +4031,11 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 })
 
 describe("session.llm.extractLastUserTask", () => {
+  test("does not end the task on a lone surrogate at the 500-unit cut", () => {
+    const messages = [{ role: "user", content: "a".repeat(499) + "😀tail" }] as any as ModelMessage[]
+    expect(LLM.extractLastUserTask(messages)).toBe("a".repeat(499))
+  })
+
   test("returns undefined for empty messages", () => {
     expect(LLM.extractLastUserTask([])).toBeUndefined()
   })

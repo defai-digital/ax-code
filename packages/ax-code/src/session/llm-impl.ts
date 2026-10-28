@@ -18,6 +18,7 @@ import { ObservedWindow } from "@/provider/observed-window"
 import { TokenLedger } from "@/provider/token-ledger"
 import { FILE_TOUCHING_TOOLS } from "@/tool/mutation-tools"
 import { toolInputFilePath } from "@/tool/file-path"
+import { sliceCodeUnits } from "@/util/format"
 import { completionClamp, calculateCompactionBudget, effectiveClampWindow } from "./compaction-budget"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
@@ -1509,10 +1510,10 @@ export namespace LLM {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i]
       if (msg.role !== "user") continue
-      if (typeof msg.content === "string") return msg.content.slice(0, 500)
+      if (typeof msg.content === "string") return sliceCodeUnits(msg.content, 500)
       if (Array.isArray(msg.content)) {
         for (const part of msg.content as Array<{ type: string; text?: string }>) {
-          if (part.type === "text" && part.text) return part.text.slice(0, 500)
+          if (part.type === "text" && part.text) return sliceCodeUnits(part.text, 500)
         }
       }
     }

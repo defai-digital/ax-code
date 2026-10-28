@@ -1,14 +1,13 @@
 import type { MessageV2 } from "../message-v2"
+import { sliceCodeUnits } from "../../util/format"
 
 function safeDecisionText(value: unknown, max = 240) {
   if (typeof value !== "string") return ""
-  const escaped = value
-    .replace(/\s+/g, " ")
-    .trim()
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-  return escaped.length <= max ? escaped : `${escaped.slice(0, max)}...`
+  // Cut before escaping: a cut after it can land inside an entity (`&qu...`),
+  // and a code-unit slice can split a surrogate pair.
+  const text = value.replace(/\s+/g, " ").trim()
+  const cut = text.length <= max ? text : `${sliceCodeUnits(text, max)}...`
+  return cut.replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
 }
 
 export function autonomousDecisionLedgerReminder(messages: MessageV2.WithParts[]) {
