@@ -45,6 +45,10 @@ async function withWiki<T>(args: CommonArgs, fn: WikiRun<T>, options: { models?:
   return options.models ? api.bootstrap(root, run) : api.bootstrapReadonly(root, run)
 }
 
+export function wikiRelatedExitCode(result: { matches: readonly unknown[] }) {
+  return result.matches.length ? 0 : 1
+}
+
 export function wikiStatusExitCode(status: Pick<WikiStatus, "exists" | "healthy" | "freshness">): number {
   // A missing wiki is a successful status report, not a command failure.
   if (!status.exists) return 0
@@ -349,9 +353,11 @@ export const WikiRelatedCommand = cmd({
         }
         if (!result.matches.length) {
           UI.println("  No matching wiki pages; use code_intelligence for structural lookup.")
-          process.exitCode = 1
         }
       }
+      // The exit code reports "no match" the same way in both output modes.
+      const exitCode = wikiRelatedExitCode(result)
+      if (exitCode !== 0) process.exitCode = exitCode
     })
   },
 })

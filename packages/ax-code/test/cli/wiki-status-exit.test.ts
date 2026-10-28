@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { wikiStatusExitCode } from "../../src/cli/cmd/wiki"
+import { wikiRelatedExitCode, wikiStatusExitCode } from "../../src/cli/cmd/wiki"
 
 describe("wiki status exit code", () => {
   test("treats a missing wiki as a successful status report", () => {
@@ -13,5 +13,12 @@ describe("wiki status exit code", () => {
 
   test("succeeds when a present wiki is healthy and fresh", () => {
     expect(wikiStatusExitCode({ exists: true, healthy: true, freshness: "fresh" })).toBe(0)
+  })
+})
+
+describe("wiki related exit code", () => {
+  test("fails on no match and succeeds on a match, whatever the output mode", () => {
+    expect(wikiRelatedExitCode({ matches: [] })).toBe(1)
+    expect(wikiRelatedExitCode({ matches: [{}] })).toBe(0)
   })
 })
