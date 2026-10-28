@@ -5,6 +5,7 @@ import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
 import { buildAttachAuthHeaders } from "../attach-auth"
 import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import { assertLoopbackHttpUrl } from "@/util/listen-security"
+import { parseIdleTimeoutMs } from "./idle-timeout"
 import type { HeadlessEventSink } from "@/runtime/headless"
 
 // Shared plumbing for the headless CLI entry points (headless-run,
@@ -56,6 +57,7 @@ export function headlessBackendOptions<T>(yargs: Argv<T>) {
         "abort if the headless session emits no events for this long (inactivity timeout — a busy long run keeps resetting it); set 0 to disable",
       type: "number",
       default: 10 * 60 * 1000,
+      coerce: parseIdleTimeoutMs,
     })
     .option("event-log", {
       describe: "also write raw headless JSONL events to this file",

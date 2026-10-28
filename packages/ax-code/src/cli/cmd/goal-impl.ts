@@ -7,6 +7,7 @@ import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import type { HeadlessRuntimeCommand } from "@/runtime/headless"
 import type { SessionGoal } from "../../session/goal"
 import type { SessionID } from "../../session/schema"
+import { parseIdleTimeoutMs } from "./idle-timeout"
 import { jsonOption, writeJson } from "./json-output"
 
 // Same options as headlessBackendOptions. Inlined so `goal` registration does
@@ -31,6 +32,7 @@ function headlessBackendOptions<T>(yargs: Argv<T>) {
         "abort if the headless session emits no events for this long (inactivity timeout — a busy long run keeps resetting it); set 0 to disable",
       type: "number",
       default: 10 * 60 * 1000,
+      coerce: parseIdleTimeoutMs,
     })
     .option("event-log", {
       describe: "also write raw headless JSONL events to this file",
