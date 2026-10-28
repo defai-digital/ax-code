@@ -235,6 +235,32 @@ test("revert leaves a baseline-excluded file at its current content", async () =
   })
 })
 
+test("previewRevert omits a baseline-excluded file that revert leaves alone", async () => {
+  vi.stubEnv("AX_CODE_SNAPSHOT_MAX_FILE_MB", "0.001")
+  await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "grow.txt")
+      await fs.writeFile(file, "small")
+      await Snapshot.track()
+      await fs.writeFile(file, "x".repeat(8 * 1024))
+      const before = (await Snapshot.track())!
+      expect(before).toBeTruthy()
+      const edited = path.join(tmp.path, "a.txt")
+      await fs.writeFile(edited, "edited")
+      // Shrunk back under the limit, grow.txt is staged again in the preview's
+      // fresh tree, so it differs from the baseline's stale "small".
+      await fs.writeFile(file, "shrunk")
+
+      // The preview must list what revert() will change, and revert() skips
+      // grow.txt: its baseline holds stale last-staged bytes.
+      const diffs = await Snapshot.previewRevert([{ hash: before!, files: [file, edited] }])
+      expect(diffs.map((diff) => diff.file)).toEqual(["a.txt"])
+    },
+  })
+})
+
 test("patch omits a file the turn's baseline left out of the per-pass budget", async () => {
   // 0.002 MB is ~2 KB: the 8 KB file alone exceeds one staging-pass budget.
   vi.stubEnv("AX_CODE_SNAPSHOT_MAX_ADD_MB", "0.002")

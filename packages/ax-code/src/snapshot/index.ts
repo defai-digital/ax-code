@@ -1432,12 +1432,25 @@ export namespace Snapshot {
     const realWorktree = patches.some((item) => valid(item.hash) && item.files.length > 0)
       ? await fs.realpath(path.resolve(current.worktree))
       : undefined
+    // Mirror revert(): the first patch naming a file owns it, and a file its
+    // baseline excluded from staging is skipped rather than previewed as a
+    // change the undo will never make.
+    const seen = new Set<string>()
+    const exclusions = new Map<string, Set<string>>()
     for (const item of patches) {
       if (!valid(item.hash)) continue
       for (const requestedFile of item.files) {
         const resolved = await revertPath(current, requestedFile, realWorktree)
         const file = path.relative(current.worktree, resolved).split(path.sep).join("/")
-        if (!baselines.has(file)) baselines.set(file, { hash: item.hash, file })
+        if (seen.has(file)) continue
+        seen.add(file)
+        let excluded = exclusions.get(item.hash)
+        if (!excluded) {
+          excluded = await snapshotExclusions(current, item.hash)
+          exclusions.set(item.hash, excluded)
+        }
+        if (excluded.has(file)) continue
+        baselines.set(file, { hash: item.hash, file })
       }
     }
     if (baselines.size === 0) return []
