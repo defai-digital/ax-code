@@ -94,10 +94,19 @@ export namespace UsageRecord {
     const queue = pending.get(projectRoot)
     if (!queue || queue.size === 0) return
     pending.delete(projectRoot)
+    const target = file(projectRoot)
+    let fd: number | undefined
     try {
       const fs = syncFs
-      const target = file(projectRoot)
-      const text = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "{}"
+      let text = "{}"
+      try {
+        fd = fs.openSync(target, "r+")
+        text = fs.readFileSync(fd, "utf8")
+      } catch (error) {
+        const code = error && typeof error === "object" && "code" in error ? error.code : undefined
+        if (code !== "ENOENT") throw error
+        fd = undefined
+      }
       const parsed = parseJsonResult(text)
       // Only merge into a well-formed record; a corrupt file is left for the
       // next async flush to rebuild rather than overwritten on exit.
@@ -111,10 +120,25 @@ export namespace UsageRecord {
         data.entries[key] = { last_used_at: last, use_count: (previous?.use_count ?? 0) + 1 }
       }
       data.entries = bound(data.entries)
-      fs.mkdirSync(path.dirname(target), { recursive: true })
-      fs.writeFileSync(target, JSON.stringify(data, null, 2))
+      const payload = JSON.stringify(data, null, 2)
+      if (fd === undefined) {
+        fs.mkdirSync(path.dirname(target), { recursive: true })
+        fd = fs.openSync(target, "wx")
+      } else {
+        fs.ftruncateSync(fd, 0)
+      }
+      // Position 0: readFileSync left the descriptor at EOF.
+      fs.writeSync(fd, payload, 0, "utf8")
     } catch {
       // Advisory only.
+    } finally {
+      if (fd !== undefined) {
+        try {
+          syncFs.closeSync(fd)
+        } catch {
+          // Advisory only.
+        }
+      }
     }
   }
 

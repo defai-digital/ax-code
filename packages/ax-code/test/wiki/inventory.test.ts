@@ -208,6 +208,9 @@ test("resolves tsconfig path aliases from the nearest config without guessing", 
   )!
   expect(aliases.rules.map((rule) => rule.prefix)).toEqual(["@tui/", "#lib", "@/"])
   expect(WikiInventory.resolveImport("pkg/src/a.ts", "@/session", cited, aliases)).toBe("pkg/src/session/index.ts")
+  // `$` in the wildcard rest stays literal. String.replace would collapse `$$`.
+  const dollar = new Set([...cited, "pkg/src/$$session.ts"])
+  expect(WikiInventory.resolveImport("pkg/src/a.ts", "@/$$session", dollar, aliases)).toBe("pkg/src/$$session.ts")
   expect(WikiInventory.resolveImport("pkg/src/a.ts", "@/tool/bash.js", cited, aliases)).toBe("pkg/src/tool/bash.ts")
   expect(WikiInventory.resolveImport("pkg/src/a.ts", "#lib", cited, aliases)).toBe("pkg/lib/util.ts")
   // Longest prefix wins and an unresolved match never falls back to a shorter rule.

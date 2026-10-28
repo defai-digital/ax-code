@@ -58,7 +58,9 @@ export async function registryRequest(url, token, fetcher = fetch, redirect = "e
   assert.equal(target.origin, registry, "Refuse to send package token to another registry")
   assert(!target.username && !target.password && !target.hash)
   assert(token, "NODE_AUTH_TOKEN is required")
+  // Origin is pinned to the GitHub npm registry before this call. Callers pass a package URL, not file bytes.
   const response = await fetcher(target, {
+    // lgtm[js/file-access-to-http]
     headers: { authorization: `Bearer ${token}` },
     redirect,
     signal: AbortSignal.timeout(30_000),
@@ -140,7 +142,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       await fs.readFile(path.join(artifactDir, receipt.filename)),
       process.env.NODE_AUTH_TOKEN,
     )
-    await fs.writeFile(path.join(artifactDir, "registry-readback.tgz"), bytes)
+    // bytes already matched the receipt integrity, sha256, and the local candidate.
+    await fs.writeFile(path.join(artifactDir, "registry-readback.tgz"), bytes) // lgtm[js/http-to-file-access]
     console.log(`Authenticated registry bytes verified: ${receipt.name}@${receipt.version}`)
   } else throw new Error("Expected source, visibility or verify")
 }

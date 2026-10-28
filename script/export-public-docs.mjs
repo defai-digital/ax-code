@@ -81,7 +81,7 @@ export function exportSnapshot(base = root) {
   const publicLink = (source, target) => {
     target = target.replace(`${websiteOrigin}/`, "/")
     if (/^(?:https?:|mailto:|#|\/)/.test(target) && !isPrivateRepositoryUrl(target)) return target
-    let name = target
+    let name
     if (isPrivateRepositoryUrl(target)) {
       const rest = target.slice("https://github.com/defai-digital/ax-code".length)
       if (!rest || rest.startsWith("#")) return "/en/docs/"

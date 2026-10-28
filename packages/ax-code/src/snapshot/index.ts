@@ -346,6 +346,8 @@ export namespace Snapshot {
       using lock = await FileLock.acquire(path.join(current.gitdir, "ax-code", "operation"), {
         staleMs: Number.POSITIVE_INFINITY,
       })
+      // The binding is the hold. It is released when this block returns.
+      void lock
       return await fn()
     })
   }

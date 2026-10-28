@@ -459,9 +459,9 @@ export function renderCorcovadoPixels(width: number, height: number, style: Corc
     let baseR = 0
     let baseG = 0
     let baseB = 0
-    let hashShift = 1
-    let hashScale = 0.1
-    let hashOffset = 0.95
+    let hashShift: number
+    let hashScale: number
+    let hashOffset: number
     let waveY = 0
     if (sy < CORCOVADO_GROUND_TOP + 1.1) {
       // Sand row base = hdMix(wetSand, sand, min(1, (sy - GROUND_TOP - 0.35)/0.8))

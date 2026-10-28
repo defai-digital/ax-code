@@ -237,7 +237,7 @@ export const McpListCommand = cmd({
         default: false,
       }),
   async handler(args) {
-    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
+    const { MCP, Config, Instance, Permission } = await loadMcp()
     const { available: discoverAvailable } = await import("../../mcp/discovery")
     await Instance.provide({
       directory: process.cwd(),
@@ -403,7 +403,7 @@ export const McpAuthCommand = cmd({
       })
       .command(McpAuthListCommand),
   async handler(args) {
-    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
+    const { MCP, Config, Instance, Bus } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -547,7 +547,7 @@ export const McpAuthListCommand = cmd({
       default: false,
     }),
   async handler(args) {
-    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
+    const { MCP, Config, Instance } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -608,7 +608,7 @@ export const McpLogoutCommand = cmd({
       type: "string",
     }),
   async handler(args) {
-    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
+    const { MCP, McpAuth, Instance } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -671,7 +671,7 @@ export const McpTrustCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
-    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
+    const { MCP, Instance } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -707,7 +707,7 @@ export const McpUntrustCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
-    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
+    const { MCP, Instance } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -810,7 +810,7 @@ export const McpRemoveCommand = cmd({
         describe: "remove from global config instead of the current project",
       }),
   async handler(args) {
-    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
+    const { MCP, Instance } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -866,7 +866,7 @@ export const McpAddCommand = cmd({
   command: "add",
   describe: "add an MCP server",
   async handler() {
-    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
+    const { MCP, Instance } = await loadMcp()
     const McpTemplates = await import("../../mcp/templates")
     await Instance.provide({
       directory: process.cwd(),
@@ -1104,7 +1104,7 @@ export const McpDebugCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
-    const { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission } = await loadMcp()
+    const { MCP, McpAuth, McpOAuthProvider, Config, Instance } = await loadMcp()
     const { Client } = await import("@modelcontextprotocol/client")
     const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/client")
     const { UnauthorizedError } = await import("@modelcontextprotocol/client")

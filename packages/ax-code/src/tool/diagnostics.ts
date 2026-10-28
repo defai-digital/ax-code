@@ -3,7 +3,7 @@ import { Filesystem } from "../util/filesystem"
 import { Bus } from "../bus"
 import { File } from "../file"
 import { FileWatcher } from "../file/watcher"
-import { readFile, stat } from "node:fs/promises"
+import { open } from "node:fs/promises"
 import { MAX_DIAGNOSTICS_PER_FILE, MAX_PROJECT_DIAGNOSTICS_FILES } from "@/constants/tool"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
@@ -156,15 +156,20 @@ async function syntaxCheckFile(
   file: string,
   deadline: AbortSignal,
 ): Promise<SyntacticExtractor.SyntaxIssue[] | undefined> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
-    const info = await stat(file)
+    // One descriptor so the size check and the read cannot observe two different files.
+    handle = await open(file, "r")
+    const info = await handle.stat()
     if (!info.isFile() || info.size > SYNTAX_FALLBACK_MAX_BYTES) return undefined
-    const source = await readFile(file, "utf8")
+    const source = await handle.readFile({ encoding: "utf8" })
     return await SyntacticExtractor.syntaxErrors(file, source, deadline)
   } catch (error) {
     if (deadline.aborted) return undefined
     log.warn("syntax fallback check failed", { file, error })
     return undefined
+  } finally {
+    await handle?.close()
   }
 }
 

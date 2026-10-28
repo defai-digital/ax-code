@@ -25,9 +25,9 @@ export namespace BrowserWorkflow {
    * on one side and never matches right after `$`).
    */
   export function declaresNamedExport(content: string, name: string) {
-    return new RegExp(
-      `\\bexport\\s+(?:async\\s+)?(?:function|const|let)\\s+${name.replace(/[$]/g, "\\$")}(?![\\w$])`,
-    ).test(content)
+    if (!/^[A-Za-z_$][\w$]*$/.test(name)) return false
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    return new RegExp(`\\bexport\\s+(?:async\\s+)?(?:function|const|let)\\s+${escaped}(?![\\w$])`).test(content)
   }
 
   const ScenarioParameters = z.discriminatedUnion("action", [

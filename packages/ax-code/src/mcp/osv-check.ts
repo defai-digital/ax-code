@@ -136,7 +136,9 @@ export namespace OsvCheck {
     // version.
     const { name, version } = splitPkgAtVersion(token)
     if (!name) return undefined
-    if (version && !/^v?\d+([.-]?\d+)*([+-][\w.-]+)?$/i.test(version)) {
+    // Separator is required. An optional separator lets `\d+` split a run of
+    // digits in exponentially many ways when the match fails.
+    if (version && !/^v?\d+(?:[.-]\d+)*(?:[+-][\w.-]+)?$/i.test(version)) {
       return { name }
     }
     return { name, version }
@@ -268,12 +270,12 @@ export namespace OsvCheck {
 
   async function loadCache(): Promise<Map<string, CacheEntry>> {
     if (memoryCache && Date.now() - memoryCacheLoadedAt < 60_000) return memoryCache
-    const loading = (memoryCacheLoading ??= readCacheFile())
-    try {
-      return await loading
-    } finally {
-      if (memoryCacheLoading === loading) memoryCacheLoading = undefined
-    }
+    // One in-flight read. The assignment is synchronous, so overlapping callers
+    // share it, and the flight clears itself when that read settles.
+    const flight = (memoryCacheLoading ??= readCacheFile().finally(() => {
+      memoryCacheLoading = undefined
+    }))
+    return await flight
   }
 
   function persistCache(map: Map<string, CacheEntry>): Promise<void> {

@@ -1,5 +1,4 @@
 // Real split-footer frontend check. Sync is stubbed; Prompt, providers, surfaces and renderer are real.
-import fs from "node:fs"
 import fsp from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -96,7 +95,6 @@ let footerDialog: ReturnType<typeof useDialog> | undefined
 function agent(name: string, extra: Partial<Agent> = {}): Agent {
   return { name, mode: "primary", native: true, tier: "core", permission: [], options: {}, ...extra } as Agent
 }
-const AGENTS: Agent[] = [agent("build"), agent("plan"), agent("general", { mode: "subagent", tier: "subagent" })]
 
 function model(providerID: string, id: string, name: string, extra: Partial<Model> = {}): Model {
   return {

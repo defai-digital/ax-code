@@ -25,8 +25,8 @@ import { getDoctorProcessRegistryCheck } from "./doctor-processes"
 import { runTerminalDoctorChecks, type TmuxOptionSource } from "./doctor-terminal"
 import path from "path"
 import net from "net"
-import { realpathSync } from "fs"
-import { access, readFile, stat } from "fs/promises"
+import { constants as fsConstants, realpathSync } from "fs"
+import { access, open } from "fs/promises"
 import { isLoopbackHostname } from "../../util/listen-security"
 import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import type { Isolation as IsolationConfig } from "../../config/schema"
@@ -350,11 +350,20 @@ export async function hasGitRepository(project: { projectRoot: string }): Promis
   const git = path.join(project.projectRoot, ".git")
   // @scan-suppress security_scan - Read-only probe of the fixed .git entry under the caller-selected project directory.
   if (await exists(path.join(git, "HEAD"))) return true
-  // @scan-suppress security_scan - Read-only size probe of the fixed .git entry under the caller-selected project directory.
-  const info = await stat(git).catch(() => undefined)
-  if (!info?.isFile() || info.size > 4096) return false
-  const pointer = await readFile(git, "utf8").catch(() => undefined)
-  return pointer !== undefined && /^gitdir:\s*\S/.test(pointer)
+  // A linked worktree stores a gitdir pointer in .git. Open that path once so the
+  // size check and the read share a descriptor. O_NOFOLLOW refuses a symlink.
+  let handle: Awaited<ReturnType<typeof open>> | undefined
+  try {
+    handle = await open(git, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+    const info = await handle.stat()
+    if (!info.isFile() || info.size > 4096) return false
+    const pointer = await handle.readFile({ encoding: "utf8" })
+    return /^gitdir:\s*\S/.test(pointer)
+  } catch {
+    return false
+  } finally {
+    await handle?.close()
+  }
 }
 
 export function isLocalPortInUse(port: number): Promise<boolean> {

@@ -8,7 +8,6 @@ import {
   list,
   num,
   object,
-  primitive,
   record,
   serialize,
   str,

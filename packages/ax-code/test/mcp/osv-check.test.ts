@@ -54,6 +54,18 @@ describe("parseLocalLaunch", () => {
     })
   })
 
+  test("does not treat a non-semver suffix as a version and stays linear", () => {
+    const zeros = "0".repeat(80)
+    const started = Date.now()
+    expect(OsvCheck.parseLocalLaunch(["npx", `foo@${zeros}x`])).toEqual({ ecosystem: "npm", name: "foo" })
+    expect(Date.now() - started).toBeLessThan(1000)
+    expect(OsvCheck.parseLocalLaunch(["npx", "foo@1.2.3-beta.1"])).toEqual({
+      ecosystem: "npm",
+      name: "foo",
+      version: "1.2.3-beta.1",
+    })
+  })
+
   test("parses npx with --yes flag and a package", () => {
     expect(OsvCheck.parseLocalLaunch(["npx", "-y", "foo@latest"])).toEqual({
       ecosystem: "npm",

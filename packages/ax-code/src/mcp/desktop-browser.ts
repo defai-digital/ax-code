@@ -11,7 +11,6 @@ import { exactOrigin } from "./webmcp-origin"
 import { WebMcpProfile } from "./webmcp-profile"
 import { parseJsonStrict } from "../util/json-value"
 import { BrowserRouting } from "./browser-routing"
-import { Filesystem } from "../util/filesystem"
 import { NotFoundError } from "../storage/db"
 
 // Captured from the trusted launcher once, never from project configuration.
@@ -822,7 +821,7 @@ export namespace DesktopBrowser {
       text: prepared.text,
     })
     // The reply generation is the document the action ended on; a different one retires every reference.
-    const navigated = entry.snapshot.generation !== binding.generation
+    const navigated = reply.generation !== binding.generation
     return {
       done: true,
       how: prepared.how,
@@ -906,7 +905,7 @@ export namespace DesktopBrowser {
    * or this preview. Value-level secrets under innocuous keys are not redacted.
    */
   export function inputPreview(input: Record<string, unknown>) {
-    let json = "{}"
+    let json: string
     try {
       json = JSON.stringify(redactSecrets(input)) ?? "{}"
     } catch {

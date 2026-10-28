@@ -68,15 +68,7 @@ function hillTop(sx: number): number {
   return leftHill(sx) * (1 - u) + rightCliff(sx) * u
 }
 
-function paintRearCar(
-  hd: HdCanvas,
-  cx: number,
-  base: number,
-  scale: number,
-  night: boolean,
-  exhaust: boolean,
-  shadow: boolean,
-) {
+function paintRearCar(hd: HdCanvas, cx: number, base: number, scale: number, night: boolean, shadow: boolean) {
   const { cw, ch } = hd
   // Terminal cells are twice as tall as they are wide. Compress the car's
   // scene-space height so its rendered silhouette stays low and wide.
@@ -273,11 +265,6 @@ function paintRearCar(
     hd.disk(ex, ey, Math.max(1, cw * 0.46 * scale), [184, 188, 196])
     hd.disk(ex, ey, Math.max(1, cw * 0.36 * scale), [26, 28, 30])
     hd.disk(ex, ey, Math.max(0.6, cw * 0.28 * scale), [12, 12, 14])
-    // Only a small ember sits inside the bore; the ring itself never fills solid.
-    if (exhaust) {
-      hd.disk(ex, ey, Math.max(0.6, cw * 0.2 * scale), hdHex("#ff9a3c"))
-      glow(hd, ex, ey, Math.max(2, cw * 1.1 * scale), hdHex("#ff8a30"), 0.3, 0.6)
-    }
   }
   // Ducktail lip on the deck's rear edge, then the small chrome badge above
   // the lamp band. Both stay clear of the dark centre sample zone.
@@ -853,7 +840,7 @@ export function createRacingPixelPainter(width: number, height: number, style: R
         const canvas = createHdCanvas(sw, sh, sw / cw, sh / ch)
         const center = sw / (2 * cw),
           floor = sh / ch - 0.5 * scale
-        paintRearCar(canvas, center, floor, scale, night, false, false)
+        paintRearCar(canvas, center, floor, scale, night, false)
         sprite = { pixels: canvas.pixels, width: sw, height: sh, center: sw / 2, base: floor * ch }
         cars.set(scale, sprite)
       }

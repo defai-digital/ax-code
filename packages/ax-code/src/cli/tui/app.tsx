@@ -1400,7 +1400,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       if (updateHandlerDisposed) return
 
       const { DialogUpdate } = await import("@tui/component/dialog-update")
-      if (updateHandlerDisposed) return
+      // onCleanup sets this flag while the import above is in flight. CodeQL does not treat that await as a write point.
+      if (updateHandlerDisposed) return // lgtm[js/trivial-conditional]
       // Esc leaves the version un-skipped so /update and the next check can
       // offer it again; only the explicit "Later" button remembers it.
       dialog.replace(() => (

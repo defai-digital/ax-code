@@ -138,7 +138,7 @@ await writeKV(BASE_KV)
 
 const { testRender } = await import("ax-tui/solid")
 const { createStore } = await import("solid-js/store")
-const { onMount, createEffect } = await import("solid-js")
+const { onMount } = await import("solid-js")
 const { KVProvider, useKV } = await import("../src/cli/tui/context/kv")
 const { ToastProvider, useToast } = await import("../src/cli/tui/ui/toast")
 const { RouteProvider, useRoute } = await import("../src/cli/tui/context/route")

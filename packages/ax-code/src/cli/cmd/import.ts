@@ -1,5 +1,4 @@
 import { EOL } from "os"
-import path from "path"
 import type { Argv } from "yargs"
 import { CompatibilityImport } from "../../import/compatibility"
 import { ClaudeSessions } from "../../import/claude-sessions"

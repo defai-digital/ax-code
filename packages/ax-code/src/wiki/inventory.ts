@@ -116,7 +116,12 @@ export namespace WikiInventory {
         if (!matches) continue
         const rest = rule.wildcard ? specifier.slice(rule.prefix.length, specifier.length - rule.suffix.length) : ""
         for (const target of rule.targets) {
-          const base = path.posix.normalize(target.replace("*", rest))
+          const star = target.indexOf("*")
+          // One `*` is the TypeScript wildcard. Splicing avoids `replace` only
+          // changing the first star, and avoids `$` sequences in `rest`.
+          if (star !== target.lastIndexOf("*")) continue
+          const replaced = star < 0 ? target : `${target.slice(0, star)}${rest}${target.slice(star + 1)}`
+          const base = path.posix.normalize(replaced)
           if (base.startsWith("../") || path.posix.isAbsolute(base)) continue
           const found = probe(base, cited)
           if (found) return found

@@ -1,4 +1,4 @@
-import { Database, and, eq, inArray, isNotNull, notInArray, NotFoundError } from "../storage/db"
+import { Database, eq, inArray, isNotNull, NotFoundError } from "../storage/db"
 import { Shard } from "../storage/shard"
 import { ProjectShardTable, type ShardState } from "../storage/shard.sql"
 import {

@@ -49,10 +49,8 @@ interface ZipEntry {
 }
 
 const SIG_EOCD = 0x06054b50
-const SIG_EOCD64_LOCATOR = 0x07064b50
 const SIG_CENTRAL = 0x02014b50
 const SIG_LOCAL = 0x04034b50
-const SIG_ZIP64_EOCD = 0x06064b50
 
 function readU16(buf: Buffer, off: number): number {
   return buf.readUInt16LE(off)
@@ -60,10 +58,20 @@ function readU16(buf: Buffer, off: number): number {
 function readU32(buf: Buffer, off: number): number {
   return buf.readUInt32LE(off)
 }
-function readU64(buf: Buffer, off: number): number {
-  const lo = BigInt(buf.readUInt32LE(off))
-  const hi = BigInt(buf.readUInt32LE(off + 4))
-  return Number((hi << 32n) | lo)
+
+/** Drop complete markup spans once, left to right, without rescanning the output. */
+function dropMarkup(input: string): string {
+  let out = ""
+  let cursor = 0
+  while (cursor < input.length) {
+    const start = input.indexOf("<", cursor)
+    if (start < 0) return out + input.slice(cursor)
+    out += input.slice(cursor, start)
+    const end = input.indexOf(">", start + 1)
+    if (end < 0) return out + input.slice(start)
+    cursor = end + 1
+  }
+  return out
 }
 
 function findEocd(buf: Buffer): number {
@@ -210,12 +218,7 @@ function extractDocxText(xml: string): string {
         // rendered text. Whitespace between tags is also trimmed so a tab or
         // line break that sits between runs joins the surrounding text
         // without a stray newline.
-        parts.push(
-          inner
-            .slice(cursor, tokenMatch.index)
-            .replace(/<[^>]+>/g, "")
-            .trim(),
-        )
+        parts.push(dropMarkup(inner.slice(cursor, tokenMatch.index)).trim())
       }
       const tag = tokenMatch[0]
       if (tag[3] === "t" && tag[4] === "a") {
@@ -228,12 +231,7 @@ function extractDocxText(xml: string): string {
       cursor = tokenRegex.lastIndex
     }
     if (cursor < inner.length) {
-      parts.push(
-        inner
-          .slice(cursor)
-          .replace(/<[^>]+>/g, "")
-          .trim(),
-      )
+      parts.push(dropMarkup(inner.slice(cursor)).trim())
     }
     lines.push(parts.join(""))
   }

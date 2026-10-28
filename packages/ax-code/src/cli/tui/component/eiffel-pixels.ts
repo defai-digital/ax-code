@@ -299,9 +299,9 @@ export function renderEiffelPixels(width: number, height: number, style: EiffelS
       const c0 = Math.round(iba0 + (m0 - iba0) * t2)
       const c1 = Math.round(iba1 + (m1 - iba1) * t2)
       const c2 = Math.round(iba2 + (m2 - iba2) * t2)
-      let r0v = c0
-      let r1v = c1
-      let r2v = c2
+      let r0v: number
+      let r1v: number
+      let r2v: number
       if (night) {
         let t3 = 0.18 + 0.55 * hv * hv * (0.4 + sh * 0.6)
         if (t3 < 0) t3 = 0

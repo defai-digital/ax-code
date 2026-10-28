@@ -496,7 +496,7 @@ export class BrowserRuntime {
     })
 
     let title: string
-    let finalUrl = url
+    let finalUrl: string
     try {
       await pwPage.goto(url, { waitUntil: "domcontentloaded" })
       // goto follows redirects, so report the page's actual URL rather than the
@@ -864,14 +864,11 @@ export class BrowserRuntime {
     // invoke the documented function-string form; a bare expression string
     // ("document.title") still evaluates to its value the way it always did, so
     // only an actual function is called.
-    return entry.pwPage.evaluate(
-      (source: string) => {
-        // eslint-disable-next-line @typescript-eslint/no-implied-eval
-        const value = new Function(`return (${source})`)() as unknown
-        return typeof value === "function" ? (value as () => unknown)() : value
-      },
-      fn,
-    )
+    return entry.pwPage.evaluate((source: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const value = new Function(`return (${source})`)() as unknown
+      return typeof value === "function" ? (value as () => unknown)() : value
+    }, fn)
   }
 
   /** True when a registered or pending page still references this context. The caller drops itself first. */

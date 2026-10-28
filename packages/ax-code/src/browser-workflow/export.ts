@@ -1,8 +1,38 @@
 import { BrowserScenario } from "./scenario"
 
+/** JSON text safe to embed in generated JavaScript, including a script element. */
+function embedJson(value: unknown, space?: number): string {
+  const json = space === undefined ? JSON.stringify(value) : JSON.stringify(value, null, space)
+  return json.replace(/[<>&/\u2028\u2029]/g, (char) => {
+    switch (char) {
+      case "<":
+        return "\\u003c"
+      case ">":
+        return "\\u003e"
+      case "&":
+        return "\\u0026"
+      case "/":
+        return "\\u002f"
+      case "\u2028":
+        return "\\u2028"
+      case "\u2029":
+        return "\\u2029"
+      default:
+        return char
+    }
+  })
+}
+
+function assertionTimeout(value: number): string {
+  if (!Number.isInteger(value) || value < 0 || value > 10000) {
+    throw new Error("Assertion timeout is outside 0..10000")
+  }
+  return String(value)
+}
+
 /** Readable regression projection. Only runtime MCP receipts qualify Arena. */
 export function exportPlaywright(frozen: BrowserScenario.Frozen): string {
-  const quote = (value: unknown) => JSON.stringify(value)
+  const quote = (value: unknown) => embedJson(value)
   const locator = (value: BrowserScenario.Locator) =>
     `page.getByRole(${quote(value.role)}, { name: ${quote(value.name)}, exact: true })`
   const steps = frozen.manifest.steps
@@ -19,12 +49,24 @@ export function exportPlaywright(frozen: BrowserScenario.Frozen): string {
               ? `${target}.inputValue({ timeout: remaining() })`
               : property === "checked"
                 ? `${target}.isChecked({ timeout: remaining() })`
-                : `${target}.isDisabled({ timeout: remaining() })`
-        const check = `${property === "count" ? "" : `assert.equal(await ${target}.count(), 1, "Step ${index}: unique assertion target");\n    `}assert.equal(await ${expression}, ${quote(step.assertion.equals)}, "Step ${index}: ${property}");`
-        return `await checkAssertion(async (remaining) => { ${check} }, ${step.timeoutMs});`
+                : property === "disabled"
+                  ? `${target}.isDisabled({ timeout: remaining() })`
+                  : undefined
+        if (!expression) throw new Error("Unsupported assertion property")
+        const unique =
+          property === "count"
+            ? ""
+            : `assert.equal(await ${target}.count(), 1, ${quote(`Step ${index}: unique assertion target`)});\n    `
+        const check = `${unique}assert.equal(await ${expression}, ${quote(step.assertion.equals)}, ${quote(`Step ${index}: ${property}`)});`
+        return `await checkAssertion(async (remaining) => { ${check} }, ${assertionTimeout(step.timeoutMs)});`
       }
       const target = locator(step.locator)
-      return `assert.equal(await ${target}.count(), 1, "Step ${index}: unique action target");\n  await ${target}.${step.action}(${step.action === "fill" ? quote(step.value) : ""});`
+      const ready = `assert.equal(await ${target}.count(), 1, ${quote(`Step ${index}: unique action target`)});`
+      if (step.action === "click") return `${ready}\n  await ${target}.click();`
+      if (step.action === "fill") return `${ready}\n  await ${target}.fill(${quote(step.value)});`
+      if (step.action === "hover") return `${ready}\n  await ${target}.hover();`
+      const unsupported: never = step
+      throw new Error(`Unsupported browser step ${quote(unsupported)}`)
     })
     .join("\n  ")
   return `// Browser scenario ${frozen.hash}; runner ${frozen.runner}; baseline ${frozen.baseline.revision}
@@ -39,7 +81,7 @@ import { join } from "node:path";
 import { createServer } from "node:net";
 import { once } from "node:events";
 import { chromium } from "playwright-core";
-const manifest = ${JSON.stringify(frozen.manifest, null, 2)};
+const manifest = ${embedJson(frozen.manifest, 2)};
 const data = await mkdtemp(join(tmpdir(), "ax-browser-regression-"));
 const lease = createServer();
 lease.listen(0, "127.0.0.1"); await once(lease, "listening");

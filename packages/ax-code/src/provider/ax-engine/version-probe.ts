@@ -61,7 +61,6 @@ function directVersion(text: string) {
     if (/^ax-engine\s+/i.test(label) && semver.valid(label.replace(/^ax-engine\s+/i, ""))) return label
   }
   return lines.find((label) => semver.valid(label))
-  return undefined
 }
 
 export async function probeVersion(binaryPath: string) {

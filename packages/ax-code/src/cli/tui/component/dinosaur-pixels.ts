@@ -12,7 +12,6 @@ import {
   DINOSAUR_STARS,
   DINOSAUR_SUN,
   DINOSAUR_VOLCANO,
-  dinosaurPtero,
   dinosaurSkyRgb,
   dinosaurWalker,
   type DinosaurStyle,
@@ -366,8 +365,8 @@ export function renderDinosaurPixels(width: number, height: number, style: Dinos
   }
   if (night) glow(nestX, nestY - ch, cw * 2, ch * 0.9, hdHex(c.firefly), 0.3 + 0.2 * Math.cos(theta * 6))
 
-  // Pterosaurs overhead: bent wings flapping slowly.
-  const ptero = dinosaurPtero(elapsed)
+  // Pterosaurs overhead: bent wings flapping slowly. Positions stay continuous
+  // here; dinosaurPtero() is the discrete cell used by the view model.
   const smoothPteroX = phase * DINOSAUR_COLUMNS
   const smoothPteroY = 3 + Math.sin(theta) * 1.5
   const feather = hdHex(c.ptero)
