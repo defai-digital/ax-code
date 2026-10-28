@@ -96,9 +96,10 @@ export function extractAiComments(file: string, text: string, options: ExtractOp
 
     if (inBlock !== undefined) {
       const closer = BLOCK_OPENERS.find((entry) => entry.kind === inBlock)!.closer
-      const closeAt = raw.indexOf(closer)
       let content = raw
       if (inBlock === "slash") content = content.replace(/^\s*\*?/, "")
+      // Index the closer in the stripped text the slice applies to.
+      const closeAt = content.indexOf(closer)
       if (closeAt !== -1) {
         content = content.slice(0, closeAt)
         inBlock = undefined
@@ -221,7 +222,9 @@ export function createWatchLoop(deps: WatchLoopDeps, options: WatchLoopOptions =
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
   const log = deps.log ?? (() => {})
 
-  let running = false
+  // Files debounce independently, so several runs can overlap; the first one
+  // to finish must not end the agent window for the others.
+  let running = 0
   let runEndedAt = Number.NEGATIVE_INFINITY
   const agentChanged = new Set<string>()
   const submittedSignatures = new Set<string>()
@@ -230,7 +233,7 @@ export function createWatchLoop(deps: WatchLoopDeps, options: WatchLoopOptions =
   const pending = new Set<Promise<unknown>>()
 
   function agentWindowActive(): boolean {
-    return running || now() - runEndedAt < graceMs
+    return running > 0 || now() - runEndedAt < graceMs
   }
 
   function track(task: Promise<unknown>) {
@@ -242,7 +245,7 @@ export function createWatchLoop(deps: WatchLoopDeps, options: WatchLoopOptions =
     // Mark the run active synchronously, before the first await: a watcher
     // event that fires right after a submission starts must be attributed to
     // the agent, and `onChange` runs synchronously from the watcher callback.
-    running = true
+    running++
     try {
       let text: string
       try {
@@ -275,7 +278,7 @@ export function createWatchLoop(deps: WatchLoopDeps, options: WatchLoopOptions =
       }
       return submitted
     } finally {
-      running = false
+      running--
       runEndedAt = now()
     }
   }

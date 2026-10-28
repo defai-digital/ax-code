@@ -148,3 +148,42 @@ test("watch loop logs submission failures and keeps processing", async () => {
   expect(count).toBe(1)
   expect(log).toHaveBeenCalledWith(expect.stringContaining("submission failed"))
 })
+
+test("extractAiComments drops the closer from a decorated block continuation line", () => {
+  const comments = extractAiComments("/work/a.ts", "/*\n * AI! rename this */\nconst x = 1")
+  expect(comments.map((comment) => comment.text)).toEqual(["rename this"])
+})
+
+test("watch loop keeps the agent window open until every overlapping run finishes", async () => {
+  const submitted: string[] = []
+  const files: Record<string, string> = {
+    "/work/slow.ts": "// AI! slow",
+    "/work/fast.ts": "// AI! fast",
+    "/work/user.ts": "// AI! user",
+  }
+  let release: () => void = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  const loop = createWatchLoop(
+    {
+      readFile: async (file) => files[file] ?? "",
+      submit: async (prompt: string) => {
+        submitted.push(prompt)
+        if (prompt.includes("Comment (AI!): slow")) await gate
+      },
+      sleep: async () => {},
+    },
+    { debounceMs: 0, graceMs: 0 },
+  )
+
+  const slow = loop.processFile("/work/slow.ts")
+  await loop.processFile("/work/fast.ts")
+  // The slow run is still in flight, so this change is the agent's.
+  loop.onChange("/work/user.ts")
+  release()
+  await slow
+  await loop.idle()
+  expect(submitted.some((prompt) => prompt.includes("Comment (AI!): user"))).toBe(false)
+})

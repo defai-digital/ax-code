@@ -110,12 +110,14 @@ export const WatchCommand = cmd({
       }),
   handler: async (args) => {
     const directory = path.resolve(args.dir ?? process.cwd())
-    let submissionActive = false
+    // Children from different files can run at once; count them so the first
+    // to exit does not mark the rest idle.
+    let activeSubmissions = 0
     const submit = createCliSubmitter({
       session: args.session,
       dir: directory,
       onSpawn: (running) => {
-        submissionActive = running
+        activeSubmissions += running ? 1 : -1
       },
     })
     const loop = createWatchLoop(
@@ -144,9 +146,10 @@ export const WatchCommand = cmd({
     }
     // First Ctrl+C while a run is active only interrupts the child `run`
     // (it receives the signal through the process group); the watcher stays
-    // up. Ctrl+C while idle stops watching.
-    process.once("SIGINT", () => {
-      if (submissionActive) return
+    // up. Ctrl+C while idle stops watching. `on`, not `once`: a consumed
+    // listener would let the next Ctrl+C during a run kill the watcher.
+    process.on("SIGINT", () => {
+      if (activeSubmissions > 0) return
       shutdown(0)
     })
 
