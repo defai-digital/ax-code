@@ -53,4 +53,31 @@ describe("cli.github-agent.prompts", () => {
     expect(errorSpy.mock.calls.flat().join("\n")).not.toContain(attachmentUrl)
     expect(errorSpy.mock.calls.flat().join("\n")).not.toContain("secret")
   })
+
+  it("follows GitHub's redirect to the asset host so the image reaches the model", async () => {
+    delete process.env["PROMPT"]
+    vi.spyOn(Ssrf, "pinnedFetch").mockImplementation((async (_url: string, init?: { redirect?: string }) =>
+      init?.redirect === "manual"
+        ? new Response(null, { status: 302, headers: { location: "https://objects.example.com/a.png" } })
+        : new Response(new Uint8Array([137, 80, 78, 71]), {
+            status: 200,
+            headers: { "content-type": "image/png" },
+          })) as never)
+    const payload = {
+      comment: { body: "/ax-code look ![shot](https://github.com/user-attachments/assets/a.png)" },
+    } as Parameters<typeof getUserPrompt>[0]["payload"]
+
+    const result = await getUserPrompt({
+      eventName: "issue_comment",
+      isRepoEvent: false,
+      isIssuesEvent: false,
+      isCommentEvent: true,
+      appToken: "github-token",
+      payload,
+    })
+
+    expect(result.promptFiles).toHaveLength(1)
+    expect(result.promptFiles[0]).toMatchObject({ filename: "a.png", mime: "image/png" })
+    expect(result.userPrompt).toBe("/ax-code look @a.png")
+  })
 })

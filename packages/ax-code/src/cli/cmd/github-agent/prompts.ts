@@ -143,7 +143,10 @@ export async function getUserPrompt(params: {
         Authorization: `Bearer ${appToken}`,
         Accept: "application/vnd.github.v3+json",
       },
-      redirect: "manual",
+      // GitHub answers with a 302 to its asset host. pinnedFetch re-checks
+      // every hop and drops Authorization across origins, so following is
+      // safe; "manual" returned the 302 itself and the image was dropped.
+      redirect: "follow",
     })
     if (!res.ok) {
       console.error(`Failed to download GitHub attachment: HTTP ${res.status}`)
