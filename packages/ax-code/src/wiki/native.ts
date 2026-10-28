@@ -70,7 +70,12 @@ const PAGE_SYMBOL_NAME_MAX = 256
 // (finishReason=length on deepseek-flash), which failed every update and kept
 // the wiki stale forever.
 export const WIKI_PAGE_OUTPUT_TOKEN_MAX = 8_192
-const WIKI_PAGE_TIMEOUT_MS = 180_000
+export const WIKI_PAGE_TIMEOUT_MS = 180_000
+// MiniMax M3.1 Flash thinks for 91-130 s before its first page text even at
+// low effort, so 180 s cut most large pages and discarded the finished
+// thinking (production p99 171 s, max 215 s; 224 aborts at 180 s in three
+// days). 300 s still leaves room for two pages in the ten-minute build window.
+export const WIKI_PAGE_MINIMAX_FLASH_TIMEOUT_MS = 300_000
 const WIKI_PAGE_PREVIOUS_MAX = 24_000
 // One retry per failure class, two attempts total: a page either succeeds on
 // the class-appropriate retry or fails the build with a classified failure.
@@ -229,19 +234,27 @@ function symbolGloss(nameHint: string, value: unknown): { name: string; summary:
  * Keeping this as an explicit table with a `capReason` makes the policy
  * auditable and regression-testable instead of an inline predicate. MiniMax
  * M3.1 Flash uses low effort without an output cap: its default max effort can
- * consume the page deadline, and this model cannot disable thinking.
+ * consume the page deadline, and this model cannot disable thinking. Even at
+ * low effort it needs a longer page deadline than other classes.
  */
 export type WikiPageBudgetPolicy = {
   class: "glm-class" | "minimax-flash-class" | "standard"
   maxOutputTokens: number
   capReason: "glm-hidden-reasoning" | "none"
   reasoningEffort?: "low"
+  deadlineMs: number
 }
 
 export function wikiPageBudgetPolicy(model: Provider.Model): WikiPageBudgetPolicy {
   const aux = ProviderTransform.auxMaxOutputTokens(model)
   if (wikiMinimaxFlashNeedsLowEffort(model)) {
-    return { class: "minimax-flash-class", maxOutputTokens: aux, capReason: "none", reasoningEffort: "low" }
+    return {
+      class: "minimax-flash-class",
+      maxOutputTokens: aux,
+      capReason: "none",
+      reasoningEffort: "low",
+      deadlineMs: WIKI_PAGE_MINIMAX_FLASH_TIMEOUT_MS,
+    }
   }
   if (wikiGlmNeedsLowEffort(model)) {
     return {
@@ -249,13 +262,18 @@ export function wikiPageBudgetPolicy(model: Provider.Model): WikiPageBudgetPolic
       maxOutputTokens: Math.min(aux, WIKI_PAGE_OUTPUT_TOKEN_MAX),
       capReason: "glm-hidden-reasoning",
       reasoningEffort: "low",
+      deadlineMs: WIKI_PAGE_TIMEOUT_MS,
     }
   }
-  return { class: "standard", maxOutputTokens: aux, capReason: "none" }
+  return { class: "standard", maxOutputTokens: aux, capReason: "none", deadlineMs: WIKI_PAGE_TIMEOUT_MS }
 }
 
 export function wikiPageOutputTokens(model: Provider.Model): number {
   return wikiPageBudgetPolicy(model).maxOutputTokens
+}
+
+export function wikiPageDeadlineMs(model: Provider.Model): number {
+  return wikiPageBudgetPolicy(model).deadlineMs
 }
 
 /**
@@ -499,6 +517,7 @@ async function resolveModel(model?: string, sessionID?: SessionID) {
     label: `${reference.providerID}/${reference.modelID}`,
     language: await Provider.getLanguage(resolved),
     maxOutputTokens: wikiPageOutputTokens(resolved),
+    pageDeadlineMs: wikiPageDeadlineMs(resolved),
     providerOptions: reasoning.providerOptions,
     reasoningMode: reasoning.mode,
   }
@@ -819,7 +838,7 @@ export async function runNativeWiki(input: {
     const generator = async (request: WikiPageGenerationRequest): Promise<WikiPageGenerationResult> => {
       const pageStartedMs = Date.now()
       const abort = new AbortController()
-      const timer = setTimeout(() => abort.abort(), WIKI_PAGE_TIMEOUT_MS)
+      const timer = setTimeout(() => abort.abort(), model.pageDeadlineMs)
       const signal = input.signal ? AbortSignal.any([abort.signal, input.signal]) : abort.signal
       const sourceBytes = request.sources.reduce((bytes, source) => bytes + Buffer.byteLength(source.content), 0)
       let promptBytes = 0

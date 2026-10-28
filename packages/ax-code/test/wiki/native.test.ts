@@ -50,6 +50,9 @@ import {
   resolveWikiModelRef,
   runNativeWiki,
   wikiPageBudgetPolicy,
+  wikiPageDeadlineMs,
+  WIKI_PAGE_MINIMAX_FLASH_TIMEOUT_MS,
+  WIKI_PAGE_TIMEOUT_MS,
   wikiPageOutputTokens,
   wikiPageProviderOptions,
   wikiPageGenerationConcurrency,
@@ -758,6 +761,7 @@ describe("wiki page generation budget", () => {
       maxOutputTokens: WIKI_PAGE_OUTPUT_TOKEN_MAX,
       capReason: "glm-hidden-reasoning",
       reasoningEffort: "low",
+      deadlineMs: WIKI_PAGE_TIMEOUT_MS,
     })
     const deepseek = wikiModel({ id: "deepseek-flash", apiID: "deepseek-flash" })
     deepseek.limit.output = 16_384
@@ -765,6 +769,7 @@ describe("wiki page generation budget", () => {
       class: "standard",
       maxOutputTokens: 16_384,
       capReason: "none",
+      deadlineMs: WIKI_PAGE_TIMEOUT_MS,
     })
     // A standard model is never capped by the GLM token ceiling.
     expect(wikiPageBudgetPolicy(wikiModel({ id: "gpt-4.1", reasoning: false })).maxOutputTokens).toBe(32_000)
@@ -784,11 +789,35 @@ describe("wiki page generation budget", () => {
       maxOutputTokens: 32_000,
       capReason: "none",
       reasoningEffort: "low",
+      deadlineMs: WIKI_PAGE_MINIMAX_FLASH_TIMEOUT_MS,
     })
     expect(wikiPageProviderOptions(model)).toEqual({
       openaiCompatible: { reasoningEffort: "low" },
       "defai-01-ax-trust-com": { reasoningEffort: "low" },
     })
+  })
+
+  test("gives only MiniMax M3.1 Flash the longer page deadline", () => {
+    // Regression: at low effort this model thinks 91-130 s before page text,
+    // so the shared 180 s deadline aborted large pages and lost the work.
+    expect(WIKI_PAGE_TIMEOUT_MS).toBe(180_000)
+    expect(WIKI_PAGE_MINIMAX_FLASH_TIMEOUT_MS).toBe(300_000)
+    expect(wikiPageDeadlineMs(wikiModel({ id: "MiniMax-M3.1-Flash" }))).toBe(WIKI_PAGE_MINIMAX_FLASH_TIMEOUT_MS)
+    expect(wikiPageDeadlineMs(wikiModel({ id: "wiki-fast", apiID: "MiniMax-M3.1-Flash" }))).toBe(
+      WIKI_PAGE_MINIMAX_FLASH_TIMEOUT_MS,
+    )
+    for (const model of [
+      wikiModel({ id: "MiniMax-M3" }),
+      wikiModel({ id: "MiniMax-M3.1-Flash", providerID: "openrouter" }),
+      wikiModel({ id: "MiniMax-M3.1-Flash", url: "http://127.0.0.1:8000/v1" }),
+      wikiModel({ id: "glm-5.3-flash" }),
+      wikiModel({ id: "deepseek-flash", apiID: "deepseek-flash" }),
+      wikiModel({ id: "gpt-4.1", reasoning: false }),
+    ]) {
+      expect(wikiPageDeadlineMs(model)).toBe(WIKI_PAGE_TIMEOUT_MS)
+    }
+    // The longer page deadline still fits two pages in the ten-minute build window.
+    expect(WIKI_PAGE_MINIMAX_FLASH_TIMEOUT_MS * 2).toBeLessThanOrEqual(600_000)
   })
 
   test("sends the supported MiniMax Wiki effort on the actual OpenAI-compatible wire", async () => {
