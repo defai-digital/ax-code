@@ -10,6 +10,11 @@ import {
 } from "../../src/session/prompt/prompt-title"
 
 describe("session prompt title", () => {
+  test("title caps never leave half a surrogate pair", () => {
+    expect(cleanGeneratedTitle("a".repeat(96) + "😀" + "bbbb")).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+    expect(fallbackTitleFromUserText("a".repeat(76) + "😀" + "bbbb")).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+  })
+
   test("skips automatic title generation for the managed ax-engine provider", () => {
     expect(shouldSkipAutomaticTitle({ providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID) })).toBe(true)
     expect(shouldSkipAutomaticTitle({ providerID: ProviderID.make("groq") })).toBe(false)

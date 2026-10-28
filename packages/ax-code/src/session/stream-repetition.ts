@@ -23,6 +23,9 @@
  * Checks are throttled (every CHECK_INTERVAL_CHARS appended, only after
  * MIN_TOTAL_CHARS total) so the per-delta cost stays negligible.
  */
+
+import { sliceCodeUnits } from "@/util/format"
+
 export namespace StreamRepetition {
   /** Don't evaluate anything until this much text has streamed. */
   export const MIN_TOTAL_CHARS = 4096
@@ -257,10 +260,8 @@ export namespace StreamRepetition {
    */
   export function truncateLoopedText(text: string, headChars = TRUNCATED_LOOP_HEAD_CHARS): string {
     if (text.length <= headChars) return text
-    const omitted = text.length - headChars
-    return (
-      text.slice(0, headChars) +
-      `\n\n[${omitted} characters omitted: repetitive output removed by the output-loop guard]`
-    )
+    const head = sliceCodeUnits(text, headChars)
+    const omitted = text.length - head.length
+    return head + `\n\n[${omitted} characters omitted: repetitive output removed by the output-loop guard]`
   }
 }

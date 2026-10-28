@@ -306,6 +306,11 @@ describe("stream-repetition", () => {
 })
 
 describe("truncateLoopedText", () => {
+  test("keeps the head on a surrogate-safe boundary", () => {
+    const out = StreamRepetition.truncateLoopedText("a".repeat(1999) + "😀" + "tail".repeat(10), 2000)
+    expect(out).toStartWith("a".repeat(1999) + "\n\n[")
+  })
+
   test("keeps short text untouched", () => {
     expect(StreamRepetition.truncateLoopedText("short plan text")).toBe("short plan text")
   })

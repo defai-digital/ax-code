@@ -13,6 +13,7 @@ import { Session } from ".."
 import { LLM } from "../llm"
 import { MessageV2 } from "../message-v2"
 import { stripThinkTags } from "@/provider/think-tags"
+import { sliceCodeUnits } from "@/util/format"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -47,7 +48,7 @@ function titleFilePlaceholder(part: MessageV2.FilePart) {
 
 function truncateTitleContext(text: string) {
   if (Token.estimate(text) <= TITLE_CONTEXT_MAX_TOKENS) return text
-  return `${text.slice(0, TITLE_CONTEXT_MAX_CHARS)}\n\n[Title context truncated]`
+  return `${sliceCodeUnits(text, TITLE_CONTEXT_MAX_CHARS)}\n\n[Title context truncated]`
 }
 
 export function titleContextMessages(contextMessages: MessageV2.WithParts[]): ModelMessage[] {
@@ -107,7 +108,7 @@ export function cleanGeneratedTitle(text: string): string | undefined {
     .find((candidate) => candidate.length > 0 && !isTitlePreamble(candidate))
 
   if (!line) return undefined
-  const capped = line.length > TITLE_MAX_LEN ? line.substring(0, TITLE_MAX_LEN - 3) + "..." : line
+  const capped = line.length > TITLE_MAX_LEN ? sliceCodeUnits(line, TITLE_MAX_LEN - 3) + "..." : line
   return capTitleWords(capped)
 }
 
@@ -125,7 +126,7 @@ export function fallbackTitleFromUserText(text: string): string | undefined {
   // shared with generated titles.
   const firstSentence = firstSentenceFrom(collapsed)
   const summary = capTitleWords(firstSentence)
-  return summary.length > FALLBACK_TITLE_MAX_LEN ? summary.slice(0, FALLBACK_TITLE_MAX_LEN - 3) + "..." : summary
+  return summary.length > FALLBACK_TITLE_MAX_LEN ? sliceCodeUnits(summary, FALLBACK_TITLE_MAX_LEN - 3) + "..." : summary
 }
 
 function firstSentenceFrom(text: string): string {

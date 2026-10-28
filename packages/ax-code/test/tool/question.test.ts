@@ -177,6 +177,27 @@ describe("tool.question", () => {
     }
   })
 
+  test("clipped autonomous decision text never ends on half an entity or emoji", async () => {
+    const original = process.env.AX_CODE_AUTONOMOUS
+    process.env.AX_CODE_AUTONOMOUS = "true"
+    try {
+      const tool = await QuestionTool.init()
+      const entities = "x" + "&".repeat(600)
+      const emoji = "a".repeat(499) + "😀zz"
+      const questions = [{ question: entities, header: emoji, options: [{ label: "ok", description: "d" }] }]
+      askSpy.mockResolvedValueOnce([["ok"]])
+
+      const result = await tool.execute({ questions }, ctx)
+      const decision = result.metadata.autonomousDecisions?.[0]
+      if (!decision) throw new Error("Expected autonomous decision metadata")
+      expect(decision.question).toMatch(/&amp;\.\.\.$/)
+      expect(decision.header).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+    } finally {
+      if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
+      else process.env.AX_CODE_AUTONOMOUS = original
+    }
+  })
+
   describe("defer (ADR-222)", () => {
     const questions = [
       {

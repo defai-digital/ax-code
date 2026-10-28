@@ -7,6 +7,7 @@ import { QuestionID } from "../question/schema"
 import { Session } from "../session"
 import DESCRIPTION from "./question.txt"
 import { ScopedFlag } from "../flag/scoped"
+import { sliceCodeUnits } from "../util/format"
 
 const MAX_AUTONOMOUS_DECISION_TEXT = 500
 
@@ -28,7 +29,10 @@ function clipPromptText(value: string | undefined) {
   if (value === undefined) return undefined
   const escaped = escapePromptText(value)
   if (escaped.length <= MAX_AUTONOMOUS_DECISION_TEXT) return escaped
-  return `${escaped.slice(0, MAX_AUTONOMOUS_DECISION_TEXT)}...`
+  // Bound the escaped text, but never end on half an entity or half a
+  // surrogate pair.
+  const cut = sliceCodeUnits(escaped, MAX_AUTONOMOUS_DECISION_TEXT).replace(/&[a-z]*$/, "")
+  return `${cut}...`
 }
 
 type AutonomousDecision = {
