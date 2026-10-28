@@ -206,7 +206,7 @@ export namespace BackgroundNotification {
     let blockBytes = 0
     while (records.length > 0 && claimed.length < MAX_STEP_NOTIFICATIONS && blockBytes < MAX_STEP_BLOCK_BYTES) {
       const record = records[0]
-      const size = formatRecord(record).length
+      const size = Buffer.byteLength(formatRecord(record), "utf8")
       // Always deliver at least one record, even when a single large tail
       // already exceeds the block budget; the per-record caps keep that
       // bounded.

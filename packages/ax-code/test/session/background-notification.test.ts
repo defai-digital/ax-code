@@ -172,6 +172,23 @@ describe("BackgroundNotification", () => {
     expect(BackgroundNotification.pendingCount("ses_bn_cap")).toBe(0)
   })
 
+  test("the per-step block budget counts UTF-8 bytes, not characters", () => {
+    for (let i = 1; i <= 8; i++) {
+      BackgroundNotification.recordShellExit({
+        sessionID: "ses_bn_bytes",
+        shellID: `bash_${i}`,
+        description: `exit ${i}`,
+        status: "failed",
+        exitCode: 1,
+        durationMs: 1000,
+        outputTail: "字".repeat(900),
+      })
+    }
+    const first = BackgroundNotification.drainForModelStep("ses_bn_bytes")
+    expect(Buffer.byteLength(first!, "utf8")).toBeLessThanOrEqual(8 * 1024 + 4096)
+    expect(BackgroundNotification.pendingCount("ses_bn_bytes")).toBeGreaterThan(0)
+  })
+
   test("closing untrusted-output tags inside content is neutralized", () => {
     BackgroundNotification.recordMonitorLine({
       sessionID: "ses_bn_inject",
