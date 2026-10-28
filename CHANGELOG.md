@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.3] - 2026-10-28
+
+### Fixed
+
+- Keep file-lock holders exclusive during stale recovery and after the legacy age limit; release the process guard on exit without removing its permanent sidecar.
+- Stop delivering buffered SSE events after a handler cancels the stream.
+- Preserve config credentials through redacted partial updates, reject unsafe credential-bearing edits, and retain Unicode boundaries in prompts and notifications.
+- Correct session undo previews, workflow cancellation, headless error reporting, worktree cleanup, and provider stream recovery.
+
+### Security
+
+- Pin qs to 6.16.1 and include the reviewed configuration, command-template, and network-policy boundary fixes.
+
+### Changed
+
+- Publish the integrated runtime fixes with SDK 2.6.55 and unchanged generated API contracts.
+
 ## [7.30.2] - 2026-10-27
 
 ### Fixed
