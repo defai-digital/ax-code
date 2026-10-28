@@ -573,6 +573,33 @@ describe("/global/config redaction", () => {
     }
   })
 
+  test("config PATCH refuses a changed MCP URL that still carries redacted credentials", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+
+    await using tmp = await tmpdir({ git: true })
+    const configPath = path.join(tmp.path, "ax-code.json")
+    const url = "https://fixture-user:fixture-pass@remote.test/mcp"
+    await Filesystem.write(configPath, JSON.stringify({ mcp: { remote: { type: "remote", url } } }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const query = `directory=${encodeURIComponent(tmp.path)}`
+        const write = await Server.Default().request(`/config?${query}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ mcp: { remote: { type: "remote", url: "https://[redacted]@other.test/mcp" } } }),
+        })
+        // Keeping the old URL would report success for an edit that never
+        // happened; re-attaching the credentials would send them to a new host.
+        expect(write.status).toBe(400)
+      },
+    })
+
+    const stored = JSON.parse(await Filesystem.readText(configPath)) as { mcp: Record<string, { url: string }> }
+    expect(stored.mcp.remote.url).toBe(url)
+  })
+
   test("config GET redacts credentials in a remote MCP URL and PATCH keeps the stored URL", async () => {
     vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
 

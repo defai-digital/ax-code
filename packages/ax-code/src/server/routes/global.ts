@@ -458,7 +458,7 @@ export const GlobalRoutes = lazy(() =>
       }),
       validator("json", Config.Info),
       async (c) => {
-        const config = stripRedactedConfig(c.req.valid("json"))
+        const config = stripRedactedConfig(c.req.valid("json"), await Config.getGlobal())
         const next = await Config.updateGlobal(config)
         return c.json(redactConfig(next))
       },

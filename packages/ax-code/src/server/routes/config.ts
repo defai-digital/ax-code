@@ -1,4 +1,5 @@
 import { Hono } from "hono"
+import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import z from "zod"
@@ -168,11 +169,25 @@ function redactUrlUserinfo(value: string): string {
   }
 }
 
+// Parse rather than substring-match: a path that merely contains
+// `//[redacted]@` carries no redacted credentials.
 function hasRedactedUserinfo(value: string): boolean {
-  return value.includes(`//${REDACTED}@`) || value.includes(`//${encodeURIComponent(REDACTED)}@`)
+  try {
+    const url = new URL(value)
+    return decodeURIComponent(url.username) === REDACTED && !url.password
+  } catch {
+    return false
+  }
 }
 
-export function stripRedactedConfig(config: Config.Info): Config.Info {
+/**
+ * `stored` is the config the caller last read (its redacted form). A remote MCP
+ * URL that still carries the redaction marker is only an unchanged round trip
+ * when everything else matches the stored URL; if the host or path changed,
+ * dropping the URL would silently keep the old server, and re-attaching the
+ * stored credentials could send them to a new host, so the edit is refused.
+ */
+export function stripRedactedConfig(config: Config.Info, stored?: Config.Info): Config.Info {
   const result: Config.Info = { ...config }
   // Only rewrite provider/mcp when the caller actually sent them. Setting
   // these keys to an explicit `undefined` is NOT a no-op: patchJsonc treats a
@@ -200,11 +215,21 @@ export function stripRedactedConfig(config: Config.Info): Config.Info {
         if (!("type" in m)) return [name, m]
         if (m.type === "remote") {
           const { url, ...rest } = m
+          const redacted = hasRedactedUserinfo(url)
+          if (redacted) {
+            const previous = stored?.mcp?.[name]
+            const previousUrl = previous && "url" in previous ? previous.url : undefined
+            if (previousUrl === undefined || redactUrlUserinfo(previousUrl) !== url) {
+              throw new HTTPException(400, {
+                message: `MCP server "${name}": the URL still has ${REDACTED} credentials but was changed; re-enter the credentials to change it`,
+              })
+            }
+          }
           return [
             name,
             {
               ...rest,
-              ...(hasRedactedUserinfo(url) ? {} : { url }),
+              ...(redacted ? {} : { url }),
               ...(m.headers === undefined ? {} : { headers: stripRedactedRecord(m.headers) }),
               ...(m.oauth && typeof m.oauth === "object" && m.oauth.clientSecret === REDACTED
                 ? { oauth: Object.fromEntries(Object.entries(m.oauth).filter(([key]) => key !== "clientSecret")) }
@@ -332,7 +357,7 @@ export const ConfigRoutes = lazy(() =>
       }),
       validator("json", Config.Info),
       async (c) => {
-        const config = stripRedactedConfig(c.req.valid("json"))
+        const config = stripRedactedConfig(c.req.valid("json"), await Config.get())
         await Config.update(config)
         return c.json(redactConfig(await Config.get()))
       },
