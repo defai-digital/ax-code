@@ -17,6 +17,7 @@ import { ProviderTransform } from "@/provider/transform"
 import { ObservedWindow } from "@/provider/observed-window"
 import { TokenLedger } from "@/provider/token-ledger"
 import { FILE_TOUCHING_TOOLS } from "@/tool/mutation-tools"
+import { toolInputFilePath } from "@/tool/file-path"
 import { completionClamp, calculateCompactionBudget, effectiveClampWindow } from "./compaction-budget"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
@@ -1525,11 +1526,10 @@ export namespace LLM {
       if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue
       for (const part of msg.content as Array<{ type: string; toolName?: string; input?: Record<string, unknown> }>) {
         if (part.type !== "tool-call" || !FILE_TOUCHING_TOOLS.has(part.toolName ?? "")) continue
-        const inp = part.input as Record<string, unknown> | undefined
-        // `notebook_edit` takes `notebook_path`; it is not in the alias list
-        // because it is tool-specific, so it is checked explicitly.
-        const filePath = (inp?.file_path ?? inp?.path ?? inp?.notebook_path) as string | undefined
-        if (filePath && typeof filePath === "string") {
+        // Stored tool inputs are the raw model args, which use the canonical
+        // `filePath` (or an alias).
+        const filePath = toolInputFilePath(part.input as Record<string, unknown> | undefined)
+        if (filePath) {
           paths.set(filePath, `accessed by ${part.toolName}`)
         }
       }

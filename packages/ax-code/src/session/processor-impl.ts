@@ -47,7 +47,7 @@ import { createPartWriteBatcher } from "./part-write-batcher"
 import { MediaProjection } from "./media-projection"
 import { Instance } from "@/project/instance"
 import { Filesystem } from "@/util/filesystem"
-import { FILE_PATH_ALIAS_KEYS } from "@/tool/file-path"
+import { toolInputFilePath } from "@/tool/file-path"
 import { FILE_TOUCHING_TOOLS, MUTATION_TOOLS } from "@/tool/mutation-tools"
 import { Truncate } from "@/tool/truncate"
 import { Env } from "@/util/env"
@@ -424,16 +424,6 @@ export namespace SessionProcessor {
       if (!Filesystem.contains(Instance.worktree, resolved)) return undefined
       return resolved
     }
-    const claimInputPath = (toolInput: Record<string, unknown>): string | undefined => {
-      // `state.input` is the RAW un-aliased model input, so tolerate the
-      // file-path aliases providers emit. Canonical `filePath` wins, then the
-      // shared alias list, then notebook_edit's `notebook_path`.
-      for (const key of ["filePath", ...FILE_PATH_ALIAS_KEYS, "notebook_path"]) {
-        const value = toolInput[key]
-        if (typeof value === "string" && value.length > 0) return value
-      }
-      return undefined
-    }
     const claimCompletedToolFiles = (tool: string, toolInput: Record<string, unknown>, metadata: unknown) => {
       if (!fileMutatingTools.has(tool)) return
       const claimed: string[] = []
@@ -452,7 +442,7 @@ export namespace SessionProcessor {
           }
         }
       } else {
-        const inputPath = claimInputPath(toolInput)
+        const inputPath = toolInputFilePath(toolInput)
         if (inputPath) claimed.push(inputPath)
         if (tool === "refactor_apply") {
           // RefactorApplyTool takes a plan id, not a path: its result metadata
@@ -934,8 +924,8 @@ export namespace SessionProcessor {
 
                   const toolInput = asRecord(value.input)
                   if (fileTouchingTools.has(value.toolName)) {
-                    const filePath = toolInput?.file_path ?? toolInput?.path
-                    if (typeof filePath === "string" && !stepTouchedFilePaths.has(filePath)) {
+                    const filePath = toolInputFilePath(toolInput)
+                    if (filePath && !stepTouchedFilePaths.has(filePath)) {
                       stepTouchedFilePaths.add(filePath)
                       stepTouchedFiles.push({ path: filePath, summary: `accessed by ${value.toolName}` })
                     }

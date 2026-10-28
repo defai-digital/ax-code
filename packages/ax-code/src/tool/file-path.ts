@@ -14,6 +14,21 @@ export const NULL_BYTE_PATH_ERROR = "File path contains null byte"
 export const FILE_PATH_ALIAS_KEYS = ["file", "path", "file_path", "filepath", "filename", "fileName", "file_name"]
 
 /**
+ * The file a raw (un-aliased) tool input names. Streamed and stored tool
+ * inputs are the model's original arguments, so tolerate the aliases:
+ * canonical `filePath` wins, then the shared alias list, then
+ * notebook_edit's `notebook_path`.
+ */
+export function toolInputFilePath(input: Record<string, unknown> | undefined): string | undefined {
+  if (!input) return undefined
+  for (const key of ["filePath", ...FILE_PATH_ALIAS_KEYS, "notebook_path"]) {
+    const value = input[key]
+    if (typeof value === "string" && value.length > 0) return value
+  }
+  return undefined
+}
+
+/**
  * Wrap a tool's parameter object so a `filePath` alias (see
  * {@link FILE_PATH_ALIAS_KEYS}) is rewritten to `filePath` before validation.
  * Only applied when `filePath` is absent, so a correct call is never altered.

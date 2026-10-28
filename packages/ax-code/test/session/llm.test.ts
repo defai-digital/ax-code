@@ -4080,6 +4080,16 @@ describe("session.llm.extractTouchedFiles", () => {
     expect(LLM.extractTouchedFiles([])).toEqual([])
   })
 
+  test("extracts the canonical filePath the model actually sends", () => {
+    const messages = [
+      {
+        role: "assistant",
+        content: [{ type: "tool-call", toolCallId: "c1", toolName: "edit", input: { filePath: "/src/a.ts" } }],
+      },
+    ] as any as ModelMessage[]
+    expect(LLM.extractTouchedFiles(messages)).toEqual([{ path: "/src/a.ts", summary: "accessed by edit" }])
+  })
+
   test("extracts file_path from read tool calls", () => {
     const messages = [
       {
