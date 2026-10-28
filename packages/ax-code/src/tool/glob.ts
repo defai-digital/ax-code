@@ -60,7 +60,7 @@ export const GlobTool = Tool.define("glob", {
       },
     })
 
-    const title = normalizeToWorkspacePath(search, Instance.worktree)
+    const title = normalizeToWorkspacePath(search, Instance.worktree) || search
 
     // Native fast-path: in-process glob via Rust addon
     const native = NativeAddon.fs()

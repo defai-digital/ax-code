@@ -57,15 +57,13 @@ test.skipIf(!nativeBinding?.globFiles)(
     await mkdir(path.join(tmp.path, "sub", "deep"), { recursive: true })
     await writeFile(path.join(tmp.path, "sub", "b.ts"), "")
     await writeFile(path.join(tmp.path, "sub", "deep", "c.ts"), "")
-    const shallow = (
-      parseJsonStrict(nativeBinding!.globFiles(tmp.path, "sub/*.ts", 10)) as { path: string }[]
-    ).map((m) => m.path)
+    const shallow = (parseJsonStrict(nativeBinding!.globFiles(tmp.path, "sub/*.ts", 10)) as { path: string }[]).map(
+      (m) => m.path,
+    )
     // `rg --files -g 'sub/*.ts'` returns only the direct child.
     expect(shallow).toEqual(["sub/b.ts"])
     // A slash-less pattern still matches at any depth (ripgrep basename rule).
-    const anyDepth = (
-      parseJsonStrict(nativeBinding!.globFiles(tmp.path, "*.ts", 10)) as { path: string }[]
-    )
+    const anyDepth = (parseJsonStrict(nativeBinding!.globFiles(tmp.path, "*.ts", 10)) as { path: string }[])
       .map((m) => m.path)
       .sort()
     expect(anyDepth).toEqual(["sub/b.ts", "sub/deep/c.ts"])
@@ -208,6 +206,30 @@ describe("tool.glob", () => {
     } finally {
       nativeFs.mockRestore()
       files.mockRestore()
+    }
+  })
+
+  test("titles a search of the workspace root instead of leaving it blank", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
+      ScanCancellation: class {
+        cancel() {}
+      },
+      globFilesAsync: vi.fn(async () => JSON.stringify([{ path: path.join(tmp.path, "a.ts"), mtime: 1, size: 1 }])),
+    } as any)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const glob = await GlobTool.init()
+          const result = await glob.execute({ pattern: "*.ts" }, ctx)
+
+          expect(result.title).toBe(tmp.path)
+        },
+      })
+    } finally {
+      nativeFs.mockRestore()
     }
   })
 
