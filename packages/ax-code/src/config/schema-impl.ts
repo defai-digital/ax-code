@@ -1573,7 +1573,7 @@ export const Info = z
           .boolean()
           .optional()
           .describe(
-            "Rank idle Wiki evidence with an installed AX Engine on macOS arm64. Downloads a pinned local embedding model when needed. Default: true.",
+            "Opt in to rank idle Wiki evidence with an installed AX Engine on macOS arm64. Downloads a pinned local embedding model when needed. Default: false.",
           ),
         auto: z
           .boolean()

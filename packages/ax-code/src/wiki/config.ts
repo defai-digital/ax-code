@@ -42,7 +42,7 @@ export async function resolveWikiRuntimeConfig(
   const slice = await readWikiConfigSlice()
   return {
     ...(slice ?? {}),
-    localEmbeddings: slice?.localEmbeddings !== false,
+    localEmbeddings: slice?.localEmbeddings === true,
     enabled: slice?.enabled !== false,
     auto: slice?.auto !== false,
     dir: sanitizeWikiDir(overrides.dir ?? slice?.dir, AX_WIKI_DIR_DEFAULT),

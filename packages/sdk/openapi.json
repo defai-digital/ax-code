@@ -41128,7 +41128,7 @@
             "type": "object",
             "properties": {
               "localEmbeddings": {
-                "description": "Rank idle Wiki evidence with an installed AX Engine on macOS arm64. Downloads a pinned local embedding model when needed. Default: true.",
+                "description": "Opt in to rank idle Wiki evidence with an installed AX Engine on macOS arm64. Downloads a pinned local embedding model when needed. Default: false.",
                 "type": "boolean"
               },
               "auto": {

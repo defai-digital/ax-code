@@ -204,10 +204,11 @@ through ordinary file tools.
 
 On macOS arm64, idle Wiki maintenance can use an already-installed AX Engine
 7.9.0 or later to rank optional source evidence before page generation. This is
-enabled by default; set `wiki.localEmbeddings` to `false` to disable it. Normal
-CLI generation, startup and status reads do not provision an embedding model.
+off by default because its quality benefit has not been measured; set
+`wiki.localEmbeddings` to `true` to opt in. Normal CLI generation, startup and
+status reads do not provision an embedding model.
 
-When eligible work exists, AX Code downloads the pinned
+When enabled and eligible work exists, AX Code downloads the pinned
 `AutomatosX/AX-Qwen3-Embedding-0.6B-MLX-AXQ-MXFP8` revision through AX Engine if
 the verified artifact is absent from the standard Hugging Face cache. The pack
 is approximately 0.63 GB. It is a development artifact, not a certified model.
