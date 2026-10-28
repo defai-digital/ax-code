@@ -176,12 +176,14 @@ export const NotebookEditTool = Tool.define("notebook_edit", {
       // Permission prompts can stay open while an editor or another process
       // changes the notebook. Re-check the path and the exact bytes that were
       // used to build the approved diff before committing the write.
+      ctx.abort.throwIfAborted()
       await assertSymlinkInsideProject(notebookPath)
       await FileTime.assert(ctx.sessionID, notebookPath)
       if ((await fs.readFile(notebookPath, "utf-8")) !== raw) {
         throw new Error(`File ${notebookPath} changed while edit approval was pending. Read it again and retry.`)
       }
 
+      ctx.abort.throwIfAborted()
       await fs.writeFile(notebookPath, updated, "utf-8")
       await notifyFileEdited(notebookPath, "change")
       await FileTime.read(ctx.sessionID, notebookPath)

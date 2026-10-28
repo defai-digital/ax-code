@@ -227,6 +227,34 @@ describe("tool.notebook_edit", () => {
     })
   })
 
+  test("does not write when the call is aborted while edit approval is pending", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const notebookPath = path.join(tmp.path, "analysis.ipynb")
+    const original = JSON.stringify(notebook(), null, 1) + "\n"
+    await fs.writeFile(notebookPath, original)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const tool = await NotebookEditTool.init()
+        const controller = new AbortController()
+        await expect(
+          tool.execute(
+            { notebook_path: notebookPath, cell_index: 0, new_source: "model edit" },
+            {
+              ...context(isolation, async (request) => {
+                if (request.permission === "edit") controller.abort()
+              }),
+              abort: controller.signal,
+            },
+          ),
+        ).rejects.toThrow()
+        expect(await fs.readFile(notebookPath, "utf8")).toBe(original)
+      },
+    })
+  })
+
   test("rejects fractional cell indices at schema validation", async () => {
     const tool = await NotebookEditTool.init()
     await expect(
