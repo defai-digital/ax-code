@@ -573,7 +573,8 @@ export const MemoryCurateCommand = cmd({
 
     if (args.undo) {
       const record = await MemoryCuration.undo({ projectRoot }, args.undo)
-      console.log(`Restored ${record.target} ${record.kind ?? ""}${record.name} (${record.id})`)
+      const label = record.kind ? `${record.kind}/${record.name}` : record.name
+      console.log(args.json ? JSON.stringify(record, null, 2) : `Restored ${record.target} ${label} (${record.id})`)
       return
     }
 
