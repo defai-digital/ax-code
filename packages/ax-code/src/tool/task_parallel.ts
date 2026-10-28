@@ -244,12 +244,11 @@ function slugifyForWorktree(input: string): string {
  * report that the call result aggregates.
  */
 async function finalizeWriterWorktree(input: {
-  outcome: TaskOutcome
-  index: number
-}): Promise<WriterWorktreeReport | undefined> {
-  const { outcome, index } = input
-  if (!outcome.worktree) return undefined
-  const { info, startPoint } = outcome.worktree
+  worktree: NonNullable<TaskOutcome["worktree"]>
+  index?: number
+}): Promise<WriterWorktreeReport> {
+  const { index } = input
+  const { info, startPoint } = input.worktree
 
   let diffStat = ""
   let dirty = false
@@ -387,6 +386,7 @@ async function runOneTask(input: {
     // child session, the prompt path, and any tool that reads
     // Instance.directory all operate on the worktree. Mirrors the pattern
     // in src/tool/arena-implement.ts:433-525.
+    const worktree = { info: worktreeInfo, startPoint: worktreeSetup.startPoint }
     const outcome = await Instance.provide({
       directory: worktreeInfo.directory,
       init: InstanceBootstrap,
@@ -402,8 +402,14 @@ async function runOneTask(input: {
           onSessionCreated: input.onSessionCreated,
           cancelled: input.cancelled,
         }),
+    }).catch(async (error: unknown) => {
+      // A member that throws (or the caller's abort) leaves no outcome for the
+      // post-pool pass, so its worktree would never be finalised. Apply the
+      // same keep-or-remove rule here before the error propagates.
+      await finalizeWriterWorktree({ worktree })
+      throw error
     })
-    return { ...outcome, worktree: { info: worktreeInfo, startPoint: worktreeSetup.startPoint } }
+    return { ...outcome, worktree }
   }
 
   return await runMemberInsideInstance({
@@ -860,7 +866,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       const worktreeReports = await Promise.all(
         outcomes.map(async (outcome, index) => {
           if (!outcome?.worktree) return undefined
-          return await finalizeWriterWorktree({ outcome, index })
+          return await finalizeWriterWorktree({ worktree: outcome.worktree, index })
         }),
       )
       const settled = outcomes.filter((outcome): outcome is NonNullable<typeof outcome> => outcome !== undefined)

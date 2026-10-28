@@ -425,4 +425,39 @@ describe("task_parallel writer worktree cleanup (ADR-231 §3)", () => {
       },
     })
   })
+
+  test("an aborted call still removes its writers' clean worktrees", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { username: "tester", agents: { task_parallel: { worktree_isolation: true } } },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parentForExecutor(tmp.path)
+        const controller = new AbortController()
+        stubInstanceBootstrap()
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+          controller.abort()
+          throw new DOMException("Aborted", "AbortError")
+        }) as any)
+        const worktreeRoot = path.join(Global.Path.data, "worktree", Instance.project.id)
+        try {
+          await expect(
+            (await TaskParallelTool.init()).execute({ tasks: TWO_WRITER_TASKS } as any, {
+              ...ctx,
+              abort: controller.signal,
+            }),
+          ).rejects.toThrow()
+          const left = (await fs.readdir(worktreeRoot).catch(() => [] as string[])).filter((name) =>
+            name.startsWith("swarm-"),
+          )
+          expect(left).toEqual([])
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
 })
