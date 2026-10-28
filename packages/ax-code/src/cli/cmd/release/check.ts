@@ -302,6 +302,15 @@ async function gitWithTimeout(args: string[], cwd: string) {
   }))
 }
 
+/**
+ * `--for-version v7.0.0` passes semver validation, but every tag check
+ * prefixes `v` itself; a kept prefix would query `vv7.0.0`, find nothing, and
+ * report an already-published tag as free.
+ */
+export function releaseCheckVersion(value: string): string {
+  return value.trim().replace(/^v/i, "")
+}
+
 async function checkRemoteTag(ctx: CheckContext): Promise<CheckResult> {
   const [r, durationMs] = await timed(async () => {
     const tag = `v${ctx.version}`
@@ -365,7 +374,12 @@ async function checkBranchSync(ctx: CheckContext): Promise<CheckResult> {
     if (ctx.fetch) {
       // Side-effectful: updates origin/main ref. Gated behind --fetch per PRD
       // "validate, don't mutate" contract.
-      const fetchRes = await gitWithTimeout(["fetch", "origin", "main", "--depth=10"], ctx.repoRoot)
+      // --depth on a full clone converts it to a shallow one (and truncates
+      // the later commit count); only bound the fetch in an already-shallow
+      // checkout such as a CI clone.
+      const shallow = await git(["rev-parse", "--is-shallow-repository"], { cwd: ctx.repoRoot })
+      const depth = shallow.exitCode === 0 && shallow.stdout.toString().trim() === "true" ? ["--depth=10"] : []
+      const fetchRes = await gitWithTimeout(["fetch", "origin", "main", ...depth], ctx.repoRoot)
       if (fetchRes.code !== 0) {
         return mkResult(
           "Branch sync",
@@ -764,9 +778,12 @@ export const ReleaseCheckCommand = cmd({
   async handler(args) {
     try {
       const repoRoot = await findRepoRoot()
-      const version = (args["for-version"] as string | undefined) ?? (await readPackageVersion(repoRoot))
-      const skipList = ((args.skip as string | undefined) ?? "")
-        .split(",")
+      const forVersion = args["for-version"] as string | undefined
+      const version = forVersion !== undefined ? releaseCheckVersion(forVersion) : await readPackageVersion(repoRoot)
+      // yargs gives an array when --skip is repeated.
+      const skipList = [args.skip as string | string[] | undefined]
+        .flat()
+        .flatMap((value) => (value ?? "").split(","))
         .map((s) => s.trim())
         .filter((s) => s.length > 0)
       const unknownSkips = skipList.filter((id) => !CHECK_IDS.includes(id))

@@ -7,6 +7,7 @@ import {
   decodeReleasePackageJsonValue,
   parseReleasePackageJsonText,
   releaseReadinessChecks,
+  releaseCheckVersion,
   runChecks,
   CHECK_IDS,
   type CheckContext,
@@ -452,5 +453,29 @@ describe("release check (full checks)", () => {
     const results = await runChecks(ctx)
     expect(find(results, "workflow-changes").status).toBe("warn")
     expect(find(results, "workflow-changes").detail).toContain(".github/workflows/ci.yml")
+  })
+})
+
+describe("release check inputs", () => {
+  test("--for-version accepts a leading v without doubling it in tag checks", () => {
+    expect(releaseCheckVersion("v7.0.0")).toBe("7.0.0")
+    expect(releaseCheckVersion("7.0.0")).toBe("7.0.0")
+  })
+
+  test("--fetch does not turn a full clone into a shallow one", async () => {
+    const origin = await makeRepo("1.0.0")
+    for (let i = 0; i < 12; i++) await run("git", ["commit", "-q", "--allow-empty", "-m", `c${i}`], origin)
+    const clone = await mkdtemp(path.join(os.tmpdir(), "ax-code-release-clone-"))
+    await run("git", ["clone", "-q", `file://${origin}`, clone], origin)
+
+    const results = await runChecks(
+      mkCtx(clone, "1.0.0", {
+        fetch: true,
+        skip: new Set(CHECK_IDS.filter((id) => id !== "branch-sync")),
+      }),
+    )
+    expect(find(results, "branch-sync").status).not.toBe("fail")
+    const shallow = await Process.run(["git", "rev-parse", "--is-shallow-repository"], { cwd: clone, nothrow: true })
+    expect(shallow.stdout.toString().trim()).toBe("false")
   })
 })
