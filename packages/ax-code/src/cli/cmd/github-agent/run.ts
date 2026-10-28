@@ -369,8 +369,14 @@ export const GithubRunCommand = cmd({
         // succeeded — otherwise octoRest/appToken were never assigned and
         // dereferencing them here would crash instead of reporting `msg`.
         if (isUserEvent && credentialsReady) {
-          await createComment(octoRest!, owner, repo, issueId!, `${msg}${footer()}`)
-          await removeReaction(octoRest!, owner, repo, triggerCommentId, issueId, commentType)
+          // The original failure is often the GitHub API itself (an expired
+          // token, a 403); a second API failure here must not replace `msg`.
+          try {
+            await createComment(octoRest!, owner, repo, issueId!, `${msg}${footer()}`)
+            await removeReaction(octoRest!, owner, repo, triggerCommentId, issueId, commentType)
+          } catch (reportError) {
+            console.error(`Failed to report the error on GitHub: ${toErrorMessage(reportError)}`)
+          }
         }
         core.setFailed(msg)
       } finally {
