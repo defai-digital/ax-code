@@ -1,5 +1,4 @@
 import type { Argv } from "yargs"
-import { UI } from "../ui"
 import { confirmDestructiveAction } from "../confirm-destructive"
 import { cmd } from "./cmd"
 import { jsonOption, writeJson } from "./json-output"

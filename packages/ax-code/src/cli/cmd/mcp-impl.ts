@@ -810,7 +810,7 @@ export const McpRemoveCommand = cmd({
         describe: "remove from global config instead of the current project",
       }),
   async handler(args) {
-    const { MCP, Instance } = await loadMcp()
+    const { Instance } = await loadMcp()
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -866,7 +866,7 @@ export const McpAddCommand = cmd({
   command: "add",
   describe: "add an MCP server",
   async handler() {
-    const { MCP, Instance } = await loadMcp()
+    const { Instance } = await loadMcp()
     const McpTemplates = await import("../../mcp/templates")
     await Instance.provide({
       directory: process.cwd(),

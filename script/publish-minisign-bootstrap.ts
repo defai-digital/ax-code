@@ -318,11 +318,13 @@ async function downloadUpstream(manifest: BootstrapManifest, directory: string):
   for (const archive of manifest.archives) {
     const destination = path.join(directory, archive.name)
     // Pinned jedisct1/minisign prefix from the local manifest. The body is the response, not a file.
-    const response = await fetch(`${manifest.upstreamPrefix}/${archive.name}`) // lgtm[js/file-access-to-http]
+    // codeql[js/file-access-to-http]
+    const response = await fetch(`${manifest.upstreamPrefix}/${archive.name}`)
     if (!response.ok) throw new Error(`Upstream download failed for ${archive.name} (${response.status})`)
     const bytes = Buffer.from(await response.arrayBuffer())
     if (sha256Hex(bytes) !== archive.sha256) throw new Error(`Upstream SHA-256 mismatch for ${archive.name}`)
-    fs.writeFileSync(destination, bytes) // lgtm[js/http-to-file-access]
+    // codeql[js/http-to-file-access]
+    fs.writeFileSync(destination, bytes)
   }
 }
 

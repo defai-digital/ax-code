@@ -1,5 +1,4 @@
 import { cmd } from "./cmd"
-import { UI } from "../ui"
 import { confirmDestructiveAction } from "../confirm-destructive"
 import { Instance } from "../../project/instance"
 import { getRequiredSession } from "./session-required"
