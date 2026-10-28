@@ -172,12 +172,17 @@ export namespace Permission {
     readonly ruleset: unknown
     readonly agent?: string
 
-    constructor(input: { ruleset: unknown; agent?: string; options?: ErrorOptions }) {
+    // `readOnly` says the agent's own ruleset denies edits. Only then is the
+    // "switch to the Dev agent" advice true: a writable agent (Dev itself)
+    // denied by a user rule would otherwise be told to switch to itself.
+    constructor(input: { ruleset: unknown; agent?: string; readOnly?: boolean; options?: ErrorOptions }) {
       const base = `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${formatRulesetForDeniedError(input.ruleset)}`
       super(
-        input.agent
-          ? `${base}\n\nThis is because you are running as the "${input.agent}" agent, which is read-only and cannot modify files. You should inform the user that this task requires code changes, and suggest they switch to the Dev agent (press Tab or use @build).`
-          : base,
+        !input.agent
+          ? base
+          : input.readOnly
+            ? `${base}\n\nThis is because you are running as the "${input.agent}" agent, which is read-only and cannot modify files. You should inform the user that this task requires code changes, and suggest they switch to the Dev agent (press Tab or use @build).`
+            : `${base}\n\nYou are running as the "${input.agent}" agent. Do not retry this call; tell the user which rule blocked it.`,
         input.options,
       )
       this.ruleset = input.ruleset
@@ -186,6 +191,10 @@ export namespace Permission {
   }
 
   export type Error = DeniedError | RejectedError | CorrectedError
+
+  function deniesEdits(ruleset: Ruleset) {
+    return evaluate("edit", "*", ruleset).action === "deny"
+  }
 
   export const AskInput = Request.partial({ id: true }).extend({
     patterns: z.string().array().min(1, "Permission requests must include at least one pattern"),
@@ -512,7 +521,11 @@ export namespace Permission {
           [...layers, current, ruleset].some((layer) => evaluate(request.permission, pattern, layer).action === "deny"),
         )
       )
-        throw new DeniedError({ ruleset: merge(...layers, current, ruleset), agent: input.agent })
+        throw new DeniedError({
+          ruleset: merge(...layers, current, ruleset),
+          agent: input.agent,
+          readOnly: deniesEdits(ruleset),
+        })
       ruleset = merge(current, ruleset)
     }
     let needsAsk = false
@@ -529,6 +542,7 @@ export namespace Permission {
         throw new DeniedError({
           ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
           agent: input.agent,
+          readOnly: deniesEdits(ruleset),
         })
       }
       if (rule.action === "allow" && !isInteractiveOnly(request.permission, request.metadata)) continue
@@ -559,7 +573,7 @@ export namespace Permission {
             evaluate(request.permission, pattern, ruleset, approved).action === "deny" ||
             evaluate(request.permission, pattern, current).action === "deny"
           )
-            throw new DeniedError({ ruleset, agent: input.agent })
+            throw new DeniedError({ ruleset, agent: input.agent, readOnly: deniesEdits(ruleset) })
         }
         if (options?.signal?.aborted) throw abortError(options.signal)
         log.info("autonomous auto-approve (WebMCP, runtime-bound)", {
@@ -1180,7 +1194,7 @@ export namespace Permission {
         evaluate(input.permission, pattern, input.ruleset, approved).action === "deny" ||
         evaluate(input.permission, pattern, current).action === "deny"
       ) {
-        throw new DeniedError({ ruleset: input.ruleset, agent: input.agent })
+        throw new DeniedError({ ruleset: input.ruleset, agent: input.agent, readOnly: deniesEdits(input.ruleset) })
       }
     }
   }

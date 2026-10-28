@@ -918,6 +918,45 @@ test("ask - throws RejectedError when action is deny", async () => {
   })
 })
 
+test("ask - claims read-only only for an agent whose ruleset denies edits", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const denied = (agent: string, ruleset: Permission.Ruleset) =>
+        Permission.ask({
+          sessionID: SessionID.make("session_test"),
+          permission: "bash",
+          patterns: ["ls"],
+          metadata: {},
+          always: [],
+          agent,
+          ruleset,
+        }).then(
+          () => undefined,
+          (error: unknown) => error,
+        )
+
+      // A user `bash: deny` on the writable Dev agent must not tell it to
+      // switch to itself.
+      const writable = await denied("build", [
+        { permission: "*", pattern: "*", action: "allow" },
+        { permission: "bash", pattern: "*", action: "deny" },
+      ])
+      expect(writable).toBeInstanceOf(Permission.DeniedError)
+      expect((writable as Error).message).toContain('running as the "build" agent')
+      expect((writable as Error).message).not.toContain("read-only")
+
+      const readOnly = await denied("explore", [
+        { permission: "*", pattern: "*", action: "deny" },
+        { permission: "read", pattern: "*", action: "allow" },
+      ])
+      expect(readOnly).toBeInstanceOf(Permission.DeniedError)
+      expect((readOnly as Error).message).toContain("read-only and cannot modify files")
+    },
+  })
+})
+
 test("DeniedError - safely formats non-JSON-safe rulesets", () => {
   const ruleset: Record<string, unknown> = {
     permission: "bash",
