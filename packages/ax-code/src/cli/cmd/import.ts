@@ -4,6 +4,7 @@ import type { Argv } from "yargs"
 import { CompatibilityImport } from "../../import/compatibility"
 import { ClaudeSessions } from "../../import/claude-sessions"
 import { bootstrap } from "../bootstrap"
+import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { ImportCommand as StorageImportCommand } from "./storage/import"
 
@@ -94,7 +95,9 @@ export const ImportSessionsCommand = cmd({
 })
 
 export const ImportCommand = cmd({
-  command: "import <file>",
+  // `[file]`, not `<file>`: a required parent positional fails yargs'
+  // validation before the `sessions` subcommand can run.
+  command: "import [file]",
   describe: "import session data, or dry-run import opencode/claude/codex/cursor/windsurf compatibility files",
   builder: (yargs: Argv) =>
     yargs
@@ -102,7 +105,6 @@ export const ImportCommand = cmd({
       .positional("file", {
         describe: "path to JSON file, or one of: opencode, claude, codex, cursor, windsurf",
         type: "string",
-        demandOption: true,
       })
       .option("write", {
         type: "boolean",
@@ -118,6 +120,11 @@ export const ImportCommand = cmd({
         describe: "output machine-readable JSON for compatibility imports",
       }),
   async handler(args) {
+    if (!args.file) {
+      UI.error("Missing required argument: file")
+      process.exitCode = 1
+      return
+    }
     const source = CompatibilityImport.Source.safeParse(args.file)
     if (!source.success) {
       await StorageImportCommand.handler?.(args as never)
