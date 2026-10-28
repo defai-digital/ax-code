@@ -34,7 +34,7 @@ export const GraphCommand = cmd({
         let sessionID: SessionID
         const session = await resolveSession(args.sessionID as string | undefined)
         if (!session) {
-          printNoSessionFound()
+          printNoSessionFound(args.sessionID as string | undefined)
           return
         }
         sessionID = session.id

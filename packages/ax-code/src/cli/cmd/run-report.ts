@@ -43,7 +43,7 @@ export const RunReportCommand = cmd({
   async handler(args) {
     const hit = args.index ? undefined : await target(args.sessionID as string | undefined)
     if (!args.index && !hit) {
-      printNoSessionFound()
+      printNoSessionFound(args.sessionID as string | undefined)
       return
     }
 

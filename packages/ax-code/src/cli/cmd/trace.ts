@@ -156,7 +156,7 @@ export const TraceCommand: CommandModule = {
           let sessionID: SessionID
           const resolvedSession = await resolveSession(args.sessionID as string | undefined)
           if (!resolvedSession) {
-            printNoSessionFound()
+            printNoSessionFound(args.sessionID as string | undefined)
             return
           }
           sessionID = resolvedSession.id
