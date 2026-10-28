@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import { readFileSync, unlinkSync } from "fs"
 import path from "path"
+import { randomUUID } from "crypto"
 import { Log } from "./log"
 import { sleep } from "./timeout"
 import {
@@ -82,11 +83,33 @@ export namespace FileLock {
     return parseProcessLockBody(text)
   }
 
-  async function removeLockFile(target: string): Promise<void> {
-    await fs.unlink(target).catch((err: NodeJS.ErrnoException) => {
-      if (err?.code === "ENOENT") return
-      throw err
-    })
+  /**
+   * Remove the lock at `target` only if it is still the one judged stale.
+   * Two processes can judge the same stale body; if the first replaces it with
+   * a fresh lock before the second's unlink lands, a plain unlink deletes that
+   * live lock and both processes then hold the path. Renaming is atomic, so
+   * move the file aside, confirm it is the expected lock, and put anything
+   * else back.
+   */
+  async function removeIfUnchanged(target: string, expected: ProcessLockBody | undefined): Promise<void> {
+    const aside = `${target}.steal-${process.pid}-${randomUUID()}`
+    const moved = await fs.rename(target, aside).then(
+      () => true,
+      (err: NodeJS.ErrnoException) => {
+        if (err?.code === "ENOENT") return false
+        throw err
+      },
+    )
+    if (!moved) return
+    const body = await readLockBody(aside).catch(() => undefined)
+    const unchanged =
+      expected === undefined ? body === undefined : body !== undefined && isSameProcessLockBody(body, expected)
+    if (!unchanged) {
+      log.warn("file lock changed hands during steal; restoring it", { target, pid: body?.pid })
+      // link() fails if yet another lock already took the path; that holder wins.
+      await fs.link(aside, target).catch(() => undefined)
+    }
+    await fs.unlink(aside).catch(() => undefined)
   }
 
   function readLockBodySync(target: string): ProcessLockBody | undefined {
@@ -118,7 +141,7 @@ export namespace FileLock {
         return true
       }
       if (Date.now() - mtimeMs <= Math.min(staleMs, EMPTY_LOCK_GRACE_MS)) return false
-      await removeLockFile(target)
+      await removeIfUnchanged(target, undefined)
       return true
     }
     const age = Date.now() - body.startedAt
@@ -130,7 +153,7 @@ export namespace FileLock {
         pid: body.pid,
         host: body.host,
       })
-      await removeLockFile(target)
+      await removeIfUnchanged(target, body)
       return true
     }
     const sameHost = isSameProcessLockHost(body)
@@ -140,7 +163,7 @@ export namespace FileLock {
       } catch (err) {
         if ((err as NodeJS.ErrnoException)?.code === "ESRCH") {
           log.warn("stealing abandoned file lock", { target, pid: body.pid })
-          await removeLockFile(target)
+          await removeIfUnchanged(target, body)
           return true
         }
       }

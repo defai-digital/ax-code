@@ -7,6 +7,40 @@ import { currentLockHost } from "../../src/util/process-lock"
 import { tmpdir } from "../fixture/fixture"
 
 describe("util.filelock", () => {
+  test("stealing a stale lock leaves a fresh lock another process just took", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const lockfile = filepath + ".lock"
+    const host = currentLockHost()
+    await fs.writeFile(lockfile, JSON.stringify({ pid: 1, startedAt: Date.now() - 10 * 60_000, host }))
+    const fresh = JSON.stringify({ pid: 1, startedAt: Date.now(), host })
+
+    // Another process stole the same stale lock first and wrote its own just
+    // before this process removes the path.
+    const swap = async (target: unknown) => {
+      if (String(target) === lockfile) await fs.writeFile(lockfile, fresh)
+    }
+    const realRename = fs.rename.bind(fs)
+    const realUnlink = fs.unlink.bind(fs)
+    const rename = vi.spyOn(fs, "rename").mockImplementationOnce(async (from, to) => {
+      await swap(from)
+      return realRename(from, to)
+    })
+    const unlink = vi.spyOn(fs, "unlink").mockImplementationOnce(async (target) => {
+      await swap(target)
+      return realUnlink(target)
+    })
+    try {
+      const handle = await FileLock.tryAcquire(filepath, { staleMs: 60_000 })
+      handle?.[Symbol.dispose]()
+      expect(handle).toBeUndefined()
+      expect(await fs.readFile(lockfile, "utf8")).toBe(fresh)
+    } finally {
+      rename.mockRestore()
+      unlink.mockRestore()
+    }
+  })
+
   test("a cancelled waiter leaves the held lock intact", async () => {
     await using tmp = await tmpdir()
     const filepath = path.join(tmp.path, "state.json")
