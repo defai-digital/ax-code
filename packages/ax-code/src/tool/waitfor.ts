@@ -159,10 +159,11 @@ async function waitForShell(
   if (vanished) {
     return {
       title: `Waiting on ${info.description}`,
+      // `info` is the last running snapshot; the shell finished, so neither
+      // that status nor a timeout describes what happened.
       metadata: {
         shellID: info.id,
-        status: info.status,
-        timedOut: true,
+        timedOut: false,
         consumed: true,
       },
       output:

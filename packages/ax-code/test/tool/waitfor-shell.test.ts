@@ -67,6 +67,28 @@ describe("tool.waitfor background shells", () => {
     expect(BackgroundNotification.pendingCount(sessionID)).toBe(0)
   })
 
+  test("reports a shell consumed by another reader as finished, not timed out", async () => {
+    WaitForInternals.pollIntervalMs = 20
+    const proc = fakeProc()
+    const info = BackgroundShell.register({
+      sessionID,
+      command: "noop",
+      description: "raced shell",
+      proc,
+    })
+
+    const pending = WaitForTool.init().then((tool) => tool.execute({ task_id: info.id, timeout: 30 }, ctx()))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    ;(proc as any).exitCode = 0
+    ;(proc as unknown as EventEmitter).emit("close")
+    BackgroundShell.read(info.id, sessionID)
+    const result = await pending
+
+    expect(result.metadata.consumed).toBe(true)
+    expect(result.metadata.timedOut).toBe(false)
+    expect(result.metadata).not.toHaveProperty("status", "running")
+  })
+
   test("returns Still running when the shell outlives the timeout", async () => {
     WaitForInternals.pollIntervalMs = 20
     const proc = fakeProc()
