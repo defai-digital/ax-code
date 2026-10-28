@@ -185,7 +185,7 @@ async function runEventStream(input: {
       response.end("true")
       return
     }
-    if (request.method === "POST" && pathname.endsWith("/message")) {
+    if (request.method === "POST" && (pathname.endsWith("/message") || pathname.endsWith("/command"))) {
       // Drain the request body first so captureBody can read every chunk.
       const chunks: Buffer[] = []
       for await (const chunk of request) chunks.push(chunk as Buffer)
@@ -884,6 +884,40 @@ test("steering flags reach the POST /message body as system, tools, and format",
   // parsed schema object is sent as the json_schema format with up to two
   // server-side retries before the CLI's own final validation runs.
   expect(body.format).toEqual({ type: "json_schema", schema, retryCount: 2 })
+})
+
+test("--command sends --append-system-prompt in the POST /command body", async () => {
+  const { messageBody, rejected } = await runEventStream({
+    ...scriptedOkExchange("ses_stream"),
+    captureBody: true,
+    extraArgs: { command: "check", "append-system-prompt": "Answer in English only" },
+  })
+
+  expect(rejected).toBeUndefined()
+  const body = JSON.parse(messageBody ?? "{}")
+  expect(body.command).toBe("check")
+  expect(body.system).toBe("Answer in English only")
+})
+
+test("--command refuses flags its route cannot carry instead of dropping them", async () => {
+  await using tmp = await tmpdir()
+  await writeFile(path.join(tmp.path, "schema.json"), JSON.stringify({ type: "object" }))
+
+  for (const [extraArgs, message] of [
+    [{ "output-schema": path.join(tmp.path, "schema.json") }, "--output-schema is not supported with --command"],
+    [
+      { sandbox: "read-only" },
+      "--sandbox is not enforced for --command on an attached server; drop --command or --sandbox",
+    ],
+  ] as const) {
+    const { lines, exitCode, messageBody } = await runEventStream({
+      captureBody: true,
+      extraArgs: { command: "check", ...extraArgs },
+    })
+    expect(exitCode).toBe(1)
+    expect(messageBody).toBeUndefined()
+    expect(JSON.parse(lines[0])).toEqual({ type: "error", error: { code: "usage", message } })
+  }
 })
 
 /**

@@ -1116,6 +1116,14 @@ export const RunCommand = cmd({
         } else {
           isolationPolicy = undefined
         }
+        // The command route carries no output format or isolation policy.
+        // Refuse instead of dropping them: a schema that is never sent cannot
+        // pass the post-run validation, and an attached server would run the
+        // command without the requested sandbox (locally the env seed applies).
+        if (args.command && outputFormat !== undefined) exitEarly("--output-schema is not supported with --command")
+        if (args.command && isolationPolicy !== undefined && (args.attach || args.runtime)) {
+          exitEarly("--sandbox is not enforced for --command on an attached server; drop --command or --sandbox")
+        }
 
         // Preserve the existing run budget for implicit input. Explicit EOF
         // input arms it earlier; arm() never restarts an active deadline.
@@ -1784,6 +1792,8 @@ export const RunCommand = cmd({
                     command: args.command,
                     arguments: message,
                     variant: args.variant,
+                    ...(appendSystemPrompt !== undefined ? { system: appendSystemPrompt } : {}),
+                    ...(files.length > 0 ? { parts: files } : {}),
                   },
                   { throwOnError: true, signal: lifecycle.signal },
                 )
