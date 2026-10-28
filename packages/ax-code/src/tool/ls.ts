@@ -54,12 +54,16 @@ function matchesIgnore(rule: IgnoreRule, entry: ListedEntry) {
   const rel = entry.path
   if (normalized.endsWith("/")) {
     const dir = normalized.slice(0, -1)
-    if (rel === dir || rel.startsWith(`${dir}/`)) return true
+    if (rel.startsWith(`${dir}/`)) return true
     // Noise directories must be skipped at ANY depth — ls.txt documents
     // them as "always skipped". A top-level-only match would let a DFS
     // expand nested node_modules/target/dist trees in monorepos and eat
     // the 100-entry budget before real source directories are listed.
-    return rel.split("/").includes(dir)
+    // A trailing-slash rule names a directory, so a plain file called
+    // `build` or `env` is still listed.
+    const segments = rel.split("/")
+    if (entry.type === "file") segments.pop()
+    return segments.includes(dir)
   }
   if (rel === normalized || rel.startsWith(`${normalized}/`)) return true
   if (minimatch(rel, normalized, { dot: true })) return true

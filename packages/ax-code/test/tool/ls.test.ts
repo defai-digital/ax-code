@@ -142,7 +142,9 @@ describe("tool.list", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Promise.all(
-          Array.from({ length: 100 }, (_, i) => fs.writeFile(path.join(dir, `f-${String(i).padStart(3, "0")}.txt`), "x")),
+          Array.from({ length: 100 }, (_, i) =>
+            fs.writeFile(path.join(dir, `f-${String(i).padStart(3, "0")}.txt`), "x"),
+          ),
         )
       },
     })
@@ -164,7 +166,9 @@ describe("tool.list", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Promise.all(
-          Array.from({ length: 101 }, (_, i) => fs.writeFile(path.join(dir, `f-${String(i).padStart(3, "0")}.txt`), "x")),
+          Array.from({ length: 101 }, (_, i) =>
+            fs.writeFile(path.join(dir, `f-${String(i).padStart(3, "0")}.txt`), "x"),
+          ),
         )
       },
     })
@@ -177,6 +181,30 @@ describe("tool.list", () => {
 
         expect(result.metadata.count).toBe(100)
         expect(result.metadata.truncated).toBe(true)
+      },
+    })
+  })
+
+  test("lists plain files named like a noise directory", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        for (const name of ["build", "env", "logs", "target"]) await fs.writeFile(path.join(dir, name), "x\n")
+        await fs.mkdir(path.join(dir, "src", "build"), { recursive: true })
+        await fs.writeFile(path.join(dir, "src", "build", "out.js"), "x\n")
+        await fs.writeFile(path.join(dir, "src", "env"), "x\n")
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const list = await ListTool.init()
+        const result = await list.execute({}, ctx)
+
+        for (const name of ["build", "env", "logs", "target"]) expect(result.output).toContain(`  ${name}\n`)
+        expect(result.output).toContain("    env\n")
+        expect(result.output).not.toContain("build/")
+        expect(result.output).not.toContain("out.js")
       },
     })
   })
