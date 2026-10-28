@@ -108,7 +108,9 @@ export async function parseSSE(
       }
       buf += chunk
 
-      while (true) {
+      // A synchronous handler may abort after the first frame in this chunk.
+      // Canceling the reader cannot retract frames already in our buffer.
+      while (!signal.aborted) {
         const boundary = SSE_BLOCK_BOUNDARY.exec(buf)
         if (!boundary) break
         const idx = boundary.index

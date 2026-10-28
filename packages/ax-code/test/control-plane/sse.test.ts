@@ -17,6 +17,16 @@ function stream(chunks: string[]) {
 }
 
 describe("control-plane/sse", () => {
+  test("stops dispatching buffered events when a handler cancels the stream", async () => {
+    const events: unknown[] = []
+    const stop = new AbortController()
+    await parseSSE(stream(['data: {"type":"first"}\n\ndata: {"type":"second"}\n\n']), stop.signal, (event) => {
+      events.push(event)
+      stop.abort()
+    })
+    expect(events).toEqual([{ type: "first" }])
+  })
+
   test("wraps text data as explicit SSE message events", () => {
     expect(sseMessageData("hello world", { id: "abc", retry: 1500 })).toEqual({
       type: "sse.message",
