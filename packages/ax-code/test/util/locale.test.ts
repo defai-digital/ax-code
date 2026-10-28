@@ -78,6 +78,18 @@ describe("Locale.truncate", () => {
 })
 
 describe("Locale.truncateMiddle", () => {
+  test("never splits a surrogate pair at either cut", () => {
+    for (const [input, max] of [
+      ["a😀bcdef", 4],
+      ["abcd😀", 4],
+      ["😀😀😀😀😀😀", 5],
+    ] as const) {
+      const out = Locale.truncateMiddle(input, max)
+      expect(out).toContain("…")
+      expect(out).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/)
+    }
+  })
+
   test("returns the string unchanged when within the limit", () => {
     expect(Locale.truncateMiddle("hello", 35)).toBe("hello")
     expect(Locale.truncateMiddle("hello", 5)).toBe("hello")

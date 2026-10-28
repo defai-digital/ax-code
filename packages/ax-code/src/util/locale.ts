@@ -74,6 +74,14 @@ export namespace Locale {
     return units.slice(0, len - 1).join("") + "\u2026"
   }
 
+  function isHighSurrogate(code: number) {
+    return code >= 0xd800 && code <= 0xdbff
+  }
+
+  function isLowSurrogate(code: number) {
+    return code >= 0xdc00 && code <= 0xdfff
+  }
+
   export function truncateMiddle(str: string, maxLength: number = 35): string {
     if (str.length <= maxLength) return str
 
@@ -81,8 +89,14 @@ export namespace Locale {
     const keepStart = Math.ceil((maxLength - ellipsis.length) / 2)
     const keepEnd = Math.floor((maxLength - ellipsis.length) / 2)
 
-    // slice(-0) returns the entire string, not empty — guard against it
-    return str.slice(0, keepStart) + ellipsis + (keepEnd > 0 ? str.slice(-keepEnd) : "")
+    // Cut on code-unit boundaries that do not split a surrogate pair: a lone
+    // half renders as U+FFFD.
+    let start = keepStart
+    if (start > 0 && isHighSurrogate(str.charCodeAt(start - 1))) start--
+    let end = str.length - keepEnd
+    if (keepEnd > 0 && end < str.length && isLowSurrogate(str.charCodeAt(end))) end++
+    // An empty tail must not become slice(-0), which is the whole string.
+    return str.slice(0, start) + ellipsis + (end < str.length ? str.slice(end) : "")
   }
 
   export function pluralize(count: number, singular: string, plural: string): string {
