@@ -1,7 +1,7 @@
 import { cmd } from "./cmd"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
-import { AccountID, Account, OrgID, PollExpired, type PollResult } from "@/account"
+import { AccountID, Account, OrgID, PollError, PollExpired, type PollResult } from "@/account"
 import { sleep } from "@/util/timeout"
 import open from "open"
 
@@ -71,7 +71,9 @@ async function loginCommand(url: string) {
   const s = prompts.spinner()
   s.start("Waiting for authorization...")
 
-  const result = await pollUntilAuthorized(login)
+  // Account.poll maps OAuth error bodies to PollError but lets a transport
+  // failure throw; report it the same way so the spinner always stops.
+  const result = await pollUntilAuthorized(login).catch((cause: unknown) => new PollError({ cause }))
   switch (result._tag) {
     case "PollSuccess":
       s.stop("Logged in as " + result.email)
