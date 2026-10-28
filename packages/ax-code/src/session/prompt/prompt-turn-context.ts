@@ -8,6 +8,7 @@ import { interruptionNotice, modelSwitchNotice, staleTodoNotice, stepsSinceTodoW
 import type { SessionID } from "../schema"
 import { SystemPrompt } from "../system"
 import { Todo } from "../todo"
+import { Config } from "../../config/config"
 
 /**
  * Per-turn dynamic context: session goal, pending todos, decision hints, and
@@ -160,11 +161,13 @@ export async function buildTurnContext(input: {
     openTodos: openTodos.length,
     stepsSinceTodoWrite: stepsSinceTodoWrite(input.messages ?? []),
   })
+  // The ablation removes only this soft nudge, never live todos or continuation guards.
+  const includeStaleTodo = staleTodo && (await Config.get()).experimental?.disable_stale_todo_notice !== true
 
   const sections = [
     ...(interruption ? [interruption] : []),
     ...(modelSwitch ? [modelSwitch] : []),
-    ...(staleTodo ? [staleTodo] : []),
+    ...(includeStaleTodo ? [staleTodo] : []),
     ...(decisionHints ? [decisionHints] : []),
     ...(intelligenceNudge.active ? [intelligenceNudge.text] : []),
     ...(goalSection ? [goalSection] : []),

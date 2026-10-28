@@ -25,6 +25,7 @@ import { preparePromptRequest } from "../../src/session/prompt/prompt-request-bu
 import { systemPrompt } from "../../src/session/prompt/prompt-system"
 import { ReasoningPolicy } from "../../src/control-plane/reasoning-policy"
 import PROMPT_CRAFT from "../../src/session/prompt/craft.txt"
+import PROMPT_CRAFT_SLIM from "../../src/session/prompt/craft-slim.txt"
 import PROMPT_AX_ENGINE from "../../src/session/prompt/ax-engine.txt"
 
 describe("session.llm.hasToolCalls", () => {
@@ -1434,9 +1435,13 @@ describe("session.llm.stream", () => {
 
   test.each([
     { systemProfile: undefined, customPrompt: undefined },
+    { systemProfile: undefined, customPrompt: undefined, slim: false },
+    { systemProfile: undefined, customPrompt: undefined, slim: true },
     { systemProfile: "compact" as const, customPrompt: undefined },
+    { systemProfile: "compact" as const, customPrompt: undefined, slim: true },
     { systemProfile: "compact" as const, customPrompt: "Retain this custom agent instruction verbatim." },
-  ])("sends the selected AX Engine system profile without thinking: %j", async ({ systemProfile, customPrompt }) => {
+    { systemProfile: undefined, customPrompt: "Retain this custom agent instruction verbatim.", slim: true },
+  ])("sends AX Engine profile: %j", async ({ systemProfile, customPrompt, slim }) => {
     const repositoryInstruction = "Keep repository editorial constraints verbatim."
     const configuredInstruction = "Do not omit user-specified qualifications."
     const providerID = "ax-engine"
@@ -1478,6 +1483,7 @@ describe("session.llm.stream", () => {
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             enabled_providers: [providerID],
             instructions: ["project-rules.md"],
+            experimental: { slim_prompt: slim },
             provider: {
               [providerID]: {
                 options: {
@@ -1569,7 +1575,9 @@ describe("session.llm.stream", () => {
         expect(system[0].content).toContain("Answer the user's clear creative request directly.")
         expect(system[0].content).toBe(
           [
-            ...(customPrompt ? [customPrompt] : [PROMPT_AX_ENGINE, ...(systemProfile ? [] : [PROMPT_CRAFT])]),
+            ...(customPrompt
+              ? [customPrompt]
+              : [PROMPT_AX_ENGINE, ...(systemProfile ? [] : [slim ? PROMPT_CRAFT_SLIM : PROMPT_CRAFT])]),
             ...prepared.system,
             user.system,
           ].join("\n"),

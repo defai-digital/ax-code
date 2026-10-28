@@ -6265,6 +6265,14 @@
           "description": "Project changing task reminders after stable request history for cache experiments",
           "type": "boolean"
         },
+        "slim_prompt": {
+          "description": "Use shorter common craft guidance while preserving model-family and required instructions (default: off)",
+          "type": "boolean"
+        },
+        "disable_stale_todo_notice": {
+          "description": "Suppress only the periodic stale-todo soft reminder (default: off)",
+          "type": "boolean"
+        },
         "read_only_recipes": {
           "description": "Enable bounded declarative read-only tool recipes",
           "type": "boolean"

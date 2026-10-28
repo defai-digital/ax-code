@@ -13,6 +13,7 @@ import PROMPT_KIMI from "./prompt/kimi.txt"
 import PROMPT_META from "./prompt/meta.txt"
 import PROMPT_ORNITH from "./prompt/ornith.txt"
 import PROMPT_CRAFT from "./prompt/craft.txt"
+import PROMPT_CRAFT_SLIM from "./prompt/craft-slim.txt"
 
 import PROMPT_TRINITY from "./prompt/trinity.txt"
 import type { Provider } from "@/provider/provider"
@@ -84,11 +85,9 @@ export namespace SystemPrompt {
 
   export type Profile = "default" | "compact"
 
-  function withCraft(prompt: string) {
-    return [prompt, PROMPT_CRAFT]
-  }
-
-  export function provider(model: Provider.Model, profile: Profile = "default") {
+  export function provider(model: Provider.Model, profile: Profile = "default", slim = false) {
+    // Only common guidance is ablated; family-specific tool and identity rules stay intact.
+    const withCraft = (prompt: string) => [prompt, slim ? PROMPT_CRAFT_SLIM : PROMPT_CRAFT]
     // Ornith 35B (local / ax-engine) and 397B (cloud / Alibaba PAI) share one
     // family prompt. Match the model id before the ax-engine provider blanket.
     if (ProviderTransform.isOrnithFamily(model)) return withCraft(PROMPT_ORNITH)
@@ -121,9 +120,10 @@ export namespace SystemPrompt {
     system: string[]
     userSystem?: string
     profile?: Profile
+    slim?: boolean
   }) {
     return [
-      ...(input.agent.prompt ? [input.agent.prompt] : provider(input.model, input.profile)),
+      ...(input.agent.prompt ? [input.agent.prompt] : provider(input.model, input.profile, input.slim)),
       ...input.system,
       ...(input.userSystem ? [input.userSystem] : []),
     ].filter((item) => item.length > 0)

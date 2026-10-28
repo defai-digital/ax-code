@@ -653,6 +653,52 @@ describe("ADR-214 request-only notices in turn context", () => {
     } as any as MessageV2.WithParts
   }
 
+  test.each([undefined, false, true])(
+    "stale-todo ablation preserves live context and external-state notices: %s",
+    async (disabled) => {
+      await using tmp = await tmpdir({
+        git: true,
+        config: { experimental: { disable_stale_todo_notice: disabled } },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          await SessionGoal.create({ sessionID: session.id, objective: "Preserve goal acceptance" })
+          const todos: Todo.Info[] = [{ content: "still open", status: "in_progress", priority: "high" }]
+          Todo.update({ sessionID: session.id, todos })
+          const messages = [
+            modelUserMessage("u1", session.id, "prov-a", "model-a"),
+            ...Array.from({ length: 5 }, (_, i) =>
+              modelAssistantMessage(`a${i}`, session.id, {
+                providerID: "prov-a",
+                modelID: "model-a",
+                aborted: i === 4,
+              }),
+            ),
+            modelUserMessage("u2", session.id, "prov-b", "model-b"),
+          ]
+          const before = structuredClone(messages)
+          const result = await buildTurnContext({
+            messages,
+            sessionID: session.id,
+            decisionHints: async () => undefined,
+          })
+          expect(result?.includes("<stale_todos")).toBe(disabled !== true)
+          expect(result).toContain("<turn_interrupted>")
+          expect(result).toContain('<model_switch previous="prov-a/model-a" current="prov-b/model-b">')
+          expect(result).toContain('<pending_todos count="1">')
+          expect(result).toContain("[IN_PROGRESS] still open")
+          expect(result).toContain('<session_goal status="active"')
+          expect(Todo.active(session.id)).toEqual(todos)
+          expect((await SessionGoal.get(session.id))?.status).toBe("active")
+          expect(messages).toEqual(before)
+          await Session.remove(session.id)
+        },
+      })
+    },
+  )
+
   test("renders the interruption marker on the first request after an aborted turn", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

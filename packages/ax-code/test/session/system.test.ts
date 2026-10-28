@@ -12,6 +12,8 @@ import { tmpdir } from "../fixture/fixture"
 import PROMPT_KIMI from "../../src/session/prompt/kimi.txt"
 import PROMPT_DEFAULT from "../../src/session/prompt/default.txt"
 import PROMPT_CRAFT from "../../src/session/prompt/craft.txt"
+import PROMPT_CRAFT_SLIM from "../../src/session/prompt/craft-slim.txt"
+import type { Provider } from "../../src/provider/provider"
 import PROMPT_ORNITH from "../../src/session/prompt/ornith.txt"
 import PROMPT_AX_ENGINE from "../../src/session/prompt/ax-engine.txt"
 import PROMPT_BEAST from "../../src/session/prompt/beast.txt"
@@ -22,6 +24,37 @@ import PROMPT_META from "../../src/session/prompt/meta.txt"
 import { git } from "../../src/util/git"
 
 describe("session.system", () => {
+  test.each([
+    ["openai", "gpt-5"],
+    ["anthropic", "claude-sonnet-5"],
+    ["ax-engine", "qwen3.8-27b-axq-6bit"],
+    ["grok-build-cli", "grok-4.6"],
+    ["muse-cli", "muse-spark"],
+  ])("slim guidance preserves the selected family and required instructions for %s/%s", (providerID, id) => {
+    const model = { id, providerID, api: { id } } as Provider.Model
+    const input = { agent: {}, model, system: ["Required project instruction."], userSystem: "User constraint." }
+    const baseline = SystemPrompt.request(input)
+    expect(SystemPrompt.request({ ...input, slim: false })).toEqual(baseline)
+    const slim = SystemPrompt.request({ ...input, slim: true })
+    expect(slim).toEqual([baseline[0], PROMPT_CRAFT_SLIM, ...input.system, input.userSystem])
+    expect(PROMPT_CRAFT_SLIM.length).toBeLessThan(PROMPT_CRAFT.length)
+  })
+
+  test("slim guidance respects custom agents and the compact AX Engine omission", () => {
+    const model = { id: "qwen", providerID: "ax-engine", api: { id: "qwen" } } as Provider.Model
+    const input = { model, system: ["Required rules."], userSystem: "User constraint.", slim: true }
+    expect(SystemPrompt.request({ ...input, agent: { prompt: "Custom agent rules." } })).toEqual([
+      "Custom agent rules.",
+      ...input.system,
+      input.userSystem,
+    ])
+    expect(SystemPrompt.request({ ...input, agent: {}, profile: "compact" })).toEqual([
+      PROMPT_AX_ENGINE,
+      ...input.system,
+      input.userSystem,
+    ])
+  })
+
   test("keeps workflow rules before changing Git state and the local date", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

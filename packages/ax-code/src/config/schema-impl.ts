@@ -1346,6 +1346,16 @@ export const Info = z
           .boolean()
           .optional()
           .describe("Project changing task reminders after stable request history for cache experiments"),
+        slim_prompt: z
+          .boolean()
+          .optional()
+          .describe(
+            "Use shorter common craft guidance while preserving model-family and required instructions (default: off)",
+          ),
+        disable_stale_todo_notice: z
+          .boolean()
+          .optional()
+          .describe("Suppress only the periodic stale-todo soft reminder (default: off)"),
         read_only_recipes: z.boolean().optional().describe("Enable bounded declarative read-only tool recipes"),
         context_tools: z
           .boolean()

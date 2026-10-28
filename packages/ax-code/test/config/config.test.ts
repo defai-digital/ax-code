@@ -80,6 +80,19 @@ test("isolation schema preserves omitted fields for layered config", () => {
   })
 })
 
+test("harness ablations are independent optional booleans", () => {
+  expect(Config.Info.parse({ experimental: {} }).experimental).toEqual({})
+  for (const slim_prompt of [false, true]) {
+    for (const disable_stale_todo_notice of [false, true]) {
+      const experimental = { slim_prompt, disable_stale_todo_notice }
+      expect(Config.Info.parse({ experimental }).experimental).toEqual(experimental)
+    }
+  }
+  for (const key of ["slim_prompt", "disable_stale_todo_notice"]) {
+    expect(Config.Info.safeParse({ experimental: { [key]: "true" } }).success).toBe(false)
+  }
+})
+
 test("getFresh reloads modes after mid-session ax-code.json edit", async () => {
   await using tmp = await tmpdir()
   await writeConfig(tmp.path, {

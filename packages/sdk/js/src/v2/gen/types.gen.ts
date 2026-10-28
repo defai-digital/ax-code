@@ -876,6 +876,14 @@ export type Config = {
      */
     tail_reminders?: boolean
     /**
+     * Use shorter common craft guidance while preserving model-family and required instructions (default: off)
+     */
+    slim_prompt?: boolean
+    /**
+     * Suppress only the periodic stale-todo soft reminder (default: off)
+     */
+    disable_stale_todo_notice?: boolean
+    /**
      * Enable bounded declarative read-only tool recipes
      */
     read_only_recipes?: boolean

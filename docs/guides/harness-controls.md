@@ -28,6 +28,35 @@ Enable each experiment independently in your AX Code configuration:
 All four options default to off. Measure task success and elapsed time with your model before adopting them together.
 They retain existing tool permissions and isolation settings. See [performance diagnostics](performance.md).
 
+### Independent prompt ablations
+
+Two additional experiments can be enabled separately in `ax-code.json`:
+
+```json
+{
+  "experimental": {
+    "slim_prompt": true,
+    "disable_stale_todo_notice": false
+  }
+}
+```
+
+Both default to off; omit them or set them to `false` to keep the baseline. `slim_prompt` replaces only the common
+craft guidance with a shorter version. Model-family prompts, custom-agent prompts, required project/user instructions,
+verification protocols and execution controls remain intact. Compact AX Engine turns still omit craft entirely.
+
+`disable_stale_todo_notice` suppresses only the periodic reminder to update stale todos. It preserves live pending
+todos, goal context, interruption/model-switch notices, continuation limits, permission checks and verification gates.
+The two flags do not enable each other. Desktop uses the same runtime configuration; no separate Desktop harness
+setting is required.
+
+Evaluate baseline, slim-prompt-only and stale-notice-disabled-only runs separately, with the same repository revision,
+task, model, permissions and cache conditions. Include frontier API, local/smaller-model and CLI-provider cohorts.
+Compare task success, actual verification, false completion, recovery, total turns and elapsed time alongside exact
+provider-reported input/output/cache tokens. Existing token-ledger measurements distinguish measured from estimated
+usage; label per-block estimates and unavailable CLI usage honestly. Fewer prompt characters alone do not prove a
+quality, token or speed improvement. Keep defaults until matched live evaluation supports promotion.
+
 `context_recovery` exposes `context_recover` and adds source pointers to successful compaction summaries. The tool
 accepts a keyword, message ID, optional part ID, and a result limit. It only reads the current session, including
 pre-compaction history, and excludes reverted material, hidden reasoning, and ignored or synthetic text. It returns

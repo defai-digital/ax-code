@@ -313,6 +313,7 @@ export namespace LLM {
       system: input.system,
       userSystem: input.user.system,
       profile: input.systemProfile,
+      slim: cfg.experimental?.slim_prompt === true,
     }).join("\n")
     if (joined) {
       system.push(joined)
