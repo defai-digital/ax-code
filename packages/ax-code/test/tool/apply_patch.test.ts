@@ -1064,6 +1064,67 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("a move onto a hard link of the source replaces it like any destination", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const source = path.join(fixture.path, "a.txt")
+        const dest = path.join(fixture.path, "b.txt")
+        await writeAndTrack(source, "old\n")
+        await fs.link(source, dest)
+        // Linking bumps the shared inode's ctime; re-read both names.
+        await FileTime.read(SESSION, source)
+        await FileTime.read(SESSION, dest)
+
+        await execute(
+          { patchText: "*** Begin Patch\n*** Update File: a.txt\n*** Move to: b.txt\n@@\n-old\n+new\n*** End Patch" },
+          ctx,
+        )
+        const names = await fs.readdir(fixture.path)
+        expect(names).not.toContain("a.txt")
+        expect(await fs.readFile(dest, "utf-8")).toBe("new\n")
+      },
+    })
+  })
+
+  test("rollback restores both endpoints of a move onto a hard link", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const source = path.join(fixture.path, "a.txt")
+        const dest = path.join(fixture.path, "b.txt")
+        const second = path.join(fixture.path, "second.txt")
+        await writeAndTrack(source, "old\n")
+        await fs.link(source, dest)
+        // Linking bumps the shared inode's ctime; re-read both names.
+        await FileTime.read(SESSION, source)
+        await FileTime.read(SESSION, dest)
+        await writeAndTrack(second, "second\n")
+
+        const originalWrite = Filesystem.write.bind(Filesystem)
+        const writeSpy = vi.spyOn(Filesystem, "write").mockImplementation(async (p: string, c: any, m?: number) => {
+          if (p === second) throw new Error("injected failure")
+          return originalWrite(p, c, m)
+        })
+        try {
+          const patchText =
+            "*** Begin Patch\n*** Update File: a.txt\n*** Move to: b.txt\n@@\n-old\n+new\n*** Update File: second.txt\n@@\n-second\n+SECOND\n*** End Patch"
+          await expect(execute({ patchText }, ctx)).rejects.toThrow("injected failure")
+          expect(await fs.readFile(source, "utf-8")).toBe("old\n")
+          expect(await fs.readFile(dest, "utf-8")).toBe("old\n")
+        } finally {
+          writeSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("rollback restores the name and content of a case-only rename", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

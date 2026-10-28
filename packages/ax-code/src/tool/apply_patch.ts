@@ -33,6 +33,10 @@ const log = Log.create({ service: "tool.apply_patch" })
  */
 async function sameFile(a: string, b: string): Promise<boolean> {
   if (a === b) return true
+  // Only a case-only (or normalization-only) rename names one directory entry
+  // twice. Hard links share an inode too, but they are separate entries whose
+  // move and rollback must treat the destination as its own file.
+  if (a.normalize("NFC").toLowerCase() !== b.normalize("NFC").toLowerCase()) return false
   try {
     const [first, second] = await Promise.all([fs.stat(a), fs.stat(b)])
     return first.dev === second.dev && first.ino === second.ino
