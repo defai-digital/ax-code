@@ -272,6 +272,14 @@ describe("tui renderer profile", () => {
     expect(supportsTuiTerminalProgress({})).toBe(false)
   })
 
+  test("current terminal identity overrides inherited progress markers", () => {
+    for (const termProgram of ["Akitty", "iTerm.app", "Apple_Terminal", "vscode"]) {
+      for (const inherited of [{ WT_SESSION: "outer" }, { ConEmuANSI: "ON" }, { TERM: "xterm-ghostty" }]) {
+        expect(supportsTuiTerminalProgress({ ...inherited, TERM_PROGRAM: termProgram })).toBe(false)
+      }
+    }
+  })
+
   describe("terminal progress", () => {
     beforeEach(() => {
       // The support gate defaults to reading process.env; force a supported

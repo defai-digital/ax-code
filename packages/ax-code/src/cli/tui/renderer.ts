@@ -236,13 +236,14 @@ export function clearTuiTerminalTitle(
 export const TUI_TERMINAL_PROGRESS_KEEPALIVE_MS = 1_000
 
 export function supportsTuiTerminalProgress(env: NodeJS.ProcessEnv = process.env) {
+  const termProgram = env["TERM_PROGRAM"] ?? ""
+  // A nested terminal's explicit identity overrides inherited host markers.
+  if (termProgram.trim()) return termProgram === "WezTerm" || termProgram === "ghostty"
   if ((env["WT_SESSION"] ?? "").length > 0) return true
   if (env["ConEmuANSI"] === "ON") return true
-  const termProgram = env["TERM_PROGRAM"] ?? ""
   // Allowlist only: AkiTTY (TERM_PROGRAM=Akitty) has no OSC 9;4 support, so
   // it must stay out even though it shares the Ghostty-style advanced profile.
-  if (termProgram === "WezTerm" || isGhosttyTerminal(env)) return true
-  return false
+  return isGhosttyTerminal(env)
 }
 
 let terminalProgressActive = false

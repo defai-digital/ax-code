@@ -29,6 +29,14 @@ beforeEach(() => {
 })
 
 describe("supportsTerminalNotification", () => {
+  test("current terminal identity overrides inherited notification markers", () => {
+    for (const termProgram of ["Akitty", "Apple_Terminal", "vscode"]) {
+      for (const term of ["xterm-kitty", "xterm-ghostty"]) {
+        expect(supportsTerminalNotification({ TERM_PROGRAM: termProgram, TERM: term })).toBe(false)
+      }
+    }
+  })
+
   test("allows known TERM_PROGRAM values", () => {
     for (const termProgram of ["iTerm.app", "WezTerm", "ghostty", "WarpTerminal"]) {
       expect(supportsTerminalNotification({ TERM_PROGRAM: termProgram })).toBe(true)

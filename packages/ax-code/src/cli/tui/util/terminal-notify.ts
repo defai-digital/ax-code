@@ -40,7 +40,8 @@ function addFiredKey(key: string) {
 }
 
 export function supportsTerminalNotification(env: NotifyEnv = process.env) {
-  if (env.TERM_PROGRAM && SUPPORTED_TERM_PROGRAMS.has(env.TERM_PROGRAM)) return true
+  // TERM may describe an outer terminal; explicit program identity wins.
+  if (env.TERM_PROGRAM?.trim()) return SUPPORTED_TERM_PROGRAMS.has(env.TERM_PROGRAM)
   if (env.TERM && SUPPORTED_TERMS.has(env.TERM)) return true
   return false
 }
