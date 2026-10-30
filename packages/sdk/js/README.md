@@ -16,7 +16,7 @@ The SDK is distributed through **GitHub Packages** as the public `@defai-digital
 Set `NODE_AUTH_TOKEN` through your secret manager to a classic GitHub PAT with `read:packages` and access to the package. Never commit a token. Other npm scopes continue to use their existing registry.
 
 ```bash
-pnpm add @defai-digital/ax-code-sdk@2.6.55
+pnpm add @defai-digital/ax-code-sdk@2.6.56
 ```
 
 For GitHub Actions, declare `permissions: packages: read` and pass `${{ secrets.GITHUB_TOKEN }}` as `NODE_AUTH_TOKEN` for the install step. Public npm packages on GitHub Packages still require registry authentication; they do not require a private-package access grant. Publication uses the dedicated `SDK_PACKAGES_TOKEN` secret and verifies that package visibility remains public.
@@ -281,7 +281,7 @@ This package is the first-party TypeScript/JavaScript SDK. For Python, Go, Java,
 
 ## Migration from `@ax-code/sdk` 1.4.0
 
-| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.6.55)                                  |
+| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.6.56)                                  |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `import { createAxCode } from "@ax-code/sdk"`             | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"` |
 | `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createHeadlessClient } from "@defai-digital/ax-code-sdk/headless"` |

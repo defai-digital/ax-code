@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.4] - 2026-10-30
+
+### Fixed
+
+- Give explicit terminal identity precedence over inherited progress and notification markers, preventing unsupported OSC sequences in nested terminals.
+- Include AX TUI chart and spinner distributions in clean checkouts.
+
+### Changed
+
+- Integrate the MIT-licensed AX TUI framework into the workspace while preserving its public package exports.
+- Recognize AkiTTY as an advanced terminal and keep unsupported notification and progress features disabled.
+- Make idle Wiki local embeddings opt-in and allow MiniMax M3.1 Flash page generation up to 300 seconds.
+- Add opt-in harness prompt and context experiments, with SDK 2.6.56 configuration types.
+
 ## [7.30.3] - 2026-10-28
 
 ### Fixed

@@ -15,7 +15,7 @@ AX Code is an open-source coding-agent runtime for reviewable, reversible work. 
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![Release v7.30.3](https://img.shields.io/badge/Release-v7.30.3-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.30.3)
+[![Release v7.30.4](https://img.shields.io/badge/Release-v7.30.4-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.30.4)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows AMD64](<https://img.shields.io/badge/Windows-AMD64%20(x64)-0078D4?logo=windows&logoColor=white>)](https://github.com/defai-digital/ax-code/releases)
 [![Ubuntu 24.04+ amd64/arm64](https://img.shields.io/badge/Ubuntu%2024.04%2B-amd64%20%2B%20arm64-E95420?logo=ubuntu&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
@@ -541,16 +541,16 @@ reading this README from cold context). Internal agents working in this repo sho
 
 pnpm + Turbo monorepo.
 
-| Path                 | What it owns                                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `packages/ax-code/`  | Core runtime: CLI, terminal TUI (SolidJS over `packages/ax-tui`), Hono HTTP server, headless runner |
+| Path                 | What it owns                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `packages/ax-code/`  | Core runtime: CLI, terminal TUI (SolidJS over `packages/ax-tui`), Hono HTTP server, headless runner            |
 | `packages/ax-tui/`   | MIT terminal UI framework (`@defai-digital/ax-tui`): Solid reconciler, Zig renderer, vendored native libraries |
-| `packages/sdk/js/`   | Generated TypeScript SDK; the contract is owned by the server routes under `packages/ax-code/src/server/`           |
-| `crates/`            | Rust N-API addons: index, fs, diff, parser, terminal, daemon, bench                                                 |
-| `packages/ax-wiki/`  | Wiki compiler; keep publishable (no `"private": true`)                                                              |
-| `docs/`              | Public, user-facing documentation only — PRDs/ADRs/specs belong in `.internal/`                                     |
-| `script/`            | Repo scripts: format, structure, release, SDK generation, repo-structure checks                                     |
-| `.github/workflows/` | CI: `ax-code-ci`, `release`, `repo-structure`, `codeql`, `models-drift`, `sdk-github-packages`, and more            |
+| `packages/sdk/js/`   | Generated TypeScript SDK; the contract is owned by the server routes under `packages/ax-code/src/server/`      |
+| `crates/`            | Rust N-API addons: index, fs, diff, parser, terminal, daemon, bench                                            |
+| `packages/ax-wiki/`  | Wiki compiler; keep publishable (no `"private": true`)                                                         |
+| `docs/`              | Public, user-facing documentation only — PRDs/ADRs/specs belong in `.internal/`                                |
+| `script/`            | Repo scripts: format, structure, release, SDK generation, repo-structure checks                                |
+| `.github/workflows/` | CI: `ax-code-ci`, `release`, `repo-structure`, `codeql`, `models-drift`, `sdk-github-packages`, and more       |
 
 ### Verify before claiming done
 
