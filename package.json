@@ -115,7 +115,7 @@
       "vite@>=8.0.0 <8.1.6": "8.1.6",
       "@ai-sdk/provider-utils@>=4.0.0 <4.0.33": "4.0.33",
       "serialize-javascript": ">=7.0.5",
-      "seroval": ">=1.6.3",
+      "seroval": ">=1.6.11",
       "source-map-js@<1.2.2": "1.2.2",
       "diff@<8.0.3": "8.0.3",
       "undici@<6.29.1": "6.29.1",

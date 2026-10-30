@@ -149,7 +149,7 @@ overrides:
   vite@>=8.0.0 <8.1.6: 8.1.6
   '@ai-sdk/provider-utils@>=4.0.0 <4.0.33': 4.0.33
   serialize-javascript: '>=7.0.5'
-  seroval: '>=1.6.3'
+  seroval: '>=1.6.11'
   source-map-js@<1.2.2: 1.2.2
   diff@<8.0.3: 8.0.3
   undici@<6.29.1: 6.29.1
@@ -5378,11 +5378,11 @@ packages:
     resolution: {integrity: sha512-kiDK/Tb8IWZ61WEU8pA2PDmAuw37gKph9Y77OZlD56mg0Y2g0Bg7gZ1HeHhs5d40w+nRoUq/wj08V26ilbez9g==}
     engines: {node: '>=10'}
     peerDependencies:
-      seroval: '>=1.6.3'
+      seroval: '>=1.6.11'
 
-  seroval@1.6.8:
-    resolution: {integrity: sha512-HlSgSAkTk4EqHcje1ptJjfZi1YDv5KbhVJ/d3P7T/nAXua2VmDu+AKDX5VTdFfZf48nDkWB2TKYt0DrCSa+3wg==}
-    engines: {node: '>=10'}
+  seroval@1.7.5:
+    resolution: {integrity: sha512-UdNgpHdq0gVpme5JdQF+S3jNscnjFr4NTwUWOc1qcOa8OuWZmbV0+YX2hsqxkUZshBpHnpxDZfAKVZG2ugbrJA==}
+    engines: {node: '>=20'}
 
   serve-static@2.2.1:
     resolution: {integrity: sha512-xRXBn0pPqQTVQiC8wyQrKs2MOlX24zQ0POGaj0kultvoOCstBQM5yvOhAVSUwOMjQtTvsPWoNCHfPGwaaQJhTw==}
@@ -10379,11 +10379,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  seroval-plugins@1.6.9(seroval@1.6.8):
+  seroval-plugins@1.6.9(seroval@1.7.5):
     dependencies:
-      seroval: 1.6.8
+      seroval: 1.7.5
 
-  seroval@1.6.8: {}
+  seroval@1.7.5: {}
 
   serve-static@2.2.1:
     dependencies:
@@ -10487,8 +10487,8 @@ snapshots:
   solid-js@1.9.17:
     dependencies:
       csstype: 3.2.3
-      seroval: 1.6.8
-      seroval-plugins: 1.6.9(seroval@1.6.8)
+      seroval: 1.7.5
+      seroval-plugins: 1.6.9(seroval@1.7.5)
 
   sonic-boom@4.2.1:
     dependencies:

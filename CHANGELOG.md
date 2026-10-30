@@ -13,6 +13,10 @@ changes belong to AX Coder.
 - Give explicit terminal identity precedence over inherited progress and notification markers, preventing unsupported OSC sequences in nested terminals.
 - Include AX TUI chart and spinner distributions in clean checkouts.
 
+### Security
+
+- Require Seroval 1.6.11 or newer to fix unsafe typed-array constructor and RegExp serialization.
+
 ### Changed
 
 - Integrate the MIT-licensed AX TUI framework into the workspace while preserving its public package exports.
