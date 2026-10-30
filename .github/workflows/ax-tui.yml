@@ -44,7 +44,12 @@ jobs:
           checkout: "false"
 
       - name: Install deps
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # Framework terminal checks use node-pty, not the application's patched
+      # node-pty-prebuilt-multiarch (which has its own compiler qualification).
+      - name: Prepare framework PTY
+        run: pnpm --dir packages/ax-tui rebuild node-pty
 
       - name: Require native FFI support for runtime regressions
         run: node --experimental-ffi -e "require('node:ffi')"

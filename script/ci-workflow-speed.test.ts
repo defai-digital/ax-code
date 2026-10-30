@@ -24,6 +24,12 @@ function githubAutomationSources(directory = ".github"): string[] {
 }
 
 describe("CI workflow speed policy", () => {
+  test("framework CI builds only its own PTY dependency", () => {
+    const workflow = readFileSync(".github/workflows/ax-tui.yml", "utf8")
+    expect(workflow).toContain("pnpm install --frozen-lockfile --ignore-scripts")
+    expect(workflow).toContain("pnpm --dir packages/ax-tui rebuild node-pty")
+  })
+
   test("registry authentication stays scoped to GitHub Packages", () => {
     const npmrc = readFileSync(".npmrc", "utf8")
     expect(npmrc).toContain("@defai-digital:registry=https://npm.pkg.github.com")
