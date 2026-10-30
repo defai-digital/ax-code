@@ -42,6 +42,8 @@ describe("supportsTerminalNotification", () => {
 
   test("rejects unknown terminals", () => {
     expect(supportsTerminalNotification({ TERM_PROGRAM: "Apple_Terminal", TERM: "xterm-256color" })).toBe(false)
+    // AkiTTY has no OSC 9, so it must take the BEL fallback.
+    expect(supportsTerminalNotification({ TERM_PROGRAM: "Akitty", TERM: "xterm-256color" })).toBe(false)
     expect(supportsTerminalNotification({})).toBe(false)
   })
 })

@@ -17,7 +17,7 @@ export interface VisualCapability {
 // Terminals that render 24-bit color but do not always advertise it via
 // COLORTERM. Allowlist-only — never probe the terminal (escape-sequence
 // capability probes are a known hang class, see renderer.ts).
-const TRUECOLOR_TERM_PROGRAMS = new Set(["WezTerm", "iTerm.app", "ghostty", "vscode"])
+const TRUECOLOR_TERM_PROGRAMS = new Set(["WezTerm", "iTerm.app", "ghostty", "Akitty", "vscode"])
 
 export function resolveVisualCapability(input: {
   advancedTerminal: boolean

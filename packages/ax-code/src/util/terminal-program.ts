@@ -6,6 +6,15 @@ export function isGhosttyTerminal(env: NodeJS.ProcessEnv = process.env): boolean
   return (env["TERM"] ?? "") === "xterm-ghostty"
 }
 
+/**
+ * AkiTTY (defai-digital/akitty) exports TERM_PROGRAM=Akitty and leaves TERM at
+ * xterm-256color, so the program identity is the only marker. Since 0.8.0 it
+ * answers the Kitty graphics and keyboard probes, which the renderer detects
+ * at startup; older builds fail the probes and fall back to text. It never
+ * supports sixel, PNG/file image transfer, or OSC 9/9;4.
+ */
+const ADVANCED_TERM_PROGRAMS = new Set(["ghostty", "Akitty"])
+
 function hasValue(env: NodeJS.ProcessEnv, name: string): boolean {
   return (env[name]?.trim().length ?? 0) > 0
 }
@@ -46,9 +55,10 @@ function isVteTerminal(env: NodeJS.ProcessEnv): boolean {
 
 /**
  * Advanced TUI profile: explicit env wins, then direct terminal identity.
- * Ghostty, Windows Terminal, and VTE hosts (including GNOME Terminal) opt in
- * automatically. Unknown, remote, and multiplexed terminals stay compatible.
- * This selection never grants pixel graphics or Nerd Font capabilities.
+ * Ghostty, AkiTTY, Windows Terminal, and VTE hosts (including GNOME Terminal)
+ * opt in automatically. Unknown, remote, and multiplexed terminals stay
+ * compatible. This selection never grants pixel graphics or Nerd Font
+ * capabilities.
  */
 export function resolveTuiAdvancedTerminal(env: NodeJS.ProcessEnv = process.env): boolean {
   const parsed = Env.parseBoolean(env["AX_CODE_TUI_ADVANCED_TERMINAL"])
@@ -56,6 +66,6 @@ export function resolveTuiAdvancedTerminal(env: NodeJS.ProcessEnv = process.env)
   if (requiresCompatibleTerminal(env)) return false
   // A nested terminal's program identity wins over inherited host markers,
   // including xterm-ghostty left behind by an outer Ghostty session.
-  if (hasValue(env, "TERM_PROGRAM")) return env["TERM_PROGRAM"] === "ghostty"
+  if (hasValue(env, "TERM_PROGRAM")) return ADVANCED_TERM_PROGRAMS.has(env["TERM_PROGRAM"] ?? "")
   return isGhosttyTerminal(env) || isWindowsTerminal(env) || isVteTerminal(env)
 }

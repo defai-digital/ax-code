@@ -88,6 +88,7 @@ describe("resolveVisualCapability", () => {
   test("detects truecolor from allowlisted terminals", () => {
     expect(resolveVisualCapability({ ...base, term: "xterm-kitty" }).truecolor).toBe(true)
     expect(resolveVisualCapability({ ...base, termProgram: "WezTerm" }).truecolor).toBe(true)
+    expect(resolveVisualCapability({ ...base, termProgram: "Akitty" }).truecolor).toBe(true)
     expect(resolveVisualCapability({ ...base, termProgram: "Apple_Terminal" }).truecolor).toBe(false)
   })
 

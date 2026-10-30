@@ -44,6 +44,7 @@ const TERMINAL_APP_NAMES = new Set([
   "WezTerm",
   "Alacritty",
   "Ghostty",
+  "Akitty",
   "kitty",
   "Kitty",
   "Warp",

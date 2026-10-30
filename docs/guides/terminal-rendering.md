@@ -13,12 +13,21 @@ profile controls terminal setup, not monitor resolution or font sharpness.
 | Windows Terminal, including Ubuntu in WSL             | Advanced          | Nonempty `WT_SESSION`, with no conflicting `TERM_PROGRAM`                                           |
 | GNOME Terminal and other VTE hosts                    | Advanced          | Positive decimal `VTE_VERSION`, `TERM=xterm` or `xterm-256color`, and no conflicting `TERM_PROGRAM` |
 | Ghostty                                               | Advanced          | `TERM_PROGRAM=ghostty` or `TERM=xterm-ghostty`                                                      |
+| AkiTTY (macOS)                                        | Advanced          | `TERM_PROGRAM=Akitty`                                                                               |
 | macOS Terminal.app                                    | Compatible        | `TERM_PROGRAM=Apple_Terminal`                                                                       |
 | Unknown terminals, SSH/mosh, tmux, screen, and Zellij | Compatible        | Conservative fallback                                                                               |
 
 An explicit `TERM_PROGRAM` takes precedence over inherited outer-terminal
 markers. Limited terminal types such as `dumb`, `linux`, and `vt100` also stay
 compatible. Ubuntu or WSL identity alone does not enable the advanced profile.
+
+AkiTTY keeps `TERM=xterm-256color` and `COLORTERM=truecolor`, so its program
+identity is the only marker. AkiTTY 0.8.0 and later answers the Kitty graphics
+and Kitty keyboard probes, so pixel animations and enhanced keys work; the
+renderer detects both at startup. Older builds fail the probes and fall back to
+text. AkiTTY does not support sixel, PNG or file image transfer, or OSC 9 and
+OSC 9;4, so Nerd Font glyphs stay off unless configured and notifications use
+BEL.
 
 The advanced profile uses the alternate screen, a native rendering thread, and
 terminal capability detection. The compatible profile uses the main screen

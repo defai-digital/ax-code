@@ -267,6 +267,8 @@ describe("tui renderer profile", () => {
     expect(supportsTuiTerminalProgress({ TERM: "xterm-ghostty" })).toBe(true)
     expect(supportsTuiTerminalProgress({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" })).toBe(false)
     expect(supportsTuiTerminalProgress({ TERM_PROGRAM: "Apple_Terminal" })).toBe(false)
+    // AkiTTY lacks OSC 9;4; sending it would risk a bogus "4;3" notification.
+    expect(supportsTuiTerminalProgress({ TERM_PROGRAM: "Akitty", TERM: "xterm-256color" })).toBe(false)
     expect(supportsTuiTerminalProgress({})).toBe(false)
   })
 

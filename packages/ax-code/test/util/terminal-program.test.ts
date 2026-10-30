@@ -4,6 +4,7 @@ import { isGhosttyTerminal, isWindowsTerminal, resolveTuiAdvancedTerminal } from
 const directHosts: [string, NodeJS.ProcessEnv][] = [
   ["Ghostty program", { TERM_PROGRAM: "ghostty", TERM: "xterm-ghostty" }],
   ["Ghostty terminfo", { TERM: "xterm-ghostty" }],
+  ["AkiTTY program", { TERM_PROGRAM: "Akitty", TERM: "xterm-256color", COLORTERM: "truecolor" }],
   ["Windows Terminal PowerShell", { WT_SESSION: "terminal-session" }],
   ["Windows Terminal WSL", { WT_SESSION: "terminal-session", WSL_DISTRO_NAME: "Ubuntu", TERM: "xterm-256color" }],
   ["GNOME Terminal", { VTE_VERSION: "7802", TERM: "xterm-256color", COLORTERM: "truecolor" }],

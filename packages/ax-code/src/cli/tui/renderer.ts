@@ -239,6 +239,8 @@ export function supportsTuiTerminalProgress(env: NodeJS.ProcessEnv = process.env
   if ((env["WT_SESSION"] ?? "").length > 0) return true
   if (env["ConEmuANSI"] === "ON") return true
   const termProgram = env["TERM_PROGRAM"] ?? ""
+  // Allowlist only: AkiTTY (TERM_PROGRAM=Akitty) has no OSC 9;4 support, so
+  // it must stay out even though it shares the Ghostty-style advanced profile.
   if (termProgram === "WezTerm" || isGhosttyTerminal(env)) return true
   return false
 }
