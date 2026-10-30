@@ -4,6 +4,7 @@ import {
   createTuiProgramChrome,
   disposeTuiProgramChrome,
   supportsTuiProgramChrome,
+  suspendTuiProgramChrome,
   updateTuiProgramChrome,
 } from "../../../src/cli/tui/program-chrome"
 import { destroyTuiRenderer, resolveTuiRenderProfile, setTuiProgramChrome } from "../../../src/cli/tui/renderer"
@@ -37,6 +38,58 @@ function harness() {
 }
 
 describe("AkiTTY program chrome", () => {
+  test.each(["idle", "disabled", "disposed"])("editor return does not revive %s chrome", (transition) => {
+    const writes: string[] = []
+    const options = {
+      owner: writes,
+      env,
+      isTTY: true,
+      write: (sequence: string) => {
+        writes.push(sequence)
+        return true
+      },
+      onError: vi.fn(),
+    }
+    updateTuiProgramChrome(busy, options)
+    const resume = suspendTuiProgramChrome()
+    expect(writes.at(-1)).toBe(CHROME_CLEAR_SEQUENCE)
+    if (transition === "disposed") disposeTuiProgramChrome()
+    else updateTuiProgramChrome({ ...busy, busy: transition !== "idle", enabled: transition !== "disabled" }, options)
+    const count = writes.length
+    vi.advanceTimersByTime(1000)
+    resume()
+    resume()
+    vi.advanceTimersByTime(1000)
+    expect(writes).toHaveLength(count)
+  })
+
+  test("nested terminal handoffs restore the latest status only after both return", () => {
+    const writes: string[] = []
+    const options = {
+      owner: writes,
+      env,
+      isTTY: true,
+      write: (sequence: string) => {
+        writes.push(sequence)
+        return true
+      },
+      onError: vi.fn(),
+    }
+    updateTuiProgramChrome(busy, options)
+    const outer = suspendTuiProgramChrome()
+    const inner = suspendTuiProgramChrome()
+    updateTuiProgramChrome({ ...busy, statusText: "Retrying", animations: false }, options)
+    const count = writes.length
+    outer()
+    vi.advanceTimersByTime(1000)
+    expect(writes).toHaveLength(count)
+    inner()
+    expect(parse(writes.at(-1)!)).toMatchObject({ status: { text: "Retrying" }, mark: 0 })
+    const resumed = writes.length
+    vi.advanceTimersByTime(1000)
+    expect(writes).toHaveLength(resumed)
+  })
+
   test("busy sessions show localized status, progress and an A/X sprite while updates deduplicate", () => {
     const { writes, controller } = harness()
     expect(controller.update({ ...busy, statusText: "處理中" })).toBe(true)

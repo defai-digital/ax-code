@@ -129,6 +129,9 @@ through OSC 771. The window/tab title remains `AX-Code`. Disabling terminal
 titles also disables program chrome; disabling animations holds sprite frame 0.
 Going idle, leaving the app or running crash cleanup clears the document and
 stops playback. The terminal's own program-status setting can disable display.
+Opening an external editor temporarily clears the mark and pauses playback;
+returning restores the latest session state, including any idle or preference
+change that occurred while editing.
 
 SDK output uses the same serialized write queue as other terminal sequences.
 Pipes, SSH, multiplexers and other terminal identities receive no OSC 771.

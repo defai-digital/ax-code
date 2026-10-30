@@ -73,28 +73,52 @@ export function createTuiProgramChrome(options: {
   }
 }
 
-let active: { owner: object; controller: ReturnType<typeof createTuiProgramChrome> } | undefined
+type ProgramChromeOptions = {
+  owner: object
+  write: (sequence: string) => boolean
+  env: Environment
+  isTTY: boolean
+  onError: (error: unknown) => void
+}
 
-/** Shared by component, renderer and crash teardown, without importing the renderer. */
-export function disposeTuiProgramChrome() {
+let active: { owner: object; controller: ReturnType<typeof createTuiProgramChrome> } | undefined
+let requested: { state: TuiProgramChromeState; options: ProgramChromeOptions } | undefined
+const suspensions = new Set<symbol>()
+
+function clearActiveChrome() {
   const previous = active
   active = undefined
   previous?.controller.dispose()
   return Boolean(previous)
 }
 
-export function updateTuiProgramChrome(
-  state: TuiProgramChromeState,
-  options: {
-    owner: object
-    write: (sequence: string) => boolean
-    env: Environment
-    isTTY: boolean
-    onError: (error: unknown) => void
-  },
-) {
+/** Shared by component, renderer and crash teardown, without importing the renderer. */
+export function disposeTuiProgramChrome() {
+  requested = undefined
+  return clearActiveChrome()
+}
+
+/** Yield the title-bar mark to an external editor and restore only the latest live state. */
+export function suspendTuiProgramChrome() {
+  const token = Symbol()
+  suspensions.add(token)
+  try {
+    clearActiveChrome()
+  } catch (error) {
+    suspensions.delete(token)
+    throw error
+  }
+  return () => {
+    if (!suspensions.delete(token) || suspensions.size || !requested) return
+    updateTuiProgramChrome(requested.state, requested.options)
+  }
+}
+
+export function updateTuiProgramChrome(state: TuiProgramChromeState, options: ProgramChromeOptions) {
+  requested = { state, options }
+  if (suspensions.size) return false
   if (!state.enabled || !supportsTuiProgramChrome(options.env, options.isTTY)) return disposeTuiProgramChrome()
-  if (active && active.owner !== options.owner) disposeTuiProgramChrome()
+  if (active && active.owner !== options.owner) clearActiveChrome()
   active ??= {
     owner: options.owner,
     controller: createTuiProgramChrome({ write: options.write, supported: true, onError: options.onError }),

@@ -7,6 +7,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
 import { parseShellArgs } from "@/util/shell-args"
 import { pickFirstEnvValue } from "./env"
+import { disposeTuiProgramChrome, suspendTuiProgramChrome } from "../program-chrome"
 
 export namespace Editor {
   export type OpenResult = { status: "saved"; content: string } | { status: "cancelled" } | { status: "missing-editor" }
@@ -20,6 +21,7 @@ export namespace Editor {
 
     await Filesystem.write(filepath, opts.value)
     let suspended = false
+    const resumeChrome = suspendTuiProgramChrome()
     try {
       opts.renderer.suspend()
       suspended = true
@@ -38,8 +40,15 @@ export namespace Editor {
       const content = await Filesystem.readText(filepath)
       return content ? { status: "saved", content } : { status: "cancelled" }
     } finally {
-      opts.renderer.currentRenderBuffer.clear()
-      if (suspended) opts.renderer.resume()
+      try {
+        opts.renderer.currentRenderBuffer.clear()
+        if (suspended) opts.renderer.resume()
+      } catch (error) {
+        disposeTuiProgramChrome()
+        throw error
+      } finally {
+        resumeChrome()
+      }
       opts.renderer.requestRender()
     }
   }
