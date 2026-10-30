@@ -32,7 +32,9 @@ export namespace Editor {
         stderr: "inherit",
         shell: process.platform === "win32",
       })
-      await proc.exited
+      // Editors use a nonzero exit (for example Vim :cq) to reject the edit.
+      // Do not replace the draft with partially written contents after failure.
+      if ((await proc.exited) !== 0) return { status: "cancelled" }
       const content = await Filesystem.readText(filepath)
       return content ? { status: "saved", content } : { status: "cancelled" }
     } finally {
