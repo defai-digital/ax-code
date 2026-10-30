@@ -325,7 +325,10 @@ describe("AX Code TUI stability guardrails", () => {
     // The progress keepalive interval is module state in renderer.ts, outside
     // Solid's cleanup tracking — App must stop it on unmount (the error
     // boundary replaces the app without otherwise clearing progress).
-    expect(app).toContain("onCleanup(() => setTuiTerminalProgress(false, renderProfile))")
+    expect(app).toMatch(/onCleanup\(\(\) => \{\s*setTuiTerminalProgress\(false, renderProfile\)/)
+    expect(app).toContain(
+      'setTuiProgramChrome({ enabled: false, busy: false, animations: false, statusText: "" }, renderProfile)',
+    )
     // The tab title is claimed at TUI boot (before the renderer mounts,
     // kimi-code style) so the tab shows "AX-Code" instead of the launcher's
     // process name ("node") even if mount is slow or crashes. Lowercase
