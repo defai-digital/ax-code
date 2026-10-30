@@ -1,0 +1,957 @@
+{
+  "pointerWidth": 8,
+  "structs": [
+    {
+      "zig": "StyledChunk",
+      "size": 56,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "text",
+          "offset": 0,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "text_len",
+          "offset": 8,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "fg",
+          "offset": 16,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "bg",
+          "offset": 24,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "attributes",
+          "offset": 32,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "link",
+          "offset": 40,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "link_len",
+          "offset": 48,
+          "size": 8,
+          "alignment": 8
+        }
+      ]
+    },
+    {
+      "zig": "ExternalHighlight",
+      "size": 16,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "start",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "end",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "styleId",
+          "offset": 8,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "priority",
+          "offset": 12,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "hlRef",
+          "offset": 14,
+          "size": 2,
+          "alignment": 2
+        }
+      ]
+    },
+    {
+      "zig": "ExternalLogicalCursor",
+      "size": 12,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "row",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "col",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "offset",
+          "offset": 8,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "ExternalVisualCursor",
+      "size": 20,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "visualRow",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "visualCol",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "logicalRow",
+          "offset": 8,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "logicalCol",
+          "offset": 12,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "offset",
+          "offset": 16,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "ExternalCapabilities",
+      "size": 64,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "kitty_keyboard",
+          "offset": 0,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "kitty_graphics",
+          "offset": 1,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "rgb",
+          "offset": 2,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "ansi256",
+          "offset": 3,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "unicode",
+          "offset": 4,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "sgr_pixels",
+          "offset": 5,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "color_scheme_updates",
+          "offset": 6,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "explicit_width",
+          "offset": 7,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "scaled_text",
+          "offset": 8,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "sixel",
+          "offset": 9,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "focus_tracking",
+          "offset": 10,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "sync",
+          "offset": 11,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "bracketed_paste",
+          "offset": 12,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "hyperlinks",
+          "offset": 13,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "osc52",
+          "offset": 14,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "notifications",
+          "offset": 15,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "explicit_cursor_positioning",
+          "offset": 16,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "remote",
+          "offset": 17,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "multiplexer",
+          "offset": 18,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "term_name",
+          "offset": 24,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "term_name_len",
+          "offset": 32,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "term_version",
+          "offset": 40,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "term_version_len",
+          "offset": 48,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "term_from_xtversion",
+          "offset": 56,
+          "size": 1,
+          "alignment": 1
+        }
+      ]
+    },
+    {
+      "zig": "EncodedChar",
+      "size": 8,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "width",
+          "offset": 0,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "char",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "ExternalLineInfo",
+      "size": 64,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "startCols",
+          "offset": 0,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "startColsLen",
+          "offset": 8,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "widthCols",
+          "offset": 16,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "widthColsLen",
+          "offset": 24,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "sources",
+          "offset": 32,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "sourcesLen",
+          "offset": 40,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "wraps",
+          "offset": 48,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "wrapsLen",
+          "offset": 56,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "widthColsMax",
+          "offset": 60,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "ExternalMeasureResult",
+      "size": 8,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "lineCount",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "widthColsMax",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "ExternalCursorState",
+      "size": 28,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "x",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "y",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "visible",
+          "offset": 8,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "style",
+          "offset": 9,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "blinking",
+          "offset": 10,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "r",
+          "offset": 12,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "g",
+          "offset": 16,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "b",
+          "offset": 20,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "a",
+          "offset": 24,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "CursorStyleOptions",
+      "size": 24,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "style",
+          "offset": 0,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "blinking",
+          "offset": 1,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "color",
+          "offset": 8,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "cursor",
+          "offset": 16,
+          "size": 1,
+          "alignment": 1
+        }
+      ]
+    },
+    {
+      "zig": "ExternalGridDrawOptions",
+      "size": 2,
+      "alignment": 1,
+      "fields": [
+        {
+          "name": "drawInner",
+          "offset": 0,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "drawOuter",
+          "offset": 1,
+          "size": 1,
+          "alignment": 1
+        }
+      ]
+    },
+    {
+      "zig": "ExternalBuildOptions",
+      "size": 2,
+      "alignment": 1,
+      "fields": [
+        {
+          "name": "gpaSafeStats",
+          "offset": 0,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "gpaMemoryLimitTracking",
+          "offset": 1,
+          "size": 1,
+          "alignment": 1
+        }
+      ]
+    },
+    {
+      "zig": "ExternalAllocatorStats",
+      "size": 40,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "totalRequestedBytes",
+          "offset": 0,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "activeAllocations",
+          "offset": 8,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "smallAllocations",
+          "offset": 16,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "largeAllocations",
+          "offset": 24,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "requestedBytesValid",
+          "offset": 32,
+          "size": 1,
+          "alignment": 1
+        }
+      ]
+    },
+    {
+      "zig": "ExternalRenderStats",
+      "size": 56,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "lastFrameTime",
+          "offset": 0,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "averageFrameTime",
+          "offset": 8,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "renderTime",
+          "offset": 16,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "stdoutWriteTime",
+          "offset": 24,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "frameCount",
+          "offset": 32,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "cellsUpdated",
+          "offset": 40,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "averageCellsUpdated",
+          "offset": 44,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "renderTimeValid",
+          "offset": 48,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "stdoutWriteTimeValid",
+          "offset": 49,
+          "size": 1,
+          "alignment": 1
+        }
+      ]
+    },
+    {
+      "zig": "NativeSpanFeedOptions",
+      "size": 24,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "chunkSize",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "initialChunks",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "maxBytes",
+          "offset": 8,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "growthPolicy",
+          "offset": 16,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "autoCommitOnFull",
+          "offset": 17,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "spanQueueCapacity",
+          "offset": 20,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "NativeSpanFeedStats",
+      "size": 24,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "bytesWritten",
+          "offset": 0,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "spansCommitted",
+          "offset": 8,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "chunks",
+          "offset": 16,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "pendingSpans",
+          "offset": 20,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "SpanInfo",
+      "size": 24,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "chunkPtr",
+          "offset": 0,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "offset",
+          "offset": 8,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "len",
+          "offset": 12,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "chunkIndex",
+          "offset": 16,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "reserved",
+          "offset": 20,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "ReserveInfo",
+      "size": 16,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "ptr",
+          "offset": 0,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "len",
+          "offset": 8,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "reserved",
+          "offset": 12,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "AudioCreateOptions",
+      "size": 8,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "sampleRate",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "playbackChannels",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "AudioStartOptions",
+      "size": 24,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "periodSizeInFrames",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "periodSizeInMilliseconds",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "periods",
+          "offset": 8,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "performanceProfile",
+          "offset": 12,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "shareMode",
+          "offset": 13,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "noPreSilencedOutputBuffer",
+          "offset": 14,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "noClip",
+          "offset": 15,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "noDisableDenormals",
+          "offset": 16,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "noFixedSizedCallback",
+          "offset": 17,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "wasapiNoAutoConvertSrc",
+          "offset": 18,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "wasapiNoDefaultQualitySrc",
+          "offset": 19,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "alsaNoMMap",
+          "offset": 20,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "alsaNoAutoFormat",
+          "offset": 21,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "alsaNoAutoChannels",
+          "offset": 22,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "alsaNoAutoResample",
+          "offset": 23,
+          "size": 1,
+          "alignment": 1
+        }
+      ]
+    },
+    {
+      "zig": "AudioVoiceOptions",
+      "size": 16,
+      "alignment": 4,
+      "fields": [
+        {
+          "name": "volume",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "pan",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "loop",
+          "offset": 8,
+          "size": 1,
+          "alignment": 1
+        },
+        {
+          "name": "groupId",
+          "offset": 12,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    },
+    {
+      "zig": "AudioStats",
+      "size": 32,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "soundsLoaded",
+          "offset": 0,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "voicesActive",
+          "offset": 4,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "framesMixed",
+          "offset": 8,
+          "size": 8,
+          "alignment": 8
+        },
+        {
+          "name": "lockMisses",
+          "offset": 16,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "lastPeak",
+          "offset": 20,
+          "size": 4,
+          "alignment": 4
+        },
+        {
+          "name": "lastRms",
+          "offset": 24,
+          "size": 4,
+          "alignment": 4
+        }
+      ]
+    }
+  ]
+}

@@ -163,7 +163,7 @@ describe("CI workflow speed policy", () => {
     expect(toolchain).toContain("cache-dependency-path: pnpm-lock.yaml")
   })
 
-  test("the registry-backed Node 26 TUI startup lane is enabled by default", () => {
+  test("the Node 26 TUI startup lane is enabled by default", () => {
     const lane = ci.match(/^  tui-node26-smoke:\n[\s\S]*?(?=^  \w[\w-]*:|$(?![\s\S]))/m)?.[0]
     expect(lane).toBeDefined()
     expect(lane).not.toContain("AX_CODE_TUI_NODE26_SMOKE")

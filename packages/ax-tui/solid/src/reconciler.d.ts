@@ -1,0 +1,5 @@
+import { BaseRenderable } from "@defai-digital/ax-tui";
+import { SlotRenderable } from "./elements/index.js";
+export type DomNode = BaseRenderable;
+export declare function createSlotNode(): SlotRenderable;
+export declare const _render: (code: () => unknown, node: BaseRenderable) => () => void, effect: <T>(fn: (prev?: T) => T, init?: T) => void, memo: <T>(fn: () => T, equal: boolean) => () => T, createComponent: typeof import("solid-js").createComponent, createElement: (tag: string) => BaseRenderable, createTextNode: (value: string) => BaseRenderable, insertNode: (parent: BaseRenderable, node: BaseRenderable, anchor?: BaseRenderable | undefined) => void, insert: <T>(parent: any, accessor: T | (() => T), marker?: any | null, initial?: any) => BaseRenderable, spread: <T>(node: any, accessor: (() => T) | T, skipChildren?: boolean) => void, setProp: <T>(node: BaseRenderable, name: string, value: T, prev?: T | undefined) => T, mergeProps: (...sources: unknown[]) => unknown, use: <A, T>(fn: (element: BaseRenderable, arg: A) => T, element: BaseRenderable, arg: A) => T;

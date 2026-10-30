@@ -543,7 +543,8 @@ pnpm + Turbo monorepo.
 
 | Path                 | What it owns                                                                                                        |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `packages/ax-code/`  | Core runtime: CLI, terminal TUI (SolidJS over the standalone `ax-tui` framework), Hono HTTP server, headless runner |
+| `packages/ax-code/`  | Core runtime: CLI, terminal TUI (SolidJS over `packages/ax-tui`), Hono HTTP server, headless runner |
+| `packages/ax-tui/`   | MIT terminal UI framework (`@defai-digital/ax-tui`): Solid reconciler, Zig renderer, vendored native libraries |
 | `packages/sdk/js/`   | Generated TypeScript SDK; the contract is owned by the server routes under `packages/ax-code/src/server/`           |
 | `crates/`            | Rust N-API addons: index, fs, diff, parser, terminal, daemon, bench                                                 |
 | `packages/ax-wiki/`  | Wiki compiler; keep publishable (no `"private": true`)                                                              |
@@ -629,7 +630,7 @@ AX Code began on the MIT-licensed [OpenCode](https://github.com/anomalyco/openco
 The repository also includes code with upstream history from these MIT-licensed projects:
 
 - [OpenCode](https://github.com/anomalyco/opencode): the CLI, runtime, session, provider, and tool foundations. See [NOTICE](NOTICE).
-- [OpenTUI](https://github.com/sst/opentui): the renderer snapshot underlying the ax-tui framework. The framework is maintained standalone in the ax-tui project (MIT); AX Code consumes it as a dependency.
+- [OpenTUI](https://github.com/sst/opentui): the renderer snapshot underlying `packages/ax-tui`. The framework is MIT-licensed and maintained in this monorepo.
 - [ax-cli](https://github.com/defai-digital/ax-cli): selected AX/CLI capabilities ported from DEFAI's earlier project. See [NOTICE](NOTICE).
 
 These notices preserve license provenance and upstream credit. They do not mean the upstream projects maintain AX Code or current DEFAI modifications.
@@ -638,7 +639,7 @@ These notices preserve license provenance and upstream credit. They do not mean 
 
 AX Code Standard is licensed under the [Apache License, Version 2.0](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital).
 
-Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT). The terminal UI framework is the standalone ax-tui project (MIT), derived from OpenTUI with attribution retained. See [NOTICE](NOTICE) and [LICENSE-MIT](LICENSE-MIT).
+Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT). The terminal UI framework in `packages/ax-tui` is MIT, derived from OpenTUI with attribution retained. See [NOTICE](NOTICE) and [LICENSE-MIT](LICENSE-MIT).
 
 Planned proprietary Business components will carry a separate commercial license. This
 does not change the licenses of Standard, previously distributed code, or upstream portions.

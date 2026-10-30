@@ -1,0 +1,14 @@
+# Keep native provenance hashes and generated artifacts identical on every OS.
+* text=auto eol=lf
+
+# Generated distribution files should not dominate the repository language view.
+*.js linguist-generated=true
+*.d.ts linguist-generated=true
+src/** linguist-generated=false
+solid/source/** linguist-generated=false
+native/source/** linguist-generated=false
+
+# Preserve whitespace inside generated template literals and vendored sources.
+/index-*.js whitespace=-blank-at-eol
+/native/renderer/vendor/** linguist-vendored=true whitespace=-blank-at-eol
+/vendor/** linguist-vendored=true

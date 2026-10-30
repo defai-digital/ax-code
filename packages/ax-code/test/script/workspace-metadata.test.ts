@@ -30,19 +30,20 @@ describe("script.workspace-metadata", () => {
     expect(legacyRules).toEqual({})
   })
 
-  test("TUI dependencies use one standalone framework package", async () => {
+  test("TUI dependencies use the in-repo framework package", async () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
     const tsconfig = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/tsconfig.json"), "utf8"))
     const dependencies = packageJson.dependencies ?? {}
     const devDependencies = packageJson.devDependencies ?? {}
 
-    // Framework edits belong in ax-tui; consumers pin an actual registry artifact.
+    // pnpm rejects workspace: specifiers inside the catalog, so the alias is a direct dependency.
     const workspace = await readFile(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8")
     const lockfile = await readFile(path.join(repoRoot, "pnpm-lock.yaml"), "utf8")
-    expect(dependencies["ax-tui"]).toBe("catalog:")
-    expect(workspace).toMatch(/^  "ax-tui": "npm:@defai-digital\/ax-tui@\d+\.\d+\.\d+"$/m)
-    expect(lockfile).not.toMatch(/link:[^\n]*ax-tui/)
+    expect(dependencies["ax-tui"]).toBe("workspace:@defai-digital/ax-tui@*")
+    expect(workspace).not.toMatch(/^\s+"ax-tui":/m)
+    expect(lockfile).not.toMatch(/npm:@defai-digital\/ax-tui@/)
+    expect(lockfile).not.toMatch(/npm\.pkg\.github\.com\/download\/@defai-digital\/ax-tui/)
     expect(lockfile).not.toMatch(/npm\.jsr\.io|@jsr\/|jsr:/)
     expect(dependencies["ax-tui/solid"]).toBeUndefined()
     expect(dependencies["@ax-code/opentui-keymap"]).toBeUndefined()
@@ -56,8 +57,7 @@ describe("script.workspace-metadata", () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const turbo = JSON.parse(await readFile(path.join(repoRoot, "turbo.json"), "utf8"))
 
-    // The ax-tui framework builds in its own repository (ADR-074); this repo
-    // must not carry a turbo task for it.
+    // Renderer regeneration stays on the package's own build script.
     expect(turbo.tasks?.["ax-tui#build"]).toBeUndefined()
   })
 
@@ -87,6 +87,7 @@ describe("script.workspace-metadata", () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     // Resolve through node_modules so a local sibling cannot hide registry defects.
     const tuiDir = await realpath(path.join(repoRoot, "packages/ax-code/node_modules/ax-tui"))
+    expect(tuiDir).toBe(await realpath(path.join(repoRoot, "packages/ax-tui")))
     const tuiPackage = JSON.parse(await readFile(path.join(tuiDir, "package.json"), "utf8"))
     expect(tuiPackage.name).toBe("@defai-digital/ax-tui")
     expect(tuiPackage.dependencies?.["ax-tui"]).toBeUndefined()

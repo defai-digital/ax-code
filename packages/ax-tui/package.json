@@ -1,0 +1,228 @@
+{
+  "name": "@defai-digital/ax-tui",
+  "version": "2.1.5",
+  "description": "SolidJS terminal UI framework with a TypeScript renderer and a locally built native backend",
+  "license": "MIT",
+  "type": "module",
+  "module": "index.js",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "engines": {
+    "node": ">=26"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "index-*.js",
+    "*.d.ts",
+    "lib",
+    "spinner/dist",
+    "chart/dist",
+    "core",
+    "renderables",
+    "platform",
+    "vendor",
+    "assets",
+    "animation",
+    "plugins",
+    "post",
+    "testing.js",
+    "testing",
+    "parser.worker.js",
+    "runtime-plugin*.js",
+    "yoga.js",
+    "LICENSE",
+    "README.md",
+    "UPSTREAM.md",
+    "DIVERGENCES.md",
+    "MAINTENANCE.md",
+    "native/*.js",
+    "native/*.d.ts",
+    "solid/*.js",
+    "solid/*.d.ts",
+    "solid/scripts",
+    "solid/src",
+    "solid/LICENSE"
+  ],
+  "exports": {
+    "./native": {
+      "types": "./native/index.d.ts",
+      "import": "./native/index.js",
+      "default": "./native/index.js"
+    },
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    },
+    "./testing": {
+      "types": "./testing.d.ts",
+      "import": "./testing.js"
+    },
+    "./runtime-plugin": {
+      "types": "./runtime-plugin.d.ts",
+      "bun": "./runtime-plugin.js",
+      "node": "./runtime-plugin.node.js",
+      "default": "./runtime-plugin.node.js"
+    },
+    "./runtime-plugin-support": {
+      "types": "./runtime-plugin-support.d.ts",
+      "bun": "./runtime-plugin-support.js",
+      "node": "./runtime-plugin-support.node.js",
+      "default": "./runtime-plugin-support.node.js"
+    },
+    "./runtime-plugin-support/configure": {
+      "types": "./runtime-plugin-support-configure.d.ts",
+      "bun": "./runtime-plugin-support-configure.js",
+      "node": "./runtime-plugin-support-configure.node.js",
+      "default": "./runtime-plugin-support-configure.node.js"
+    },
+    "./yoga": {
+      "types": "./yoga.d.ts",
+      "import": "./yoga.js"
+    },
+    "./tree-sitter/update-assets": {
+      "types": "./lib/tree-sitter/update-assets.d.ts",
+      "bun": "./lib/tree-sitter/update-assets.js",
+      "import": "./lib/tree-sitter/update-assets.js"
+    },
+    "./parser.worker": {
+      "types": "./lib/tree-sitter/parser.worker.d.ts",
+      "import": "./parser.worker.js",
+      "require": "./parser.worker.js"
+    },
+    "./solid": {
+      "types": "./solid/index.d.ts",
+      "bun": "./solid/index.bun.js",
+      "node": "./solid/index.js",
+      "import": "./solid/index.js",
+      "default": "./solid/index.js"
+    },
+    "./solid/preload": {
+      "bun": "./solid/scripts/preload.js",
+      "node": "./solid/scripts/preload.node.js",
+      "default": "./solid/scripts/preload.node.js"
+    },
+    "./solid/bun-plugin": {
+      "types": "./solid/scripts/solid-plugin.d.ts",
+      "bun": "./solid/scripts/solid-plugin.js",
+      "node": "./solid/scripts/solid-plugin.node.js",
+      "default": "./solid/scripts/solid-plugin.node.js"
+    },
+    "./solid/transform": {
+      "types": "./solid/scripts/solid-transform.d.ts",
+      "import": "./solid/scripts/solid-transform.js",
+      "default": "./solid/scripts/solid-transform.js"
+    },
+    "./solid/runtime-plugin-support": {
+      "types": "./solid/scripts/runtime-plugin-support.d.ts",
+      "bun": "./solid/scripts/runtime-plugin-support.js",
+      "node": "./solid/scripts/runtime-plugin-support.node.js",
+      "default": "./solid/scripts/runtime-plugin-support.node.js"
+    },
+    "./solid/runtime-plugin-support/configure": {
+      "types": "./solid/scripts/runtime-plugin-support-configure.d.ts",
+      "bun": "./solid/scripts/runtime-plugin-support-configure.js",
+      "node": "./solid/scripts/runtime-plugin-support-configure.node.js",
+      "default": "./solid/scripts/runtime-plugin-support-configure.node.js"
+    },
+    "./solid/components": {
+      "types": "./solid/components.d.ts",
+      "import": "./solid/components.js"
+    },
+    "./solid/jsx-runtime": {
+      "types": "./solid/jsx-runtime.d.ts",
+      "import": "./solid/jsx-runtime.js",
+      "default": "./solid/jsx-runtime.js"
+    },
+    "./solid/jsx-dev-runtime": {
+      "types": "./solid/jsx-dev-runtime.d.ts",
+      "import": "./solid/jsx-dev-runtime.js",
+      "default": "./solid/jsx-dev-runtime.js"
+    },
+    "./spinner": {
+      "import": {
+        "types": "./spinner/dist/index.d.ts",
+        "default": "./spinner/dist/index.js"
+      }
+    },
+    "./spinner/solid": {
+      "import": {
+        "types": "./spinner/dist/solid.d.ts",
+        "default": "./spinner/dist/solid.js"
+      }
+    },
+    "./chart": {
+      "import": {
+        "types": "./chart/dist/index.d.ts",
+        "default": "./chart/dist/index.js"
+      }
+    },
+    "./chart/solid": {
+      "import": {
+        "types": "./chart/dist/solid.d.ts",
+        "default": "./chart/dist/solid.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "pnpm run build:renderer && pnpm run build:widgets",
+    "typecheck": "tsc -p tsconfig.json && tsc -p solid/tsconfig.json && tsc -p native/tsconfig.json && tsc -p spinner/tsconfig.json && tsc -p chart/tsconfig.json && tsc -p script/tsconfig.json",
+    "vendor": "pnpm run build:native --all",
+    "apply:patches": "pnpm run build:renderer",
+    "check:vendor": "tsx script/vendor-tui-native.ts --check",
+    "check:patches": "tsx script/tui-patches.ts --check",
+    "check:spinner-dist": "tsx script/check-tui-spinner-dist.ts",
+    "check:chart-dist": "tsx script/check-tui-chart-dist.ts",
+    "check:abi": "tsx script/native-abi-layout.ts --check",
+    "check": "pnpm run check:independence && pnpm run check:vendor && pnpm run check:patches && pnpm run check:abi && pnpm run check:renderer-dist && pnpm run check:spinner-dist && pnpm run check:chart-dist",
+    "test": "vitest run",
+    "test:terminal": "node script/terminal-quality.ts",
+    "test:stress": "node --experimental-ffi --expose-gc script/stress-application.ts",
+    "bench:compare": "node script/compare-performance.ts",
+    "build:widgets": "tsx script/build-widgets.ts",
+    "build:renderer": "tsx script/sync-renderer.ts",
+    "check:renderer-dist": "tsx script/sync-renderer.ts --check",
+    "build:native": "tsx script/build-native.ts",
+    "test:native": "tsx script/build-native.ts --test",
+    "check:independence": "tsx script/check-independence.ts",
+    "check:package": "tsx script/check-package.ts",
+    "publish:github": "npm publish --registry=https://npm.pkg.github.com --access=public"
+  },
+  "dependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/preset-typescript": "7.29.7",
+    "babel-plugin-module-resolver": "5.0.3",
+    "babel-preset-solid": "1.9.16",
+    "bun-ffi-structs": "0.2.4",
+    "diff": "9.0.0",
+    "entities": "7.0.1",
+    "marked": "17.0.6",
+    "string-width": "7.2.0",
+    "strip-ansi": "7.2.0"
+  },
+  "devDependencies": {
+    "@types/babel__core": "7.20.5",
+    "@types/bun": "1.4.3",
+    "@types/node": "26.6.5",
+    "@xterm/addon-unicode11": "0.9.0",
+    "@xterm/headless": "6.0.0",
+    "esbuild": "0.28.2",
+    "node-pty": "1.1.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "4.1.12"
+  },
+  "peerDependencies": {
+    "solid-js": "1.9.17",
+    "web-tree-sitter": "0.25.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/defai-digital/ax-code.git",
+    "directory": "packages/ax-tui"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  }
+}

@@ -22,10 +22,10 @@ originally released under the MIT License. As DEFAI owns that code, the
 ax-cli-derived portions are now offered as part of this combined work under the
 Apache License, Version 2.0.
 
-The terminal UI framework is maintained as the standalone ax-tui project
+The terminal UI framework lives in this repository at packages/ax-tui
 (derived from OpenTUI, https://github.com/sst/opentui, Copyright (c) opentui,
-MIT License) and consumed by AX Code as a dependency. Upstream license text and
-provenance are retained in the ax-tui repository and its native manifest.
+MIT License). Upstream license text and provenance are retained in that
+package and its native manifest.
 
 ========================================================================
 Third-party dependencies

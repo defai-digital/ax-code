@@ -1,0 +1,83 @@
+name: ax-tui
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ax-tui.yml"
+      - "packages/ax-tui/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - ".github/workflows/ax-tui.yml"
+      - "packages/ax-tui/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  workflow_dispatch:
+
+concurrency:
+  group: ax-tui-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  validate:
+    name: AX TUI quality
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Require native FFI support for runtime regressions
+        run: node --experimental-ffi -e "require('node:ffi')"
+
+      - name: Typecheck
+        run: pnpm --dir packages/ax-tui run typecheck
+
+      - name: Check package contracts
+        run: pnpm --dir packages/ax-tui run check
+
+      - name: Test
+        run: pnpm --dir packages/ax-tui test
+
+      - name: Validate terminal behavior through tmux
+        if: runner.os == 'Linux'
+        working-directory: packages/ax-tui
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+          node script/terminal-quality.ts --tmux
+
+      - name: Run application soak
+        working-directory: packages/ax-tui
+        run: node --experimental-ffi --expose-gc script/stress-application.ts 1000
+
+      - name: Install pinned Zig
+        shell: bash
+        run: pnpm --dir packages/ax-tui exec tsx script/ci-install-zig.ts
+
+      - name: Run native tests
+        shell: bash
+        run: pnpm --dir packages/ax-tui run test:native
+
+      - name: Verify publication payload
+        if: runner.os == 'Linux'
+        run: pnpm --dir packages/ax-tui run check:package

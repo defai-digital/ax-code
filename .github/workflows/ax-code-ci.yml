@@ -16,6 +16,7 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "packages/ax-code/**"
+      - "packages/ax-tui/**"
       - "packages/ax-code-intel/**"
       - "packages/ax-code-reason/**"
       - "crates/**"
@@ -42,6 +43,7 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "packages/ax-code/**"
+      - "packages/ax-tui/**"
       - "packages/ax-code-intel/**"
       - "packages/ax-code-reason/**"
       - "crates/**"
@@ -491,8 +493,8 @@ jobs:
           path: .internal/reports/testing/junit/*.xml
           if-no-files-found: ignore
 
-  # Exercise the pinned registry framework from a clean checkout with no sibling.
-  # Native delivery and its integrity checks belong to the installed package.
+  # Exercise the in-repo framework from a clean checkout.
+  # Native delivery and its integrity checks belong to packages/ax-tui.
   tui-node26-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15

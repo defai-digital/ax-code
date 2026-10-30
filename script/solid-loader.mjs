@@ -15,8 +15,8 @@ const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../p
 // ax-tui/solid from the ax-code package (where it's a dependency), then
 // resolve its nested babel deps relative to its entry.
 // Lazy-load both the ax-tui require and Babel until a .tsx file is loaded so
-// `ax-code generate` (and other non-TUI source-mode commands) still work in
-// CI, where the sibling ax-tui link is not checked out.
+// `ax-code generate` (and other non-TUI source-mode commands) do not pay for
+// the Solid transform until a .tsx file is actually loaded.
 const pkgRequire = createRequire(pathToFileURL(path.join(pkgRoot, "package.json")).href)
 let osRequire
 let babel, solidPreset, tsPreset
