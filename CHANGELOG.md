@@ -10,7 +10,12 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Prepare AX Code 7.30.7 and SDK 2.6.59.
+- Add animated cat, chick, red panda, and dragon activity marks for AkiTTY busy sessions.
+- Publish the paired TypeScript SDK 2.6.59.
+
+### Fixed
+
+- Ignore cancelled animation callbacks after idle, status changes, and teardown so stale ticks cannot advance replacement playback.
 
 ## [7.30.6] - 2026-10-30
 
