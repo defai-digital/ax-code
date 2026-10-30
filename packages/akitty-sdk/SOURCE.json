@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/defai-digital/akitty",
+  "revision": "a980c1c452854f362e936f090df7e3d155595003",
+  "package": "@ax-code/akitty-sdk",
+  "version": "0.1.0",
+  "tarballSha256": "aa03613fdb48377f7be880858825d18e49c54152af21aecd8028ae597d6e6225",
+  "files": {
+    "vendor/LICENSE": "c56bc5a79f1e7a4ca14363f45ba7faced92ce1939db7c3d580eeaeb28f37f32a",
+    "vendor/README.md": "f115be1858bcfce9052940b99dd37331973b8736084b3cd91c4984f5e9b7a45f",
+    "vendor/dist/index.d.ts": "9cde2b2e95dcb2fd20629b09e13b0cdabef13323f7fbcb1e1f24cdcb579ec700",
+    "vendor/dist/index.js": "47cf91662dca57691d124fd989f5d51a48ac83f867c248e2c166bafd63bd4c51",
+    "vendor/package.json": "afbfe1e7a96e83d6b9f9b253d5e6f5d0e9b2d190e2dd5fe83ca18477593d863b"
+  },
+  "sourceFiles": {
+    "packages/akitty-sdk/src/index.ts": "42da34e000dbe06641501ff95302d4cbb6bd19149b3d59682ee47c5931812f02",
+    "packages/akitty-sdk/package.json": "afbfe1e7a96e83d6b9f9b253d5e6f5d0e9b2d190e2dd5fe83ca18477593d863b",
+    "packages/akitty-sdk/tsconfig.json": "0985b0bc30d2b9b488c97f7f51fa824856a3c4bbffccd02e1a39bc3ffbf237a7",
+    "packages/akitty-sdk/README.md": "f115be1858bcfce9052940b99dd37331973b8736084b3cd91c4984f5e9b7a45f",
+    "packages/akitty-sdk/LICENSE": "c56bc5a79f1e7a4ca14363f45ba7faced92ce1939db7c3d580eeaeb28f37f32a"
+  }
+}

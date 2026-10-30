@@ -17,6 +17,7 @@ import {
   TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE,
 } from "./terminal-cleanup"
 import { inlineRenderOptions } from "./inline/lifecycle"
+import { disposeTuiProgramChrome, updateTuiProgramChrome, type TuiProgramChromeState } from "./program-chrome"
 import {
   resolveTuiScreen,
   tuiScreenModeFor,
@@ -229,10 +230,28 @@ export function clearTuiTerminalTitle(
   return setTuiTerminalTitle("", profile, stream)
 }
 
+export function setTuiProgramChrome(
+  state: TuiProgramChromeState,
+  profile: TuiRenderProfile = getTuiRenderProfile(),
+  stream: TuiSequenceStream = process.stdout,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  return updateTuiProgramChrome(
+    { ...state, enabled: state.enabled && profile.allowTerminalTitle },
+    {
+      owner: stream,
+      write: (sequence) => writeTuiSequence(stream, sequence),
+      env,
+      isTTY: stream.isTTY === true,
+      onError: (error) => log.warn("program chrome animation stopped", { error: toErrorMessage(error) }),
+    },
+  )
+}
+
 // OSC 9;4 tab progress indicator (Windows Terminal / ConEmu / Ghostty /
 // WezTerm). Shown while the agent is working so busy sessions stand out in
-// the tab bar. The tab text stays "AX-Code", with a leading 6x4
-// AX-CODE dot-matrix morph while a session is busy.
+// the tab bar. The tab text stays "AX-Code"; AkiTTY's separate title-bar mark
+// is handled by setTuiProgramChrome rather than OSC 9;4.
 export const TUI_TERMINAL_PROGRESS_KEEPALIVE_MS = 1_000
 
 export function supportsTuiTerminalProgress(env: NodeJS.ProcessEnv = process.env) {
@@ -290,6 +309,11 @@ export async function destroyTuiRenderer(
   profile: TuiRenderProfile = getTuiRenderProfile(),
 ) {
   let destroyError: unknown
+  try {
+    disposeTuiProgramChrome()
+  } catch (err) {
+    log.warn("failed to clear program chrome during teardown", { error: toErrorMessage(err) })
+  }
   try {
     setTuiTerminalProgress(false, profile)
   } catch (err) {

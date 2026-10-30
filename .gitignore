@@ -17,6 +17,7 @@ tmp
 dist
 !packages/ax-tui/spinner/dist/
 !packages/ax-tui/chart/dist/
+!/packages/akitty-sdk/vendor/dist/
 dist-source
 ts-dist
 desktop/packages/electron/resources/web-dist/

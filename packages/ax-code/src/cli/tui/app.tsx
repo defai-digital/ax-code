@@ -92,6 +92,7 @@ import {
   getTuiRenderProfile,
   renderTui,
   setTuiTerminalProgress,
+  setTuiProgramChrome,
   setTuiTerminalTitle,
 } from "./renderer"
 import type { EventSource } from "./context/sdk"
@@ -776,18 +777,29 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   }
 
   // While a session is working, show a busy indicator in the terminal tab
-  // via OSC 9;4 (Windows Terminal / ConEmu / Ghostty / WezTerm). The tab text
-  // stays a static "AX-Code": the animated A/X brand pulse lives in the footer
-  // busy indicator (component/footer-animation), not in the tab title.
+  // via OSC 9;4, or AkiTTY's OSC 771 status/progress and small sprite. The tab
+  // text stays a static "AX-Code"; the existing footer busy indicator keeps
+  // its own animation. Neither surface includes session content or paths.
   createEffect(() => {
     setTuiTerminalProgress(terminalTitleEnabled() && sessionWorking(), renderProfile)
+    const status = route.data.type === "session" ? sync.data.session_status?.[route.data.sessionID] : undefined
+    setTuiProgramChrome(
+      {
+        enabled: terminalTitleEnabled(),
+        busy: sessionWorking(),
+        animations: kv.get("animations_enabled", true),
+        statusText: t(status?.type === "retry" ? "ui.retrying" : "ui.working"),
+      },
+      renderProfile,
+    )
   })
-  // The progress keepalive interval is module state in renderer.ts, outside
-  // Solid's cleanup tracking. If this component is torn down while a session
-  // is still working (the error boundary replaces the app with the fatal-error
-  // screen), nothing else stops it — the indicator would keep re-arming every
-  // second on a crashed session until the user force-exits.
-  onCleanup(() => setTuiTerminalProgress(false, renderProfile))
+  // Progress and SDK timers live outside Solid's cleanup tracking. Stop both
+  // when an error boundary replaces the app, before they can re-arm a stale
+  // indicator on the fatal-error screen.
+  onCleanup(() => {
+    setTuiTerminalProgress(false, renderProfile)
+    setTuiProgramChrome({ enabled: false, busy: false, animations: false, statusText: "" }, renderProfile)
+  })
 
   createEffect(() => {
     if (!terminalTitleEnabled()) {

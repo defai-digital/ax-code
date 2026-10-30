@@ -258,6 +258,8 @@ importers:
         specifier: 'catalog:'
         version: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(@vitest/coverage-v8@4.1.12)(jsdom@27.4.0(@noble/hashes@2.2.0))(vite@8.1.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/akitty-sdk: {}
+
   packages/ax-agent-runtime:
     devDependencies:
       '@types/node':
@@ -293,6 +295,9 @@ importers:
       '@ai-sdk/provider':
         specifier: 3.0.8
         version: 3.0.8
+      '@ax-code/akitty-sdk':
+        specifier: workspace:*
+        version: link:../akitty-sdk
       '@ax-code/ax-agent-runtime':
         specifier: workspace:*
         version: link:../ax-agent-runtime

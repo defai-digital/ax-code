@@ -1,10 +1,13 @@
 import { Flag } from "@/flag/flag"
 import { axCodeTerminalTitleClearSequence } from "@/util/terminal-title"
+import { CHROME_CLEAR_SEQUENCE } from "@ax-code/akitty-sdk"
+import { disposeTuiProgramChrome, supportsTuiProgramChrome } from "./program-chrome"
 
 type FlushableStream = {
   write: (chunk: string, callback?: () => void) => boolean
   writable?: boolean
   destroyed?: boolean
+  isTTY?: boolean
 }
 
 type RawModeStream = {
@@ -45,6 +48,7 @@ export function createTuiTerminalCrashResetSequence(
   input: {
     kittyKeyboard?: boolean
     screenMode?: TuiTerminalScreenMode
+    programChrome?: boolean
   } = {},
 ) {
   const kittyKeyboard = input.kittyKeyboard ?? true
@@ -56,7 +60,7 @@ export function createTuiTerminalCrashResetSequence(
   // setup, even when AX Code's mode-2 enhancement is disabled, so crash
   // recovery must always turn it off. Native clean teardown owns the normal
   // mode-0 reset.
-  return `${TUI_MOUSE_TRACKING_DISABLE_SEQUENCE}${TUI_MODIFY_OTHER_KEYS_DISABLE_SEQUENCE}${kittyKeyboard ? TUI_KITTY_KEYBOARD_POP_SEQUENCE : ""}\x1b[?2004l\x1b[?25h${leaveAlternateScreen}${TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE}${TUI_TERMINAL_TITLE_CLEAR_SEQUENCE}`
+  return `${TUI_MOUSE_TRACKING_DISABLE_SEQUENCE}${TUI_MODIFY_OTHER_KEYS_DISABLE_SEQUENCE}${kittyKeyboard ? TUI_KITTY_KEYBOARD_POP_SEQUENCE : ""}\x1b[?2004l\x1b[?25h${leaveAlternateScreen}${TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE}${input.programChrome ? CHROME_CLEAR_SEQUENCE : ""}${TUI_TERMINAL_TITLE_CLEAR_SEQUENCE}`
 }
 
 export const TUI_TERMINAL_CRASH_RESET_SEQUENCE = createTuiTerminalCrashResetSequence()
@@ -109,6 +113,11 @@ export function resetTuiTerminalState(
   } = {},
 ) {
   const stdout = input.stdout ?? process.stdout
+  try {
+    disposeTuiProgramChrome()
+  } catch {
+    // Still attempt the direct crash reset when the renderer queue has failed.
+  }
   let written = false
   if (stdout.writable !== false && !stdout.destroyed) {
     const screenMode: TuiTerminalScreenMode =
@@ -125,6 +134,7 @@ export function resetTuiTerminalState(
       const reset = createTuiTerminalCrashResetSequence({
         kittyKeyboard: input.kittyKeyboard ?? Flag.AX_CODE_TUI_KITTY_KEYBOARD,
         screenMode,
+        programChrome: supportsTuiProgramChrome(process.env, stdout.isTTY === true),
       })
       // Protocol disables are written BEFORE stdin raw mode is restored:
       // once the terminal stops reporting Kitty/modifyOtherKeys sequences,

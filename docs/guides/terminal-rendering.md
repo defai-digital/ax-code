@@ -121,6 +121,25 @@ AX_CODE_TUI_ADVANCED_TERMINAL=0 ax-code
 If your shell startup files export the variable, remove that export and run
 `unset AX_CODE_TUI_ADVANCED_TERMINAL` to restore automatic selection.
 
+## AkiTTY status and title-bar sprite
+
+In a direct native AkiTTY session, AX Code uses `@ax-code/akitty-sdk` to show
+localized Working/Retrying text, indeterminate progress and a small A/X sprite
+through OSC 771. The window/tab title remains `AX-Code`. Disabling terminal
+titles also disables program chrome; disabling animations holds sprite frame 0.
+Going idle, leaving the app or running crash cleanup clears the document and
+stops playback. The terminal's own program-status setting can disable display.
+
+SDK output uses the same serialized write queue as other terminal sequences.
+Pipes, SSH, multiplexers and other terminal identities receive no OSC 771.
+AkiTTY Web is a separate implementation; this integration does not claim its
+native status-bar capabilities. Existing footer and terminal-grid animations
+keep their own renderers and graphics capability checks.
+
+The dependency is a source-pinned, compiled workspace snapshot with no native
+library or runtime dependency. See [the snapshot guide](../../packages/akitty-sdk/README.md)
+for provenance and verification.
+
 ## Pixel animations
 
 Opening and ending animations use pixels only when the renderer confirms Kitty

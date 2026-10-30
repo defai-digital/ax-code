@@ -15,6 +15,8 @@
  * TUI once it mounts, so the tab is claimed within milliseconds of exec.
  */
 
+import { titleSequence } from "@ax-code/akitty-sdk"
+
 export const AX_CODE_TERMINAL_TITLE = "AX-Code"
 
 const HELP_OR_VERSION = new Set(["-h", "--help", "-v", "--version"])
@@ -65,13 +67,12 @@ export function sanitizeAxCodeTerminalTitle(title: string) {
 }
 
 export function axCodeTerminalTitleSequence(title: string = AX_CODE_TERMINAL_TITLE) {
-  const sanitized = sanitizeAxCodeTerminalTitle(title)
   // OSC 1 = icon/tab, OSC 2 = window. Do not use OSC 0: Apple Terminal.app
   // treats OSC 0 as "set window title and clear tab title", after which the
   // tab falls back to the job name ("node" for source-mode launches).
   // Finish every window-title update with an explicit tab title, including
   // the idle/clear frame, so the final request always names the tab itself.
-  return `\x1b]2;${sanitized}\x07\x1b]1;${sanitized}\x07`
+  return titleSequence(title)
 }
 
 export function axCodeTerminalTitleClearSequence() {
