@@ -1,5 +1,10 @@
 import { createSprite, createTerminalClient, detectCapabilities } from "@ax-code/akitty-sdk"
 import type { Environment, Scheduler } from "@ax-code/akitty-sdk"
+import { AKITTY_CAT_FRAMES, AKITTY_CAT_FRAME_MS } from "./akitty-cat"
+import { AKITTY_CHICK_FRAMES, AKITTY_CHICK_FRAME_MS } from "./akitty-chick"
+import { AKITTY_DRAGON_FRAMES, AKITTY_DRAGON_FRAME_MS } from "./akitty-dragon"
+import { AKITTY_PIXEL_PX } from "./akitty-pixel"
+import { AKITTY_RED_PANDA_FRAMES, AKITTY_RED_PANDA_FRAME_MS } from "./akitty-red-panda"
 
 export type TuiProgramChromeState = Readonly<{
   enabled: boolean
@@ -8,24 +13,28 @@ export type TuiProgramChromeState = Readonly<{
   statusText: string
 }>
 
-// A/X brand poses for the native title-bar mark. Large terminal scenes and the
-// footer braille animation retain their own renderers and capability checks.
-const poses = [
-  [".##.", "#..#", "####", "#..#"],
-  ["#..#", ".##.", ".##.", "#..#"],
-]
-const busySprite = createSprite(
-  4,
-  4,
-  poses.map((rows) =>
-    Uint8Array.from(
-      rows
-        .join("")
-        .split("")
-        .flatMap((cell) => (cell === "#" ? [102, 204, 255, 255] : [0, 0, 0, 0])),
-    ),
-  ),
-)
+// AkiTTY's tab activity mark is a pixel animal (akitty-cat.ts, akitty-chick.ts,
+// akitty-red-panda.ts, akitty-dragon.ts), picked at random each time a session starts working. AkiTTY sprites hold at
+// most four frames, so each frame is its own one-frame sprite and this module,
+// not the SDK, advances them.
+const animation = (name: string, frames: readonly Uint8Array[], frameMs: number) => ({
+  name,
+  frameMs,
+  sprites: frames.map((frame) => createSprite(AKITTY_PIXEL_PX, AKITTY_PIXEL_PX, [frame])),
+})
+export const TUI_PROGRAM_CHROME_ANIMATIONS = [
+  animation("cat", AKITTY_CAT_FRAMES, AKITTY_CAT_FRAME_MS),
+  animation("chick", AKITTY_CHICK_FRAMES, AKITTY_CHICK_FRAME_MS),
+  animation("red panda", AKITTY_RED_PANDA_FRAMES, AKITTY_RED_PANDA_FRAME_MS),
+  animation("dragon", AKITTY_DRAGON_FRAMES, AKITTY_DRAGON_FRAME_MS),
+] as const
+type Animation = (typeof TUI_PROGRAM_CHROME_ANIMATIONS)[number]
+
+const scheduleInterval: Scheduler = (tick, intervalMs) => {
+  const timer = setInterval(tick, intervalMs)
+  timer.unref?.()
+  return () => clearInterval(timer)
+}
 
 export function supportsTuiProgramChrome(env: Environment, isTTY: boolean) {
   return detectCapabilities(env, isTTY).chrome
@@ -35,9 +44,22 @@ export function createTuiProgramChrome(options: {
   write: (sequence: string) => boolean
   supported: boolean
   schedule?: Scheduler
+  random?: () => number
   onError: (error: unknown) => void
 }) {
   let previous: string | undefined
+  let frame = 0
+  // Chosen when a busy period starts and kept through status changes, so a
+  // retry does not swap animals mid-run.
+  let current: Animation | undefined
+  let generation = 0
+  let stopTimer: (() => void) | undefined
+  const stop = () => {
+    generation++
+    const cancel = stopTimer
+    stopTimer = undefined
+    cancel?.()
+  }
   const client = createTerminalClient({
     capabilities: { title: false, chrome: options.supported },
     write(sequence) {
@@ -50,26 +72,57 @@ export function createTuiProgramChrome(options: {
         throw error
       }
     },
-    schedule: options.schedule,
     onError: options.onError,
   })
+  // A failed frame stops playback and forgets the state, so the next update
+  // starts it again instead of deduplicating against a document never shown.
+  const tick = () => {
+    if (!current) return
+    frame = (frame + 1) % current.sprites.length
+    try {
+      if (client.updateChrome({ sprite: current.sprites[frame]!, mark: 0 })) return
+    } catch (error) {
+      options.onError(error)
+    }
+    stop()
+    previous = undefined
+  }
   return {
     update(state: TuiProgramChromeState) {
       if (!state.enabled || !state.busy) {
+        stop()
         previous = undefined
+        current = undefined
         return client.clearChrome()
       }
       const key = JSON.stringify([state.statusText, state.animations])
       if (previous === key) return false
+      stop()
+      frame = 0
+      const animations = TUI_PROGRAM_CHROME_ANIMATIONS
+      current ??=
+        animations[Math.min(animations.length - 1, Math.floor((options.random ?? Math.random)() * animations.length))]!
       const status = { text: state.statusText, tone: "info" as const }
-      const written = state.animations
-        ? client.updateChrome({ status, progress: "indeterminate" }) &&
-          client.playSprite({ sprite: busySprite, intervalMs: 250 })
-        : client.updateChrome({ status, progress: "indeterminate", sprite: busySprite, mark: 0 })
-      if (written) previous = key
-      return written
+      const written = client.updateChrome({
+        status,
+        progress: "indeterminate",
+        sprite: current.sprites[0]!,
+        mark: 0,
+      })
+      if (!written) return false
+      previous = key
+      if (state.animations) {
+        const token = generation
+        stopTimer = (options.schedule ?? scheduleInterval)(() => {
+          if (token === generation) tick()
+        }, current.frameMs)
+      }
+      return true
     },
-    dispose: () => client.dispose(),
+    dispose: () => {
+      stop()
+      client.dispose()
+    },
   }
 }
 
@@ -98,7 +151,7 @@ export function disposeTuiProgramChrome() {
   return clearActiveChrome()
 }
 
-/** Yield the title-bar mark to an external editor and restore only the latest live state. */
+/** Yield the tab activity mark to an external editor and restore only the latest live state. */
 export function suspendTuiProgramChrome() {
   const token = Symbol()
   suspensions.add(token)

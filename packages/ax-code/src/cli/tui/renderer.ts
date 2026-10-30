@@ -250,7 +250,7 @@ export function setTuiProgramChrome(
 
 // OSC 9;4 tab progress indicator (Windows Terminal / ConEmu / Ghostty /
 // WezTerm). Shown while the agent is working so busy sessions stand out in
-// the tab bar. The tab text stays "AX-Code"; AkiTTY's separate title-bar mark
+// the tab bar. The tab text stays "AX-Code"; AkiTTY's separate tab activity mark
 // is handled by setTuiProgramChrome rather than OSC 9;4.
 export const TUI_TERMINAL_PROGRESS_KEEPALIVE_MS = 1_000
 
