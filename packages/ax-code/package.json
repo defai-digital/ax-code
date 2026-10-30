@@ -154,7 +154,7 @@
     "hono-openapi": "catalog:",
     "ignore": "7.0.12",
     "jsonc-parser": "3.3.1",
-    "minimatch": "10.2.6",
+    "minimatch": "11.0.1",
     "node-pty-prebuilt-multiarch": "0.10.1-pre.5",
     "open": "10.1.2",
     "pino": "^10.4.0",
