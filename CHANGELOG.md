@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.5] - 2026-10-30
+
+### Added
+
+- Show a localized New activity and Back to bottom control while reading earlier transcript output, with click and Escape navigation and compact labels for narrow terminals.
+
+### Fixed
+
+- Preserve reading position during streaming and resume following output after returning to the bottom; prevent a pending history load from undoing that navigation.
+- Let transcript navigation own plain Escape while scrolled up without aborting the running turn; retain dialog, autocomplete, permission, selection, and explicit interrupt behavior.
+- Respect explicit host identity when an inherited Ghostty TERM marker conflicts with AkiTTY or another nested terminal.
+
+### Changed
+
+- Verify AkiTTY 0.12.0 host detection and document its PNG/file graphics support and separate program-status protocol.
+- Publish the paired SDK 2.6.57.
+
 ## [7.30.4] - 2026-10-30
 
 ### Fixed
