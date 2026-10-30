@@ -255,6 +255,24 @@ describe("AkiTTY program chrome", () => {
     },
   )
 
+  test("a synchronous failed first tick cancels the returned scheduler handle", () => {
+    const cancel = vi.fn()
+    let writes = 0
+    const controller = createTuiProgramChrome({
+      supported: true,
+      random: () => 0,
+      write: () => ++writes !== 2,
+      schedule: (tick) => {
+        tick()
+        return cancel
+      },
+      onError: vi.fn(),
+    })
+    controller.update(busy)
+    expect(cancel).toHaveBeenCalledOnce()
+    controller.dispose()
+  })
+
   test("cancelled callbacks cannot advance a replacement animation", () => {
     const ticks: (() => void)[] = []
     const writes: string[] = []

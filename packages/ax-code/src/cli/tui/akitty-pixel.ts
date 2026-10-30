@@ -146,7 +146,12 @@ export function snore(g: Grid, x: number, y: number) {
 export function encode(g: Grid): Uint8Array {
   const pixels = new Uint8Array(AKITTY_PIXEL_PX * AKITTY_PIXEL_PX * 4)
   g.flat().forEach((pixel, i) => {
-    if (pixel) pixels.set([...AKITTY_PIXEL_PALETTE[pixel], 255], i * 4)
+    if (!pixel) return
+    const [red, green, blue] = AKITTY_PIXEL_PALETTE[pixel]
+    pixels[i * 4] = red
+    pixels[i * 4 + 1] = green
+    pixels[i * 4 + 2] = blue
+    pixels[i * 4 + 3] = 255
   })
   return pixels
 }

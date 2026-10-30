@@ -113,9 +113,11 @@ export function createTuiProgramChrome(options: {
       previous = key
       if (state.animations) {
         const token = generation
-        stopTimer = (options.schedule ?? scheduleInterval)(() => {
+        const cancel = (options.schedule ?? scheduleInterval)(() => {
           if (token === generation) tick()
         }, current.frameMs)
+        if (token === generation) stopTimer = cancel
+        else cancel()
       }
       return true
     },
