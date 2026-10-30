@@ -11,9 +11,11 @@ changes belong to AX Coder.
 ### Changed
 
 - Add animated cat, chick, red panda, and dragon activity marks for AkiTTY busy sessions.
-- Publish the paired TypeScript SDK 2.6.59.
+- Publish the paired TypeScript SDK 2.6.60.
 
 ### Fixed
+
+- Upgrade glob and minimatch to address filesystem traversal cancellation and pattern amplification advisories.
 
 - Ignore cancelled animation callbacks after idle, status changes, and teardown so stale ticks cannot advance replacement playback.
 
