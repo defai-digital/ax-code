@@ -10,6 +10,8 @@ export type PromptProps = {
   visible?: boolean
   disabled?: boolean
   onSubmit?: () => void
+  onTranscriptEscape?: () => boolean
+  transcriptEscapeEnabled?: () => boolean
   ref?: (ref: PromptRef) => void
   hint?: JSX.Element
   footerRight?: JSX.Element

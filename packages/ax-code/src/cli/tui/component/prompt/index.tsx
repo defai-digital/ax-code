@@ -99,6 +99,7 @@ import { runStatusLineCommand } from "../../util/status-line"
 import { DialogRollback } from "../../routes/session/dialog-rollback"
 import { SessionRollbackView } from "../../routes/session/rollback"
 import { promptState } from "../../routes/session/messages"
+import { isTranscriptEscape } from "../../routes/session/transcript-follow"
 
 export type { PromptProps, PromptRef } from "./prompt-types"
 
@@ -896,6 +897,8 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
       submit,
       pasteClipboardImage: paste.pasteClipboardImage,
       autocompleteVisible: () => !!autocomplete.visible,
+      transcriptEscapeEnabled: () =>
+        !inputBlocked() && !submitController.submitInFlight && !!props.transcriptEscapeEnabled?.(),
       sessionID: () => props.sessionID,
       statusType: () => status().type,
       sdk,
@@ -1292,6 +1295,13 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                   if (autocomplete.onKeyDown(e)) return
                 } else if (store.mode === "normal") {
                   autocomplete?.onKeyDown(e)
+                }
+                if (isTranscriptEscape(e) && props.onTranscriptEscape?.()) {
+                  lastDraftEscapeAt = undefined
+                  lastIdleEscapeAt = undefined
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return
                 }
                 const escapeIntent = promptEscapeClearIntent({
                   keyName: e.name,

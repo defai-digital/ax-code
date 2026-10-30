@@ -2,7 +2,7 @@ import { Env } from "./env"
 
 /** Ghostty identifies itself as TERM_PROGRAM=ghostty and TERM=xterm-ghostty. */
 export function isGhosttyTerminal(env: NodeJS.ProcessEnv = process.env): boolean {
-  if ((env["TERM_PROGRAM"] ?? "") === "ghostty") return true
+  if ((env["TERM_PROGRAM"] ?? "").trim()) return env["TERM_PROGRAM"] === "ghostty"
   return (env["TERM"] ?? "") === "xterm-ghostty"
 }
 
@@ -10,8 +10,9 @@ export function isGhosttyTerminal(env: NodeJS.ProcessEnv = process.env): boolean
  * AkiTTY (defai-digital/akitty) exports TERM_PROGRAM=Akitty and leaves TERM at
  * xterm-256color, so the program identity is the only marker. Since 0.8.0 it
  * answers the Kitty graphics and keyboard probes, which the renderer detects
- * at startup; older builds fail the probes and fall back to text. It never
- * supports sixel, PNG/file image transfer, or OSC 9/9;4.
+ * at startup; older builds fail the probes and fall back to text. Version 0.12.0
+ * supports PNG and bounded file image transfers, but not sixel or OSC 9/9;4.
+ * Its program status protocol is OSC 771, separate from OSC 9 notifications.
  */
 const ADVANCED_TERM_PROGRAMS = new Set(["ghostty", "Akitty"])
 

@@ -1,0 +1,38 @@
+{
+  "scene": "transcript-follow-dark-20x12",
+  "width": 20,
+  "height": 12,
+  "mode": "dark",
+  "cursor": {
+    "col": 1,
+    "row": 1
+  },
+  "chars": [
+    "Transcript line 11",
+    "Transcript line 12",
+    "Transcript line 13 ▄",
+    "Transcript line 14",
+    "Transcript line 15",
+    "Transcript line 16",
+    "Transcript line 17",
+    "Transcript line 18",
+    "Transcript line 19",
+    "Transcript line 20",
+    "Transcript line 21",
+    "Tran• ↓ · escne 22"
+  ],
+  "colors": [
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*19 | #9a9ea3 #252527 0*1",
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*19 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*4 | #46a758 #292929 0*9 | #ffffff #000000 0*6 | #ffffff #252527 0*1"
+  ]
+}

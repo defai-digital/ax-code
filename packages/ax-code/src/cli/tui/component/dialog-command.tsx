@@ -42,6 +42,7 @@ type Slash = {
 export type CommandOption = DialogSelectOption<string> & {
   readonly [registrationOwner]?: object
   keybind?: KeybindKey
+  keybindFilter?: (event: import("ax-tui").KeyEvent) => boolean
   suggested?: boolean
   slash?: Slash
   /** Handler for slash invocations that carry inline arguments; only reached
@@ -174,7 +175,7 @@ function init() {
     if (dialog.stack.length > 0) return
     for (const option of entries()) {
       if (!isEnabled(option)) continue
-      if (option.keybind && keybind.match(option.keybind, evt)) {
+      if (option.keybind && keybind.match(option.keybind, evt) && option.keybindFilter?.(evt) !== false) {
         evt.preventDefault()
         runCommandAction(option, "keybind")
         return

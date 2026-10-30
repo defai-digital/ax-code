@@ -1,6 +1,8 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.transcriptNewActivity": "有新動態",
+  "ui.transcriptBackToBottom": "回到底部",
   "ui.autoAccepted": "已自動接受",
   "ui.autoAcceptOn": "自動接受已開啟",
   "ui.autoAcceptOff": "自動接受已關閉",

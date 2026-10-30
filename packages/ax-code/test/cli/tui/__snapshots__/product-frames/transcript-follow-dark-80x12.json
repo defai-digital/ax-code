@@ -1,0 +1,38 @@
+{
+  "scene": "transcript-follow-dark-80x12",
+  "width": 80,
+  "height": 12,
+  "mode": "dark",
+  "cursor": {
+    "col": 1,
+    "row": 1
+  },
+  "chars": [
+    "Transcript line 11",
+    "Transcript line 12",
+    "Transcript line 13                                                             ▄",
+    "Transcript line 14",
+    "Transcript line 15",
+    "Transcript line 16",
+    "Transcript line 17",
+    "Transcript line 18",
+    "Transcript line 19",
+    "Transcript line 20",
+    "Transcript line 21",
+    "Transcript line 22  New activity · ↓ Back to bottom · esc"
+  ],
+  "colors": [
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*79 | #9a9ea3 #252527 0*1",
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*79 | #ffffff #252527 0*1",
+    "#ffffff #000000 0*20 | #46a758 #292929 0*37 | #ffffff #000000 0*22 | #ffffff #252527 0*1"
+  ]
+}

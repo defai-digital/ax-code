@@ -19,6 +19,7 @@ import { loadChangelogText, resolveReleaseNotes } from "@/util/changelog"
 import { endDisplayOffset, expandPromptTextParts, relocatePromptPartsAfterEditor } from "./prompt-helpers"
 import type { PromptInfo } from "./history"
 import type { StashEntry } from "./stash-util"
+import { isTranscriptEscape } from "../../routes/session/transcript-follow"
 
 type PromptComposer = {
   focused: boolean
@@ -44,6 +45,7 @@ export type PromptCommandsInput = {
   submit: () => void
   pasteClipboardImage: () => Promise<unknown>
   autocompleteVisible: () => boolean
+  transcriptEscapeEnabled?: () => boolean
   sessionID: () => string | undefined
   statusType: () => string
   sdk: {
@@ -296,6 +298,9 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       title: uiText("ui.interruptSession"),
       value: "session.interrupt",
       keybind: "session_interrupt",
+      // Global commands precede the textarea. Let plain Escape reach its
+      // autocomplete/scroll handling while retaining explicit interrupt actions.
+      keybindFilter: (event) => !isTranscriptEscape(event) || !input.transcriptEscapeEnabled?.(),
       category: uiText("common.session"),
       hidden: true,
       enabled: statusType() !== "idle" && store.mode !== "shell",

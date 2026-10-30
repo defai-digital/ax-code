@@ -1,6 +1,8 @@
 import type { Dictionary } from "../index"
 
 export const messages = {
+  "ui.transcriptNewActivity": "Nova atividade",
+  "ui.transcriptBackToBottom": "Voltar ao final",
   "ui.autoAccepted": "aceitação automática",
   "ui.autoAcceptOn": "Aceitação automática ativada",
   "ui.autoAcceptOff": "Aceitação automática desativada",

@@ -68,6 +68,33 @@ describe("prompt command lifecycle", () => {
 })
 
 describe("prompt session interrupt", () => {
+  test("lets plain Escape reach transcript navigation while explicit and modified interrupts remain available", async () => {
+    const { host, dialog, mount, abort } = setup()
+    mount()
+    host.transcriptEscapeEnabled = () => true
+    const command = promptCommands(host).find((command) => command.value === "session.interrupt")!
+    const { KeyEvent } = await import("ax-tui")
+    const key = new KeyEvent({
+      name: "escape",
+      ctrl: false,
+      meta: false,
+      shift: false,
+      option: false,
+      sequence: "\x1b",
+      raw: "\x1b",
+      number: false,
+      eventType: "press",
+      source: "raw",
+    })
+    expect(command.keybindFilter!(key)).toBe(false)
+    key.ctrl = true
+    expect(command.keybindFilter!(key)).toBe(true)
+    key.ctrl = false
+    host.transcriptEscapeEnabled = () => false
+    expect(command.keybindFilter!(key)).toBe(true)
+    await command.onSelect!(dialog)
+    expect(abort).toHaveBeenCalledWith({ sessionID: "ses_prompt_commands" })
+  })
   test.each([
     { error: { message: "Server refused interrupt" }, message: "Server refused interrupt" },
     { error: { data: { message: "Session is unavailable" } }, message: "Session is unavailable" },

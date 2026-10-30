@@ -2,7 +2,7 @@
 
 Status: Current
 Scope: TUI terminal profile selection, overrides, and visual capability boundaries
-Last reviewed: 2026-10-13
+Last reviewed: 2026-10-30
 Owner: AX Code TUI maintainers
 
 AX Code chooses a terminal profile from the environment when it starts. The
@@ -25,9 +25,19 @@ AkiTTY keeps `TERM=xterm-256color` and `COLORTERM=truecolor`, so its program
 identity is the only marker. AkiTTY 0.8.0 and later answers the Kitty graphics
 and Kitty keyboard probes, so pixel animations and enhanced keys work; the
 renderer detects both at startup. Older builds fail the probes and fall back to
-text. AkiTTY does not support sixel, PNG or file image transfer, or OSC 9 and
-OSC 9;4, so Nerd Font glyphs stay off unless configured and notifications use
-BEL.
+text. [AkiTTY 0.12.0](https://github.com/defai-digital/akitty/releases/tag/v0.12.0)
+supports PNG and bounded file image transfers through the Kitty protocol.
+It does not support sixel or OSC 9 and OSC 9;4. Its OSC 771 program status
+protocol is separate; AX Code notifications continue to use BEL. Nerd Font
+glyphs stay off unless configured. AkiTTY is the host terminal, not an AX Code
+package dependency; capability probes select the supported graphics path.
+
+When you scroll up in the full-screen transcript, a **Back to bottom** control
+appears above the prompt. New streamed text or tool activity adds a **New
+activity** marker without moving your reading position. Click the control or
+press Escape to return and resume following output. Dialogs, autocomplete,
+selection, and permission/question prompts retain their keyboard ownership.
+Once at the bottom, Escape keeps its normal interrupt/draft behavior.
 
 The advanced profile uses the alternate screen, a native rendering thread, and
 terminal capability detection. The compatible profile uses the main screen

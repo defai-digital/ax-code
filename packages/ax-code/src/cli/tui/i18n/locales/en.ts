@@ -1,4 +1,6 @@
 export const messages = {
+  "ui.transcriptNewActivity": "New activity",
+  "ui.transcriptBackToBottom": "Back to bottom",
   "ui.autoAccepted": "auto-accepted",
   "ui.autoAcceptOn": "Auto-accept on",
   "ui.autoAcceptOff": "Auto-accept off",

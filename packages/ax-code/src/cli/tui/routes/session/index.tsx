@@ -2,6 +2,8 @@ import { useSessionImagePreview } from "./image-preview"
 import { useWikiVisualization } from "@tui/context/wiki-visualization"
 import { useLanguage } from "@tui/context/language"
 import { TimelineRail } from "./timeline-rail"
+import { TranscriptFollowIndicator } from "./transcript-follow-indicator"
+import { isTranscriptEscape, updateTranscriptFollow } from "./transcript-follow"
 import { turnPreview } from "./timeline-rail-model"
 import { applyInitialPromptDraft } from "@tui/component/prompt/session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
@@ -653,6 +655,56 @@ export function Session() {
   const keybind = useKeybind()
   const dialog = useDialog()
   const renderer = useRenderer()
+  let transcriptNavigation = 0
+
+  const [transcriptFollow, setTranscriptFollow] = createSignal({
+    sessionID: route.sessionID,
+    away: false,
+    unread: false,
+  })
+  function readTranscriptFollow(activitySessionID?: string) {
+    const viewport = isRenderableAlive(scroll)
+      ? { scrollTop: scroll.scrollTop, scrollHeight: scroll.scrollHeight, viewportHeight: scroll.viewport.height }
+      : undefined
+    setTranscriptFollow((previous) => updateTranscriptFollow(previous, route.sessionID, viewport, activitySessionID))
+  }
+  const stopFollowPart = sdk.event.on("message.part.updated", (evt) =>
+    readTranscriptFollow(evt.properties.part.sessionID),
+  )
+  const stopFollowDelta = sdk.event.on("message.part.delta", (evt) => readTranscriptFollow(evt.properties.sessionID))
+  onCleanup(() => {
+    stopFollowPart()
+    stopFollowDelta()
+  })
+  onMount(() =>
+    onCleanup(
+      scheduleTuiInterval(() => readTranscriptFollow(), {
+        name: "session-transcript-follow",
+        delayMs: 100,
+        unref: true,
+      }),
+    ),
+  )
+  createEffect(
+    on(
+      () => route.sessionID,
+      (sessionID) => setTranscriptFollow({ sessionID, away: false, unread: false }),
+    ),
+  )
+  function canReturnToTranscriptBottom() {
+    if (dialog.stack.length || permissions().length || questions().length || renderer.getSelection()?.getSelectedText())
+      return false
+    readTranscriptFollow()
+    return transcriptFollow().away && isRenderableAlive(scroll)
+  }
+  function returnToTranscriptBottom() {
+    if (!canReturnToTranscriptBottom()) return false
+    transcriptNavigation++
+    cancelEarlierAnchor?.()
+    scroll.scrollTo(scroll.scrollHeight)
+    readTranscriptFollow()
+    return true
+  }
 
   // Allow exit when in child session (prompt is hidden)
   const exit = useExit()
@@ -704,6 +756,11 @@ export function Session() {
     // An open dialog owns the keyboard: app-exit chords (ctrl+d by default)
     // double as dialog actions there (e.g. /schedule delete, session delete).
     if (dialog.stack.length > 0) return
+    if (isTranscriptEscape(evt) && returnToTranscriptBottom()) {
+      evt.preventDefault()
+      evt.stopPropagation()
+      return
+    }
     if (keybind.match("app_exit", evt)) {
       void exit.flourish()
     }
@@ -747,6 +804,7 @@ export function Session() {
 
   let cancelScrollTimer: (() => void) | undefined
   function toBottom() {
+    transcriptNavigation++
     cancelScrollTimer?.()
     cancelScrollTimer = scheduleTuiTimeout(
       () => {
@@ -766,20 +824,22 @@ export function Session() {
   onCleanup(() => cancelEarlierAnchor?.())
   async function loadEarlier() {
     const sessionID = route.sessionID
+    const navigation = transcriptNavigation
     if (earlierLoadingID() === sessionID) return
     const anchor = isRenderableAlive(scroll) ? captureScrollAnchor(scroll) : undefined
     setEarlierLoadingID(sessionID)
     try {
       const result = await sync.session.loadEarlier(sessionID)
       if (route.sessionID !== sessionID) return
-      if (result !== "loaded" || !anchor) return
+      if (result !== "loaded" || !anchor || navigation !== transcriptNavigation) return
       // scrollHeight only changes after the renderer's next layout frame, so
       // poll briefly for it instead of reading it right after the store update.
       cancelEarlierAnchor?.()
       cancelEarlierAnchor = restoreScrollAfterPrepend({
         scroll,
         anchor,
-        isCurrent: () => route.sessionID === sessionID && isRenderableAlive(scroll),
+        isCurrent: () =>
+          route.sessionID === sessionID && navigation === transcriptNavigation && isRenderableAlive(scroll),
         schedule: (fn, delayMs) => scheduleTuiTimeout(fn, { name: "session-load-earlier-anchor", delayMs }),
       })
     } catch {
@@ -1843,6 +1903,13 @@ export function Session() {
               <Show when={showTimeline()}>
                 <TimelineRail scroll={() => scroll} turns={timelineTurns()} />
               </Show>
+              <Show when={transcriptFollow().away}>
+                <TranscriptFollowIndicator
+                  unread={transcriptFollow().unread}
+                  columns={contentWidth()}
+                  onReturn={returnToTranscriptBottom}
+                />
+              </Show>
             </box>
             <box flexShrink={0}>
               <Show when={queuedFollowUps().length > 0}>
@@ -1878,6 +1945,8 @@ export function Session() {
                 <WorkModeNotice />
               </Show>
               <Prompt
+                onTranscriptEscape={returnToTranscriptBottom}
+                transcriptEscapeEnabled={canReturnToTranscriptBottom}
                 sidebarVisible={sidebarPanelVisible}
                 statusTick={statusTick}
                 visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}

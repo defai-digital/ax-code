@@ -4,7 +4,10 @@ import { isGhosttyTerminal, isWindowsTerminal, resolveTuiAdvancedTerminal } from
 const directHosts: [string, NodeJS.ProcessEnv][] = [
   ["Ghostty program", { TERM_PROGRAM: "ghostty", TERM: "xterm-ghostty" }],
   ["Ghostty terminfo", { TERM: "xterm-ghostty" }],
-  ["AkiTTY program", { TERM_PROGRAM: "Akitty", TERM: "xterm-256color", COLORTERM: "truecolor" }],
+  [
+    "AkiTTY 0.12.0",
+    { TERM_PROGRAM: "Akitty", TERM_PROGRAM_VERSION: "0.12.0", TERM: "xterm-256color", COLORTERM: "truecolor" },
+  ],
   ["Windows Terminal PowerShell", { WT_SESSION: "terminal-session" }],
   ["Windows Terminal WSL", { WT_SESSION: "terminal-session", WSL_DISTRO_NAME: "Ubuntu", TERM: "xterm-256color" }],
   ["GNOME Terminal", { VTE_VERSION: "7802", TERM: "xterm-256color", COLORTERM: "truecolor" }],
@@ -16,6 +19,10 @@ describe("Ghostty terminal identity", () => {
     expect(isGhosttyTerminal({ TERM_PROGRAM: "ghostty" })).toBe(true)
     expect(isGhosttyTerminal({ TERM: "xterm-ghostty" })).toBe(true)
     expect(isGhosttyTerminal({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" })).toBe(false)
+    expect(isGhosttyTerminal({ TERM_PROGRAM: "Akitty", TERM_PROGRAM_VERSION: "0.12.0", TERM: "xterm-ghostty" })).toBe(
+      false,
+    )
+    expect(isGhosttyTerminal({ TERM_PROGRAM: "vscode", TERM: "xterm-ghostty" })).toBe(false)
     expect(isGhosttyTerminal({})).toBe(false)
   })
 })

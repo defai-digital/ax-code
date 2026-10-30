@@ -138,7 +138,7 @@ await writeKV(BASE_KV)
 
 const { testRender } = await import("ax-tui/solid")
 const { createStore } = await import("solid-js/store")
-const { onMount } = await import("solid-js")
+const { onMount, createSignal, Show } = await import("solid-js")
 const { KVProvider, useKV } = await import("../src/cli/tui/context/kv")
 const { ToastProvider, useToast } = await import("../src/cli/tui/ui/toast")
 const { RouteProvider, useRoute } = await import("../src/cli/tui/context/route")
@@ -164,6 +164,8 @@ const { SessionRouteContext } = await import("../src/cli/tui/routes/session/cont
 const { UserMessage, AssistantMessage } = await import("../src/cli/tui/routes/session/transcript")
 const { PermissionPrompt } = await import("../src/cli/tui/routes/session/permission")
 const { TranscriptHistoryNotice } = await import("../src/cli/tui/routes/session/transcript-history-notice")
+const { TranscriptFollowIndicator } = await import("../src/cli/tui/routes/session/transcript-follow-indicator")
+const { updateTranscriptFollow } = await import("../src/cli/tui/routes/session/transcript-follow")
 const { DialogModel } = await import("../src/cli/tui/component/dialog-model")
 const { Home } = await import("../src/cli/tui/routes/home")
 const { appCommands } = await import("../src/cli/tui/app-commands")
@@ -755,7 +757,92 @@ function codeHighlighted(frame: CapturedFrame) {
   return !!keyword && !!name && hex(keyword.fg) !== hex(name.fg)
 }
 
+let followFixture: { scroll: ScrollBoxRenderable; sample: (activity?: string) => void; append: () => void }
+function FollowTranscript(props: { width: number }) {
+  const { theme } = useTheme()
+  const [rows, setRows] = createSignal(60)
+  const [follow, setFollow] = createSignal({ sessionID: "follow", away: false, unread: false })
+  let scroll: ScrollBoxRenderable
+  function sample(activity?: string) {
+    setFollow((previous) =>
+      updateTranscriptFollow(
+        previous,
+        "follow",
+        {
+          scrollTop: scroll.scrollTop,
+          scrollHeight: scroll.scrollHeight,
+          viewportHeight: scroll.viewport.height,
+        },
+        activity,
+      ),
+    )
+  }
+  return (
+    <box flexGrow={1} backgroundColor={theme.background}>
+      <scrollbox
+        ref={(value: ScrollBoxRenderable) => {
+          scroll = value
+          followFixture = { scroll, sample, append: () => setRows((count) => count + 1) }
+        }}
+        flexGrow={1}
+        stickyScroll
+        stickyStart="bottom"
+      >
+        <text>{Array.from({ length: rows() }, (_, i) => `Transcript line ${i + 1}`).join("\n")}</text>
+      </scrollbox>
+      <Show when={follow().away}>
+        <TranscriptFollowIndicator
+          unread={follow().unread}
+          columns={props.width}
+          onReturn={() => {
+            scroll.scrollTo(scroll.scrollHeight)
+            sample()
+          }}
+        />
+      </Show>
+    </box>
+  )
+}
+
+function followScene(width: number): Scene {
+  return {
+    name: `transcript-follow-dark-${width}x12`,
+    width,
+    height: 12,
+    mode: "dark",
+    body: () => <FollowTranscript width={width} />,
+    expect: ["Transcript line 60"],
+    drive: async (setup) => {
+      followFixture.scroll.scrollTo(10)
+      followFixture.sample("follow")
+      await setup.flush()
+      await setup.renderOnce()
+      const before = followFixture.scroll.scrollTop
+      followFixture.append()
+      await setup.flush()
+      await setup.renderOnce()
+      if (followFixture.scroll.scrollTop !== before) throw new Error("Live output moved the reading position")
+      const frame = setup.captureCharFrame().split("\n")
+      const row = frame.findIndex((line) => line.includes("↓"))
+      if (row < 0) throw new Error("Transcript return control missing")
+      await setup.mockMouse.click(frame[row].indexOf("↓"), row)
+      await setup.flush()
+      await setup.renderOnce()
+      if (setup.captureCharFrame().includes("↓")) throw new Error("Return control did not clear after click")
+      followFixture.append()
+      await setup.flush()
+      await setup.renderOnce()
+      if (followFixture.scroll.scrollTop !== followFixture.scroll.scrollHeight - followFixture.scroll.viewport.height)
+        throw new Error("Return to bottom did not resume sticky scrolling")
+      followFixture.scroll.scrollTo(10)
+      followFixture.sample("follow")
+    },
+  }
+}
+
 const SCENES: Scene[] = [
+  followScene(80),
+  followScene(20),
   paletteScene(80, 24, "dark"),
   paletteScene(80, 24, "light"),
   paletteScene(120, 36, "dark"),
