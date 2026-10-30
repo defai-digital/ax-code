@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.6] - 2026-10-30
+
+### Changed
+
+- Add source-pinned AkiTTY terminal SDK integration for localized title-bar status, progress, and an animated A/X pixel mark while the displayed session is working. Honor title and animation preferences and clear the indicators on teardown.
+- Publish the paired TypeScript SDK 2.6.58.
+
+### Fixed
+
+- Pause AkiTTY pixel animation while an external editor owns the terminal, restore the latest status afterward, and prevent idle or disposed sessions from restarting it.
+- Preserve the prompt draft when an external editor exits with an error instead of accepting partially written edits.
+
 ## [7.30.5] - 2026-10-30
 
 ### Added
