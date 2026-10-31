@@ -357,6 +357,15 @@ describe("Env.sanitize", () => {
     )
   })
 
+  test("redacts Set-Cookie pairs named after object prototype properties", () => {
+    for (const name of ["__proto__", "constructor", "toString"]) {
+      expect(Env.redactSecrets(`Set-Cookie: sid=SECRET123; ${name}=SECRET456`)).toBe(
+        `Set-Cookie: sid=[redacted]; ${name}=[redacted]`,
+      )
+    }
+    expect(Env.redactSecrets("Set-Cookie: sid=SECRET123; Path=/")).toBe("Set-Cookie: sid=[redacted]; Path=/")
+  })
+
   test("redacts combined Set-Cookie headers and malformed cookie values", () => {
     const combined = "Set-Cookie: sid=abc123; Path=/, pref=xyz789; Expires=Wed, 21 Oct 2030 07:28:00 GMT; Secure"
     const redacted =

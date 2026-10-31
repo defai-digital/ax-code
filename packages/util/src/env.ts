@@ -406,7 +406,8 @@ export namespace Env {
         const name = body.slice(0, equals).trim()
         if (!name) return leading + "[redacted]" + trailing
         if (setCookie && !firstPair) {
-          const shape = COOKIE_ATTRIBUTE_SHAPES[name.toLowerCase()]
+          const key = name.toLowerCase()
+          const shape = Object.hasOwn(COOKIE_ATTRIBUTE_SHAPES, key) ? COOKIE_ATTRIBUTE_SHAPES[key] : undefined
           if (shape?.(body.slice(equals + 1))) return segment
         }
         return leading + name + "=[redacted]" + trailing
