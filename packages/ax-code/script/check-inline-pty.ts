@@ -58,6 +58,16 @@ storm = next(node for node in ast.walk(driver) if isinstance(node, ast.If)
              and ast.unparse(node.test) == "storm and storm_count < 100")
 storm.test = ast.parse("storm and storm_count < 100 and "
                        "time.monotonic() - stream_start >= storm_count * .01", mode="eval").body
+# Catch up to elapsed time after a delayed poll. Sending only one resize per
+# select() iteration makes the event count depend on scheduler/output wakeups,
+# even though both profiles receive the same fixed streaming window.
+class PaceResizeStorm(ast.NodeTransformer):
+    def visit_If(self, node):
+        self.generic_visit(node)
+        if node is storm:
+            return ast.copy_location(ast.While(test=node.test, body=node.body, orelse=[]), node)
+        return node
+module = ast.fix_missing_locations(PaceResizeStorm().visit(module))
 full = next(node for node in driver.body if isinstance(node, ast.If)
             and isinstance(node.test, ast.Name) and node.test.id == "full")
 full.body.insert(-1, ast.parse('assert b"Stream-" in data[measurement_start:measurement_end] and '
