@@ -4496,6 +4496,88 @@ describe("session.llm.streamIdleWatchdog", () => {
       else process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = prev
     }
   })
+
+  test("does not re-create the watchdog timers per chunk", async () => {
+    const consume = async (chunks: number) => {
+      const spy = vi.spyOn(globalThis, "setTimeout")
+      try {
+        async function* gen() {
+          for (let i = 0; i < chunks; i++) yield i
+        }
+        const idleAbort = new AbortController()
+        const guarded = LLM.attachStreamIdleWatchdog(makeOutput(gen()), {
+          idleAbort,
+          idleTimeoutMs: 60_000,
+          maxDurationMs: 120_000,
+          providerID: "test",
+          modelID: "m",
+        })
+        const seen: unknown[] = []
+        for await (const chunk of guarded.fullStream) seen.push(chunk)
+        expect(seen).toHaveLength(chunks)
+        expect(idleAbort.signal.aborted).toBe(false)
+        return spy.mock.calls.length
+      } finally {
+        spy.mockRestore()
+      }
+    }
+    const few = await consume(5)
+    const many = await consume(50)
+    // One idle + one duration timer per stream: the count must not scale with
+    // the number of chunks. (The pre-optimization watchdog allocated both
+    // timers on every inner.next().)
+    expect(many).toBe(few)
+    expect(many).toBeLessThan(10)
+  })
+
+  test("time the consumer spends between chunks does not count as provider idle", async () => {
+    async function* gen() {
+      yield "a"
+      yield "b"
+      yield "c"
+    }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(gen()), {
+      idleAbort,
+      idleTimeoutMs: 20,
+      maxDurationMs: 0,
+      providerID: "test",
+      modelID: "m",
+    })
+    const seen: unknown[] = []
+    for await (const chunk of guarded.fullStream) {
+      seen.push(chunk)
+      // Slower than the idle window, but the provider answered every next() at once.
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    }
+    expect(seen).toEqual(["a", "b", "c"])
+    expect(idleAbort.signal.aborted).toBe(false)
+  })
+
+  test("clears both timers when the stream completes normally", async () => {
+    vi.useFakeTimers()
+    try {
+      async function* gen() {
+        yield "a"
+        yield "b"
+      }
+      const idleAbort = new AbortController()
+      const guarded = LLM.attachStreamIdleWatchdog(makeOutput(gen()), {
+        idleAbort,
+        idleTimeoutMs: 5_000,
+        maxDurationMs: 60_000,
+        providerID: "test",
+        modelID: "m",
+      })
+      const seen: unknown[] = []
+      for await (const chunk of guarded.fullStream) seen.push(chunk)
+      expect(seen).toEqual(["a", "b"])
+      expect(idleAbort.signal.aborted).toBe(false)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe("session.llm gateway robustness integration", () => {

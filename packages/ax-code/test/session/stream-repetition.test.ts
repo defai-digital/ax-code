@@ -305,6 +305,335 @@ describe("stream-repetition", () => {
   })
 })
 
+/**
+ * Verbatim copy of `StreamRepetition.create` from before the lazy window
+ * accumulation optimization: the raw tail window was rebuilt by copying
+ * `(window + chunk).slice(-tailWindowChars)` on every chunk. Kept purely as
+ * the reference the optimized implementation must match on every input.
+ */
+function createReferenceGuard(options: StreamRepetition.Options = {}) {
+  const minTotalChars = options.minTotalChars ?? StreamRepetition.MIN_TOTAL_CHARS
+  const windowChars = options.windowChars ?? StreamRepetition.WINDOW_CHARS
+  const tailWindowChars = options.windowChars ?? StreamRepetition.TAIL_WINDOW_CHARS
+  const checkIntervalChars = options.checkIntervalChars ?? StreamRepetition.CHECK_INTERVAL_CHARS
+  const minSegmentChars = options.minSegmentChars ?? StreamRepetition.MIN_SEGMENT_CHARS
+  const maxSegmentRepeats = options.maxSegmentRepeats ?? StreamRepetition.MAX_SEGMENT_REPEATS
+  const minTailUnitChars = options.minTailUnitChars ?? StreamRepetition.MIN_TAIL_UNIT_CHARS
+  const maxTailUnitChars = options.maxTailUnitChars ?? StreamRepetition.MAX_TAIL_UNIT_CHARS
+  const minTailRepeats = options.minTailRepeats ?? StreamRepetition.MIN_TAIL_REPEATS
+  const MAX_ANCHOR_OCCURRENCES = 64
+  const MAX_SEGMENT_KEYS = 256
+
+  const normalizeSegment = (raw: string): string => raw.trim().replace(/\s+/g, " ")
+  type Segment = { start: number; text: string; kind: "prose" | "code" }
+
+  const detectSegmentRepeat = (segments: Segment[], maxRepeats: number): StreamRepetition.Detection | undefined => {
+    const counts = new Map<string, number>()
+    for (const segment of segments) {
+      const key = `${segment.kind}:${segment.text}`
+      const count = (counts.get(key) ?? 0) + 1
+      if (count > maxRepeats) {
+        return { kind: "segment", unit: segment.text.slice(0, 200), count }
+      }
+      if (counts.size >= MAX_SEGMENT_KEYS && !counts.has(key)) continue
+      counts.set(key, count)
+    }
+    return undefined
+  }
+
+  const detectTailRepeat = (
+    window: string,
+    minUnitChars: number,
+    maxUnitChars: number,
+    minRepeats: number,
+  ): StreamRepetition.Detection | undefined => {
+    const anchor = window.slice(-minUnitChars)
+    if (anchor.length < minUnitChars) return undefined
+    const anchorStart = window.length - minUnitChars
+    let from = anchorStart - 1
+    let scanned = 0
+    while (scanned < MAX_ANCHOR_OCCURRENCES) {
+      const p = window.lastIndexOf(anchor, from)
+      if (p === -1) break
+      scanned++
+      from = p - 1
+      const period = anchorStart - p
+      if (period > maxUnitChars) break
+      if (period < minUnitChars) continue
+      const unit = window.slice(window.length - period)
+      const runLength = period * minRepeats
+      if (runLength > window.length) continue
+      const tail = window.slice(window.length - runLength)
+      if (tail === unit.repeat(minRepeats)) {
+        let count = minRepeats
+        while (window.length - (count + 1) * period >= 0) {
+          const prev = window.slice(window.length - (count + 1) * period, window.length - count * period)
+          if (prev !== unit) break
+          count++
+        }
+        return { kind: "tail", unit: unit.slice(0, 200), count }
+      }
+    }
+    return undefined
+  }
+
+  let total = 0
+  let window = ""
+  let sinceCheck = 0
+  let segments: Segment[] = []
+  let pendingLine = ""
+  let lineLength = 0
+  let lineStart = 0
+  let fence: { marker: string; length: number; start: number; body: string; overflow: boolean } | undefined
+
+  const pruneSegments = (end: number) => {
+    while (segments.length && segments[0].start < end - windowChars) segments.shift()
+  }
+  const recordSegment = (raw: string, start: number, kind: Segment["kind"]) => {
+    if (kind === "prose" && /^(?: {4}|\t)/.test(raw)) return
+    const text = kind === "code" ? raw.trim() : normalizeSegment(raw)
+    if (text.length >= minSegmentChars) segments.push({ start, text, kind })
+  }
+
+  const appendSegments = (delta: string) => {
+    let offset = 0
+    while (offset < delta.length) {
+      const newline = delta.indexOf("\n", offset)
+      const end = newline === -1 ? delta.length : newline
+      const length = end - offset
+      pendingLine += delta.slice(offset, offset + Math.min(length, windowChars - pendingLine.length))
+      lineLength += length
+      if (newline === -1) break
+
+      const lineEnd = lineStart + lineLength + 1
+      pruneSegments(lineEnd)
+      const delimiter = lineLength <= windowChars ? /^ {0,3}(`{3,}|~{3,})(.*)\r?$/.exec(pendingLine) : null
+      if (fence) {
+        if (lineEnd - fence.start > windowChars) {
+          fence.body = ""
+          fence.overflow = true
+        }
+        if (
+          delimiter &&
+          delimiter[1][0] === fence.marker &&
+          delimiter[1].length >= fence.length &&
+          !delimiter[2].trim()
+        ) {
+          if (!fence.overflow) recordSegment(fence.body, fence.start, "code")
+          fence = undefined
+        } else if (!fence.overflow) {
+          fence.body += pendingLine + "\n"
+        }
+      } else if (delimiter && (delimiter[1][0] !== "`" || !delimiter[2].includes("`"))) {
+        fence = { marker: delimiter[1][0], length: delimiter[1].length, start: lineStart, body: "", overflow: false }
+      } else if (lineLength <= windowChars) {
+        recordSegment(pendingLine, lineStart, "prose")
+      }
+      pendingLine = ""
+      lineLength = 0
+      lineStart = lineEnd
+      offset = newline + 1
+    }
+  }
+
+  return {
+    push(delta: string): StreamRepetition.Detection | undefined {
+      for (let offset = 0; offset < delta.length; ) {
+        const untilCheck = Math.max(1, minTotalChars - total, checkIntervalChars - sinceCheck)
+        const chunk = delta.slice(offset, offset + untilCheck)
+        offset += chunk.length
+        total += chunk.length
+        window = (window + chunk).slice(-tailWindowChars)
+        appendSegments(chunk)
+        pruneSegments(total)
+        sinceCheck += chunk.length
+        if (total < minTotalChars || sinceCheck < checkIntervalChars) continue
+        sinceCheck = 0
+        const detection =
+          detectSegmentRepeat(segments, maxSegmentRepeats) ??
+          detectTailRepeat(window, minTailUnitChars, maxTailUnitChars, minTailRepeats)
+        if (detection) return detection
+      }
+      return undefined
+    },
+    reset() {
+      total = 0
+      window = ""
+      sinceCheck = 0
+      segments = []
+      pendingLine = ""
+      lineLength = 0
+      lineStart = 0
+      fence = undefined
+    },
+  }
+}
+
+describe("stream-repetition equivalence with the eager-window reference", () => {
+  /** Deterministic PRNG so randomized cases never flake. */
+  const mulberry32 = (seed: number) => {
+    let a = seed >>> 0
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0
+      let t = a
+      t = Math.imul(t ^ (t >>> 15), t | 1)
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+  }
+
+  const assertEquivalent = (
+    options: StreamRepetition.Options | undefined,
+    deltas: string[],
+    resetAfter: number[] = [],
+  ) => {
+    const guard = StreamRepetition.create(options)
+    const reference = createReferenceGuard(options)
+    const resets = new Set(resetAfter)
+    deltas.forEach((delta, index) => {
+      expect(guard.push(delta)).toEqual(reference.push(delta))
+      if (resets.has(index)) {
+        guard.reset()
+        reference.reset()
+      }
+    })
+  }
+
+  const splitInto = (text: string, size: number): string[] => {
+    const deltas: string[] = []
+    for (let offset = 0; offset < text.length; offset += size) deltas.push(text.slice(offset, offset + size))
+    return deltas
+  }
+
+  const buildRandomStream = (rng: () => number, targetLength: number): string => {
+    const parts: string[] = []
+    let length = 0
+    let i = 0
+    while (length < targetLength) {
+      const pick = rng()
+      i++
+      if (pick < 0.25) parts.push(`${phrase}\n`)
+      else if (pick < 0.4)
+        parts.push(`Unique analysis ${i} covers a genuinely different aspect with enough characters.\n`)
+      else if (pick < 0.55)
+        parts.push(
+          "```ts\n" +
+            `const value${i % 5} = await loadSource("file-${i % 5}.ts", { verify: true })\n`.repeat(2) +
+            "```\n",
+        )
+      else if (pick < 0.65) parts.push(`    $ run --case ${i} --verbose\n`)
+      else if (pick < 0.72) parts.push(`interlude ${i}\r\n`)
+      else if (pick < 0.84) parts.push("the model is stuck saying this sentence over and over. ")
+      else if (pick < 0.94) parts.push(`漢字混合 ${i} のテキスト with 😀 emoji\n`)
+      else parts.push(`lorem ${i} ` + "x".repeat(40) + " tail-anchor-constant-padding!!\n")
+      length += parts[parts.length - 1].length
+    }
+    return parts.join("")
+  }
+
+  const randomSizes = (rng: () => number, count: number): number[] =>
+    Array.from({ length: count }, () => {
+      const pick = rng()
+      if (pick < 0.35) return 1
+      if (pick < 0.5) return 2 + Math.floor(rng() * 6)
+      if (pick < 0.7) return 37
+      if (pick < 0.85) return 512
+      if (pick < 0.95) return 1500
+      return 5000
+    })
+
+  test("matches on 1-char deltas over loops, fences, and unique lines", () => {
+    const output =
+      Array.from({ length: 60 }, (_, i) => `Unique reasoning ${i} with enough characters to matter.\n`).join("") +
+      "```ts\n" +
+      `const shared = await loadSource("source.ts")\n`.repeat(10) +
+      "```\n" +
+      `${phrase}\n`.repeat(200)
+    // Defaults throttle checks to every 512 chars; fast options check on
+    // every character — both must agree with the reference at every step.
+    assertEquivalent(undefined, splitInto(output, 1))
+    assertEquivalent({ minTotalChars: 100, checkIntervalChars: 1 }, splitInto(output.slice(0, 6000), 1))
+  })
+
+  test("matches on a single huge delta well past the window", () => {
+    const unique = Array.from(
+      { length: 1200 },
+      (_, i) => `Line ${i} walks a different path through the analysis with padding to spare.\n`,
+    ).join("")
+    const output = unique + `${phrase}\n`.repeat(400) + unique.slice(0, 3000)
+    expect(output.length).toBeGreaterThan(StreamRepetition.TAIL_WINDOW_CHARS * 2)
+    assertEquivalent(undefined, [output])
+  })
+
+  test("matches at tail-unit period boundaries", () => {
+    // 4096 = MAX_TAIL_UNIT_CHARS at the default tail window; 200 = the same
+    // floor for a 600-char window (3 repeats must fit). ±1 straddles both.
+    const cases = [
+      [{ minTotalChars: 100, checkIntervalChars: 1 }, 4096],
+      [{ minTotalChars: 100, checkIntervalChars: 1, windowChars: 600 }, 200],
+    ] as const
+    for (const [options, boundary] of cases) {
+      for (const delta of [-1, 0, 1]) {
+        const unit = "u".repeat(boundary + delta - 1) + "\n"
+        assertEquivalent(options, splitInto(unit.repeat(8), 37))
+      }
+    }
+  })
+
+  test("matches without newlines in single-line tail loops", () => {
+    for (const unitChars of [29, 30, 31, 200, 201]) {
+      const output = "f".repeat(unitChars).repeat(30)
+      assertEquivalent({ minTotalChars: 100, checkIntervalChars: 1, windowChars: 600 }, splitInto(output, 7))
+    }
+  })
+
+  test("matches when the anchor scan budget is exhausted", () => {
+    const tail = "tail-anchor-of-thirty-plus-chars!!!\n"
+    const output = Array.from(
+      { length: 300 },
+      (_, i) => `${String(i).padStart(6, "0")} unique-prefix-${i} ${tail}`,
+    ).join("")
+    assertEquivalent({ minTotalChars: 100, checkIntervalChars: 1 }, splitInto(output, 97))
+  })
+
+  test("matches past the segment-key cap", () => {
+    const unique = Array.from(
+      { length: 400 },
+      (_, i) => `Paragraph ${i} is long enough and completely unique in every way.\n`,
+    ).join("")
+    const output = unique + `${phrase}\n`.repeat(8)
+    assertEquivalent({ minTotalChars: 100, checkIntervalChars: 1 }, splitInto(output, 211))
+  })
+
+  test.each([1, 7, 42, 1337, 65535])("matches on randomized stream and delta sizes (seed %i)", (seed) => {
+    const rng = mulberry32(seed)
+    const output = buildRandomStream(rng, 16_000)
+    assertEquivalent(undefined, splitInto(output, 1))
+    assertEquivalent(undefined, splitInto(output, 512))
+    assertEquivalent(undefined, splitInto(output, 10_000))
+    {
+      const sizes = randomSizes(rng, 5_000)
+      let offset = 0
+      const deltas: string[] = []
+      for (const size of sizes) {
+        if (offset >= output.length) break
+        deltas.push(output.slice(offset, offset + size))
+        offset += size
+      }
+      assertEquivalent(undefined, deltas)
+      assertEquivalent({ minTotalChars: 100, checkIntervalChars: 1, windowChars: 600 }, deltas.slice(0, 40))
+    }
+  })
+
+  test("matches across reset boundaries", () => {
+    const first = `${phrase}\n`.repeat(30)
+    const second =
+      Array.from({ length: 30 }, (_, i) => `Fresh line ${i} after the reset.\n`).join("") + `${phrase}\n`.repeat(10)
+    const deltas = [...splitInto(first, 53), ...splitInto(second, 53)]
+    assertEquivalent({ minTotalChars: 100, checkIntervalChars: 1 }, deltas, [splitInto(first, 53).length - 1])
+  })
+})
+
 describe("truncateLoopedText", () => {
   test("keeps the head on a surrogate-safe boundary", () => {
     const out = StreamRepetition.truncateLoopedText("a".repeat(1999) + "😀" + "tail".repeat(10), 2000)

@@ -147,13 +147,52 @@ export namespace StreamRepetition {
     const minTailRepeats = options.minTailRepeats ?? MIN_TAIL_REPEATS
 
     let total = 0
-    let window = ""
     let sinceCheck = 0
     let segments: Segment[] = []
     let pendingLine = ""
     let lineLength = 0
     let lineStart = 0
     let fence: { marker: string; length: number; start: number; body: string; overflow: boolean } | undefined
+
+    // The raw tail window is accumulated lazily: appending chunk strings to a
+    // list and compacting it only past twice the window size avoids copying
+    // the whole (up to TAIL_WINDOW_CHARS) window on every delta. The window
+    // string is materialized only when a check actually fires; the result is
+    // byte-identical to eagerly keeping `text.slice(-tailWindowChars)`.
+    let windowChunks: string[] = []
+    let windowLength = 0
+    const appendWindow = (chunk: string) => {
+      windowChunks.push(chunk)
+      windowLength += chunk.length
+      if (windowLength <= tailWindowChars * 2) return
+      let excess = windowLength - tailWindowChars
+      while (windowChunks.length > 0 && windowChunks[0].length <= excess) {
+        excess -= windowChunks[0].length
+        windowLength -= windowChunks[0].length
+        windowChunks.shift()
+      }
+      if (windowChunks.length > 0 && excess > 0) {
+        windowChunks[0] = windowChunks[0].slice(excess)
+        windowLength -= excess
+      }
+    }
+    // The last min(total, tailWindowChars) characters of everything appended.
+    const materializeWindow = (): string => {
+      if (windowLength <= tailWindowChars) return windowChunks.join("")
+      const parts: string[] = []
+      let keep = tailWindowChars
+      for (let i = windowChunks.length - 1; i >= 0 && keep > 0; i--) {
+        const chunk = windowChunks[i]
+        if (chunk.length <= keep) {
+          parts.push(chunk)
+          keep -= chunk.length
+        } else {
+          parts.push(chunk.slice(chunk.length - keep))
+          keep = 0
+        }
+      }
+      return parts.reverse().join("")
+    }
 
     const pruneSegments = (end: number) => {
       while (segments.length && segments[0].start < end - windowChars) segments.shift()
@@ -222,7 +261,7 @@ export namespace StreamRepetition {
           const chunk = delta.slice(offset, offset + untilCheck)
           offset += chunk.length
           total += chunk.length
-          window = (window + chunk).slice(-tailWindowChars)
+          appendWindow(chunk)
           appendSegments(chunk)
           pruneSegments(total)
           sinceCheck += chunk.length
@@ -230,7 +269,7 @@ export namespace StreamRepetition {
           sinceCheck = 0
           const detection =
             detectSegmentRepeat(segments, maxSegmentRepeats) ??
-            detectTailRepeat(window, minTailUnitChars, maxTailUnitChars, minTailRepeats)
+            detectTailRepeat(materializeWindow(), minTailUnitChars, maxTailUnitChars, minTailRepeats)
           if (detection) return detection
         }
         return undefined
@@ -238,7 +277,8 @@ export namespace StreamRepetition {
       /** Reset accumulated state (e.g. at a new step within the same stream). */
       reset() {
         total = 0
-        window = ""
+        windowChunks = []
+        windowLength = 0
         sinceCheck = 0
         segments = []
         pendingLine = ""

@@ -1062,6 +1062,93 @@ export namespace LLM {
   ): T {
     const maxDurationMs = options.maxDurationMs ?? 0
 
+    // Manual race (see util/timeout.ts): once the watchdog fires, the still-
+    // pending inner next() must not become an unhandled rejection when the
+    // aborted fetch later rejects it. Both timers are allocated once per
+    // stream and reused across chunks instead of being re-armed per chunk:
+    // the idle timer re-bases via Timeout.refresh() on every chunk, and the
+    // duration timer keeps firing at its absolute deadline (maxDeadline).
+    let streamClosed = false
+    let watchdogError: Error | undefined
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    let durationTimer: ReturnType<typeof setTimeout> | undefined
+    let rejectPending: ((error: Error) => void) | undefined
+
+    const clearIdle = () => {
+      if (!idleTimer) return
+      clearTimeout(idleTimer)
+      idleTimer = undefined
+    }
+    const clearDuration = () => {
+      if (!durationTimer) return
+      clearTimeout(durationTimer)
+      durationTimer = undefined
+    }
+    const fire = (error: Error) => {
+      if (streamClosed || watchdogError) return
+      watchdogError = error
+      clearIdle()
+      clearDuration()
+      options.idleAbort.abort()
+      // If no next() is pending (consumer gap between chunks), the latched
+      // error rejects the next race instead.
+      rejectPending?.(error)
+    }
+    const armIdle = () => {
+      if (options.idleTimeoutMs <= 0) return
+      if (idleTimer) {
+        // Re-base the existing handle instead of allocating a new timer per
+        // chunk; refreshing an armed timer keeps one allocation per stream.
+        idleTimer.refresh?.()
+        return
+      }
+      idleTimer = setTimeout(() => {
+        if (streamClosed || watchdogError) return
+        // Only time spent waiting inside next() counts as provider silence.
+        // Firing between chunks means the consumer was busy; the next race
+        // re-bases this timer through refresh().
+        if (!rejectPending) return
+        if (executingToolCalls > 0) {
+          armIdle() // full window again; local tools may run long
+          return
+        }
+        fire(
+          new Error(
+            `Model stream stalled — no data from ${options.providerID}/${options.modelID} for ${Math.round(options.idleTimeoutMs / 1000)}s; the request was aborted. This is usually a provider or network issue — retry, or raise AX_CODE_STREAM_IDLE_TIMEOUT_MS.`,
+          ),
+        )
+      }, options.idleTimeoutMs)
+      idleTimer.unref?.()
+    }
+    const armDuration = () => {
+      if (maxDurationMs <= 0 || executingToolCalls > 0) return
+      if (durationTimer) return // already scheduled for the current deadline
+      durationTimer = setTimeout(
+        () => {
+          // Outside a race the deadline is enforced when the next race starts
+          // (re-armed with a zero delay), as before: drop the spent handle.
+          if (!rejectPending) {
+            durationTimer = undefined
+            return
+          }
+          fire(
+            new Error(
+              `Model stream exceeded the maximum active duration of ${Math.round(maxDurationMs / 1000)}s for ${options.providerID}/${options.modelID}; the request was aborted while it was still producing data. Retry with a smaller scope, switch models, or raise AX_CODE_STREAM_MAX_DURATION_MS.`,
+            ),
+          )
+        },
+        Math.max(0, maxDeadline - Date.now()),
+      )
+      durationTimer.unref?.()
+    }
+    const stopWatchdog = () => {
+      // The iterator closed (done, error, or explicit return/throw): no race
+      // can start anymore, so both timers can be dropped.
+      streamClosed = true
+      clearIdle()
+      clearDuration()
+    }
+
     // Locally-executing tool calls observed on the stream: a `tool-call`
     // chunk has arrived but its `tool-result`/`tool-error` has not. While
     // this is > 0 the provider is not expected to send anything — the turn
@@ -1077,79 +1164,42 @@ export namespace LLM {
       const value = chunk as { type?: unknown; providerExecuted?: unknown }
       if (value.providerExecuted === true) return
       if (value.type === "tool-call") {
-        if (executingToolCalls === 0) toolPauseStartedAt = Date.now()
+        if (executingToolCalls === 0) {
+          toolPauseStartedAt = Date.now()
+          // The duration clock pauses while local tools run; it re-arms with
+          // the extended deadline when the last one finishes.
+          clearDuration()
+        }
         executingToolCalls++
       } else if ((value.type === "tool-result" || value.type === "tool-error") && executingToolCalls > 0) {
         executingToolCalls--
         if (executingToolCalls === 0 && toolPauseStartedAt !== undefined) {
           maxDeadline += Date.now() - toolPauseStartedAt
           toolPauseStartedAt = undefined
+          armDuration()
         }
       }
     }
 
-    // Manual race (see util/timeout.ts): once the watchdog fires, the still-
-    // pending inner next() must not become an unhandled rejection when the
-    // aborted fetch later rejects it.
     const raceWatchdog = <R>(op: Promise<R>): Promise<R> =>
       new Promise<R>((resolve, reject) => {
-        let settled = false
-        let idleTimer: ReturnType<typeof setTimeout> | undefined
-        let durationTimer: ReturnType<typeof setTimeout> | undefined
-        const clearTimers = () => {
-          if (idleTimer) clearTimeout(idleTimer)
-          if (durationTimer) clearTimeout(durationTimer)
+        if (watchdogError) {
+          // The aborted fetch may reject this op later; keep it handled.
+          op.catch(() => {})
+          reject(watchdogError)
+          return
         }
-        const armIdle = () => {
-          if (options.idleTimeoutMs <= 0) return
-          idleTimer = setTimeout(() => {
-            if (settled) return
-            if (executingToolCalls > 0) {
-              armIdle()
-              return
-            }
-            settled = true
-            clearTimers()
-            options.idleAbort.abort()
-            reject(
-              new Error(
-                `Model stream stalled — no data from ${options.providerID}/${options.modelID} for ${Math.round(options.idleTimeoutMs / 1000)}s; the request was aborted. This is usually a provider or network issue — retry, or raise AX_CODE_STREAM_IDLE_TIMEOUT_MS.`,
-              ),
-            )
-          }, options.idleTimeoutMs)
-          idleTimer.unref?.()
-        }
-        const armDuration = () => {
-          if (maxDurationMs <= 0 || executingToolCalls > 0) return
-          durationTimer = setTimeout(
-            () => {
-              if (settled) return
-              settled = true
-              clearTimers()
-              options.idleAbort.abort()
-              reject(
-                new Error(
-                  `Model stream exceeded the maximum active duration of ${Math.round(maxDurationMs / 1000)}s for ${options.providerID}/${options.modelID}; the request was aborted while it was still producing data. Retry with a smaller scope, switch models, or raise AX_CODE_STREAM_MAX_DURATION_MS.`,
-                ),
-              )
-            },
-            Math.max(0, maxDeadline - Date.now()),
-          )
-          durationTimer.unref?.()
-        }
+        rejectPending = reject
         armIdle()
         armDuration()
         op.then(
           (value) => {
-            if (settled) return
-            settled = true
-            clearTimers()
+            rejectPending = undefined
+            if (watchdogError) return
             resolve(value)
           },
           (error) => {
-            if (settled) return
-            settled = true
-            clearTimers()
+            rejectPending = undefined
             reject(error)
           },
         )
@@ -1171,10 +1221,12 @@ export namespace LLM {
               if (closed) return { done: true as const, value: undefined }
               completed = result.done === true
               closed = completed
+              if (closed) stopWatchdog()
               if (!result.done) trackChunk(result.value)
               return result
             } catch (error) {
               closed = true
+              stopWatchdog()
               abortUnfinished()
               throw error
             }
@@ -1182,6 +1234,7 @@ export namespace LLM {
           return: async (value?: unknown) => {
             if (closed) return { done: true as const, value }
             closed = true
+            stopWatchdog()
             // SDK fullStream is a tee branch: cancelling its reader alone does
             // not abort the provider fetch while another branch remains alive.
             // Abort first so loop guards and other early exits release local
@@ -1199,6 +1252,7 @@ export namespace LLM {
           throw: async (error?: unknown) => {
             if (closed) throw error
             closed = true
+            stopWatchdog()
             abortUnfinished()
             try {
               if (inner.throw) return await inner.throw(error)
