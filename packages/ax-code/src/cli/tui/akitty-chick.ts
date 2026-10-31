@@ -1,13 +1,13 @@
 import { encode, ellipse, fill, flip, grid, layer, outline, paint, shift, stroke, triangle } from "./akitty-pixel"
 import type { Grid, Point } from "./akitty-pixel"
 
-// Pixel chick for AkiTTY's tab activity mark, alongside the cat, the red panda
-// and the dragon (one of the four is picked at random each time a session
-// starts working). A round yellow
-// chick with an orange beak and feet, drawn from simple shapes like the cat but
-// with its own moves, in a 15 s loop: hatches from a wobbling egg, wears the top
-// shell as a hat and shakes it off, pecks up a seed, turns to scratch the dirt,
-// dances, dozes off standing, then tucks back into its egg.
+// Pixel chick for AkiTTY's tab activity mark, alongside the cat, the red panda,
+// the dragon and the dog (one of the five is picked at random each time a
+// session starts working). A round yellow chick with an orange beak and feet,
+// drawn from simple shapes like the cat but with its own moves, in a 15 s loop:
+// hatches from a wobbling egg, wears the top shell as a hat and shakes it off,
+// pecks up a seed, turns to scratch the dirt, dances, dozes off standing, then
+// tucks back into its egg.
 
 type Wing = "down" | "up"
 

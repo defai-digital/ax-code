@@ -2,6 +2,7 @@ import { createSprite, createTerminalClient, detectCapabilities } from "@ax-code
 import type { Environment, Scheduler } from "@ax-code/akitty-sdk"
 import { AKITTY_CAT_FRAMES, AKITTY_CAT_FRAME_MS } from "./akitty-cat"
 import { AKITTY_CHICK_FRAMES, AKITTY_CHICK_FRAME_MS } from "./akitty-chick"
+import { AKITTY_DOG_FRAMES, AKITTY_DOG_FRAME_MS } from "./akitty-dog"
 import { AKITTY_DRAGON_FRAMES, AKITTY_DRAGON_FRAME_MS } from "./akitty-dragon"
 import { AKITTY_PIXEL_PX } from "./akitty-pixel"
 import { AKITTY_RED_PANDA_FRAMES, AKITTY_RED_PANDA_FRAME_MS } from "./akitty-red-panda"
@@ -14,9 +15,10 @@ export type TuiProgramChromeState = Readonly<{
 }>
 
 // AkiTTY's tab activity mark is a pixel animal (akitty-cat.ts, akitty-chick.ts,
-// akitty-red-panda.ts, akitty-dragon.ts), picked at random each time a session starts working. AkiTTY sprites hold at
-// most four frames, so each frame is its own one-frame sprite and this module,
-// not the SDK, advances them.
+// akitty-red-panda.ts, akitty-dragon.ts, akitty-dog.ts), picked at random each
+// time a session starts working. AkiTTY sprites hold at most four frames, so
+// each frame is its own one-frame sprite and this module, not the SDK, advances
+// them.
 const animation = (name: string, frames: readonly Uint8Array[], frameMs: number) => ({
   name,
   frameMs,
@@ -27,6 +29,7 @@ export const TUI_PROGRAM_CHROME_ANIMATIONS = [
   animation("chick", AKITTY_CHICK_FRAMES, AKITTY_CHICK_FRAME_MS),
   animation("red panda", AKITTY_RED_PANDA_FRAMES, AKITTY_RED_PANDA_FRAME_MS),
   animation("dragon", AKITTY_DRAGON_FRAMES, AKITTY_DRAGON_FRAME_MS),
+  animation("dog", AKITTY_DOG_FRAMES, AKITTY_DOG_FRAME_MS),
 ] as const
 type Animation = (typeof TUI_PROGRAM_CHROME_ANIMATIONS)[number]
 
@@ -48,6 +51,7 @@ export function createTuiProgramChrome(options: {
   onError: (error: unknown) => void
 }) {
   let previous: string | undefined
+  let animationsEnabled = false
   let frame = 0
   // Chosen when a busy period starts and kept through status changes, so a
   // retry does not swap animals mid-run.
@@ -97,21 +101,35 @@ export function createTuiProgramChrome(options: {
       }
       const key = JSON.stringify([state.statusText, state.animations])
       if (previous === key) return false
-      stop()
-      frame = 0
+      // A status or locale change should not rewind a live animation or
+      // postpone its next frame. Motion preference changes still reset it.
+      const continuing = previous !== undefined && animationsEnabled === state.animations
+      if (!continuing) {
+        stop()
+        frame = 0
+      }
       const animations = TUI_PROGRAM_CHROME_ANIMATIONS
       current ??=
         animations[Math.min(animations.length - 1, Math.floor((options.random ?? Math.random)() * animations.length))]!
       const status = { text: state.statusText, tone: "info" as const }
-      const written = client.updateChrome({
-        status,
-        progress: "indeterminate",
-        sprite: current.sprites[0]!,
-        mark: 0,
-      })
+      let written = false
+      try {
+        written = client.updateChrome({
+          status,
+          progress: "indeterminate",
+          sprite: current.sprites[frame]!,
+          mark: 0,
+        })
+      } finally {
+        if (!written) {
+          stop()
+          previous = undefined
+        }
+      }
       if (!written) return false
       previous = key
-      if (state.animations) {
+      animationsEnabled = state.animations
+      if (state.animations && !continuing) {
         const token = generation
         const cancel = (options.schedule ?? scheduleInterval)(() => {
           if (token === generation) tick()

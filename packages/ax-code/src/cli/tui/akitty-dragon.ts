@@ -2,12 +2,12 @@ import { encode, ellipse, grid, layer, outline, paint, patch, shift, stroke } fr
 import type { Grid, Point } from "./akitty-pixel"
 
 // Pixel Chinese dragon for AkiTTY's tab activity mark, alongside the cat, the
-// chick and the red panda (one of the four is picked at random each time a
-// session starts working). A long green serpent with a white banded belly and
-// orange horns, whiskers and claws, after traditional green dragon art, drawn
-// along a curve so its whole body can ripple. Its
-// own 15 s loop: undulates, chases and catches the flaming pearl, breathes
-// fire, winds into a turning coil, and surfs a cloud.
+// chick, the red panda and the dog (one of the five is picked at random each
+// time a session starts working). A long green serpent with a white banded
+// belly and orange horns, whiskers and claws, after traditional green dragon
+// art, drawn along a curve so its whole body can ripple. Its own 15 s loop:
+// undulates, chases and catches the flaming pearl, breathes fire, winds into a
+// turning coil, and surfs a cloud.
 
 // The body is drawn along a centre line from tail to head.
 type Path = readonly Point[]

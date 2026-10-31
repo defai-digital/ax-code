@@ -17,7 +17,7 @@ const busy = { enabled: true, busy: true, animations: true, statusText: "Working
 const env = { TERM_PROGRAM: "Akitty", TERM: "xterm-256color" }
 const profile = resolveTuiRenderProfile({ advancedTerminal: true, terminalTitleDisabled: false })
 const parse = (sequence: string) => JSON.parse(sequence.slice("\x1b]771;".length, -1))
-const [CAT, CHICK, RED_PANDA, DRAGON] = TUI_PROGRAM_CHROME_ANIMATIONS
+const [CAT, CHICK, RED_PANDA, DRAGON, DOG] = TUI_PROGRAM_CHROME_ANIMATIONS
 const TUI_PROGRAM_CHROME_FRAME_MS = CAT.frameMs
 // The frame a chrome write shows, and the cat frame expected at an index.
 // Some poses repeat, so compare pixels rather than look up an index.
@@ -187,11 +187,31 @@ describe("AkiTTY program chrome", () => {
     expect(DRAGON.sprites.some((sprite) => others.has(sprite.frames[0]))).toBe(false)
   })
 
+  test("the dog is a silver and white husky with a blue collar that runs the widest", () => {
+    const used = new Set(DOG.sprites.flatMap((sprite) => [...colors(sprite.frames[0]!)]))
+    expect(used).toEqual(new Set([rgb("silver"), rgb("white"), rgb("black"), rgb("blue"), rgb("yellow")]))
+    const others = new Set(
+      [...CAT.sprites, ...CHICK.sprites, ...RED_PANDA.sprites, ...DRAGON.sprites].map((sprite) => sprite.frames[0]),
+    )
+    expect(DOG.sprites.some((sprite) => others.has(sprite.frames[0]))).toBe(false)
+    // Count frames where the animal has mostly left the frame: the dog's runs
+    // go further out, and more often, than the cat's walk.
+    const offstage = (animal: typeof CAT) =>
+      animal.sprites.filter((sprite) => {
+        const pixels = Buffer.from(sprite.frames[0]!, "base64")
+        let lit = 0
+        for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) lit++
+        return lit < 40
+      }).length
+    expect(offstage(DOG)).toBeGreaterThan(offstage(CAT))
+  })
+
   test.each([
     [0, "cat"],
-    [0.3, "chick"],
-    [0.6, "red panda"],
-    [0.99, "dragon"],
+    [0.25, "chick"],
+    [0.45, "red panda"],
+    [0.65, "dragon"],
+    [0.99, "dog"],
   ])("a roll of %s picks the %s", (roll, name) => {
     const { writes, controller } = harness(() => roll)
     controller.update(busy)
@@ -201,7 +221,7 @@ describe("AkiTTY program chrome", () => {
   })
 
   test("each busy period picks an animal at random and keeps it until idle", () => {
-    const rolls = [0.3, 0.1]
+    const rolls = [0.25, 0.1]
     const { writes, controller } = harness(() => rolls.shift() ?? 0)
     controller.update(busy)
     expect(shown(writes.at(-1)!)).toBe(CHICK.sprites[0]!.frames[0])
@@ -238,6 +258,42 @@ describe("AkiTTY program chrome", () => {
     const count = writes.length
     vi.advanceTimersByTime(2000)
     expect(writes).toHaveLength(count)
+    controller.dispose()
+  })
+
+  test("status updates keep the current pose and the next animation deadline", () => {
+    const { writes, controller } = harness()
+    controller.update(busy)
+    vi.advanceTimersByTime(TUI_PROGRAM_CHROME_FRAME_MS * 4 + 50)
+    expect(shown(writes.at(-1)!)).toBe(frame(4))
+    controller.update({ ...busy, statusText: "Retrying" })
+    expect(parse(writes.at(-1)!).status.text).toBe("Retrying")
+    expect(shown(writes.at(-1)!)).toBe(frame(4))
+    vi.advanceTimersByTime(TUI_PROGRAM_CHROME_FRAME_MS - 50)
+    expect(shown(writes.at(-1)!)).toBe(frame(5))
+    controller.dispose()
+  })
+
+  test.each(["rejected", "thrown"])("a %s status write stops playback and permits a retry", (failure) => {
+    let failing = false
+    const write = vi.fn(() => {
+      if (failing && failure === "thrown") throw new Error("terminal closed")
+      return !failing
+    })
+    const controller = createTuiProgramChrome({ supported: true, write, onError: vi.fn(), random: () => 0 })
+    controller.update(busy)
+    vi.advanceTimersByTime(TUI_PROGRAM_CHROME_FRAME_MS * 4)
+    failing = true
+    const retry = { ...busy, statusText: "Retrying" }
+    if (failure === "thrown") expect(() => controller.update(retry)).toThrow("terminal closed")
+    else expect(controller.update(retry)).toBe(false)
+    const count = write.mock.calls.length
+    vi.advanceTimersByTime(1000)
+    expect(write).toHaveBeenCalledTimes(count)
+    failing = false
+    expect(controller.update(retry)).toBe(true)
+    vi.advanceTimersByTime(TUI_PROGRAM_CHROME_FRAME_MS)
+    expect(write).toHaveBeenCalledTimes(count + 2)
     controller.dispose()
   })
 

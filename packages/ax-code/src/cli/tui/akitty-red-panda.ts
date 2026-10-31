@@ -1,13 +1,13 @@
 import { encode, ellipse, grid, layer, outline, paint, patch, rotate, shift, stroke, triangle } from "./akitty-pixel"
 import type { Grid, Point } from "./akitty-pixel"
 
-// Pixel red panda for AkiTTY's tab activity mark, alongside the cat, the chick
-// and the dragon (one of the four is picked at random each time a session
-// starts working). A rust-red panda facing front, with a white face mask and ear rims,
-// black legs, and an orange-ringed tail, drawn from simple shapes. Its own
-// 15 s loop: sits and sways its tail, munches a bamboo stalk down, rears up in
-// the classic arms-up surprise pose, plays peekaboo behind its tail, curls
-// into a ball and rolls, then waves.
+// Pixel red panda for AkiTTY's tab activity mark, alongside the cat, the chick,
+// the dragon and the dog (one of the five is picked at random each time a
+// session starts working). A rust-red panda facing front, with a white face
+// mask and ear rims, black legs, and an orange-ringed tail, drawn from simple
+// shapes. Its own 15 s loop: sits and sways its tail, munches a bamboo stalk
+// down, rears up in the classic arms-up surprise pose, plays peekaboo behind
+// its tail, curls into a ball and rolls, then waves.
 
 type Arms = "down" | "munch" | "up" | "wave-high" | "wave-low"
 type Sway = "left" | "mid" | "right"

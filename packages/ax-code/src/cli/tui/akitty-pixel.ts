@@ -1,7 +1,7 @@
 // Pixel-art helpers shared by AkiTTY's tab activity animals (akitty-cat.ts,
-// akitty-chick.ts, akitty-red-panda.ts, akitty-dragon.ts). Poses are drawn from simple shapes on
-// a 28 px grid, the tab mark's size at 14 points on a 2x display, then outlined
-// in black.
+// akitty-chick.ts, akitty-red-panda.ts, akitty-dragon.ts, akitty-dog.ts).
+// Poses are drawn from simple shapes on a 28 px grid, the tab mark's size at
+// 14 points on a 2x display, then outlined in black.
 export const AKITTY_PIXEL_PX = 28
 
 export const AKITTY_PIXEL_PALETTE = {
@@ -11,6 +11,8 @@ export const AKITTY_PIXEL_PALETTE = {
   yellow: [255, 214, 0],
   rust: [192, 64, 24],
   green: [72, 168, 64],
+  blue: [40, 110, 220],
+  silver: [176, 186, 198],
 } as const
 
 export type Point = readonly [number, number]
