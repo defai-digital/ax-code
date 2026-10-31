@@ -117,10 +117,12 @@ function truncateTerminalTitlePart(value: string, max: number) {
  */
 export function sanitizeAxCodeTerminalTitle(title: string, env: NodeJS.ProcessEnv = process.env) {
   let clean = title.replace(INVISIBLE_FORMAT_RE, "").replace(CONTROL_RE, " ").replace(/\s+/g, " ").trim()
+  // Truncation adds an ellipsis, which must also pass through Screen's ASCII fallback.
+  clean = truncateTerminalTitlePart(clean, AX_CODE_TERMINAL_TITLE_MAX_CHARS)
   if (isGnuScreenTerminalTitleTarget(env)) {
     clean = Array.from(clean, (ch) => (ch.charCodeAt(0) < 0x80 ? ch : "?")).join("")
   }
-  return truncateTerminalTitlePart(clean, AX_CODE_TERMINAL_TITLE_MAX_CHARS)
+  return clean
 }
 
 /**

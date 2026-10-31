@@ -74,6 +74,18 @@ describe("terminal title", () => {
     expect(sanitizeAxCodeTerminalTitle("café", { TERM: "screen" })).toBe("café")
   })
 
+  test("keeps truncated GNU Screen titles printable ASCII", () => {
+    const env = { STY: "1234.pts-0.host" }
+    const long = "x".repeat(200)
+    const title = sanitizeAxCodeTerminalTitle(long, env)
+    expect(title).toMatch(/^[\x20-\x7e]+$/)
+    expect(Array.from(title)).toHaveLength(AX_CODE_TERMINAL_TITLE_MAX_CHARS)
+    expect(composeAxCodeTerminalTitle({ project: long, activity: long, sessionTitle: long }, env)).toMatch(
+      /^[\x20-\x7e]+$/,
+    )
+    expect(axCodeTerminalTitleSequence(long, env)).toBe(sequence(title))
+  })
+
   test("composes brand, project, activity and session title in that order", () => {
     expect(composeAxCodeTerminalTitle({}, NO_ENV)).toBe("AX-Code")
     expect(composeAxCodeTerminalTitle({ project: "ax-code" }, NO_ENV)).toBe("AX-Code | ax-code")
