@@ -41849,9 +41849,6 @@
             "$ref": "#/components/schemas/Event.session.idle"
           },
           {
-            "$ref": "#/components/schemas/Event.session.compacted"
-          },
-          {
             "$ref": "#/components/schemas/Event.file.edited"
           },
           {
@@ -41958,6 +41955,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.worktree.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.compacted"
           },
           {
             "$ref": "#/components/schemas/Event.hook.completed"

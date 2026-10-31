@@ -1341,7 +1341,6 @@ export type Event =
   | EventTodoUpdated
   | EventSessionStatus
   | EventSessionIdle
-  | EventSessionCompacted
   | EventFileEdited
   | EventVcsBranchUpdated
   | EventWorkflowRunCreated
@@ -1378,6 +1377,7 @@ export type Event =
   | EventScheduledTaskFailedPersistently
   | EventWorktreeReady
   | EventWorktreeFailed
+  | EventSessionCompacted
   | EventHookCompleted
   | EventCodeIndexProgress
   | EventCodeIndexState
