@@ -1,11 +1,12 @@
-import { createSprite, createTerminalClient, detectCapabilities } from "@ax-code/akitty-sdk"
-import type { Environment, Scheduler } from "@ax-code/akitty-sdk"
-import { AKITTY_CAT_FRAMES, AKITTY_CAT_FRAME_MS } from "./akitty-cat"
-import { AKITTY_CHICK_FRAMES, AKITTY_CHICK_FRAME_MS } from "./akitty-chick"
-import { AKITTY_DOG_FRAMES, AKITTY_DOG_FRAME_MS } from "./akitty-dog"
-import { AKITTY_DRAGON_FRAMES, AKITTY_DRAGON_FRAME_MS } from "./akitty-dragon"
+import { createSprite, createTerminalClient } from "@ax-code/akitty-sdk"
+import type { Environment, Scheduler, Sprite } from "@ax-code/akitty-sdk"
+import { AKITTY_CAT_FRAME_MS, akittyCatFrames } from "./akitty-cat"
+import { AKITTY_CHICK_FRAME_MS, akittyChickFrames } from "./akitty-chick"
+import { AKITTY_DOG_FRAME_MS, akittyDogFrames } from "./akitty-dog"
+import { AKITTY_DRAGON_FRAME_MS, akittyDragonFrames } from "./akitty-dragon"
 import { AKITTY_PIXEL_PX } from "./akitty-pixel"
-import { AKITTY_RED_PANDA_FRAMES, AKITTY_RED_PANDA_FRAME_MS } from "./akitty-red-panda"
+import { AKITTY_RED_PANDA_FRAME_MS, akittyRedPandaFrames } from "./akitty-red-panda"
+import { registerTuiProgramChromeDisposer, supportsTuiProgramChrome } from "./program-chrome-lifecycle"
 
 export type TuiProgramChromeState = Readonly<{
   enabled: boolean
@@ -18,18 +19,25 @@ export type TuiProgramChromeState = Readonly<{
 // akitty-red-panda.ts, akitty-dragon.ts, akitty-dog.ts), picked at random each
 // time a session starts working. AkiTTY sprites hold at most four frames, so
 // each frame is its own one-frame sprite and this module, not the SDK, advances
-// them.
-const animation = (name: string, frames: readonly Uint8Array[], frameMs: number) => ({
-  name,
-  frameMs,
-  sprites: frames.map((frame) => createSprite(AKITTY_PIXEL_PX, AKITTY_PIXEL_PX, [frame])),
-})
+// them. Frames rasterize and sprites build only when an animal is first
+// selected, so importing this module draws nothing.
+const animation = (name: string, frameMs: number, frames: () => readonly Uint8Array[]) => {
+  let sprites: readonly Sprite[] | undefined
+  return {
+    name,
+    frameMs,
+    frames,
+    // Sprites build only when this animal is first selected.
+    sprites: (): readonly Sprite[] =>
+      (sprites ??= frames().map((frame) => createSprite(AKITTY_PIXEL_PX, AKITTY_PIXEL_PX, [frame]))),
+  }
+}
 export const TUI_PROGRAM_CHROME_ANIMATIONS = [
-  animation("cat", AKITTY_CAT_FRAMES, AKITTY_CAT_FRAME_MS),
-  animation("chick", AKITTY_CHICK_FRAMES, AKITTY_CHICK_FRAME_MS),
-  animation("red panda", AKITTY_RED_PANDA_FRAMES, AKITTY_RED_PANDA_FRAME_MS),
-  animation("dragon", AKITTY_DRAGON_FRAMES, AKITTY_DRAGON_FRAME_MS),
-  animation("dog", AKITTY_DOG_FRAMES, AKITTY_DOG_FRAME_MS),
+  animation("cat", AKITTY_CAT_FRAME_MS, akittyCatFrames),
+  animation("chick", AKITTY_CHICK_FRAME_MS, akittyChickFrames),
+  animation("red panda", AKITTY_RED_PANDA_FRAME_MS, akittyRedPandaFrames),
+  animation("dragon", AKITTY_DRAGON_FRAME_MS, akittyDragonFrames),
+  animation("dog", AKITTY_DOG_FRAME_MS, akittyDogFrames),
 ] as const
 type Animation = (typeof TUI_PROGRAM_CHROME_ANIMATIONS)[number]
 
@@ -37,10 +45,6 @@ const scheduleInterval: Scheduler = (tick, intervalMs) => {
   const timer = setInterval(tick, intervalMs)
   timer.unref?.()
   return () => clearInterval(timer)
-}
-
-export function supportsTuiProgramChrome(env: Environment, isTTY: boolean) {
-  return detectCapabilities(env, isTTY).chrome
 }
 
 export function createTuiProgramChrome(options: {
@@ -82,9 +86,9 @@ export function createTuiProgramChrome(options: {
   // starts it again instead of deduplicating against a document never shown.
   const tick = () => {
     if (!current) return
-    frame = (frame + 1) % current.sprites.length
+    frame = (frame + 1) % current.sprites().length
     try {
-      if (client.updateChrome({ sprite: current.sprites[frame]!, mark: 0 })) return
+      if (client.updateChrome({ sprite: current.sprites()[frame]!, mark: 0 })) return
     } catch (error) {
       options.onError(error)
     }
@@ -117,7 +121,7 @@ export function createTuiProgramChrome(options: {
         written = client.updateChrome({
           status,
           progress: "indeterminate",
-          sprite: current.sprites[frame]!,
+          sprite: current.sprites()[frame]!,
           mark: 0,
         })
       } finally {
@@ -165,11 +169,19 @@ function clearActiveChrome() {
   return Boolean(previous)
 }
 
-/** Shared by component, renderer and crash teardown, without importing the renderer. */
-export function disposeTuiProgramChrome() {
+/** Stops playback and forgets the state a suspension could otherwise revive. */
+const disposeChrome = () => {
   requested = undefined
   return clearActiveChrome()
 }
+// terminal-cleanup disposes through the lifecycle module, without loading the
+// animations above.
+registerTuiProgramChromeDisposer(disposeChrome)
+
+// The lifecycle surface for the renderer, editor and tests; terminal-cleanup
+// imports it from program-chrome-lifecycle so a CLI start never loads this file.
+export { disposeTuiProgramChrome } from "./program-chrome-lifecycle"
+export { supportsTuiProgramChrome }
 
 /** Yield the tab activity mark to an external editor and restore only the latest live state. */
 export function suspendTuiProgramChrome() {
@@ -190,7 +202,7 @@ export function suspendTuiProgramChrome() {
 export function updateTuiProgramChrome(state: TuiProgramChromeState, options: ProgramChromeOptions) {
   requested = { state, options }
   if (suspensions.size) return false
-  if (!state.enabled || !supportsTuiProgramChrome(options.env, options.isTTY)) return disposeTuiProgramChrome()
+  if (!state.enabled || !supportsTuiProgramChrome(options.env, options.isTTY)) return disposeChrome()
   if (active && active.owner !== options.owner) clearActiveChrome()
   active ??= {
     owner: options.owner,

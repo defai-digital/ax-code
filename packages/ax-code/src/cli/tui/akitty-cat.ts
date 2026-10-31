@@ -256,7 +256,9 @@ const SWISH: readonly Tail[] = ["mid", "up", "up", "mid", "down"]
 const JUMP_ARC = [-3, -6, -8, -9, -9, -8, -6, -3]
 const stand = (crouch = 0) => sidePose({ tail: 0, eyes: "open", crouch })
 
-const SCENES: Grid[] = [
+// The 15 s loop. A function, not a top-level table: program-chrome imports
+// this module on every CLI start, so importing it must rasterize nothing.
+const scenes = (): Grid[] => [
   // Sit: swish, blink, swish, ear twitch.
   ...sitting(["down", ...SWISH]),
   ...sitting(["down"], "closed"),
@@ -297,5 +299,10 @@ const SCENES: Grid[] = [
   ...sitting(["down", "down", "down"], "wink"),
 ]
 
-export const AKITTY_CAT_FRAMES: readonly Uint8Array[] = SCENES.map(encode)
+let frames: readonly Uint8Array[] | undefined
+
+/** The cat's poses as RGBA8 frames, rasterized on first call and then cached. */
+export function akittyCatFrames(): readonly Uint8Array[] {
+  return (frames ??= scenes().map(encode))
+}
 export const AKITTY_CAT_FRAME_MS = 150

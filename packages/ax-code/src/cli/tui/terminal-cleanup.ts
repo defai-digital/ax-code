@@ -1,7 +1,9 @@
 import { Flag } from "@/flag/flag"
 import { axCodeTerminalTitleClearSequence } from "@/util/terminal-title"
 import { CHROME_CLEAR_SEQUENCE } from "@ax-code/akitty-sdk"
-import { disposeTuiProgramChrome, supportsTuiProgramChrome } from "./program-chrome"
+// program-chrome-lifecycle, not program-chrome: this module loads on every
+// CLI start (boot -> thread) and must not pull in the pixel-art animations.
+import { disposeTuiProgramChrome, supportsTuiProgramChrome } from "./program-chrome-lifecycle"
 
 type FlushableStream = {
   write: (chunk: string, callback?: () => void) => boolean

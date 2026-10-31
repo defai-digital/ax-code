@@ -167,7 +167,9 @@ const TAIL: Point = [1.5, 21]
 const HEAD: Point = [21.5, 10.5]
 const swim = (phase: number, amplitude = 5) => dragon(wave(TAIL, HEAD, amplitude, phase))
 
-const SCENES: Grid[] = [
+// The 15 s loop. A function, not a top-level table: program-chrome imports
+// this module on every CLI start, so importing it must rasterize nothing.
+const scenes = (): Grid[] => [
   // Undulate in place.
   ...Array.from({ length: 20 }, (_, i) => swim(i * 0.63)),
   // Chase the pearl around a loop, then catch it.
@@ -200,5 +202,10 @@ const SCENES: Grid[] = [
   ...Array.from({ length: 8 }, (_, i) => swim(i * 0.79)),
 ]
 
-export const AKITTY_DRAGON_FRAMES: readonly Uint8Array[] = SCENES.map(encode)
+let frames: readonly Uint8Array[] | undefined
+
+/** The dragon's poses as RGBA8 frames, rasterized on first call and then cached. */
+export function akittyDragonFrames(): readonly Uint8Array[] {
+  return (frames ??= scenes().map(encode))
+}
 export const AKITTY_DRAGON_FRAME_MS = 150

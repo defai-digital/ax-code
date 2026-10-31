@@ -53,18 +53,26 @@ export function triangle(g: Grid, [a, b, c]: readonly [Point, Point, Point], pix
   )
 }
 
-// A round brush dragged along the polyline.
+// A round brush dragged along the polyline. The old per-pixel
+// `points.slice(1)` and Math.hypot are hoisted: segment vectors are read by
+// index and the distance test compares squares, so nothing is allocated inside
+// fill's 28x28 scan.
 export function stroke(g: Grid, points: readonly Point[], radius: number, pixel: Pixel) {
+  const radiusSquared = radius * radius
   fill(
     g,
-    (x, y) =>
-      points.slice(1).some((end, i) => {
-        const start = points[i]!
-        const dx = end[0] - start[0],
-          dy = end[1] - start[1]
+    (x, y) => {
+      for (let i = 1; i < points.length; i++) {
+        const start = points[i - 1]!
+        const dx = points[i]![0] - start[0],
+          dy = points[i]![1] - start[1]
         const t = Math.max(0, Math.min(1, ((x - start[0]) * dx + (y - start[1]) * dy) / (dx * dx + dy * dy)))
-        return Math.hypot(x - start[0] - t * dx, y - start[1] - t * dy) <= radius
-      }),
+        const ex = x - start[0] - t * dx,
+          ey = y - start[1] - t * dy
+        if (ex * ex + ey * ey <= radiusSquared) return true
+      }
+      return false
+    },
     pixel,
   )
 }

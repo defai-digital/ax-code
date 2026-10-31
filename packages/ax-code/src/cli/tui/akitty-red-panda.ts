@@ -277,7 +277,9 @@ const grounded = (g: Grid, dx = 0) => shift(g, dx, 6)
 const sit = (tail: Sway = "mid", eyes: "open" | "closed" = "open") => pandaPose({ tail, eyes })
 const SWAY: readonly Sway[] = ["mid", "right", "right", "mid", "left", "left"]
 
-const SCENES: Grid[] = [
+// The 15 s loop. A function, not a top-level table: program-chrome imports
+// this module on every CLI start, so importing it must rasterize nothing.
+const scenes = (): Grid[] => [
   // Sit, sway the tail, blink.
   ...SWAY.map((tail) => sit(tail)),
   sit("mid", "closed"),
@@ -327,5 +329,10 @@ const SCENES: Grid[] = [
   ...SWAY.slice(0, 4).map((tail) => sit(tail)),
 ]
 
-export const AKITTY_RED_PANDA_FRAMES: readonly Uint8Array[] = SCENES.map(encode)
+let frames: readonly Uint8Array[] | undefined
+
+/** The red panda's poses as RGBA8 frames, rasterized on first call and then cached. */
+export function akittyRedPandaFrames(): readonly Uint8Array[] {
+  return (frames ??= scenes().map(encode))
+}
 export const AKITTY_RED_PANDA_FRAME_MS = 150

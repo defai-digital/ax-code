@@ -349,7 +349,9 @@ function run(from: number, to: number, carrying = false) {
 
 const sit = (wag = 0) => dogPose({ wag, legs: [0, 0, 2, 2] })
 
-const SCENES: Grid[] = [
+// The 15 s loop. A function, not a top-level table: program-chrome imports
+// this module on every CLI start, so importing it must rasterize nothing.
+const scenes = (): Grid[] => [
   // Stand and wag.
   ...[0, 1, 0, -1, 0, 1, 0, -1, 0, 1, 0, -1].map((wag) => sit(wag)),
   dogPose({ eyes: "closed" }),
@@ -380,5 +382,10 @@ const SCENES: Grid[] = [
   sit(1),
 ]
 
-export const AKITTY_DOG_FRAMES: readonly Uint8Array[] = SCENES.map(encode)
+let frames: readonly Uint8Array[] | undefined
+
+/** The dog's poses as RGBA8 frames, rasterized on first call and then cached. */
+export function akittyDogFrames(): readonly Uint8Array[] {
+  return (frames ??= scenes().map(encode))
+}
 export const AKITTY_DOG_FRAME_MS = 150

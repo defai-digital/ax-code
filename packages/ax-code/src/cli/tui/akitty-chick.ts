@@ -258,7 +258,9 @@ function withSeed(g: Grid) {
 const stand = (lift = 0) => chickPose({ lift })
 const PECK: readonly boolean[] = [false, false, true, true, false, false]
 
-const SCENES: Grid[] = [
+// The 15 s loop. A function, not a top-level table: program-chrome imports
+// this module on every CLI start, so importing it must rasterize nothing.
+const scenes = (): Grid[] => [
   // Hatch: the egg wobbles, cracks, and the cap pops off.
   ...[0, -1, 0, 1].map((dx) => shift(eggPart("whole"), dx, 0)),
   ...[0, -1, 0, 1].map((dx) => shift(eggPart("whole", true), dx, 0)),
@@ -308,5 +310,10 @@ const SCENES: Grid[] = [
   ...[0, 0, 0, 0, 0, 0].map(() => eggPart("whole")),
 ]
 
-export const AKITTY_CHICK_FRAMES: readonly Uint8Array[] = SCENES.map(encode)
+let frames: readonly Uint8Array[] | undefined
+
+/** The chick's poses as RGBA8 frames, rasterized on first call and then cached. */
+export function akittyChickFrames(): readonly Uint8Array[] {
+  return (frames ??= scenes().map(encode))
+}
 export const AKITTY_CHICK_FRAME_MS = 150

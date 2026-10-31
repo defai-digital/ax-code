@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { CHROME_CLEAR_SEQUENCE } from "@ax-code/akitty-sdk"
+import { CHROME_CLEAR_SEQUENCE, createSprite } from "@ax-code/akitty-sdk"
 import {
   TUI_PROGRAM_CHROME_ANIMATIONS,
   createTuiProgramChrome,
@@ -10,8 +11,29 @@ import {
 } from "../../../src/cli/tui/program-chrome"
 import { destroyTuiRenderer, resolveTuiRenderProfile, setTuiProgramChrome } from "../../../src/cli/tui/renderer"
 import { createTuiTerminalCrashResetSequence, resetTuiTerminalState } from "../../../src/cli/tui/terminal-cleanup"
-import { AKITTY_PIXEL_PALETTE, AKITTY_PIXEL_PX } from "../../../src/cli/tui/akitty-pixel"
+import { AKITTY_PIXEL_PALETTE, AKITTY_PIXEL_PX, encode } from "../../../src/cli/tui/akitty-pixel"
 import { registerTuiSequenceTarget, unregisterTuiSequenceTarget } from "../../../src/cli/tui/util/sequence-writer"
+
+// The spies prove the animations rasterize lazily: importing the chrome modules
+// above must not draw a single pose. akitty-cat's factory also counts module
+// evaluations, so the teardown test can show terminal-cleanup's import graph
+// never reaches an animal module.
+vi.mock("../../../src/cli/tui/akitty-pixel", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/cli/tui/akitty-pixel")>()
+  return { ...actual, encode: vi.fn(actual.encode) }
+})
+vi.mock("@ax-code/akitty-sdk", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@ax-code/akitty-sdk")>()
+  return { ...actual, createSprite: vi.fn(actual.createSprite) }
+})
+const akittyCatLoads = vi.hoisted(() => ({ count: 0 }))
+vi.mock("../../../src/cli/tui/akitty-cat", async (importOriginal) => {
+  akittyCatLoads.count++
+  return await importOriginal()
+})
+
+const encodeMock = vi.mocked(encode)
+const createSpriteMock = vi.mocked(createSprite)
 
 const busy = { enabled: true, busy: true, animations: true, statusText: "Working" }
 const env = { TERM_PROGRAM: "Akitty", TERM: "xterm-256color" }
@@ -22,7 +44,7 @@ const TUI_PROGRAM_CHROME_FRAME_MS = CAT.frameMs
 // The frame a chrome write shows, and the cat frame expected at an index.
 // Some poses repeat, so compare pixels rather than look up an index.
 const shown = (sequence: string) => parse(sequence).sprite.frames[0]
-const frame = (index: number) => CAT.sprites[index % CAT.sprites.length]!.frames[0]
+const frame = (index: number) => CAT.sprites()[index % CAT.sprites().length]!.frames[0]
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
@@ -48,6 +70,61 @@ function harness(random: () => number = () => 0) {
 }
 
 describe("AkiTTY program chrome", () => {
+  test("importing the chrome modules rasterizes no pose and builds no sprite", () => {
+    // This file statically imports program-chrome, the renderer and
+    // terminal-cleanup; before the frames went lazy that encoded ~500 frames
+    // and built as many sprites before the first test ran.
+    expect(encodeMock).not.toHaveBeenCalled()
+    expect(createSpriteMock).not.toHaveBeenCalled()
+  })
+
+  test("each animal rasterizes its frames once, on first call", () => {
+    for (const animation of TUI_PROGRAM_CHROME_ANIMATIONS) {
+      const calls = encodeMock.mock.calls.length
+      const frames = animation.frames()
+      expect(encodeMock).toHaveBeenCalledTimes(calls + frames.length)
+      expect(animation.frames()).toBe(frames)
+      expect(encodeMock).toHaveBeenCalledTimes(calls + frames.length)
+    }
+  })
+
+  // Digests of the eager AKITTY_*_FRAMES exports captured before the frames
+  // went lazy: sha256 over each frame's byte length followed by its bytes.
+  const AKITTY_FRAME_DIGESTS = {
+    cat: "4ad685757415490af917176624e82ad08c0ff4f0a0fe2008cd82b717c83d2502",
+    chick: "7762ccd75f77cc14675aa8830edb20d84843e8fd6c1d6d802e00ce5590d8286b",
+    "red panda": "fbb1acb977a07957cf7acce77697bb3247f73fa2897acb1540f4bfe6e8f880e3",
+    dragon: "24b4add330c330fed2534f8894aa2e4b7686c3ca40d2fd87b0cd5370897bd54e",
+    dog: "964602f3f292fd9fc99771c6856b7d66bd22176aebdd6cbbb0c64644d9ac4dd1",
+  } as const
+
+  test.each(Object.entries(AKITTY_FRAME_DIGESTS))(
+    "the lazy %s frames are byte-identical to the eager rasterization",
+    (name, expected) => {
+      const hash = createHash("sha256")
+      const animal = TUI_PROGRAM_CHROME_ANIMATIONS.find((animation) => animation.name === name)!
+      for (const bytes of animal.frames()) {
+        hash.update(Uint32Array.of(bytes.byteLength))
+        hash.update(bytes)
+      }
+      expect(hash.digest("hex")).toBe(expected)
+    },
+  )
+
+  test("sprites build once per animal, on first selection", () => {
+    const cat = harness()
+    cat.controller.update(busy)
+    const afterCat = createSpriteMock.mock.calls.length
+    expect(afterCat).toBe(CAT.frames().length)
+    const again = harness()
+    again.controller.update(busy)
+    expect(createSpriteMock).toHaveBeenCalledTimes(afterCat)
+    const chick = harness(() => 0.25)
+    chick.controller.update(busy)
+    expect(createSpriteMock).toHaveBeenCalledTimes(afterCat + CHICK.frames().length)
+    for (const h of [cat, again, chick]) h.controller.dispose()
+  })
+
   test.each(["idle", "disabled", "disposed"])("editor return does not revive %s chrome", (transition) => {
     const writes: string[] = []
     const options = {
@@ -131,7 +208,7 @@ describe("AkiTTY program chrome", () => {
   test.each(TUI_PROGRAM_CHROME_ANIMATIONS.map((animation) => [animation.name, animation] as const))(
     "the %s plays a 15 s loop of crisp, never-empty pixel art",
     (_, animation) => {
-      const frames = animation.sprites.map((sprite) => sprite.frames[0]!)
+      const frames = animation.sprites().map((sprite) => sprite.frames[0]!)
       expect(frames.length * animation.frameMs).toBe(15_000)
       expect(new Set(frames).size).toBeGreaterThanOrEqual(30)
       const palette = new Set(
@@ -150,9 +227,9 @@ describe("AkiTTY program chrome", () => {
   )
 
   test("the cat is white, black and orange and ends on the icon's wink", () => {
-    const used = new Set(CAT.sprites.flatMap((sprite) => [...colors(sprite.frames[0]!)]))
+    const used = new Set(CAT.sprites().flatMap((sprite) => [...colors(sprite.frames[0]!)]))
     expect(used).toEqual(new Set([rgb("white"), rgb("black"), rgb("orange")]))
-    const wink = Buffer.from(CAT.sprites.at(-1)!.frames[0]!, "base64")
+    const wink = Buffer.from(CAT.sprites().at(-1)!.frames[0]!, "base64")
     const at = (x: number, y: number) =>
       [...wink.subarray((y * AKITTY_PIXEL_PX + x) * 4, (y * AKITTY_PIXEL_PX + x) * 4 + 3)].join(",")
     expect([at(9, 10), at(10, 11), at(9, 12)]).toEqual([rgb("black"), rgb("black"), rgb("black")])
@@ -161,43 +238,47 @@ describe("AkiTTY program chrome", () => {
   test("the chick hatches from its egg and tucks back in, so the loop is seamless", () => {
     // The loop opens and closes on the white egg.
     const egg = new Set([rgb("white"), rgb("black")])
-    expect(colors(CHICK.sprites[0]!.frames[0]!)).toEqual(egg)
-    expect(colors(CHICK.sprites.at(-1)!.frames[0]!)).toEqual(egg)
-    expect(CHICK.sprites.at(-1)!.frames[0]).toBe(CHICK.sprites[0]!.frames[0])
+    expect(colors(CHICK.sprites()[0]!.frames[0]!)).toEqual(egg)
+    expect(colors(CHICK.sprites().at(-1)!.frames[0]!)).toEqual(egg)
+    expect(CHICK.sprites().at(-1)!.frames[0]).toBe(CHICK.sprites()[0]!.frames[0])
     // In between it is a yellow chick with an orange beak and feet.
-    const used = new Set(CHICK.sprites.flatMap((sprite) => [...colors(sprite.frames[0]!)]))
+    const used = new Set(CHICK.sprites().flatMap((sprite) => [...colors(sprite.frames[0]!)]))
     expect(used).toEqual(new Set([rgb("yellow"), rgb("black"), rgb("orange"), rgb("white")]))
     // Its moves are its own: no frame repeats one of the cat's.
-    const cat = new Set(CAT.sprites.map((sprite) => sprite.frames[0]))
-    expect(CHICK.sprites.some((sprite) => cat.has(sprite.frames[0]))).toBe(false)
+    const cat = new Set(CAT.sprites().map((sprite) => sprite.frames[0]))
+    expect(CHICK.sprites().some((sprite) => cat.has(sprite.frames[0]))).toBe(false)
   })
 
   test("the red panda is rust with a white mask, black legs, a ringed tail and green bamboo", () => {
-    const used = new Set(RED_PANDA.sprites.flatMap((sprite) => [...colors(sprite.frames[0]!)]))
+    const used = new Set(RED_PANDA.sprites().flatMap((sprite) => [...colors(sprite.frames[0]!)]))
     expect(used).toEqual(new Set([rgb("rust"), rgb("white"), rgb("black"), rgb("orange"), rgb("green")]))
     // Its moves are its own: no frame repeats the cat's or the chick's.
-    const others = new Set([...CAT.sprites, ...CHICK.sprites].map((sprite) => sprite.frames[0]))
-    expect(RED_PANDA.sprites.some((sprite) => others.has(sprite.frames[0]))).toBe(false)
+    const others = new Set([...CAT.sprites(), ...CHICK.sprites()].map((sprite) => sprite.frames[0]))
+    expect(RED_PANDA.sprites().some((sprite) => others.has(sprite.frames[0]))).toBe(false)
   })
 
   test("the dragon is green, white and orange, and its moves are its own", () => {
-    const used = new Set(DRAGON.sprites.flatMap((sprite) => [...colors(sprite.frames[0]!)]))
+    const used = new Set(DRAGON.sprites().flatMap((sprite) => [...colors(sprite.frames[0]!)]))
     expect(used).toEqual(new Set([rgb("green"), rgb("white"), rgb("orange"), rgb("black")]))
-    const others = new Set([...CAT.sprites, ...CHICK.sprites, ...RED_PANDA.sprites].map((sprite) => sprite.frames[0]))
-    expect(DRAGON.sprites.some((sprite) => others.has(sprite.frames[0]))).toBe(false)
+    const others = new Set(
+      [...CAT.sprites(), ...CHICK.sprites(), ...RED_PANDA.sprites()].map((sprite) => sprite.frames[0]),
+    )
+    expect(DRAGON.sprites().some((sprite) => others.has(sprite.frames[0]))).toBe(false)
   })
 
   test("the dog is a silver and white husky with a blue collar that runs the widest", () => {
-    const used = new Set(DOG.sprites.flatMap((sprite) => [...colors(sprite.frames[0]!)]))
+    const used = new Set(DOG.sprites().flatMap((sprite) => [...colors(sprite.frames[0]!)]))
     expect(used).toEqual(new Set([rgb("silver"), rgb("white"), rgb("black"), rgb("blue"), rgb("yellow")]))
     const others = new Set(
-      [...CAT.sprites, ...CHICK.sprites, ...RED_PANDA.sprites, ...DRAGON.sprites].map((sprite) => sprite.frames[0]),
+      [...CAT.sprites(), ...CHICK.sprites(), ...RED_PANDA.sprites(), ...DRAGON.sprites()].map(
+        (sprite) => sprite.frames[0],
+      ),
     )
-    expect(DOG.sprites.some((sprite) => others.has(sprite.frames[0]))).toBe(false)
+    expect(DOG.sprites().some((sprite) => others.has(sprite.frames[0]))).toBe(false)
     // Count frames where the animal has mostly left the frame: the dog's runs
     // go further out, and more often, than the cat's walk.
     const offstage = (animal: typeof CAT) =>
-      animal.sprites.filter((sprite) => {
+      animal.sprites().filter((sprite) => {
         const pixels = Buffer.from(sprite.frames[0]!, "base64")
         let lit = 0
         for (let i = 3; i < pixels.length; i += 4) if (pixels[i]) lit++
@@ -216,7 +297,7 @@ describe("AkiTTY program chrome", () => {
     const { writes, controller } = harness(() => roll)
     controller.update(busy)
     const animal = TUI_PROGRAM_CHROME_ANIMATIONS.find((animation) => animation.name === name)!
-    expect(shown(writes.at(-1)!)).toBe(animal.sprites[0]!.frames[0])
+    expect(shown(writes.at(-1)!)).toBe(animal.sprites()[0]!.frames[0])
     controller.dispose()
   })
 
@@ -224,23 +305,23 @@ describe("AkiTTY program chrome", () => {
     const rolls = [0.25, 0.1]
     const { writes, controller } = harness(() => rolls.shift() ?? 0)
     controller.update(busy)
-    expect(shown(writes.at(-1)!)).toBe(CHICK.sprites[0]!.frames[0])
+    expect(shown(writes.at(-1)!)).toBe(CHICK.sprites()[0]!.frames[0])
     // A status change mid-run keeps the chick.
     controller.update({ ...busy, statusText: "Retrying" })
-    expect(shown(writes.at(-1)!)).toBe(CHICK.sprites[0]!.frames[0])
+    expect(shown(writes.at(-1)!)).toBe(CHICK.sprites()[0]!.frames[0])
     vi.advanceTimersByTime(CHICK.frameMs * 4)
-    expect(shown(writes.at(-1)!)).toBe(CHICK.sprites[4]!.frames[0])
+    expect(shown(writes.at(-1)!)).toBe(CHICK.sprites()[4]!.frames[0])
     // Idle, then the next run rolls again.
     controller.update({ ...busy, busy: false })
     controller.update(busy)
-    expect(shown(writes.at(-1)!)).toBe(CAT.sprites[0]!.frames[0])
+    expect(shown(writes.at(-1)!)).toBe(CAT.sprites()[0]!.frames[0])
     controller.dispose()
   })
 
   test("each tick advances one cat frame and the cycle wraps", () => {
     const { writes, controller } = harness()
     controller.update(busy)
-    for (let i = 1; i <= CAT.sprites.length; i++) {
+    for (let i = 1; i <= CAT.sprites().length; i++) {
       vi.advanceTimersByTime(TUI_PROGRAM_CHROME_FRAME_MS)
       expect(shown(writes.at(-1)!)).toBe(frame(i))
     }
@@ -497,5 +578,15 @@ describe("AkiTTY program chrome", () => {
     const count = writes.length
     vi.advanceTimersByTime(2000)
     expect(writes).toHaveLength(count)
+  })
+
+  test("importing terminal cleanup alone loads no animal module and rasterizes nothing", async () => {
+    const loads = akittyCatLoads.count
+    const calls = encodeMock.mock.calls.length
+    vi.resetModules()
+    const cleanup = await import("../../../src/cli/tui/terminal-cleanup")
+    expect(cleanup.TUI_TERMINAL_CRASH_RESET_SEQUENCE).toContain("\x1b[?25h")
+    expect(akittyCatLoads.count).toBe(loads)
+    expect(encodeMock).toHaveBeenCalledTimes(calls)
   })
 })
