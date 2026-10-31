@@ -322,8 +322,9 @@ test("a maintenance deadline records durable backoff that survives instance rest
     permission: Permission.fromConfig({ "*": "allow" }),
   }))
   const original = globalThis.setTimeout
+  let deadlines = 0
   vi.spyOn(globalThis, "setTimeout").mockImplementation((handler, ms, ...args) =>
-    original(handler, ms === 600_000 ? 50 : ms === 30_000 ? 0 : ms, ...args),
+    original(handler, ms === 600_000 && deadlines++ === 0 ? 50 : ms === 30_000 ? 0 : ms, ...args),
   )
   state.build.mockImplementationOnce(async ({ signal }) => {
     await new Promise<void>((resolve) => {
@@ -331,6 +332,11 @@ test("a maintenance deadline records durable backoff that survives instance rest
       signal.addEventListener("abort", () => resolve(), { once: true })
     })
     throw signal.reason
+  })
+  // Recovery uses the real build deadline, including when setup or the build
+  // takes longer than the artificial timeout used for the deliberately hung run.
+  state.build.mockImplementationOnce(async () => {
+    await new Promise<void>((resolve) => original(resolve, 100))
   })
   await Instance.provide({
     directory: tmp.path,
