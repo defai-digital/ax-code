@@ -30,7 +30,8 @@ export function safeRelativePath(input: string): string | undefined {
 export function resolveInside(root: string, relative: string): string {
   const resolvedRoot = path.resolve(root)
   const resolved = path.resolve(resolvedRoot, relative)
-  if (resolved !== resolvedRoot && !resolved.startsWith(`${resolvedRoot}${path.sep}`)) {
+  const rel = path.relative(resolvedRoot, resolved)
+  if (rel && (rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel))) {
     throw new Error(`AX Wiki path escapes repository root: ${relative}`)
   }
   return resolved

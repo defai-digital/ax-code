@@ -50,6 +50,14 @@ describe("AX Wiki path containment", () => {
     expect(() => resolveInside("/repo", "../repo-other/x")).toThrow("escapes repository root")
   })
 
+  test("resolveInside accepts children of the filesystem root", () => {
+    // resolvedRoot "/" must not turn the containment prefix into "//".
+    expect(resolveInside("/", "tmp/file.md")).toBe(path.resolve("/tmp/file.md"))
+    expect(resolveInside("/", ".")).toBe(path.resolve("/"))
+    // At the filesystem root ".." clamps to "/", so a leading escape stays inside.
+    expect(resolveInside("/", "../escape")).toBe(path.resolve("/escape"))
+  })
+
   test("normalizePath converts separators and strips leading ./", () => {
     expect(normalizePath("a\\b")).toBe("a/b")
     expect(normalizePath("./a")).toBe("a")
