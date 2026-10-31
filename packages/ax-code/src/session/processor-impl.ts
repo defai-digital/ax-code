@@ -788,12 +788,15 @@ export namespace SessionProcessor {
                   break
 
                 case "reasoning-delta":
-                  if (value.text.trim()) replayUnsafe = true
+                  // Test the delta, not the accumulated text: trim() on a growing
+                  // concatenated string flattens it, making every delta O(length).
+                  const reasoningNonBlank = value.text.trim().length > 0
+                  if (reasoningNonBlank) replayUnsafe = true
                   if (value.id in reasoningMap) {
                     const part = reasoningMap[value.id]
                     const offset = part.text.length
                     part.text += value.text
-                    if (part.text.trim()) emptyAttemptParts.delete(part.id)
+                    if (reasoningNonBlank) emptyAttemptParts.delete(part.id)
                     guardStreamOutput("reasoning", value.text)
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     deltaBatcher.push(part.id, value.text, offset)
@@ -1814,11 +1817,13 @@ export namespace SessionProcessor {
                   break
 
                 case "text-delta":
-                  if (value.text.trim()) replayUnsafe = true
+                  // Same as reasoning-delta: never trim() the accumulated text per delta.
+                  const textNonBlank = value.text.trim().length > 0
+                  if (textNonBlank) replayUnsafe = true
                   if (currentText) {
                     const offset = currentText.text.length
                     currentText.text += value.text
-                    if (currentText.text.trim()) emptyAttemptParts.delete(currentText.id)
+                    if (textNonBlank) emptyAttemptParts.delete(currentText.id)
                     guardStreamOutput("text", value.text)
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
                     deltaBatcher.push(currentText.id, value.text, offset)
