@@ -88,10 +88,11 @@ function webmcpTargetSummary(metadata: Record<string, unknown> | undefined): str
   return parts.length > 0 ? parts.join(" ") : undefined
 }
 
-// Schema transforms may capture project-defined tool schemas. Keep the LRU,
-// the in-flight work and the conversion memo scoped to the active project
-// instance so two projects with the same tool ID/model cannot reuse each
-// other's schema.
+// Schema transforms may capture project-defined tool schemas. Keep the LRU and
+// in-flight work scoped to the active project instance so two projects with
+// the same tool ID/model cannot reuse each other's schema. The conversion memo
+// below is keyed on the parameters object itself, so it cannot cross projects
+// and lives at module scope (the estimate runs outside an instance too).
 type PendingSchema = { promise: Promise<any> }
 /**
  * A registry tool's converted JSON schema depends only on its zod parameters,
@@ -108,8 +109,8 @@ type ToolSchemaConversion = {
 const schemaState = Instance.state(() => ({
   cache: new Map<string, any>(),
   mcpPending: new Map<string, PendingSchema>(),
-  conversions: new WeakMap<object, ToolSchemaConversion>(),
 }))
+const conversions = new WeakMap<object, ToolSchemaConversion>()
 const SCHEMA_CACHE_MAX = 500
 const SCHEMA_CACHE_DROP = 100
 const SCHEMA_VARIANT_MAX = 16
@@ -149,7 +150,6 @@ function schemaIdentityForModel(model: Provider.Model) {
 
 /** `z.toJSONSchema` for one tool's parameters, converted once per process. */
 function toolSchemaConversion(parameters: object) {
-  const conversions = schemaState().conversions
   const cached = conversions.get(parameters)
   if (cached) return cached
   const json = z.toJSONSchema(parameters as Parameters<typeof z.toJSONSchema>[0])
