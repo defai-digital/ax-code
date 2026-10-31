@@ -34,7 +34,7 @@ function canonicalize(value: unknown, stack = new WeakSet<object>()): Canonical 
   try {
     if (Array.isArray(value)) return value.map((item) => canonicalize(item, stack))
     const record = value as Record<string, unknown>
-    const result: Record<string, Canonical> = {}
+    const result: Record<string, Canonical> = Object.create(null)
     for (const key of Object.keys(record).sort()) result[key] = canonicalize(record[key], stack)
     return result
   } finally {

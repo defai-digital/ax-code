@@ -14,6 +14,15 @@ function definition(description: string, inputSchema: z.ZodType) {
 }
 
 describe("session.request-provenance", () => {
+  test("includes own prototype-named keys in request fingerprints", () => {
+    const value = { ["__proto__"]: { value: "first" }, constructor: "own", prototype: "own" }
+    const expected = createHash("sha256").update(JSON.stringify(value)).digest("hex")
+    expect(RequestProvenance.fingerprint(value)).toBe(expected)
+    expect(RequestProvenance.fingerprint(value)).not.toBe(
+      RequestProvenance.fingerprint({ ...value, ["__proto__"]: { value: "second" } }),
+    )
+  })
+
   test("records UTF-8 component sizes without changing existing request identity or persisting content", async () => {
     const system = [{ content: "private-\u{1F642}", role: "system" }]
     const messages = [...system, { content: "private-\u00E9", role: "user" }]
