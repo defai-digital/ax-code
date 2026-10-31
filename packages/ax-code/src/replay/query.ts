@@ -191,13 +191,9 @@ export namespace EventQuery {
    * step markers) the hints never read. This variant filters by `event_type`
    * in SQL — each query is one bounded backward scan of
    * event_log_session_type_sequence_idx (session_id, event_type, sequence),
-   * so non-tool rows are never read — and rebuilds each row with SQLite JSON
-   * functions so only the consumed fields cross into JS.
-   *
-   * The window counts tool events only: unlike `recentBySession`, non-tool
-   * events do not consume the `limit`-row budget. That is the only behavioral
-   * difference — for the same event log the hint analysis of both feeds is
-   * identical whenever the tool events fit in the old window.
+   * so non-tool payloads are never read — and rebuilds each row with SQLite JSON
+   * functions so only the consumed fields cross into JS. The sequence cutoff
+   * preserves `recentBySession`'s overall-event window.
    */
   export function recentToolEventsForHints(sessionID: SessionID, limit = 500): ReplayEvent[] {
     const normalizedLimit = normalizeRecentLimit(limit)
@@ -205,8 +201,16 @@ export namespace EventQuery {
     const store = SessionShard.storeFor(sessionID)
     // One index scan per event type, then merge: the top `limit` of the union
     // of two per-type `limit`-slices is exactly the most recent `limit` tool
-    // events overall, and each scan is a pure index walk with no sort.
+    // events in the window, and each scan is a pure index walk with no sort.
     const rows = store.use((db) => {
+      const cutoff = db
+        .select({ sequence: EventLogTable.sequence })
+        .from(EventLogTable)
+        .where(eq(EventLogTable.session_id, sessionID))
+        .orderBy(desc(EventLogTable.sequence))
+        .limit(1)
+        .offset(normalizedLimit - 1)
+        .get()
       const calls = db
         .select({
           event_json: sql<string>`
@@ -223,7 +227,13 @@ export namespace EventQuery {
           sequence: EventLogTable.sequence,
         })
         .from(EventLogTable)
-        .where(and(eq(EventLogTable.session_id, sessionID), eq(EventLogTable.event_type, "tool.call")))
+        .where(
+          and(
+            eq(EventLogTable.session_id, sessionID),
+            eq(EventLogTable.event_type, "tool.call"),
+            cutoff ? gte(EventLogTable.sequence, cutoff.sequence) : undefined,
+          ),
+        )
         .orderBy(desc(EventLogTable.sequence))
         .limit(normalizedLimit)
         .all()
@@ -244,7 +254,13 @@ export namespace EventQuery {
           sequence: EventLogTable.sequence,
         })
         .from(EventLogTable)
-        .where(and(eq(EventLogTable.session_id, sessionID), eq(EventLogTable.event_type, "tool.result")))
+        .where(
+          and(
+            eq(EventLogTable.session_id, sessionID),
+            eq(EventLogTable.event_type, "tool.result"),
+            cutoff ? gte(EventLogTable.sequence, cutoff.sequence) : undefined,
+          ),
+        )
         .orderBy(desc(EventLogTable.sequence))
         .limit(normalizedLimit)
         .all()

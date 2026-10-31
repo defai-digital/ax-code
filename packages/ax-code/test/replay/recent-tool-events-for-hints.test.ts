@@ -102,7 +102,7 @@ describe("EventQuery.recentToolEventsForHints", () => {
     })
   })
 
-  test("returns the most recent tool events up to the limit", async () => {
+  test("returns tool events from the most recent overall event window", async () => {
     await withSession(async (sessionID) => {
       Recorder.begin(sessionID)
       for (let i = 0; i < 4; i++) {
@@ -112,7 +112,7 @@ describe("EventQuery.recentToolEventsForHints", () => {
       }
       await Recorder.end(sessionID)
       const recent = EventQuery.recentToolEventsForHints(sessionID, 3) as any[]
-      expect(recent.map((e) => `${e.type}:${e.callID}`)).toEqual(["tool.result:c2", "tool.call:c3", "tool.result:c3"])
+      expect(recent.map((e) => `${e.type}:${e.callID}`)).toEqual(["tool.call:c3", "tool.result:c3"])
     })
   })
 })
