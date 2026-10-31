@@ -72,15 +72,48 @@ function parsePathRule(filepath: string, raw: string): PathRule | undefined {
 // rules) are cached against the same mtime.
 const ruleCache = Instance.state(() => new Map<string, { mtimeMs: number; rule?: PathRule }>())
 
+// The rules listing (the Glob.scan output) is cached per Instance and keyed on
+// the rules directory's existence and mtime (key "missing" covers the absent
+// directory): creating, removing or renaming a rule file — or the directory
+// itself — updates the directory's mtime, so the listing is re-globbed exactly
+// when its contents could have changed. Parsing below stays keyed on each rule
+// file's own mtime, so an in-place rule edit (file mtime changes, directory
+// mtime does not) is still re-read on the next call. A listing is only cached
+// when the directory mtime observed before the glob still holds after it;
+// otherwise the next call simply re-globs.
+const rulesListingCache = Instance.state(() => ({
+  key: undefined as string | undefined,
+  files: undefined as string[] | undefined,
+}))
+
 async function loadPathRules(): Promise<PathRule[]> {
   // Project trust: rules are project-scoped instructions, so they follow the
   // same project-config gate as the root AGENTS.md.
   if (Flag.AX_CODE_DISABLE_PROJECT_CONFIG) return []
   const dir = path.join(Instance.worktree, RULES_DIR)
   if (!Filesystem.contains(Instance.worktree, dir)) return []
-  const files = await Glob.scan(RULES_PATTERN, { cwd: Instance.worktree, absolute: true, include: "file" }).catch(
-    () => [] as string[],
-  )
+  const listing = rulesListingCache()
+  const dirStat = await fs.stat(dir).catch(() => undefined)
+  const key = dirStat ? String(dirStat.mtimeMs) : "missing"
+  let files: string[]
+  if (listing.key === key && listing.files) {
+    files = listing.files
+  } else {
+    files = await Glob.scan(RULES_PATTERN, { cwd: Instance.worktree, absolute: true, include: "file" }).catch(
+      () => [] as string[],
+    )
+    // Only cache the listing when the directory did not change while the glob
+    // ran — a rule created mid-glob would otherwise be baked into the cached
+    // mtime key but missing from the cached file list.
+    const after = await fs.stat(dir).catch(() => undefined)
+    if ((after ? String(after.mtimeMs) : "missing") === key) {
+      listing.key = key
+      listing.files = files
+    } else {
+      listing.key = undefined
+      listing.files = undefined
+    }
+  }
   const cache = ruleCache()
   // Compare realpaths: the rules directory (or a rule file) can be a symlink
   // that points outside the worktree.
@@ -181,6 +214,38 @@ async function allowRelativeInstructionPath(input: string) {
   return roots.some((root) => Filesystem.contains(root, input) && Filesystem.contains(root, real))
 }
 
+async function statMtime(dir: string) {
+  const stat = await fs.stat(dir).catch(() => undefined)
+  return stat ? stat.mtimeMs : Number.NaN
+}
+
+// Every directory whose direct children the systemPaths computation observes:
+// the AGENTS.md/CLAUDE.md findUp walk (Instance.directory up to and including
+// Instance.worktree — the same traversal Filesystem.findUp performs) and the
+// parent of each global instruction candidate.
+function instructionWatchDirs(globals: string[]) {
+  const dirs = new Set<string>()
+  let current = Instance.directory
+  const stop = Instance.worktree
+  while (true) {
+    dirs.add(path.resolve(current))
+    if (stop === current) break
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  for (const file of globals) dirs.add(path.dirname(file))
+  return [...dirs]
+}
+
+// True when none of the watched directories changed mtime. Object.is treats
+// NaN (directory absent at both observations) as unchanged, matching findUp's
+// exists() returning false both times.
+async function watchDirsUnchanged(watch: { dir: string; mtimeMs: number }[]) {
+  const after = await Promise.all(watch.map((entry) => statMtime(entry.dir)))
+  return after.every((mtimeMs, i) => Object.is(mtimeMs, watch[i].mtimeMs))
+}
+
 function globalFiles() {
   const files = []
   if (Flag.AX_CODE_CONFIG_DIR) {
@@ -251,8 +316,68 @@ export namespace InstructionPrompt {
     state().claims.delete(messageID)
   }
 
+  // Per-Instance cache for the resolved instruction path set. A cached result
+  // stays valid while ALL of these hold:
+  //  1. The config snapshot object is unchanged. Config.invalidate() /
+  //     Config.invalidateAll() make Config.get() return a fresh object, so any
+  //     mid-session config change forces a full recompute — including fresh
+  //     re-globbing of the `config.instructions` patterns.
+  //  2. globalFiles() returns the same candidate list (an env/flag flip
+  //     recomputes without touching the filesystem).
+  //  3. The mtimes of every directory the AGENTS.md/CLAUDE.md findUp walk
+  //     visits (Instance.directory up to Instance.worktree) plus each global
+  //     candidate's parent directory are unchanged. Creating, removing or
+  //     renaming an instruction file updates the containing directory's
+  //     mtime, so new/removed AGENTS.md files are still seen without
+  //     re-walking; any other change in those directories merely costs a
+  //     recompute.
+  //  4. Every cached path still exists (one access per path).
+  //  5. The config has no `config.instructions` entries. Those are globs and
+  //     upward relative lookups whose matches can appear anywhere, so they are
+  //     re-resolved on every call rather than trusted from a cache.
+  // Rules-directory freshness is handled separately in loadPathRules().
+  // The cached Set is shared between calls; every current caller only reads
+  // it (has()/Array.from), so mutation is not a supported pattern.
+  const systemPathsCache = Instance.state(() => ({
+    config: undefined as Config.Info | undefined,
+    globals: [] as string[],
+    watch: [] as { dir: string; mtimeMs: number }[],
+    paths: undefined as Set<string> | undefined,
+  }))
+
   export async function systemPaths() {
     const config = await Config.get()
+    const cache = systemPathsCache()
+    const globals = globalFiles()
+    if (config.instructions?.length) return systemPathsFresh(config)
+    if (
+      cache.config === config &&
+      cache.globals.length === globals.length &&
+      cache.globals.every((file, i) => file === globals[i]) &&
+      cache.paths &&
+      (await watchDirsUnchanged(cache.watch)) &&
+      (await Promise.all([...cache.paths].map((p) => Filesystem.exists(p)))).every(Boolean)
+    ) {
+      return cache.paths
+    }
+    const watchDirs = instructionWatchDirs(globals)
+    const before = await Promise.all(watchDirs.map((dir) => statMtime(dir)))
+    const watch = watchDirs.map((dir, i) => ({ dir, mtimeMs: before[i] }))
+    const paths = await systemPathsFresh(config)
+    // Publish the cache only when the watched mtimes observed before the
+    // computation still hold after it: an instruction file created or removed
+    // mid-computation would otherwise be reflected in the mtime snapshot but
+    // not in the path set (or vice versa).
+    if (await watchDirsUnchanged(watch)) {
+      cache.config = config
+      cache.globals = globals
+      cache.watch = watch
+      cache.paths = paths
+    }
+    return paths
+  }
+
+  async function systemPathsFresh(config: Config.Info) {
     const paths = new Set<string>()
 
     if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
