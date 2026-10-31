@@ -135,16 +135,21 @@ export const checksumManifestSha256 = (content: string, assetName?: string) => {
     .map((line) => line.trim())
     .filter(Boolean)
 
+  let bare: string | undefined
   for (const line of lines) {
     if (line.length < 64) continue
     const hash = line.slice(0, 64)
     if (!/^[a-f0-9]{64}$/i.test(hash)) continue
     const rest = line.slice(64).trim()
     if (!assetName) return hash.toLowerCase()
-    if (!rest) return hash.toLowerCase()
+    if (!rest) {
+      bare ??= hash.toLowerCase()
+      continue
+    }
     const name = rest.startsWith("*") ? rest.slice(1).trim() : rest
     if (name === assetName) return hash.toLowerCase()
   }
+  return bare
 }
 
 export const fetchChecksumSha256 = async (input: {

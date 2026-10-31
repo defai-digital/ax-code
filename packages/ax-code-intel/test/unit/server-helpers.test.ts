@@ -287,6 +287,20 @@ describe("lsp server helpers", () => {
     ).toBe("2a5bbe55ec91b4325392050dc422cead3220a2459b3766be35e1fff45b4a50d9")
   })
 
+  test("prefers an exact named asset match over a bare hash in a mixed manifest", () => {
+    const bare = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    expect(
+      checksumManifestSha256(
+        [
+          bare,
+          "79877f94a8eb175e6a58cf177839b0801acbfeccf968a2102e95d470fa3ad4a5  terraform-ls_0.38.6_linux_amd64.zip",
+          "a44b3df099f0ad8e88c96ea1110f965affee6e69b68ec44df25a593f5ee66cf3  terraform-ls_0.38.6_linux_arm64.zip",
+        ].join("\n"),
+        "terraform-ls_0.38.6_linux_arm64.zip",
+      ),
+    ).toBe("a44b3df099f0ad8e88c96ea1110f965affee6e69b68ec44df25a593f5ee66cf3")
+  })
+
   test("fetches an exact GitHub release by tag", async () => {
     const calls: string[] = []
     const release = await fetchGitHubReleaseByTag({
