@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.9] - 2026-10-31
+
+### Changed
+
+- Reduce repeated streaming, event forwarding, snapshot, instruction discovery, and request preparation work.
+- Load AkiTTY animation frames on first use and publish the paired TypeScript SDK 2.6.62.
+
+### Fixed
+
+- Preserve own prototype-named fields when fingerprinting model requests.
+- Handle null GitHub release responses, mixed checksum manifests, and filesystem-root containment.
+- Keep decision hints within the event window and memory usage counts within each prompt.
+
 ## [7.30.8] - 2026-10-31
 
 ### Changed
