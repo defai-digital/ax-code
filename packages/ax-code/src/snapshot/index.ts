@@ -133,6 +133,15 @@ export namespace Snapshot {
     warnedOversized?: string
     /** Absolute path of the worktree's info/exclude; constant per worktree, so resolved with git once. */
     excludePath?: string
+    /**
+     * Tree of the most recent capture while it is still this state's latest
+     * word on the worktree: set when a capture — or an unchanged short-circuit
+     * that verified the worktree against it — produced the tree, cleared by any
+     * operation that restages, restores, or otherwise observes newer worktree
+     * state. patch() uses it to reuse a caller's fresh track() instead of
+     * repeating the staging pass that capture just performed.
+     */
+    captureFresh?: string
   }
 
   function maxStageBytes() {
@@ -892,11 +901,15 @@ export namespace Snapshot {
         }
         if (untracked.text.length === 0 && (await snapshotExclusions(current, current.prevHash)).size === 0) {
           log.info("tracking (unchanged)", { hash: current.prevHash })
+          current.captureFresh = current.prevHash
           return current.prevHash
         }
       }
     }
 
+    // The staging pass below observes worktree state that may be newer than
+    // the previous capture, so patch() can no longer reuse that tree.
+    current.captureFresh = undefined
     let staged: Skipped[] = []
     try {
       staged = await add(current, { excludesSynced: Boolean(current.prevHash) })
@@ -977,6 +990,7 @@ export namespace Snapshot {
     await writeSnapshotMeta(current, hash)
     await writeExclusionRecord(current, hash, staged)
     current.prevHash = hash
+    current.captureFresh = hash
     log.info("tracking", { hash, cwd: current.directory, git: current.gitdir })
     return hash
   }
@@ -1018,12 +1032,82 @@ export namespace Snapshot {
     })
   }
 
-  export async function patch(hash: string) {
+  function patchResult(current: State, hash: string, names: string[], excluded: Set<string>): Patch {
+    // Paths the baseline's staging pass excluded are not faithfully recorded
+    // in it; diffing the worktree against such a tree reports drift the turn
+    // never made, and reverting it would overwrite current content with the
+    // stale last-staged bytes. Leave them out of the patch.
+    return {
+      hash,
+      files: names
+        .filter((item) => {
+          if (!excluded.has(item)) return true
+          log.warn("skipped file excluded from the snapshot baseline in patch", { hash, file: item })
+          return false
+        })
+        .map((item) => path.join(current.worktree, item).split(path.sep).join("/")),
+    }
+  }
+
+  /**
+   * Files that differ between a snapshot baseline and the current worktree.
+   *
+   * `options.fromTrack` names the tree an immediately preceding track() call
+   * captured from this same worktree. When that tree is still this state's
+   * freshest known capture — no restage, restore, or revert ran in between —
+   * the diff is computed tree-to-tree against it: one git process instead of
+   * repeating the staging pass (untracked scan, diff-files, git add) that the
+   * capture just performed. Any other fromTrack, or none at all, takes the
+   * staged worktree diff below. A fromTrack equal to the baseline keeps the
+   * unchanged short-circuit, which verifies the worktree live instead of
+   * trusting the capture.
+   */
+  export async function patch(hash: string, options?: { fromTrack?: string }) {
     const current = await state()
     return withOperationLock(current, async () => {
       if (!valid(hash)) {
         log.warn("failed to get diff", { hash, error: "invalid snapshot hash" })
         return { hash, files: [] }
+      }
+      const tracked = options?.fromTrack
+      if (tracked !== undefined && valid(tracked) && tracked !== hash && tracked === current.captureFresh) {
+        // Both trees record the whole worktree their staging passes admitted
+        // (see add()); the tree-to-tree diff inherits that scope without a
+        // pathspec, so it cannot regress to current.directory.
+        const result = await runGit(
+          [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-only", "-z", hash, tracked])],
+          { cwd: current.worktree },
+        )
+        if (result.code !== 0) {
+          log.warn("failed to get diff", { hash, exitCode: result.code })
+          return { hash, files: [] }
+        }
+        const names = result.text.split("\0").filter(Boolean)
+        const excluded = await snapshotExclusions(current, hash)
+        // Paths the fresh capture did not admit (size, budget, Windows,
+        // nested repositories) keep their last staged bytes in it, so the tree
+        // diff is blind to their worktree drift where the staged diff below
+        // would report it. Unless the baseline excluded the same path —
+        // patchResult() drops it either way — re-check exactly those paths
+        // against the worktree so both paths list the same files.
+        const drifted = [...(await snapshotExclusions(current, tracked))].filter((name) => !excluded.has(name))
+        for (let offset = 0; offset < drifted.length; offset += revertPathBatch) {
+          const chunk = drifted.slice(offset, offset + revertPathBatch)
+          const check = await runGit(
+            [
+              ...quote,
+              "--literal-pathspecs",
+              ...args(current, ["diff", "--no-ext-diff", "--name-only", "-z", hash, "--", ...chunk]),
+            ],
+            { cwd: current.worktree },
+          )
+          if (check.code !== 0) {
+            log.warn("failed to get diff", { hash, exitCode: check.code })
+            return { hash, files: [] }
+          }
+          names.push(...check.text.split("\0").filter(Boolean))
+        }
+        return patchResult(current, hash, names, excluded)
       }
       if (hash === current.prevHash) {
         await checkWindowsHistory(current)
@@ -1043,10 +1127,14 @@ export namespace Snapshot {
           )
           if (untracked.code === 0 && untracked.text.length === 0) {
             log.info("patch (unchanged)", { hash })
+            current.captureFresh = hash
             return { hash, files: [] }
           }
         }
       }
+      // The staging pass below may observe worktree state newer than the last
+      // capture, so the tree-reuse fast path can no longer be offered.
+      current.captureFresh = undefined
       await add(current)
       // Diff the whole worktree (see add() above) — a "." pathspec scoped to
       // current.directory would silently exclude files changed outside the
@@ -1061,23 +1149,8 @@ export namespace Snapshot {
         log.warn("failed to get diff", { hash, exitCode: result.code })
         return { hash, files: [] }
       }
-      // Paths the baseline's staging pass excluded are not faithfully recorded
-      // in it; diffing the worktree against such a tree reports drift the turn
-      // never made, and reverting it would overwrite current content with the
-      // stale last-staged bytes. Leave them out of the patch.
       const excluded = await snapshotExclusions(current, hash)
-      return {
-        hash,
-        files: result.text
-          .split("\0")
-          .filter(Boolean)
-          .filter((item) => {
-            if (!excluded.has(item)) return true
-            log.warn("skipped file excluded from the snapshot baseline in patch", { hash, file: item })
-            return false
-          })
-          .map((item) => path.join(current.worktree, item).split(path.sep).join("/")),
-      }
+      return patchResult(current, hash, result.text.split("\0").filter(Boolean), excluded)
     })
   }
 
@@ -1093,6 +1166,9 @@ export namespace Snapshot {
       }
       log.info("restore", { commit: snapshot })
       await checkWindowsHistory(current, snapshot)
+      // restore rewrites the index and checks the worktree out from the
+      // snapshot, so the last capture no longer describes either of them.
+      current.captureFresh = undefined
       await add(current)
       const savedTree = await runGit([...core, ...args(current, ["write-tree"])], { cwd: current.worktree })
       if (savedTree.code !== 0) {
@@ -1258,6 +1334,7 @@ export namespace Snapshot {
       }
 
       current.prevHash = undefined
+      current.captureFresh = undefined
       await add(current)
       const savedTree = await runGit([...core, ...args(current, ["write-tree"])], { cwd: current.worktree })
       if (savedTree.code !== 0) {
@@ -1488,6 +1565,7 @@ export namespace Snapshot {
         })
         return ""
       }
+      current.captureFresh = undefined
       await add(current)
       const result = await runGit([...quote, ...args(current, ["diff", "--no-ext-diff", hash, "--", "."])], {
         cwd: current.worktree,

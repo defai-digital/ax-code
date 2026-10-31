@@ -1561,9 +1561,11 @@ export namespace SessionProcessor {
                   // successful tool turn look unchanged, so revert has no
                   // file ledger to restore.
                   const stepBaseline = snapshot
+                  let trackedSnapshot: string | undefined
                   if (usedTools) {
                     try {
                       snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
+                      trackedSnapshot = snapshot
                     } catch (error) {
                       if (Snapshot.UnsupportedPathError.isInstance(error)) throw error
                       log.warn("snapshot track failed after tools; continuing without undo coverage", { error })
@@ -1577,8 +1579,11 @@ export namespace SessionProcessor {
                   let patchData: { hash: string; files: string[] } | undefined
                   if (stepBaseline) {
                     try {
+                      // When this step's track succeeded, pass its tree so
+                      // patch() diffs trees directly instead of restaging the
+                      // worktree that capture just staged.
                       const patch = await NativePerf.runAsync("session.snapshot.patch", undefined, () =>
-                        Snapshot.patch(stepBaseline),
+                        Snapshot.patch(stepBaseline, trackedSnapshot ? { fromTrack: trackedSnapshot } : undefined),
                       )
                       if (patch.files.length) patchData = patch
                     } catch (err) {
