@@ -145,11 +145,19 @@ class Budget {
   }
 }
 
+// ADR-249 usage keys, minus any already counted in this prompt's usage scope.
+function recordUsage(projectRoot: string, keys: string[], seen: Set<string> | undefined) {
+  const fresh = seen ? keys.filter((key) => !seen.has(key)) : keys
+  if (fresh.length === 0) return
+  for (const key of fresh) seen?.add(key)
+  UsageRecord.record(projectRoot, fresh)
+}
+
 function pushEntries(
   parts: string[],
   title: string,
   section: EntrySection | undefined,
-  opts: { agent?: string; paths?: string[]; projectRoot: string; kind?: string },
+  opts: { agent?: string; paths?: string[]; projectRoot: string; kind?: string; usageSeen?: Set<string> },
   budget: Budget,
 ) {
   if (!section || section.entries.length === 0) return
@@ -165,9 +173,10 @@ function pushEntries(
   // ADR-249: only entries that actually reached the prompt count as used.
   // Best effort and non-blocking; usage never affects injection output.
   if (used.length > 0) {
-    UsageRecord.record(
+    recordUsage(
       opts.projectRoot,
       used.map((name) => UsageRecord.memoryKey(opts.kind ?? title, name)),
+      opts.usageSeen,
     )
   }
   if (rendered.length === 0) return
@@ -208,6 +217,37 @@ export interface BuildContextOptions {
    * unbounded.
    */
   maxTokens?: number
+  /**
+   * Usage keys already recorded for the current usage scope. Entries in it are
+   * not recorded again, and newly recorded keys are added to it.
+   */
+  usageSeen?: Set<string>
+}
+
+export type ContextOptions = Omit<BuildContextOptions, "global" | "usageSeen"> & {
+  /**
+   * ADR-249 counts an entry once per user prompt. Every agent step of one
+   * prompt passes the same scope (the user message id), so an entry injected
+   * on each step is recorded once, and usage.json is written only when a scope
+   * records something new.
+   */
+  usageScope?: string
+}
+
+// Keys recorded per usage scope, bounded so long-lived processes do not grow.
+const USAGE_SCOPES_MAX = 256
+const usageScopes = new Map<string, Set<string>>()
+
+function usageSeenFor(projectRoot: string, scope: string | undefined) {
+  if (!scope) return undefined
+  const key = `${projectRoot}\0${scope}`
+  let seen = usageScopes.get(key)
+  if (!seen) {
+    if (usageScopes.size >= USAGE_SCOPES_MAX) usageScopes.delete(usageScopes.keys().next().value!)
+    seen = new Set()
+    usageScopes.set(key, seen)
+  }
+  return seen
 }
 
 /**
@@ -253,9 +293,10 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
           }
         }
         if (used.length > 0)
-          UsageRecord.record(
+          recordUsage(
             memory.projectRoot,
             used.map((name) => UsageRecord.memoryKey(kind, name)),
+            opts.usageSeen,
           )
       }
       return rendered
@@ -268,7 +309,7 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
   }
 
   // Project-scoped curated entries.
-  const entryOpts = { agent, paths, projectRoot: memory.projectRoot }
+  const entryOpts = { agent, paths, projectRoot: memory.projectRoot, usageSeen: opts.usageSeen }
   // getContext shares the object only when both scopes refer to one file.
   // Keep its global precedence, without repeating the same curated entries.
   // Equal content from distinct stores must retain its separate scope.
@@ -336,7 +377,11 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
  * Loads project memory and (if present) global memory, then merges them.
  * Returns empty string if no memory is cached anywhere.
  */
-export async function getContext(projectRoot: string, opts: Omit<BuildContextOptions, "global"> = {}): Promise<string> {
+export async function getContext(projectRoot: string, options: ContextOptions = {}): Promise<string> {
+  const { usageScope, ...rest } = options
+  const usageSeen = usageSeenFor(String(projectRoot), usageScope)
+  const opts: Omit<BuildContextOptions, "global"> = { ...rest, usageSeen }
+  const recordedBefore = usageSeen?.size
   // Preserve the loader's fail-soft behavior for malformed runtime callers.
   const projectPath = typeof projectRoot === "string" ? store.getMemoryPath(projectRoot) : undefined
   const globalPath = store.getGlobalMemoryPath()
@@ -360,9 +405,14 @@ export async function getContext(projectRoot: string, opts: Omit<BuildContextOpt
   ])
 
   if (!memory && !global) return ""
-  // ADR-249: one usage flush per injection keeps the record current without
-  // paying a write per prompt. Best effort; failures never block injection.
-  const flush = () => void UsageRecord.flush(projectRoot).catch(() => {})
+  // ADR-249: one usage flush per injection keeps the record current. Within a
+  // usage scope, flush only when this injection recorded a new key, so later
+  // steps of the same prompt do not rewrite usage.json. Best effort; failures
+  // never block injection.
+  const flush = () => {
+    if (usageSeen && usageSeen.size === recordedBefore) return
+    void UsageRecord.flush(projectRoot).catch(() => {})
+  }
   if (!memory && global) {
     // Only global memory — synthesize a minimal project memory wrapper.
     const shell: ProjectMemory = {

@@ -299,3 +299,45 @@ describe("memory injection budget", () => {
     expect(budgetForContext(0)).toBeUndefined()
   })
 })
+
+describe("memory usage scope", () => {
+  test("counts each injected entry once per usage scope and flushes only when something new is recorded", async () => {
+    await using home = await tmpdir()
+    await using project = await tmpdir()
+    vi.stubEnv("AX_CODE_TEST_HOME", home.path)
+    await store.save(project.path, memory(project.path))
+    const { UsageRecord } = await import("../../src/memory/usage")
+    const record = vi.spyOn(UsageRecord, "record")
+    const flush = vi.spyOn(UsageRecord, "flush")
+
+    const first = await getContext(project.path, { agent: "build", usageScope: "msg_1" })
+    const second = await getContext(project.path, { agent: "build", usageScope: "msg_1" })
+    expect(second).toBe(first)
+    const recordedKeys = record.mock.calls.flatMap(([, keys]) => keys)
+    expect(recordedKeys).toHaveLength(new Set(recordedKeys).size)
+    expect(recordedKeys).toHaveLength(4)
+    expect(flush).toHaveBeenCalledTimes(1)
+
+    // A new prompt counts the same entries again.
+    await getContext(project.path, { agent: "build", usageScope: "msg_2" })
+    expect(record.mock.calls.flatMap(([, keys]) => keys)).toHaveLength(8)
+    expect(flush).toHaveBeenCalledTimes(2)
+    await UsageRecord.flush(project.path)
+    const data = await UsageRecord.read(project.path)
+    expect(Object.values(data.entries).map((entry) => entry.use_count)).toEqual([2, 2, 2, 2])
+  })
+
+  test("without a usage scope every injection records and flushes", async () => {
+    await using home = await tmpdir()
+    await using project = await tmpdir()
+    vi.stubEnv("AX_CODE_TEST_HOME", home.path)
+    await store.save(project.path, memory(project.path))
+    const { UsageRecord } = await import("../../src/memory/usage")
+    const record = vi.spyOn(UsageRecord, "record")
+    const flush = vi.spyOn(UsageRecord, "flush")
+    await getContext(project.path, { agent: "build" })
+    await getContext(project.path, { agent: "build" })
+    expect(record.mock.calls.flatMap(([, keys]) => keys)).toHaveLength(8)
+    expect(flush).toHaveBeenCalledTimes(2)
+  })
+})

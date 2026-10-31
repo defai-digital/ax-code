@@ -358,7 +358,10 @@ export namespace SystemPrompt {
         : windowBudget === undefined
           ? opts.maxTokens
           : Math.min(windowBudget, opts.maxTokens)
-    const ctx = await getMemoryContext(Instance.directory, { agent: agent.name, paths, maxTokens })
+    // Every step of one prompt shares its user message, so usage counts each
+    // injected entry once per prompt rather than once per step (ADR-249).
+    const usageScope = messages?.findLast((msg) => msg.info.role === "user")?.info.id
+    const ctx = await getMemoryContext(Instance.directory, { agent: agent.name, paths, maxTokens, usageScope })
     return ctx ? ctx : undefined
   }
 
