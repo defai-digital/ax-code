@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import z from "zod"
 import { Bus } from "../../src/bus"
 import { BusEvent } from "../../src/bus/bus-event"
+import { GlobalBus } from "../../src/bus/global"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
@@ -11,6 +12,12 @@ const TestEvent = BusEvent.define(
     value: z.number(),
   }),
 )
+
+// Count only the bus deadline timer: unrelated publishes/logging may schedule
+// their own timers while a test runs.
+function deadlineTimers(timer: { mock: { calls: unknown[][] } }) {
+  return timer.mock.calls.filter((args) => args[1] === Bus.SUBSCRIBER_TIMEOUT_MS)
+}
 
 describe("Bus", () => {
   afterEach(async () => {
@@ -177,6 +184,108 @@ describe("Bus", () => {
           off()
         }
         expect(directories).toEqual([expected])
+      },
+    })
+  })
+
+  test("synchronous subscribers do not arm a deadline timer per publish", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const off = Bus.subscribe(TestEvent, () => {})
+        const timer = vi.spyOn(globalThis, "setTimeout")
+        try {
+          await Bus.publish(TestEvent, { value: 1 })
+          Bus.publishDetached(TestEvent, { value: 2 })
+          await Bus.publish(TestEvent, { value: 3 })
+          // A synchronous subscriber has already returned, so a timer could
+          // never fire and must not be allocated.
+          expect(deadlineTimers(timer)).toEqual([])
+        } finally {
+          timer.mockRestore()
+          off()
+        }
+      },
+    })
+  })
+
+  test("thenable subscribers still get the deadline timer", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let release!: () => void
+        const blocked = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const off = Bus.subscribe(TestEvent, async () => {
+          await blocked
+        })
+        const timer = vi.spyOn(globalThis, "setTimeout")
+        try {
+          const publishing = Bus.publish(TestEvent, { value: 1 })
+          await Promise.resolve()
+          expect(deadlineTimers(timer)).toHaveLength(1)
+          release()
+          await publishing
+        } finally {
+          timer.mockRestore()
+          off()
+        }
+      },
+    })
+  })
+
+  test("a throwing synchronous subscriber does not skip later subscribers", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const seen: number[] = []
+        const offThrowing = Bus.subscribe(TestEvent, () => {
+          throw new Error("subscriber boom")
+        })
+        const offRecording = Bus.subscribe(TestEvent, (event) => {
+          seen.push(event.properties.value)
+        })
+        try {
+          await Bus.publish(TestEvent, { value: 7 })
+          expect(seen).toEqual([7])
+        } finally {
+          offThrowing()
+          offRecording()
+        }
+      },
+    })
+  })
+
+  test("reuses the instance journal frame for the global journal", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const directory = Instance.directory
+        const start = GlobalBus.subscribeFrom(undefined, () => {})
+        start.unsubscribe()
+
+        await Bus.publish(TestEvent, { value: 11 })
+
+        const capture = GlobalBus.subscribeFrom(start.cursor, () => {})
+        capture.unsubscribe()
+        const entries = capture.replay?.type === "replay" ? capture.replay.entries : []
+        const entry = entries.find((candidate) => candidate.value?.payload?.type === TestEvent.type)
+
+        expect(entry).toBeDefined()
+        // Byte-identical to the previous double-encoding result, minus the
+        // second JSON.stringify pass over the payload.
+        expect(entry!.data).toBe(
+          JSON.stringify({ directory, payload: { type: TestEvent.type, properties: { value: 11 } } }),
+        )
       },
     })
   })

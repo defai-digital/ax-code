@@ -59,14 +59,32 @@ export namespace Bus {
 
   function deliver(subscriptions: Subscription[], payload: unknown, type: string): Pending {
     return subscriptions.map((sub) =>
-      withTimeout(
-        Promise.resolve()
-          .then(() => sub(payload))
-          .catch((err) => log.error("subscriber threw", { type, err })),
-        SUBSCRIBER_TIMEOUT_MS,
-        `Bus subscriber for "${type}" timed out after ${SUBSCRIBER_TIMEOUT_MS}ms`,
-      ).catch((err) => log.error("subscriber timed out", { type, err })),
+      // Deferring the call turns a synchronous throw into a rejection that
+      // cannot skip later subscribers in the same publish cycle.
+      Promise.resolve().then(() => {
+        let result: unknown
+        try {
+          result = sub(payload)
+        } catch (err) {
+          log.error("subscriber threw", { type, err })
+          return
+        }
+        // Only a promise can still be running after the subscriber returns, so
+        // only thenable subscribers pay for a deadline timer. Arming one for a
+        // synchronous subscriber costs a timer per subscriber per publish and
+        // can never fire.
+        if (!isThenable(result)) return result
+        return withTimeout(
+          Promise.resolve(result).catch((err) => log.error("subscriber threw", { type, err })),
+          SUBSCRIBER_TIMEOUT_MS,
+          `Bus subscriber for "${type}" timed out after ${SUBSCRIBER_TIMEOUT_MS}ms`,
+        ).catch((err) => log.error("subscriber timed out", { type, err }))
+      }),
     )
+  }
+
+  function isThenable(value: unknown): value is PromiseLike<unknown> {
+    return typeof (value as PromiseLike<unknown> | null | undefined)?.then === "function"
   }
 
   function prepare<Definition extends BusEvent.Definition>(
@@ -92,22 +110,28 @@ export namespace Bus {
       }
     }
     pending.push(...deliver([...state().sequencedSubscriptions], journalEntry, def.type))
-    return { payload, pending }
+    // `data` is the instance journal's encoded frame; emitGlobal reuses it
+    // instead of serializing the payload a second time.
+    return { payload, pending, data: journalEntry.data }
   }
 
-  function emitGlobal(payload: { type: string; properties: unknown }) {
-    GlobalBus.emit("event", {
-      directory: Instance.directory,
-      payload,
-    })
+  function emitGlobal(payload: { type: string; properties: unknown }, data: string) {
+    GlobalBus.emit(
+      "event",
+      {
+        directory: Instance.directory,
+        payload,
+      },
+      data,
+    )
   }
 
   export async function publish<Definition extends BusEvent.Definition>(
     def: Definition,
     properties: z.output<Definition["properties"]>,
   ) {
-    const { payload, pending } = prepare(def, properties)
-    emitGlobal(payload)
+    const { payload, pending, data } = prepare(def, properties)
+    emitGlobal(payload, data)
     return Promise.all(pending)
   }
 
@@ -121,10 +145,10 @@ export namespace Bus {
     properties: z.output<Definition["properties"]>,
     options?: { localOnly?: boolean },
   ) {
-    const { payload, pending } = prepare(def, properties)
+    const { payload, pending, data } = prepare(def, properties)
     // Global maintenance publishes once with the record's stored directory,
     // while each owning instance still receives its local journal event.
-    if (!options?.localOnly) emitGlobal(payload)
+    if (!options?.localOnly) emitGlobal(payload, data)
     void Promise.all(pending).catch((err) => {
       log.warn("subscriber failed during detached publish", {
         event: def.type,

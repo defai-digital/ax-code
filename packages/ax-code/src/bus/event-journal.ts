@@ -59,8 +59,13 @@ export class EventJournal<T> {
     return `${this.epoch}:${this.sequence}`
   }
 
-  append(value: T): EventJournalEntry<T> {
-    const data = encodeSsePayload(value)
+  /**
+   * `encoded` lets a caller that already serialized this value (or a frame that
+   * embeds it) reuse those bytes instead of paying for a second
+   * `JSON.stringify`. Only the byte accounting is recomputed here.
+   */
+  append(value: T, encoded?: string): EventJournalEntry<T> {
+    const data = encoded ?? encodeSsePayload(value)
     const entry: EventJournalEntry<T> = {
       id: `${this.epoch}:${++this.sequence}`,
       sequence: this.sequence,

@@ -100,13 +100,6 @@ registerTuiProcessHandler(
   { name: "worker-uncaught-exception" },
 )
 
-const handleGlobalEvent = (event: GlobalEvent) => {
-  Rpc.emit("global.event", event)
-}
-
-// Subscribe to global events and forward them via RPC
-GlobalBus.on("event", handleGlobalEvent)
-
 let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 let shutdownPromise: Promise<void> | undefined
 let removeSignalHandlers: (() => void) | undefined
@@ -117,6 +110,35 @@ const eventStream = {
   done: undefined as Promise<void> | undefined,
   directory: undefined as string | undefined,
 }
+
+// The worker also subscribes to the active workspace's "/event" SSE stream,
+// which already carries every event published by that directory's instance.
+// Forwarding those GlobalBus events again over RPC hands the TUI a second,
+// un-coalesced copy of data it is about to receive anyway, and pays RPC
+// serialization plus main-thread dispatch for each one. Forward only what the
+// per-directory stream cannot carry: installation.* notifications (published by
+// the background upgrade check against the launch cwd) and events from another
+// instance directory.
+const alreadyDeliveredByWorkspaceStream = (event: GlobalEvent) => {
+  const type = (event.payload as { type?: unknown } | undefined)?.type
+  if (typeof type === "string" && type.startsWith("installation.")) return false
+  // No stream installed yet (startup window): the RPC channel is the only path.
+  if (!eventStream.abort || !eventStream.directory) return false
+  if (event.directory !== eventStream.directory) return false
+  // Mirrors the "/event" filter: an event may still be scoped to a different
+  // directory through its own properties, in which case that stream drops it.
+  const directory = (event.payload as { properties?: { directory?: string } } | undefined)?.properties?.directory
+  return directory === undefined || directory === eventStream.directory
+}
+
+const handleGlobalEvent = (event: GlobalEvent) => {
+  if (alreadyDeliveredByWorkspaceStream(event)) return
+  Rpc.emit("global.event", event)
+}
+
+// Subscribe to global events and forward the ones the workspace stream misses.
+GlobalBus.on("event", handleGlobalEvent)
+
 // Guards concurrent startEventStream calls (e.g. two setWorkspace RPCs
 // in quick succession): both would pass the teardown await below and
 // each install a stream, leaving one controller orphaned — it keeps

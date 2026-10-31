@@ -6,13 +6,28 @@ export type GlobalBusEvent = {
   payload: any
 }
 
+// Build the journal frame around an already-encoded payload frame. The key
+// order (`directory` first) and the elision of an `undefined` directory match
+// `JSON.stringify({ directory, payload })` byte for byte, so the journal, replay
+// and /global/event output are unchanged — only the second serialization pass
+// (and its traversal of the whole payload) is gone.
+function encodeEnvelope(event: GlobalBusEvent, payloadData: string) {
+  if (event.directory === undefined) return `{"payload":${payloadData}}`
+  return `{"directory":${JSON.stringify(event.directory)},"payload":${payloadData}}`
+}
+
 class GlobalEventBus {
   private readonly events = new EventEmitter<{ event: [GlobalBusEvent] }>()
   private readonly sequenced = new EventEmitter<{ event: [EventJournalEntry<GlobalBusEvent>] }>()
   private readonly journal = new EventJournal<GlobalBusEvent>()
 
-  emit(_eventName: "event", event: GlobalBusEvent) {
-    const entry = this.journal.append(event)
+  /**
+   * `payloadData` is the already-encoded JSON for `event.payload`. Publishers
+   * that own that frame (see Bus.emitGlobal) pass it so the global journal can
+   * reuse those bytes instead of serializing the envelope a second time.
+   */
+  emit(_eventName: "event", event: GlobalBusEvent, payloadData?: string) {
+    const entry = this.journal.append(event, payloadData === undefined ? undefined : encodeEnvelope(event, payloadData))
     // Sequence-aware listeners run first so a raw listener that synchronously
     // publishes another event cannot make the journal arrive out of order.
     const sequenced = this.sequenced.emit("event", entry)
