@@ -5,14 +5,22 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import { describe, expect, test } from "vitest"
 import {
   AX_CODE_TERMINAL_TITLE,
+  AX_CODE_TERMINAL_TITLE_MAX_CHARS,
+  axCodeEntryTerminalTitle,
   axCodeTerminalTitleSequence,
   claimAxCodeTerminalTitle,
+  composeAxCodeTerminalTitle,
   sanitizeAxCodeTerminalTitle,
   shouldClaimAxCodeTerminalTitleAtEntry,
 } from "../../src/util/terminal-title"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..")
 const TITLE_SEQUENCE = "\x1b]2;AX-Code\x07\x1b]1;AX-Code\x07"
+const NO_ENV: NodeJS.ProcessEnv = {}
+
+function sequence(title: string) {
+  return `\x1b]2;${title}\x07\x1b]1;${title}\x07`
+}
 
 function captureStream(writes: string[] = []) {
   return {
@@ -38,17 +46,108 @@ describe("terminal title", () => {
   })
 
   test("sanitizes control characters out of OSC payloads", () => {
-    expect(sanitizeAxCodeTerminalTitle("AX-Code\x07 |\x1b evil\n")).toBe("AX-Code  |  evil ")
-    expect(axCodeTerminalTitleSequence("a\x9bb\x80c")).toBe("\x1b]2;a b c\x07\x1b]1;a b c\x07")
+    // Controls become spaces and whitespace runs collapse, so a BEL or ESC in a
+    // session title can neither end the OSC sequence nor leave a ragged title.
+    expect(sanitizeAxCodeTerminalTitle("AX-Code\x07 |\x1b evil\n", NO_ENV)).toBe("AX-Code | evil")
+    expect(axCodeTerminalTitleSequence("a\x9bb\x80c", NO_ENV)).toBe(sequence("a b c"))
+  })
+
+  test("strips bidi and invisible formatting characters", () => {
+    // Trojan Source style controls could reorder or hide title text that comes
+    // from model output or a project path.
+    expect(sanitizeAxCodeTerminalTitle("Pro‮j⁦e‏c؜t​ ﻿T⁠itle", NO_ENV)).toBe("Project Title")
+  })
+
+  test("caps the whole title and keeps Unicode outside GNU Screen", () => {
+    const long = "字".repeat(AX_CODE_TERMINAL_TITLE_MAX_CHARS + 10)
+    const capped = sanitizeAxCodeTerminalTitle(long, NO_ENV)
+    expect(Array.from(capped)).toHaveLength(AX_CODE_TERMINAL_TITLE_MAX_CHARS)
+    expect(capped.endsWith("…")).toBe(true)
+    expect(sanitizeAxCodeTerminalTitle("日本語 café", NO_ENV)).toBe("日本語 café")
+  })
+
+  test("falls back to printable ASCII under GNU Screen", () => {
+    // Screen truncates Unicode in OSC titles to a byte, which can turn a
+    // visible character into a control byte and spill the title into the terminal.
+    expect(sanitizeAxCodeTerminalTitle("日本語 café | AX-Code", { STY: "1234.pts-0.host" })).toBe("??? caf? | AX-Code")
+    // tmux also uses TERM=screen but never sets STY, so it keeps Unicode.
+    expect(sanitizeAxCodeTerminalTitle("café", { TERM: "screen" })).toBe("café")
+  })
+
+  test("composes brand, project, activity and session title in that order", () => {
+    expect(composeAxCodeTerminalTitle({}, NO_ENV)).toBe("AX-Code")
+    expect(composeAxCodeTerminalTitle({ project: "ax-code" }, NO_ENV)).toBe("AX-Code | ax-code")
+    expect(composeAxCodeTerminalTitle({ project: "ax-code", activity: "Working" }, NO_ENV)).toBe(
+      "AX-Code | ax-code | Working",
+    )
+    expect(composeAxCodeTerminalTitle({ project: "ax-code", sessionTitle: "Fix tab title in AkiTTY" }, NO_ENV)).toBe(
+      "AX-Code | ax-code | Fix tab title in AkiTTY",
+    )
+    expect(
+      composeAxCodeTerminalTitle(
+        { project: "ax-code", activity: "Working", sessionTitle: "Fix tab title in AkiTTY" },
+        NO_ENV,
+      ),
+    ).toBe("AX-Code | ax-code | Working | Fix tab title in AkiTTY")
+  })
+
+  test("marks pending attention in the activity slot", () => {
+    expect(
+      composeAxCodeTerminalTitle(
+        { project: "ax-code", activity: "Approval needed", attention: true, sessionTitle: "Fix tab title" },
+        NO_ENV,
+      ),
+    ).toBe("AX-Code | ax-code | [!] Approval needed | Fix tab title")
+    // Attention without a label still shows the mark.
+    expect(composeAxCodeTerminalTitle({ attention: true }, NO_ENV)).toBe("AX-Code | [!]")
+    // Idle sessions carry no activity item at all.
+    expect(composeAxCodeTerminalTitle({ activity: "", attention: false, sessionTitle: "x" }, NO_ENV)).toBe(
+      "AX-Code | x",
+    )
+  })
+
+  test("truncates each part on its own so a long session title cannot push out the project", () => {
+    const title = composeAxCodeTerminalTitle(
+      {
+        project: "a-very-long-project-directory-name-that-keeps-going",
+        activity: "Working",
+        sessionTitle: "Investigate why the terminal tab title only shows the product name in AkiTTY sessions",
+      },
+      NO_ENV,
+    )
+    expect(title).toBe(
+      "AX-Code | a-very-long-project-directory-n… | Working | Investigate why the terminal tab title only sho…",
+    )
+    expect(Array.from(title).length).toBeLessThanOrEqual(AX_CODE_TERMINAL_TITLE_MAX_CHARS)
+  })
+
+  test("sanitizes every part before composing", () => {
+    expect(composeAxCodeTerminalTitle({ project: "ax\x07code", sessionTitle: "  tidy\n\ttitle ‮ " }, NO_ENV)).toBe(
+      "AX-Code | ax code | tidy title",
+    )
+    // Whitespace-only parts count as missing.
+    expect(composeAxCodeTerminalTitle({ project: " \t", sessionTitle: "​" }, NO_ENV)).toBe("AX-Code")
+  })
+
+  test("entry title names the working directory before any session exists", () => {
+    expect(axCodeEntryTerminalTitle("/Users/me/code/ax-code", NO_ENV)).toBe("AX-Code | ax-code")
+    expect(axCodeEntryTerminalTitle("/", NO_ENV)).toBe("AX-Code")
+    expect(axCodeEntryTerminalTitle("", NO_ENV)).toBe("AX-Code")
+    // Default: the current working directory of this process.
+    expect(axCodeEntryTerminalTitle(undefined, NO_ENV)).toBe(`AX-Code | ${path.basename(process.cwd())}`)
   })
 
   test("claims the title on a TTY-like stream and skips non-TTY or disabled", () => {
     const ok = captureStream()
-    expect(claimAxCodeTerminalTitle(ok.stream, {})).toBe(true)
-    expect(ok.writes).toEqual([TITLE_SEQUENCE])
+    expect(claimAxCodeTerminalTitle(ok.stream, NO_ENV)).toBe(true)
+    expect(ok.writes).toEqual([sequence(axCodeEntryTerminalTitle(process.cwd(), NO_ENV))])
+
+    const explicit = captureStream()
+    expect(claimAxCodeTerminalTitle(explicit.stream, NO_ENV, "AX-Code")).toBe(true)
+    expect(explicit.writes).toEqual([TITLE_SEQUENCE])
 
     const piped = captureStream()
-    expect(claimAxCodeTerminalTitle({ ...piped.stream, isTTY: false }, {})).toBe(false)
+    expect(claimAxCodeTerminalTitle({ ...piped.stream, isTTY: false }, NO_ENV)).toBe(false)
     expect(piped.writes).toEqual([])
 
     const disabled = captureStream()
@@ -58,7 +157,7 @@ describe("terminal title", () => {
 
   test.each([false, undefined])("does not claim a stream whose isTTY is %s", (isTTY) => {
     const capture = captureStream()
-    expect(claimAxCodeTerminalTitle({ ...capture.stream, isTTY }, {})).toBe(false)
+    expect(claimAxCodeTerminalTitle({ ...capture.stream, isTTY }, NO_ENV)).toBe(false)
     expect(capture.writes).toEqual([])
   })
 

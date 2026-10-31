@@ -1,3 +1,4 @@
+import path from "node:path"
 import { TuiMcp } from "./component/tui-mcp"
 import open from "open"
 import { WikiVisualization } from "@/wiki/visualization"
@@ -84,7 +85,7 @@ import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
 import { GITHUB_NEW_ISSUE_URL } from "@/constants/project"
-import { AX_CODE_TERMINAL_TITLE } from "@/util/terminal-title"
+import { axCodeEntryTerminalTitle, composeAxCodeTerminalTitle } from "@/util/terminal-title"
 import {
   type TuiRenderProfile,
   clearTuiTerminalTitle,
@@ -171,10 +172,11 @@ export function tui(input: TuiInput) {
         })
         setTuiTerminalProfile(renderProfile)
         // Claim the terminal tab title before the renderer mounts (kimi-code
-        // style: one fire-and-forget OSC 0 write at startup). Entry already
+        // style: one fire-and-forget OSC 2/1 write at startup). Entry already
         // wrote this for the default TUI path; repeating it here covers attach
-        // / late mount and keeps the tab at "AX-Code" if mount crashes.
-        setTuiTerminalTitle(AX_CODE_TERMINAL_TITLE, renderProfile)
+        // / late mount and keeps the tab at "AX-Code | <project>" if mount
+        // crashes. The App rewrites it with activity and session title.
+        setTuiTerminalTitle(axCodeEntryTerminalTitle(input.directory), renderProfile)
         beginTuiStartup({
           continue: !!input.args.continue,
           fork: !!input.args.fork,
@@ -778,8 +780,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   // While a session is working, show a busy indicator in the terminal tab
   // via OSC 9;4, or AkiTTY's OSC 771 status/progress and small sprite. The tab
-  // text stays a static "AX-Code"; the existing footer busy indicator keeps
-  // its own animation. Neither surface includes session content or paths.
+  // text itself is the composed title below; the existing footer busy
+  // indicator keeps its own animation. Neither surface includes session
+  // content or paths.
   createEffect(() => {
     setTuiTerminalProgress(terminalTitleEnabled() && sessionWorking(), renderProfile)
     const status = route.data.type === "session" ? sync.data.session_status?.[route.data.sessionID] : undefined
@@ -799,14 +802,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   onCleanup(() => {
     setTuiTerminalProgress(false, renderProfile)
     setTuiProgramChrome({ enabled: false, busy: false, animations: false, statusText: "" }, renderProfile)
-  })
-
-  createEffect(() => {
-    if (!terminalTitleEnabled()) {
-      clearTuiTerminalTitle(renderProfile)
-      return
-    }
-    setTuiTerminalTitle(AX_CODE_TERMINAL_TITLE, renderProfile)
   })
 
   // Terminal-native notifications (OSC 9 / BEL fallback, ported from
@@ -841,7 +836,35 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       permissions: sync.data.permission,
       questions: sync.data.question,
       tree: sync.sessionTree?.(),
+      t,
     })
+  })
+
+  // Terminal tab title: "AX-Code | <project> | <activity> | <session title>"
+  // (ADR-276). Ghostty's rule for titles is where and what, with the most
+  // specific part last because Ghostty and AkiTTY truncate the head of a long
+  // tab title. The activity is the sidebar's label (approval needed > question
+  // pending > retrying > working, "[!]" while attention is pending) and is
+  // omitted when idle. The memo changes only when a part changes, so the tab
+  // is rewritten on state transitions, never per frame.
+  const terminalTitle = createMemo(() => {
+    const directory = sdk.directory ?? sync.data.path.directory
+    const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+    const session = sessionID === undefined ? undefined : sync.session.get(sessionID)
+    const activity = sessionID === undefined ? undefined : turnActivity()?.get(sessionID)
+    return composeAxCodeTerminalTitle({
+      project: directory ? path.basename(directory) : undefined,
+      activity: activity?.label,
+      attention: activity?.attention,
+      sessionTitle: session && !SessionApi.isDefaultTitle(session.title) ? session.title : undefined,
+    })
+  })
+  createEffect(() => {
+    if (!terminalTitleEnabled()) {
+      clearTuiTerminalTitle(renderProfile)
+      return
+    }
+    setTuiTerminalTitle(terminalTitle(), renderProfile)
   })
   createEffect(() => {
     const sessionID = route.data.type === "session" ? route.data.sessionID : undefined

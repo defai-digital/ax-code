@@ -9,9 +9,10 @@ import { brailleDotBit } from "@/util/braille"
 // to the other one dot at a time, so a busy session shows a small brand pulse in
 // the footer.
 //
-// The terminal tab keeps a static "AX-Code" title (util/terminal-title.ts); the
-// animation lives here, not in the tab, because an OSC tab title cannot span the
-// braille matrix and is not a good animation surface.
+// The terminal tab title names the project, activity and session
+// (util/terminal-title.ts) and changes only with that state; the animation
+// lives here, not in the tab, because an OSC tab title cannot span the braille
+// matrix and is not a good animation surface (Ghostty debounces title writes).
 //
 // Braille is East Asian Width "Narrow" and CJK-safe. The ambiguous-width block
 // glyphs the old "Knight Rider" scanner used drift CJK layouts, so braille is

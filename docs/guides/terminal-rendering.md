@@ -121,11 +121,33 @@ AX_CODE_TUI_ADVANCED_TERMINAL=0 ax-code
 If your shell startup files export the variable, remove that export and run
 `unset AX_CODE_TUI_ADVANCED_TERMINAL` to restore automatic selection.
 
+## Terminal tab title
+
+AX Code names the terminal tab and window with OSC 2 and OSC 1:
+
+```text
+AX-Code | <project directory> | <activity> | <session title>
+```
+
+Items without a value are omitted. The activity is the session's live state
+(`Approval needed`, `Question pending`, `Retrying`, `Working`), prefixed with
+`[!]` while an approval or question is pending; idle sessions show no activity.
+The session title appears once the session has one. The title changes only
+when one of these parts changes, so terminals that debounce title writes
+(Ghostty, AkiTTY) always show the current state, and the most specific part
+sits last so tab bars that keep the end of a long title keep the session.
+Control and invisible formatting characters are removed, each part is
+truncated, and the whole title is capped at 120 characters. Under GNU Screen
+the title is plain ASCII.
+
+Set `AX_CODE_DISABLE_TERMINAL_TITLE=1` or run the `Disable terminal title`
+command to leave the title alone; both also disable the busy indicators below.
+
 ## AkiTTY status and title-bar sprite
 
 In a direct native AkiTTY session, AX Code uses `@ax-code/akitty-sdk` to show
 localized Working/Retrying text, indeterminate progress and a small A/X sprite
-through OSC 771. The window/tab title remains `AX-Code`. Disabling terminal
+through OSC 771 next to the tab title above. Disabling terminal
 titles also disables program chrome; disabling animations holds sprite frame 0.
 Going idle, leaving the app or running crash cleanup clears the document and
 stops playback. The terminal's own program-status setting can disable display.

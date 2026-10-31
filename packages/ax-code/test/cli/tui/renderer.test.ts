@@ -220,7 +220,8 @@ describe("tui renderer profile", () => {
     })
     const { writes, stream } = captureStream()
     setTuiTerminalTitle("ax-code\x07 |\x1b evil\n", profile, stream)
-    expect(writes).toEqual(["\x1b]2;ax-code  |  evil \x07\x1b]1;ax-code  |  evil \x07"])
+    // Controls become spaces and whitespace runs collapse (util/terminal-title.ts).
+    expect(writes).toEqual(["\x1b]2;ax-code | evil\x07\x1b]1;ax-code | evil\x07"])
     // C1 controls (\x80-\x9f, e.g. \x9b CSI) must go too — some terminals
     // still honor them, which would break out of the OSC sequence.
     setTuiTerminalTitle("a\x9bb\x80c", profile, stream)

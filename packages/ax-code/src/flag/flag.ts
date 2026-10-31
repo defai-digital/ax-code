@@ -63,8 +63,9 @@ export namespace Flag {
   export const AX_CODE_DISABLE_AUTOUPDATE = truthy("AX_CODE_DISABLE_AUTOUPDATE")
   export const AX_CODE_ALWAYS_NOTIFY_UPDATE = truthy("AX_CODE_ALWAYS_NOTIFY_UPDATE")
   export const AX_CODE_DISABLE_PRUNE = truthy("AX_CODE_DISABLE_PRUNE")
-  // Disables both the terminal tab title (OSC 0) and the tab progress
-  // indicator (OSC 9;4) the TUI writes while a session is working.
+  // Disables the terminal tab title (OSC 2/1: "AX-Code | <project> |
+  // <activity> | <session title>"), the tab progress indicator (OSC 9;4) and
+  // AkiTTY program chrome (OSC 771) the TUI writes while a session is working.
   export const AX_CODE_DISABLE_TERMINAL_TITLE = truthy("AX_CODE_DISABLE_TERMINAL_TITLE")
   // Access-time getter (see the dynamic-flag block at the bottom of this
   // file). A hard, one-way disable for TUI mouse capture: it beats the

@@ -315,13 +315,18 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("setTuiTerminalTitle")
     expect(app).toContain("clearTuiTerminalTitle")
     expect(app).toContain("setTuiTerminalProgress")
-    expect(app).toContain("AX_CODE_TERMINAL_TITLE")
-    // The tab title is static "AX-Code"; the A/X morph lives in the footer
-    // (component/footer-animation), not in a per-frame tab title.
-    expect(app).not.toContain("composeAxCodeTerminalTitle")
+    // The tab title is composed from project, activity and session title
+    // (ADR-276) inside a memo, so it is rewritten only when a part changes.
+    // The A/X morph lives in the footer (component/footer-animation), never
+    // in a per-frame tab title: Ghostty debounces title writes by 75 ms.
+    expect(app).toContain("const terminalTitle = createMemo(() => {")
+    expect(app).toContain("composeAxCodeTerminalTitle({")
+    expect(app).toContain("setTuiTerminalTitle(terminalTitle(), renderProfile)")
+    expect(app).toContain("activity: activity?.label,")
+    expect(app).toContain("attention: activity?.attention,")
     expect(app).not.toContain("setTitleSpinnerFrame")
     expect(app).not.toContain("TITLE_SPINNER_FRAMES")
-    expect(app).not.toContain("AX Code | ")
+    expect(app).not.toContain("scheduleTuiInterval(() => setTuiTerminalTitle")
     // The progress keepalive interval is module state in renderer.ts, outside
     // Solid's cleanup tracking — App must stop it on unmount (the error
     // boundary replaces the app without otherwise clearing progress).
@@ -330,10 +335,10 @@ describe("AX Code TUI stability guardrails", () => {
       'setTuiProgramChrome({ enabled: false, busy: false, animations: false, statusText: "" }, renderProfile)',
     )
     // The tab title is claimed at TUI boot (before the renderer mounts,
-    // kimi-code style) so the tab shows "AX-Code" instead of the launcher's
-    // process name ("node") even if mount is slow or crashes. Lowercase
-    // "ax-code" remains the machine process title (util/process-title.ts).
-    expect(app).toContain("setTuiTerminalTitle(AX_CODE_TERMINAL_TITLE, renderProfile)")
+    // kimi-code style) so the tab shows "AX-Code | <project>" instead of the
+    // launcher's process name ("node") even if mount is slow or crashes.
+    // Lowercase "ax-code" remains the machine process title (util/process-title.ts).
+    expect(app).toContain("setTuiTerminalTitle(axCodeEntryTerminalTitle(input.directory), renderProfile)")
     expect(exitContext).toContain("await destroyTuiRenderer(renderer, input.profile)")
   })
 

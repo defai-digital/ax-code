@@ -213,7 +213,9 @@ function writeTuiSequence(stream: TuiSequenceStream, sequence: string) {
 
 // The window/tab titles are written directly to stdout as OSC 2/1 escapes instead of
 // routing through AX Code TUI's native setTerminalTitle — the native write proved
-// flaky in the compatible profile (same approach as kimi-code).
+// flaky in the compatible profile (same approach as kimi-code). The text is the
+// composed "AX-Code | <project> | <activity> | <session title>" from
+// util/terminal-title.ts (ADR-276); callers write it on state changes only.
 export function setTuiTerminalTitle(
   title: string,
   profile: TuiRenderProfile = getTuiRenderProfile(),
@@ -250,8 +252,8 @@ export function setTuiProgramChrome(
 
 // OSC 9;4 tab progress indicator (Windows Terminal / ConEmu / Ghostty /
 // WezTerm). Shown while the agent is working so busy sessions stand out in
-// the tab bar. The tab text stays "AX-Code"; AkiTTY's separate tab activity mark
-// is handled by setTuiProgramChrome rather than OSC 9;4.
+// the tab bar even where the title text is cut short. AkiTTY's separate tab
+// activity mark is handled by setTuiProgramChrome rather than OSC 9;4.
 export const TUI_TERMINAL_PROGRESS_KEEPALIVE_MS = 1_000
 
 export function supportsTuiTerminalProgress(env: NodeJS.ProcessEnv = process.env) {

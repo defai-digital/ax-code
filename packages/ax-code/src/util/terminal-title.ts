@@ -3,23 +3,50 @@
  *
  * Distinct from the machine process title in process-title.ts ("ax-code"):
  * that string is for ps/pgrep/tmux automatic-rename and Windows SetConsoleTitle.
- * The tab the user reads is this short product token. Grok falls back to "grok"
- * and Kimi to "Kimi Code"; AX Code keeps a single static "AX-Code" so the tab
- * never shows the Node launcher ("node") or a long argv / session-title string.
  *
- * The tab is deliberately static while busy: the animated A/X brand pulse lives
- * in the footer busy indicator (component/footer-animation) because an OSC tab
- * title cannot span the braille matrix. Do not re-add a per-frame tab title.
+ * The tab follows Ghostty's rule for titles (say where and what, most specific
+ * part last, because Ghostty and AkiTTY truncate the head of a long tab title)
+ * and the item list Codex and Grok build theirs from (ADR-276):
  *
- * Written at TUI entry (before the CLI module graph loads) and again from the
- * TUI once it mounts, so the tab is claimed within milliseconds of exec.
+ *   AX-Code | <project directory> | <activity> | <session title>
+ *
+ * "AX-Code" always leads so the tab never shows the Node launcher ("node") or
+ * a long argv. Items without a value are omitted. Entry (before the CLI graph
+ * loads) claims "AX-Code | <cwd basename>"; the TUI then rewrites the title
+ * only when a part changes. The tab never animates: Ghostty debounces title
+ * writes by 75 ms, and the footer busy indicator (component/footer-animation)
+ * and AkiTTY's OSC 771 sprite carry the motion. Do not re-add a per-frame tab
+ * title.
  */
 
+import path from "node:path"
 import { titleSequence } from "@ax-code/akitty-sdk"
 
 export const AX_CODE_TERMINAL_TITLE = "AX-Code"
+export const AX_CODE_TERMINAL_TITLE_SEPARATOR = " | "
+// Pending approval or question. ASCII so GNU Screen and plain tab bars keep it.
+export const AX_CODE_TERMINAL_TITLE_ATTENTION_MARK = "[!]"
+// AkiTTY stores 128 characters; most tab bars show far fewer.
+export const AX_CODE_TERMINAL_TITLE_MAX_CHARS = 120
+// Per-item caps (Codex: cwd 32, thread title 48; Grok: cwd 30, session 40).
+export const AX_CODE_TERMINAL_TITLE_PART_MAX_CHARS = Object.freeze({
+  project: 32,
+  activity: 32,
+  sessionTitle: 48,
+})
 
 const HELP_OR_VERSION = new Set(["-h", "--help", "-v", "--version"])
+
+export type AxCodeTerminalTitleParts = Readonly<{
+  /** Project directory basename. */
+  project?: string
+  /** Localized activity label (working, retrying, approval needed); omitted when idle. */
+  activity?: string
+  /** A permission or question is pending; prefixes the activity with the attention mark. */
+  attention?: boolean
+  /** Session title when it is not the default placeholder. */
+  sessionTitle?: string
+}>
 
 function isTerminalTitleDisabled(env: NodeJS.ProcessEnv = process.env) {
   const value = env["AX_CODE_DISABLE_TERMINAL_TITLE"]
@@ -62,17 +89,91 @@ export function shouldClaimAxCodeTerminalTitleAtEntry(
 
 // Control chars (BEL terminates the OSC sequence, ESC would break out of it)
 // must never reach the terminal from a title payload.
-export function sanitizeAxCodeTerminalTitle(title: string) {
-  return title.replace(/[\x00-\x1f\x7f-\x9f]/g, " ")
+const CONTROL_RE = /[\x00-\x1f\x7f-\x9f]/g
+// Invisible formatting and bidi controls (the Trojan Source family) can
+// reorder or hide title text that comes from model output or a project path.
+// Same set Codex strips before OSC output.
+const INVISIBLE_FORMAT_RE = /[­͏؜᠎​-‏‪-‮⁠-⁯︀-️﻿￹-￻\u{1bca0}-\u{1bca3}\u{e0100}-\u{e01ef}]/gu
+
+/** GNU Screen is the output hop: STY is set only by Screen itself (tmux shares TERM=screen). */
+export function isGnuScreenTerminalTitleTarget(env: NodeJS.ProcessEnv = process.env) {
+  const sty = env["STY"]
+  return typeof sty === "string" && sty.length > 0
 }
 
-export function axCodeTerminalTitleSequence(title: string = AX_CODE_TERMINAL_TITLE) {
+function truncateTerminalTitlePart(value: string, max: number) {
+  const chars = Array.from(value)
+  if (chars.length <= max) return value
+  return `${chars.slice(0, Math.max(0, max - 1)).join("")}…`
+}
+
+/**
+ * Normalize untrusted title text into one bounded display line: control
+ * characters become spaces, invisible formatting is removed, whitespace runs
+ * collapse, and the result is capped at AX_CODE_TERMINAL_TITLE_MAX_CHARS.
+ * GNU Screen truncates Unicode in OSC titles to a byte, which can turn a
+ * visible character into a control byte and spill the title into the
+ * terminal, so under Screen every non-ASCII character becomes "?".
+ */
+export function sanitizeAxCodeTerminalTitle(title: string, env: NodeJS.ProcessEnv = process.env) {
+  let clean = title.replace(INVISIBLE_FORMAT_RE, "").replace(CONTROL_RE, " ").replace(/\s+/g, " ").trim()
+  if (isGnuScreenTerminalTitleTarget(env)) {
+    clean = Array.from(clean, (ch) => (ch.charCodeAt(0) < 0x80 ? ch : "?")).join("")
+  }
+  return truncateTerminalTitlePart(clean, AX_CODE_TERMINAL_TITLE_MAX_CHARS)
+}
+
+/**
+ * "AX-Code | <project> | <activity> | <session title>", omitting empty items.
+ * Every part is sanitized and truncated on its own so one long session title
+ * cannot push the project or activity out of the title.
+ */
+export function composeAxCodeTerminalTitle(
+  parts: AxCodeTerminalTitleParts = {},
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const part = (value: string | undefined, max: number) => {
+    const clean = value ? sanitizeAxCodeTerminalTitle(value, env) : ""
+    return clean ? truncateTerminalTitlePart(clean, max) : undefined
+  }
+  const activity = part(parts.activity, AX_CODE_TERMINAL_TITLE_PART_MAX_CHARS.activity)
+  const items = [
+    AX_CODE_TERMINAL_TITLE,
+    part(parts.project, AX_CODE_TERMINAL_TITLE_PART_MAX_CHARS.project),
+    parts.attention
+      ? activity
+        ? `${AX_CODE_TERMINAL_TITLE_ATTENTION_MARK} ${activity}`
+        : AX_CODE_TERMINAL_TITLE_ATTENTION_MARK
+      : activity,
+    part(parts.sessionTitle, AX_CODE_TERMINAL_TITLE_PART_MAX_CHARS.sessionTitle),
+  ].filter((item): item is string => typeof item === "string" && item.length > 0)
+  return sanitizeAxCodeTerminalTitle(items.join(AX_CODE_TERMINAL_TITLE_SEPARATOR), env)
+}
+
+function currentDirectory() {
+  // process.cwd() throws once the directory has been deleted under us.
+  try {
+    return process.cwd()
+  } catch {
+    return ""
+  }
+}
+
+/** Title claimed at entry, before any session exists: "AX-Code | <cwd basename>". */
+export function axCodeEntryTerminalTitle(cwd: string = currentDirectory(), env: NodeJS.ProcessEnv = process.env) {
+  return composeAxCodeTerminalTitle({ project: cwd ? path.basename(cwd) : undefined }, env)
+}
+
+export function axCodeTerminalTitleSequence(
+  title: string = AX_CODE_TERMINAL_TITLE,
+  env: NodeJS.ProcessEnv = process.env,
+) {
   // OSC 1 = icon/tab, OSC 2 = window. Do not use OSC 0: Apple Terminal.app
   // treats OSC 0 as "set window title and clear tab title", after which the
   // tab falls back to the job name ("node" for source-mode launches).
   // Finish every window-title update with an explicit tab title, including
   // the idle/clear frame, so the final request always names the tab itself.
-  return titleSequence(title)
+  return titleSequence(sanitizeAxCodeTerminalTitle(title, env))
 }
 
 export function axCodeTerminalTitleClearSequence() {
@@ -89,14 +190,14 @@ type TitleStream = {
 export function claimAxCodeTerminalTitle(
   stream: TitleStream = process.stdout,
   env: NodeJS.ProcessEnv = process.env,
-  title: string = AX_CODE_TERMINAL_TITLE,
+  title: string = axCodeEntryTerminalTitle(currentDirectory(), env),
 ) {
   if (isTerminalTitleDisabled(env)) return false
   // Node leaves isTTY undefined on pipes and redirected files.
   if (stream.isTTY !== true) return false
   if (stream.writable === false || stream.destroyed) return false
   try {
-    stream.write(axCodeTerminalTitleSequence(title))
+    stream.write(axCodeTerminalTitleSequence(title, env))
     return true
   } catch {
     return false
