@@ -6,6 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.10] - 2026-10-31
+
+### Changed
+
+- Name terminal tabs after the project, activity and session; publish the paired SDK 2.6.63.
+
+### Fixed
+
+- Keep truncated terminal titles printable ASCII under GNU Screen, including the truncation marker.
+
 ## [7.30.9] - 2026-10-31
 
 ### Changed
