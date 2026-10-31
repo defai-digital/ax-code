@@ -44,7 +44,10 @@ export const LLMRequestEvent = Base.extend({
   model: z.string(),
   messageCount: z.number().int(),
   temperature: z.number().optional(),
-  provenanceVersion: z.literal(1).optional(),
+  // Version 2 redefines messagesHash as a fold over per-message hashes (see
+  // session/request-provenance.ts). Both versions stay readable so recordings
+  // made before the change keep replaying.
+  provenanceVersion: z.union([z.literal(1), z.literal(2)]).optional(),
   provenanceBoundary: z.literal("ai-sdk-pre-adapter").optional(),
   hashAlgorithm: z.literal("sha256").optional(),
   providerID: z.string().optional(),

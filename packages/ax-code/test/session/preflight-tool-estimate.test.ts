@@ -4,6 +4,7 @@ import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { MCP } from "../../src/mcp"
 import type { Provider } from "../../src/provider/provider"
+import { ProviderTransform } from "../../src/provider/transform"
 import { estimateRegistryToolSchemaTokens } from "../../src/session/prompt/prompt-tools"
 import { tmpdir } from "../fixture/fixture"
 
@@ -31,10 +32,12 @@ const model: Provider.Model = {
 
 let mcpSpy: MockInstance | undefined
 // Tool descriptions embed the working directory, so every estimate in a test
-// must share one directory or path-length differences shift the counts.
+// must share one directory or path-length differences shift the counts. The
+// pinned `username` keeps Config.loadState off os.userInfo(), which throws
+// ENOENT in sandboxes without a passwd entry for the current uid.
 let project: Awaited<ReturnType<typeof tmpdir>>
 beforeAll(async () => {
-  project = await tmpdir({ git: true })
+  project = await tmpdir({ git: true, config: { username: "test" } })
 })
 afterAll(async () => {
   await project[Symbol.asyncDispose]()
@@ -96,5 +99,22 @@ describe("preflight tool schema estimate", () => {
       fn: async () => estimateRegistryToolSchemaTokens({ agent: (await Agent.get("build"))!, model }),
     })
     expect(fallback).toBe(base)
+  })
+
+  test("reuses converted and transformed schemas for an unchanged tool surface", async () => {
+    // Warm the per-project conversion cache for the registry surface.
+    await estimate({})
+    const transformSpy = vi.spyOn(ProviderTransform, "schema")
+    try {
+      // A different surface (one registry tool disabled) forces the estimate to
+      // be recomputed. A conversion miss would always reach the provider
+      // transform, so zero transform calls proves both caches were reused.
+      const disabled = await estimate({}, { tools: { bash: false } })
+      expect(transformSpy).not.toHaveBeenCalled()
+      expect(await estimate({}, { tools: { bash: false } })).toBe(disabled)
+      expect(transformSpy).not.toHaveBeenCalled()
+    } finally {
+      transformSpy.mockRestore()
+    }
   })
 })

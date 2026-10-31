@@ -31,7 +31,14 @@ describe("session.request-provenance", () => {
     // Fixtures have sorted keys, allowing an independent canonical JSON oracle.
     const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
     expect(manifest.systemHash).toBe(hash(system))
-    expect(manifest.messagesHash).toBe(hash(messages))
+    // Version 2 folds the per-message canonical hashes instead of hashing the
+    // concatenated array.
+    expect(manifest.messagesHash).toBe(
+      createHash("sha256")
+        .update(messages.map((message) => hash(message)).join("\n"))
+        .digest("hex"),
+    )
+    // The definition assembly is byte-identical to whole-array canonicalization.
     expect(manifest.toolDefinitionsHash).toBe(hash(definitions))
     expect(manifest.requestHash).toBe(
       hash({
@@ -59,7 +66,7 @@ describe("session.request-provenance", () => {
       messageCount: 1,
       ...manifest,
     })
-    expect(event).toMatchObject({ requestBytes: manifest.requestBytes })
+    expect(event).toMatchObject({ requestBytes: manifest.requestBytes, provenanceVersion: 2 })
     expect(JSON.stringify(event)).not.toContain("private-")
   })
 
@@ -116,7 +123,7 @@ describe("session.request-provenance", () => {
     expect(reversed.toolDefinitionsHash).not.toBe(first.toolDefinitionsHash)
     expect(reversed.requestHash).not.toBe(first.requestHash)
     expect(first).toMatchObject({
-      provenanceVersion: 1,
+      provenanceVersion: 2,
       provenanceBoundary: "ai-sdk-pre-adapter",
       hashAlgorithm: "sha256",
       providerID: "test-provider",
@@ -210,6 +217,47 @@ describe("session.request-provenance", () => {
     ).toHaveLength(9)
   })
 
+  test("measures reused message objects exactly like freshly built ones", async () => {
+    const messages = [
+      { role: "system", content: "system" },
+      { role: "user", content: [{ type: "text", text: "hello" }] },
+      { role: "assistant", content: [{ type: "text", text: "hi" }] },
+    ]
+    const input = {
+      providerID: "test-provider",
+      modelID: "test-model",
+      systemMessages: messages.slice(0, 1),
+      tools: { alpha: definition("alpha", z.object({ text: z.string() })) },
+      activeToolNames: ["alpha"],
+      options: {},
+    }
+    // First build populates the per-message evidence cache.
+    const warm = await RequestProvenance.build({ ...input, messages })
+    // Same objects: served from the cache.
+    const reused = await RequestProvenance.build({ ...input, messages })
+    // Structurally identical but freshly built objects: must hash identically.
+    const fresh = await RequestProvenance.build({
+      ...input,
+      messages: messages.map((message) => JSON.parse(JSON.stringify(message))),
+    })
+    expect(reused).toEqual(warm)
+    expect(fresh).toEqual(warm)
+  })
+
+  test("keeps the message byte count exact as history grows", async () => {
+    const base = { providerID: "p", modelID: "m", systemMessages: [], tools: {}, activeToolNames: [], options: {} }
+    const history = [
+      { role: "user", content: "hello" },
+      { role: "assistant", content: [{ type: "text", text: "hi" }] },
+    ]
+    const first = await RequestProvenance.build({ ...base, messages: history })
+    const grown = [...history, { role: "user", content: "next" }]
+    const second = await RequestProvenance.build({ ...base, messages: grown })
+    expect(first.requestBytes.messages).toBe(Buffer.byteLength(JSON.stringify(history)))
+    expect(second.requestBytes.messages).toBe(Buffer.byteLength(JSON.stringify(grown)))
+    expect(second.messagesHash).not.toBe(first.messagesHash)
+  })
+
   test("keeps legacy llm.request events valid when provenance fields are absent", () => {
     expect(
       ReplayEvent.parse({
@@ -226,6 +274,17 @@ describe("session.request-provenance", () => {
       messageCount: 3,
       temperature: 0.2,
     })
+    // A version 1 recording made before the messagesHash change still parses.
+    expect(
+      ReplayEvent.parse({
+        type: "llm.request",
+        sessionID: "ses_v1",
+        model: "legacy-provider/legacy-model",
+        messageCount: 3,
+        provenanceVersion: 1,
+        messagesHash: "a".repeat(64),
+      }),
+    ).toMatchObject({ provenanceVersion: 1, messagesHash: "a".repeat(64) })
   })
 
   test("rejects cyclic request values instead of persisting ambiguous evidence", () => {

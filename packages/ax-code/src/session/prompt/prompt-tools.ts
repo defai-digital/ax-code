@@ -88,20 +88,31 @@ function webmcpTargetSummary(metadata: Record<string, unknown> | undefined): str
   return parts.length > 0 ? parts.join(" ") : undefined
 }
 
-// Schema transforms may capture project-defined tool schemas. Keep both the
-// LRU and in-flight work scoped to the active project instance so two projects
-// with the same tool ID/model cannot reuse each other's schema.
+// Schema transforms may capture project-defined tool schemas. Keep the LRU,
+// the in-flight work and the conversion memo scoped to the active project
+// instance so two projects with the same tool ID/model cannot reuse each
+// other's schema.
 type PendingSchema = { promise: Promise<any> }
+/**
+ * A registry tool's converted JSON schema depends only on its zod parameters,
+ * and both the preflight estimate and `resolveTools` need it for every tool on
+ * every model step. `ToolRegistry.tools()` memoizes initialized definitions per
+ * agent/model, so the parameters object is stable across steps and is a safe
+ * memo key: a replaced definition is a new object and simply misses.
+ */
+type ToolSchemaConversion = {
+  json: any
+  /** `ProviderTransform.schema` output per model identity. */
+  transformed: Map<string, any>
+}
 const schemaState = Instance.state(() => ({
   cache: new Map<string, any>(),
   mcpPending: new Map<string, PendingSchema>(),
+  conversions: new WeakMap<object, ToolSchemaConversion>(),
 }))
 const SCHEMA_CACHE_MAX = 500
 const SCHEMA_CACHE_DROP = 100
-
-function schemaCache() {
-  return schemaState().cache
-}
+const SCHEMA_VARIANT_MAX = 16
 
 function touchSchemaCache(cache: Map<string, any>, cacheKey: string, value: any) {
   cache.delete(cacheKey)
@@ -125,6 +136,118 @@ function schemaFingerprint(schema: unknown) {
     .digest("base64url")
 }
 
+/** Identity of everything `ProviderTransform.schema` may branch on. */
+function schemaIdentityForModel(model: Provider.Model) {
+  return schemaFingerprint({
+    id: model.id,
+    providerID: model.providerID,
+    apiID: model.api.id,
+    npm: model.api.npm,
+    url: model.api.url,
+  })
+}
+
+/** `z.toJSONSchema` for one tool's parameters, converted once per process. */
+function toolSchemaConversion(parameters: object) {
+  const conversions = schemaState().conversions
+  const cached = conversions.get(parameters)
+  if (cached) return cached
+  const json = z.toJSONSchema(parameters as Parameters<typeof z.toJSONSchema>[0])
+  const entry: ToolSchemaConversion = { json, transformed: new Map() }
+  conversions.set(parameters, entry)
+  return entry
+}
+
+/**
+ * Provider-transformed schema for one model. The transform branches on the
+ * model family, so results are keyed by the same model identity the MCP cache
+ * uses; the per-tool map is bounded because one process can serve several
+ * models for the same definition. `ProviderTransform.schema` never mutates its
+ * input, so the converted schema can be handed to it repeatedly.
+ */
+function transformedToolSchema(input: { parameters: object; model: Provider.Model; modelIdentity: string }) {
+  const entry = toolSchemaConversion(input.parameters)
+  const cached = entry.transformed.get(input.modelIdentity)
+  if (cached !== undefined) return { json: entry.json, schema: cached }
+  const schema = ProviderTransform.schema(input.model, entry.json)
+  if (entry.transformed.size >= SCHEMA_VARIANT_MAX) entry.transformed.clear()
+  entry.transformed.set(input.modelIdentity, schema)
+  return { json: entry.json, schema }
+}
+
+/**
+ * `jsonSchema()` wrapper for a transformed schema, memoized per schema object.
+ * The wrapper is a plain immutable descriptor of its schema and the AI SDK only
+ * reads it, so one instance can serve every step. Sharing it keeps the tool
+ * surface's schema identity stable, which is what lets the per-step consumers
+ * (token estimate, ledger hash, request provenance) memoize their own work.
+ */
+const aiSchemaByJson = new WeakMap<object, any>()
+function aiToolSchema(schema: any) {
+  if (typeof schema !== "object" || schema === null) return jsonSchema(schema)
+  const cached = aiSchemaByJson.get(schema)
+  if (cached !== undefined) return cached
+  const wrapped = jsonSchema(schema)
+  aiSchemaByJson.set(schema, wrapped)
+  return wrapped
+}
+
+/** Stable identity for an object that is reused across steps. */
+const schemaIdentities = new WeakMap<object, number>()
+let nextSchemaIdentity = 1
+function schemaIdentityOf(schema: unknown) {
+  if (typeof schema !== "object" || schema === null) return 0
+  const known = schemaIdentities.get(schema)
+  if (known !== undefined) return known
+  const id = nextSchemaIdentity++
+  schemaIdentities.set(schema, id)
+  return id
+}
+
+/**
+ * Identity key for a resolved tool surface: id, description and schema object
+ * identity of every tool, compared as a set. Pure per-surface work (schema
+ * hashing, token estimation) is memoized on this key so an unchanged surface is
+ * not re-serialized on every step. Two surfaces share a key only when their
+ * schemas are the same objects — the immutability assumption the AI SDK
+ * conversion cache, the token estimate cache and the evidence projection
+ * already make.
+ */
+export function toolSurfaceKey(tools: Iterable<{ id: string; description?: string; inputSchema?: unknown }>) {
+  const parts: string[] = []
+  for (const tool of tools) {
+    parts.push(`${tool.id}\u0000${tool.description ?? ""}\u0000${schemaIdentityOf(tool.inputSchema)}`)
+  }
+  parts.sort()
+  return parts.join("\n")
+}
+
+const SURFACE_MEMO_MAX = 16
+
+/**
+ * Bounded LRU for a value that is a pure function of a `toolSurfaceKey`.
+ * Callers must never memoize `undefined`.
+ */
+export function memoizedSurface<T>(cache: Map<string, T>, key: string, compute: () => T): T {
+  const cached = cache.get(key)
+  if (cached !== undefined) {
+    cache.delete(key)
+    cache.set(key, cached)
+    return cached
+  }
+  const value = compute()
+  while (cache.size >= SURFACE_MEMO_MAX) {
+    const oldest = cache.keys().next().value
+    if (oldest === undefined) break
+    cache.delete(oldest)
+  }
+  cache.set(key, value)
+  return value
+}
+
+/** Preflight/compaction tool-schema token totals, keyed by resolved surface. */
+const estimateMemo = new Map<string, number>()
+
 export async function transformMcpInputSchema(input: {
   cacheKey: string
   model: Provider.Model
@@ -132,13 +255,7 @@ export async function transformMcpInputSchema(input: {
 }) {
   const current = schemaState()
   const schemaJson = await Promise.resolve(asSchema(input.inputSchema).jsonSchema)
-  const modelIdentity = schemaFingerprint({
-    id: input.model.id,
-    providerID: input.model.providerID,
-    apiID: input.model.api.id,
-    npm: input.model.api.npm,
-    url: input.model.api.url,
-  })
+  const modelIdentity = schemaIdentityForModel(input.model)
   const cacheKey = `${input.cacheKey}:${modelIdentity}:${schemaFingerprint(schemaJson)}`
   const cached = current.cache.get(cacheKey)
   if (cached !== undefined) {
@@ -427,6 +544,7 @@ export async function estimateRegistryToolSchemaTokens(input: {
   omitToolSchemas?: boolean
 }) {
   if (input.omitToolSchemas) return 0
+  const modelIdentity = schemaIdentityForModel(input.model)
   const ruleset = Permission.merge(
     input.agent.permission,
     input.sessionPermission ?? [],
@@ -445,7 +563,7 @@ export async function estimateRegistryToolSchemaTokens(input: {
     .map((item) => ({
       id: item.id,
       description: item.description,
-      inputSchema: ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters)),
+      inputSchema: transformedToolSchema({ parameters: item.parameters, model: input.model, modelIdentity }).schema,
     }))
 
   // resolveTools also sends connected MCP tools and, when a WebMCP bridge is
@@ -458,13 +576,6 @@ export async function estimateRegistryToolSchemaTokens(input: {
     return {} as Awaited<ReturnType<typeof MCP.tools>>
   })
   const disabledMcpTools = Permission.disabled(Object.keys(mcpTools), ruleset)
-  const modelIdentity = schemaFingerprint({
-    id: input.model.id,
-    providerID: input.model.providerID,
-    apiID: input.model.api.id,
-    npm: input.model.api.npm,
-    url: input.model.api.url,
-  })
   for (const [key, item] of Object.entries(mcpTools)) {
     if (input.tools?.[key] === false || disabledMcpTools.has(key) || !item.execute) continue
     definitions.push({
@@ -485,10 +596,16 @@ export async function estimateRegistryToolSchemaTokens(input: {
     definitions.push({
       id: "browser_workflow",
       description: BrowserWorkflow.description,
-      inputSchema: ProviderTransform.schema(input.model, z.toJSONSchema(BrowserWorkflow.Parameters)),
+      inputSchema: transformedToolSchema({
+        parameters: BrowserWorkflow.Parameters,
+        model: input.model,
+        modelIdentity,
+      }).schema,
     })
   }
-  return estimateToolDefinitionTokens(definitions)
+  // The estimate is a pure sum over the definition surface and both preflight
+  // and compaction recompute it for an unchanged surface on every step.
+  return memoizedSurface(estimateMemo, toolSurfaceKey(definitions), () => estimateToolDefinitionTokens(definitions))
 }
 
 /**
@@ -506,15 +623,8 @@ export async function resolveTools(input: ResolveToolsInput) {
     input.session.permission ?? [],
     permissionRulesetFromLegacyTools(input.tools),
   )
-  // Share transformed schemas across tool resolution calls.
-  const cache = schemaCache()
-  const modelSchemaIdentity = schemaFingerprint({
-    id: input.model.id,
-    providerID: input.model.providerID,
-    apiID: input.model.api.id,
-    npm: input.model.api.npm,
-    url: input.model.api.url,
-  })
+  // Share converted and transformed schemas across tool resolution calls.
+  const modelSchemaIdentity = schemaIdentityForModel(input.model)
   const schemaCacheKey = (toolId: string) => `${toolId}:${modelSchemaIdentity}`
   const isDisabledByConfig = (toolID: string) => input.tools?.[toolID] === false
   let registryDispatcher: Tool.Dispatcher | undefined
@@ -840,27 +950,18 @@ export async function resolveTools(input: ResolveToolsInput) {
   }
 
   for (const item of enabledRegistryTools) {
-    const schemaJson = z.toJSONSchema(item.parameters)
-    const cacheKey = schemaCacheKey(`${item.id}:${schemaFingerprint(schemaJson)}`)
-    const cached = cache.get(cacheKey)
-    const schema =
-      cached !== undefined
-        ? // LRU: move to end so recently-used entries survive eviction
-          (touchSchemaCache(cache, cacheKey, cached), cached)
-        : (() => {
-            const s = ProviderTransform.schema(input.model, schemaJson)
-            // Bound the cache to avoid a slow memory leak in long-running
-            // processes (TUI/daemon) that accumulate tool×model entries
-            // across session lifetimes. LRU eviction: when we reach the
-            // cap, drop the 100 least-recently-used entries. Maps preserve
-            // insertion order, so `.keys()` iterates oldest first.
-            setSchemaCache(cache, cacheKey, s)
-            return s
-          })()
+    // One conversion and one provider transform per tool/model for the life of
+    // the memoized registry definition, so an unchanged surface costs neither
+    // `z.toJSONSchema` nor the schema transform on the next step.
+    const schema = transformedToolSchema({
+      parameters: item.parameters,
+      model: input.model,
+      modelIdentity: modelSchemaIdentity,
+    }).schema
     tools[item.id] = tool({
       id: item.id as any,
       description: item.description,
-      inputSchema: jsonSchema(schema as any),
+      inputSchema: aiToolSchema(schema),
       async execute(args, options) {
         return invokeRegistryTool({ item, args, options, isolationPolicy: "escalate" })
       },
@@ -1415,7 +1516,13 @@ export async function resolveTools(input: ResolveToolsInput) {
     )
     tools.browser_workflow = tool({
       description: BrowserWorkflow.description,
-      inputSchema: jsonSchema(ProviderTransform.schema(input.model, z.toJSONSchema(BrowserWorkflow.Parameters)) as any),
+      inputSchema: aiToolSchema(
+        transformedToolSchema({
+          parameters: BrowserWorkflow.Parameters,
+          model: input.model,
+          modelIdentity: modelSchemaIdentity,
+        }).schema,
+      ),
       async execute(raw, options) {
         const args = BrowserWorkflow.Parameters.parse(raw)
         const ctx = context(args, options)
@@ -1585,7 +1692,7 @@ export async function resolveTools(input: ResolveToolsInput) {
       ids.map(async (id) => {
         const schema = registry.get(id)?.parameters
         const json = schema
-          ? z.toJSONSchema(schema)
+          ? toolSchemaConversion(schema).json
           : await Promise.resolve(asSchema(tools[id]!.inputSchema).jsonSchema)
         const properties = isRecord(json) && isRecord(json.properties) ? json.properties : {}
         const required = isRecord(json) && Array.isArray(json.required) ? json.required : []

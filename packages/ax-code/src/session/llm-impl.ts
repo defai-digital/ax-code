@@ -57,11 +57,29 @@ import { levenshtein } from "@/util/levenshtein"
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 import { RequestProvenance } from "./request-provenance"
 import { RequestTiming } from "./request-timing"
+import { memoizedSurface, toolSurfaceKey } from "./prompt/prompt-tools"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
   const SUPER_LONG_PACING_MAX_ENTRIES = 64
   const superLongPacing = new Map<string, SuperLongPolicy.PacingState>()
+
+  /** Tool-surface hashes for the ledger lookup, keyed by resolved surface. */
+  const toolSchemaHashes = new Map<string, string>()
+
+  /**
+   * ADR-139 D2 anchors the token ledger on a hash of the resolved tool surface.
+   * The hash serializes every tool schema, and the surface is normally
+   * unchanged between steps, so memoize it on the surface identity. The value
+   * still comes from TokenLedger, so the anchor recorded after a response
+   * (processor) stays byte-identical to this lookup.
+   */
+  function toolSchemaHashFor(tools: Record<string, Tool>) {
+    const key = toolSurfaceKey(
+      Object.entries(tools).map(([id, item]) => ({ id, description: item.description, inputSchema: item.inputSchema })),
+    )
+    return memoizedSurface(toolSchemaHashes, key, () => TokenLedger.toolSchemaHashForRecord(tools))
+  }
 
   /** LRU-capped setter for superLongPacing to prevent unbounded growth. */
   function setPacingEntry(key: string, state: SuperLongPolicy.PacingState) {
@@ -571,7 +589,7 @@ export namespace LLM {
         const breakdown = ledger.current({
           messageIDs: filteredMessageIDs,
           revision: TokenLedger.revisionFor(input.sessionID),
-          toolSchemaHash: TokenLedger.toolSchemaHashForRecord(tools),
+          toolSchemaHash: toolSchemaHashFor(tools),
           systemHash: TokenLedger.systemHashFor(input.system),
           routeKey,
           tail: { system: input.system, messages: filteredMessages },

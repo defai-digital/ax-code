@@ -68,7 +68,7 @@ export namespace RequestProvenance {
   }
 
   export type Manifest = {
-    provenanceVersion: 1
+    provenanceVersion: 2
     provenanceBoundary: "ai-sdk-pre-adapter"
     hashAlgorithm: "sha256"
     providerID: string
@@ -84,6 +84,12 @@ export namespace RequestProvenance {
       toolDefinitions: number
     }
     systemHash: string
+    /**
+     * Version 2: sha256 over the ordered per-message canonical hashes rather
+     * than one hash of the concatenated canonical array, so unchanged history
+     * is measured once and reused across steps. Not comparable with a version 1
+     * `messagesHash` for the same request.
+     */
     messagesHash: string
     toolDefinitionsHash: string
     optionsHash: string
@@ -97,38 +103,126 @@ export namespace RequestProvenance {
   }
 
   export function fingerprint(value: unknown): string {
-    return sha256(JSON.stringify(canonicalize(value)))
+    return sha256(canonicalJson(value))
   }
 
-  function measure(value: unknown) {
-    // Reuse the existing canonical serialization; never retain request bodies
-    // in the manifest. This is not a provider tokenizer or wire-size measure.
-    const serialized = JSON.stringify(canonicalize(value))
+  function canonicalJson(value: unknown) {
+    return JSON.stringify(canonicalize(value))
+  }
+
+  function measureSerialized(serialized: string) {
+    // Never retain request bodies in the manifest. This is not a provider
+    // tokenizer or wire-size measure.
     return { hash: sha256(serialized), bytes: Buffer.byteLength(serialized, "utf8") }
   }
 
+  function measure(value: unknown) {
+    return measureSerialized(canonicalJson(value))
+  }
+
+  // Per-message evidence cache. Canonicalizing a 1-1.6 MB history dominates the
+  // manifest cost and the history is re-measured on every step, while the
+  // converted ModelMessages are reused across steps (toModelMessages caches
+  // conversions per message, the request path only replaces the messages it
+  // rewrites, and the evidence projection returns the same objects when it
+  // changes nothing). Cache the hash and byte count only — never the canonical
+  // text — so the cache cannot accumulate copies of history. A message that is
+  // rebuilt is a new object and simply misses.
+  const messageEvidence = new WeakMap<object, { hash: string; bytes: number }>()
+
+  function messageMeasurement(message: unknown) {
+    if (typeof message !== "object" || message === null) return measure(message)
+    const cached = messageEvidence.get(message)
+    if (cached !== undefined) return cached
+    const measured = measure(message)
+    messageEvidence.set(message, measured)
+    return measured
+  }
+
+  /**
+   * Fold the per-message hashes into `messagesHash`. Hashes are fixed-width hex
+   * joined by a newline, so the encoding is unambiguous. The byte count stays
+   * the exact canonical JSON length of the array: `[` + items joined by `,` +
+   * `]`, which is what `JSON.stringify` produces for an array of canonical
+   * values.
+   */
+  function measureMessages(messages: unknown[]) {
+    const parts = messages.map(messageMeasurement)
+    return {
+      hash: sha256(parts.map((part) => part.hash).join("\n")),
+      bytes: parts.reduce((total, part) => total + part.bytes, 0) + (messages.length === 0 ? 2 : messages.length + 1),
+    }
+  }
+
+  // Tool definitions carry a large schema each and are remeasured per step. The
+  // converted schema object is stable across steps (the prompt tool cache keeps
+  // one conversion per tool and model), so cache the exact per-definition
+  // canonical JSON and assemble the array string from it. Assembly reproduces
+  // the bytes a whole-array canonicalization would produce, so
+  // `toolDefinitionsHash` and its byte count are unchanged from version 1.
+  const definitionEvidence = new WeakMap<object, Map<string, string>>()
+  const DEFINITION_CACHE_MAX = 16
+
+  function definitionSerialization(definition: { name: string; description: string; schema: unknown }) {
+    const { name, description, schema } = definition
+    if (typeof schema !== "object" || schema === null) return canonicalJson(definition)
+    let byKey = definitionEvidence.get(schema)
+    if (!byKey) {
+      byKey = new Map()
+      definitionEvidence.set(schema, byKey)
+    }
+    const key = `${name}\u0000${description}`
+    const cached = byKey.get(key)
+    if (cached !== undefined) return cached
+    const serialized = canonicalJson(definition)
+    if (byKey.size >= DEFINITION_CACHE_MAX) byKey.clear()
+    byKey.set(key, serialized)
+    return serialized
+  }
+
+  function measureDefinitions(definitions: Array<{ name: string; description: string; schema: unknown }>) {
+    return measureSerialized(`[${definitions.map(definitionSerialization).join(",")}]`)
+  }
+
+  const TOOL_SCHEMA_TIMEOUT_MS = 250
+
   export async function build(input: Input): Promise<Manifest> {
     const toolNames = [...input.activeToolNames]
-    const toolDefinitions = await Promise.all(
-      toolNames.map(async (name) => {
-        const current = input.tools[name]!
-        let schema: unknown
+    // One timer for the whole surface instead of one per tool: the budget is
+    // the same order of magnitude, a hanging or rejecting schema still fails
+    // the whole manifest (which becomes a manifest-unavailable marker at the
+    // caller), and the failing tool is still named in the error.
+    const settled = new Set<string>()
+    const failed: string[] = []
+    const resolved = toolNames.map(async (name) => {
+      const current = input.tools[name]!
+      let schema: unknown = null
+      if (current.inputSchema) {
         try {
-          schema = current.inputSchema
-            ? await withTimeout(
-                Promise.resolve(asSchema(current.inputSchema as Parameters<typeof asSchema>[0]).jsonSchema),
-                250,
-                `Tool schema provenance timed out for ${name}`,
-              )
-            : null
+          schema = await Promise.resolve(asSchema(current.inputSchema as Parameters<typeof asSchema>[0]).jsonSchema)
         } catch (error) {
-          // The caller records a manifest-unavailable marker and still dispatches
-          // the model request. Never publish a complete-looking partial hash.
-          throw new Error(`Tool schema unavailable for provenance: ${name}`, { cause: error })
+          failed.push(name)
+          throw error
         }
-        return { name, description: current.description ?? "", schema }
-      }),
-    )
+      }
+      settled.add(name)
+      return { name, description: current.description ?? "", schema }
+    })
+    let toolDefinitions: Array<{ name: string; description: string; schema: unknown }>
+    try {
+      toolDefinitions = await withTimeout(
+        Promise.all(resolved),
+        TOOL_SCHEMA_TIMEOUT_MS,
+        "Tool schema provenance timed out",
+      )
+    } catch (error) {
+      // The caller records a manifest-unavailable marker and still dispatches
+      // the model request. Never publish a complete-looking partial hash.
+      const stuck = toolNames.filter((name) => !settled.has(name))
+      throw new Error(`Tool schema unavailable for provenance: ${failed[0] ?? stuck[0] ?? toolNames[0]}`, {
+        cause: error,
+      })
+    }
     const options = {
       temperature: input.options.temperature,
       topP: input.options.topP,
@@ -141,8 +235,8 @@ export namespace RequestProvenance {
       providerOptions: input.options.providerOptions,
     }
     const system = measure(input.systemMessages)
-    const messages = measure(input.messages)
-    const definitions = measure(toolDefinitions)
+    const messages = measureMessages(input.messages)
+    const definitions = measureDefinitions(toolDefinitions)
     const systemHash = system.hash
     const messagesHash = messages.hash
     const toolDefinitionsHash = definitions.hash
@@ -159,7 +253,7 @@ export namespace RequestProvenance {
     })
 
     return {
-      provenanceVersion: 1,
+      provenanceVersion: 2,
       provenanceBoundary: "ai-sdk-pre-adapter",
       hashAlgorithm: "sha256",
       providerID: input.providerID,

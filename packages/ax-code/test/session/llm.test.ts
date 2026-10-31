@@ -1109,7 +1109,7 @@ describe("session.llm.stream", () => {
         const provenance = replayEvents.find((event) => event.type === "llm.request")
         expect(provenance).toMatchObject({
           type: "llm.request",
-          provenanceVersion: 1,
+          provenanceVersion: 2,
           provenanceBoundary: "ai-sdk-pre-adapter",
           providerID,
           messageCount: 1,
