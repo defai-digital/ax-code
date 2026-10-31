@@ -5,6 +5,7 @@ import { EventLogID } from "./index"
 import type { ReplayEvent } from "./event"
 import { SessionID } from "../session/schema"
 import { Log } from "../util/log"
+import { parseJsonStrict } from "../util/json-value"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
 import { Flag } from "../flag/flag"
@@ -148,6 +149,112 @@ export namespace EventQuery {
         .all(),
     )
     return rows.reverse().map((row) => row.event_data)
+  }
+
+  // Fields DecisionHints (src/session/decision-hints.ts) consumes from
+  // tool.call `input` and tool.result `metadata`. The projections below drop
+  // every other field — edit-tool diffs, before/after file contents, tool
+  // stdout, error text — before the row crosses into JS, so a hint reading a
+  // key outside these lists sees undefined. Keep both lists in sync with that
+  // module; the hint-equivalence tests in test/replay/query.test.ts cover each
+  // listed key.
+  const HINT_INPUT_KEYS = ["command", "description", "filePath", "file", "path", "targetPath", "workflow"]
+  const HINT_METADATA_KEYS = [
+    "exit",
+    "finding",
+    "reviewResult",
+    "verificationEnvelopes",
+    "policy",
+    "debugHypothesis",
+    "verificationOutcome",
+    "effectiveCaseStatus",
+    "verificationPolicyFailed",
+  ]
+
+  // json_each reports JSON true/false as SQL 1/0, which json_group_object
+  // would embed as numbers; the CASE in the projections re-wraps them as JSON
+  // booleans so projected values round-trip exactly.
+  function hintKeyList(keys: readonly string[]) {
+    return sql.join(
+      keys.map((key) => sql`${key}`),
+      sql`, `,
+    )
+  }
+
+  /**
+   * Recent `tool.call` / `tool.result` events only, projected to the fields
+   * session decision hints consume.
+   *
+   * `recentBySession` decodes every row of its window — including tool.result
+   * metadata that carries full before/after file contents for edits (hundreds
+   * of KB of JSON.parse per agent step) and non-tool payloads (`llm.output`,
+   * step markers) the hints never read. This variant filters by `event_type`
+   * in SQL — each query is one bounded backward scan of
+   * event_log_session_type_sequence_idx (session_id, event_type, sequence),
+   * so non-tool rows are never read — and rebuilds each row with SQLite JSON
+   * functions so only the consumed fields cross into JS.
+   *
+   * The window counts tool events only: unlike `recentBySession`, non-tool
+   * events do not consume the `limit`-row budget. That is the only behavioral
+   * difference — for the same event log the hint analysis of both feeds is
+   * identical whenever the tool events fit in the old window.
+   */
+  export function recentToolEventsForHints(sessionID: SessionID, limit = 500): ReplayEvent[] {
+    const normalizedLimit = normalizeRecentLimit(limit)
+    if (normalizedLimit === 0) return []
+    const store = SessionShard.storeFor(sessionID)
+    // One index scan per event type, then merge: the top `limit` of the union
+    // of two per-type `limit`-slices is exactly the most recent `limit` tool
+    // events overall, and each scan is a pure index walk with no sort.
+    const rows = store.use((db) => {
+      const calls = db
+        .select({
+          event_json: sql<string>`
+            json_object(
+              'type', json_extract(${EventLogTable.event_data}, '$.type'),
+              'tool', json_extract(${EventLogTable.event_data}, '$.tool'),
+              'callID', json_extract(${EventLogTable.event_data}, '$.callID'),
+              'input', (
+                select json_group_object(key, case type when 'true' then json('true') when 'false' then json('false') else value end)
+                from json_each(${EventLogTable.event_data}, '$.input')
+                where key in (${hintKeyList(HINT_INPUT_KEYS)})
+              )
+            )`,
+          sequence: EventLogTable.sequence,
+        })
+        .from(EventLogTable)
+        .where(and(eq(EventLogTable.session_id, sessionID), eq(EventLogTable.event_type, "tool.call")))
+        .orderBy(desc(EventLogTable.sequence))
+        .limit(normalizedLimit)
+        .all()
+      const results = db
+        .select({
+          event_json: sql<string>`
+            json_object(
+              'type', json_extract(${EventLogTable.event_data}, '$.type'),
+              'tool', json_extract(${EventLogTable.event_data}, '$.tool'),
+              'callID', json_extract(${EventLogTable.event_data}, '$.callID'),
+              'status', json_extract(${EventLogTable.event_data}, '$.status'),
+              'metadata', (
+                select json_group_object(key, case type when 'true' then json('true') when 'false' then json('false') else value end)
+                from json_each(${EventLogTable.event_data}, '$.metadata')
+                where key in (${hintKeyList(HINT_METADATA_KEYS)})
+              )
+            )`,
+          sequence: EventLogTable.sequence,
+        })
+        .from(EventLogTable)
+        .where(and(eq(EventLogTable.session_id, sessionID), eq(EventLogTable.event_type, "tool.result")))
+        .orderBy(desc(EventLogTable.sequence))
+        .limit(normalizedLimit)
+        .all()
+      return [...calls, ...results]
+    })
+    rows.sort((a, b) => b.sequence - a.sequence)
+    return rows
+      .slice(0, normalizedLimit)
+      .reverse()
+      .map((row) => parseJsonStrict(row.event_json) as ReplayEvent)
   }
 
   export function bySessionWithTimestamp(sessionID: SessionID): { event_data: ReplayEvent; time_created: number }[] {

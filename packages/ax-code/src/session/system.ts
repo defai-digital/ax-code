@@ -369,7 +369,7 @@ export namespace SystemPrompt {
     const sessionID = input.sessionID ?? inferSessionID(input.messages)
     if (sessionID) {
       try {
-        const replay = DecisionHints.analyzeEvents(EventQuery.recentBySession(sessionID))
+        const replay = DecisionHints.analyzeEvents(EventQuery.recentToolEventsForHints(sessionID))
         if (replay.actionCount > 0) return DecisionHints.render(replay.hints)
       } catch (error) {
         log.warn("decision hint replay load failed", { sessionID, error })
