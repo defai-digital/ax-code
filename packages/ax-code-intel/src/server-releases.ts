@@ -200,7 +200,7 @@ export const fetchGitHubReleaseByTag = async (input: {
     log.warn("failed to parse GitHub release response as JSON", { repo: input.repo, tag: input.tag, error })
     return
   }
-  if (!Array.isArray(release.assets)) return
+  if (!release || !Array.isArray(release.assets)) return
   return release
 }
 

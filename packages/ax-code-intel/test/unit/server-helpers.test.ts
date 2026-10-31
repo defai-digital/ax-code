@@ -323,6 +323,19 @@ describe("lsp server helpers", () => {
     expect(release?.assets?.[0]?.name).toBe("zls-aarch64-macos.tar.xz")
   })
 
+  test("treats a null GitHub release payload as a missing release", async () => {
+    const release = await fetchGitHubReleaseByTag({
+      repo: "zigtools/zls",
+      tag: "0.16.0",
+      fetcher: async () => ({
+        ok: true,
+        json: async () => null,
+      }),
+    })
+
+    expect(release).toBeUndefined()
+  })
+
   test("installs pinned GitHub release assets with verified digests", async () => {
     const installs: Record<string, unknown>[] = []
     const bin = await installPinnedGitHubReleaseAsset({
