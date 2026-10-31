@@ -147,3 +147,19 @@ export async function loopMessages(input: {
     cached: input.cached,
   }
 }
+
+// Goal progress, source scope and check verification only look at messages
+// and tool parts dated at or after the goal's creation. Stream newest → oldest
+// and stop at the first assistant message that completed before `since`:
+// assistant turns in one session run sequentially, so every older message
+// (and all of its parts) also ended before the goal existed. Messages without
+// a completion time are kept conservatively.
+export async function goalWindowMessages(sessionID: SessionID, since: number) {
+  const result: MessageV2.WithParts[] = []
+  for await (const msg of MessageV2.stream(sessionID)) {
+    if (msg.info.role === "assistant" && msg.info.time.completed !== undefined && msg.info.time.completed < since) break
+    result.push(msg)
+  }
+  result.reverse()
+  return result
+}

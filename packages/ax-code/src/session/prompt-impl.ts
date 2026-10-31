@@ -49,7 +49,7 @@ import {
 } from "./prompt/prompt-loop-truncated-turn"
 import { handlePromptLoopTodoConvergence } from "./prompt/prompt-loop-todo-convergence"
 import { handlePromptLoopTodoContinuation } from "./prompt/prompt-loop-todo-continuation"
-import { appendNewerMessages, loopMessages, scanLoopMessages } from "./prompt/prompt-loop-messages"
+import { appendNewerMessages, goalWindowMessages, loopMessages, scanLoopMessages } from "./prompt/prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt/prompt-loop-queue"
 import {
   beginPromptLoopRecording,
@@ -2178,7 +2178,8 @@ export namespace SessionPrompt {
           reason = "completed"
           break
         }
-        const goalMessages = goal && goal.status !== "complete" ? await Session.messages({ sessionID }) : msgs
+        const goalMessages =
+          goal && goal.status !== "complete" ? await goalWindowMessages(sessionID, goal.time.created) : msgs
         const progress = goal?.status === "active" ? goalProgress(goalMessages, goal.time.created) : undefined
         const goalGuidance =
           goal && goal.status !== "complete"
