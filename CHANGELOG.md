@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.8] - 2026-10-31
+
+### Changed
+
+- Add a silver-and-white husky to the AkiTTY activity animations.
+- Publish the paired TypeScript SDK 2.6.61.
+
+### Fixed
+
+- Preserve the current animal pose and animation timing when the working status or language changes.
+- Stop playback after a failed status write and allow the same update to retry.
+
 ## [7.30.7] - 2026-10-30
 
 ### Changed
