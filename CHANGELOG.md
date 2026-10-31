@@ -18,6 +18,8 @@ changes belong to AX Coder.
 - Preserve own prototype-named fields when fingerprinting model requests.
 - Handle null GitHub release responses, mixed checksum manifests, and filesystem-root containment.
 - Keep decision hints within the event window and memory usage counts within each prompt.
+- Re-arm rescheduled one-time tasks, record dispatch failures, reconcile orphaned runs, and route deletion events by project.
+- Deliver the complete resize storm in PTY qualification even when polling is delayed.
 
 ## [7.30.8] - 2026-10-31
 
