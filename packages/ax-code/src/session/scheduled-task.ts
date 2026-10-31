@@ -246,11 +246,15 @@ export namespace ScheduledTask {
   export const Event = {
     Created: BusEvent.define("scheduled.task.created", z.object({ task: Info })),
     Updated: BusEvent.define("scheduled.task.updated", z.object({ task: Info })),
+    // Carries the directory so a client can route the event to its project
+    // without a loaded copy of the task; the rest of the task (its prompt
+    // included) is gone and is not re-published.
     Deleted: BusEvent.define(
       "scheduled.task.deleted",
       z.object({
         id: ScheduledTaskID.zod,
         projectID: ProjectID.zod,
+        directory: z.string(),
       }),
     ),
     Fired: BusEvent.define("scheduled.task.fired", z.object({ task: Info, run: RunInfo })),
@@ -354,8 +358,8 @@ export namespace ScheduledTask {
     Bus.publishDetached(Event.Updated, { task })
   }
 
-  function publishDeleted(task: Pick<Info, "id" | "projectID">) {
-    Bus.publishDetached(Event.Deleted, task)
+  function publishDeleted(task: Pick<Info, "id" | "projectID" | "directory">) {
+    Bus.publishDetached(Event.Deleted, { id: task.id, projectID: task.projectID, directory: task.directory })
   }
 
   function publishFired(task: Info, run: RunInfo) {
@@ -557,17 +561,43 @@ export namespace ScheduledTask {
     ) {
       throw new InvalidSchedule({
         resource: "status",
-        // A paused one-time task was not delivered — it exhausted its failure
-        // retries, so resume must point at the retry path instead of claiming
-        // the task already ran.
+        // A paused one-time task was not delivered. One the failure policy
+        // paused exhausted its retries, so resume points at the retry path;
+        // one the user paused simply saw its run time pass, so resume points
+        // at a new schedule. Neither "already ran".
         message:
           current.status === "paused"
-            ? `This one-time task was paused after repeated failures; trigger it with run-now to retry, or delete it and create a new task.`
+            ? current.error?.startsWith("auto-paused")
+              ? `This one-time task was paused after repeated failures; trigger it with run-now to retry, or delete it and create a new task.`
+              : `This one-time task's run time passed while it was paused; give it a new schedule to run it, or delete it.`
             : `This one-time task already ran${current.lastRunAt ? ` at ${new Date(current.lastRunAt).toISOString()}` : ""}; create a new task instead of resuming it.`,
       })
     }
+    // A finished one-time task has nothing to pause: it is not running and will
+    // not run again without a new schedule. A paused row would later be resumed
+    // as if the failure policy had paused it. Re-scheduling it paused stays legal.
+    if (parsed.status === "paused" && current.status === "disabled" && parsed.schedule === undefined) {
+      throw new InvalidSchedule({
+        resource: "status",
+        message: "This one-time task already finished and cannot be paused; give it a new schedule or delete it.",
+      })
+    }
+    // A finished one-time task (`disabled`) is re-armed by a new schedule: nothing
+    // else can run it again, and a request that carried only the schedule left the
+    // row disabled with a future next_run_at — it looked scheduled, runDue (which
+    // lists active tasks only) never fired it, and retention pruned it. An explicit
+    // status in the same request still wins, so a client can re-schedule it paused.
+    // A recurring task a client disabled stays disabled until the status says so:
+    // a client that echoes the schedule on every save must not switch it back on.
+    const nextStatus =
+      parsed.status === undefined &&
+      parsed.schedule !== undefined &&
+      current.status === "disabled" &&
+      current.schedule.type === "once"
+        ? ("active" as const)
+        : parsed.status
     const nextSchedule = parsed.schedule ?? current.schedule
-    if (parsed.schedule !== undefined || (parsed.status === "active" && current.status !== "active")) {
+    if (parsed.schedule !== undefined || (nextStatus === "active" && current.status !== "active")) {
       validateSchedule(nextSchedule, now)
     }
     // Overlap/orphan accounting derives a run's staleness from the task's
@@ -593,11 +623,11 @@ export namespace ScheduledTask {
     if (parsed.schedule !== undefined) {
       updates.schedule = parsed.schedule
       updates.next_run_at = nextRunAt(parsed.schedule, now) ?? null
-    } else if (parsed.status === "active" && current.status !== "active") {
+    } else if (nextStatus === "active" && current.status !== "active") {
       updates.next_run_at = nextRunAt(nextSchedule, now) ?? null
     }
-    if (parsed.status !== undefined) updates.status = parsed.status
-    if (parsed.status === "active" && current.status !== "active") {
+    if (nextStatus !== undefined) updates.status = nextStatus
+    if (nextStatus === "active" && current.status !== "active") {
       // Resume clears the failure that paused the task (SPEC §7) so the UI stops
       // showing a recovered task as failed until its next claim.
       updates.error = null
@@ -853,13 +883,20 @@ export namespace ScheduledTask {
     }
   }
 
+  // A run-now that failed before it could claim a run row (the claim
+  // transaction or a workflow lookup threw). The attempt still gets a terminal
+  // `failed` row in the same write as the task summary — the task's error and
+  // last_run_at alone left the run history empty for a failure the row was
+  // reporting — and the failure policy judges a dispatch failure like any
+  // other, as the claimed path already does through recordQueueOutcome.
   async function recordRunFailure(id: ScheduledTaskID, error: unknown): Promise<Info> {
     const now = Date.now()
-    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    const message = toErrorMessage(error)
+    const { task, run } = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const row = db
         .update(ScheduledTaskTable)
         .set({
-          error: toErrorMessage(error),
+          error: message,
           last_run_at: now,
           time_updated: now,
         })
@@ -867,10 +904,22 @@ export namespace ScheduledTask {
         .returning()
         .get()
       if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
-      return fromRow(row)
+      const runRow = insertRunRow(db, {
+        taskID: id,
+        triggerType: "manual",
+        status: "failed",
+        occurrenceAt: now,
+        coalescedCount: 1,
+        error: message,
+        now,
+      })
+      return { task: fromRow(row), run: runRow }
     })
-    publishUpdated(task)
-    return task
+    if (task.status === "active") await applyFailurePolicy(task, now)
+    const latest = await get(id)
+    publishUpdated(latest)
+    emitRunEvents(id, "failed", run, message)
+    return latest
   }
 
   export async function runDue(now = Date.now()): Promise<RunNowResult[]> {
@@ -1207,9 +1256,10 @@ export namespace ScheduledTask {
     return status.success && !["failed", "completed", "cancelled"].includes(status.data)
   }
 
-  function reconcileOrphanRuns(taskID: ScheduledTaskID, now: number, deadlineMs: number): void {
+  function reconcileOrphanRuns(taskID: ScheduledTaskID, now: number, deadlineMs: number): number {
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
-    SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      let closed = 0
       const candidates = db
         .select({
           id: ScheduledTaskRunTable.id,
@@ -1251,8 +1301,36 @@ export namespace ScheduledTask {
             ),
           )
           .run()
+        closed += 1
       }
+      return closed
     })
+  }
+
+  // Orphan reconciliation otherwise happens only for due tasks and on run-now,
+  // so a run abandoned by a restart stayed `running` for as long as its task
+  // was paused or its claim had already cleared next_run_at (a one-shot), or
+  // when its queue item reached a terminal state without an outcome, which
+  // the queue's own restart recovery does not see. Every scheduler tick sweeps
+  // the tasks that have an open run — one query when none does — and announces
+  // the closed rows, since nothing else tells a client that "running" ended.
+  export async function reconcileAllOrphanRuns(now = Date.now()): Promise<void> {
+    const open = SessionShard.storeForProject(Instance.project.id).use((db) =>
+      db
+        .select({ taskID: ScheduledTaskRunTable.task_id })
+        .from(ScheduledTaskRunTable)
+        .where(
+          and(eq(ScheduledTaskRunTable.project_id, Instance.project.id), eq(ScheduledTaskRunTable.status, "running")),
+        )
+        .groupBy(ScheduledTaskRunTable.task_id)
+        .all(),
+    )
+    for (const { taskID } of open) {
+      const task = await get(taskID).catch(() => undefined)
+      if (!task) continue
+      const closed = reconcileOrphanRuns(task.id, now, task.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS)
+      if (closed > 0) publishUpdated(await get(task.id))
+    }
   }
 
   // Count trailing failed/timeout runs since the last completed run. Skipped
@@ -1596,7 +1674,11 @@ export namespace ScheduledTask {
     const tick = Instance.bind(() => {
       if (state.running) return
       state.running = true
-      void runDue()
+      void reconcileAllOrphanRuns()
+        .catch((error) => {
+          log.warn("scheduled task orphan sweep failed", { error })
+        })
+        .then(() => runDue())
         .catch((error) => {
           log.warn("scheduled task due run failed", { error })
         })

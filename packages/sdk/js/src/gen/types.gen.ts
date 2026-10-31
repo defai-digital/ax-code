@@ -1806,6 +1806,7 @@ export type EventScheduledTaskDeleted = {
   properties: {
     id: string
     projectID: string
+    directory: string
   }
 }
 

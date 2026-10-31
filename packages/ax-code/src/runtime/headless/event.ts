@@ -81,7 +81,7 @@ export type HeadlessTaskQueueEvent<TTaskQueueItem extends { id: string }> =
 export type HeadlessScheduledTaskEvent<TScheduledTask> =
   | { type: "scheduled.task.created"; properties: { task: TScheduledTask } }
   | { type: "scheduled.task.updated"; properties: { task: TScheduledTask } }
-  | { type: "scheduled.task.deleted"; properties: { id: string; projectID: string } }
+  | { type: "scheduled.task.deleted"; properties: { id: string; projectID: string; directory: string } }
 
 export type HeadlessControlEvent =
   | { type: "server.connected"; properties: Record<string, never> }

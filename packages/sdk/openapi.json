@@ -43430,11 +43430,15 @@
               },
               "projectID": {
                 "type": "string"
+              },
+              "directory": {
+                "type": "string"
               }
             },
             "required": [
               "id",
-              "projectID"
+              "projectID",
+              "directory"
             ]
           }
         },
