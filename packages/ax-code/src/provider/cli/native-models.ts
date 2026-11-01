@@ -82,7 +82,10 @@ export function parseCodexModelsCache(data: CliJsonObject): NativeCliModel[] {
       context: positive(item.context_window),
       image: modalities.includes("image"),
       efforts: efforts(item.supported_reasoning_levels, "effort"),
-      priority: positive(item.priority) ?? Number.MAX_SAFE_INTEGER,
+      priority:
+        typeof item.priority === "number" && Number.isFinite(item.priority) && item.priority >= 0
+          ? item.priority
+          : Number.MAX_SAFE_INTEGER,
     })
   }
   return rows.sort((a, b) => a.priority - b.priority).map(({ priority: _, ...model }) => model)

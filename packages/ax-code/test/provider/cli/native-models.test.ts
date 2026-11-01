@@ -91,6 +91,17 @@ function claudeCatalog(fetchedAt: number, mainID: string) {
 }
 
 describe("native CLI model caches", () => {
+  test("codex priority zero sorts before positive priorities", () => {
+    const models = parseCodexModelsCache({
+      models: [
+        { slug: "second", visibility: "list", priority: 1 },
+        { slug: "first", visibility: "list", priority: 0 },
+        { slug: "unranked", visibility: "list" },
+      ],
+    })
+    expect(models.map((model) => model.id)).toEqual(["first", "second", "unranked"])
+  })
+
   test("codex keeps only picker-visible models in priority order", () => {
     expect(parseCodexModelsCache(codexCache)).toEqual([
       { id: "gpt-6-astra", name: "GPT-6-Astra", context: 272000, image: true, efforts: ["low", "high", "max"] },
