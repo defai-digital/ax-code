@@ -8,6 +8,7 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Preserve cancellation when PDF text extraction is aborted.
 - Preserve a managed model's PDF input capability when an older client re-saves it without the optional field.
 
 ## [7.30.12] - 2026-11-01

@@ -46,6 +46,9 @@ export async function extractPdfText(filePath: string, options: PdfExtractOption
     timeout: PDFTOTEXT_TIMEOUT_MS,
     abort: options.abort,
   })
+  // `nothrow` reports an aborted child as exit code 1, so surface the abort
+  // before it is mistaken for an extraction failure.
+  options.abort?.throwIfAborted()
   if (result.code === 124) {
     return { kind: "pdf", text: "", reason: `pdftotext timed out after ${PDFTOTEXT_TIMEOUT_MS / 1000} s` }
   }

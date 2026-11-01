@@ -1,7 +1,8 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { writeFile } from "fs/promises"
 import path from "path"
 import { PDFTOTEXT_MISSING_REASON, extractPdfText } from "../../src/tool/pdf-text"
+import { Process } from "../../src/util/process"
 import { which } from "../../src/util/which"
 import { tmpdir } from "../fixture/fixture"
 import { buildPdf } from "./pdf-fixture"
@@ -9,6 +10,8 @@ import { buildPdf } from "./pdf-fixture"
 const hasPdftotext = which("pdftotext") !== null
 
 describe("pdf-text (ADR-278)", () => {
+  afterEach(() => vi.restoreAllMocks())
+
   test("reports a reason when pdftotext is not installed", async () => {
     await using tmp = await tmpdir()
     const filePath = path.join(tmp.path, "doc.pdf")
@@ -26,6 +29,22 @@ describe("pdf-text (ADR-278)", () => {
     })
     expect(result.text).toBe("")
     expect(result.reason).toMatch(/pdftotext/)
+  })
+
+  // `Process.spawn` already rejects a pre-aborted signal, so the regression must
+  // abort while pdftotext is running: `nothrow` turns that into exit code 1,
+  // which previously surfaced as an extraction reason (and made read.ts throw
+  // ReadPdfExtractionError before its own abort check).
+  test("propagates an abort raised while pdftotext is running", async () => {
+    const controller = new AbortController()
+    const reason = new Error("aborted during extraction")
+    vi.spyOn(Process, "run").mockImplementation(async () => {
+      controller.abort(reason)
+      return { code: 1, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) }
+    })
+    await expect(
+      extractPdfText("doc.pdf", { abort: controller.signal, resolveBinary: () => "/fake/pdftotext" }),
+    ).rejects.toBe(reason)
   })
 
   test.skipIf(!hasPdftotext)("returns the page text in the envelope", async () => {
