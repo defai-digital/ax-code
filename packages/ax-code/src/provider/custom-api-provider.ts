@@ -75,6 +75,11 @@ export namespace CustomApiProvider {
       // Optional so rows that say nothing stay "not declared" (fail-closed for
       // the TUI search marker); declared rows come from the gateway card.
       websearch: z.boolean().optional(),
+      // PDF input as declared by the gateway card (`capabilities.pdf`,
+      // `abilities.pdf` or "pdf" in `modalities.input`). Optional for the same
+      // reason: a row that says nothing stays "not declared", and the runtime
+      // keeps extracting text for that model.
+      pdf: z.boolean().optional(),
     })
     .strict()
     .refine((model) => model.outputLimit <= model.contextWindow, {
@@ -329,6 +334,25 @@ export namespace CustomApiProvider {
     return undefined
   }
 
+  // A gateway card states PDF input the same three ways it states image
+  // input: an explicit `pdf` flag under `capabilities` or `abilities`, then
+  // the input modality list. Unlike images, a catalog row is never consulted:
+  // whether a PDF can reach the model is a property of the gateway route (AX
+  // Trust advertises it only when every binding can carry the bytes, its
+  // ADR-115), so a card that says nothing leaves the flag undeclared and the
+  // runtime keeps extracting text for that model.
+  function pdfCapable(
+    capabilities: Record<string, unknown> | undefined,
+    raw: Record<string, unknown> | undefined,
+  ): boolean | undefined {
+    if (typeof capabilities?.pdf === "boolean") return capabilities.pdf
+    const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
+    if (typeof abilities?.pdf === "boolean") return abilities.pdf
+    const declared = isRecord(raw?.modalities) && Array.isArray(raw.modalities.input) ? raw.modalities.input : undefined
+    if (declared && declared.length > 0) return declared.some((modality) => modality === "pdf")
+    return undefined
+  }
+
   export function discoveredModel(
     id: string,
     name?: string,
@@ -364,6 +388,7 @@ export namespace CustomApiProvider {
       temperature:
         typeof capabilities?.temperature === "boolean" ? capabilities.temperature : (fallback?.temperature ?? true),
       websearch: webSearchCapable(capabilities, raw),
+      pdf: pdfCapable(capabilities, raw),
     }
   }
 
@@ -488,8 +513,14 @@ export namespace CustomApiProvider {
             // rebuilds the model list from config and the declaration is gone.
             websearch: model.websearch,
             limit: { context: model.contextWindow, output: model.outputLimit },
+            // The declared input modalities are the persisted form of the
+            // image and PDF flags; the view reads "pdf" back from here.
             modalities: {
-              input: model.attachment ? (["text", "image"] as const) : (["text"] as const),
+              input: [
+                "text" as const,
+                ...(model.attachment ? (["image"] as const) : []),
+                ...(model.pdf ? (["pdf"] as const) : []),
+              ],
               output: ["text"] as const,
             },
           },
@@ -513,6 +544,7 @@ export namespace CustomApiProvider {
       attachment: model.attachment ?? false,
       temperature: model.temperature ?? false,
       websearch: model.websearch,
+      pdf: model.modalities?.input?.includes("pdf"),
     }))
     const parsed = View.safeParse({
       ...(provider.management === "ax-trust" ? { management: provider.management } : {}),

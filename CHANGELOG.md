@@ -9,6 +9,7 @@ changes belong to AX Coder.
 ### Added
 
 - Read a PDF as extracted text (poppler `pdftotext`) when the active model cannot take PDF input, in the same envelope as Office documents; the attachment is kept for models that accept PDFs.
+- Read the gateway's `pdf` card statement (`capabilities.pdf`, `abilities.pdf` or "pdf" in `modalities.input`) into the PDF input capability of AX Trust and managed custom API models, so a route the gateway attests receives the document itself instead of extracted text.
 
 ### Changed
 

@@ -41,7 +41,10 @@ export async function discoverAxTrustModels(
           reasoning: model.reasoning,
           attachment: model.attachment,
           toolcall: model.toolCall,
-          input: { text: true, image: model.attachment, audio: false, video: false, pdf: false },
+          // `pdf` is the gateway's statement that the route can carry a
+          // document (AX Trust ADR-115); an undeclared card keeps the text
+          // fallback in the read tool.
+          input: { text: true, image: model.attachment, audio: false, video: false, pdf: model.pdf ?? false },
           output: { text: true, image: false, audio: false, video: false, pdf: false },
           interleaved: fallback?.interleaved ?? previous?.capabilities.interleaved ?? false,
           // Discovery resolves the gateway's declared search flag (or leaves it

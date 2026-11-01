@@ -35,7 +35,7 @@ const vision = {
   id: "fixture-vision",
   name: "Updated Flash Vision",
   limit: { context: 1_000_000, output: 384_000 },
-  capabilities: { attachment: true, reasoning: true, toolcall: true, temperature: true },
+  capabilities: { attachment: true, reasoning: true, toolcall: true, temperature: true, pdf: true },
 }
 
 function config(providerID: string, baseURL: string, management?: "ax-trust" | "custom-api") {
@@ -107,10 +107,15 @@ test.each([
           const model = await Provider.getModel(ProviderID.make(id), ModelID.make(vision.id))
           expect(model.name).toBe(vision.name)
           expect(model.limit).toEqual(vision.limit)
-          expect(model.capabilities).toMatchObject({ reasoning: true, toolcall: true, input: { image: true } })
+          expect(model.capabilities).toMatchObject({
+            reasoning: true,
+            toolcall: true,
+            input: { image: true, pdf: true },
+          })
           expect(modelDisplayInfo(model.id, model).label).toBe("Updated Flash Vision 👀")
           expect(modelDisplayInfo("deepseek-flash", refreshed.models["deepseek-flash"]).label).toBe("DeepSeek Flash 👀")
           expect(refreshed.models["text-only"].capabilities.input.image).toBe(false)
+          expect(refreshed.models["text-only"].capabilities.input.pdf).toBe(false)
           expect(updated).toHaveBeenCalledOnce()
           expect(calls).toBe(1)
           expect(await Auth.get(id)).toEqual({ type: "api", key: "startup-test-token" })

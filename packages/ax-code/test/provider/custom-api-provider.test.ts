@@ -124,6 +124,34 @@ describe("custom API provider model discovery", () => {
     expect(imageSupport([{ id: "grok-4.7" }])).toBe(false)
   })
 
+  test("reads PDF input from the gateway card and never from the catalog", () => {
+    const pdfSupport = (rows: unknown[]) => CustomApiProvider.parseDiscoveredModels({ data: rows })[0].pdf
+
+    expect(pdfSupport([{ id: "claude-sonnet-5-5", capabilities: { pdf: true } }])).toBe(true)
+    expect(pdfSupport([{ id: "claude-sonnet-5-5", abilities: { pdf: true } }])).toBe(true)
+    expect(pdfSupport([{ id: "claude-sonnet-5-5", modalities: { input: ["text", "image", "pdf"] } }])).toBe(true)
+    // The explicit flag outranks the modality list both ways.
+    expect(
+      pdfSupport([
+        { id: "glm-5.3-flash", capabilities: { pdf: false }, modalities: { input: ["text", "image", "pdf"] } },
+      ]),
+    ).toBe(false)
+    expect(pdfSupport([{ id: "glm-5.3-flash", abilities: { pdf: true }, modalities: { input: ["text"] } }])).toBe(true)
+    // Image support says nothing about documents.
+    expect(
+      pdfSupport([
+        {
+          id: "qwen3.8-max",
+          capabilities: { attachment: true, vision: true },
+          modalities: { input: ["text", "image"] },
+        },
+      ]),
+    ).toBe(false)
+    // A sparse card stays undeclared even though the first-party catalog lists
+    // pdf input for this SKU: the gateway route decides, not the vendor.
+    expect(pdfSupport([{ id: "claude-opus-5-5" }])).toBeUndefined()
+  })
+
   test("does not throw when a fallback catalog row omits limit and modalities.input", () => {
     // The fallback catalog is a trust boundary (bundled snapshot / env path /
     // URL). `ModelsDev.Model` requires `limit` and requires `input` whenever
