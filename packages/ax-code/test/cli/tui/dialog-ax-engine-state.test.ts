@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  axEngineDownloadAnnotation,
   axEngineModelStateAnnotation,
   axEngineModelStateAnnotations,
 } from "../../../src/cli/tui/component/dialog-ax-engine-state"
@@ -34,6 +35,30 @@ describe("axEngineModelStateAnnotation", () => {
   })
 })
 
+describe("axEngineDownloadAnnotation", () => {
+  test("shows the percent and the engine's current file or retry notice", () => {
+    expect(
+      axEngineDownloadAnnotation({
+        status: "running",
+        progress: { percent: 45.4, message: "model-00002-of-00003.safetensors" },
+      }),
+    ).toBe("Downloading 45% · model-00002-of-00003.safetensors")
+    // A rate-limit wait keeps the bar and swaps only the text (sizeless native event).
+    expect(
+      axEngineDownloadAnnotation({
+        status: "running",
+        progress: { percent: 45, message: "Download service is busy. Retrying in 4s" },
+      }),
+    ).toBe("Downloading 45% · Download service is busy. Retrying in 4s")
+    expect(axEngineDownloadAnnotation({ status: "running", progress: { percent: 120 } })).toBe("Downloading 100%")
+    expect(axEngineDownloadAnnotation({ status: "running", progress: { message: "  " } })).toBe("Downloading...")
+    expect(axEngineDownloadAnnotation({ status: "queued", progress: { percent: 0, message: "Queued…" } })).toBe(
+      "Download queued",
+    )
+    expect(axEngineDownloadAnnotation(undefined)).toBe("Downloading...")
+  })
+})
+
 describe("axEngineModelStateAnnotations", () => {
   test("maps only entries whose weights are not usable locally", () => {
     const annotations = axEngineModelStateAnnotations([
@@ -46,6 +71,24 @@ describe("axEngineModelStateAnnotations", () => {
     expect([...annotations.entries()]).toEqual([
       ["missing-model", "Not downloaded"],
       ["busy-model", "Downloading..."],
+    ])
+  })
+
+  test("annotates a downloading entry from its active catalog job, ignoring finished ones", () => {
+    const annotations = axEngineModelStateAnnotations(
+      [
+        { id: "busy-model", fit: { state: "downloading" } },
+        { id: "other-model", fit: { state: "downloading" } },
+      ],
+      [
+        { modelID: "busy-model", status: "failed", progress: { percent: 12, message: "old attempt" } },
+        { modelID: "busy-model", status: "running", progress: { percent: 61, message: "mtp.safetensors" } },
+        { modelID: "unrelated", status: "running", progress: { percent: 5 } },
+      ],
+    )
+    expect([...annotations.entries()]).toEqual([
+      ["busy-model", "Downloading 61% · mtp.safetensors"],
+      ["other-model", "Downloading..."],
     ])
   })
 

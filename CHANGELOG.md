@@ -8,6 +8,7 @@ changes belong to AX Coder.
 
 ### Changed
 
+- The TUI model picker annotates a downloading AX Engine model with its percent and the engine's current file or retry notice instead of a bare "Downloading...".
 - Install AX Engine 8.0.4 as the managed engine. From 7.10.0 the engine's `download` command fetches public AutomatosX packs natively, so model downloads no longer depend on a Python `huggingface_hub` environment; `nativeDownloads` in the dependency status and the behind-pin warning say which path the resolved engine uses.
 
 ### Fixed

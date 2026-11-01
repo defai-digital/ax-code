@@ -5,7 +5,11 @@ import { urlAllowlistServerRoute } from "@tui/util/server-url"
 import type { useSDK } from "../context/sdk"
 import type { useToast } from "../ui/toast"
 import { useAxEngineDownloads } from "../context/ax-engine-downloads"
-import { axEngineModelStateAnnotations, type AxEngineCatalogEntryState } from "./dialog-ax-engine-state"
+import {
+  axEngineModelStateAnnotations,
+  type AxEngineCatalogEntryState,
+  type AxEngineCatalogJobState,
+} from "./dialog-ax-engine-state"
 
 // Minimal projections of /provider/ax-engine/models and /connection responses —
 // only the fields this dialog reads. The server catalog is the authority.
@@ -18,7 +22,7 @@ type AxEngineCatalogModel = AxEngineCatalogEntryState & {
   revision?: string
 }
 
-type AxEngineCatalog = { models?: AxEngineCatalogModel[] }
+type AxEngineCatalog = { models?: AxEngineCatalogModel[]; jobs?: AxEngineCatalogJobState[] }
 
 /**
  * Fetch the managed catalog, or undefined when local download semantics do not
@@ -47,7 +51,7 @@ async function fetchAxEngineCatalog(sdk: ReturnType<typeof useSDK>): Promise<AxE
  */
 export async function fetchAxEngineModelAnnotations(sdk: ReturnType<typeof useSDK>): Promise<Map<string, string>> {
   const catalog = await fetchAxEngineCatalog(sdk).catch(() => undefined)
-  return axEngineModelStateAnnotations(catalog?.models ?? [])
+  return axEngineModelStateAnnotations(catalog?.models ?? [], catalog?.jobs ?? [])
 }
 
 export type AxEngineDownloadOffer = {
