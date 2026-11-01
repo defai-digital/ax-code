@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const PACKAGE_URL = "https://github.com/orgs/defai-digital/packages/npm/package/ax-tui"
-const MAINTENANCE_URL = "https://github.com/defai-digital/ax-tui/blob/main/MAINTENANCE.md"
+const MAINTENANCE_URL = "https://github.com/defai-digital/ax-code/blob/main/packages/ax-tui/MAINTENANCE.md"
 
 /**
  * Extract the CHANGELOG section for one released version.
