@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.11] - 2026-11-01
+
+### Changed
+
+- Hand WebMCP sign-in steps to the user and publish the paired SDK 2.6.64.
+
+### Fixed
+
+- Require proof that WebMCP opened a page before allowing Auto mode to close it without a prompt.
+- Reject navigation landings on non-loopback plain HTTP and explain uncertain bridge timeouts.
+- Keep truncated snapshots and their sign-in and dialog notes within the read budget.
+- Recheck cancellation and remaining WebMCP deadlines after idle health probes; refund waits that were never dispatched.
+
 ## [7.30.10] - 2026-10-31
 
 ### Changed
