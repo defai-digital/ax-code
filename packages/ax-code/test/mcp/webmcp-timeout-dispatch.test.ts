@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import { SdkError, SdkErrorCode } from "@modelcontextprotocol/client"
 import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 import { convertMcpTool } from "../../src/mcp/tool-conversion"
+import { SessionHealth } from "../../src/mcp/session-health"
 
 const ORIGIN = "https://app.test"
 const PAGE = `${ORIGIN}/orders`
@@ -172,5 +173,72 @@ describe("WebMCP timeouts around a page-changing action (ADR-277)", () => {
     expect((error as Error).message).toContain("exceeded its timeout before list_pages was sent to the browser")
     expect((error as Error).message).toContain("changed nothing")
     expect(client.callTool).not.toHaveBeenCalled()
+  })
+})
+
+describe("WebMCP dispatch after the idle health probe", () => {
+  test("refuses dispatch when the health probe exhausts the shared budget", async () => {
+    let now = 10_000
+    vi.spyOn(Date, "now").mockImplementation(() => now)
+    const client = { callTool: vi.fn(async () => pages) }
+    vi.spyOn(SessionHealth, "preflightCall").mockImplementation(async () => {
+      now += 1_500
+      return { client: client as never, retried: false }
+    })
+    const profile = fullProfile()
+    const tool = await convertMcpTool(
+      { name: "list_pages", inputSchema: { type: "object" } } as never,
+      client as never,
+      1_000,
+      policy("list_pages", profile, fullGrants()),
+    )
+    const args = {}
+    const error = await rejection(tool.execute!(args, options("expired-probe")))
+    expect((error as Error)?.message).toContain("before list_pages was sent")
+    expect(client.callTool).not.toHaveBeenCalled()
+    expect(WebMcpProfile.wasDispatched(args)).toBe(false)
+  })
+
+  test("subtracts health probe time from the bridge request deadline", async () => {
+    let now = 10_000
+    vi.spyOn(Date, "now").mockImplementation(() => now)
+    const client = { callTool: vi.fn(async () => pages) }
+    vi.spyOn(SessionHealth, "preflightCall").mockImplementation(async () => {
+      now += 600
+      return { client: client as never, retried: false }
+    })
+    const tool = await convertMcpTool(
+      { name: "list_pages", inputSchema: { type: "object" } } as never,
+      client as never,
+      1_000,
+      policy("list_pages", fullProfile(), fullGrants()),
+    )
+    await tool.execute!({}, options("remaining-probe"))
+    expect(client.callTool).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "list_pages" }),
+      expect.objectContaining({ timeout: 400, maxTotalTimeout: 400 }),
+    )
+  })
+
+  test("does not dispatch or spend a wait reservation after cancellation during the health probe", async () => {
+    const controller = new AbortController()
+    const client = { callTool: vi.fn(async () => pages) }
+    vi.spyOn(SessionHealth, "preflightCall").mockImplementation(async () => {
+      controller.abort(new Error("user cancelled during idle probe"))
+      return { client: client as never, retried: false }
+    })
+    const tool = await convertMcpTool(
+      { name: "wait_for", inputSchema: { type: "object" } } as never,
+      client as never,
+      5_000,
+      policy("wait_for", fullProfile(), fullGrants()),
+    )
+    const args = { pageId: 1, text: ["Ready"], timeout: 1_000 }
+    const error = await rejection(
+      tool.execute!(args, { toolCallId: "abort-probe", messages: [], abortSignal: controller.signal } as never),
+    )
+    expect(error).toBe(controller.signal.reason)
+    expect(client.callTool).not.toHaveBeenCalledWith(expect.objectContaining({ name: "wait_for" }), expect.anything())
+    expect(WebMcpProfile.wasDispatched(args)).toBe(false)
   })
 })

@@ -447,20 +447,6 @@ export async function convertMcpTool(
         // evidence that the page the response selects was created by it.
         const pagesBefore =
           webmcp?.toolName === "new_page" ? await webmcpPageIdsBefore(client, budget(), opts.abortSignal) : undefined
-        opts.abortSignal?.throwIfAborted()
-        const mainTimeout = webmcp ? budget() : timeout
-        // A wait that cannot settle before the request times out is refused
-        // here, before the bridge is involved, so its reservation is returned.
-        if (
-          webmcp?.toolName === "wait_for" &&
-          mainTimeout !== undefined &&
-          mainTimeout <= WebMcpProfile.WAIT_SETTLE_MARGIN_MS
-        ) {
-          throw new Error("WebMCP dispatch budget is too short to wait for page text; do not retry automatically")
-        }
-        // The request is about to reach the bridge: the session layer refunds
-        // a wait_for reservation only for failures before this point.
-        if (webmcp) WebMcpProfile.markDispatched(args)
         // ADR-237: idle-server preflight + in-flight fast-fail. The
         // preflight pings the client when the previous call is older than
         // MCP_IDLE_THRESHOLD_MS, reconnects through MCP.connect on ping
@@ -482,6 +468,22 @@ export async function convertMcpTool(
           if (!live) throw new Error(`MCP reconnect produced no live client for ${serverName}`)
           return live
         })
+        // The idle probe/reconnect awaits too: recheck cancellation and the
+        // shared deadline afterwards, before marking or sending the call.
+        opts.abortSignal?.throwIfAborted()
+        const mainTimeout = webmcp ? budget() : timeout
+        // A wait that cannot settle before the request times out is refused
+        // here, before the bridge is involved, so its reservation is returned.
+        if (
+          webmcp?.toolName === "wait_for" &&
+          mainTimeout !== undefined &&
+          mainTimeout <= WebMcpProfile.WAIT_SETTLE_MARGIN_MS
+        ) {
+          throw new Error("WebMCP dispatch budget is too short to wait for page text; do not retry automatically")
+        }
+        // The request is about to reach the bridge: the session layer refunds
+        // a wait_for reservation only for failures before this point.
+        if (webmcp) WebMcpProfile.markDispatched(args)
         const callClient = preflight.client
         const tracker = SessionHealth.trackCall(callClient)
         let result: Awaited<ReturnType<typeof callClient.callTool>>
