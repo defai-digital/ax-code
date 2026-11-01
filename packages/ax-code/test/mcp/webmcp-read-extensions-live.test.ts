@@ -60,6 +60,12 @@ test.skipIf(!executablePath)(
         fn: async () => {
           try {
             await MCP.connect("live")
+            // ADR-197: a project config that sets executablePath needs a reviewed
+            // trust grant; the fixture plays the user who reviewed it.
+            const trustGate = (await MCP.status()).live
+            if (trustGate?.status === "needs_trust") {
+              expect((await MCP.trustReviewed("live", trustGate.fingerprint)).ok).toBe(true)
+            }
             expect((await MCP.status()).live).toMatchObject({ status: "connected" })
             expect((await MCP.grantWebMcpReadOrigin("live", origin)).ok).toBe(true)
             const tools = await MCP.tools()

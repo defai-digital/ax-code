@@ -146,6 +146,12 @@ test.skipIf(!executablePath)(
         directory: tmp.path,
         fn: async () => {
           await MCP.connect("live")
+          // ADR-197: a project config that sets executablePath needs a reviewed
+          // trust grant; the fixture plays the user who reviewed it.
+          const trustGate = (await MCP.status()).live
+          if (trustGate?.status === "needs_trust") {
+            expect((await MCP.trustReviewed("live", trustGate.fingerprint)).ok).toBe(true)
+          }
           const direct = await MCP.tools()
           const options = { toolCallId: "call_live_approval", messages: [], abortSignal: new AbortController().signal }
           const open = async () => {
