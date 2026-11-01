@@ -33629,6 +33629,9 @@
                         "updateAvailable": {
                           "type": "boolean"
                         },
+                        "nativeDownloads": {
+                          "type": "boolean"
+                        },
                         "blockers": {
                           "default": [],
                           "type": "array",

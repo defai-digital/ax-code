@@ -715,6 +715,7 @@ async function markPreparedWithLockHeld(input: {
 // relocated HF_HUB_CACHE) still names the pinned snapshot once both sides are
 // resolved. A missing path never matches.
 async function sameDirectory(reported: string, expected: string): Promise<boolean> {
+  // @scan-suppress security_scan - This path is compared to the pinned snapshot only; it is never used as a write destination.
   if (path.resolve(reported) === expected) return true
   const [left, right] = await Promise.all([
     fs.realpath(reported).catch(() => undefined),

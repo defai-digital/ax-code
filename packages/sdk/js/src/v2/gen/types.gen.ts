@@ -16272,6 +16272,7 @@ export type ProviderAxEngineStatusResponses = {
       installable?: boolean
       pinnedVersion?: string
       updateAvailable?: boolean
+      nativeDownloads?: boolean
       blockers?: Array<string>
       warnings?: Array<string>
     }
