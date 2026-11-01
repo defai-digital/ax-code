@@ -17,7 +17,8 @@ export function isValidTimeZone(timezone: string): boolean {
 
 // Full 5-field cron support (minute hour day-of-month month day-of-week). When
 // both day-of-month and day-of-week are restricted the match is OR (POSIX/Vixie);
-// otherwise both must match, with "*" matching everything. Month always ANDs.
+// otherwise both must match. A field is unrestricted when it begins with "*"
+// (so "*" and "*/step" both qualify). Month always ANDs.
 export function isValidCronExpression(expression: string): boolean {
   return parseCronExpressionFull(expression) !== undefined
 }
@@ -47,8 +48,10 @@ export function parseCronExpressionFull(expression: string): ParsedCron | undefi
     doms,
     months,
     dows,
-    domRestricted: fields[2] !== "*",
-    dowRestricted: fields[4] !== "*",
+    // Vixie sets DOM_STAR/DOW_STAR when the field *begins* with '*', so a
+    // stepped field such as "*/2" is unrestricted rather than restricted.
+    domRestricted: !fields[2].startsWith("*"),
+    dowRestricted: !fields[4].startsWith("*"),
   }
 }
 

@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Treat stepped cron wildcards as unrestricted when combining day-of-month and day-of-week matching.
+
 ## [7.30.13] - 2026-11-01
 
 ### Changed

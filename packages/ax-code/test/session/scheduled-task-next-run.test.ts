@@ -187,6 +187,33 @@ describe("ScheduledTask.nextRunAt", () => {
     expect(new Date(next!).getDay()).toBe(1)
   })
 
+  test("cron treats a */step dom as unrestricted, so a restricted dow ANDs with it", () => {
+    // Vixie marks DOM as "star" for any field beginning with '*', including
+    // */step. That keeps AND semantics, so 09:00 daily AND Mondays must skip
+    // Thursday Aug 20 and land on Monday Aug 24.
+    const from = new Date(2026, 7, 20, 8, 0, 0).getTime() // Thu Aug 20
+    const next = ScheduledTask.nextRunAt({ type: "cron", expression: "0 9 */1 * 1" }, from)
+    expect(next).toBe(new Date(2026, 7, 24, 9, 0, 0).getTime())
+    expect(new Date(next!).getDay()).toBe(1)
+  })
+
+  test("cron treats a */step dow as unrestricted, so a restricted dom ANDs with it", () => {
+    // Mirror image: DOW is "star", so 09:00 on the 1st stays the only
+    // occurrence and the next one is Tuesday Sep 1, not Thu Aug 20.
+    const from = new Date(2026, 7, 20, 8, 0, 0).getTime() // Thu Aug 20
+    const next = ScheduledTask.nextRunAt({ type: "cron", expression: "0 9 1 * */1" }, from)
+    expect(next).toBe(new Date(2026, 8, 1, 9, 0, 0).getTime())
+    expect(new Date(next!).getDate()).toBe(1)
+  })
+
+  test("cron keeps AND for a non-full */step dom with a restricted dow", () => {
+    // Discriminates "field starts with *" from "field set covers everything":
+    // odd days AND Mondays from Thu Aug 20 is Monday Aug 31, not Aug 24.
+    const from = new Date(2026, 7, 20, 8, 0, 0).getTime() // Thu Aug 20
+    const next = ScheduledTask.nextRunAt({ type: "cron", expression: "0 9 */2 * 1" }, from)
+    expect(next).toBe(new Date(2026, 7, 31, 9, 0, 0).getTime())
+  })
+
   test("cron treats a restricted dom with wildcard dow as AND (dom only)", () => {
     // 09:00 on the 15th (dow is *)
     const from = new Date(2026, 7, 20, 8, 0, 0).getTime() // Aug 20
