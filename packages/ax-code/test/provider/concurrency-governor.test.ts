@@ -59,6 +59,45 @@ describe("ProviderConcurrencyGovernor", () => {
     else process.env[ENV_LIMIT] = savedEnv
   })
 
+  test.each(["interactive", "background"] as const)(
+    "cancelling the %s queue head admits an eligible successor without waiting for a release",
+    async (priority) => {
+      const input = { providerID: `cancel-head-${priority}`, crossProcess: false }
+      const held = await ProviderConcurrencyGovernor.acquire({ ...input, limit: 1 })
+      const headController = new AbortController()
+      const nextController = new AbortController()
+      const head = ProviderConcurrencyGovernor.acquire({
+        ...input,
+        priority,
+        limit: 1,
+        signal: headController.signal,
+      }).catch((error: unknown) => error)
+      let admitted: Disposable | undefined
+      const next = ProviderConcurrencyGovernor.acquire({
+        ...input,
+        priority,
+        limit: priority === "interactive" ? 2 : 3,
+        signal: nextController.signal,
+      }).then(
+        (slot) => {
+          admitted = slot
+        },
+        () => {},
+      )
+      try {
+        headController.abort()
+        expect(await head).toMatchObject({ name: "AbortError" })
+        await tick()
+        expect(admitted).toBeDefined()
+      } finally {
+        nextController.abort()
+        held[Symbol.dispose]()
+        await next
+        admitted?.[Symbol.dispose]()
+      }
+    },
+  )
+
   test("custom pre-abort reasons never fail open into provider admission", async () => {
     const controller = new AbortController()
     controller.abort(new Error("User cancelled"))

@@ -297,6 +297,10 @@ async function acquireCrossProcessLease(opts: {
 
 function releaseInProcess(state: ProviderState): void {
   state.inFlight = Math.max(0, state.inFlight - 1)
+  drainQueue(state)
+}
+
+function drainQueue(state: ProviderState): void {
   // ADR-279 priority drain: repeatedly admit the first queued interactive
   // waiter while it fits its own limit, else the first queued background
   // waiter while it fits backgroundCap(its limit); stop at the first head
@@ -469,7 +473,12 @@ async function acquireInner(input: ProviderConcurrencyGovernor.AcquireInput): Pr
         const signal = input.signal
         const onAbort = () => {
           const index = state.queue.indexOf(waiter)
-          if (index !== -1) state.queue.splice(index, 1)
+          if (index !== -1) {
+            state.queue.splice(index, 1)
+            // Removing the head can expose a waiter with a higher limit.
+            // No slot was held by the cancelled waiter: drain without release.
+            drainQueue(state)
+          }
           reject(abortError())
         }
         // @scan-suppress race_scan - Both settlement wrappers below remove this listener; an abort removes itself through once.
