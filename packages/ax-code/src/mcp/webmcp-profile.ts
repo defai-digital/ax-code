@@ -457,7 +457,7 @@ export namespace WebMcpProfile {
       lines.push(
         `  Where this bridge exposes read tools, prefer take_snapshot over take_screenshot for text, locators and assertions. For layout, canvas or image-only content, use take_screenshot with a fresh snapshot uid to crop the target, or jpeg with reduced quality. Screenshot reading depends on model vision; there is no native OCR tool, and visual guesses cannot establish structured test success.`,
         `  Where available, narrow console by types/pageSize and network by resourceTypes/pageSize before repeating large reads. For a JS error, list console messages with includeStackTraces and read one frame set with get_console_message by msgid. Check error messages and failed requests around the reproduced action. Report observed evidence; a bare tool acknowledgement is not success.`,
-        `  If a snapshot shows a credential field or the bridge notes a sign-in page, stop and ask the user to sign in by hand in the AX Code browser window, then continue on the same page; never type credentials and never fill a credential field.`,
+        `  If a snapshot shows a credential field, stop and ask the user to sign in by hand in the AX Code browser window, then continue on the same page; never type credentials and never fill a credential field. A bridge note that a landing looks like a sign-in route only means take a snapshot first and hand off if it shows a credential field.`,
       )
     }
     if (tier === "interact") {

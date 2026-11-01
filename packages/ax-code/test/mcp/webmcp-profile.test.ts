@@ -412,6 +412,8 @@ describe("WebMCP unrestricted profile (ADR-170)", () => {
     // http stays admitted on loopback hosts only.
     expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed("http://localhost:3000/"))).not.toThrow()
     expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed("http://127.0.0.1:3000/"))).not.toThrow()
+    // Node keeps the brackets in URL.hostname, so the IPv6 loopback matches too.
+    expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed("http://[::1]:3000/"))).not.toThrow()
     // A redirect to plain http outside loopback — the cloud metadata
     // endpoint or any other origin — is refused even with no allowlist.
     for (const url of ["http://169.254.169.254/latest/meta-data/", "http://example.test/"]) {

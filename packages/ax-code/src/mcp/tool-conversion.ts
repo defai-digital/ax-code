@@ -359,7 +359,7 @@ export async function convertMcpTool(
       // Resolve the page's URL and origin through the bridge before the call
       // reads or acts; an unlocatable page fails without a retry.
       const locatePage = async (when: "reading" | "acting") => {
-        const pageId = (input as Record<string, unknown>).pageId
+        const pageId = ((input ?? {}) as Record<string, unknown>).pageId
         const before =
           typeof pageId === "number"
             ? await beforeCall(webmcpPageUrl(client, pageId, budget(), opts.abortSignal))
@@ -542,7 +542,7 @@ export async function convertMcpTool(
             // (ADR-174 rule 8): the uid map recorded before it must not bind
             // the next action. navigate_page and emulate are cleared again by
             // the outer catch through wasDispatched; this covers the rest.
-            const pageId = (input as Record<string, unknown>).pageId
+            const pageId = ((input ?? {}) as Record<string, unknown>).pageId
             if (typeof pageId === "number" && WebMcpProfile.changesPage(webmcp.toolName)) {
               WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
             }
@@ -598,7 +598,9 @@ export async function convertMcpTool(
             const landing =
               webmcp.toolName === "new_page"
                 ? WebMcpProfile.structuredSelectedPageUrl(result)
-                : WebMcpProfile.parseStructuredPages(result)?.get((input as Record<string, unknown>).pageId as number)
+                : WebMcpProfile.parseStructuredPages(result)?.get(
+                    ((input ?? {}) as Record<string, unknown>).pageId as number,
+                  )
             if (WebMcpProfile.signInLanding(landing)) {
               WebMcpProfile.annotateSignIn(result, "landing", webmcp.profile.interact === true)
             }
@@ -610,7 +612,7 @@ export async function convertMcpTool(
           if (webmcp.toolName === "navigate_page") {
             // validateCall guarantees a numeric pageId; the guard keeps the
             // clear from silently no-op'ing on a shape nobody validated.
-            const pageId = (input as Record<string, unknown>).pageId
+            const pageId = ((input ?? {}) as Record<string, unknown>).pageId
             if (typeof pageId !== "number") throw new Error("WebMCP navigation confirmed for an unidentified page")
             WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
             WebMcpProfile.invalidateListing(webmcp.profile, pageId)
@@ -618,7 +620,7 @@ export async function convertMcpTool(
           if (readTier && webmcp && readOrigin) {
             // Re-resolve the page after the call: a page that navigated to
             // another origin mid-read discards its output (ADR-171).
-            const pageId = (input as Record<string, unknown>).pageId as number
+            const pageId = ((input ?? {}) as Record<string, unknown>).pageId as number
             const after = await webmcpPageUrl(client, pageId, budget(), opts.abortSignal)
             pageObserved = true
             if (WebMcpProfile.pageOriginOf(after) !== readOrigin) {
@@ -651,7 +653,7 @@ export async function convertMcpTool(
             // ADR-174 rules 6, 8, 9: the action happened, so a navigation is
             // reported, never discarded; any URL change invalidates the uid
             // map; wait_for output is a snapshot and is bounded as one.
-            const pageId = (input as Record<string, unknown>).pageId as number
+            const pageId = ((input ?? {}) as Record<string, unknown>).pageId as number
             const after = await webmcpPageUrl(client, pageId, budget(), opts.abortSignal)
             pageObserved = true
             const afterOrigin = WebMcpProfile.pageOriginOf(after)
@@ -675,8 +677,8 @@ export async function convertMcpTool(
               if (after !== interactUrl) WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
             }
           }
-          if (webmcp && typeof (input as Record<string, unknown>).pageId === "number") {
-            const pageId = (input as Record<string, unknown>).pageId as number
+          if (webmcp && typeof ((input ?? {}) as Record<string, unknown>).pageId === "number") {
+            const pageId = ((input ?? {}) as Record<string, unknown>).pageId as number
             // A closed page's id is never reissued by the bridge: drop its uid
             // map, listing baseline and dialog note instead of carrying them
             // for the rest of the connection.
@@ -723,7 +725,7 @@ export async function convertMcpTool(
         // for either (ADR-174 rule 8). A bridge-reported failure keeps the
         // map: the page was not observed to change and the result says so.
         if (webmcp && (readOrigin !== undefined || interactOrigin !== undefined) && callAccepted && !pageObserved) {
-          WebMcpProfile.clearSnapshot(webmcp.profile, (input as Record<string, unknown>).pageId as number)
+          WebMcpProfile.clearSnapshot(webmcp.profile, ((input ?? {}) as Record<string, unknown>).pageId as number)
         }
         // Once dispatched, the bridge may have taken a new snapshot even when the call then
         // failed (error result, transport, origin, parse). Its uids supersede the recorded
@@ -732,7 +734,7 @@ export async function convertMcpTool(
           (webmcp?.toolName === "take_snapshot" || webmcp?.toolName === "wait_for") &&
           (callAccepted || WebMcpProfile.wasDispatched(args))
         ) {
-          const pageId = (input as Record<string, unknown>).pageId
+          const pageId = ((input ?? {}) as Record<string, unknown>).pageId
           if (typeof pageId === "number") WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
         }
         // ADR-192: a navigation that reached the bridge and then failed its
@@ -742,11 +744,11 @@ export async function convertMcpTool(
         // listing baseline go either way.
         if (webmcp?.toolName === "emulate" && WebMcpProfile.wasDispatched(args)) {
           // The viewport may have changed even when the read checks failed afterwards.
-          const pageId = (input as Record<string, unknown>).pageId
+          const pageId = ((input ?? {}) as Record<string, unknown>).pageId
           if (typeof pageId === "number") WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
         }
         if (webmcp?.toolName === "navigate_page" && WebMcpProfile.wasDispatched(args)) {
-          const pageId = (input as Record<string, unknown>).pageId
+          const pageId = ((input ?? {}) as Record<string, unknown>).pageId
           if (typeof pageId === "number") {
             WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
             WebMcpProfile.invalidateListing(webmcp.profile, pageId)
@@ -760,7 +762,7 @@ export async function convertMcpTool(
         // observed; the clears above cover the read and interact tiers, this
         // one covers the page tools.
         if (webmcp && isRequestTimeout(e)) {
-          const pageId = (input as Record<string, unknown>).pageId
+          const pageId = ((input ?? {}) as Record<string, unknown>).pageId
           if (sent && typeof pageId === "number" && WebMcpProfile.changesPage(webmcp.toolName)) {
             WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
           }

@@ -232,12 +232,12 @@ control, so read it.
 ### Signing in
 
 The isolated window does not inherit the logins of your normal browser. When
-the agent reaches a page that looks like a sign-in step, it tells you and asks
-you to sign in by hand in that window; it never types credentials. After you
-sign in, it continues on the same page. The signed-in state lives in that
-window until the bridge is turned off, or in the persistent profile option
-under managed policy. An identity-provider redirect is a new origin and may ask
-for a new grant.
+a page shows a credential field, the agent tells you and asks you to sign in
+by hand in that window; it never types credentials. After you sign in, it
+continues on the same page. The signed-in state lives in that window until
+the bridge is turned off, or in the persistent profile option under managed
+policy. An identity-provider redirect is a new origin and may ask for a new
+grant.
 
 ## Work with an existing page
 

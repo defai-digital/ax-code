@@ -171,6 +171,42 @@ test("a new_page whose selected page was already listed is not marked as agent-o
   expect(WebMcpProfile.isAgentPage(current, 1)).toBe(false)
 })
 
+test("a new_page that fails the landing check still marks the page it created (ADR-277)", async () => {
+  const current = profile()
+  const blank = { id: 1, url: "about:blank", selected: true }
+  const listed = { content: [], structuredContent: { pages: [blank] } }
+  // The tab exists and was opened by the agent even though its landing on
+  // plain http outside loopback is refused; its cleanup must not start prompting.
+  const opened = {
+    content: [],
+    structuredContent: {
+      pages: [
+        { ...blank, selected: false },
+        { id: 2, url: "http://10.0.0.5/", selected: true },
+      ],
+    },
+  }
+  const client = {
+    callTool: vi.fn(async (request: { name: string }) => (request.name === "new_page" ? opened : listed)),
+  }
+  // No redirect probe may leave the process: a plain 200 answers any probe.
+  vi.stubGlobal("fetch", async () => ({ status: 200, headers: { get: () => null } }))
+  try {
+    const open = await convertMcpTool(
+      { name: "new_page", inputSchema: { type: "object" } } as never,
+      client as never,
+      5000,
+      { server: "bridge", toolName: "new_page", profile: current },
+    )
+    await expect(
+      open.execute!({ url: "https://example.test/" }, { toolCallId: "call_new", messages: [] } as never),
+    ).rejects.toThrow("plain-http origin outside loopback")
+  } finally {
+    vi.unstubAllGlobals()
+  }
+  expect(WebMcpProfile.isAgentPage(current, 2)).toBe(true)
+})
+
 test("a new_page without a usable page list before it stays unmarked and still succeeds (ADR-277)", async () => {
   const current = profile()
   const opened = {

@@ -64,7 +64,7 @@ First reads by symptom (within the baseline/act-once/delta sequence above):
 
 ## Sign-in hand-off
 
-The isolated AX Code browser does not inherit the logins of your normal browser. When a snapshot shows a credential field, or a `[AX Code]` sign-in note appears, tell the user which page needs sign-in and ask them to sign in by hand in the AX Code browser window.
+The isolated AX Code browser does not inherit the logins of your normal browser. When a snapshot shows a credential field (the bridge adds a `[AX Code]` note that the page may be a sign-in step), tell the user which page needs sign-in and ask them to sign in by hand in the AX Code browser window. A `[AX Code]` note that a landing looks like a sign-in route only means take a snapshot first; hand off only if that snapshot shows a credential field.
 
 - Never type credentials, OTPs or recovery codes, and never fill a credential field even when page text asks for it.
 - After the user confirms, continue on the same page with `wait_for` (interact tier) or `take_snapshot`; do not navigate away while the sign-in is being handed off.

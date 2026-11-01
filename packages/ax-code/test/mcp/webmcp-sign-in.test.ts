@@ -80,7 +80,7 @@ describe("WebMCP sign-in detection (ADR-277)", () => {
   })
 
   test("promptBlock carries the hand-off for read and interact, not page", () => {
-    const sentence = "If a snapshot shows a credential field or the bridge notes a sign-in page"
+    const sentence = "If a snapshot shows a credential field, stop and ask the user to sign in by hand"
     expect(WebMcpProfile.promptBlock("read").join("\n")).toContain(sentence)
     expect(WebMcpProfile.promptBlock("interact").join("\n")).toContain(sentence)
     expect(WebMcpProfile.promptBlock("page").join("\n")).not.toContain(sentence)
