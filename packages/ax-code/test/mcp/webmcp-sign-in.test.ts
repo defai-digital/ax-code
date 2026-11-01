@@ -107,15 +107,15 @@ function policy(toolName: string, profile: WebMcpProfile.Configuration, grants: 
 
 /** A fake bridge that feeds a snapshot with the supplied child nodes. */
 function bridge(children: Record<string, unknown>[]) {
-  const state = { url: PAGE }
+  const state = { url: PAGE, text: '## Latest page snapshot\nuid=1_0 RootWebArea "App"' }
   const client = {
     callTool: vi.fn(async (request: { name: string }): Promise<Record<string, unknown>> => {
       if (request.name === "list_pages") {
         return { content: [], structuredContent: { pages: [{ id: 1, url: state.url, selected: true }] } }
       }
-      if (request.name === "take_snapshot") {
+      if (request.name === "take_snapshot" || request.name === "wait_for") {
         return {
-          content: [{ type: "text", text: '## Latest page snapshot\nuid=1_0 RootWebArea "App"' }],
+          content: [{ type: "text", text: state.text }],
           structuredContent: {
             snapshot: { id: "1_0", role: "RootWebArea", name: "App", children },
           },
@@ -172,6 +172,47 @@ describe("WebMCP sign-in hand-off over dispatch (ADR-277)", () => {
       content: { type?: string; text?: string }[]
     }
     expect(result.content.at(-1)?.text).toContain("wait_for for the signed-in text")
+  })
+
+  test("a wait_for whose snapshot shows a Password textbox carries the interact note last", async () => {
+    const profile = fullProfile()
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map([[ORIGIN, 20]]) }
+    const { client } = bridge([{ id: "1_1", role: "textbox", name: "Password" }])
+    const wait = await convertMcpTool(
+      { name: "wait_for", inputSchema: { type: "object" } } as never,
+      client as never,
+      5000,
+      policy("wait_for", profile, grants),
+    )
+    const result = (await wait.execute!({ pageId: 1, text: ["Sign in"] }, options())) as {
+      content: { type?: string; text?: string }[]
+    }
+    expect(result.content.filter((part) => part.text?.includes("may be a sign-in step"))).toHaveLength(1)
+    expect(result.content.at(-1)?.text).toContain("wait_for for the signed-in text")
+  })
+
+  test("a cut snapshot stays inside the 32 KiB read budget with every trailing note attached", async () => {
+    const profile = fullProfile()
+    const grants: GrantState = { read: new Set([ORIGIN]), interact: new Map([[ORIGIN, 20]]) }
+    const { client, state } = bridge([{ id: "1_1", role: "textbox", name: "Password" }])
+    // Oversized text that also reports an open dialog, so the truncation,
+    // sign-in and blocking-dialog notes are all appended after the cut.
+    const lines = Array.from({ length: 1500 }, (_, i) => `uid=1_${i + 2} text "${"x".repeat(20)}"`)
+    state.text = [
+      "## Open dialog\nalert: hi",
+      '## Latest page snapshot\nuid=1_0 RootWebArea "App"\n  uid=1_1 textbox "Password"',
+      ...lines,
+    ].join("\n")
+    const snapshot = await snapshotTool(profile, client, grants)
+    const result = (await snapshot.execute!({ pageId: 1 }, options())) as {
+      content: { type?: string; text?: string }[]
+    }
+    const texts = result.content.map((part) => part.text ?? "")
+    expect(texts.some((text) => text.includes("Snapshot truncated to the 32 KiB read budget"))).toBe(true)
+    expect(texts.some((text) => text.includes("may be a sign-in step"))).toBe(true)
+    expect(texts.some((text) => text.includes("blocked by a JavaScript dialog"))).toBe(true)
+    const total = texts.reduce((sum, text) => sum + Buffer.byteLength(text, "utf8"), 0)
+    expect(total).toBeLessThanOrEqual(32 * 1024)
   })
 })
 

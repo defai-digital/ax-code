@@ -2205,7 +2205,11 @@ export namespace WebMcpProfile {
   }
 
   const MAX_READ_TEXT_BYTES = 32 * 1024
-  const SNAPSHOT_NOTE_RESERVE = 512
+  // Room kept inside the read budget for the runtime notes a cut snapshot can
+  // carry after its text: the truncation note, the sign-in hand-off note
+  // (ADR-277, the longest at about 490 bytes) and the blocking-dialog note.
+  // 512 covered the first and last; the three together need about 950.
+  const SNAPSHOT_NOTE_RESERVE = 1024
   const truncatedSnapshots = new WeakSet<object>()
 
   /**
