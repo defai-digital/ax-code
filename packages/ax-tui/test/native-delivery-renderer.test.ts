@@ -42,7 +42,7 @@ const target = process.platform + "-" + process.arch
 const original = process.argv[2]
 let requests = 0
 globalThis.fetch = async (url) => {
-  assert.ok(url.startsWith("https://github.com/defai-digital/ax-tui/releases/download/"))
+  assert.ok(url.startsWith("https://github.com/defai-digital/ax-code/releases/download/ax-tui-v"))
   const filename = path.basename(url).slice(("ax-tui-native-" + target + "-").length)
   assert.ok(["LICENSE", "libaxtui.dylib", "libaxtui.so", "axtui.dll"].includes(filename))
   requests++

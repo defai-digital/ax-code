@@ -17,6 +17,7 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Download AX TUI native fallback assets from versioned releases in the AX Code monorepo after retiring the standalone repository.
 - Guard every WebMCP page-id read against a missing tool input, and let the opt-in live Chrome lanes grant the reviewed trust a project config needs.
 
 ## [7.30.11] - 2026-11-01

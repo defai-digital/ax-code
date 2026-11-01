@@ -39,8 +39,8 @@ describe("native delivery", () => {
     expect(await readFile(result.libraryPath)).toEqual(library)
     expect(await readFile(result.licensePath)).toEqual(license)
     expect(f.fetcher.mock.calls.map(([url]) => url).sort()).toEqual([
-      "https://github.com/defai-digital/ax-tui/releases/download/v0.1.1/ax-tui-native-darwin-arm64-LICENSE",
-      "https://github.com/defai-digital/ax-tui/releases/download/v0.1.1/ax-tui-native-darwin-arm64-libaxtui.dylib",
+      "https://github.com/defai-digital/ax-code/releases/download/ax-tui-v0.1.1/ax-tui-native-darwin-arm64-LICENSE",
+      "https://github.com/defai-digital/ax-code/releases/download/ax-tui-v0.1.1/ax-tui-native-darwin-arm64-libaxtui.dylib",
     ])
     expect(
       await prepareNativeLibraryFrom(f.packageRoot, target, { cacheDir: f.cacheDir, offline: true }, f.fetcher),

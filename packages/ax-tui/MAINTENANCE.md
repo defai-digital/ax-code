@@ -113,16 +113,22 @@ replace assets attached to a previously published version.
 1. Add a version section to `CHANGELOG.md`; release notes are generated from it.
 2. Bump `package.json` for each new version. Versions already published to GitHub Packages are immutable.
 3. Run all verification above, including `check:package` and native builds/tests when affected.
-4. After approval, push the release commit and matching `v<version>` tag.
-5. `.github/workflows/packages.yml` stages verified native libraries and licenses,
-   creates the release, checks existing assets byte-for-byte, and publishes the
-   public `@defai-digital/ax-tui` package to `https://npm.pkg.github.com`.
-   The publish job uses `GITHUB_TOKEN` with `packages: write`.
+4. Stage the native libraries and licenses with `pnpm --dir packages/ax-tui exec tsx
+   script/stage-native-assets.ts <output-directory>`. This verifies every file against
+   `vendor/manifest.json` and refuses to replace different staged bytes.
+5. After approval, create the `ax-tui-v<version>` tag in `defai-digital/ax-code` at the
+   verified source commit and publish the staged assets in a release with that tag.
+   Mark it as not latest so it does not replace the AX Code CLI release. Download
+   the published assets and verify their bytes against the staged inventory before
+   publishing the package. These namespaced tags are also the native fallback URL.
+6. Publish the public package manually with `pnpm --dir packages/ax-tui run publish:github`.
+   The monorepo quality workflow does not publish packages; the retired standalone
+   repository's tag workflow is no longer used.
 
 For a version already released before the registry migration, preserve its existing tag and
 native assets. Qualify the migration at the current main commit, publish that version's verified
-npm tarball, and record the tested commit and tarball integrity. Later versions use the tag-driven
-workflow above.
+npm tarball, and record the tested commit and tarball integrity. Later versions use the manual
+publication procedure above.
 
 The npm payload contains generated JavaScript/declarations, widget dist, tree-sitter assets,
 and all manifest-verified native libraries/licenses. `check:package` checks the actual npm

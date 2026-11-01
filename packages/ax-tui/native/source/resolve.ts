@@ -11,7 +11,7 @@ import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
-const RELEASES = "https://github.com/defai-digital/ax-tui/releases/download"
+const RELEASES = "https://github.com/defai-digital/ax-code/releases/download"
 const MAX_LIBRARY_BYTES = 32 * 1024 * 1024
 const MAX_LICENSE_BYTES = 64 * 1024
 const SHA256 = /^[a-f0-9]{64}$/
@@ -187,7 +187,7 @@ export async function prepareNativeLibraryFrom(
   ])
   try {
     const names = nativeAssetNames(target, entry)
-    const base = `${RELEASES}/v${version}`
+    const base = `${RELEASES}/ax-tui-v${version}`
     const [library, license] = await Promise.all([
       download(`${base}/${names.library}`, entry.lib.size, signal, fetchImpl),
       download(`${base}/${names.license}`, MAX_LICENSE_BYTES, signal, fetchImpl),

@@ -41,6 +41,7 @@ The package includes manifest-verified native libraries and licenses for every s
 Normal installations load the bundled library without a network download, including with
 `AX_CODE_TUI_NATIVE_OFFLINE=1`. Custom distributions that omit the bundled libraries can
 still prepare the version-matched verified cache through `@defai-digital/ax-tui/native`.
+Fallback downloads use the AX Code repository's `ax-tui-v<package-version>` releases.
 
 ## Quick start
 
