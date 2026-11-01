@@ -105,7 +105,7 @@ export namespace HarnessCapture {
       return {
         outcome: outcome ?? (code === 0 ? ("completed" as const) : ("failed" as const)),
         code,
-        metrics: metrics?.finish(streamEnded && !outcome),
+        metrics: metrics?.finish(streamEnded && !child.outputTruncated && !outcome),
       }
     } finally {
       clearTimeout(timer)

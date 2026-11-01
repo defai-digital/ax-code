@@ -28,6 +28,29 @@ test("retains pipe data and natural EOF delivered after the parent exit event", 
   expect(output.stdout.toString()).toBe("final output")
   expect(output.stderr.toString()).toBe("final diagnostic")
   expect(ended).toBe(true)
+  expect(child).toHaveProperty("outputTruncated", false)
+})
+
+test("marks forced EOF as incomplete without discarding buffered pipe data", async () => {
+  vi.resetModules()
+  const { Process } = await import("../../src/util/process")
+  vi.useFakeTimers()
+  try {
+    const stdout = new PassThrough()
+    const fixture = Object.assign(new EventEmitter(), { stdout }) as unknown as ChildProcess
+    vi.mocked(launch).mockReturnValueOnce(fixture)
+    const child = Process.spawn(["inherited-pipe-fixture"], { stdout: "pipe" })
+    stdout.write("retained output")
+    const drained = Process.drain(stdout)
+    child.emit("exit", 0, null)
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect((await drained).toString()).toBe("retained output")
+    expect(child.outputTruncated).toBe(true)
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test("unrefs the timeout timer when the child is unref'd", async () => {

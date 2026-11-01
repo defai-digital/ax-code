@@ -140,6 +140,7 @@ process.stdout.write(crypto.createHash("sha256").update(input).digest("hex") + "
         stdout,
         stderr,
         exited: Promise.reject(failure),
+        outputTruncated: false,
         exitCode: null,
         signalCode: null,
       })
@@ -195,6 +196,7 @@ process.stdout.write(crypto.createHash("sha256").update(input).digest("hex") + "
         stdout,
         stderr,
         exited,
+        outputTruncated: false,
         exitCode: null,
         signalCode: null,
       })
@@ -308,7 +310,7 @@ test("Grok prompt files retain structured output instructions and clean up after
     const stderr = new PassThrough()
     stdout.end()
     stderr.end("provider rejected request")
-    return Object.assign(new ChildProcess(), { stdout, stderr, exited: Promise.resolve(9) })
+    return Object.assign(new ChildProcess(), { stdout, stderr, exited: Promise.resolve(9), outputTruncated: false })
   })
   await expect(
     model("grok-build-cli").doGenerate({
@@ -330,7 +332,7 @@ test("cancelling a Grok stream kills its process and removes its prompt file", a
   const stderr = new PassThrough()
   vi.spyOn(Process, "spawn").mockImplementation((cmd) => {
     file = cmd[cmd.indexOf("--prompt-file") + 1]!
-    return Object.assign(new ChildProcess(), { stdout, stderr, exited })
+    return Object.assign(new ChildProcess(), { stdout, stderr, exited, outputTruncated: false })
   })
   const kill = vi.spyOn(Shell, "killTree").mockImplementation(async () => {
     expect(existsSync(file!)).toBe(true)
@@ -355,7 +357,7 @@ test("an idle Grok stream timeout kills its process and removes its prompt file"
   const stderr = new PassThrough()
   vi.spyOn(Process, "spawn").mockImplementation((cmd) => {
     file = cmd[cmd.indexOf("--prompt-file") + 1]!
-    return Object.assign(new ChildProcess(), { stdout, stderr, exited })
+    return Object.assign(new ChildProcess(), { stdout, stderr, exited, outputTruncated: false })
   })
   vi.spyOn(Shell, "killTree").mockImplementation(async () => {
     expect(existsSync(file!)).toBe(true)

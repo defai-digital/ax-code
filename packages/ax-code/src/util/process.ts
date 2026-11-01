@@ -63,7 +63,11 @@ export namespace Process {
     }
   }
 
-  export type Child = ChildProcess & { exited: Promise<number> }
+  export type Child = ChildProcess & {
+    exited: Promise<number>
+    /** A still-open output pipe was ended after the post-exit drain grace. */
+    outputTruncated: boolean
+  }
 
   type KillableProcess = {
     pid?: number
@@ -119,6 +123,8 @@ export namespace Process {
     const file = cmd[0]
     const args = cmd.slice(1)
     const proc = launch(file, args, spawnOpts) // lgtm[js/shell-command-injection-from-environment, js/indirect-command-line-injection]
+    const child = proc as Child
+    child.outputTruncated = false
 
     let closed = false
     let termination: Promise<void> | undefined
@@ -164,6 +170,7 @@ export namespace Process {
             opts.stdout === "pipe" ? (proc as ChildProcess).stdout : null,
             opts.stderr === "pipe" ? (proc as ChildProcess).stderr : null,
           ]) {
+            if (stream && !stream.readableEnded && !stream.destroyed && !stream.closed) child.outputTruncated = true
             stream?.push(null)
             ;(stream as unknown as { unref?: () => void } | null)?.unref?.()
           }
@@ -189,7 +196,6 @@ export namespace Process {
       timeoutTimer = setTimeout(() => terminate(false), opts.timeout)
     }
 
-    const child = proc as Child
     child.exited = exited
     if (opts.unref) {
       proc.unref()

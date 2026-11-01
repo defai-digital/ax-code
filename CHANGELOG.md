@@ -17,6 +17,7 @@ changes belong to AX Coder.
 
 - Keep background process timeouts from pinning the CLI, report aborted commands as failed, and preserve complete output when draining closed or backpressured pipes.
 - Validate model catalog fallbacks with deterministic fixtures so upstream metadata refreshes do not fail scheduled validation.
+- Keep evaluation totals partial when an inherited output pipe requires a forced EOF after its parent exits.
 - Preserve cancellation when PDF text extraction is aborted.
 - Preserve a managed model's PDF input capability when an older client re-saves it without the optional field.
 
