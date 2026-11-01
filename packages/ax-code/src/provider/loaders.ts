@@ -9,6 +9,7 @@ import { selectPreferredCodexBinary } from "./cli/binary"
 import { resolveCliModel } from "./cli/resolve"
 import { getCliProviderDefinition } from "./cli/config"
 import { checkCliProviderAuth } from "./cli/connect"
+import { readNativeCliModels, type NativeCliModel } from "./cli/native-models"
 import { URL } from "url"
 import { Log } from "@/util/log"
 import { isLocalHostname } from "@/util/local-host"
@@ -488,6 +489,52 @@ function overlayCliCatalogModel(
   }
 }
 
+// Build the picker list from the CLI's own model cache. Catalog metadata fills
+// capabilities when the snapshot knows the model; the cache owns membership,
+// names, and limits because it reflects what the vendor serves today.
+function nativeCliModels(
+  base: Provider.Model,
+  native: NativeCliModel[],
+  catalog: Record<string, ModelsDev.Model>,
+  providerID: string,
+  familyOf: (input: { id: string; family?: string }) => string | undefined,
+): Record<string, Provider.Model> {
+  const models: Record<string, Provider.Model> = {}
+  for (const item of native) {
+    const known = catalog[item.id]
+    const model = known
+      ? overlayCliCatalogModel(
+          base,
+          known,
+          providerID,
+          item.name,
+          familyOf({ id: item.id, family: known.family }),
+          item.id,
+        )
+      : {
+          ...base,
+          id: ModelID.make(item.id),
+          providerID: ProviderID.make(providerID),
+          api: { ...base.api, id: item.id },
+          name: item.name,
+          family: familyOf({ id: item.id }) ?? base.family,
+        }
+    models[item.id] = {
+      ...model,
+      limit: {
+        ...model.limit,
+        ...(item.context ? { context: item.context } : {}),
+        ...(item.output ? { output: item.output } : {}),
+      },
+      capabilities: {
+        ...model.capabilities,
+        input: { ...model.capabilities.input, image: model.capabilities.input.image || item.image === true },
+      },
+    }
+  }
+  return models
+}
+
 async function claudeCodeFamilyModels(
   provider: Provider.Info,
   resolved?: string,
@@ -550,15 +597,19 @@ async function grokBuildFamilyModels(
   const base = Object.values(provider.models)[0]
   if (!base) return {}
   const catalog = collectGrokCatalog(await ModelsDev.get())
-  const models: Record<string, Provider.Model> = {}
-  for (const item of latestGrokFamilyModels(catalog)) {
-    models[item.id] = overlayCliCatalogModel(
-      base,
-      item,
-      "grok-build-cli",
-      grokDisplayName(item.name, item.id),
-      grokFamilyId({ id: item.id, family: item.family }),
-    )
+  const native = await readNativeCliModels("grok-build-cli")
+  const models: Record<string, Provider.Model> =
+    native.length > 0 ? nativeCliModels(base, native, catalog, "grok-build-cli", grokFamilyId) : {}
+  if (native.length === 0) {
+    for (const item of latestGrokFamilyModels(catalog)) {
+      models[item.id] = overlayCliCatalogModel(
+        base,
+        item,
+        "grok-build-cli",
+        grokDisplayName(item.name, item.id),
+        grokFamilyId({ id: item.id, family: item.family }),
+      )
+    }
   }
   if (resolved && resolved !== "grok-build-cli" && !models[resolved] && catalog[resolved]) {
     const item = catalog[resolved]!
@@ -602,16 +653,23 @@ async function codexCliFamilyModels(
 ): Promise<Record<string, Provider.Model>> {
   const base = Object.values(provider.models)[0]
   if (!base) return {}
-  const catalog = collectCodexCatalog(await ModelsDev.get())
-  const models: Record<string, Provider.Model> = {}
-  for (const item of latestCodexFamilyModels(catalog)) {
-    models[item.id] = overlayCliCatalogModel(
-      base,
-      item,
-      "codex-cli",
-      codexDisplayName(item.name, item.id),
-      codexFamilyId({ id: item.id, family: item.family }),
-    )
+  const snapshot = await ModelsDev.get()
+  const catalog = collectCodexCatalog(snapshot)
+  const native = await readNativeCliModels("codex-cli")
+  const models: Record<string, Provider.Model> =
+    native.length > 0
+      ? nativeCliModels(base, native, { ...snapshot.openai?.models, ...catalog }, "codex-cli", codexFamilyId)
+      : {}
+  if (native.length === 0) {
+    for (const item of latestCodexFamilyModels(catalog)) {
+      models[item.id] = overlayCliCatalogModel(
+        base,
+        item,
+        "codex-cli",
+        codexDisplayName(item.name, item.id),
+        codexFamilyId({ id: item.id, family: item.family }),
+      )
+    }
   }
   if (resolved && resolved !== "codex-cli" && !models[resolved] && catalog[resolved]) {
     const item = catalog[resolved]!
@@ -655,15 +713,19 @@ async function museCliFamilyModels(
   const base = Object.values(provider.models)[0]
   if (!base) return {}
   const catalog = collectMuseCatalog(await ModelsDev.get())
-  const models: Record<string, Provider.Model> = {}
-  for (const item of latestMuseFamilyModels(catalog)) {
-    models[item.id] = overlayCliCatalogModel(
-      base,
-      item,
-      "muse-cli",
-      museDisplayName(item.name, item.id),
-      museFamilyId({ id: item.id, family: item.family }),
-    )
+  const native = await readNativeCliModels("muse-cli")
+  const models: Record<string, Provider.Model> =
+    native.length > 0 ? nativeCliModels(base, native, catalog, "muse-cli", museFamilyId) : {}
+  if (native.length === 0) {
+    for (const item of latestMuseFamilyModels(catalog)) {
+      models[item.id] = overlayCliCatalogModel(
+        base,
+        item,
+        "muse-cli",
+        museDisplayName(item.name, item.id),
+        museFamilyId({ id: item.id, family: item.family }),
+      )
+    }
   }
   if (resolved && resolved !== "muse-cli" && !models[resolved] && catalog[resolved]) {
     const item = catalog[resolved]!
