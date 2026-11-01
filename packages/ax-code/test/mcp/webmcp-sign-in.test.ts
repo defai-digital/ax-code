@@ -174,3 +174,91 @@ describe("WebMCP sign-in hand-off over dispatch (ADR-277)", () => {
     expect(result.content.at(-1)?.text).toContain("wait_for for the signed-in text")
   })
 })
+
+type Content = { content: { type?: string; text?: string }[] }
+const landingNotes = (result: Content) =>
+  result.content.filter((part) => part.text?.includes("looks like a sign-in route"))
+
+describe("WebMCP sign-in landing over dispatch (ADR-277)", () => {
+  const grants = (): GrantState => ({ read: new Set(), interact: new Map() })
+
+  test("a new_page that lands on a sign-in route carries the landing note last, once", async () => {
+    const profile = fullProfile()
+    const before = { content: [], structuredContent: { pages: [{ id: 1, url: "about:blank", selected: true }] } }
+    const opened = {
+      content: [
+        { type: "text", text: "## Pages\n1: about:blank\n2: Sign in (https://idp.test/login?next=%2F) [selected]" },
+      ],
+      structuredContent: {
+        pages: [
+          { id: 1, url: "about:blank" },
+          { id: 2, url: "https://idp.test/login?next=%2F", selected: true },
+        ],
+      },
+    }
+    const client = {
+      callTool: vi.fn(async (request: { name: string }) => (request.name === "new_page" ? opened : before)),
+    }
+    const tool = await convertMcpTool(
+      { name: "new_page", inputSchema: { type: "object" } } as never,
+      client as never,
+      5000,
+      policy("new_page", profile, grants()),
+    )
+    const result = (await tool.execute!({ url: "https://idp.test/login?next=%2F" }, options())) as Content
+    expect(landingNotes(result)).toHaveLength(1)
+    expect(result.content.at(-1)?.text).toContain("looks like a sign-in route")
+    // The page the call created is still marked, landing note or not.
+    expect(WebMcpProfile.isAgentPage(profile, 2)).toBe(true)
+  })
+
+  test("a navigate_page that lands on a sign-in route carries the landing note for its own page", async () => {
+    const profile = fullProfile()
+    const login = `${ORIGIN}/login`
+    const pages = { content: [], structuredContent: { pages: [{ id: 1, url: login, selected: true }] } }
+    const navigated = {
+      content: [{ type: "text", text: `Successfully navigated to ${login}` }],
+      structuredContent: {
+        message: `Successfully navigated to ${login}`,
+        pages: [{ id: 1, url: login, selected: true }],
+      },
+    }
+    const client = {
+      callTool: vi.fn(async (request: { name: string }) => (request.name === "navigate_page" ? navigated : pages)),
+    }
+    const tool = await convertMcpTool(
+      { name: "navigate_page", inputSchema: { type: "object" } } as never,
+      client as never,
+      5000,
+      policy("navigate_page", profile, grants()),
+    )
+    const result = (await tool.execute!({ pageId: 1, url: login }, options())) as Content
+    expect(landingNotes(result)).toHaveLength(1)
+    expect(result.content.at(-1)?.text).toContain("looks like a sign-in route")
+  })
+
+  test("a landing off a sign-in route carries no landing note", async () => {
+    const profile = fullProfile()
+    const before = { content: [], structuredContent: { pages: [{ id: 1, url: "about:blank", selected: true }] } }
+    const opened = {
+      content: [{ type: "text", text: "## Pages\n1: about:blank\n2: Orders (https://app.test/orders) [selected]" }],
+      structuredContent: {
+        pages: [
+          { id: 1, url: "about:blank" },
+          { id: 2, url: PAGE, selected: true },
+        ],
+      },
+    }
+    const client = {
+      callTool: vi.fn(async (request: { name: string }) => (request.name === "new_page" ? opened : before)),
+    }
+    const tool = await convertMcpTool(
+      { name: "new_page", inputSchema: { type: "object" } } as never,
+      client as never,
+      5000,
+      policy("new_page", profile, grants()),
+    )
+    const result = (await tool.execute!({ url: PAGE }, options())) as Content
+    expect(landingNotes(result)).toHaveLength(0)
+  })
+})

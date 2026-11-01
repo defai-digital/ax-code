@@ -107,6 +107,31 @@ async function webmcpPageUrl(
 }
 
 /**
+ * ADR-277: the page ids the bridge lists immediately before a new_page, so
+ * the page that call created can be told from one that already existed. The
+ * pinned bridge selects the first listed page when the tab it created has
+ * already closed by the time it builds the response, and reports that only
+ * in prose, so "the selected page" alone is not proof of creation. Fails
+ * closed to undefined (no page gets marked agent-owned) on any error or an
+ * unparseable list; it never fails the new_page itself. An abort propagates.
+ */
+async function webmcpPageIdsBefore(
+  client: Client,
+  timeout: number | undefined,
+  signal?: AbortSignal,
+): Promise<ReadonlySet<number> | undefined> {
+  try {
+    const pages = await client.callTool({ name: "list_pages", arguments: {} }, { timeout, signal })
+    WebMcpProfile.validateResult("list_pages", pages)
+    const parsed = WebMcpProfile.parseStructuredPages(pages)
+    return parsed ? new Set(parsed.keys()) : undefined
+  } catch (error) {
+    if (signal?.aborted) throw error
+    return undefined
+  }
+}
+
+/**
  * When a WebMCP navigation fails while its requested origin IS allowed, the
  * bridge may have blocked a redirect to a different origin. The pinned bridge
  * reports that as a generic net error (`net::ERR_INTERNET_DISCONNECTED at
@@ -307,21 +332,38 @@ export async function convertMcpTool(
       // sub-call. An exhausted budget fails here instead of dispatching a
       // call the SDK would time out immediately.
       const deadline = webmcp && timeout !== undefined ? Date.now() + timeout : undefined
+      // Set once the approved call itself has reached the bridge and
+      // returned: the budget and lookup timeout messages below say whether
+      // the action was sent (ADR-277), because the same budget also covers
+      // the page lookups before and after it.
+      let sent = false
       const budget = () => {
         if (deadline === undefined) return undefined
         const remaining = deadline - Date.now()
-        if (remaining <= 0)
-          throw new Error(
-            "WebMCP dispatch exceeded its timeout before the call started; nothing was sent to the browser. Do not retry automatically.",
-          )
+        if (remaining <= 0) throw new Error(WebMcpProfile.budgetExceededMessage(mcpTool.name, sent))
         return remaining
+      }
+      // ADR-277: the page lookups before the call run ahead of the dispatch
+      // try below, so an SDK timeout in one of them is named here; the
+      // lookups after the call are named by the outer catch.
+      const beforeCall = async <T>(work: Promise<T>): Promise<T> => {
+        try {
+          return await work
+        } catch (error) {
+          if (webmcp && isRequestTimeout(error)) {
+            throw Object.assign(new Error(WebMcpProfile.lookupTimeoutMessage(webmcp.toolName, false)), { cause: error })
+          }
+          throw error
+        }
       }
       // Resolve the page's URL and origin through the bridge before the call
       // reads or acts; an unlocatable page fails without a retry.
       const locatePage = async (when: "reading" | "acting") => {
         const pageId = (input as Record<string, unknown>).pageId
         const before =
-          typeof pageId === "number" ? await webmcpPageUrl(client, pageId, budget(), opts.abortSignal) : undefined
+          typeof pageId === "number"
+            ? await beforeCall(webmcpPageUrl(client, pageId, budget(), opts.abortSignal))
+            : undefined
         const origin = WebMcpProfile.pageOriginOf(before)
         if (!origin)
           throw new Error(
@@ -368,13 +410,8 @@ export async function convertMcpTool(
         interactUrl = before
       }
       if (webmcp) {
-        await webmcpPreflight(
-          client,
-          webmcp,
-          (input ?? {}) as Record<string, unknown>,
-          budget,
-          opts.abortSignal,
-          expected,
+        await beforeCall(
+          webmcpPreflight(client, webmcp, (input ?? {}) as Record<string, unknown>, budget, opts.abortSignal, expected),
         )
       }
       const listingPageId = webmcp?.toolName === "list_webmcp_tools" ? (input as { pageId: number }).pageId : undefined
@@ -406,6 +443,10 @@ export async function convertMcpTool(
         if (interactTier && interactOrigin) {
           await WebMcpApprovals.checkCall(args as object)
         }
+        // ADR-277: the page list right before a new_page is the only
+        // evidence that the page the response selects was created by it.
+        const pagesBefore =
+          webmcp?.toolName === "new_page" ? await webmcpPageIdsBefore(client, budget(), opts.abortSignal) : undefined
         opts.abortSignal?.throwIfAborted()
         const mainTimeout = webmcp ? budget() : timeout
         // A wait that cannot settle before the request times out is refused
@@ -487,6 +528,7 @@ export async function convertMcpTool(
             tracker.promise,
           ])
           tracker.finish()
+          sent = true
         } catch (error) {
           tracker.fail(error)
           // ADR-277: the SDK's "MCP error -32001: Request timed out" says
@@ -510,13 +552,16 @@ export async function convertMcpTool(
         }
         // ADR-277: the page this connection's new_page just created is
         // agent-owned, so Auto may later close it without a prompt. Mark it
-        // from the bridge's structured page list as soon as the call returns,
-        // before the result and landing checks: a tab that opened and then
-        // failed those checks still exists and was still opened by the agent,
-        // and its cleanup must not start prompting (Grok design review).
-        if (webmcp?.toolName === "new_page") {
+        // as soon as the call returns, before the result and landing checks:
+        // a tab that opened and then failed those checks still exists and was
+        // still opened by the agent, and its cleanup must not start prompting.
+        // The proof of creation is the page list taken right before the call:
+        // the selected page counts as created only when it was not listed
+        // then. Without that list (bridge error, unparseable payload) nothing
+        // is marked and close_page keeps prompting — the fail-closed side.
+        if (webmcp?.toolName === "new_page" && pagesBefore) {
           const created = WebMcpProfile.structuredSelectedPageId(result)
-          if (created !== undefined) WebMcpProfile.markAgentPage(webmcp.profile, created)
+          if (created !== undefined && !pagesBefore.has(created)) WebMcpProfile.markAgentPage(webmcp.profile, created)
         }
         if (webmcp) {
           try {
@@ -706,6 +751,19 @@ export async function convertMcpTool(
           }
         }
         log.error("MCP tool call failed", { tool: mcpTool.name, error: toErrorMessage(e) })
+        // ADR-277: an SDK timeout raised by one of the page lookups around the
+        // call (never by the call itself, which the inner catch already named)
+        // is rewritten with the phase it died in. After a sent page-changing
+        // action the uid map must not stand in for the page that was not
+        // observed; the clears above cover the read and interact tiers, this
+        // one covers the page tools.
+        if (webmcp && isRequestTimeout(e)) {
+          const pageId = (input as Record<string, unknown>).pageId
+          if (sent && typeof pageId === "number" && WebMcpProfile.changesPage(webmcp.toolName)) {
+            WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+          }
+          throw Object.assign(new Error(WebMcpProfile.lookupTimeoutMessage(webmcp.toolName, sent)), { cause: e })
+        }
         throw e
       }
     },

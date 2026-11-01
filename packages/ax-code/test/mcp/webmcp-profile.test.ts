@@ -648,11 +648,22 @@ describe("WebMcpProfile.timeoutMessage (ADR-277)", () => {
     expect(message).not.toContain("may or may not have taken effect")
   })
 
-  test("hover reads like an observation call, not a state change", () => {
+  test("hover dispatches pointer events, so its timeout reads as a state change", () => {
     const message = WebMcpProfile.timeoutMessage("hover", 5_000)
     expect(message).toContain("WebMCP hover timed out after 5 s")
-    expect(message).toContain("Nothing was changed")
-    expect(message).not.toContain("may or may not have taken effect")
+    expect(message).toContain("may or may not have taken effect")
+    expect(WebMcpProfile.changesPage("hover")).toBe(true)
+  })
+
+  test("the budget and lookup messages say whether the call was sent", () => {
+    expect(WebMcpProfile.budgetExceededMessage("click", false)).toContain(
+      "exceeded its timeout before click was sent to the browser",
+    )
+    expect(WebMcpProfile.budgetExceededMessage("click", false)).toContain("changed nothing")
+    expect(WebMcpProfile.budgetExceededMessage("click", true)).toContain("after click was sent to the browser")
+    expect(WebMcpProfile.budgetExceededMessage("click", true)).toContain("may have taken effect")
+    expect(WebMcpProfile.lookupTimeoutMessage("click", false)).toContain("click was not sent to the browser")
+    expect(WebMcpProfile.lookupTimeoutMessage("click", true)).toContain("may have taken effect")
   })
 
   test("an unknown budget is reported without a duration", () => {

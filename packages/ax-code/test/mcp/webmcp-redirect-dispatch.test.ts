@@ -21,6 +21,9 @@ const blockedRedirect = {
   isError: true,
 }
 
+/** The page list new_page reads before it is sent (ADR-277); answered at no cost here. */
+const pagesBefore = { content: [], structuredContent: { pages: [{ id: 1, url: "about:blank", selected: true }] } }
+
 async function dispatch(toolName: string, result: unknown, args: Record<string, unknown>, fetchImpl: unknown) {
   const tool = await convertMcpTool(
     { name: toolName, description: "", inputSchema: { type: "object", properties: {} } } as never,
@@ -54,7 +57,8 @@ describe("WebMCP dispatch: blocked-redirect normalization (ADR-168)", () => {
     const tool = await convertMcpTool(
       { name: "new_page", inputSchema: { type: "object" } } as never,
       {
-        callTool: async () => {
+        callTool: async (request: { name: string }) => {
+          if (request.name === "list_pages") return pagesBefore
           now += 80
           return blockedRedirect
         },
@@ -76,7 +80,8 @@ describe("WebMCP dispatch: blocked-redirect normalization (ADR-168)", () => {
     const tool = await convertMcpTool(
       { name: "new_page", inputSchema: { type: "object" } } as never,
       {
-        callTool: async () => {
+        callTool: async (request: { name: string }) => {
+          if (request.name === "list_pages") return pagesBefore
           now += 100
           return blockedRedirect
         },

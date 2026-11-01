@@ -2593,12 +2593,14 @@ export namespace WebMcpProfile {
   /**
    * Tools that change the browser or the page. A timeout on one of them leaves
    * the outcome unknown: the bridge may have applied the action before it
-   * stopped answering. `hover` is deliberately excluded — it changes nothing
-   * durable, so it reads like the other observation calls.
+   * stopped answering. `hover` is included: it dispatches real pointer events,
+   * and a page's mouseover handler can change the DOM or navigate before the
+   * call answers, so its timeout is as ambiguous as a click's.
    */
   const changingTools: ReadonlySet<string> = new Set<string>([
     ...PER_ACTION_TOOLS,
     "click",
+    "hover",
     "emulate",
     "new_page",
     "navigate_page",
@@ -2631,6 +2633,32 @@ export namespace WebMcpProfile {
       return `WebMCP ${toolName} timed out ${after} while the browser was executing it: the action may or may not have taken effect. Inspect the page first (list_pages, then take_snapshot where this bridge exposes it) and continue from what you see; do not repeat the action blindly.`
     }
     return `WebMCP ${toolName} timed out ${after}: the page did not answer in time (a blocking dialog, a heavy page or a hung tab). Nothing was changed. Retry once at most, narrowing the read (types, pageSize or uid) or after wait_for; if it times out again, report BLOCKED.`
+  }
+
+  /**
+   * ADR-277: the shared dispatch budget also covers the page lookups before
+   * and after the approved call, so running out of it means different things
+   * on each side of the call. Before: the call was never sent (lookups may
+   * have been). After: it was sent and may have taken effect, but the page
+   * was not checked afterwards, so its result is discarded.
+   */
+  export function budgetExceededMessage(toolName: string, sent: boolean): string {
+    if (sent) {
+      return `WebMCP dispatch exceeded its timeout after ${toolName} was sent to the browser: the action may have taken effect, but the page could not be checked afterwards and the result is discarded. Inspect the page first (list_pages, then take_snapshot where this bridge exposes it); do not repeat the action blindly.`
+    }
+    return `WebMCP dispatch exceeded its timeout before ${toolName} was sent to the browser; the requested call was not dispatched and changed nothing. Do not retry automatically.`
+  }
+
+  /**
+   * ADR-277: an SDK timeout raised by a page lookup around the approved call
+   * (list_pages before it, the page check after it), as opposed to the call
+   * itself, which `timeoutMessage` names.
+   */
+  export function lookupTimeoutMessage(toolName: string, sent: boolean): string {
+    if (sent) {
+      return `WebMCP ${toolName} was sent to the browser, but the page lookup after it timed out: the action may have taken effect and its result is discarded. Inspect the page first (list_pages, then take_snapshot where this bridge exposes it); do not repeat the action blindly.`
+    }
+    return `WebMCP ${toolName}: the page lookup before the call timed out, so ${toolName} was not sent to the browser and nothing was changed. Retry once at most; if it times out again, report BLOCKED.`
   }
 
   /**
