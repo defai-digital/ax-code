@@ -32525,6 +32525,9 @@
                             },
                             "websearch": {
                               "type": "boolean"
+                            },
+                            "pdf": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
@@ -32662,6 +32665,9 @@
                           },
                           "websearch": {
                             "type": "boolean"
+                          },
+                          "pdf": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -32779,6 +32785,9 @@
                           "type": "boolean"
                         },
                         "websearch": {
+                          "type": "boolean"
+                        },
+                        "pdf": {
                           "type": "boolean"
                         }
                       },

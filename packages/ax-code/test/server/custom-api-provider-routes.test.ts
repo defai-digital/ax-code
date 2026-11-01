@@ -371,13 +371,18 @@ describe("managed custom API provider model refresh", () => {
   })
 
   test("keeps a card-declared web search flag through discovery, config, and re-save", async () => {
-    await using tmp = await tmpdir({ git: true })
+    // `username` keeps Config.loadState off os.userInfo(), which throws ENOENT
+    // in sandboxes where the current uid has no passwd entry.
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
     const query = `directory=${encodeURIComponent(tmp.path)}`
     const app = Server.Default()
     const baseURL = "http://127.0.0.1:18082/v1"
     const modelsByID = (view: unknown) =>
       Object.fromEntries(
-        ((view as { models?: { id: string; websearch?: boolean }[] }).models ?? []).map((model) => [model.id, model]),
+        ((view as { models?: { id: string; websearch?: boolean; pdf?: boolean }[] }).models ?? []).map((model) => [
+          model.id,
+          model,
+        ]),
       )
 
     const originalFetch = globalThis.fetch
@@ -387,7 +392,11 @@ describe("managed custom API provider model refresh", () => {
         JSON.stringify({
           data: [
             // OpenAI-compatible capability shape.
-            { id: "search-model", limit: { context: 100_000, output: 8_192 }, capabilities: { web_search: true } },
+            {
+              id: "search-model",
+              limit: { context: 100_000, output: 8_192 },
+              capabilities: { web_search: true, pdf: true },
+            },
             // AX Trust states the same thing under the top-level abilities block.
             { id: "abilities-model", limit: { context: 100_000, output: 8_192 }, abilities: { web_search: true } },
             // A card that declares nothing must not claim the capability.
@@ -406,11 +415,13 @@ describe("managed custom API provider model refresh", () => {
       expect(created.status).toBe(200)
       const discovered = modelsByID(await created.json())
       expect(discovered["search-model"].websearch).toBe(true)
+      expect(discovered["search-model"].pdf).toBe(true)
       expect(discovered["abilities-model"].websearch).toBe(true)
       expect(discovered["plain-model"].websearch).toBeUndefined()
 
       const saved = (await Config.getGlobal()).provider?.["company-gateway"]?.models ?? {}
       expect(saved["search-model"]?.websearch).toBe(true)
+      expect(saved["search-model"]?.modalities?.input).toContain("pdf")
       expect(saved["abilities-model"]?.websearch).toBe(true)
       expect(saved["plain-model"]?.websearch).toBeUndefined()
 
@@ -424,6 +435,7 @@ describe("managed custom API provider model refresh", () => {
       expect(resaved.status).toBe(200)
       const reused = modelsByID(await resaved.json())
       expect(reused["search-model"].websearch).toBe(true)
+      expect(reused["search-model"].pdf).toBe(true)
       expect(reused["abilities-model"].websearch).toBe(true)
       expect((await Config.getGlobal()).provider?.["company-gateway"]?.models?.["search-model"]?.websearch).toBe(true)
 
@@ -436,12 +448,14 @@ describe("managed custom API provider model refresh", () => {
           providerBody({
             baseURL,
             apiKey: undefined,
-            models: [{ ...providerBody().models[0], id: "search-model", websearch: undefined }],
+            models: [{ ...providerBody().models[0], id: "search-model", websearch: undefined, pdf: undefined }],
           }),
         ),
       })
       expect(explicit.status).toBe(200)
-      expect(modelsByID(await explicit.json())["search-model"].websearch).toBe(true)
+      const explicitView = modelsByID(await explicit.json())
+      expect(explicitView["search-model"].websearch).toBe(true)
+      expect(explicitView["search-model"].pdf).toBe(true)
 
       // An explicit `false` is a denial, and does clear the flag.
       const denied = await app.request(`/provider/custom/company-gateway?${query}`, {
@@ -451,12 +465,14 @@ describe("managed custom API provider model refresh", () => {
           providerBody({
             baseURL,
             apiKey: undefined,
-            models: [{ ...providerBody().models[0], id: "search-model", websearch: false }],
+            models: [{ ...providerBody().models[0], id: "search-model", websearch: false, pdf: false }],
           }),
         ),
       })
       expect(denied.status).toBe(200)
-      expect(modelsByID(await denied.json())["search-model"].websearch).toBe(false)
+      const deniedView = modelsByID(await denied.json())
+      expect(deniedView["search-model"].websearch).toBe(false)
+      expect(deniedView["search-model"].pdf).toBe(false)
     } finally {
       globalThis.fetch = originalFetch
     }

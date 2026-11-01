@@ -6233,6 +6233,7 @@ export class Custom extends HeyApiClient {
         attachment: boolean
         temperature: boolean
         websearch?: boolean
+        pdf?: boolean
       }>
       refreshModels?: boolean
     },

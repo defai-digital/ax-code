@@ -15817,6 +15817,7 @@ export type ProviderCustomListResponses = {
       attachment: boolean
       temperature: boolean
       websearch?: boolean
+      pdf?: boolean
     }>
   }>
 }
@@ -15877,6 +15878,7 @@ export type ProviderCustomUpdateData = {
       attachment: boolean
       temperature: boolean
       websearch?: boolean
+      pdf?: boolean
     }>
     refreshModels?: boolean
   }
@@ -15922,6 +15924,7 @@ export type ProviderCustomUpdateResponses = {
       attachment: boolean
       temperature: boolean
       websearch?: boolean
+      pdf?: boolean
     }>
   }
 }

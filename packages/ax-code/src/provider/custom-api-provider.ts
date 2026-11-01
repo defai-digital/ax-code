@@ -619,19 +619,27 @@ export namespace CustomApiProvider {
     previousAuth: Auth.Info | undefined,
   ): Promise<Model[]> {
     if (input.models && input.models.length > 0) {
-      // `websearch` is the only optional model field, so a caller that predates
-      // it — the TUI editor rebuilds the list from IDs, and any client whose
-      // view of the model omits it — leaves it out rather than denying it.
-      // Carry the stored declaration forward for those rows; an explicit `false`
-      // still clears it, and the next successful discovery replaces the row.
+      // `websearch` and `pdf` are the optional model fields, so a caller that
+      // predates them — the TUI editor rebuilds the list from IDs, and any
+      // client whose view of the model omits them — leaves them out rather
+      // than denying them. Carry the stored declarations forward for those
+      // rows; an explicit `false` still clears them, and the next successful
+      // discovery replaces the row.
       if (!previousProvider || !isManaged(previousProvider)) return input.models
       const stored = new Map(
-        Object.entries(previousProvider.models ?? {}).map(([key, model]) => [model.id ?? key, model.websearch]),
+        Object.entries(previousProvider.models ?? {}).map(([key, model]) => [
+          model.id ?? key,
+          { websearch: model.websearch, pdf: model.modalities?.input?.includes("pdf") },
+        ]),
       )
       return input.models.map((model) => {
-        if (model.websearch !== undefined) return model
         const declared = stored.get(model.id)
-        return declared === undefined ? model : { ...model, websearch: declared }
+        if (declared === undefined) return model
+        return {
+          ...model,
+          ...(model.websearch === undefined ? { websearch: declared.websearch } : {}),
+          ...(model.pdf === undefined ? { pdf: declared.pdf } : {}),
+        }
       })
     }
     if (!input.refreshModels && previousProvider && isManaged(previousProvider)) {
