@@ -246,4 +246,93 @@ process.exitCode = 1
     expect(await deleteAxEngineModel({ modelID: id, quantization: "mlx" })).toMatchObject({ deleted: false })
     expect(await Filesystem.exists(kept)).toBe(true)
   })
+
+  function mockDiskSpace() {
+    const original = Process.text
+    vi.spyOn(Process, "text").mockImplementation((cmd, options) => {
+      if (cmd[0] !== "df") return original(cmd, options)
+      const text = "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/test 900000000 1 800000000 1% /\n"
+      return Promise.resolve({ code: 0, stdout: Buffer.from(text), stderr: Buffer.alloc(0), text })
+    })
+  }
+
+  // A fake 8.0.4 engine: byte-scaled per-file events, a sizeless retry notice,
+  // and the ax.download_model.v1 summary the native downloader prints. It stays
+  // alive long enough for the legacy cache poller to have fired had it been on.
+  async function writeNativeEngine(binaryPath: string, summary: Record<string, unknown>) {
+    const total = 17 * 1024 ** 3
+    const lines = [
+      { event: "progress", done: 0, total: 100, file: "Checking public model files" },
+      { event: "progress", done: (total / 2) * 90, total: total * 100, file: "model-00001-of-00004.safetensors" },
+      { event: "progress", done: 0, total: 0, file: "Download service is busy. Retrying in 3s" },
+      { event: "progress", done: total * 90, total: total * 100, file: "model-00004-of-00004.safetensors" },
+      { event: "progress", done: 95, total: 100, file: "Validating model manifest" },
+      { event: "progress", done: 100, total: 100, file: "Ready" },
+    ]
+    await fs.writeFile(
+      binaryPath,
+      `#!/usr/bin/env node
+for (const line of ${JSON.stringify(lines)}) console.log(JSON.stringify(line))
+setTimeout(() => console.log(${JSON.stringify(JSON.stringify(summary))}), 700)
+`,
+    )
+    await fs.chmod(binaryPath, 0o755)
+  }
+
+  test("a native engine streams byte progress without cache polling or a Python helper", async () => {
+    if (process.platform === "win32") return
+    await using tmp = await tmpdir()
+    process.env.HF_HUB_CACHE = path.join(tmp.path, "hub")
+    const destination = await makeSnapshot(model.sha)
+    const binaryPath = path.join(tmp.path, "fake-engine")
+    await writeNativeEngine(binaryPath, {
+      schema_version: "ax.download_model.v1",
+      repo_id: model.id,
+      revision: model.sha,
+      resolved_revision: model.sha,
+      dest: destination,
+      status: "ready",
+      errors: [],
+    })
+    mockDiskSpace()
+    const seen: { percent: number; message?: string }[] = []
+    const result = await downloadModel({
+      modelID: id,
+      binaryPath,
+      binaryVersion: "8.0.4",
+      onProgress: (progress) => seen.push({ percent: progress.percent, message: progress.message }),
+    })
+    expect(result).toMatchObject({ modelID: id, revision: model.sha, path: destination })
+    expect(seen.map((entry) => entry.percent)).toEqual([0, 45, 45, 90, 95, 99])
+    expect(seen[2]).toEqual({ percent: 45, message: "Download service is busy. Retrying in 3s" })
+    expect(seen[3]?.message).toBe("model-00004-of-00004.safetensors")
+    // The legacy poller would have replaced these with a "Downloading weights (0.0 GiB" reading.
+    expect(seen.every((entry) => !entry.message?.includes("Downloading weights"))).toBe(true)
+  })
+
+  test("accepts the pinned snapshot when the engine reports its canonical path", async () => {
+    if (process.platform === "win32") return
+    await using tmp = await tmpdir()
+    const real = path.join(tmp.path, "hub-real")
+    await fs.mkdir(real, { recursive: true })
+    const link = path.join(tmp.path, "hub-link")
+    await fs.symlink(real, link)
+    process.env.HF_HUB_CACHE = link
+    const destination = await makeSnapshot(model.sha)
+    expect(destination.startsWith(link)).toBe(true)
+    const binaryPath = path.join(tmp.path, "fake-engine")
+    await writeNativeEngine(binaryPath, {
+      schema_version: "ax.download_model.v1",
+      repo_id: model.id,
+      revision: model.sha,
+      resolved_revision: model.sha,
+      dest: await fs.realpath(destination),
+      status: "ready",
+      errors: [],
+    })
+    mockDiskSpace()
+    const result = await downloadModel({ modelID: id, binaryPath, binaryVersion: "8.0.4" })
+    expect(await fs.realpath(result.path)).toBe(await fs.realpath(destination))
+    expect(result.revision).toBe(model.sha)
+  })
 })

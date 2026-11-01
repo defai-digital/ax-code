@@ -10,6 +10,7 @@ import {
   AX_ENGINE_RELEASES_URL,
   axEngineMissingBlocker,
   getDependencyStatus,
+  nativeDownloadSupported,
 } from "../../../src/provider/ax-engine/dependency"
 
 const response = (text: string, code = 0): Process.TextResult => ({
@@ -411,4 +412,47 @@ test("an unsupported host is told ax-engine is Apple Silicon only", () => {
   const message = axEngineMissingBlocker(false)
   expect(message).toContain("Apple Silicon macOS")
   expect(message).not.toContain(AX_ENGINE_RELEASES_URL)
+})
+
+test.each([
+  [undefined, false],
+  ["dev", false],
+  ["ax-engine 7.7.0", false],
+  ["7.9.9", false],
+  ["7.10.0-rc.1", false],
+  ["7.10.0", true],
+  ["ax-engine 8.0.4", true],
+])("nativeDownloadSupported(%s) is %s", (detected, expected) => {
+  expect(nativeDownloadSupported(detected)).toBe(expected)
+})
+
+test("reports native downloads for an engine at or above 7.10.0", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 8.0.4"))
+  const status = await getDependencyStatus({ binaryPath })
+  expect(status).toMatchObject({ available: true, mode: "configured", nativeDownloads: true })
+  expect(status.warnings.join(" ")).not.toContain("huggingface_hub")
+})
+
+test("flags a helper-based managed engine and says the pin downloads natively", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Which, "which").mockReturnValue(null)
+  vi.spyOn(Install, "getManagedBinary").mockResolvedValue({ path: binaryPath, version: "7.7.0" })
+  vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.7.0"))
+  const status = await getDependencyStatus()
+  expect(status).toMatchObject({ available: true, mode: "managed", updateAvailable: true, nativeDownloads: false })
+  const warning = status.warnings.join("\n")
+  expect(warning).toContain("older than the 8.0.4 release this AX Code installs")
+  expect(warning).toContain("8.0.4 downloads public models natively, without the Python huggingface_hub helper")
+})
+
+test("omits the native-download field when no engine is available", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.5.6"))
+  const status = await getDependencyStatus({ binaryPath })
+  expect(status.available).toBe(false)
+  expect(status.nativeDownloads).toBeUndefined()
 })

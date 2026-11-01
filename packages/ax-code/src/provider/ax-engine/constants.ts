@@ -43,6 +43,11 @@ export const AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS = 8_192
 export const AX_ENGINE_MIN_VERSION = "7.7.0"
 // First released tag containing the validated repository@revision downloader.
 export const AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION = "6.13.1"
+// First released tag whose `ax-engine download` fetches public AutomatosX packs
+// natively (Rust, anonymous, per-file SHA-256, resumable). Older engines shell
+// out to the Python `huggingface_hub` helper, which needs a separate venv and
+// reports progress only around the whole snapshot call.
+export const AX_ENGINE_NATIVE_DOWNLOAD_MIN_VERSION = "7.10.0"
 // First ax-engine version whose server accepts --max-output-tokens: the
 // advertised per-request output budget, split from --max-batch-tokens (the
 // scheduler's per-step width). Older binaries only know the conflated knob,
@@ -455,18 +460,20 @@ export type AxEngineBinaryRelease = {
 }
 
 const AX_ENGINE_RELEASE_ORIGIN = "https://github.com"
-const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v7.7.0/ax-engine-v7.7.0-macos-arm64.tar.gz`
+const AX_ENGINE_BINARY_RELEASE_URL = `${AX_ENGINE_RELEASE_ORIGIN}/defai-digital/ax-engine/releases/download/v8.0.4/ax-engine-v8.0.4-macos-arm64.tar.gz`
 
 // Pinned self-contained macOS archive (binaries + MLX dylibs + metallib) that
 // `ax-code providers ax-engine install` downloads and verifies. AX Code
 // releases no longer bundle it (ADR-190); Homebrew and a manual GitHub download
 // are equivalent ways to provide the binary. AX_ENGINE_INSTALL_* overrides
-// remain for validating a different artifact.
+// remain for validating a different artifact. 8.0.4 is the first pin with the
+// native public-model downloader (AX_ENGINE_NATIVE_DOWNLOAD_MIN_VERSION); the
+// digest is the release's published ax-engine-v8.0.4-macos-arm64.tar.gz.sha256.
 export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease = {
-  version: "7.7.0",
-  assetName: "ax-engine-v7.7.0-macos-arm64.tar.gz",
+  version: "8.0.4",
+  assetName: "ax-engine-v8.0.4-macos-arm64.tar.gz",
   url: AX_ENGINE_BINARY_RELEASE_URL,
-  sha256: "e217efdd3918b1c00804db89678b0a614192f9dc3c63800b741cea227ba387cd",
+  sha256: "e4bb9043b8c9793af8ebf8d2f89dde179e04e513e30c0b1dc01351d74ab81440",
   teamId: "N5ZUZDUJS6",
 }
 

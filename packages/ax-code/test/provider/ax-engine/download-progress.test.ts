@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 import {
   applyProgressEvent,
+  applyProgressMessage,
   completeProgress,
   formatGiB,
   indeterminateProgress,
@@ -62,6 +63,37 @@ describe("download-progress", () => {
     )
     expect(parseProgressJsonLine("not json")).toEqual({ kind: "ignore" })
     expect(parseProgressJsonLine("")).toEqual({ kind: "ignore" })
+  })
+
+  test("native retry waits arrive as sizeless events and become message-only updates", () => {
+    // ax-engine-download emits progress(0, 0, "Download service is busy. Retrying in 4s").
+    expect(
+      parseProgressJsonLine(
+        '{"event":"progress","done":0,"total":0,"file":"Download service is busy. Retrying in 4s"}',
+      ),
+    ).toEqual({ kind: "message", message: "Download service is busy. Retrying in 4s" })
+    expect(parseProgressJsonLine('{"event":"progress","done":0,"total":0,"file":"  "}')).toEqual({ kind: "ignore" })
+    expect(parseProgressJsonLine('{"event":"progress","done":0,"total":0}')).toEqual({ kind: "ignore" })
+  })
+
+  test("applyProgressMessage keeps the bar and refreshes only the text", () => {
+    const running = applyProgressEvent(undefined, { done: 4500, total: 10000, message: "model-00001.safetensors" }, 1)
+    const waiting = applyProgressMessage(running, "Download service is busy. Retrying in 4s", 2)
+    expect(waiting).toEqual({ ...running, message: "Download service is busy. Retrying in 4s", updatedAt: 2 })
+    expect(waiting.percent).toBe(45)
+    expect(applyProgressMessage(undefined, "Checking public model files", 3)).toEqual(
+      indeterminateProgress("Checking public model files", 3),
+    )
+  })
+
+  test("native byte-scaled events map onto the same percent scale", () => {
+    // The native downloader reports (bytes * 90, total * 100, file) per file.
+    const total = 17 * 1024 ** 3
+    const half = applyProgressEvent(undefined, { done: (total / 2) * 90, total: total * 100 }, 1)
+    expect(half.percent).toBe(45)
+    const all = applyProgressEvent(half, { done: total * 90, total: total * 100 }, 2)
+    expect(all.percent).toBe(90)
+    expect(applyProgressEvent(all, { done: 95, total: 100, message: "Validating model manifest" }, 3).percent).toBe(95)
   })
 
   test("progressFromCacheBytes maps weight phase into 5–84 and refreshes the message", () => {

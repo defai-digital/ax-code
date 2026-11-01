@@ -6,6 +6,7 @@ import {
   AX_ENGINE_BUNDLED_MIN_VERSION,
   AX_ENGINE_ERROR,
   AX_ENGINE_MIN_VERSION,
+  AX_ENGINE_NATIVE_DOWNLOAD_MIN_VERSION,
   AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION,
   noteAxEngineOnce,
 } from "./constants"
@@ -30,6 +31,11 @@ export const AxEngineDependencyStatus = z.object({
   // a newer pinned release: a managed or legacy bundled engine older than the
   // pin. Never for PATH or configured binaries, which outrank the managed copy.
   updateAvailable: z.boolean().optional(),
+  // True when the selected engine downloads public AutomatosX packs natively
+  // (AX_ENGINE_NATIVE_DOWNLOAD_MIN_VERSION or newer). False means `ax-engine
+  // download` still runs the Python huggingface_hub helper. Absent when no
+  // engine is available.
+  nativeDownloads: z.boolean().optional(),
   blockers: z.array(z.string()).default([]),
   warnings: z.array(z.string()).default([]),
 })
@@ -118,8 +124,22 @@ function olderThanPin(detected: string | undefined, pinned: string | undefined) 
   return Boolean(parsed && pinned && semver.lt(parsed, pinned))
 }
 
+// Whether `ax-engine download` on this version is the native public-model
+// downloader rather than the Python huggingface_hub helper. Unknown versions
+// are treated as helper-based so the Python environment is still resolved.
+export function nativeDownloadSupported(detected: string | undefined): boolean {
+  const parsed = coerceVersion(detected)
+  return Boolean(parsed && semver.gte(parsed, AX_ENGINE_NATIVE_DOWNLOAD_MIN_VERSION))
+}
+
 function behindPinWarning(source: string, detected: string | undefined, pinned: string, advice: string) {
-  return `${AX_ENGINE_ERROR.VersionUnsupported}: ${source} ax-engine ${coercedVersionLabel(detected)} is older than the ${pinned} release this AX Code installs; ${advice}`
+  // Name the concrete gain when the update also replaces the Python download
+  // helper, since that helper is the usual reason model downloads fail.
+  const downloads =
+    !nativeDownloadSupported(detected) && nativeDownloadSupported(pinned)
+      ? ` (${pinned} downloads public models natively, without the Python huggingface_hub helper)`
+      : ""
+  return `${AX_ENGINE_ERROR.VersionUnsupported}: ${source} ax-engine ${coercedVersionLabel(detected)} is older than the ${pinned} release this AX Code installs; ${advice}${downloads}`
 }
 
 const MANAGED_UPDATE_ADVICE = "run `ax-code providers ax-engine install` to update it"
@@ -146,7 +166,7 @@ export function axEngineMissingBlocker(installable: boolean) {
   return [
     `${prefix} ax-engine was not found. It is only needed for local models; cloud providers work without it.`,
     "Install it with `brew install defai-digital/tap/ax-engine`, `ax-code providers ax-engine install`,",
-    `or \`pip install "ax-engine[download]>=${AX_ENGINE_MIN_VERSION},<8"\` in a Python 3.12-3.14 virtualenv (this also provides the model download helpers),`,
+    `or \`pip install "ax-engine[download]>=${AX_ENGINE_NATIVE_DOWNLOAD_MIN_VERSION},<9"\` in a Python 3.12-3.14 virtualenv,`,
     `or download a release (${AX_ENGINE_MIN_VERSION} or later) from ${AX_ENGINE_RELEASES_URL}`,
     "and set provider.ax-engine.options.binaryPath (or AX_ENGINE_BIN) to it.",
     "Check with `ax-code providers ax-engine status`.",
@@ -201,6 +221,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
       installable: false,
       pinnedVersion,
       updateAvailable: false,
+      ...(versionBlocker ? {} : { nativeDownloads: nativeDownloadSupported(detectedVersion) }),
       blockers: versionBlocker ? [versionBlocker] : [],
       warnings,
     }
@@ -226,6 +247,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
         installable: false,
         pinnedVersion,
         updateAvailable: false,
+        nativeDownloads: nativeDownloadSupported(detectedVersion),
         blockers: [],
         warnings,
       }
@@ -254,6 +276,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
         installable: false,
         pinnedVersion,
         updateAvailable,
+        nativeDownloads: nativeDownloadSupported(detectedVersion),
         blockers: [],
         warnings,
       }
@@ -284,6 +307,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
         installable: false,
         pinnedVersion,
         updateAvailable,
+        nativeDownloads: nativeDownloadSupported(detectedVersion),
         blockers: [],
         warnings,
       }

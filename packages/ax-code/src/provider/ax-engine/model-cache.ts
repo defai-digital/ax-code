@@ -20,10 +20,11 @@ import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { AxEnginePaths } from "./paths"
 import { resolveAxEngineModelDefinition } from "./hub-catalog"
 import { requireAxEngineLocalModel } from "./local-models"
-import { getDependencyStatus, pinnedDownloadVersionBlocker } from "./dependency"
+import { getDependencyStatus, nativeDownloadSupported, pinnedDownloadVersionBlocker } from "./dependency"
 import { axEngineDownloadEnv } from "./python"
 import {
   applyProgressEvent,
+  applyProgressMessage,
   parseGiBTotalFromMessage,
   progressFromCacheBytes,
   startCacheProgressPolling,
@@ -539,6 +540,9 @@ export async function measureDirBytes(target: string): Promise<number> {
  *
  * Mid-download: also poll the HF hub cache for the target repo so the UI does
  * not freeze at the engine's sparse start event (~5%) for multi-GB transfers.
+ * Native engines stream byte-scaled events per file instead and stage into
+ * `<cache>/.ax-downloads/`, where the repo directory stays empty, so polling
+ * would only overwrite their messages with a 0.0 GiB reading.
  */
 async function runAxEngineDownload(input: {
   cmd: string[]
@@ -549,6 +553,8 @@ async function runAxEngineDownload(input: {
   watchRepo?: string
   /** Optional known total size (bytes); also learned from engine messages. */
   expectedBytes?: number
+  /** The engine reports live byte progress itself; skip cache polling. */
+  nativeProgress?: boolean
 }): Promise<{ code: number; stdout: string; stderr: string; lastSummary?: Record<string, unknown> }> {
   // Prefer live progress. Older engines that reject the flag are retried once
   // without it and stay indeterminate.
@@ -583,6 +589,10 @@ async function runAxEngineDownload(input: {
         if (fromMessage) expectedBytes = expectedBytes ?? fromMessage
         publish({ done: parsed.event.done, total: parsed.event.total, message: parsed.event.file })
       }
+      if (parsed.kind === "message") {
+        progress = applyProgressMessage(progress, parsed.message)
+        input.onProgress?.(progress)
+      }
       if (parsed.kind === "summary") lastSummary = parsed.value
     })
     const onStdoutLine = (line: string) => {
@@ -593,7 +603,7 @@ async function runAxEngineDownload(input: {
     // Poll HF cache while snapshot_download is blocked inside the engine —
     // progress-json is otherwise silent for most of a multi-GB download.
     let stopPolling: (() => void) | undefined
-    if (input.watchRepo && input.onProgress) {
+    if (input.watchRepo && input.onProgress && !input.nativeProgress) {
       const repoPath = HfCache.repoDir(input.watchRepo, input.env)
       stopPolling = startCacheProgressPolling({
         sample: () => measureDirBytes(repoPath),
@@ -700,6 +710,19 @@ async function markPreparedWithLockHeld(input: {
   return state
 }
 
+// The native downloader canonicalizes the snapshot parent before reporting the
+// destination, so a cache reached through a symlink (an external volume, a
+// relocated HF_HUB_CACHE) still names the pinned snapshot once both sides are
+// resolved. A missing path never matches.
+async function sameDirectory(reported: string, expected: string): Promise<boolean> {
+  if (path.resolve(reported) === expected) return true
+  const [left, right] = await Promise.all([
+    fs.realpath(reported).catch(() => undefined),
+    fs.realpath(expected).catch(() => undefined),
+  ])
+  return left !== undefined && left === right
+}
+
 export async function downloadModel(input: {
   binaryPath: string
   binaryVersion?: string
@@ -713,11 +736,14 @@ export async function downloadModel(input: {
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
   requireAxEngineLocalModel(modelID)
   const definition = await resolveAxEngineModelDefinition(modelID, { signal: input.signal, persist: true })
+  const version = input.binaryVersion ?? (await getDependencyStatus({ binaryPath: input.binaryPath })).version
   if (definition.revision) {
-    const version = input.binaryVersion ?? (await getDependencyStatus({ binaryPath: input.binaryPath })).version
     const blocker = pinnedDownloadVersionBlocker(version)
     if (blocker) throw new Error(blocker)
   }
+  // Native engines fetch public packs themselves; only older helpers need the
+  // Python environment, and only they need cache polling for live progress.
+  const native = nativeDownloadSupported(version)
   const quantization = normalizeQuantization(input.quantization, modelID)
   const quantizationDefinition = definition.quantizations[quantization]
   const repo = quantizationDefinition?.hfRepo
@@ -747,7 +773,9 @@ export async function downloadModel(input: {
   // huggingface_hub is available. Relying on parent env alone fails for CLI
   // launches and some Desktop paths that never set the variable.
   const downloadEnv = axEngineDownloadEnv()
-  if (downloadEnv.AX_ENGINE_PYTHON) {
+  if (native) {
+    log.info("ax-engine download uses the engine's native public downloader", { version })
+  } else if (downloadEnv.AX_ENGINE_PYTHON) {
     log.info("ax-engine download using AX_ENGINE_PYTHON", { python: downloadEnv.AX_ENGINE_PYTHON })
   } else {
     log.warn("ax-engine download has no AX_ENGINE_PYTHON; ax-engine will use system python3", {
@@ -763,6 +791,7 @@ export async function downloadModel(input: {
     // minDiskBytes includes headroom; use it only as a soft upper bound until
     // the engine (or hub) reports a real total in a progress message.
     expectedBytes: undefined,
+    nativeProgress: native,
   })
   input.signal?.throwIfAborted()
   const failure = downloadFailureMessage(result)
@@ -778,7 +807,7 @@ export async function downloadModel(input: {
     const expectedDestination = path.resolve(HfCache.repoDir(repo), "snapshots", definition.revision)
     if (
       (parsed.revision !== undefined && parsed.revision !== definition.revision) ||
-      path.resolve(parsed.dest) !== expectedDestination
+      !(await sameDirectory(parsed.dest, expectedDestination))
     ) {
       throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: downloaded revision does not match the requested artifact`)
     }

@@ -6,9 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Install AX Engine 8.0.4 as the managed engine. From 7.10.0 the engine's `download` command fetches public AutomatosX packs natively, so model downloads no longer depend on a Python `huggingface_hub` environment; `nativeDownloads` in the dependency status and the behind-pin warning say which path the resolved engine uses.
+
 ### Fixed
 
 - Treat stepped cron wildcards as unrestricted when combining day-of-month and day-of-week matching.
+- Stop polling the Hugging Face cache for download progress when the engine streams byte progress itself, so native downloads no longer show a 0.0 GiB reading over the engine's per-file progress.
+- Keep the progress bar and show the engine's retry notice while a native download waits on a rate limit, instead of dropping the sizeless event.
+- Accept the pinned snapshot when the native downloader reports its canonical path for a Hugging Face cache reached through a symlink.
 
 ## [7.30.13] - 2026-11-01
 

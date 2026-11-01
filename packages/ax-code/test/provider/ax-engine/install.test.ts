@@ -131,11 +131,16 @@ describe("resolveInstallableRelease", () => {
   })
 
   test("pins a self-contained darwin-arm64 release and refuses other hosts", () => {
-    expect(AX_ENGINE_BINARY_RELEASE.version).toBe("7.7.0")
-    expect(AX_ENGINE_BINARY_RELEASE.sha256).toMatch(/^[a-f0-9]{64}$/)
-    expect(AX_ENGINE_BINARY_RELEASE.url.startsWith("https://")).toBe(true)
+    // 8.0.4 is the first pin whose `download` is the native public downloader;
+    // the digest is the release's published .sha256 sidecar.
+    expect(AX_ENGINE_BINARY_RELEASE.version).toBe("8.0.4")
+    expect(AX_ENGINE_BINARY_RELEASE.sha256).toBe("e4bb9043b8c9793af8ebf8d2f89dde179e04e513e30c0b1dc01351d74ab81440")
+    expect(AX_ENGINE_BINARY_RELEASE.url).toBe(
+      "https://github.com/defai-digital/ax-engine/releases/download/v8.0.4/ax-engine-v8.0.4-macos-arm64.tar.gz",
+    )
+    expect(AX_ENGINE_BINARY_RELEASE.assetName).toBe("ax-engine-v8.0.4-macos-arm64.tar.gz")
     expect(resolveInstallableRelease("darwin", "arm64", {})).toMatchObject({
-      version: "7.7.0",
+      version: "8.0.4",
       sha256: AX_ENGINE_BINARY_RELEASE.sha256,
     })
     expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(true)

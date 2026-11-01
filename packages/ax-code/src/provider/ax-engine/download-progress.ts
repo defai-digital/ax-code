@@ -84,11 +84,26 @@ export function indeterminateProgress(message?: string, now: number = Date.now()
   }
 }
 
+/**
+ * Keep the last determinate reading and refresh only the message. Native
+ * engines report retry waits ("Download service is busy. Retrying in 4s") as
+ * progress events with no size, so the bar must hold while the text updates.
+ */
+export function applyProgressMessage(
+  previous: AxEngineDownloadProgress | undefined,
+  message: string,
+  now: number = Date.now(),
+): AxEngineDownloadProgress {
+  if (!previous) return indeterminateProgress(message, now)
+  return { ...previous, message, updatedAt: now }
+}
+
 /** Parse one stdout line from ax-engine download with --progress-json. */
 export function parseProgressJsonLine(
   line: string,
 ):
   | { kind: "progress"; event: AxEngineProgressEvent }
+  | { kind: "message"; message: string }
   | { kind: "summary"; value: Record<string, unknown> }
   | { kind: "ignore" } {
   const trimmed = line.trim()
@@ -101,7 +116,10 @@ export function parseProgressJsonLine(
   if (record.event === "progress") {
     const done = typeof record.done === "number" ? record.done : Number(record.done)
     const total = typeof record.total === "number" ? record.total : Number(record.total)
-    if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0) return { kind: "ignore" }
+    const file = typeof record.file === "string" ? record.file.trim() : ""
+    if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0) {
+      return file ? { kind: "message", message: file } : { kind: "ignore" }
+    }
     return {
       kind: "progress",
       event: {
@@ -116,10 +134,12 @@ export function parseProgressJsonLine(
   return { kind: "summary", value: record }
 }
 
-// ax-engine only emits sparse --progress-json events around snapshot_download
-// (typically one ~5% "Starting…" then a jump to 85% after the hub call returns).
-// Mid-download UI progress therefore observes HF cache bytes, mapped onto the
-// same 5–84 band the engine uses for the weight phase.
+// Engines below AX_ENGINE_NATIVE_DOWNLOAD_MIN_VERSION only emit sparse
+// --progress-json events around snapshot_download (typically one ~5%
+// "Starting…" then a jump to 85% after the hub call returns). Mid-download UI
+// progress for them therefore observes HF cache bytes, mapped onto the same
+// 5–84 band the helper uses for the weight phase. Native engines stream
+// byte-scaled events per file and need no polling.
 const WEIGHT_PHASE_START = 5
 const WEIGHT_PHASE_END = 84
 
