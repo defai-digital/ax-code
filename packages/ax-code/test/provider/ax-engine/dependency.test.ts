@@ -436,6 +436,12 @@ test("reports native downloads for an engine at or above 7.10.0", async () => {
 })
 
 test("flags a helper-based managed engine and says the pin downloads natively", async () => {
+  vi.spyOn(Install, "resolveInstallableRelease").mockReturnValue({
+    version: "8.0.4",
+    assetName: "ax-engine.tar.gz",
+    url: "https://example.test/ax-engine.tar.gz",
+    sha256: "0".repeat(64),
+  })
   await using dir = await tmpdir()
   const binaryPath = await launcher(dir.path)
   vi.spyOn(Which, "which").mockReturnValue(null)
@@ -455,4 +461,17 @@ test("omits the native-download field when no engine is available", async () => 
   const status = await getDependencyStatus({ binaryPath })
   expect(status.available).toBe(false)
   expect(status.nativeDownloads).toBeUndefined()
+})
+
+test("does not offer a managed update when the host has no installable release", async () => {
+  await using dir = await tmpdir()
+  const binaryPath = await launcher(dir.path)
+  vi.spyOn(Which, "which").mockReturnValue(null)
+  vi.spyOn(Install, "getManagedBinary").mockResolvedValue({ path: binaryPath, version: "7.7.0" })
+  vi.spyOn(Install, "resolveInstallableRelease").mockReturnValue(undefined)
+  vi.spyOn(Process, "text").mockResolvedValue(response("ax-engine 7.7.0"))
+  const status = await getDependencyStatus()
+  expect(status).toMatchObject({ available: true, mode: "managed", updateAvailable: false, nativeDownloads: false })
+  expect(status.pinnedVersion).toBeUndefined()
+  expect(status.warnings.join("\n")).not.toContain("older than the")
 })
