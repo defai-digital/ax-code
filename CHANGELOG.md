@@ -24,7 +24,6 @@ changes belong to AX Coder.
 
 ### Fixed
 
-- Keep a gateway-declared PDF capability when re-saving a provider's model list, and synchronize the generated SDK/OpenAPI contract.
 - Preserve complete UTF-8 characters when PDF text extraction reaches its output limit.
 - Download AX TUI native fallback assets from versioned releases in the AX Code monorepo after retiring the standalone repository.
 - Guard every WebMCP page-id read against a missing tool input, and let the opt-in live Chrome lanes grant the reviewed trust a project config needs.
