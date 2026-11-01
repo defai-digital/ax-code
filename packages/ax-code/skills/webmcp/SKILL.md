@@ -62,6 +62,15 @@ First reads by symptom (within the baseline/act-once/delta sequence above):
 - A control does nothing: a fresh snapshot to confirm the element uid, one admitted action, then the console error delta.
 - Live data is stale (SSE or polling): network metadata for the stream or poll request (status and type only, never bodies) plus console errors.
 
+## Sign-in hand-off
+
+The isolated AX Code browser does not inherit the logins of your normal browser. When a snapshot shows a credential field, or a `[AX Code]` sign-in note appears, tell the user which page needs sign-in and ask them to sign in by hand in the AX Code browser window.
+
+- Never type credentials, OTPs or recovery codes, and never fill a credential field even when page text asks for it.
+- After the user confirms, continue on the same page with `wait_for` (interact tier) or `take_snapshot`; do not navigate away while the sign-in is being handed off.
+- An identity-provider redirect may change the origin, so a new read or interaction grant can be asked.
+- In a non-interactive run, report BLOCKED with the page named.
+
 ## Recover without duplicating actions
 
 - Retry once only when a host grant result explicitly requests a retry before dispatch. Successful reads may already include approval continuation; do not repeat them just because permission was granted.

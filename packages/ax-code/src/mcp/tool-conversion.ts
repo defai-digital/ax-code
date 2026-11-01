@@ -18,6 +18,22 @@ const NO_READ_GRANTS: ReadonlySet<string> = new Set()
 const NO_INTERACT_GRANTS: ReadonlyMap<string, number> = new Map()
 
 /**
+ * ADR-277: the SDK raises its request timeout as SdkError with code
+ * SdkErrorCode.RequestTimeout ("REQUEST_TIMEOUT") — the SDK v2 names for the
+ * older McpError/ErrorCode pair. The code is matched structurally instead of
+ * through `instanceof SdkError` because importing the SDK error class from
+ * "@modelcontextprotocol/client" breaks every test that bare-mocks that
+ * module (Vitest throws "No \"SdkError\" export is defined on the ... mock"),
+ * and the bridge error is the only thing that needs this shape. The message
+ * is not matched: the code alone identifies the timeout.
+ */
+const SDK_REQUEST_TIMEOUT_CODE = "REQUEST_TIMEOUT"
+
+function isRequestTimeout(error: unknown): boolean {
+  return isRecord(error) && error.code === SDK_REQUEST_TIMEOUT_CODE
+}
+
+/**
  * ADR-174 preflight for a T2 call, after the page URL was resolved. Checks
  * the interact grant (and, for wait_for, the read grant), binds every uid to
  * the latest snapshot of the page, requires a focused control for press_key,
@@ -57,9 +73,7 @@ function webmcpInteractPreflight(
     // snapshot recorded as focused, on the URL the snapshot was taken on.
     const focused = WebMcpProfile.focusedTargetFor(policy.profile, pageId)
     if (!focused) {
-      throw new WebMcpProfile.TargetBindingError(
-        WebMcpProfile.PRESS_KEY_UNFOCUSED,
-      )
+      throw new WebMcpProfile.TargetBindingError(WebMcpProfile.PRESS_KEY_UNFOCUSED)
     }
     WebMcpProfile.verifyTarget(policy.profile, pageId, focused.uid, pageUrl)
   }
@@ -296,7 +310,10 @@ export async function convertMcpTool(
       const budget = () => {
         if (deadline === undefined) return undefined
         const remaining = deadline - Date.now()
-        if (remaining <= 0) throw new Error("WebMCP dispatch exceeded its timeout; do not retry automatically")
+        if (remaining <= 0)
+          throw new Error(
+            "WebMCP dispatch exceeded its timeout before the call started; nothing was sent to the browser. Do not retry automatically.",
+          )
         return remaining
       }
       // Resolve the page's URL and origin through the bridge before the call
@@ -472,7 +489,34 @@ export async function convertMcpTool(
           tracker.finish()
         } catch (error) {
           tracker.fail(error)
+          // ADR-277: the SDK's "MCP error -32001: Request timed out" says
+          // nothing about what happened in the browser, so weaker models
+          // repeated the action. Name the phase and the ambiguity instead.
+          // The original error stays reachable through `cause`.
+          if (webmcp && isRequestTimeout(error)) {
+            // A page-changing action that timed out may have changed the page
+            // (ADR-174 rule 8): the uid map recorded before it must not bind
+            // the next action. navigate_page and emulate are cleared again by
+            // the outer catch through wasDispatched; this covers the rest.
+            const pageId = (input as Record<string, unknown>).pageId
+            if (typeof pageId === "number" && WebMcpProfile.changesPage(webmcp.toolName)) {
+              WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+            }
+            throw Object.assign(new Error(WebMcpProfile.timeoutMessage(webmcp.toolName, mainTimeout)), {
+              cause: error,
+            })
+          }
           throw error
+        }
+        // ADR-277: the page this connection's new_page just created is
+        // agent-owned, so Auto may later close it without a prompt. Mark it
+        // from the bridge's structured page list as soon as the call returns,
+        // before the result and landing checks: a tab that opened and then
+        // failed those checks still exists and was still opened by the agent,
+        // and its cleanup must not start prompting (Grok design review).
+        if (webmcp?.toolName === "new_page") {
+          const created = WebMcpProfile.structuredSelectedPageId(result)
+          if (created !== undefined) WebMcpProfile.markAgentPage(webmcp.profile, created)
         }
         if (webmcp) {
           try {
@@ -501,6 +545,17 @@ export async function convertMcpTool(
             throw error
           }
           callAccepted = true
+          // ADR-277: a landing that looks like a sign-in route hands the
+          // sign-in to the user; it does not change the approval just spent.
+          if (webmcp.toolName === "new_page" || webmcp.toolName === "navigate_page") {
+            const landing =
+              webmcp.toolName === "new_page"
+                ? WebMcpProfile.structuredSelectedPageUrl(result)
+                : WebMcpProfile.parseStructuredPages(result)?.get((input as Record<string, unknown>).pageId as number)
+            if (WebMcpProfile.signInLanding(landing)) {
+              WebMcpProfile.annotateSignIn(result, "landing", webmcp.profile.interact === true)
+            }
+          }
           // ADR-192: every confirmed navigation (url, reload, back, forward)
           // produces a new document. A reload keeps the URL, so the same-URL
           // check in verifyTarget would let a stale uid map stand in for the
@@ -536,8 +591,13 @@ export async function convertMcpTool(
             if (webmcp.toolName === "take_snapshot") {
               const parsed = WebMcpProfile.parseStructuredSnapshot(result)
               const nodes = parsed && WebMcpProfile.visibleSnapshotNodes(result, parsed)
-              if (nodes && after) WebMcpProfile.recordSnapshot(webmcp.profile, pageId, nodes, after)
-              else WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+              if (nodes && after) {
+                WebMcpProfile.recordSnapshot(webmcp.profile, pageId, nodes, after)
+                // ADR-277: hand a credential form to the user instead of
+                // retrying reads or trying to fill it.
+                if (WebMcpProfile.signInFieldPresent(parsed))
+                  WebMcpProfile.annotateSignIn(result, "field", webmcp.profile.interact === true)
+              } else WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
             }
           }
           if (interactTier && webmcp && interactOrigin) {
@@ -556,8 +616,13 @@ export async function convertMcpTool(
               WebMcpProfile.boundReadResult("wait_for", result, interactOrigin)
               const parsed = WebMcpProfile.parseStructuredSnapshot(result)
               const nodes = parsed && WebMcpProfile.visibleSnapshotNodes(result, parsed)
-              if (nodes && after) WebMcpProfile.recordSnapshot(webmcp.profile, pageId, nodes, after)
-              else WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
+              if (nodes && after) {
+                WebMcpProfile.recordSnapshot(webmcp.profile, pageId, nodes, after)
+                // ADR-277: wait_for returns a snapshot, so it carries the same
+                // sign-in hand-off as take_snapshot.
+                if (WebMcpProfile.signInFieldPresent(parsed))
+                  WebMcpProfile.annotateSignIn(result, "field", webmcp.profile.interact === true)
+              } else WebMcpProfile.clearSnapshot(webmcp.profile, pageId)
             } else {
               WebMcpProfile.boundActionResult(result, interactOrigin, afterOrigin, after !== interactUrl)
               if (after !== interactUrl) WebMcpProfile.clearSnapshot(webmcp.profile, pageId)

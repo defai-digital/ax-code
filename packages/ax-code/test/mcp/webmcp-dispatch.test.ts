@@ -1,4 +1,5 @@
 import { expect, test, vi } from "vitest"
+import { SdkError, SdkErrorCode } from "@modelcontextprotocol/client"
 import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 import { convertMcpTool } from "../../src/mcp/tool-conversion"
 
@@ -99,4 +100,103 @@ test("bridge tool descriptions state the T0 limits", async () => {
   )
   expect(tool.description).toContain("List pages.")
   expect(tool.description).toContain(WebMcpProfile.LIMITS_NOTE)
+})
+
+test("a new_page dispatch marks the created page and close_page forgets it (ADR-277)", async () => {
+  const current = profile()
+  const pages = {
+    content: [],
+    structuredContent: { pages: [{ id: 1, url: "https://example.test/", selected: true }] },
+  }
+  const client = {
+    // The pinned bridge returns the authoritative page list for new_page and
+    // close_page alike; list_pages serves the close-target origin lookup.
+    callTool: vi.fn(async () => pages),
+  }
+  const open = await convertMcpTool(
+    { name: "new_page", inputSchema: { type: "object" } } as never,
+    client as never,
+    5000,
+    { server: "bridge", toolName: "new_page", profile: current },
+  )
+  await open.execute!({ url: "https://example.test/" }, { toolCallId: "call_new", messages: [] } as never)
+  // The selected page of the structured list is the one new_page created.
+  expect(WebMcpProfile.isAgentPage(current, 1)).toBe(true)
+  const close = await convertMcpTool(
+    { name: "close_page", inputSchema: { type: "object" } } as never,
+    client as never,
+    5000,
+    { server: "bridge", toolName: "close_page", profile: current },
+  )
+  await close.execute!({ pageId: 1 }, { toolCallId: "call_close", messages: [] } as never)
+  // forgetPage drops the agent mark along with the rest of the page state.
+  expect(WebMcpProfile.isAgentPage(current, 1)).toBe(false)
+})
+
+// ADR-277: a bridge timeout must name the phase and the ambiguity instead of
+// surfacing the SDK's generic "MCP error -32001: Request timed out".
+test("a timed-out new_page reports that the action may or may not have taken effect", async () => {
+  const timeout = new SdkError(SdkErrorCode.RequestTimeout, "Request timed out")
+  const client = {
+    callTool: vi.fn(async () => {
+      throw timeout
+    }),
+  }
+  const tool = await convertMcpTool(
+    { name: "new_page", inputSchema: { type: "object" } } as never,
+    client as never,
+    5000,
+    { server: "bridge", toolName: "new_page", profile: profile() },
+  )
+  const error = await tool.execute!({ url: "https://example.test/" }, {
+    toolCallId: "call_new_page",
+    messages: [],
+  } as never).then(
+    () => undefined,
+    (reason: unknown) => reason,
+  )
+  expect(error).toBeInstanceOf(Error)
+  expect((error as Error).message).toContain("may or may not have taken effect")
+  // The original SDK error stays reachable for logging and inspection.
+  expect((error as Error).cause).toBe(timeout)
+})
+
+test("a timed-out list_pages reports that nothing was changed", async () => {
+  const client = {
+    callTool: vi.fn(async () => {
+      throw new SdkError(SdkErrorCode.RequestTimeout, "Request timed out")
+    }),
+  }
+  const tool = await convertMcpTool(
+    { name: "list_pages", inputSchema: { type: "object" } } as never,
+    client as never,
+    5000,
+    { server: "bridge", toolName: "list_pages", profile: profile() },
+  )
+  const error = await tool.execute!({}, { toolCallId: "call_list_pages", messages: [] } as never).then(
+    () => undefined,
+    (reason: unknown) => reason,
+  )
+  expect(error).toBeInstanceOf(Error)
+  expect((error as Error).message).toContain("Nothing was changed")
+})
+
+test("a timed-out non-WebMCP tool keeps the original SDK error", async () => {
+  const timeout = new SdkError(SdkErrorCode.RequestTimeout, "Request timed out")
+  const client = {
+    callTool: vi.fn(async () => {
+      throw timeout
+    }),
+  }
+  const tool = await convertMcpTool(
+    { name: "some_other_tool", inputSchema: { type: "object" } } as never,
+    client as never,
+    5000,
+  )
+  const error = await tool.execute!({}, { toolCallId: "call_other", messages: [] } as never).then(
+    () => undefined,
+    (reason: unknown) => reason,
+  )
+  expect(error).toBe(timeout)
+  expect((error as Error).message).toBe("Request timed out")
 })

@@ -206,6 +206,50 @@ export namespace WebMcpProfile {
     "numero di carta",
   ]
   /**
+   * Field names that mean "this page wants a credential" (ADR-277). The
+   * pinned snapshot does not expose `input type`, so this is a name
+   * heuristic on the structured node, never a structural check. Narrower
+   * than `SENSITIVE_NAME`: a search box named "token" is not sign-in.
+   */
+  export const SIGN_IN_FIELD =
+    /password|passwd|passcode|passphrase|\botp\b|one-time (?:code|password)|verification code|\b2fa\b|totp|authenticator/i
+  /**
+   * Localized equivalents of the sign-in vocabulary (ADR-277), matched as
+   * case-insensitive substrings. Kept separate from `LOCALIZED_SENSITIVE_TERMS`
+   * so a localized card- or PIN-style label does not by itself mean sign-in.
+   */
+  export const SIGN_IN_LOCALIZED_TERMS: readonly string[] = [
+    // Traditional Chinese
+    "\u5BC6\u78BC",
+    "\u9A57\u8B49\u78BC",
+    // Simplified Chinese
+    "\u5BC6\u7801",
+    "\u9A8C\u8BC1\u7801",
+    // Japanese
+    "\u30D1\u30B9\u30EF\u30FC\u30C9",
+    "\u6697\u8A3C\u756A\u53F7",
+    "\u8A8D\u8A3C\u30B3\u30FC\u30C9",
+    // Korean
+    "\uBE44\uBC00\uBC88\uD638",
+    "\uC778\uC99D\uBC88\uD638",
+    // German
+    "passwort",
+    "kennwort",
+    // French
+    "mot de passe",
+    // Spanish
+    "contrase\u00F1a",
+    "contrasena",
+    // Portuguese
+    "senha",
+  ]
+  /**
+   * Path segments that look like a sign-in route (ADR-277). Tested against
+   * `url.pathname` only, so a query string cannot fake or hide a landing.
+   */
+  export const SIGN_IN_PATH =
+    /(?:^|\/)(?:log-?in|sign-?in|sso|oauth2?|authorize|auth|session\/new|account\/login)(?:\/|$)/i
+  /**
    * Values that look like a bearer credential are refused before any prompt
    * (ADR-174 rule 4): typing a credential is transmitting it. Unanchored, so
    * a secret embedded in a longer value is still caught. Publishable keys
@@ -413,6 +457,7 @@ export namespace WebMcpProfile {
       lines.push(
         `  Where this bridge exposes read tools, prefer take_snapshot over take_screenshot for text, locators and assertions. For layout, canvas or image-only content, use take_screenshot with a fresh snapshot uid to crop the target, or jpeg with reduced quality. Screenshot reading depends on model vision; there is no native OCR tool, and visual guesses cannot establish structured test success.`,
         `  Where available, narrow console by types/pageSize and network by resourceTypes/pageSize before repeating large reads. For a JS error, list console messages with includeStackTraces and read one frame set with get_console_message by msgid. Check error messages and failed requests around the reproduced action. Report observed evidence; a bare tool acknowledgement is not success.`,
+        `  If a snapshot shows a credential field or the bridge notes a sign-in page, stop and ask the user to sign in by hand in the AX Code browser window, then continue on the same page; never type credentials and never fill a credential field.`,
       )
     }
     if (tier === "interact") {
@@ -1646,6 +1691,39 @@ export namespace WebMcpProfile {
   }
 
   /**
+   * Whether a snapshot shows a credential field, so the runtime can hand the
+   * sign-in to the user (ADR-277). Only textboxes count: a button or link
+   * named "Password manager" is not a place to type a credential.
+   */
+  export function signInFieldPresent(nodes: ReadonlyMap<string, SnapshotNode>): boolean {
+    for (const node of nodes.values()) {
+      if (node.role !== "textbox") continue
+      const text = `${node.name} ${node.description ?? ""}`
+      if (SIGN_IN_FIELD.test(text)) return true
+      const lower = text.toLowerCase()
+      if (SIGN_IN_LOCALIZED_TERMS.some((term) => term.length > 0 && lower.includes(term.toLowerCase()))) return true
+    }
+    return false
+  }
+
+  /**
+   * Whether a navigation landed on a URL that looks like a sign-in route
+   * (ADR-277). The check is on `url.pathname` only and fails closed on any
+   * non-http(s) or unparseable URL.
+   */
+  export function signInLanding(url: string | undefined): boolean {
+    if (!url) return false
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      return false
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false
+    return SIGN_IN_PATH.test(parsed.pathname)
+  }
+
+  /**
    * Why a click is escalated from the interact grant to a per-action prompt
    * (ADR-174 rule 2), or undefined when the grant covers it. An unknown
    * target is escalated too: dispatch fails it closed, but the approver must
@@ -1890,6 +1968,12 @@ export namespace WebMcpProfile {
             ...(isHistoryNavigation(call) ? { historyNavigation: true } : {}),
             ...(call.ignoreCache === true ? { ignoreCache: true } : {}),
           }
+        : {}),
+      // ADR-277 — the approver and the Auto binder must know whether the
+      // agent opened the page. The marker is runtime-written from this
+      // connection's new_page records, never page-authored.
+      ...(tool === "close_page" && typeof call.pageId === "number"
+        ? { openedByAgent: isAgentPage(profile, call.pageId) }
         : {}),
       ...(typeof call.input === "string" ? { inputBytes: Buffer.byteLength(call.input, "utf8") } : {}),
       // Marks a T1 read call so the approval screen can label it as reading
@@ -2188,7 +2272,10 @@ export namespace WebMcpProfile {
       if (Array.isArray(raw.children)) for (let i = raw.children.length - 1; i >= 0; i--) stack.push(raw.children[i])
       const node = typeof raw.id === "string" ? nodes.get(raw.id) : undefined
       if (!node) continue
-      const line = new RegExp(`(?:^|\\n)[ \\t]*uid=${node.uid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[ \\t\\n]|$)`, "g")
+      const line = new RegExp(
+        `(?:^|\\n)[ \\t]*uid=${node.uid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[ \\t\\n]|$)`,
+        "g",
+      )
       line.lastIndex = cursor
       const found = line.exec(text)
       if (!found) break
@@ -2504,6 +2591,49 @@ export namespace WebMcpProfile {
   }
 
   /**
+   * Tools that change the browser or the page. A timeout on one of them leaves
+   * the outcome unknown: the bridge may have applied the action before it
+   * stopped answering. `hover` is deliberately excluded — it changes nothing
+   * durable, so it reads like the other observation calls.
+   */
+  const changingTools: ReadonlySet<string> = new Set<string>([
+    ...PER_ACTION_TOOLS,
+    "click",
+    "emulate",
+    "new_page",
+    "navigate_page",
+    "close_page",
+    "execute_webmcp_tool",
+  ])
+
+  /** Whether a timeout on this tool leaves the page in an unknown state (ADR-277). */
+  export function changesPage(toolName: string): boolean {
+    return changingTools.has(toolName)
+  }
+
+  /**
+   * ADR-277: a bridge timeout has to say which phase expired and whether the
+   * action may or may not have happened. The SDK's generic "MCP error -32001:
+   * Request timed out" told the model nothing, and weaker models repeated the
+   * action — clicking twice, or re-running a navigation that had landed. The
+   * message therefore names the elapsed budget and, for a state-changing
+   * tool, says the effect is unknown and must be inspected before a retry.
+   */
+  export function timeoutMessage(toolName: string, budgetMs: number | undefined): string {
+    const after =
+      budgetMs !== undefined && Number.isFinite(budgetMs)
+        ? `after ${Math.max(1, Math.round(budgetMs / 1000))} s`
+        : "before it answered"
+    if (toolName === "wait_for") {
+      return `WebMCP wait_for timed out ${after} without confirming the text; the page may still be loading. Take a snapshot to see the current state instead of waiting for the same text again.`
+    }
+    if (changingTools.has(toolName)) {
+      return `WebMCP ${toolName} timed out ${after} while the browser was executing it: the action may or may not have taken effect. Inspect the page first (list_pages, then take_snapshot where this bridge exposes it) and continue from what you see; do not repeat the action blindly.`
+    }
+    return `WebMCP ${toolName} timed out ${after}: the page did not answer in time (a blocking dialog, a heavy page or a hung tab). Nothing was changed. Retry once at most, narrowing the read (types, pageSize or uid) or after wait_for; if it times out again, report BLOCKED.`
+  }
+
+  /**
    * A blocking JavaScript dialog (alert/confirm/prompt) freezes the page for
    * every bridge call, and handle_dialog is not an admitted tool. Surface that
    * as a plain note so the model stops retrying list/execute against it.
@@ -2543,6 +2673,26 @@ export namespace WebMcpProfile {
           : "[AX Code] The page is blocked by a JavaScript dialog. handle_dialog is not available through this bridge, so the page cannot be listed, read or driven until the dialog closes. Report this blocker to the user, or navigate to a different URL; do not retry list_webmcp_tools or execute_webmcp_tool against this page.",
       },
     ]
+  }
+
+  /**
+   * Name the next step after a sign-in signal (ADR-277): the isolated browser
+   * profile does not inherit the user's normal logins (they may already have
+   * signed in there by hand), so the model hands the sign-in to the user
+   * instead of guessing credentials (ADR-174 rule 4). Fixed text, never page
+   * derived; appended after the untrusted label and content, like
+   * `annotateEmptyListing`.
+   */
+  export function annotateSignIn(result: unknown, kind: "field" | "landing", interact: boolean): void {
+    if (!isRecord(result)) return
+    const content = Array.isArray(result.content) ? result.content : []
+    const text =
+      kind === "landing"
+        ? "[AX Code] The landing URL looks like a sign-in route. If the next snapshot shows a credential field, ask the user to sign in by hand in the AX Code browser window; the agent never types credentials."
+        : interact
+          ? "[AX Code] This page shows a credential field, so it may be a sign-in step. The isolated AX Code browser does not inherit the logins of your normal browser, and the agent never types credentials. Ask the user to sign in by hand in the AX Code browser window on this page, then continue with wait_for for the signed-in text or take_snapshot again. While the sign-in is being handed off, do not fill the credential fields and do not navigate away. In a non-interactive run, report BLOCKED."
+          : "[AX Code] This page shows a credential field, so it may be a sign-in step. The isolated AX Code browser does not inherit the logins of your normal browser, and the agent never types credentials. Ask the user to sign in by hand in the AX Code browser window on this page, then continue with take_snapshot again. While the sign-in is being handed off, do not fill the credential fields and do not navigate away. In a non-interactive run, report BLOCKED."
+    result.content = [...content, { type: "text", text }]
   }
 
   /**
@@ -2588,6 +2738,21 @@ export namespace WebMcpProfile {
   }
 
   /**
+   * Id of the bridge-selected page, when the result carries a structured page
+   * list whose selected entry has a safe non-negative integer id (ADR-277:
+   * the id of the page this connection's new_page just created).
+   */
+  export function structuredSelectedPageId(result: unknown): number | undefined {
+    for (const entry of structuredPageEntries(result) ?? []) {
+      if (!isRecord(entry) || entry.selected !== true) continue
+      const id: unknown = entry.id
+      // Like parseStructuredPages: only a safe non-negative integer is a page id.
+      return typeof id === "number" && Number.isSafeInteger(id) && id >= 0 ? id : undefined
+    }
+    return undefined
+  }
+
+  /**
    * Verify a navigation landed on an allowed origin. The bridge reports the
    * requested URL in its success message, so a redirect (or a page-side
    * navigation) would otherwise pass as the approved destination. The pinned
@@ -2610,13 +2775,24 @@ export namespace WebMcpProfile {
     if (!origin) {
       throw new Error("WebMCP navigation landing could not be verified; do not retry automatically")
     }
+    // ADR-277: the landing applies the same scheme rule as request-time
+    // validation (webMcpSchemeAllowed in validateCall): https anywhere, http
+    // on loopback only. A redirect from an allowed https page to plain http
+    // outside loopback — a cloud metadata endpoint or any other origin — must
+    // not pass just because the profile is unrestricted.
+    if (typeof url !== "string" || !webMcpSchemeAllowed(new URL(url))) {
+      throw new Error(
+        "WebMCP navigation landed on a plain-http origin outside loopback, which this bridge does not admit; do not retry automatically",
+      )
+    }
     // The landing origin must be one the user has allowed. A redirect between
     // two allowed origins is permitted: the redirect target was separately
     // granted through the same per-origin approval, so it is authorized. A
     // landing on an origin outside the effective allowlist is rejected here;
     // the dispatch probe (tool-conversion.ts) offers the grant prompt for a
     // redirect target the bridge blocked, so the retry can land on it. An
-    // unrestricted profile (ADR-170) accepts any http(s) landing.
+    // unrestricted profile (ADR-170) accepts any scheme-allowed http(s)
+    // landing (the scheme rule above is ADR-277 and applies either way).
     if (restricted(profile) && !profile.allowedOrigins.includes(origin)) {
       throw new Error("WebMCP navigation did not land on an allowed origin; do not retry automatically")
     }
@@ -2652,6 +2828,11 @@ export namespace WebMcpProfile {
   // per-connection state without threading a store through the MCP layer.
   const listingStates = new WeakMap<Configuration, ListingState>()
 
+  // ADR-277 (amending ADR-189): the page ids this connection's new_page
+  // created, so full-access Auto may close only them without a prompt. The
+  // same per-connection keying as the listing state above.
+  const agentPages = new WeakMap<Configuration, Set<number>>()
+
   export function stateFor(profile: Configuration): ListingState {
     let state = listingStates.get(profile)
     if (!state) {
@@ -2659,6 +2840,21 @@ export namespace WebMcpProfile {
       listingStates.set(profile, state)
     }
     return state
+  }
+
+  /** Record that this connection's new_page created the page (ADR-277). */
+  export function markAgentPage(profile: Configuration, pageId: number): void {
+    let pages = agentPages.get(profile)
+    if (!pages) {
+      pages = new Set()
+      agentPages.set(profile, pages)
+    }
+    pages.add(pageId)
+  }
+
+  /** Whether this connection's new_page created the page (ADR-277). */
+  export function isAgentPage(profile: Configuration, pageId: number): boolean {
+    return agentPages.get(profile)?.has(pageId) === true
   }
 
   /** Parse the structured tool descriptors chrome-devtools-mcp returns. */
@@ -2808,6 +3004,7 @@ export namespace WebMcpProfile {
   export function forgetPage(profile: Configuration, pageId: number): void {
     snapshotStates.get(profile)?.delete(pageId)
     listingStates.get(profile)?.pages.delete(pageId)
+    agentPages.get(profile)?.delete(pageId)
   }
 
   export function recordListing(
@@ -2924,13 +3121,7 @@ export namespace WebMcpProfile {
   export function unlistedExecuteMessage(profile: Configuration, pageId: unknown, toolName: unknown): string {
     const page = typeof pageId === "number" ? listingStates.get(profile)?.pages.get(pageId) : undefined
     // A listing that holds the tool now was written after this call's approval found none.
-    if (
-      !page ||
-      page.disabled ||
-      page.origin === undefined ||
-      typeof toolName !== "string" ||
-      page.tools.has(toolName)
-    )
+    if (!page || page.disabled || page.origin === undefined || typeof toolName !== "string" || page.tools.has(toolName))
       return "WebMCP execute requires list_webmcp_tools to be called first"
     // Page-chosen names stay in the untrusted listing; this runtime sentence only counts them.
     const registered =

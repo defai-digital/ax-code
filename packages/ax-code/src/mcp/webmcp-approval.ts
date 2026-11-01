@@ -177,7 +177,16 @@ export function webMcpApprovalLines(metadata: Record<string, unknown>): string[]
     ...(Number.isSafeInteger(metadata.pageId) ? [`Page ID: ${metadata.pageId}`] : []),
     ...(typeof metadata.toolName === "string" ? [`Page tool: ${text(metadata.toolName)}`] : []),
     ...(typeof metadata.pageOrigin === "string" ? [`Page origin: ${text(metadata.pageOrigin)}`] : []),
-    ...(metadata.tool === "close_page" ? ["Closing this page can discard unsaved work."] : []),
+    ...(metadata.tool === "close_page"
+      ? [
+          "Closing this page can discard unsaved work.",
+          // ADR-277: say whether the agent opened the page, because the user
+          // also opens pages by hand in the isolated window (e.g. to sign in).
+          metadata.openedByAgent === true
+            ? "This page was opened by the agent in this session."
+            : "This page was NOT opened by the agent in this session: it may be one you opened or signed in to by hand.",
+        ]
+      : []),
     ...(typeof metadata.origin === "string" ? [`Navigation origin: ${text(metadata.origin)}`] : []),
     ...(metadata.navigationType === "reload"
       ? [

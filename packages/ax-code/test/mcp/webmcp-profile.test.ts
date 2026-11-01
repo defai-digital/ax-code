@@ -270,6 +270,51 @@ describe("WebMCP profile", () => {
     expect(unlisted).not.toHaveProperty("pageOrigin")
   })
 
+  test("markAgentPage, isAgentPage and forgetPage round-trip per connection (ADR-277)", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: origins }).webmcp
+    const other = WebMcpProfile.config({ allowedOrigins: origins }).webmcp
+    expect(WebMcpProfile.isAgentPage(profile, 1)).toBe(false)
+    WebMcpProfile.markAgentPage(profile, 1)
+    WebMcpProfile.markAgentPage(profile, 2)
+    expect(WebMcpProfile.isAgentPage(profile, 1)).toBe(true)
+    expect(WebMcpProfile.isAgentPage(profile, 2)).toBe(true)
+    // The mark is per connection: another profile object never shares it.
+    expect(WebMcpProfile.isAgentPage(other, 1)).toBe(false)
+    WebMcpProfile.forgetPage(profile, 1)
+    expect(WebMcpProfile.isAgentPage(profile, 1)).toBe(false)
+    expect(WebMcpProfile.isAgentPage(profile, 2)).toBe(true)
+  })
+
+  test("structuredSelectedPageId returns the selected safe id only", () => {
+    const pages = (entry: Record<string, unknown>) => ({ structuredContent: { pages: [entry] } })
+    expect(WebMcpProfile.structuredSelectedPageId(pages({ id: 3, url: "https://example.test/", selected: true }))).toBe(
+      3,
+    )
+    // A selected entry with a non-integer or negative id yields undefined.
+    expect(WebMcpProfile.structuredSelectedPageId(pages({ id: 1.5, selected: true }))).toBeUndefined()
+    expect(WebMcpProfile.structuredSelectedPageId(pages({ id: -1, selected: true }))).toBeUndefined()
+    expect(WebMcpProfile.structuredSelectedPageId(pages({ selected: true }))).toBeUndefined()
+    // No selected entry yields undefined, even with well-formed ids.
+    expect(WebMcpProfile.structuredSelectedPageId(pages({ id: 4, url: "https://example.test/" }))).toBeUndefined()
+    expect(WebMcpProfile.structuredSelectedPageId({ content: [] })).toBeUndefined()
+  })
+
+  test("close_page approval metadata reports whether the agent opened the page (ADR-277)", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: origins }).webmcp
+    expect(WebMcpProfile.approvalMetadata("bridge", profile, "close_page", { pageId: 1 })).toMatchObject({
+      openedByAgent: false,
+    })
+    WebMcpProfile.markAgentPage(profile, 1)
+    expect(WebMcpProfile.approvalMetadata("bridge", profile, "close_page", { pageId: 1 })).toMatchObject({
+      openedByAgent: true,
+    })
+    // Other tools and calls without a numeric pageId carry no marker.
+    expect(
+      WebMcpProfile.approvalMetadata("bridge", profile, "new_page", { url: "https://example.test/" }),
+    ).not.toHaveProperty("openedByAgent")
+    expect(WebMcpProfile.approvalMetadata("bridge", profile, "close_page", {})).not.toHaveProperty("openedByAgent")
+  })
+
   test.each([
     ["new_page", { url: "https://denied.test/" }],
     ["new_page", { url: "https://example.test.evil.test/" }],
@@ -360,10 +405,20 @@ describe("WebMCP unrestricted profile (ADR-170)", () => {
     expect(() => WebMcpProfile.validateCall(profile, "new_page", { url: "not a url" })).toThrow()
   })
 
-  test("validateLanding accepts any http landing origin when unrestricted", () => {
+  test("validateLanding applies the request-time scheme rule even when unrestricted (ADR-277)", () => {
     const profile = WebMcpProfile.config({ allowedOrigins: [] }).webmcp
-    const landed = { structuredContent: { pages: [{ id: 1, url: "https://surprise.test/", selected: true }] } }
-    expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed)).not.toThrow()
+    const landed = (url: string) => ({ structuredContent: { pages: [{ id: 1, url, selected: true }] } })
+    expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed("https://surprise.test/"))).not.toThrow()
+    // http stays admitted on loopback hosts only.
+    expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed("http://localhost:3000/"))).not.toThrow()
+    expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed("http://127.0.0.1:3000/"))).not.toThrow()
+    // A redirect to plain http outside loopback — the cloud metadata
+    // endpoint or any other origin — is refused even with no allowlist.
+    for (const url of ["http://169.254.169.254/latest/meta-data/", "http://example.test/"]) {
+      expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, landed(url))).toThrow(
+        "WebMCP navigation landed on a plain-http origin outside loopback, which this bridge does not admit; do not retry automatically",
+      )
+    }
     // The authoritative page list is still required: an absent one fails closed.
     expect(() => WebMcpProfile.validateLanding(profile, "new_page", {}, { content: [] })).toThrow()
   })
@@ -561,5 +616,49 @@ describe("WebMCP cross-field feedback", () => {
         ignoreCache: true,
       }),
     ).toThrow("pageId: expected integer")
+  })
+})
+
+describe("WebMcpProfile.timeoutMessage (ADR-277)", () => {
+  test("a wait timeout names the page as still loading and asks for a snapshot", () => {
+    const message = WebMcpProfile.timeoutMessage("wait_for", 30_000)
+    expect(message).toContain("WebMCP wait_for timed out after 30 s")
+    expect(message).toContain("the page may still be loading")
+    expect(message).toContain("Take a snapshot")
+    // A wait changes nothing, so the ambiguity wording must not appear.
+    expect(message).not.toContain("may or may not have taken effect")
+  })
+
+  test("a state-changing timeout says the action may or may not have taken effect", () => {
+    for (const toolName of ["click", "new_page"]) {
+      const message = WebMcpProfile.timeoutMessage(toolName, 2_000)
+      expect(message).toContain(`WebMCP ${toolName} timed out after 2 s`)
+      expect(message).toContain("may or may not have taken effect")
+      expect(message).toContain("Inspect the page first")
+      expect(message).not.toContain("Nothing was changed")
+    }
+  })
+
+  test("a read timeout says nothing changed and bounds the retry", () => {
+    const message = WebMcpProfile.timeoutMessage("take_snapshot", 1_500)
+    expect(message).toContain("WebMCP take_snapshot timed out after 2 s")
+    expect(message).toContain("Nothing was changed")
+    expect(message).toContain("Retry once at most")
+    expect(message).toContain("report BLOCKED")
+    expect(message).not.toContain("may or may not have taken effect")
+  })
+
+  test("hover reads like an observation call, not a state change", () => {
+    const message = WebMcpProfile.timeoutMessage("hover", 5_000)
+    expect(message).toContain("WebMCP hover timed out after 5 s")
+    expect(message).toContain("Nothing was changed")
+    expect(message).not.toContain("may or may not have taken effect")
+  })
+
+  test("an unknown budget is reported without a duration", () => {
+    const message = WebMcpProfile.timeoutMessage("list_pages", undefined)
+    expect(message).toContain("WebMCP list_pages timed out before it answered")
+    expect(message).not.toContain("after 0 s")
+    expect(message).toContain("Nothing was changed")
   })
 })

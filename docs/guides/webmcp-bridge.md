@@ -229,6 +229,16 @@ actions, then the same prompt returns.
 The name-based checks are heuristics, not a guarantee. The prompt is the
 control, so read it.
 
+### Signing in
+
+The isolated window does not inherit the logins of your normal browser. When
+the agent reaches a page that looks like a sign-in step, it tells you and asks
+you to sign in by hand in that window; it never types credentials. After you
+sign in, it continues on the same page. The signed-in state lives in that
+window until the bridge is turned off, or in the persistent profile option
+under managed policy. An identity-provider redirect is a new origin and may ask
+for a new grant.
+
 ## Work with an existing page
 
 Ask AX Code to inspect the page's capabilities, develop its native tools, or

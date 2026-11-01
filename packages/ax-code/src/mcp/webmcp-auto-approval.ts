@@ -71,6 +71,11 @@ export namespace WebMcpAutoApproval {
       const annotations = operation.annotations
       if (isRecord(annotations) && annotations.consequential === true) return
     }
+    // ADR-277 amends ADR-189 — tightening only: pages the user opened or
+    // signed in to by hand are never auto-closed. Auto may close only pages
+    // this connection's new_page created; the marker is runtime-written by
+    // approvalMetadata, never page-authored, so its absence keeps the prompt.
+    if (policy.toolName === "close_page" && operation.openedByAgent !== true) return
     const fullAccessOnly = interactAction || policy.toolName === "close_page" || tier === "invoke"
     bindings.set(metadata, { ...admission, patterns: [...admission.patterns], tier, fullAccessOnly, valid })
   }

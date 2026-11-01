@@ -190,6 +190,9 @@ describe("WebMCP T2 asks through the session layer", () => {
     await using tmp = await tmpdir()
     const profile = WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, true).webmcp
     WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
+    // ADR-277: full-access Auto closes without a prompt only pages the agent
+    // opened itself; this fixture's page 1 models one of them.
+    WebMcpProfile.markAgentPage(profile, 1)
     const grants: GrantState = { read: new Set(), interact: new Map() }
     const client = fakeClient()
     vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
@@ -291,7 +294,9 @@ describe("WebMCP T2 asks through the session layer", () => {
           // A successful read replaces the snapshot; bind the fixture's target again.
           WebMcpProfile.recordSnapshot(profile, 1, snapshotNodes(), PAGE)
           await expect(tools.bridge_click!.execute!({ pageId: 1, uid: "1_1" }, execOptions())).resolves.toMatchObject({
-            output: expect.stringMatching(/\[AX Code host\].*NOT performed.*call bridge_click again once with the same arguments/),
+            output: expect.stringMatching(
+              /\[AX Code host\].*NOT performed.*call bridge_click again once with the same arguments/,
+            ),
           })
           expect(client.calls).not.toContain("click")
           expect(grants.interact.get(ORIGIN)).toBe(20)

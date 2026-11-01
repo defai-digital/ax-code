@@ -83,6 +83,24 @@ test("approval handles missing metadata and strips terminal controls", () => {
   expect(/[\u202a-\u202e\u2066-\u2069\u200b-\u200f\u2028\u2029]/.test(spoofed)).toBe(false)
 })
 
+test("close_page approval states whether the agent opened the page (ADR-277)", () => {
+  const agent = webMcpApprovalLines({
+    server: "bridge",
+    tool: "close_page",
+    pageId: 1,
+    openedByAgent: true,
+  }).join("\n")
+  expect(agent).toContain("Closing this page can discard unsaved work.")
+  expect(agent).toContain("This page was opened by the agent in this session.")
+  expect(agent).not.toContain("NOT opened by the agent")
+  const user = webMcpApprovalLines({ server: "bridge", tool: "close_page", pageId: 1 }).join("\n")
+  expect(user).toContain("Closing this page can discard unsaved work.")
+  expect(user).toContain(
+    "This page was NOT opened by the agent in this session: it may be one you opened or signed in to by hand.",
+  )
+  expect(user).not.toContain("was opened by the agent")
+})
+
 test("approval counts origins beyond the display cap and marks truncated labels", () => {
   const origins = Array.from({ length: 10 }, (_, index) => `https://o${index}.test`)
   const lines = webMcpApprovalLines({ server: "bridge", tool: "navigate_page", allowedOrigins: origins }).join("\n")

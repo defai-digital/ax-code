@@ -176,6 +176,8 @@ describe("runtime-bound WebMCP approval in Auto mode", () => {
                   server: "bridge",
                   tool,
                   ...(WebMcpProfile.isInteractTool(tool) ? { interactAction: true } : {}),
+                  // ADR-277: close_page binds only for a page the agent opened.
+                  ...(tool === "close_page" ? { openedByAgent: true } : {}),
                 })
                 input.patterns = [`bridge_${tool}`]
                 bind(input, async () => true, tool)
@@ -191,6 +193,23 @@ describe("runtime-bound WebMCP approval in Auto mode", () => {
       })
     },
   )
+
+  test("full-access Auto keeps the prompt for close_page on a page the agent did not open", async () => {
+    autoEnv("full-access")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // A missing marker (older metadata) and an explicit false must both
+        // keep the close prompt: only the runtime-written marker admits.
+        for (const extra of [{}, { openedByAgent: false }] as const) {
+          const input = request("webmcp", { server: "bridge", tool: "close_page", ...extra })
+          bind(input, async () => true, "close_page")
+          expect((await rejectPending(input)).autoOnceAt).toBeUndefined()
+        }
+      },
+    })
+  })
 
   test.each([
     ["read-only", true],
