@@ -6,12 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.14] - 2026-11-01
+
 ### Changed
+
+- Read native CLI model catalogs and per-model reasoning efforts from each CLI cache.
+- Reserve an in-process provider slot for interactive work and check remote state before repeating interrupted outside actions.
+- Publish the paired TypeScript SDK 2.6.67.
 
 - The TUI model picker annotates a downloading AX Engine model with its percent and the engine's current file or retry notice instead of a bare "Downloading...".
 - Install AX Engine 8.0.4 as the managed engine. From 7.10.0 the engine's `download` command fetches public AutomatosX packs natively, so model downloads no longer depend on a Python `huggingface_hub` environment; `nativeDownloads` in the dependency status and the behind-pin warning say which path the resolved engine uses.
 
 ### Fixed
+
+- Wake eligible provider requests when a restrictive queue head is cancelled, without waiting for another request to finish.
+- Keep priority-zero CLI models first in the picker ordering.
 
 - Treat stepped cron wildcards as unrestricted when combining day-of-month and day-of-week matching.
 - Stop polling the Hugging Face cache for download progress when the engine streams byte progress itself, so native downloads no longer show a 0.0 GiB reading over the engine's per-file progress.
