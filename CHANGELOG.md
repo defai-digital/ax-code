@@ -6,9 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.13] - 2026-11-01
+
+### Changed
+
+- Prepare AX Code 7.30.13 and SDK 2.6.66.
+- Refresh the documented model download revisions and their verified mirror availability.
+
 ### Fixed
 
 - Keep background process timeouts from pinning the CLI, report aborted commands as failed, and preserve complete output when draining closed or backpressured pipes.
+- Validate model catalog fallbacks with deterministic fixtures so upstream metadata refreshes do not fail scheduled validation.
 - Preserve cancellation when PDF text extraction is aborted.
 - Preserve a managed model's PDF input capability when an older client re-saves it without the optional field.
 
