@@ -642,6 +642,17 @@ export namespace SessionProcessor {
           log.warn("snapshot track failed; continuing without undo coverage", { error })
           snapshot = undefined
         }
+        // ADR-279: classify this request once per process() call — a subagent
+        // (child) session is "background" so Layer 1 of the provider governor
+        // keeps one slot in reserve for a person's request; parentage cannot
+        // change mid-turn, so every retry attempt reuses the same class. Lazy
+        // so a turn that never reaches the governor skips the session lookup;
+        // a failed lookup fails safe to "interactive" (today's behavior).
+        let priorityPromise: Promise<ProviderConcurrencyGovernor.Priority> | undefined
+        const acquirePriority = () =>
+          (priorityPromise ??= Session.get(input.sessionID)
+            .then((session) => (session.parentID ? "background" : "interactive"))
+            .catch(() => "interactive"))
         while (true) {
           blocked = false
           let currentText: MessageV2.TextPart | undefined
@@ -683,6 +694,7 @@ export namespace SessionProcessor {
             _providerSlot = await ProviderConcurrencyGovernor.acquire({
               providerID: input.model.providerID,
               signal: input.abort,
+              priority: await acquirePriority(),
             })
             let usedTools = false
             let receivedFinish = false

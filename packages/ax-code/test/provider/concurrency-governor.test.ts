@@ -326,6 +326,137 @@ describe("ProviderConcurrencyGovernor", () => {
       extra[Symbol.dispose]()
       for (const slot of defaultSlots.slice(1)) slot[Symbol.dispose]()
     })
+
+    test("background acquires leave one slot in reserve for interactive work (ADR-279)", async () => {
+      const providerID = "gateway-reserve"
+      const input = { providerID, limit: 3, crossProcess: false }
+      const bgA = await ProviderConcurrencyGovernor.acquire({ ...input, priority: "background" })
+      const bgB = await ProviderConcurrencyGovernor.acquire({ ...input, priority: "background" })
+      let bgCResolved = false
+      const bgC = ProviderConcurrencyGovernor.acquire({ ...input, priority: "background" }).then((slot) => {
+        bgCResolved = true
+        return slot
+      })
+      await tick()
+      // Background caps at limit - 1: the third background acquire queues.
+      expect(bgCResolved).toBe(false)
+
+      // The reserved slot is exactly what an interactive request takes,
+      // immediately, ahead of the queued background waiter.
+      const interactive = await ProviderConcurrencyGovernor.acquire(input)
+      await tick()
+      expect(bgCResolved).toBe(false)
+
+      bgA[Symbol.dispose]()
+      bgB[Symbol.dispose]()
+      const bgCSlot = await bgC
+      interactive[Symbol.dispose]()
+      bgCSlot[Symbol.dispose]()
+    })
+
+    test("an interactive waiter is served before an earlier-queued background waiter on release", async () => {
+      const providerID = "gateway-priority-drain"
+      const input = { providerID, limit: 3, crossProcess: false }
+      const holders = await Promise.all([
+        ProviderConcurrencyGovernor.acquire(input),
+        ProviderConcurrencyGovernor.acquire(input),
+        ProviderConcurrencyGovernor.acquire(input),
+      ])
+      const order: string[] = []
+      const bg = ProviderConcurrencyGovernor.acquire({ ...input, priority: "background" }).then((slot) => {
+        order.push("background")
+        return slot
+      })
+      const interactive = ProviderConcurrencyGovernor.acquire(input).then((slot) => {
+        order.push("interactive")
+        return slot
+      })
+      await tick()
+      expect(order).toEqual([])
+
+      holders[0][Symbol.dispose]()
+      const interactiveSlot = await interactive
+      // Still queued after the handoff: two interactive holders keep the
+      // background cap met.
+      await tick()
+      expect(order).toEqual(["interactive"])
+
+      holders[1][Symbol.dispose]()
+      holders[2][Symbol.dispose]()
+      const bgSlot = await bg
+      expect(order).toEqual(["interactive", "background"])
+      interactiveSlot[Symbol.dispose]()
+      bgSlot[Symbol.dispose]()
+    })
+
+    test("a limit of 1 is not reserved: background admits when free and queues behind the only slot", async () => {
+      const providerID = "gateway-reserve-limit-1"
+      const input = { providerID, limit: 1, crossProcess: false }
+      const slot = await ProviderConcurrencyGovernor.acquire({ ...input, priority: "background" })
+      expect(slot).toBeDefined()
+      let queuedResolved = false
+      const queued = ProviderConcurrencyGovernor.acquire({ ...input, priority: "background" }).then((next) => {
+        queuedResolved = true
+        return next
+      })
+      await tick()
+      expect(queuedResolved).toBe(false)
+
+      slot[Symbol.dispose]()
+      const queuedSlot = await queued
+      queuedSlot[Symbol.dispose]()
+    })
+
+    test("default priority (omitted) behaves as interactive and may take the last slot", async () => {
+      const providerID = "gateway-default-priority"
+      const input = { providerID, limit: 2, crossProcess: false }
+      const slotA = await ProviderConcurrencyGovernor.acquire(input)
+      let bgResolved = false
+      const bg = ProviderConcurrencyGovernor.acquire({ ...input, priority: "background" }).then((slot) => {
+        bgResolved = true
+        return slot
+      })
+      await tick()
+      // An explicit background acquire queues at limit - 1; the omitted
+      // priority must still admit as interactive.
+      expect(bgResolved).toBe(false)
+      const slotB = await ProviderConcurrencyGovernor.acquire(input)
+
+      slotA[Symbol.dispose]()
+      slotB[Symbol.dispose]()
+      const bgSlot = await bg
+      bgSlot[Symbol.dispose]()
+    })
+
+    test("an aborted queued background waiter does not block later waiters", async () => {
+      const providerID = "gateway-bg-abort"
+      const input = { providerID, limit: 2, crossProcess: false }
+      const slotA = await ProviderConcurrencyGovernor.acquire(input)
+      const slotB = await ProviderConcurrencyGovernor.acquire(input)
+      const controller = new AbortController()
+      const bg = ProviderConcurrencyGovernor.acquire({
+        ...input,
+        priority: "background",
+        signal: controller.signal,
+      })
+      const follower = ProviderConcurrencyGovernor.acquire(input)
+      await tick()
+
+      controller.abort()
+      const err = await bg.then(
+        () => {
+          throw new Error("expected background acquire to reject")
+        },
+        (e: unknown) => e,
+      )
+      expect(err).toBeInstanceOf(DOMException)
+      expect((err as DOMException).name).toBe("AbortError")
+
+      slotA[Symbol.dispose]()
+      const followerSlot = await follower
+      slotB[Symbol.dispose]()
+      followerSlot[Symbol.dispose]()
+    })
   })
 
   describe("cross-process lease layer (layer 2)", () => {

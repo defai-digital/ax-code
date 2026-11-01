@@ -989,6 +989,14 @@ const BACKGROUND_ONGOING_PROMPT =
   `Say explicitly which background work (shells or tasks) is still running and what evidence remains pending. ` +
   `Do not start new shells or monitors, and do not delegate further.`
 
+// Sent when a task's turn was cut off by a backend restart. The cut-off turn
+// may already have pushed, commented or opened a pull request, so the resumed
+// turn checks for that before acting outside the workspace again.
+const RESTART_CONTINUATION_PROMPT =
+  `Your previous turn was interrupted by a backend restart. ` +
+  `Before repeating any outside action, such as a push, a comment or a pull request, check your working directory, git status and log, and the remote (GitHub comments, pull requests, checks) for what already happened, and repeat it only if it did not. ` +
+  `Continue the assigned task and produce the final result. Do not repeat completed work unless you must verify it.`
+
 // Reserve part of the queue item's execution budget for the final turn so a
 // background wait cannot consume the whole deadline.
 const SUBAGENT_FINALIZE_RESERVE_MS = 2 * 60 * 1000
@@ -1107,7 +1115,7 @@ async function applyRestartContinuation(
     parts: [
       {
         type: "text",
-        text: "Your previous turn was interrupted by a backend restart. Continue the assigned task and produce the final result. Do not repeat completed work unless you must verify it.",
+        text: RESTART_CONTINUATION_PROMPT,
       },
     ],
   }

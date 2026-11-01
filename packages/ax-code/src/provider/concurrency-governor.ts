@@ -25,9 +25,12 @@ import { sleep } from "@/util/timeout"
 //
 // Two layers, composed:
 //
-//   Layer 1 (in-process): one FIFO semaphore per providerID. Bounds THIS
-//   process's own fan-out (tool calls, subagents, council/arena members,
-//   workflow children) and is the fair "wait my share" queue.
+//   Layer 1 (in-process): one semaphore per providerID with an interactive
+//   reserve (ADR-279): background requests (subagent fan-out) may hold at
+//   most limit-1 slots and never queue ahead of an interactive request,
+//   so fan-out cannot starve a person's request. FIFO within each
+//   priority class. Bounds THIS process's own fan-out (tool calls,
+//   subagents, council/arena members, workflow children).
 //
 //   Layer 2 (cross-process, best-effort): one lease file per held slot under
 //   <state>/provider-slots/<providerHash>/, with PID+host liveness and TTL
@@ -65,9 +68,18 @@ const LeaseBodySchema = z
   })
   .passthrough()
 
+interface Waiter {
+  resolve: () => void
+  reject: (err: unknown) => void
+  priority: ProviderConcurrencyGovernor.Priority
+  // The waiter's own resolved limit: the env var or per-provider config can
+  // differ between arrivals, so drain admission uses this, not the releaser's.
+  limit: number
+}
+
 interface ProviderState {
   inFlight: number
-  queue: Array<{ resolve: () => void; reject: (e: unknown) => void }>
+  queue: Waiter[]
 }
 
 const providers = new Map<string, ProviderState>()
@@ -285,12 +297,29 @@ async function acquireCrossProcessLease(opts: {
 
 function releaseInProcess(state: ProviderState): void {
   state.inFlight = Math.max(0, state.inFlight - 1)
-  // Hand the slot to the next FIFO waiter directly; inFlight stays at the
-  // limit until that waiter disposes, so no later arrival can jump the queue.
-  const next = state.queue.shift()
-  if (next) {
-    state.inFlight++
-    next.resolve()
+  // ADR-279 priority drain: repeatedly admit the first queued interactive
+  // waiter while it fits its own limit, else the first queued background
+  // waiter while it fits backgroundCap(its limit); stop at the first head
+  // that cannot be admitted. Interactive waiters lead earlier-queued
+  // background waiters; FIFO holds within each priority. An admitted waiter
+  // re-occupies its slot immediately, so no later arrival can jump the
+  // remaining queue.
+  while (true) {
+    const interactive = state.queue.find((waiter) => waiter.priority === "interactive")
+    if (interactive && state.inFlight < interactive.limit) {
+      state.queue.splice(state.queue.indexOf(interactive), 1)
+      state.inFlight++
+      interactive.resolve()
+      continue
+    }
+    const background = state.queue.find((waiter) => waiter.priority === "background")
+    if (background && state.inFlight < ProviderConcurrencyGovernor.backgroundCap(background.limit)) {
+      state.queue.splice(state.queue.indexOf(background), 1)
+      state.inFlight++
+      background.resolve()
+      continue
+    }
+    return
   }
 }
 
@@ -327,12 +356,32 @@ export namespace ProviderConcurrencyGovernor {
   // exceeding the machine-wide bound — callers never wait indefinitely here.
   export const DEFAULT_CROSS_PROCESS_TIMEOUT_MS = 30_000
 
+  // ADR-279: admission classes for the in-process layer. "interactive" is a
+  // person's request; "background" is subagent fan-out.
+  export type Priority = "interactive" | "background"
+
+  /**
+   * ADR-279: the most slots background requests may occupy at this limit —
+   * one stays in reserve for interactive work. A pool of one is NOT
+   * reserved; holding back its only slot would deadlock the provider.
+   */
+  export function backgroundCap(limit: number): number {
+    return limit >= 2 ? limit - 1 : limit
+  }
+
   export interface AcquireInput {
     providerID: string
     /** Explicit per-call limit override. */
     limit?: number
     /** Rejects with AbortError if aborted while queued (or during the Layer 2 wait). */
     signal?: AbortSignal
+    /**
+     * ADR-279 admission priority for Layer 1 (Layer 2 is priority-blind):
+     * "interactive" (default) may use every slot and never queues behind a
+     * background waiter; "background" (subagent fan-out) is capped at
+     * backgroundCap(limit) and never overtakes a queued waiter.
+     */
+    priority?: ProviderConcurrencyGovernor.Priority
     /** Default true; false skips the cross-process layer for this acquire (tests). */
     crossProcess?: boolean
     /**
@@ -399,13 +448,22 @@ async function acquireInner(input: ProviderConcurrencyGovernor.AcquireInput): Pr
     return noopDisposable()
   }
 
-  // ---- Layer 1: in-process FIFO semaphore ----
+  // ---- Layer 1: in-process priority semaphore (ADR-279) ----
+  const priority = input.priority ?? "interactive"
   const state = stateFor(providerID)
-  if (state.inFlight < limit) {
+  const admitsNow =
+    priority === "interactive"
+      ? // Interactive never waits behind background fan-out; it queues only
+        // behind an earlier interactive waiter (FIFO).
+        state.inFlight < limit && !state.queue.some((waiter) => waiter.priority === "interactive")
+      : // Background keeps one slot in reserve and must not overtake any
+        // queued waiter (interactive or background).
+        state.inFlight < ProviderConcurrencyGovernor.backgroundCap(limit) && state.queue.length === 0
+  if (admitsNow) {
     state.inFlight++
   } else {
     await new Promise<void>((resolve, reject) => {
-      const waiter = { resolve, reject }
+      const waiter: Waiter = { resolve, reject, priority, limit }
       state.queue.push(waiter)
       if (input.signal) {
         const signal = input.signal
@@ -420,7 +478,8 @@ async function acquireInner(input: ProviderConcurrencyGovernor.AcquireInput): Pr
         // release-handoff resolves the waiter without firing abort, leaving a
         // dangling listener on a long-lived shared signal. Wrap both settle
         // callbacks once so every path removes the listener, keeping
-        // releaseInProcess (which calls next.resolve()) unaware of cleanup.
+        // releaseInProcess (which resolves the admitted waiter) unaware of
+        // cleanup.
         const cleanup = () => signal.removeEventListener("abort", onAbort)
         waiter.resolve = () => {
           cleanup()
