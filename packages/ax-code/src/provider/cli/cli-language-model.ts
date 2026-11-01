@@ -33,6 +33,8 @@ export interface CliLanguageModelConfig {
   promptMode: "stdin" | "arg" | "positional" | "file"
   promptFlag?: string
   workspaceArg?: string
+  /** Efforts this model accepts, from the CLI's model cache; overrides the provider default list. */
+  efforts?: readonly string[]
   providerEnvKeys?: readonly string[]
 }
 
@@ -199,7 +201,7 @@ export function buildCliCommand(
     config.binary,
     ...config.args,
     ...autonomousCliArgs(config.providerID),
-    ...cliEffortArgs(config.providerID, effort),
+    ...cliEffortArgs(config.providerID, effort, config.efforts),
   ]
   if (config.workspaceArg && workspaceDirectory) cmd.push(config.workspaceArg, workspaceDirectory)
   if (config.modelID !== config.providerID) cmd.push("--model", config.modelID)
@@ -253,7 +255,7 @@ export class CliLanguageModel implements LanguageModelV3 {
   }
 
   private buildCmd(prompt: string, providerOptions?: LanguageModelV3CallOptions["providerOptions"]) {
-    const effort = cliEffortFromProviderOptions(this.config.providerID, providerOptions)
+    const effort = cliEffortFromProviderOptions(this.config.providerID, providerOptions, this.config.efforts)
     return buildCliCommand(this.config, prompt, currentInstanceDirectory(), effort)
   }
 

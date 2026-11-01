@@ -10,6 +10,7 @@ import { resolveCliModel } from "./cli/resolve"
 import { getCliProviderDefinition } from "./cli/config"
 import { checkCliProviderAuth } from "./cli/connect"
 import { readNativeCliModels, type NativeCliModel } from "./cli/native-models"
+import { cliModelEfforts } from "./cli/effort"
 import { URL } from "url"
 import { Log } from "@/util/log"
 import { isLocalHostname } from "@/util/local-host"
@@ -530,6 +531,7 @@ function nativeCliModels(
         ...model.capabilities,
         input: { ...model.capabilities.input, image: model.capabilities.input.image || item.image === true },
       },
+      ...(item.efforts ? { options: { ...model.options, cliEfforts: item.efforts } } : {}),
     }
   }
   return models
@@ -542,15 +544,19 @@ async function claudeCodeFamilyModels(
   const base = Object.values(provider.models)[0]
   if (!base) return {}
   const catalog = (await ModelsDev.get()).anthropic?.models ?? {}
-  const models: Record<string, Provider.Model> = {}
-  for (const item of latestAnthropicFamilyModels(catalog)) {
-    models[item.id] = overlayCliCatalogModel(
-      base,
-      item,
-      "claude-code",
-      claudeDisplayName(item.name, item.id),
-      claudeFamilyId({ id: item.id, family: item.family }),
-    )
+  const native = await readNativeCliModels("claude-code")
+  const models: Record<string, Provider.Model> =
+    native.length > 0 ? nativeCliModels(base, native, catalog, "claude-code", claudeFamilyId) : {}
+  if (native.length === 0) {
+    for (const item of latestAnthropicFamilyModels(catalog)) {
+      models[item.id] = overlayCliCatalogModel(
+        base,
+        item,
+        "claude-code",
+        claudeDisplayName(item.name, item.id),
+        claudeFamilyId({ id: item.id, family: item.family }),
+      )
+    }
   }
   if (resolved && resolved !== "claude-code" && !models[resolved] && catalog[resolved]) {
     const item = catalog[resolved]!
@@ -775,7 +781,7 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
   return async (provider) => {
     return {
       autoload: false,
-      async getModel(_sdk: any, modelID: string) {
+      async getModel(_sdk: any, modelID: string, options?: Record<string, any>) {
         const path = await resolveCliBinary(opts.providerID, opts.binary)
         if (!path) throw new Error(`${opts.binary} CLI not found in PATH`)
         const authError = await checkCliProviderAuth(opts.providerID, path)
@@ -792,6 +798,7 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
           promptMode: opts.promptMode,
           promptFlag: opts.promptFlag,
           workspaceArg: opts.workspaceArg,
+          efforts: cliModelEfforts(options),
         })
       },
       async discoverModels(current) {

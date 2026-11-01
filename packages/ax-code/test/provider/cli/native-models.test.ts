@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import { tmpdir } from "../../fixture/fixture"
 import {
+  parseClaudeModelCatalog,
   parseCodexModelsCache,
   parseGrokModelsCache,
   parseMuseModelCatalog,
@@ -27,13 +28,23 @@ const codexCache = {
       priority: 2,
       context_window: 272000,
       input_modalities: ["text", "image"],
+      supported_reasoning_levels: [{ effort: "max" }, { effort: "low" }, { effort: 'bad value"' }, { effort: "high" }],
     },
   ],
 }
 
 const grokCache = {
   models: {
-    "grok-4.7": { info: { id: "grok-4.7", name: "Grok 4.7", hidden: false, context_window: 256000 } },
+    "grok-4.7": {
+      info: {
+        id: "grok-4.7",
+        name: "Grok 4.7",
+        hidden: false,
+        context_window: 256000,
+        supports_reasoning_effort: true,
+        reasoning_efforts: [{ value: "xhigh" }, { value: "high" }, { value: "low" }],
+      },
+    },
     "grok-internal": { info: { id: "grok-internal", name: "Internal", hidden: true } },
     "grok-4.6": { info: { id: "grok-4.6", name: "Grok 4.6", context_window: 256000, max_completion_tokens: 64000 } },
   },
@@ -55,17 +66,41 @@ const museCatalog = {
   ],
 }
 
+function claudeCatalog(fetchedAt: number, mainID: string) {
+  return {
+    fetchedAt,
+    catalog: {
+      config: {
+        models: [
+          {
+            id: mainID,
+            name: "Opus 5.5",
+            section: "main",
+            runtime: {
+              max_input_tokens: 1000000,
+              max_output_tokens: 128000,
+              effort_levels: ["low", "max", "xhigh"],
+              capabilities: ["mm_images"],
+            },
+          },
+          { id: "claude-opus-4-6", name: "Opus 4.6", section: "overflow", runtime: { max_input_tokens: 1000000 } },
+        ],
+      },
+    },
+  }
+}
+
 describe("native CLI model caches", () => {
   test("codex keeps only picker-visible models in priority order", () => {
     expect(parseCodexModelsCache(codexCache)).toEqual([
-      { id: "gpt-6-astra", name: "GPT-6-Astra", context: 272000, image: true },
+      { id: "gpt-6-astra", name: "GPT-6-Astra", context: 272000, image: true, efforts: ["low", "high", "max"] },
       { id: "gpt-5.6-sol", name: "GPT-5.6-Sol", context: 272000, image: false },
     ])
   })
 
   test("grok drops hidden models", () => {
     expect(parseGrokModelsCache(grokCache)).toEqual([
-      { id: "grok-4.7", name: "Grok 4.7", context: 256000, output: undefined },
+      { id: "grok-4.7", name: "Grok 4.7", context: 256000, output: undefined, efforts: ["low", "high", "xhigh"] },
       { id: "grok-4.6", name: "Grok 4.6", context: 256000, output: 64000 },
     ])
   })
@@ -74,7 +109,32 @@ describe("native CLI model caches", () => {
     expect(parseMuseModelCatalog(museCatalog).map((model) => model.id)).toEqual(["muse-wonder-1.0", "muse-spark-1.3"])
   })
 
+  test("claude keeps only the main picker section", () => {
+    expect(parseClaudeModelCatalog(claudeCatalog(1, "claude-opus-5-5"))).toEqual([
+      {
+        id: "claude-opus-5-5",
+        name: "Opus 5.5",
+        context: 1000000,
+        output: 128000,
+        image: true,
+        efforts: ["low", "xhigh", "max"],
+      },
+    ])
+  })
+
+  test("claude reads the most recently fetched account catalog", async () => {
+    await using tmp = await tmpdir()
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    const dir = path.join(tmp.path, ".claude", "cache", "model-catalog")
+    await mkdir(dir, { recursive: true })
+    await writeFile(path.join(dir, "old-account-cc.json"), JSON.stringify(claudeCatalog(100, "claude-opus-5")))
+    await writeFile(path.join(dir, "new-account-cc.json"), JSON.stringify(claudeCatalog(200, "claude-opus-5-5")))
+    await writeFile(path.join(dir, "published-floor.json"), JSON.stringify({ version: 1 }))
+    expect((await readNativeCliModels("claude-code")).map((model) => model.id)).toEqual(["claude-opus-5-5"])
+  })
+
   test("malformed caches yield no models", () => {
+    expect(parseClaudeModelCatalog({ catalog: { config: { models: {} } } })).toEqual([])
     expect(parseCodexModelsCache({ models: "nope" })).toEqual([])
     expect(parseGrokModelsCache({ models: [] })).toEqual([])
     expect(parseMuseModelCatalog({})).toEqual([])

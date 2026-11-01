@@ -11,7 +11,7 @@ import { isQwen37MaxOrPlusModel } from "./model-capabilities"
 import { modelIdFinalSegment, normalizeProviderModelId } from "./model-id"
 import { isDedicatedPrivateGpuProviderID } from "./private-gpu/presets"
 import { AX_ENGINE_PROVIDER_ID, AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID } from "./ax-engine/constants"
-import { cliEffortVariants } from "./cli/effort"
+import { cliEffortVariants, cliModelEfforts } from "./cli/effort"
 import { wrapThinkTagText, type ThinkTagName } from "./think-tags"
 import { PromptCachePolicy } from "./prompt-cache-policy"
 
@@ -1077,7 +1077,7 @@ export namespace ProviderTransform {
     // the AI SDK, but several CLIs expose a documented effort flag. Publish
     // those variants before the capability gate and translate them when the
     // subprocess command is built.
-    if (model.api.npm === "cli") return cliEffortVariants(model.providerID)
+    if (model.api.npm === "cli") return cliEffortVariants(model.providerID, cliModelEfforts(model.options))
 
     if (!model.capabilities.reasoning) return {}
 

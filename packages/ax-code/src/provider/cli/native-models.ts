@@ -16,6 +16,8 @@ export interface NativeCliModel {
   context?: number
   output?: number
   image?: boolean
+  /** Reasoning efforts the CLI accepts for this model, in ascending order. */
+  efforts?: string[]
 }
 
 function homeDir() {
@@ -40,6 +42,25 @@ function positive(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
+const EFFORT_ORDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+
+// Efforts become a CLI argument (and a TOML string for Codex), so accept only
+// plain identifiers.
+function efforts(list: unknown, key: string): string[] | undefined {
+  if (!Array.isArray(list)) return undefined
+  const values = new Set<string>()
+  for (const item of list) {
+    const value = isRecord(item) ? str(item[key]) : undefined
+    if (value && /^[a-z][a-z0-9_-]{0,31}$/.test(value)) values.add(value)
+  }
+  if (values.size === 0) return undefined
+  const rank = (value: string) => {
+    const index = EFFORT_ORDER.indexOf(value)
+    return index === -1 ? EFFORT_ORDER.length : index
+  }
+  return [...values].sort((a, b) => rank(a) - rank(b))
+}
+
 function codexHome() {
   if (process.env.AX_CODE_TEST_HOME) return join(process.env.AX_CODE_TEST_HOME, ".codex")
   return process.env.CODEX_HOME?.trim() || join(homeDir(), ".codex")
@@ -60,6 +81,7 @@ export function parseCodexModelsCache(data: CliJsonObject): NativeCliModel[] {
       name: str(item.display_name) ?? id,
       context: positive(item.context_window),
       image: modalities.includes("image"),
+      efforts: efforts(item.supported_reasoning_levels, "effort"),
       priority: positive(item.priority) ?? Number.MAX_SAFE_INTEGER,
     })
   }
@@ -80,6 +102,7 @@ export function parseGrokModelsCache(data: CliJsonObject): NativeCliModel[] {
       name: str(info.name) ?? id,
       context: positive(info.context_window),
       output: positive(info.max_completion_tokens),
+      efforts: info.supports_reasoning_effort === false ? undefined : efforts(info.reasoning_efforts, "value"),
     })
   }
   return rows
@@ -109,6 +132,7 @@ export function parseMuseModelCatalog(data: CliJsonObject): NativeCliModel[] {
       name: str(item.display_label) ?? id,
       context,
       output: positive(item.output_limit),
+      efforts: efforts(item.reasoning_effort_variants, "tier"),
       isDefault: item.is_default === true,
     })
   }
@@ -134,7 +158,61 @@ async function readMuseCatalogs(): Promise<NativeCliModel[]> {
   return models
 }
 
+function claudeConfigDir() {
+  if (process.env.AX_CODE_TEST_HOME) return join(process.env.AX_CODE_TEST_HOME, ".claude")
+  return process.env.CLAUDE_CONFIG_DIR?.trim() || join(homeDir(), ".claude")
+}
+
+// <claude config>/cache/model-catalog/<account>-cc.json:
+// { fetchedAt, catalog: { config: { models: [{ id, name, section, runtime: { ... } }] } } }.
+// The "main" section is Claude Code's own picker; "overflow" holds older models.
+export function parseClaudeModelCatalog(data: CliJsonObject): NativeCliModel[] {
+  const catalog = isRecord(data.catalog) ? data.catalog : undefined
+  const config = catalog && isRecord(catalog.config) ? catalog.config : undefined
+  if (!config || !Array.isArray(config.models)) return []
+  const rows: NativeCliModel[] = []
+  for (const item of config.models) {
+    if (!isRecord(item) || item.section !== "main" || item.hidden === true) continue
+    const id = str(item.id)
+    if (!id) continue
+    const runtime = isRecord(item.runtime) ? item.runtime : {}
+    const capabilities = Array.isArray(runtime.capabilities) ? runtime.capabilities : []
+    rows.push({
+      id,
+      name: str(item.name) ?? id,
+      context: positive(runtime.max_input_tokens),
+      output: positive(runtime.max_output_tokens),
+      image: capabilities.includes("mm_images"),
+      efforts: efforts(
+        Array.isArray(runtime.effort_levels) ? runtime.effort_levels.map((value) => ({ value })) : undefined,
+        "value",
+      ),
+    })
+  }
+  return rows
+}
+
+// One catalog file per signed-in account; the most recently fetched belongs to
+// the account Claude Code is using now.
+async function readClaudeCatalogs(): Promise<NativeCliModel[]> {
+  const dir = join(claudeConfigDir(), "cache", "model-catalog")
+  const files = await readdir(dir).catch((error) => {
+    if (Filesystem.isEnoent(error)) return [] as string[]
+    throw error
+  })
+  let newest: { fetchedAt: number; models: NativeCliModel[] } | undefined
+  for (const file of files.filter((name) => name.endsWith("-cc.json"))) {
+    const data = await readJson(join(dir, file))
+    if (!data) continue
+    const models = parseClaudeModelCatalog(data)
+    const fetchedAt = positive(data.fetchedAt) ?? 0
+    if (models.length > 0 && (!newest || fetchedAt > newest.fetchedAt)) newest = { fetchedAt, models }
+  }
+  return newest?.models ?? []
+}
+
 const READERS: Record<string, () => Promise<NativeCliModel[]>> = {
+  "claude-code": readClaudeCatalogs,
   "codex-cli": async () => {
     const data = await readJson(join(codexHome(), "models_cache.json"))
     return data ? parseCodexModelsCache(data) : []
