@@ -6,6 +6,14 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Tell the agent to hand off a WebMCP sign-in only when a credential field is visible; a sign-in-looking landing means take a snapshot first.
+
+### Fixed
+
+- Guard every WebMCP page-id read against a missing tool input, and let the opt-in live Chrome lanes grant the reviewed trust a project config needs.
+
 ## [7.30.11] - 2026-11-01
 
 ### Changed
