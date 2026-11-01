@@ -65,6 +65,13 @@ export async function extractPdfText(filePath: string, options: PdfExtractOption
   }
   const bytes = Buffer.from(raw, "utf8")
   const truncated = bytes.length > MAX_OUTPUT_BYTES
-  const body = truncated ? bytes.subarray(0, MAX_OUTPUT_BYTES).toString("utf8") : raw
+  let body = raw
+  if (truncated) {
+    // A slice at exactly the cap can split a multibyte sequence and emit
+    // U+FFFD; back up to the start of the next UTF-8 code point instead.
+    let end = MAX_OUTPUT_BYTES
+    while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end--
+    body = bytes.subarray(0, end).toString("utf8")
+  }
   return { kind: "pdf", text: labelEnvelope(body, truncated), truncated }
 }

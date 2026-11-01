@@ -56,6 +56,18 @@ describe("pdf-text (ADR-278)", () => {
     expect(Buffer.byteLength(body, "utf8")).toBeLessThanOrEqual(200 * 1024)
   })
 
+  test.skipIf(!hasPdftotext)("does not split a multibyte character at the 200 KB cap", async () => {
+    await using tmp = await tmpdir()
+    const filePath = path.join(tmp.path, "multibyte.pdf")
+    const lines = Array.from({ length: 4000 }, () => "a" + "£".repeat(80))
+    lines[0] = "x" + lines[0]
+    await writeFile(filePath, buildPdf(lines))
+    const result = await extractPdfText(filePath)
+    expect(result.reason).toBeUndefined()
+    expect(result.truncated).toBe(true)
+    expect(result.text).not.toContain("\uFFFD")
+  })
+
   test.skipIf(!hasPdftotext)("reports a reason for a file that is not a PDF", async () => {
     await using tmp = await tmpdir()
     const filePath = path.join(tmp.path, "broken.pdf")
