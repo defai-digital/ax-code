@@ -8,6 +8,7 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Keep background process timeouts from pinning the CLI, report aborted commands as failed, and preserve complete output when draining closed or backpressured pipes.
 - Preserve cancellation when PDF text extraction is aborted.
 - Preserve a managed model's PDF input capability when an older client re-saves it without the optional field.
 

@@ -29,3 +29,20 @@ test("retains pipe data and natural EOF delivered after the parent exit event", 
   expect(output.stderr.toString()).toBe("final diagnostic")
   expect(ended).toBe(true)
 })
+
+test("unrefs the timeout timer when the child is unref'd", async () => {
+  vi.resetModules()
+  const { Process } = await import("../../src/util/process")
+  const child = Object.assign(new EventEmitter(), { unref: vi.fn() }) as unknown as ChildProcess
+  vi.mocked(launch).mockReturnValueOnce(child)
+  const timer = { unref: vi.fn() }
+  const setTimeoutSpy = vi
+    .spyOn(globalThis, "setTimeout")
+    .mockReturnValue(timer as unknown as ReturnType<typeof setTimeout>)
+  try {
+    Process.spawn(["unref-timeout-fixture"], { unref: true, timeout: 30000 })
+    expect(timer.unref).toHaveBeenCalledTimes(1)
+  } finally {
+    setTimeoutSpy.mockRestore()
+  }
+})

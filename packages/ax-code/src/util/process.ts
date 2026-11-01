@@ -124,13 +124,15 @@ export namespace Process {
     let termination: Promise<void> | undefined
     let timeoutTimer: ReturnType<typeof setTimeout> | undefined
     let timedOut = false
+    let aborted = false
 
     const terminate = (graceful = true) => {
       if (closed) return
       if (proc.exitCode !== null || proc.signalCode !== null) return
       closed = true
       if (timeoutTimer) clearTimeout(timeoutTimer)
-      if (!graceful) timedOut = true
+      if (graceful) aborted = true
+      else timedOut = true
       // Snapshot and signal the tree before the parent can exit and orphan its
       // descendants. Shell.killTree owns the bounded hard-kill escalation.
       termination = killProcessTree(proc, { signal: opts.kill }).catch(() => undefined)
@@ -147,15 +149,24 @@ export namespace Process {
       proc.once("exit", (code, signal) => {
         done()
         // A short-lived caller must not exit while descendant cleanup is pending.
-        void Promise.resolve(termination).then(() => resolve(timedOut ? 124 : (code ?? (signal ? 1 : 0))))
+        void Promise.resolve(termination).then(() => resolve(timedOut ? 124 : aborted ? 1 : (code ?? (signal ? 1 : 0))))
         // Background children spawned by the command inherit the pipe FDs and
         // keep them open, preventing stream EOF. Allow a bounded drain grace:
         // a single setImmediate can run before pending pipe data or EOF under
         // load, truncating output and making complete metrics look partial.
-        // Descendant-held pipes still close without waiting for the descendant.
+        // After the grace, deliver a graceful EOF (push(null)) instead of
+        // destroy()ing: destroy truncates buffered output under backpressure and
+        // surfaces as ERR_STREAM_PREMATURE_CLOSE, while push(null) lets consumers
+        // read everything already buffered and then see a clean `end`. Unref the
+        // pipe handle so a descendant-held FD cannot keep the CLI alive.
         const drainTimer = setTimeout(() => {
-          if (opts.stdout === "pipe") (proc as ChildProcess).stdout?.destroy()
-          if (opts.stderr === "pipe") (proc as ChildProcess).stderr?.destroy()
+          for (const stream of [
+            opts.stdout === "pipe" ? (proc as ChildProcess).stdout : null,
+            opts.stderr === "pipe" ? (proc as ChildProcess).stderr : null,
+          ]) {
+            stream?.push(null)
+            ;(stream as unknown as { unref?: () => void } | null)?.unref?.()
+          }
         }, 100)
         drainTimer.unref()
         proc.once("close", () => clearTimeout(drainTimer))
@@ -182,6 +193,7 @@ export namespace Process {
     child.exited = exited
     if (opts.unref) {
       proc.unref()
+      timeoutTimer?.unref()
       if (opts.stdout === "pipe") (proc.stdout as unknown as { unref?: () => void })?.unref?.()
       if (opts.stderr === "pipe") (proc.stderr as unknown as { unref?: () => void })?.unref?.()
     }
@@ -224,12 +236,12 @@ export namespace Process {
   }
 
   // Drain a child stream tolerantly. The strict `node:stream/consumers` buffer()
-  // rejects with ERR_STREAM_PREMATURE_CLOSE when the stream is destroy()ed (which
-  // `spawn` does on exit to unblock pipes held open by background children) before
-  // it reaches a natural EOF — a race that surfaces under concurrent spawns. Node
-  // still emits all buffered `data` events before `close`, so collecting via raw
-  // events and resolving on end/close/error returns the full output without the
-  // spurious rejection.
+  // rejects with ERR_STREAM_PREMATURE_CLOSE when a stream is destroyed before it
+  // reaches a natural EOF — a race that surfaces under concurrent spawns. `spawn`
+  // no longer destroy()s the pipes: after the post-exit grace it pushes a graceful
+  // EOF and unrefs the pipe handle, so consumers still receive every buffered
+  // `data` event before `end`/`close`. Collecting via raw events and resolving on
+  // end/close/error returns the full output without the spurious rejection.
   export function drain(stream: Readable): Promise<Buffer> {
     return new Promise((resolve) => {
       const chunks: Buffer[] = []
@@ -238,6 +250,12 @@ export namespace Process {
       stream.once("end", finish)
       stream.once("close", finish)
       stream.once("error", finish)
+      // Listeners are attached first to avoid missing an event that fires in
+      // between. If the stream already ended/closed before we subscribed (for
+      // example a pipe drained on a previous turn), settle now instead of
+      // waiting for events that will never fire again; a repeated resolve is a
+      // harmless no-op.
+      if (stream.readableEnded || stream.destroyed || stream.closed) finish()
     })
   }
 

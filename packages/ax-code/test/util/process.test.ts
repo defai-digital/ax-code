@@ -1,3 +1,5 @@
+import { Writable } from "node:stream"
+import { pipeline } from "node:stream/promises"
 import { describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
@@ -42,6 +44,54 @@ describe("util.process", () => {
     expect(ended).toBe(true)
   })
 
+  test("drains full piped output under slow backpressure without premature close", async () => {
+    const size = 256 * 1024
+    const child = Process.spawn(node(`process.stdout.write(Buffer.alloc(${size}, 7))`), { stdout: "pipe" })
+    const received: Buffer[] = []
+    const sink = new Writable({
+      highWaterMark: 1,
+      write(chunk: Buffer, _encoding, callback) {
+        received.push(Buffer.from(chunk))
+        // Delay each chunk well past the post-exit drain grace so the source
+        // cannot reach a natural EOF before the 100ms timer fires.
+        setTimeout(callback, 50)
+      },
+    })
+
+    await pipeline(child.stdout!, sink)
+
+    const output = Buffer.concat(received)
+    expect(output.length).toBe(size)
+    expect(output.every((byte) => byte === 7)).toBe(true)
+  }, 20000)
+
+  test("drain resolves for a pipe that already ended before listeners attach", async () => {
+    const size = 1024 * 1024
+    const child = Process.spawn(node(`process.stdout.write(Buffer.alloc(${size}, 9))`), {
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+
+    // Drain stdout first; by the time it and the exit settle, the empty stderr
+    // pipe has already reached EOF and closed without ever being consumed.
+    expect(await Process.drain(child.stdout!)).toHaveLength(size)
+    expect(await child.exited).toBe(0)
+
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<{ resolved: false }>((resolve) => {
+      timer = setTimeout(() => resolve({ resolved: false }), 250)
+    })
+    const outcome = await Promise.race([
+      Process.drain(child.stderr!).then((buffer) => ({ resolved: true as const, buffer })),
+      timeout,
+    ])
+    clearTimeout(timer)
+
+    expect(outcome.resolved).toBe(true)
+    if (!outcome.resolved) throw new Error("drain on an already ended pipe did not resolve")
+    expect(outcome.buffer).toHaveLength(0)
+  }, 20000)
+
   test("returns code when nothrow is enabled", async () => {
     const out = await Process.run(node("process.exit(7)"), { nothrow: true })
     expect(out.code).toBe(7)
@@ -68,6 +118,43 @@ describe("util.process", () => {
     expect(out.code).not.toBe(0)
     expect(Date.now() - started).toBeLessThan(1000)
   }, 3000)
+
+  test.skipIf(process.platform === "win32")(
+    "resolves an abort as a failure even when the child exits 0 on SIGTERM",
+    { timeout: 15000, retry: 0 },
+    async () => {
+      await using tmp = await tmpdir()
+
+      // Spawn detached and confirm the SIGTERM handler is installed via a
+      // readiness file before aborting, so the abort never races node startup
+      // (a pre-handler SIGTERM would report a signal exit and mask the bug).
+      const startAbortable = (label: string, opts: { nothrow: boolean }) => {
+        const ready = path.join(tmp.path, label)
+        const script = `
+const fs = require("node:fs")
+process.on("SIGTERM", () => process.exit(0))
+fs.writeFileSync(${JSON.stringify(ready)}, "ready")
+setInterval(() => {}, 1000)
+`
+        const abort = new AbortController()
+        const result = Process.run(node(script), { abort: abort.signal, detached: true, ...opts })
+        return { ready, abort, result }
+      }
+
+      const nothrowRun = startAbortable("nothrow", { nothrow: true })
+      await vi.waitFor(() => fs.access(nothrowRun.ready), { timeout: 5000, interval: 10 })
+      nothrowRun.abort.abort()
+      expect((await nothrowRun.result).code).toBe(1)
+
+      const defaultRun = startAbortable("default", { nothrow: false })
+      await vi.waitFor(() => fs.access(defaultRun.ready), { timeout: 5000, interval: 10 })
+      defaultRun.abort.abort()
+      const err = await defaultRun.result.catch((error) => error)
+      expect(err).toBeInstanceOf(Process.RunFailedError)
+      if (!(err instanceof Process.RunFailedError)) throw err
+      expect(err.code).toBe(1)
+    },
+  )
 
   test("aborts a running process by terminating the full process tree", async () => {
     if (process.platform === "win32") return
