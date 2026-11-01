@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- Read a PDF as extracted text (poppler `pdftotext`) when the active model cannot take PDF input, in the same envelope as Office documents; the attachment is kept for models that accept PDFs.
+
 ### Changed
 
 - Tell the agent to hand off a WebMCP sign-in only when a credential field is visible; a sign-in-looking landing means take a snapshot first.

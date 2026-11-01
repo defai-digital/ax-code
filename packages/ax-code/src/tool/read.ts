@@ -18,6 +18,7 @@ import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
 import { isBinaryFile, isSupportedImageAttachment } from "./file-content"
 import { detectOfficeKind, extractOfficeText } from "./office-text"
+import { extractPdfText } from "./pdf-text"
 import { ToolNumber } from "./schema"
 import { CanonicalOutput } from "./canonical-output"
 
@@ -255,6 +256,39 @@ export const ReadTool = Tool.define("read", {
       const mime = Filesystem.mimeType(filepath)
       const isImage = isSupportedImageAttachment(mime)
       const isPdf = mime === "application/pdf"
+      // ADR-278: a model that cannot take PDF input gets the extracted text in
+      // the office envelope instead of an attachment the provider transform
+      // would replace with an error. An unknown model keeps the attachment.
+      if (isPdf && ctx.extra?.model?.capabilities?.input?.pdf === false) {
+        const bigStat = await fs.stat(filepath, { bigint: true })
+        const result = await extractPdfText(filepath, { abort: ctx.abort })
+        await assertReadSourceStable(filepath, bigStat)
+        if (result.reason) {
+          throw readError("ReadPdfExtractionError", result.reason)
+        }
+        const out = result.text
+        const note = result.truncated ? "\n(truncated to 200 KB)" : ""
+        ctx.abort.throwIfAborted()
+        await FileTime.read(ctx.sessionID, filepath, {
+          mtime: Number(bigStat.mtimeMs),
+          ctime: Number(bigStat.ctimeMs),
+          size: Number(bigStat.size),
+          mtimeNs: bigStat.mtimeNs.toString(),
+          ctimeNs: bigStat.ctimeNs.toString(),
+          dev: bigStat.dev.toString(),
+          ino: bigStat.ino.toString(),
+        })
+        return {
+          title,
+          output: out + note,
+          data: { kind: "text", text: out, truncated: Boolean(result.truncated) },
+          metadata: {
+            preview: out.slice(0, 200),
+            truncated: Boolean(result.truncated),
+            loaded: instructions.map((i) => i.filepath),
+          },
+        }
+      }
       if (isImage || isPdf) {
         const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
         if (Number(stat.size) > MAX_ATTACHMENT_BYTES) {
