@@ -116,7 +116,19 @@ describe("update-models script", () => {
   })
 
   test("drops the direct xai provider and preserves the Grok CLI bridge", async () => {
-    const snapshotPath = path.join(import.meta.dirname, "../../src/provider/models-snapshot.json")
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+    const fixture = JSON.parse(await readFile(fixturePath, "utf-8"))
+    fixture.ollama = localProvider("ollama", "Ollama", "OLLAMA_HOST", "http://wrong-host/v1")
+    fixture["ax-studio"] = localProvider("ax-studio", "AX Studio", "AX_STUDIO_HOST", "http://wrong-host/v1")
+    await writeFile(fixturePath, JSON.stringify(fixture))
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+
+    expect(result.status).toBe(0)
     const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
 
     expect(data.xai).toBeUndefined()
@@ -139,16 +151,18 @@ describe("update-models script", () => {
       "HTTP-Referer": "https://github.com/defai-digital/ax-code",
       "X-Title": "AX Code",
     })
-    expect(Object.keys(data.openrouter?.models ?? {})).toEqual([
-      "anthropic/claude-fable-5",
-      "anthropic/claude-sonnet-4.6",
-      "moonshotai/kimi-k2.7-code",
-      "qwen/qwen3-coder-plus",
-      "qwen/qwen3-coder-flash",
-      "qwen/qwen3.7-plus",
-      "x-ai/grok-4.5",
-      "google/gemini-3.8-flash",
-    ])
+    expect(Object.keys(data.openrouter?.models ?? {}).sort()).toEqual(
+      [
+        "anthropic/claude-fable-5",
+        "anthropic/claude-sonnet-4.6",
+        "moonshotai/kimi-k2.7-code",
+        "qwen/qwen3-coder-plus",
+        "qwen/qwen3-coder-flash",
+        "qwen/qwen3.7-plus",
+        "x-ai/grok-4.5",
+        "google/gemini-3.8-flash",
+      ].sort(),
+    )
     expect(data.openrouter?.models?.["qwen/qwen3-coder-flash"]?.tool_call).toBe(true)
     expect(data.openrouter?.models?.["qwen/qwen3-coder-flash"]?.limit).toEqual({
       context: 1_000_000,
@@ -171,6 +185,35 @@ describe("update-models script", () => {
     expect(data["qoder-cli"]).toBeUndefined()
     expect(data["kimi-cli"]).toBeUndefined()
     expect(data["minimax-cli"]).toBeUndefined()
+  })
+
+  test("preserves upstream Groq limits instead of replacing them with fallback metadata", async () => {
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+    const fixture = JSON.parse(await readFile(fixturePath, "utf-8"))
+    const model = {
+      id: "qwen/qwen3.8-27b",
+      name: "Qwen/Qwen3.8-27B",
+      family: "qwen",
+      limit: { context: 131_072, output: 16_384 },
+      modalities: { input: ["text", "image"], output: ["text"] },
+      tool_call: true,
+    }
+    fixture.groq = { id: "groq", name: "Groq", models: { [model.id]: model } }
+    await writeFile(fixturePath, JSON.stringify(fixture))
+
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+
+    expect(result.status).toBe(0)
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    expect(data.groq.models[model.id].limit).toEqual(model.limit)
+    expect(data.groq.models[model.id].modalities).toEqual(model.modalities)
+    expect(data.groq.models["openai/gpt-oss-120b"].limit).toEqual({ context: 131_072, output: 65_536 })
+    expect(data.xai).toBeUndefined()
   })
 
   test("normalizes local provider endpoints during snapshot regeneration", async () => {
