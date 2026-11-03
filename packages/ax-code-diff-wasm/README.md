@@ -20,6 +20,8 @@ pnpm --dir packages/ax-code-diff-wasm build
 pnpm --dir packages/ax-code-diff-wasm typecheck
 pnpm --dir packages/ax-code-diff-wasm test
 pnpm --dir packages/ax-code-diff-wasm test:browser
+pnpm --dir packages/ax-code-diff-wasm test:tarball
+pnpm --dir packages/ax-code-diff-wasm test:tarball --browser
 ```
 
 The build requires the CLI version matching the Rust binding dependency and
@@ -32,6 +34,16 @@ Playwright Chromium or `AX_DIFF_WASM_CHROMIUM` (on macOS, installed Google
 Chrome is also detected). Set `AX_DIFF_WASM_BROWSER=firefox` or `webkit`
 to select another engine. Install them with `pnpm --dir packages/ax-code-diff-wasm
 exec playwright-core install firefox webkit`. CI tests all three browser engines.
+
+`test:tarball` packs the existing build, installs it offline into a fresh consumer
+with an empty pnpm store and disabled install scripts, then verifies frozen install,
+both public exports, real Node Worker operations and the shipped TypeScript declarations.
+`--browser` additionally runs the browser smoke against that consumer's installed
+assets; `AX_DIFF_WASM_BROWSER` selects the browser. CI uses this installed-artifact
+path for all three engines. Run `build` first; consumers need neither Rust nor a
+workspace checkout. The `@ax-code/util` source helper is bundled into the JS, so it
+is a build dependency only. The packed package has no runtime npm dependencies.
+This packaging check does not publish the private package or change CLI backend selection.
 
 ## Usage
 

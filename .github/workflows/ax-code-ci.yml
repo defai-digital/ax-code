@@ -165,10 +165,10 @@ jobs:
       - run: pnpm --dir packages/ax-code-diff-wasm run typecheck
       - run: pnpm --dir packages/ax-code-diff-wasm test
       - run: pnpm --dir packages/ax-code-diff-wasm exec playwright-core install --with-deps chromium firefox webkit
-      - name: Verify Chromium, Firefox and WebKit workers
+      - name: Verify offline tarball consumers and browser workers
         run: |
           for browser in chromium firefox webkit; do
-            AX_DIFF_WASM_BROWSER="$browser" pnpm --dir packages/ax-code-diff-wasm run test:browser
+            AX_DIFF_WASM_BROWSER="$browser" pnpm --dir packages/ax-code-diff-wasm run test:tarball --browser
           done
 
   windows-snapshot:
