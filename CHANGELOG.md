@@ -6,6 +6,15 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.15] - 2026-11-03
+
+### Changed
+
+- Share bounded Rust diff preview, patch content and duplicate-comparison kernels between the existing native workers and an opt-in Wasm workspace package; retain the native CLI backend.
+- Add worker-hosted Node/browser diff and strict hunk application with exact CRLF and final-newline preservation, cancellation, deadlines and stale-response protection. The private Wasm package is not bundled in CLI installers.
+- Add native/Wasm parity regressions and Chromium, Firefox and WebKit CI qualification.
+- Publish the paired SDK 2.6.68 maintenance release without changing the server API contract.
+
 ## [7.30.14] - 2026-11-01
 
 ### Changed
