@@ -152,7 +152,7 @@ test("Bench transmits its own pixels at bounded resolution and cleans up on resi
   player.draw({ ...input, width: 500, style: "sunset-serenade" })
   expect(writes[1]).toContain("a=d,d=I")
   expect(
-    decode(writes[2]!).equals(
+    decode(writes[1]!).equals(
       finishScenePixels(renderTextScenePixels(500, 500, "sunset-serenade", 750), 500, 500, {
         elapsedMs: 750,
         move: CINEMA_STILL,
@@ -160,7 +160,7 @@ test("Bench transmits its own pixels at bounded resolution and cleans up on resi
     ),
   ).toBe(true)
   player.dispose()
-  expect(writes[3]).toContain("a=d,d=I")
+  expect(writes[2]).toContain("a=d,d=I")
   player.draw(input)
-  expect(writes).toHaveLength(4)
+  expect(writes).toHaveLength(3)
 })

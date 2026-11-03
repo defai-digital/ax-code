@@ -415,13 +415,18 @@ export function finishScenePixels(
 }
 
 // The caller supplies the renderer's native output queue, never intercepted
-// console/stdout output. Delete only this playback's image and its placements.
+// console/stdout output. Delete only this playback's two images and their placements.
 export function digitalCodePixelPlayer(
   write: (data: string) => void,
   options: { now?: () => number; move?: CinemaMove } = {},
 ) {
   const now = options.now ?? (() => performance.now())
-  const id = randomInt(1, 0x7fffffff)
+  // Reusing the visible image ID makes Ghostty delete it on the first
+  // chunk, exposing the text overlay until the last chunk is received.
+  // Alternate two private IDs and retire the old image only AFTER a=T has
+  // completed the next one. This also bounds terminal storage to two images.
+  const id = randomInt(1, 0x7ffffffe)
+  let displayedId: number | undefined
   let frame: DigitalCodePixels | undefined
   let foliagePainter: { width: number; height: number; paint: (elapsedMs: number) => Buffer } | undefined
   let racingPainter: { width: number; height: number; paint: (elapsedMs: number) => Buffer } | undefined
@@ -435,7 +440,19 @@ export function digitalCodePixelPlayer(
   let ceiling = 1
   const costs: number[] = []
   let sceneFrames = 0
-  const clear = () => write(kittyDigitalCodeDeleteSequence(id))
+  const clear = () => write(kittyDigitalCodeDeleteSequence(id) + kittyDigitalCodeDeleteSequence(id + 1))
+  const present = (
+    frame: DigitalCodePixels,
+    columns: number,
+    rows: number,
+    rgb?: Buffer,
+    raster?: { width: number; height: number },
+  ) => {
+    const nextId = displayedId === id ? id + 1 : id
+    const output = kittyDigitalCodeFrame(nextId, frame, columns, rows, rgb, raster)
+    write(output + (displayedId === undefined ? "" : kittyDigitalCodeDeleteSequence(displayedId)))
+    displayedId = nextId
+  }
   return {
     draw(input: {
       width: number
@@ -451,7 +468,6 @@ export function digitalCodePixelPlayer(
       if (closed) return
       const next = `${input.width}:${input.height}:${input.columns}:${input.rows}:${input.direction}:${input.style ?? "digital-code"}`
       if (!frame || next !== size) {
-        if (frame) clear()
         frame = createDigitalCodePixels(input.width, input.height, input.direction, undefined, input.style)
         foliagePainter = undefined
         racingPainter = undefined
@@ -474,7 +490,7 @@ export function digitalCodePixelPlayer(
       const elapsedMs = input.elapsedMs ?? begin - started
       const style = input.style
       if (!isTextSceneStyle(style) && !isFoliageVariant(style)) {
-        write(kittyDigitalCodeFrame(id, frame, input.columns, input.rows))
+        present(frame, input.columns, input.rows)
         return
       }
       const raster = sceneRasterSize(frame.width, frame.height, quality)
@@ -496,21 +512,18 @@ export function digitalCodePixelPlayer(
         }
         painted = racingPainter.paint(elapsedMs)
       } else painted = renderTextScenePixels(raster.width, raster.height, style, elapsedMs)
-      write(
-        kittyDigitalCodeFrame(
-          id,
-          frame,
-          input.columns,
-          input.rows,
-          finishScenePixels(painted, raster.width, raster.height, {
-            elapsedMs,
-            durationMs: input.durationMs,
-            // Authored per theme, so every draw of a theme shares one camera.
-            move: options.move ?? chooseCinemaMove(style),
-            style,
-          }),
-          raster,
-        ),
+      present(
+        frame,
+        input.columns,
+        input.rows,
+        finishScenePixels(painted, raster.width, raster.height, {
+          elapsedMs,
+          durationMs: input.durationMs,
+          // Authored per theme, so every draw of a theme shares one camera.
+          move: options.move ?? chooseCinemaMove(style),
+          style,
+        }),
+        raster,
       )
       const spent = now() - begin
       // A scene's first frame pays one-time setup (caches, warm-up); it says

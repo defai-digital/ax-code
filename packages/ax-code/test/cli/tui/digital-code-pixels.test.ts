@@ -40,6 +40,56 @@ describe("Digital Code pixel admission", () => {
 })
 
 describe("Digital Code pixel transport", () => {
+  // Ghostty removes an explicit image ID on the FIRST transmission chunk.
+  // Model a repaint after every APC, including continuations and deletions.
+  test.each(["down", "up"] as const)("%s playback keeps a visible frame at every chunk boundary", (direction) => {
+    const visible = new Set<number>()
+    const ids = new Set<number>()
+    let loading = 0
+    let displayed = false
+    let disposing = false
+    let chunks = 0
+    const player = digitalCodePixelPlayer(
+      (data) => {
+        for (const packet of data.matchAll(/\x1b_G([^;]+);[A-Za-z0-9+/=]*\x1b\\/g)) {
+          const fields = new Map(packet[1]!.split(",").map((field) => field.split("=") as [string, string]))
+          if (fields.get("a") === "d") visible.delete(Number(fields.get("i")))
+          else {
+            if (fields.get("a") === "T") {
+              loading = Number(fields.get("i"))
+              ids.add(loading)
+              visible.delete(loading)
+            }
+            if (fields.get("m") === "0") {
+              visible.add(loading)
+              displayed = true
+            }
+            chunks++
+          }
+          if (displayed && !disposing)
+            expect(visible.size, "terminal repainted without an animation frame").toBeGreaterThan(0)
+          expect(visible.size).toBeLessThanOrEqual(2)
+        }
+      },
+      { now: () => 0 },
+    )
+    const input = { width: 320, height: 180, columns: 80, rows: 24, direction, elapsedMs: 1000 }
+    player.draw(input)
+    for (let tick = 0; tick < 12; tick++) {
+      player.draw({ ...input, elapsedMs: 1000 + tick * 50 })
+      expect(visible.size).toBe(1)
+    }
+    // Resizes and scene changes must also upload before retiring the old frame.
+    player.draw({ ...input, width: 400, columns: 100, style: "fuji-day" })
+    player.draw({ ...input, style: "fuji-night" })
+    expect(ids.size).toBe(2)
+    expect(visible.size).toBe(1)
+    expect(chunks).toBeGreaterThan(30)
+    disposing = true
+    player.dispose()
+    expect(visible.size).toBe(0)
+  })
+
   test("bounds raster size and transmits lossless compressed RGB in bounded chunks", () => {
     const frame = createDigitalCodePixels(3840, 2160, "down")
     expect(frame.width).toBe(DIGITAL_CODE_PIXEL_MAX_WIDTH)
@@ -87,20 +137,40 @@ describe("Digital Code pixel transport", () => {
     expect(gold.r).toBeGreaterThan(gold.g)
   })
 
-  test("deletes only its own image on resize and dispose; never draws after disposal", () => {
+  test("retires only its own previous image after resize and deletes both buffers on dispose", () => {
     const writes: string[] = []
     const player = digitalCodePixelPlayer((data) => writes.push(data))
     const input = { width: 320, height: 180, columns: 80, rows: 24, direction: "up" as const }
     player.draw(input)
-    const id = /,i=(\d+),/.exec(writes[0]!)![1]
+    const id = Number(/,i=(\d+),/.exec(writes[0]!)![1])
     player.draw({ ...input, width: 400, columns: 100 })
-    expect(writes[1]).toBe(kittyDigitalCodeDeleteSequence(Number(id)))
-    expect(writes[2]).toContain(`i=${id},`)
+    expect(writes[1]).toContain(`i=${id + 1},`)
+    expect(writes[1]!.endsWith(kittyDigitalCodeDeleteSequence(id))).toBe(true)
     player.dispose()
-    expect(writes[3]).toBe(writes[1])
+    expect(writes[2]).toBe(kittyDigitalCodeDeleteSequence(id) + kittyDigitalCodeDeleteSequence(id + 1))
     player.dispose()
     player.draw(input)
-    expect(writes).toHaveLength(4)
+    expect(writes).toHaveLength(3)
+  })
+
+  test("cleans both image IDs after a partially written replacement throws", () => {
+    const writes: string[] = []
+    let fail = false
+    const player = digitalCodePixelPlayer((data) => {
+      writes.push(data)
+      if (fail) throw new Error("output interrupted")
+    })
+    const input = { width: 320, height: 180, columns: 80, rows: 24, direction: "down" as const }
+    player.draw(input)
+    const id = Number(/,i=(\d+),/.exec(writes[0]!)![1])
+    fail = true
+    expect(() => player.draw(input)).toThrow("output interrupted")
+    fail = false
+    player.dispose()
+    expect(writes[2]).toBe(kittyDigitalCodeDeleteSequence(id) + kittyDigitalCodeDeleteSequence(id + 1))
+    player.draw(input)
+    player.dispose()
+    expect(writes).toHaveLength(3)
   })
 
   test("renders a frame when a rain cell is blank instead of crashing", () => {
@@ -118,11 +188,11 @@ describe("Digital Code pixel transport", () => {
     player.draw(input)
     expect(writes).toHaveLength(1)
     player.draw({ ...input, direction: "up" })
-    expect(writes).toHaveLength(3)
-    const id = /,i=(\d+),/.exec(writes[0]!)![1]
-    expect(writes[1]).toBe(kittyDigitalCodeDeleteSequence(Number(id)))
-    expect(writes[2]).toContain("a=T,")
-    expect(writes[2]).toContain("i=" + id + ",")
+    expect(writes).toHaveLength(2)
+    const id = Number(/,i=(\d+),/.exec(writes[0]!)![1])
+    expect(writes[1]).toContain("a=T,")
+    expect(writes[1]).toContain(`i=${id + 1},`)
+    expect(writes[1]!.endsWith(kittyDigitalCodeDeleteSequence(id))).toBe(true)
   })
 
   test("unused playback emits nothing", () => {

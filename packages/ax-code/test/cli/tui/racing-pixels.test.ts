@@ -96,5 +96,6 @@ test("the racing player preserves framing and replaces its caches on style and v
   player.dispose()
   player.draw({ width: 320, height: 180, columns: 80, rows: 24, direction: "down", style: "racing-day" })
   expect(writes).toHaveLength(count)
-  expect(writes.filter((data) => data.startsWith("\x1b_Ga=d,"))).toHaveLength(4)
+  expect(writes.filter((data) => data.startsWith("\x1b_Ga=d,"))).toHaveLength(1)
+  expect(writes.filter((data) => data.includes("a=d,d=I"))).toHaveLength(5)
 })

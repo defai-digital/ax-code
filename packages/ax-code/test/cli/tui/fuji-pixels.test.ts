@@ -102,7 +102,7 @@ test("Fuji transport sends the scene, preserves animation time on resize, and de
   player.draw({ ...input, width: 600 })
   expect(writes[1]).toContain("a=d,d=I")
   expect(
-    decode(writes[2]!).equals(
+    decode(writes[1]!).equals(
       finishScenePixels(renderFujiPixels(600, 440, "fuji-day", 1200), 600, 440, {
         elapsedMs: 1200,
         move: CINEMA_STILL,
@@ -111,7 +111,7 @@ test("Fuji transport sends the scene, preserves animation time on resize, and de
   ).toBe(true)
   player.draw({ ...input, style: "fuji-night" })
   expect(
-    decode(writes[4]!).equals(
+    decode(writes[2]!).equals(
       finishScenePixels(renderFujiPixels(780, 440, "fuji-night", 1200), 780, 440, {
         elapsedMs: 1200,
         move: CINEMA_STILL,
@@ -119,7 +119,7 @@ test("Fuji transport sends the scene, preserves animation time on resize, and de
     ),
   ).toBe(true)
   player.dispose()
-  expect(writes[5]).toContain("a=d,d=I")
+  expect(writes[3]).toContain("a=d,d=I")
   player.draw(input)
-  expect(writes).toHaveLength(6)
+  expect(writes).toHaveLength(4)
 })

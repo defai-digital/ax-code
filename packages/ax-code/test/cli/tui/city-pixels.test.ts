@@ -101,7 +101,7 @@ test("City transmits its own pixels and cleans up on resize", () => {
   player.draw({ ...input, width: 600, style: "city-dawn" })
   expect(writes[1]).toContain("a=d,d=I")
   expect(
-    decode(writes[2]!).equals(
+    decode(writes[1]!).equals(
       finishScenePixels(renderTextScenePixels(600, 480, "city-dawn", 750), 600, 480, {
         elapsedMs: 750,
         move: CINEMA_STILL,
@@ -109,7 +109,7 @@ test("City transmits its own pixels and cleans up on resize", () => {
     ),
   ).toBe(true)
   player.dispose()
-  expect(writes[3]).toContain("a=d,d=I")
+  expect(writes[2]).toContain("a=d,d=I")
   player.draw(input)
-  expect(writes).toHaveLength(4)
+  expect(writes).toHaveLength(3)
 })

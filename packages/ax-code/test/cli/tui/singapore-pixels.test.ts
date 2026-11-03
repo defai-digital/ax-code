@@ -87,9 +87,9 @@ test("existing Kitty player routes both Singapore variants, resizes and cleans u
     ),
   ).toBe(true)
   player.draw({ ...input, direction: "up", style: "singapore-night" })
-  expect(writes[1]).toBe(kittyDigitalCodeDeleteSequence(id))
+  expect(writes[1]!.endsWith(kittyDigitalCodeDeleteSequence(id))).toBe(true)
   expect(
-    decode(writes[2]!).equals(
+    decode(writes[1]!).equals(
       finishScenePixels(renderSingaporePixels(304, 192, "singapore-night", 1000), 304, 192, {
         elapsedMs: 1000,
         move: CINEMA_STILL,
@@ -97,10 +97,10 @@ test("existing Kitty player routes both Singapore variants, resizes and cleans u
     ),
   ).toBe(true)
   player.draw({ ...input, width: 380, columns: 95 })
-  expect(writes[3]).toBe(kittyDigitalCodeDeleteSequence(id))
-  expect(writes[4]).toContain("s=380,v=192,")
+  expect(writes[2]!.endsWith(kittyDigitalCodeDeleteSequence(id + 1))).toBe(true)
+  expect(writes[2]).toContain("s=380,v=192,")
   expect(
-    decode(writes[4]!).equals(
+    decode(writes[2]!).equals(
       finishScenePixels(renderSingaporePixels(380, 192, "singapore-day", 1000), 380, 192, {
         elapsedMs: 1000,
         move: CINEMA_STILL,
@@ -108,8 +108,8 @@ test("existing Kitty player routes both Singapore variants, resizes and cleans u
     ),
   ).toBe(true)
   player.dispose()
-  expect(writes[5]).toBe(kittyDigitalCodeDeleteSequence(id))
+  expect(writes[3]).toBe(kittyDigitalCodeDeleteSequence(id) + kittyDigitalCodeDeleteSequence(id + 1))
   player.dispose()
   player.draw(input)
-  expect(writes).toHaveLength(6)
+  expect(writes).toHaveLength(4)
 })
