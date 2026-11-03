@@ -24,13 +24,12 @@
     "build": "node script/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:tarball": "node script/tarball-smoke.mjs",
     "test:browser": "node script/browser-smoke.mjs",
     "benchmark": "node --import tsx script/benchmark.mjs"
   },
-  "dependencies": {
-    "@ax-code/util": "workspace:*"
-  },
   "devDependencies": {
+    "@ax-code/util": "workspace:*",
     "@ax-code/diff": "workspace:*",
     "@ax-code/ax-code-reason": "workspace:*",
     "@types/node": "catalog:",

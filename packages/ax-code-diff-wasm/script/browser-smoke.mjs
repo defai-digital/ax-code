@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import { createServer } from "node:http"
 import { readFile, access } from "node:fs/promises"
-import { fileURLToPath } from "node:url"
+import path from "node:path"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { chromium, firefox, webkit } from "playwright-core"
 
 // Bound browser/driver startup as well as the worker operation deadlines.
@@ -14,7 +15,10 @@ watchdog.unref()
 const browserName = process.env.AX_DIFF_WASM_BROWSER ?? "chromium"
 const browserType = { chromium, firefox, webkit }[browserName]
 if (!browserType) throw new Error(`Unsupported browser: ${browserName}`)
-const pkg = new URL("../", import.meta.url)
+// Tarball qualification serves the actual installed assets, not workspace dist.
+const pkg = process.env.AX_DIFF_WASM_PACKAGE_ROOT
+  ? pathToFileURL(path.resolve(process.env.AX_DIFF_WASM_PACKAGE_ROOT) + path.sep)
+  : new URL("../", import.meta.url)
 const csp = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'"
 const server = createServer(async (request, response) => {
   response.setHeader("Content-Security-Policy", csp)

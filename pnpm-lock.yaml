@@ -621,10 +621,6 @@ importers:
         version: 3.10.8(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.6.5)(emnapi@1.9.2(node-addon-api@8.9.2))
 
   packages/ax-code-diff-wasm:
-    dependencies:
-      '@ax-code/util':
-        specifier: workspace:*
-        version: link:../util
     devDependencies:
       '@ax-code/ax-code-reason':
         specifier: workspace:*
@@ -632,6 +628,9 @@ importers:
       '@ax-code/diff':
         specifier: workspace:*
         version: link:../ax-code-diff-native
+      '@ax-code/util':
+        specifier: workspace:*
+        version: link:../util
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.5
