@@ -14,3 +14,9 @@ describe("installed braces dependency depth guards", () => {
     expect(() => checkBracesDepthGuard()).not.toThrow()
   })
 })
+
+test("the installed registry patch retains the input-length guard for imbalanced patterns", () => {
+  const pattern = "}".repeat(10001)
+  expect(() => braces.parse(pattern)).toThrow(/exceeds max characters/)
+  expect(() => braces.parse(pattern, { maxLength: Infinity })).toThrow(/exceeds max characters/)
+})

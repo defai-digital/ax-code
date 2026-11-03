@@ -1,4 +1,1 @@
-[[IgnoredVulns]]
-id = "GHSA-grv7-fg5c-xmjg"
-ignoreUntil = 2026-11-02
-reason = "The same tools/braces tree is upstream 3.0.3, which already caps pattern length for GHSA-grv7-fg5c-xmjg, plus the depth guard. osv-scanner reads the lockfile key file:tools/braces as the version, so it cannot see semver 3.0.4 and reports the fixed-in-3.0.3 advisory. Reassess when upstream publishes a release."
+# No advisory exceptions. The local braces depth guards use a pinned registry patch.

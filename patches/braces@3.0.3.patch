@@ -1,0 +1,1253 @@
+diff --git a/index.js b/index.js
+index d222c13..b201871 100644
+--- a/index.js
++++ b/index.js
+@@ -1,9 +1,9 @@
+-'use strict';
++"use strict"
+ 
+-const stringify = require('./lib/stringify');
+-const compile = require('./lib/compile');
+-const expand = require('./lib/expand');
+-const parse = require('./lib/parse');
++const stringify = require("./lib/stringify")
++const compile = require("./lib/compile")
++const expand = require("./lib/expand")
++const parse = require("./lib/parse")
+ 
+ /**
+  * Expand the given pattern or create a regex-compatible string.
+@@ -20,26 +20,26 @@ const parse = require('./lib/parse');
+  */
+ 
+ const braces = (input, options = {}) => {
+-  let output = [];
++  let output = []
+ 
+   if (Array.isArray(input)) {
+     for (const pattern of input) {
+-      const result = braces.create(pattern, options);
++      const result = braces.create(pattern, options)
+       if (Array.isArray(result)) {
+-        output.push(...result);
++        output.push(...result)
+       } else {
+-        output.push(result);
++        output.push(result)
+       }
+     }
+   } else {
+-    output = [].concat(braces.create(input, options));
++    output = [].concat(braces.create(input, options))
+   }
+ 
+   if (options && options.expand === true && options.nodupes === true) {
+-    output = [...new Set(output)];
++    output = [...new Set(output)]
+   }
+-  return output;
+-};
++  return output
++}
+ 
+ /**
+  * Parse the given `str` with the given `options`.
+@@ -55,7 +55,7 @@ const braces = (input, options = {}) => {
+  * @api public
+  */
+ 
+-braces.parse = (input, options = {}) => parse(input, options);
++braces.parse = (input, options = {}) => parse(input, options)
+ 
+ /**
+  * Creates a braces string from an AST, or an AST node.
+@@ -72,11 +72,11 @@ braces.parse = (input, options = {}) => parse(input, options);
+  */
+ 
+ braces.stringify = (input, options = {}) => {
+-  if (typeof input === 'string') {
+-    return stringify(braces.parse(input, options), options);
++  if (typeof input === "string") {
++    return stringify(braces.parse(input, options), options)
+   }
+-  return stringify(input, options);
+-};
++  return stringify(input, options)
++}
+ 
+ /**
+  * Compiles a brace pattern into a regex-compatible, optimized string.
+@@ -94,11 +94,11 @@ braces.stringify = (input, options = {}) => {
+  */
+ 
+ braces.compile = (input, options = {}) => {
+-  if (typeof input === 'string') {
+-    input = braces.parse(input, options);
++  if (typeof input === "string") {
++    input = braces.parse(input, options)
+   }
+-  return compile(input, options);
+-};
++  return compile(input, options)
++}
+ 
+ /**
+  * Expands a brace pattern into an array. This method is called by the
+@@ -118,24 +118,24 @@ braces.compile = (input, options = {}) => {
+  */
+ 
+ braces.expand = (input, options = {}) => {
+-  if (typeof input === 'string') {
+-    input = braces.parse(input, options);
++  if (typeof input === "string") {
++    input = braces.parse(input, options)
+   }
+ 
+-  let result = expand(input, options);
++  let result = expand(input, options)
+ 
+   // filter out empty strings if specified
+   if (options.noempty === true) {
+-    result = result.filter(Boolean);
++    result = result.filter(Boolean)
+   }
+ 
+   // filter out duplicates if specified
+   if (options.nodupes === true) {
+-    result = [...new Set(result)];
++    result = [...new Set(result)]
+   }
+ 
+-  return result;
+-};
++  return result
++}
+ 
+ /**
+  * Processes a brace pattern and returns either an expanded array
+@@ -154,17 +154,15 @@ braces.expand = (input, options = {}) => {
+  */
+ 
+ braces.create = (input, options = {}) => {
+-  if (input === '' || input.length < 3) {
+-    return [input];
++  if (input === "" || input.length < 3) {
++    return [input]
+   }
+ 
+-  return options.expand !== true
+-    ? braces.compile(input, options)
+-    : braces.expand(input, options);
+-};
++  return options.expand !== true ? braces.compile(input, options) : braces.expand(input, options)
++}
+ 
+ /**
+  * Expose "braces"
+  */
+ 
+-module.exports = braces;
++module.exports = braces
+diff --git a/lib/compile.js b/lib/compile.js
+index dce69be..da60620 100644
+--- a/lib/compile.js
++++ b/lib/compile.js
+@@ -1,60 +1,61 @@
+-'use strict';
++"use strict"
+ 
+-const fill = require('fill-range');
+-const utils = require('./utils');
++const fill = require("fill-range")
++const utils = require("./utils")
+ 
+ const compile = (ast, options = {}) => {
+-  const walk = (node, parent = {}) => {
+-    const invalidBlock = utils.isInvalidBrace(parent);
+-    const invalidNode = node.invalid === true && options.escapeInvalid === true;
+-    const invalid = invalidBlock === true || invalidNode === true;
+-    const prefix = options.escapeInvalid === true ? '\\' : '';
+-    let output = '';
++  const walk = (node, parent = {}, depth = 0) => {
++    if (depth >= 128) throw new SyntaxError("Brace pattern nesting exceeds depth limit (128)")
++    const invalidBlock = utils.isInvalidBrace(parent)
++    const invalidNode = node.invalid === true && options.escapeInvalid === true
++    const invalid = invalidBlock === true || invalidNode === true
++    const prefix = options.escapeInvalid === true ? "\\" : ""
++    let output = ""
+ 
+     if (node.isOpen === true) {
+-      return prefix + node.value;
++      return prefix + node.value
+     }
+ 
+     if (node.isClose === true) {
+-      console.log('node.isClose', prefix, node.value);
+-      return prefix + node.value;
++      console.log("node.isClose", prefix, node.value)
++      return prefix + node.value
+     }
+ 
+-    if (node.type === 'open') {
+-      return invalid ? prefix + node.value : '(';
++    if (node.type === "open") {
++      return invalid ? prefix + node.value : "("
+     }
+ 
+-    if (node.type === 'close') {
+-      return invalid ? prefix + node.value : ')';
++    if (node.type === "close") {
++      return invalid ? prefix + node.value : ")"
+     }
+ 
+-    if (node.type === 'comma') {
+-      return node.prev.type === 'comma' ? '' : invalid ? node.value : '|';
++    if (node.type === "comma") {
++      return node.prev.type === "comma" ? "" : invalid ? node.value : "|"
+     }
+ 
+     if (node.value) {
+-      return node.value;
++      return node.value
+     }
+ 
+     if (node.nodes && node.ranges > 0) {
+-      const args = utils.reduce(node.nodes);
+-      const range = fill(...args, { ...options, wrap: false, toRegex: true, strictZeros: true });
++      const args = utils.reduce(node.nodes)
++      const range = fill(...args, { ...options, wrap: false, toRegex: true, strictZeros: true })
+ 
+       if (range.length !== 0) {
+-        return args.length > 1 && range.length > 1 ? `(${range})` : range;
++        return args.length > 1 && range.length > 1 ? `(${range})` : range
+       }
+     }
+ 
+     if (node.nodes) {
+       for (const child of node.nodes) {
+-        output += walk(child, node);
++        output += walk(child, node, depth + 1)
+       }
+     }
+ 
+-    return output;
+-  };
++    return output
++  }
+ 
+-  return walk(ast);
+-};
++  return walk(ast)
++}
+ 
+-module.exports = compile;
++module.exports = compile
+diff --git a/lib/constants.js b/lib/constants.js
+index 2bb3b88..e47e0da 100644
+--- a/lib/constants.js
++++ b/lib/constants.js
+@@ -1,57 +1,57 @@
+-'use strict';
++"use strict"
+ 
+ module.exports = {
+   MAX_LENGTH: 10000,
+ 
+   // Digits
+-  CHAR_0: '0', /* 0 */
+-  CHAR_9: '9', /* 9 */
++  CHAR_0: "0" /* 0 */,
++  CHAR_9: "9" /* 9 */,
+ 
+   // Alphabet chars.
+-  CHAR_UPPERCASE_A: 'A', /* A */
+-  CHAR_LOWERCASE_A: 'a', /* a */
+-  CHAR_UPPERCASE_Z: 'Z', /* Z */
+-  CHAR_LOWERCASE_Z: 'z', /* z */
++  CHAR_UPPERCASE_A: "A" /* A */,
++  CHAR_LOWERCASE_A: "a" /* a */,
++  CHAR_UPPERCASE_Z: "Z" /* Z */,
++  CHAR_LOWERCASE_Z: "z" /* z */,
+ 
+-  CHAR_LEFT_PARENTHESES: '(', /* ( */
+-  CHAR_RIGHT_PARENTHESES: ')', /* ) */
++  CHAR_LEFT_PARENTHESES: "(" /* ( */,
++  CHAR_RIGHT_PARENTHESES: ")" /* ) */,
+ 
+-  CHAR_ASTERISK: '*', /* * */
++  CHAR_ASTERISK: "*" /* * */,
+ 
+   // Non-alphabetic chars.
+-  CHAR_AMPERSAND: '&', /* & */
+-  CHAR_AT: '@', /* @ */
+-  CHAR_BACKSLASH: '\\', /* \ */
+-  CHAR_BACKTICK: '`', /* ` */
+-  CHAR_CARRIAGE_RETURN: '\r', /* \r */
+-  CHAR_CIRCUMFLEX_ACCENT: '^', /* ^ */
+-  CHAR_COLON: ':', /* : */
+-  CHAR_COMMA: ',', /* , */
+-  CHAR_DOLLAR: '$', /* . */
+-  CHAR_DOT: '.', /* . */
+-  CHAR_DOUBLE_QUOTE: '"', /* " */
+-  CHAR_EQUAL: '=', /* = */
+-  CHAR_EXCLAMATION_MARK: '!', /* ! */
+-  CHAR_FORM_FEED: '\f', /* \f */
+-  CHAR_FORWARD_SLASH: '/', /* / */
+-  CHAR_HASH: '#', /* # */
+-  CHAR_HYPHEN_MINUS: '-', /* - */
+-  CHAR_LEFT_ANGLE_BRACKET: '<', /* < */
+-  CHAR_LEFT_CURLY_BRACE: '{', /* { */
+-  CHAR_LEFT_SQUARE_BRACKET: '[', /* [ */
+-  CHAR_LINE_FEED: '\n', /* \n */
+-  CHAR_NO_BREAK_SPACE: '\u00A0', /* \u00A0 */
+-  CHAR_PERCENT: '%', /* % */
+-  CHAR_PLUS: '+', /* + */
+-  CHAR_QUESTION_MARK: '?', /* ? */
+-  CHAR_RIGHT_ANGLE_BRACKET: '>', /* > */
+-  CHAR_RIGHT_CURLY_BRACE: '}', /* } */
+-  CHAR_RIGHT_SQUARE_BRACKET: ']', /* ] */
+-  CHAR_SEMICOLON: ';', /* ; */
+-  CHAR_SINGLE_QUOTE: '\'', /* ' */
+-  CHAR_SPACE: ' ', /*   */
+-  CHAR_TAB: '\t', /* \t */
+-  CHAR_UNDERSCORE: '_', /* _ */
+-  CHAR_VERTICAL_LINE: '|', /* | */
+-  CHAR_ZERO_WIDTH_NOBREAK_SPACE: '\uFEFF' /* \uFEFF */
+-};
++  CHAR_AMPERSAND: "&" /* & */,
++  CHAR_AT: "@" /* @ */,
++  CHAR_BACKSLASH: "\\" /* \ */,
++  CHAR_BACKTICK: "`" /* ` */,
++  CHAR_CARRIAGE_RETURN: "\r" /* \r */,
++  CHAR_CIRCUMFLEX_ACCENT: "^" /* ^ */,
++  CHAR_COLON: ":" /* : */,
++  CHAR_COMMA: "," /* , */,
++  CHAR_DOLLAR: "$" /* . */,
++  CHAR_DOT: "." /* . */,
++  CHAR_DOUBLE_QUOTE: '"' /* " */,
++  CHAR_EQUAL: "=" /* = */,
++  CHAR_EXCLAMATION_MARK: "!" /* ! */,
++  CHAR_FORM_FEED: "\f" /* \f */,
++  CHAR_FORWARD_SLASH: "/" /* / */,
++  CHAR_HASH: "#" /* # */,
++  CHAR_HYPHEN_MINUS: "-" /* - */,
++  CHAR_LEFT_ANGLE_BRACKET: "<" /* < */,
++  CHAR_LEFT_CURLY_BRACE: "{" /* { */,
++  CHAR_LEFT_SQUARE_BRACKET: "[" /* [ */,
++  CHAR_LINE_FEED: "\n" /* \n */,
++  CHAR_NO_BREAK_SPACE: "\u00A0" /* \u00A0 */,
++  CHAR_PERCENT: "%" /* % */,
++  CHAR_PLUS: "+" /* + */,
++  CHAR_QUESTION_MARK: "?" /* ? */,
++  CHAR_RIGHT_ANGLE_BRACKET: ">" /* > */,
++  CHAR_RIGHT_CURLY_BRACE: "}" /* } */,
++  CHAR_RIGHT_SQUARE_BRACKET: "]" /* ] */,
++  CHAR_SEMICOLON: ";" /* ; */,
++  CHAR_SINGLE_QUOTE: "'" /* ' */,
++  CHAR_SPACE: " " /*   */,
++  CHAR_TAB: "\t" /* \t */,
++  CHAR_UNDERSCORE: "_" /* _ */,
++  CHAR_VERTICAL_LINE: "|" /* | */,
++  CHAR_ZERO_WIDTH_NOBREAK_SPACE: "\uFEFF" /* \uFEFF */,
++}
+diff --git a/lib/expand.js b/lib/expand.js
+index 35b2c41..8c0fb66 100644
+--- a/lib/expand.js
++++ b/lib/expand.js
+@@ -1,113 +1,116 @@
+-'use strict';
++"use strict"
+ 
+-const fill = require('fill-range');
+-const stringify = require('./stringify');
+-const utils = require('./utils');
++const fill = require("fill-range")
++const stringify = require("./stringify")
++const utils = require("./utils")
+ 
+-const append = (queue = '', stash = '', enclose = false) => {
+-  const result = [];
++const append = (queue = "", stash = "", enclose = false) => {
++  const result = []
+ 
+-  queue = [].concat(queue);
+-  stash = [].concat(stash);
++  queue = [].concat(queue)
++  stash = [].concat(stash)
+ 
+-  if (!stash.length) return queue;
++  if (!stash.length) return queue
+   if (!queue.length) {
+-    return enclose ? utils.flatten(stash).map(ele => `{${ele}}`) : stash;
++    return enclose ? utils.flatten(stash).map((ele) => `{${ele}}`) : stash
+   }
+ 
+   for (const item of queue) {
+     if (Array.isArray(item)) {
+       for (const value of item) {
+-        result.push(append(value, stash, enclose));
++        result.push(append(value, stash, enclose))
+       }
+     } else {
+       for (let ele of stash) {
+-        if (enclose === true && typeof ele === 'string') ele = `{${ele}}`;
+-        result.push(Array.isArray(ele) ? append(item, ele, enclose) : item + ele);
++        if (enclose === true && typeof ele === "string") ele = `{${ele}}`
++        result.push(Array.isArray(ele) ? append(item, ele, enclose) : item + ele)
+       }
+     }
+   }
+-  return utils.flatten(result);
+-};
++  return utils.flatten(result)
++}
+ 
+ const expand = (ast, options = {}) => {
+-  const rangeLimit = options.rangeLimit === undefined ? 1000 : options.rangeLimit;
++  const rangeLimit = options.rangeLimit === undefined ? 1000 : options.rangeLimit
+ 
+-  const walk = (node, parent = {}) => {
+-    node.queue = [];
++  const walk = (node, parent = {}, depth = 0) => {
++    if (depth >= 128) throw new SyntaxError("Brace pattern nesting exceeds depth limit (128)")
++    node.queue = []
+ 
+-    let p = parent;
+-    let q = parent.queue;
++    let p = parent
++    let q = parent.queue
+ 
+-    while (p.type !== 'brace' && p.type !== 'root' && p.parent) {
+-      p = p.parent;
+-      q = p.queue;
++    while (p.type !== "brace" && p.type !== "root" && p.parent) {
++      p = p.parent
++      q = p.queue
+     }
+ 
+     if (node.invalid || node.dollar) {
+-      q.push(append(q.pop(), stringify(node, options)));
+-      return;
++      q.push(append(q.pop(), stringify(node, options)))
++      return
+     }
+ 
+-    if (node.type === 'brace' && node.invalid !== true && node.nodes.length === 2) {
+-      q.push(append(q.pop(), ['{}']));
+-      return;
++    if (node.type === "brace" && node.invalid !== true && node.nodes.length === 2) {
++      q.push(append(q.pop(), ["{}"]))
++      return
+     }
+ 
+     if (node.nodes && node.ranges > 0) {
+-      const args = utils.reduce(node.nodes);
++      const args = utils.reduce(node.nodes)
+ 
+       if (utils.exceedsLimit(...args, options.step, rangeLimit)) {
+-        throw new RangeError('expanded array length exceeds range limit. Use options.rangeLimit to increase or disable the limit.');
++        throw new RangeError(
++          "expanded array length exceeds range limit. Use options.rangeLimit to increase or disable the limit.",
++        )
+       }
+ 
+-      let range = fill(...args, options);
++      let range = fill(...args, options)
+       if (range.length === 0) {
+-        range = stringify(node, options);
++        range = stringify(node, options)
+       }
+ 
+-      q.push(append(q.pop(), range));
+-      node.nodes = [];
+-      return;
++      q.push(append(q.pop(), range))
++      node.nodes = []
++      return
+     }
+ 
+-    const enclose = utils.encloseBrace(node);
+-    let queue = node.queue;
+-    let block = node;
++    const enclose = utils.encloseBrace(node)
++    let queue = node.queue
++    let block = node
+ 
+-    while (block.type !== 'brace' && block.type !== 'root' && block.parent) {
+-      block = block.parent;
+-      queue = block.queue;
++    while (block.type !== "brace" && block.type !== "root" && block.parent) {
++      block = block.parent
++      queue = block.queue
+     }
+ 
+     for (let i = 0; i < node.nodes.length; i++) {
+-      const child = node.nodes[i];
++      const child = node.nodes[i]
+ 
+-      if (child.type === 'comma' && node.type === 'brace') {
+-        if (i === 1) queue.push('');
+-        queue.push('');
+-        continue;
++      if (child.type === "comma" && node.type === "brace") {
++        if (i === 1) queue.push("")
++        queue.push("")
++        continue
+       }
+ 
+-      if (child.type === 'close') {
+-        q.push(append(q.pop(), queue, enclose));
+-        continue;
++      if (child.type === "close") {
++        q.push(append(q.pop(), queue, enclose))
++        continue
+       }
+ 
+-      if (child.value && child.type !== 'open') {
+-        queue.push(append(queue.pop(), child.value));
+-        continue;
++      if (child.value && child.type !== "open") {
++        queue.push(append(queue.pop(), child.value))
++        continue
+       }
+ 
+       if (child.nodes) {
+-        walk(child, node);
++        walk(child, node, depth + 1)
+       }
+     }
+ 
+-    return queue;
+-  };
++    return queue
++  }
+ 
+-  return utils.flatten(walk(ast));
+-};
++  return utils.flatten(walk(ast))
++}
+ 
+-module.exports = expand;
++module.exports = expand
+diff --git a/lib/parse.js b/lib/parse.js
+index 3a6988e..998315b 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -1,6 +1,6 @@
+-'use strict';
++"use strict"
+ 
+-const stringify = require('./stringify');
++const stringify = require("./stringify")
+ 
+ /**
+  * Constants
+@@ -8,81 +8,81 @@ const stringify = require('./stringify');
+ 
+ const {
+   MAX_LENGTH,
+-  CHAR_BACKSLASH, /* \ */
+-  CHAR_BACKTICK, /* ` */
+-  CHAR_COMMA, /* , */
+-  CHAR_DOT, /* . */
+-  CHAR_LEFT_PARENTHESES, /* ( */
+-  CHAR_RIGHT_PARENTHESES, /* ) */
+-  CHAR_LEFT_CURLY_BRACE, /* { */
+-  CHAR_RIGHT_CURLY_BRACE, /* } */
+-  CHAR_LEFT_SQUARE_BRACKET, /* [ */
+-  CHAR_RIGHT_SQUARE_BRACKET, /* ] */
+-  CHAR_DOUBLE_QUOTE, /* " */
+-  CHAR_SINGLE_QUOTE, /* ' */
++  CHAR_BACKSLASH /* \ */,
++  CHAR_BACKTICK /* ` */,
++  CHAR_COMMA /* , */,
++  CHAR_DOT /* . */,
++  CHAR_LEFT_PARENTHESES /* ( */,
++  CHAR_RIGHT_PARENTHESES /* ) */,
++  CHAR_LEFT_CURLY_BRACE /* { */,
++  CHAR_RIGHT_CURLY_BRACE /* } */,
++  CHAR_LEFT_SQUARE_BRACKET /* [ */,
++  CHAR_RIGHT_SQUARE_BRACKET /* ] */,
++  CHAR_DOUBLE_QUOTE /* " */,
++  CHAR_SINGLE_QUOTE /* ' */,
+   CHAR_NO_BREAK_SPACE,
+-  CHAR_ZERO_WIDTH_NOBREAK_SPACE
+-} = require('./constants');
++  CHAR_ZERO_WIDTH_NOBREAK_SPACE,
++} = require("./constants")
+ 
+ /**
+  * parse
+  */
+ 
+ const parse = (input, options = {}) => {
+-  if (typeof input !== 'string') {
+-    throw new TypeError('Expected a string');
++  if (typeof input !== "string") {
++    throw new TypeError("Expected a string")
+   }
+ 
+-  const opts = options || {};
+-  const max = typeof opts.maxLength === 'number' ? Math.min(MAX_LENGTH, opts.maxLength) : MAX_LENGTH;
++  const opts = options || {}
++  const max = typeof opts.maxLength === "number" ? Math.min(MAX_LENGTH, opts.maxLength) : MAX_LENGTH
+   if (input.length > max) {
+-    throw new SyntaxError(`Input length (${input.length}), exceeds max characters (${max})`);
++    throw new SyntaxError(`Input length (${input.length}), exceeds max characters (${max})`)
+   }
+ 
+-  const ast = { type: 'root', input, nodes: [] };
+-  const stack = [ast];
+-  let block = ast;
+-  let prev = ast;
+-  let brackets = 0;
+-  const length = input.length;
+-  let index = 0;
+-  let depth = 0;
+-  let value;
++  const ast = { type: "root", input, nodes: [] }
++  const stack = [ast]
++  let block = ast
++  let prev = ast
++  let brackets = 0
++  const length = input.length
++  let index = 0
++  let depth = 0
++  let value
+ 
+   /**
+    * Helpers
+    */
+ 
+-  const advance = () => input[index++];
+-  const push = node => {
+-    if (node.type === 'text' && prev.type === 'dot') {
+-      prev.type = 'text';
++  const advance = () => input[index++]
++  const push = (node) => {
++    if (node.type === "text" && prev.type === "dot") {
++      prev.type = "text"
+     }
+ 
+-    if (prev && prev.type === 'text' && node.type === 'text') {
+-      prev.value += node.value;
+-      return;
++    if (prev && prev.type === "text" && node.type === "text") {
++      prev.value += node.value
++      return
+     }
+ 
+-    block.nodes.push(node);
+-    node.parent = block;
+-    node.prev = prev;
+-    prev = node;
+-    return node;
+-  };
++    block.nodes.push(node)
++    node.parent = block
++    node.prev = prev
++    prev = node
++    return node
++  }
+ 
+-  push({ type: 'bos' });
++  push({ type: "bos" })
+ 
+   while (index < length) {
+-    block = stack[stack.length - 1];
+-    value = advance();
++    block = stack[stack.length - 1]
++    value = advance()
+ 
+     /**
+      * Invalid chars
+      */
+ 
+     if (value === CHAR_ZERO_WIDTH_NOBREAK_SPACE || value === CHAR_NO_BREAK_SPACE) {
+-      continue;
++      continue
+     }
+ 
+     /**
+@@ -90,8 +90,8 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_BACKSLASH) {
+-      push({ type: 'text', value: (options.keepEscaping ? value : '') + advance() });
+-      continue;
++      push({ type: "text", value: (options.keepEscaping ? value : "") + advance() })
++      continue
+     }
+ 
+     /**
+@@ -99,8 +99,8 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_RIGHT_SQUARE_BRACKET) {
+-      push({ type: 'text', value: '\\' + value });
+-      continue;
++      push({ type: "text", value: "\\" + value })
++      continue
+     }
+ 
+     /**
+@@ -108,34 +108,34 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_LEFT_SQUARE_BRACKET) {
+-      brackets++;
++      brackets++
+ 
+-      let next;
++      let next
+ 
+       while (index < length && (next = advance())) {
+-        value += next;
++        value += next
+ 
+         if (next === CHAR_LEFT_SQUARE_BRACKET) {
+-          brackets++;
+-          continue;
++          brackets++
++          continue
+         }
+ 
+         if (next === CHAR_BACKSLASH) {
+-          value += advance();
+-          continue;
++          value += advance()
++          continue
+         }
+ 
+         if (next === CHAR_RIGHT_SQUARE_BRACKET) {
+-          brackets--;
++          brackets--
+ 
+           if (brackets === 0) {
+-            break;
++            break
+           }
+         }
+       }
+ 
+-      push({ type: 'text', value });
+-      continue;
++      push({ type: "text", value })
++      continue
+     }
+ 
+     /**
+@@ -143,21 +143,22 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_LEFT_PARENTHESES) {
+-      block = push({ type: 'paren', nodes: [] });
+-      stack.push(block);
+-      push({ type: 'text', value });
+-      continue;
++      if (stack.length >= 128) throw new SyntaxError("Brace pattern nesting exceeds depth limit (128)")
++      block = push({ type: "paren", nodes: [] })
++      stack.push(block)
++      push({ type: "text", value })
++      continue
+     }
+ 
+     if (value === CHAR_RIGHT_PARENTHESES) {
+-      if (block.type !== 'paren') {
+-        push({ type: 'text', value });
+-        continue;
++      if (block.type !== "paren") {
++        push({ type: "text", value })
++        continue
+       }
+-      block = stack.pop();
+-      push({ type: 'text', value });
+-      block = stack[stack.length - 1];
+-      continue;
++      block = stack.pop()
++      push({ type: "text", value })
++      block = stack[stack.length - 1]
++      continue
+     }
+ 
+     /**
+@@ -165,29 +166,29 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_DOUBLE_QUOTE || value === CHAR_SINGLE_QUOTE || value === CHAR_BACKTICK) {
+-      const open = value;
+-      let next;
++      const open = value
++      let next
+ 
+       if (options.keepQuotes !== true) {
+-        value = '';
++        value = ""
+       }
+ 
+       while (index < length && (next = advance())) {
+         if (next === CHAR_BACKSLASH) {
+-          value += next + advance();
+-          continue;
++          value += next + advance()
++          continue
+         }
+ 
+         if (next === open) {
+-          if (options.keepQuotes === true) value += next;
+-          break;
++          if (options.keepQuotes === true) value += next
++          break
+         }
+ 
+-        value += next;
++        value += next
+       }
+ 
+-      push({ type: 'text', value });
+-      continue;
++      push({ type: "text", value })
++      continue
+     }
+ 
+     /**
+@@ -195,24 +196,25 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_LEFT_CURLY_BRACE) {
+-      depth++;
++      if (stack.length >= 128) throw new SyntaxError("Brace pattern nesting exceeds depth limit (128)")
++      depth++
+ 
+-      const dollar = prev.value && prev.value.slice(-1) === '$' || block.dollar === true;
++      const dollar = (prev.value && prev.value.slice(-1) === "$") || block.dollar === true
+       const brace = {
+-        type: 'brace',
++        type: "brace",
+         open: true,
+         close: false,
+         dollar,
+         depth,
+         commas: 0,
+         ranges: 0,
+-        nodes: []
+-      };
++        nodes: [],
++      }
+ 
+-      block = push(brace);
+-      stack.push(block);
+-      push({ type: 'open', value });
+-      continue;
++      block = push(brace)
++      stack.push(block)
++      push({ type: "open", value })
++      continue
+     }
+ 
+     /**
+@@ -220,20 +222,20 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_RIGHT_CURLY_BRACE) {
+-      if (block.type !== 'brace') {
+-        push({ type: 'text', value });
+-        continue;
++      if (block.type !== "brace") {
++        push({ type: "text", value })
++        continue
+       }
+ 
+-      const type = 'close';
+-      block = stack.pop();
+-      block.close = true;
++      const type = "close"
++      block = stack.pop()
++      block.close = true
+ 
+-      push({ type, value });
+-      depth--;
++      push({ type, value })
++      depth--
+ 
+-      block = stack[stack.length - 1];
+-      continue;
++      block = stack[stack.length - 1]
++      continue
+     }
+ 
+     /**
+@@ -242,14 +244,14 @@ const parse = (input, options = {}) => {
+ 
+     if (value === CHAR_COMMA && depth > 0) {
+       if (block.ranges > 0) {
+-        block.ranges = 0;
+-        const open = block.nodes.shift();
+-        block.nodes = [open, { type: 'text', value: stringify(block) }];
++        block.ranges = 0
++        const open = block.nodes.shift()
++        block.nodes = [open, { type: "text", value: stringify(block) }]
+       }
+ 
+-      push({ type: 'comma', value });
+-      block.commas++;
+-      continue;
++      push({ type: "comma", value })
++      block.commas++
++      continue
+     }
+ 
+     /**
+@@ -257,75 +259,75 @@ const parse = (input, options = {}) => {
+      */
+ 
+     if (value === CHAR_DOT && depth > 0 && block.commas === 0) {
+-      const siblings = block.nodes;
++      const siblings = block.nodes
+ 
+       if (depth === 0 || siblings.length === 0) {
+-        push({ type: 'text', value });
+-        continue;
++        push({ type: "text", value })
++        continue
+       }
+ 
+-      if (prev.type === 'dot') {
+-        block.range = [];
+-        prev.value += value;
+-        prev.type = 'range';
++      if (prev.type === "dot") {
++        block.range = []
++        prev.value += value
++        prev.type = "range"
+ 
+         if (block.nodes.length !== 3 && block.nodes.length !== 5) {
+-          block.invalid = true;
+-          block.ranges = 0;
+-          prev.type = 'text';
+-          continue;
++          block.invalid = true
++          block.ranges = 0
++          prev.type = "text"
++          continue
+         }
+ 
+-        block.ranges++;
+-        block.args = [];
+-        continue;
++        block.ranges++
++        block.args = []
++        continue
+       }
+ 
+-      if (prev.type === 'range') {
+-        siblings.pop();
++      if (prev.type === "range") {
++        siblings.pop()
+ 
+-        const before = siblings[siblings.length - 1];
+-        before.value += prev.value + value;
+-        prev = before;
+-        block.ranges--;
+-        continue;
++        const before = siblings[siblings.length - 1]
++        before.value += prev.value + value
++        prev = before
++        block.ranges--
++        continue
+       }
+ 
+-      push({ type: 'dot', value });
+-      continue;
++      push({ type: "dot", value })
++      continue
+     }
+ 
+     /**
+      * Text
+      */
+ 
+-    push({ type: 'text', value });
++    push({ type: "text", value })
+   }
+ 
+   // Mark imbalanced braces and brackets as invalid
+   do {
+-    block = stack.pop();
++    block = stack.pop()
+ 
+-    if (block.type !== 'root') {
+-      block.nodes.forEach(node => {
++    if (block.type !== "root") {
++      block.nodes.forEach((node) => {
+         if (!node.nodes) {
+-          if (node.type === 'open') node.isOpen = true;
+-          if (node.type === 'close') node.isClose = true;
+-          if (!node.nodes) node.type = 'text';
+-          node.invalid = true;
++          if (node.type === "open") node.isOpen = true
++          if (node.type === "close") node.isClose = true
++          if (!node.nodes) node.type = "text"
++          node.invalid = true
+         }
+-      });
++      })
+ 
+       // get the location of the block on parent.nodes (block's siblings)
+-      const parent = stack[stack.length - 1];
+-      const index = parent.nodes.indexOf(block);
++      const parent = stack[stack.length - 1]
++      const index = parent.nodes.indexOf(block)
+       // replace the (invalid) block with it's nodes
+-      parent.nodes.splice(index, 1, ...block.nodes);
++      parent.nodes.splice(index, 1, ...block.nodes)
+     }
+-  } while (stack.length > 0);
++  } while (stack.length > 0)
+ 
+-  push({ type: 'eos' });
+-  return ast;
+-};
++  push({ type: "eos" })
++  return ast
++}
+ 
+-module.exports = parse;
++module.exports = parse
+diff --git a/lib/stringify.js b/lib/stringify.js
+index 8bcf872..d4b2a63 100644
+--- a/lib/stringify.js
++++ b/lib/stringify.js
+@@ -1,32 +1,32 @@
+-'use strict';
++"use strict"
+ 
+-const utils = require('./utils');
++const utils = require("./utils")
+ 
+ module.exports = (ast, options = {}) => {
+-  const stringify = (node, parent = {}) => {
+-    const invalidBlock = options.escapeInvalid && utils.isInvalidBrace(parent);
+-    const invalidNode = node.invalid === true && options.escapeInvalid === true;
+-    let output = '';
++  const stringify = (node, parent = {}, depth = 0) => {
++    if (depth >= 128) throw new SyntaxError("Brace pattern nesting exceeds depth limit (128)")
++    const invalidBlock = options.escapeInvalid && utils.isInvalidBrace(parent)
++    const invalidNode = node.invalid === true && options.escapeInvalid === true
++    let output = ""
+ 
+     if (node.value) {
+       if ((invalidBlock || invalidNode) && utils.isOpenOrClose(node)) {
+-        return '\\' + node.value;
++        return "\\" + node.value
+       }
+-      return node.value;
++      return node.value
+     }
+ 
+     if (node.value) {
+-      return node.value;
++      return node.value
+     }
+ 
+     if (node.nodes) {
+       for (const child of node.nodes) {
+-        output += stringify(child);
++        output += stringify(child, {}, depth + 1)
+       }
+     }
+-    return output;
+-  };
+-
+-  return stringify(ast);
+-};
++    return output
++  }
+ 
++  return stringify(ast)
++}
+diff --git a/lib/utils.js b/lib/utils.js
+index d19311f..0a4a72d 100644
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -1,122 +1,123 @@
+-'use strict';
++"use strict"
+ 
+-exports.isInteger = num => {
+-  if (typeof num === 'number') {
+-    return Number.isInteger(num);
++exports.isInteger = (num) => {
++  if (typeof num === "number") {
++    return Number.isInteger(num)
+   }
+-  if (typeof num === 'string' && num.trim() !== '') {
+-    return Number.isInteger(Number(num));
++  if (typeof num === "string" && num.trim() !== "") {
++    return Number.isInteger(Number(num))
+   }
+-  return false;
+-};
++  return false
++}
+ 
+ /**
+  * Find a node of the given type
+  */
+ 
+-exports.find = (node, type) => node.nodes.find(node => node.type === type);
++exports.find = (node, type) => node.nodes.find((node) => node.type === type)
+ 
+ /**
+  * Find a node of the given type
+  */
+ 
+ exports.exceedsLimit = (min, max, step = 1, limit) => {
+-  if (limit === false) return false;
+-  if (!exports.isInteger(min) || !exports.isInteger(max)) return false;
+-  return ((Number(max) - Number(min)) / Number(step)) >= limit;
+-};
++  if (limit === false) return false
++  if (!exports.isInteger(min) || !exports.isInteger(max)) return false
++  return (Number(max) - Number(min)) / Number(step) >= limit
++}
+ 
+ /**
+  * Escape the given node with '\\' before node.value
+  */
+ 
+ exports.escapeNode = (block, n = 0, type) => {
+-  const node = block.nodes[n];
+-  if (!node) return;
++  const node = block.nodes[n]
++  if (!node) return
+ 
+-  if ((type && node.type === type) || node.type === 'open' || node.type === 'close') {
++  if ((type && node.type === type) || node.type === "open" || node.type === "close") {
+     if (node.escaped !== true) {
+-      node.value = '\\' + node.value;
+-      node.escaped = true;
++      node.value = "\\" + node.value
++      node.escaped = true
+     }
+   }
+-};
++}
+ 
+ /**
+  * Returns true if the given brace node should be enclosed in literal braces
+  */
+ 
+-exports.encloseBrace = node => {
+-  if (node.type !== 'brace') return false;
+-  if ((node.commas >> 0 + node.ranges >> 0) === 0) {
+-    node.invalid = true;
+-    return true;
++exports.encloseBrace = (node) => {
++  if (node.type !== "brace") return false
++  if ((node.commas >> (0 + node.ranges)) >> 0 === 0) {
++    node.invalid = true
++    return true
+   }
+-  return false;
+-};
++  return false
++}
+ 
+ /**
+  * Returns true if a brace node is invalid.
+  */
+ 
+-exports.isInvalidBrace = block => {
+-  if (block.type !== 'brace') return false;
+-  if (block.invalid === true || block.dollar) return true;
+-  if ((block.commas >> 0 + block.ranges >> 0) === 0) {
+-    block.invalid = true;
+-    return true;
++exports.isInvalidBrace = (block) => {
++  if (block.type !== "brace") return false
++  if (block.invalid === true || block.dollar) return true
++  if ((block.commas >> (0 + block.ranges)) >> 0 === 0) {
++    block.invalid = true
++    return true
+   }
+   if (block.open !== true || block.close !== true) {
+-    block.invalid = true;
+-    return true;
++    block.invalid = true
++    return true
+   }
+-  return false;
+-};
++  return false
++}
+ 
+ /**
+  * Returns true if a node is an open or close node
+  */
+ 
+-exports.isOpenOrClose = node => {
+-  if (node.type === 'open' || node.type === 'close') {
+-    return true;
++exports.isOpenOrClose = (node) => {
++  if (node.type === "open" || node.type === "close") {
++    return true
+   }
+-  return node.open === true || node.close === true;
+-};
++  return node.open === true || node.close === true
++}
+ 
+ /**
+  * Reduce an array of text nodes.
+  */
+ 
+-exports.reduce = nodes => nodes.reduce((acc, node) => {
+-  if (node.type === 'text') acc.push(node.value);
+-  if (node.type === 'range') node.type = 'text';
+-  return acc;
+-}, []);
++exports.reduce = (nodes) =>
++  nodes.reduce((acc, node) => {
++    if (node.type === "text") acc.push(node.value)
++    if (node.type === "range") node.type = "text"
++    return acc
++  }, [])
+ 
+ /**
+  * Flatten an array
+  */
+ 
+ exports.flatten = (...args) => {
+-  const result = [];
++  const result = []
+ 
+-  const flat = arr => {
++  const flat = (arr) => {
+     for (let i = 0; i < arr.length; i++) {
+-      const ele = arr[i];
++      const ele = arr[i]
+ 
+       if (Array.isArray(ele)) {
+-        flat(ele);
+-        continue;
++        flat(ele)
++        continue
+       }
+ 
+       if (ele !== undefined) {
+-        result.push(ele);
++        result.push(ele)
+       }
+     }
+-    return result;
+-  };
++    return result
++  }
+ 
+-  flat(args);
+-  return result;
+-};
++  flat(args)
++  return result
++}
