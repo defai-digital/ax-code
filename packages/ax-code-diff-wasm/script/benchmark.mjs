@@ -156,7 +156,7 @@ console.log(
       arch: process.arch,
       cpu: os.cpus()[0]?.model,
       head: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
-      uncommittedImplementation: true,
+      uncommittedImplementation: Boolean(execFileSync("git", ["status", "--porcelain"], { encoding: "utf8" }).trim()),
       notes:
         "Synthetic inputs; 7 warm samples per case after one warmup, modes interleaved. JS is current reason fallback; native includes the same admission/result validation as the Wasm adapter. Native/JS production dispatch policy is not benchmarked. RSS is whole-process including workers; not per-backend peak. Cold Wasm uses 5 fresh Node processes. No full tool/user latency or cross-platform speedup claim. Linear memory probe is a separate inline instance, not worker peak memory.",
       results,
