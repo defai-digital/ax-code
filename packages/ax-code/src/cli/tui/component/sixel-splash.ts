@@ -378,8 +378,10 @@ export function sixelSplashPlayer(write: (data: string) => void) {
       const raster = padSplashToBand(rgb, size.width, size.height, background)
       const dcs = raster ? encodeSixelSplash(raster.data, raster.width, raster.height) : null
       if (!dcs || !raster) throw new Error("Sixel splash exceeded the size budget")
-      write(`\x1b7\x1b[H${dcs}\x1b8`)
+      // A writer can emit part of the DCS before throwing. Retain its
+      // geometry first so the caller's failure cleanup can erase that splash.
       drawn = raster
+      write(`\x1b7\x1b[H${dcs}\x1b8`)
     },
     dispose() {
       if (closed) return

@@ -47,7 +47,11 @@ export function scheduleTuiInterval(task: () => void | Promise<void>, input: Tui
     const cancelTask = runTuiBackgroundTask(
       () =>
         Promise.resolve()
-          .then(task)
+          .then(() => {
+            // Cancellation can happen after the background boundary admits
+            // this run but before this second microtask reaches the callback.
+            if (!cancelled) return task()
+          })
           .finally(() => {
             running = false
             cancelTasks.delete(cancelTask)

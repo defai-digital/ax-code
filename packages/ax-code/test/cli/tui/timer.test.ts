@@ -61,6 +61,18 @@ describe("tui timers", () => {
     expect(task).toHaveBeenCalledTimes(2)
   })
 
+  test("cancels an interval callback after its background boundary has queued it", async () => {
+    const task = vi.fn()
+    const cancel = scheduleTuiInterval(task, { name: "queued-interval", delayMs: 10 })
+    vi.advanceTimersByTime(10)
+    // Enter the background boundary, leaving the actual callback queued.
+    await Promise.resolve()
+    cancel()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(task).not.toHaveBeenCalled()
+  })
+
   test("does not overlap interval callbacks by default", async () => {
     let release: (() => void) | undefined
     const task = vi.fn(

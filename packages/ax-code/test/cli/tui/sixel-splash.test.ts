@@ -160,6 +160,24 @@ describe("Sixel splash player", () => {
     expect(writes[0]).toContain('"1;1;96;72')
   })
 
+  test("clears a partially emitted splash after the output writer throws", () => {
+    const writes: string[] = []
+    const player = sixelSplashPlayer((data) => {
+      writes.push(data)
+      if (writes.length === 1) throw new Error("interrupted output")
+    })
+    expect(() => player.draw({ width: 96, height: 72, direction: "down", background: "#000000" })).toThrow(
+      "interrupted output",
+    )
+    player.dispose()
+    expect(writes).toHaveLength(2)
+    expect(writes[1]).toContain('"1;1;96;72')
+    expect(writes[1]).toContain("#1;2;0;0;0")
+    player.dispose()
+    player.draw({ width: 96, height: 72, direction: "down", background: "#000000" })
+    expect(writes).toHaveLength(2)
+  })
+
   test("dispose without draw writes nothing and tolerates bad backgrounds", () => {
     const writes: string[] = []
     sixelSplashPlayer((data) => writes.push(data)).dispose()
