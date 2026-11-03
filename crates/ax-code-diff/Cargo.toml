@@ -13,6 +13,7 @@ name = "ax-code-diff-bench"
 path = "examples/bench.rs"
 
 [dependencies]
+ax-code-diff-core = { path = "../ax-code-diff-core" }
 napi = { workspace = true }
 napi-derive = { workspace = true }
 serde = { workspace = true }

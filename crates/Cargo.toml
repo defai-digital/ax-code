@@ -4,6 +4,8 @@ members = [
   "ax-code-index",
   "ax-code-fs",
   "ax-code-diff",
+  "ax-code-diff-core",
+  "ax-code-diff-wasm",
   "ax-code-parser",
   "ax-code-daemon",
   "ax-code-terminal",

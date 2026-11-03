@@ -1,0 +1,44 @@
+{
+  "name": "@ax-code/diff-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Worker-hosted Wasm diff, structured hunks and duplicate comparison using shared Rust kernels",
+  "exports": {
+    ".": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    }
+  },
+  "files": [
+    "dist",
+    "wasm",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "node script/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "node script/browser-smoke.mjs",
+    "benchmark": "node --import tsx script/benchmark.mjs"
+  },
+  "dependencies": {
+    "@ax-code/util": "workspace:*"
+  },
+  "devDependencies": {
+    "@ax-code/diff": "workspace:*",
+    "@ax-code/ax-code-reason": "workspace:*",
+    "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "tsx": "catalog:",
+    "esbuild": "catalog:",
+    "playwright-core": "1.64.1"
+  }
+}

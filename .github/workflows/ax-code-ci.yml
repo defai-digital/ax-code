@@ -19,6 +19,7 @@ on:
       - "packages/ax-tui/**"
       - "packages/ax-code-intel/**"
       - "packages/ax-code-reason/**"
+      - "packages/ax-code-diff-wasm/**"
       - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
@@ -46,6 +47,7 @@ on:
       - "packages/ax-tui/**"
       - "packages/ax-code-intel/**"
       - "packages/ax-code-reason/**"
+      - "packages/ax-code-diff-wasm/**"
       - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
@@ -144,6 +146,30 @@ jobs:
       - uses: ./.github/actions/build-evidence-cache
       - name: Test native evidence contracts
         run: cargo test --manifest-path crates/Cargo.toml -p ax-code-fs --lib
+
+  diff-wasm:
+    name: Diff Wasm parity and browser worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: rustup target add wasm32-unknown-unknown --toolchain stable
+      - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - run: cargo test --manifest-path crates/Cargo.toml -p ax-code-diff-core -p ax-code-diff
+      - run: pnpm build:native diff
+      - run: pnpm --dir packages/ax-code-diff-wasm run build
+      - run: pnpm --dir packages/ax-code-diff-wasm run typecheck
+      - run: pnpm --dir packages/ax-code-diff-wasm test
+      - run: pnpm --dir packages/ax-code-diff-wasm exec playwright-core install --with-deps chromium firefox webkit
+      - name: Verify Chromium, Firefox and WebKit workers
+        run: |
+          for browser in chromium firefox webkit; do
+            AX_DIFF_WASM_BROWSER="$browser" pnpm --dir packages/ax-code-diff-wasm run test:browser
+          done
 
   windows-snapshot:
     name: Windows runtime and recovery (${{ matrix.os }})
@@ -583,7 +609,17 @@ jobs:
   required-checks:
     name: AX Code required checks
     if: always()
-    needs: [evidence-plan, evidence-native, checks, deterministic, runtime-contract, windows-snapshot, tui-node26-smoke]
+    needs:
+      [
+        evidence-plan,
+        evidence-native,
+        diff-wasm,
+        checks,
+        deterministic,
+        runtime-contract,
+        windows-snapshot,
+        tui-node26-smoke,
+      ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -601,4 +637,5 @@ jobs:
           CI_RUNTIME: ${{ needs.runtime-contract.result }}
           CI_WINDOWS: ${{ needs.windows-snapshot.result }}
           CI_TUI: ${{ needs.tui-node26-smoke.result }}
+          CI_WASM: ${{ needs.diff-wasm.result }}
         run: node --experimental-strip-types script/ci-required-checks.ts

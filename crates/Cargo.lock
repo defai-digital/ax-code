@@ -43,6 +43,7 @@ dependencies = [
 name = "ax-code-diff"
 version = "0.1.0"
 dependencies = [
+ "ax-code-diff-core",
  "napi",
  "napi-build",
  "napi-derive",
@@ -53,6 +54,23 @@ dependencies = [
  "strsim",
  "thiserror",
  "unicode-normalization",
+]
+
+[[package]]
+name = "ax-code-diff-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "ax-code-diff-wasm"
+version = "0.1.0"
+dependencies = [
+ "ax-code-diff-core",
+ "wasm-bindgen",
 ]
 
 [[package]]

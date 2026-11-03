@@ -3,7 +3,7 @@ import path from "node:path"
 
 export function requiredCheckFailures(env: Record<string, string | undefined>) {
   const failures: string[] = []
-  for (const name of ["PLAN", "CHECKS", "DETERMINISTIC", "RUNTIME", "WINDOWS", "TUI"]) {
+  for (const name of ["PLAN", "CHECKS", "DETERMINISTIC", "RUNTIME", "WINDOWS", "TUI", "WASM"]) {
     if (env[`CI_${name}`] !== "success") failures.push(`${name}: ${env[`CI_${name}`] || "missing"}`)
   }
   if (!["true", "false"].includes(env.CI_NATIVE_REQUIRED ?? "")) failures.push("Invalid native evidence plan")

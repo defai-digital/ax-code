@@ -10,6 +10,7 @@ const green = {
   CI_RUNTIME: "success",
   CI_WINDOWS: "success",
   CI_TUI: "success",
+  CI_WASM: "success",
   CI_NATIVE_REQUIRED: "true",
   CI_NATIVE: "success",
 }
@@ -19,7 +20,7 @@ describe("required CI results", () => {
     expect(requiredCheckFailures(green)).toEqual([])
     expect(requiredCheckFailures({ ...green, CI_NATIVE_REQUIRED: "false", CI_NATIVE: "skipped" })).toEqual([])
   })
-  for (const name of ["PLAN", "CHECKS", "DETERMINISTIC", "RUNTIME", "WINDOWS", "TUI", "NATIVE"]) {
+  for (const name of ["PLAN", "CHECKS", "DETERMINISTIC", "RUNTIME", "WINDOWS", "TUI", "WASM", "NATIVE"]) {
     test.each(["failure", "cancelled", "skipped", "", undefined])(`rejects ${name} result %s`, (status) => {
       expect(requiredCheckFailures({ ...green, [`CI_${name}`]: status }).length).toBeGreaterThan(0)
     })
@@ -35,6 +36,7 @@ describe("required CI results", () => {
       for (const file of [
         "packages/ax-agent-runtime/src/index.ts",
         "packages/ax-wiki/src/index.ts",
+        "packages/ax-code-diff-wasm/src/client.ts",
         ".github/actions/setup-ax-code-toolchain/action.yml",
         "patches/example.patch",
         "tools/example.ts",
@@ -58,6 +60,7 @@ describe("required CI results", () => {
       "runtime-contract",
       "windows-snapshot",
       "tui-node26-smoke",
+      "diff-wasm",
     ]) {
       expect(job).toContain(`needs.${name}.result`)
     }

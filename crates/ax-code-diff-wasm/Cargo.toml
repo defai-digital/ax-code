@@ -1,0 +1,13 @@
+[package]
+name = "ax-code-diff-wasm"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ax-code-diff-core = { path = "../ax-code-diff-core" }
+wasm-bindgen = "=0.2.129"
