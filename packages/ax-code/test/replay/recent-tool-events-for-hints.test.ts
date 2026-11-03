@@ -102,6 +102,18 @@ describe("EventQuery.recentToolEventsForHints", () => {
     })
   })
 
+  test("keeps empty projected input and metadata as objects", async () => {
+    await withSession(async (sessionID) => {
+      Recorder.begin(sessionID)
+      call(sessionID, "c1", "edit", { oldString: "bulk input" })
+      result(sessionID, "c1", "edit", { output: "bulk output" })
+      await Recorder.end(sessionID)
+      const [request, response] = EventQuery.recentToolEventsForHints(sessionID) as any[]
+      expect(request.input).toEqual({})
+      expect(response.metadata).toEqual({})
+    })
+  })
+
   test("returns tool events from the most recent overall event window", async () => {
     await withSession(async (sessionID) => {
       Recorder.begin(sessionID)

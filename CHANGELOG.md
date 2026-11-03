@@ -17,6 +17,7 @@ changes belong to AX Coder.
 - Keep opening and ending animations visible in Ghostty while each replacement frame uploads, including after resize and scene changes.
 - Cancel TUI interval callbacks that were queued just before an overlay or component was disposed.
 - Clear partially emitted Sixel splash images when terminal output fails.
+- Preserve nested input and metadata objects in replay hint queries across SQLite versions, retaining validation failure and verification policy signals.
 
 ## [7.30.15] - 2026-11-03
 

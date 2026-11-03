@@ -173,7 +173,9 @@ export namespace EventQuery {
 
   // json_each reports JSON true/false as SQL 1/0, which json_group_object
   // would embed as numbers; the CASE in the projections re-wraps them as JSON
-  // booleans so projected values round-trip exactly.
+  // booleans so projected values round-trip exactly. The outer json() calls
+  // restore the JSON subtype across scalar subqueries; without them SQLite
+  // can embed input/metadata as quoted strings rather than nested objects.
   function hintKeyList(keys: readonly string[]) {
     return sql.join(
       keys.map((key) => sql`${key}`),
@@ -218,11 +220,11 @@ export namespace EventQuery {
               'type', json_extract(${EventLogTable.event_data}, '$.type'),
               'tool', json_extract(${EventLogTable.event_data}, '$.tool'),
               'callID', json_extract(${EventLogTable.event_data}, '$.callID'),
-              'input', (
+              'input', json((
                 select json_group_object(key, case type when 'true' then json('true') when 'false' then json('false') else value end)
                 from json_each(${EventLogTable.event_data}, '$.input')
                 where key in (${hintKeyList(HINT_INPUT_KEYS)})
-              )
+              ))
             )`,
           sequence: EventLogTable.sequence,
         })
@@ -245,11 +247,11 @@ export namespace EventQuery {
               'tool', json_extract(${EventLogTable.event_data}, '$.tool'),
               'callID', json_extract(${EventLogTable.event_data}, '$.callID'),
               'status', json_extract(${EventLogTable.event_data}, '$.status'),
-              'metadata', (
+              'metadata', json((
                 select json_group_object(key, case type when 'true' then json('true') when 'false' then json('false') else value end)
                 from json_each(${EventLogTable.event_data}, '$.metadata')
                 where key in (${hintKeyList(HINT_METADATA_KEYS)})
-              )
+              ))
             )`,
           sequence: EventLogTable.sequence,
         })
