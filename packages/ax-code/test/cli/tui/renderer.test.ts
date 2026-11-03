@@ -285,6 +285,9 @@ describe("tui renderer profile", () => {
     beforeEach(() => {
       // The support gate defaults to reading process.env; force a supported
       // terminal so the existing activation tests are host-env independent.
+      // Explicit nested terminal identity overrides WT_SESSION. Remove the
+      // developer host's TERM_PROGRAM so this fixture models Windows Terminal.
+      vi.stubEnv("TERM_PROGRAM", "")
       vi.stubEnv("WT_SESSION", "ax-code-test")
     })
 
