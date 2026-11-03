@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.16] - 2026-11-03
+
+### Changed
+
+- Publish the paired SDK 2.6.69 maintenance release without changing the server API contract.
+
+### Fixed
+
+- Keep opening and ending animations visible in Ghostty while each replacement frame uploads, including after resize and scene changes.
+- Cancel TUI interval callbacks that were queued just before an overlay or component was disposed.
+- Clear partially emitted Sixel splash images when terminal output fails.
+
 ## [7.30.15] - 2026-11-03
 
 ### Changed
