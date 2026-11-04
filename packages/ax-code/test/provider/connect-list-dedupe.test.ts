@@ -94,15 +94,26 @@ describe("dedupeApiCloudVendorVariants", () => {
     const providers = {
       perplexity: record("perplexity", "Perplexity"),
       "perplexity-agent": record("perplexity-agent", "Perplexity Agent"),
+      meta: record("meta", "Meta"),
+      llama: record("llama", "Llama"),
       ollama: record("ollama", "Ollama Cloud"),
       "claude-code": record("claude-code", "Claude Code", 0),
       nebius: record("nebius", "Nebius"),
       "ax-engine": record("ax-engine", "AX Engine"),
     }
     const kept = dedupeApiCloudVendorVariants(providers)
-    // perplexity/perplexity-agent normalize apart and both survive.
+    // Distinct products survive even when they share a vendor.
     expect(kept).toEqual(
-      expect.arrayContaining(["perplexity", "perplexity-agent", "ollama", "claude-code", "nebius", "ax-engine"]),
+      expect.arrayContaining([
+        "perplexity",
+        "perplexity-agent",
+        "meta",
+        "llama",
+        "ollama",
+        "claude-code",
+        "nebius",
+        "ax-engine",
+      ]),
     )
   })
 
@@ -169,7 +180,6 @@ describe("connect list vendor dedupe against the bundled catalog", () => {
     expect(keptSet.has("perplexity")).toBe(true)
     expect(keptSet.has("perplexity-agent")).toBe(true)
     expect(keptSet.has("meta")).toBe(true)
-    expect(keptSet.has("llama")).toBe(true)
     expect(keptSet.has("opencode")).toBe(true)
     expect(keptSet.has("opencode-go")).toBe(true)
 

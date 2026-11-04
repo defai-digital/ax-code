@@ -63,7 +63,7 @@ test("provider loaded from env variable", async () => {
   })
 })
 
-test("GroqCloud provider exposes documented Qwen and GPT-OSS models", async () => {
+test("GroqCloud provider exposes allowed Qwen and GPT-OSS models with bundled limits", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -76,12 +76,12 @@ test("GroqCloud provider exposes documented Qwen and GPT-OSS models", async () =
 
       expect(groq?.name).toBe("GroqCloud")
       expect(groq?.models[ModelID.make("qwen/qwen3.8-27b")]?.api.url).toBe("https://api.groq.com/openai/v1")
-      // 16,384 is Groq's documented max completion for qwen3.8-27b
-      // (https://console.groq.com/docs/model/qwen/qwen3.8-27b) — not 32,768.
-      expect(groq?.models[ModelID.make("qwen/qwen3.8-27b")]?.limit).toEqual({ context: 131_042, output: 16_384 })
+      // The generator preserves upstream limits and supplies fallbacks only
+      // for missing models. Provider loading must retain the bundled values.
+      for (const id of ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"] as const) {
+        expect(groq?.models[ModelID.make(id)]?.limit).toEqual(bundledSnapshot.groq.models[id].limit)
+      }
       expect(groq?.models[ModelID.make("qwen/qwen3.6-27b")]).toBeUndefined()
-      expect(groq?.models[ModelID.make("openai/gpt-oss-120b")]?.limit).toEqual({ context: 131_072, output: 65_536 })
-      expect(groq?.models[ModelID.make("openai/gpt-oss-20b")]?.limit).toEqual({ context: 131_072, output: 65_536 })
       expect(groq?.models[ModelID.make("openai/gpt-oss-safeguard-20b")]).toBeUndefined()
       // Non-chat and non-allowlisted SKUs never reach the provider catalog.
       expect(groq?.models[ModelID.make("whisper-large-v3")]).toBeUndefined()

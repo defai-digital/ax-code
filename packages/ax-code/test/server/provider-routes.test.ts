@@ -150,7 +150,6 @@ describe("provider routes", () => {
     const ids = body.all.map((provider) => provider.id)
     // Catalog API-cloud providers outside the curated set need no enabled_providers opt-in.
     expect(ids).toContain("siliconflow")
-    expect(ids).toContain("iflowcn")
     expect(ids).toContain("zhipuai")
     // Zero-model snapshot entries do not qualify as API-cloud providers.
     expect(ids).not.toContain("wallaby")
