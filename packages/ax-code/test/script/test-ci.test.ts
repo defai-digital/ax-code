@@ -137,6 +137,43 @@ describe("script.test-ci", () => {
     expect(new Set(seen)).toEqual(new Set([1, 2, 3, 4]))
   })
 
+  test("failed shard scheduling drains active shards before caller cleanup", async () => {
+    const active = Promise.withResolvers<void>()
+    const failure = new Error("shard failed")
+    const started: number[] = []
+    let cleaned = false
+    let cleanedDuringShard: boolean | undefined
+    const result = mapWithConcurrency([0, 1, 2], 2, async (shard) => {
+      started.push(shard)
+      if (shard === 1) throw failure
+      await active.promise
+      cleanedDuringShard = cleaned
+      return shard
+    })
+      .finally(() => {
+        cleaned = true
+      })
+      .catch((error) => error)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    const cleanedBeforeRelease = cleaned
+    active.resolve()
+    expect(await result).toBe(failure)
+    expect(cleanedBeforeRelease).toBe(false)
+    expect(cleanedDuringShard).toBe(false)
+    expect(cleaned).toBe(true)
+    expect(started).toEqual([0, 1])
+  })
+
+  test.each([0, -1, 1.5, NaN, Infinity])("rejects invalid shard concurrency %s before dispatch", async (limit) => {
+    let started = false
+    await expect(
+      mapWithConcurrency([1], limit, async () => {
+        started = true
+      }),
+    ).rejects.toThrow("Concurrency must be a positive integer")
+    expect(started).toBe(false)
+  })
+
   test("aggregates shard reports without dropping coverage metadata", () => {
     const results = ["shard-1.xml", "shard-2.xml"].map((file, index) => ({
       code: 0,

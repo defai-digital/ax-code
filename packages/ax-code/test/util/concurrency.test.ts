@@ -123,4 +123,47 @@ describe("mapWithConcurrency", () => {
   test("returns empty array for empty input", async () => {
     expect(await mapWithConcurrency([], 4, async (x) => x)).toEqual([])
   })
+
+  test.each([new Error("mapper failed"), undefined])(
+    "drains active mappers and stops admission after rejection with %s",
+    async (failure) => {
+      const active = Promise.withResolvers<void>()
+      const visited: number[] = []
+      let settled = false
+      const result = mapWithConcurrency([0, 1, 2, 3], 2, async (item) => {
+        visited.push(item)
+        if (item === 1) throw failure
+        await active.promise
+        return item
+      }).then(
+        (value) => {
+          settled = true
+          return { value }
+        },
+        (error) => {
+          settled = true
+          return { error }
+        },
+      )
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      const settledBeforeRelease = settled
+      active.resolve()
+      expect(await result).toEqual({ error: failure })
+      expect(settledBeforeRelease).toBe(false)
+      expect(visited).toEqual([0, 1])
+    },
+  )
+
+  test("preserves the first rejection when a lower-index mapper fails later", async () => {
+    const active = Promise.withResolvers<void>()
+    const firstFailure = new Error("first failure")
+    const result = mapWithConcurrency([0, 1, 2], 2, async (item) => {
+      if (item === 1) throw firstFailure
+      await active.promise
+      throw new Error("late failure")
+    }).catch((error) => error)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    active.resolve()
+    expect(await result).toBe(firstFailure)
+  })
 })

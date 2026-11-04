@@ -71,6 +71,7 @@ export function createConcurrencyLimiter(max: number): ConcurrencyLimiter {
 /**
  * Map an array with at most `concurrency` workers, preserving result order.
  * Shared implementation for skill discovery and other bulk fan-out.
+ * On failure, stop admitting work and drain active mappers before rejecting.
  */
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],
@@ -81,14 +82,26 @@ export async function mapWithConcurrency<T, R>(
   const limit = Number.isFinite(concurrency) ? Math.max(1, Math.floor(concurrency)) : 1
   const result = new Array<R>(items.length)
   let next = 0
+  let failed = false
+  let failure: unknown
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (true) {
+    while (!failed) {
       const index = next++
       if (index >= items.length) return
-      result[index] = await mapper(items[index]!, index)
+      try {
+        result[index] = await mapper(items[index]!, index)
+      } catch (error) {
+        if (!failed) {
+          failed = true
+          failure = error
+        }
+      }
     }
   })
+  // Callers may dispose resources when this settles. Keep ownership until all
+  // admitted work finishes, and preserve the first failure even if it is undefined.
   await Promise.all(workers)
+  if (failed) throw failure
   return result
 }
 

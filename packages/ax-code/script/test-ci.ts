@@ -7,6 +7,7 @@ import type { Readable } from "node:stream"
 import { check, list, pick, root } from "./test-group"
 import { writeCoverageArtifacts } from "./test-coverage"
 import { prepareTestNative } from "./test-native"
+import { mapWithConcurrency as mapConcurrent } from "../src/util/concurrency"
 
 export type Result = {
   code: number
@@ -164,19 +165,7 @@ export async function mapWithConcurrency<T, R>(
   if (!Number.isSafeInteger(concurrency) || concurrency < 1) {
     throw new Error(`Concurrency must be a positive integer: ${concurrency}`)
   }
-  if (items.length === 0) return []
-  const results = new Array<R>(items.length)
-  let next = 0
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-      while (true) {
-        const index = next++
-        if (index >= items.length) return
-        results[index] = await mapper(items[index]!, index)
-      }
-    }),
-  )
-  return results
+  return mapConcurrent(items, concurrency, mapper)
 }
 
 function attrs(text: string) {
