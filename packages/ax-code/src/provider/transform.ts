@@ -14,6 +14,7 @@ import { AX_ENGINE_PROVIDER_ID, AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID } fr
 import { cliEffortVariants, cliModelEfforts } from "./cli/effort"
 import { wrapThinkTagText, type ThinkTagName } from "./think-tags"
 import { PromptCachePolicy } from "./prompt-cache-policy"
+import { isKimiProtocol, resolveProtocolProfile } from "./protocol-profile"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -74,23 +75,8 @@ export namespace ProviderTransform {
   // The Vertex provider uses the same "google" key as the Gemini provider,
   // so variant options (thinkingConfig, reasoning effort) produced by
   // variants() land under the right namespace.
-  function sdkKey(npm: string): string | undefined {
-    switch (npm) {
-      case "@ai-sdk/google":
-      case "@ai-sdk/google-vertex":
-        return "google"
-      case "@ai-sdk/openai":
-        return "openai"
-    }
-    return undefined
-  }
-
-  // The compatible SDK keys provider options by the provider name it was
-  // constructed with, which stops at the first dot. A dotted config ID such as
-  // `wafer.ai` therefore registers as `wafer`, and reads must use the same
-  // namespace as writes.
   export function providerOptionsKey(model: Provider.Model): string {
-    return sdkKey(model.api.npm) ?? (model.providerID.split(".")[0]?.trim() || model.providerID)
+    return resolveProtocolProfile(model).providerOptionsKey
   }
 
   function normalizeMessages(
@@ -522,35 +508,7 @@ export namespace ProviderTransform {
     family?: string
     name?: string
   }): boolean {
-    // OpenCode also selects the Kimi prompt for official coding providers
-    // whose catalog ids are short (`k3`, `k2p7`) and do not contain "kimi".
-    if (
-      model.providerID === "kimi-for-coding" ||
-      model.providerID === "kimi-cloud-plan" ||
-      model.providerID === "moonshotai" ||
-      model.providerID === "moonshotai-cn"
-    ) {
-      return true
-    }
-    // AX Trust's kimiCodingPlanModels and model cards identify these short
-    // API ids as Kimi K3. Require the card's Kimi/Moonshot identity as well:
-    // an unrelated deployment named "k3" must not inherit this dialect.
-    if (/^(?:k3|k3-256k)$/i.test(modelIdFinalSegment(model.api.id)) && /\b(?:kimi|moonshot)\b/i.test(model.name ?? ""))
-      return true
-    const ids = [model.providerID, model.api.id, model.id ? modelIdFinalSegment(model.id) : undefined, model.family]
-    if (
-      ids.some((id) => {
-        if (!id) return false
-        const value = id.toLowerCase()
-        return value.includes("kimi") || value.includes("moonshot")
-      })
-    ) {
-      return true
-    }
-    const url = (model.api.url ?? "").toLowerCase()
-    return ["api.kimi.com", "api.moonshot.ai", "api.moonshot.cn", "api.moonshotai.cn"].some((host) =>
-      url.includes(host),
-    )
+    return isKimiProtocol(model)
   }
 
   export function isMuseFamily(model: {
@@ -954,48 +912,7 @@ export namespace ProviderTransform {
   // independent serialization contracts; the installed DeepSeek SDK drops
   // reasoningEffort. Local/private deployments retain their own dialects.
   function chatReasoningFamily(model: Provider.Model) {
-    if (model.api.npm !== "@ai-sdk/openai-compatible" || model.options?.nativeReasoning === false) return undefined
-    if (isPrivateGpuProvider(model.providerID)) return undefined
-    if (
-      [
-        AX_ENGINE_PROVIDER_ID,
-        "groq",
-        "openrouter",
-        "nvidia",
-        "lilac",
-        "ollama",
-        "lmstudio",
-        "mtplx",
-        "omlx",
-        "ax-studio",
-        "local-llm",
-      ].includes(model.providerID)
-    )
-      return undefined
-    let host = ""
-    try {
-      // Custom provider names must not bypass known dialect exclusions.
-      host = new URL(model.api.url).hostname
-      if (["openrouter.ai", "api.groq.com", "integrate.api.nvidia.com"].includes(host)) return undefined
-    } catch {
-      // Synthetic models and SDK-only callers may omit the URL.
-    }
-    const id = model.api.id.toLowerCase()
-    const segment = modelIdFinalSegment(id)
-    if (/^qwen3\.8-(?:max|flash)$/.test(segment)) return "qwen3.8"
-    // DashScope deploys other vendors with its own enable_thinking dialect.
-    if (
-      isAlibabaPlanProvider(model.providerID) ||
-      ["alibaba", "alibaba-cn"].includes(model.providerID) ||
-      host === "dashscope.aliyuncs.com" ||
-      host.endsWith(".maas.aliyuncs.com") ||
-      (host.startsWith("dashscope-") && host.endsWith(".aliyuncs.com"))
-    )
-      return undefined
-    if (/^glm-5\.3(?:-flash)?$/.test(segment)) return "glm5.3"
-    if (/^deepseek-(?:v4-(?:pro|flash)|flash)$/.test(id)) return "deepseek-v4"
-    if (id === "minimax-m3" || id === "minimax-m2.7") return id
-    return undefined
+    return resolveProtocolProfile(model).reasoningFamily
   }
 
   function currentChatVariants(model: Provider.Model): Record<string, Record<string, any>> | undefined {
@@ -1668,7 +1585,7 @@ export namespace ProviderTransform {
 
     // Moonshot expands $ref before validation and rejects sibling keywords
     // (description on the same node) plus tuple-style `items` arrays.
-    if (isKimiFamily(model)) {
+    if (resolveProtocolProfile(model).schemaDialect === "moonshot") {
       const sanitizeMoonshot = (obj: unknown, schemaMap = false): unknown => {
         if (obj === null || typeof obj !== "object") return obj
         if (Array.isArray(obj)) return obj.map((item) => sanitizeMoonshot(item))
@@ -1701,7 +1618,7 @@ export namespace ProviderTransform {
     }
 
     // Convert integer enums to string enums for Google/Gemini
-    if (model.providerID === "google" || model.api.id.includes("gemini")) {
+    if (resolveProtocolProfile(model).schemaDialect === "gemini") {
       const isPlainObject = (node: unknown): node is Record<string, any> => isRecord(node)
       const hasCombiner = (node: unknown) =>
         isPlainObject(node) && (Array.isArray(node.anyOf) || Array.isArray(node.oneOf) || Array.isArray(node.allOf))

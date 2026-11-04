@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-09-13
+Last reviewed: 2026-11-04
 Owner: ax-code runtime
 
 This guide captures the recommended way to run ax-code with a premium reasoning model and cheaper same-provider aux models.
@@ -19,13 +19,9 @@ Use the expensive model for reasoning-dense work, and cheap models for mechanica
 | Advisor / reasoning   | Stronger connected model (e.g. DeepSeek V4 Pro)          | `plan`, `architect`, `security`, `debug`                                |
 | Cheap / read-only aux | Same flash SKU                                           | `explore`, `compaction`, titles, recaps, low-complexity classification  |
 
-Pin `provider/model` IDs that are connected. Disabled first-party plan IDs
-(`alibaba-token-plan`, `deepseek`, `zai-coding-plan`, `minimax-coding-plan`)
-still resolve by SKU, but each call first tries the disabled provider and
-warns. Qwen 3.8 Max is a valid explicit choice, not the product or example
-default; without `config.model`, implicit default walks connected catalogs in
-this order: deepseek-flash, glm-5.3-flash, qwen3.8-flash, MiniMax-M3, grok-4.6,
-claude-sonnet-5, gpt-6, gemini-3.8-flash, qwen3.8-27b.
+Pin exact `provider/model` IDs that are connected. Disabled or unavailable pins fail when used. Catalog recommendations are UI suggestions; they do not become an implicit runtime default or an automatic recovery pool. Without `config.model`, AX Code preserves the most recent explicit selection. With neither a configured nor recent selection, choose a model or pass `--model provider/model`.
+
+Recovery targets must be explicitly authorized through `llm_routing.fallback`. See [model selection and recovery](model-recovery.md) for the current selection, retry and privacy contract.
 
 ## Config template
 
@@ -79,5 +75,5 @@ The last group should stay on the session model unless the user explicitly pins 
 
 ## Known ax-code limitations
 
-- `Provider.getSmallModel()` returns `undefined` for providers whose catalog neither tags a tier-bearing `family` nor matches the hardcoded priority lists; aux calls then fall back to the session model (logged as "no small model for provider").
+- Auxiliary model selection is explicit: `Provider.getSmallModel()` reads `small_model`; absent that setting, callers inherit the primary model. It does not scan the catalog for a cheap tier.
 - There is no mid-run escalation from a stuck worker to a stronger model.

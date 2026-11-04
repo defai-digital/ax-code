@@ -5,6 +5,7 @@ import { ModelsDev } from "./models"
 import { ProviderTransform } from "./transform"
 import { Log } from "../util/log"
 import { toErrorMessage } from "@/util/error-message"
+import { withCapabilityEvidence } from "./capability-evidence"
 
 const log = Log.create({ service: "provider" })
 
@@ -121,31 +122,40 @@ function fromModelsDevModel(provider: ModelsDev.Provider, model: ModelsDev.Model
         input: limit.input,
         output: limit.output ?? 0,
       },
-      capabilities: {
-        temperature: model.temperature ?? false,
-        reasoning: model.reasoning ?? false,
-        attachment: model.attachment ?? false,
-        toolcall: model.tool_call ?? false,
-        input: {
-          text: model.modalities?.input?.includes("text") ?? false,
-          audio: model.modalities?.input?.includes("audio") ?? false,
-          image: model.modalities?.input?.includes("image") ?? false,
-          video: model.modalities?.input?.includes("video") ?? false,
-          pdf: model.modalities?.input?.includes("pdf") ?? false,
+      capabilities: withCapabilityEvidence(
+        {
+          temperature: model.temperature ?? false,
+          reasoning: model.reasoning ?? false,
+          attachment: model.attachment ?? false,
+          toolcall: model.tool_call ?? false,
+          input: {
+            text: model.modalities?.input?.includes("text") ?? false,
+            audio: model.modalities?.input?.includes("audio") ?? false,
+            image: model.modalities?.input?.includes("image") ?? false,
+            video: model.modalities?.input?.includes("video") ?? false,
+            pdf: model.modalities?.input?.includes("pdf") ?? false,
+          },
+          output: {
+            text: model.modalities?.output?.includes("text") ?? false,
+            audio: model.modalities?.output?.includes("audio") ?? false,
+            image: model.modalities?.output?.includes("image") ?? false,
+            video: model.modalities?.output?.includes("video") ?? false,
+            pdf: model.modalities?.output?.includes("pdf") ?? false,
+          },
+          interleaved: model.interleaved ?? false,
+          // models.dev publishes no search field, so a snapshot entry never
+          // declares server-side web search. Set it explicitly to keep the value
+          // present-but-false distinguishable from "unknown" discovery rows.
+          websearch: false,
         },
-        output: {
-          text: model.modalities?.output?.includes("text") ?? false,
-          audio: model.modalities?.output?.includes("audio") ?? false,
-          image: model.modalities?.output?.includes("image") ?? false,
-          video: model.modalities?.output?.includes("video") ?? false,
-          pdf: model.modalities?.output?.includes("pdf") ?? false,
+        {
+          thinking: model.reasoning,
+          toolCalling: model.tool_call,
+          temperature: model.temperature,
+          attachment: model.attachment,
         },
-        interleaved: model.interleaved ?? false,
-        // models.dev publishes no search field, so a snapshot entry never
-        // declares server-side web search. Set it explicitly to keep the value
-        // present-but-false distinguishable from "unknown" discovery rows.
-        websearch: false,
-      },
+        "catalog",
+      ),
       release_date: model.release_date ?? "",
       variants: {},
     }

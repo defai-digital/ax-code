@@ -6,6 +6,7 @@ import type { Provider } from "../provider"
 import { ModelID, ProviderID } from "../schema"
 import { PRIVATE_GPU_DISCOVERY_TIMEOUT_MS, type PrivateGpuVendor } from "./presets"
 import { normalizeVendorBaseURL, privateGpuModelsURL } from "./endpoint"
+import { declaredCapabilityEvidence, withCapabilityEvidence } from "../capability-evidence"
 
 export type PrivateGpuDiscoveredModel = {
   id: string
@@ -91,13 +92,25 @@ function parseModelList(input: unknown): PrivateGpuDiscoveredModel[] {
     seen.add(id)
     const context = contextLimit(raw)
     const output = reservedOutputTokens(context, advertisedOutput(raw))
-    models.push({
-      id,
-      name: id,
-      context,
-      output,
-      ...advertisedCapabilities(raw),
-    })
+    const capabilities = isRecord(raw.capabilities) ? raw.capabilities : {}
+    models.push(
+      withCapabilityEvidence(
+        {
+          id,
+          name: id,
+          context,
+          output,
+          ...advertisedCapabilities(raw),
+        },
+        {
+          toolCalling: capabilities.toolcall ?? raw.tool_call,
+          thinking: capabilities.reasoning ?? raw.reasoning,
+          temperature: capabilities.temperature ?? raw.temperature,
+          attachment: capabilities.attachment ?? raw.attachment,
+        },
+        "deployment",
+      ),
+    )
   }
   return models
 }
@@ -116,15 +129,20 @@ export function privateGpuModelRecords(
       providerID: ProviderID.make(vendor.id),
       name: item.name,
       api: { id: item.id, url: inferenceBaseURL, npm: vendor.npm },
-      capabilities: {
-        temperature: item.temperature,
-        reasoning: item.reasoning,
-        attachment: item.attachment,
-        toolcall: item.toolCall,
-        input: { text: true, audio: false, image: false, video: false, pdf: false },
-        output: { text: true, audio: false, image: false, video: false, pdf: false },
-        interleaved: item.reasoning ? { field: "reasoning_content" } : false,
-      },
+      capabilities: withCapabilityEvidence(
+        {
+          temperature: item.temperature,
+          reasoning: item.reasoning,
+          attachment: item.attachment,
+          toolcall: item.toolCall,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: item.reasoning ? { field: "reasoning_content" } : false,
+        },
+        {},
+        "deployment",
+        declaredCapabilityEvidence(item),
+      ),
       limit: {
         context: item.context,
         input: Math.max(1, item.context - item.output),

@@ -231,6 +231,43 @@ describe("ObservedWindowStore boundary model", () => {
 })
 
 describe("ObservedWindowStore unknown-window mode", () => {
+  test.each(["expiry", "catalog"] as const)(
+    "invalidates negative evidence after %s, including after reload",
+    async (reason) => {
+      await using tmp = await tmpdir()
+      const filePath = path.join(tmp.path, "windows.json")
+      let now = 1000
+      const s = store({ filePath, now: () => now })
+      await s.recordOverflow(ROUTE, 100, { statedLimit: 100, catalogLimit: CATALOG })
+      if (reason === "expiry") now += ObservedWindow.WINDOW_TTL_MS + 1
+      const limit = reason === "catalog" ? CATALOG * 2 : CATALOG
+      for (const current of [s, store({ filePath, now: () => now })]) {
+        expect(await current.resolveWindow(ROUTE, limit)).toEqual({ kind: "catalog" })
+        await current.recordOverflow(ROUTE, 8000, { catalogLimit: limit })
+        expect(await current.effectiveWindow(ROUTE, limit)).toBe(8000)
+      }
+    },
+  )
+
+  test("legacy negative evidence without provenance cannot disable compaction forever", async () => {
+    await using tmp = await tmpdir()
+    const filePath = path.join(tmp.path, "windows.json")
+    await fs.writeFile(filePath, JSON.stringify({ version: 1, records: {}, unknown: [ROUTE] }))
+    expect(await store({ filePath }).resolveWindow(ROUTE, CATALOG)).toEqual({ kind: "catalog" })
+  })
+
+  test("bounds negative records as well as positive records", async () => {
+    await using tmp = await tmpdir()
+    const filePath = path.join(tmp.path, "windows.json")
+    let now = 1000
+    const s = store({ filePath, now: () => now++ })
+    for (let index = 0; index < ObservedWindow.MAX_RECORDS + 5; index++) {
+      await s.recordOverflow(`route-${index}`, 100, { catalogLimit: CATALOG })
+    }
+    expect(s.snapshot().unknown).toHaveLength(ObservedWindow.MAX_RECORDS)
+    expect(await store({ filePath }).resolveWindow("route-0", CATALOG)).toEqual({ kind: "catalog" })
+  })
+
   test("a below-plausibility failure marks the route unknown instead of clamping", async () => {
     const s = store()
     await s.recordOverflow(ROUTE, 2_000, { catalogLimit: CATALOG })
@@ -316,7 +353,7 @@ describe("ObservedWindowStore persistence validation", () => {
     await using tmp = await tmpdir()
     const filePath = path.join(tmp.path, "observed-windows.json")
     await fs.mkdir(path.dirname(filePath), { recursive: true })
-    await fs.writeFile(filePath, JSON.stringify({ version: 2, records: { [ROUTE]: { window: 40_000 } } }))
+    await fs.writeFile(filePath, JSON.stringify({ version: 999, records: { [ROUTE]: { window: 40_000 } } }))
     const s = store({ filePath })
     expect(await s.effectiveWindow(ROUTE, CATALOG)).toBeUndefined()
   })
@@ -429,7 +466,7 @@ describe("routeKeyFor", () => {
   }
 
   test("uses provider ID + resolved model ID", () => {
-    expect(ObservedWindow.routeKeyFor(model({}))).toBe("provider-id/model-id")
+    expect(ObservedWindow.routeKeyFor(model({}))).toMatch(/^deployment-v2:[a-f0-9]{64}$/)
   })
 
   test("changing the upstream model behind an alias does not reuse its observed window", async () => {
@@ -446,27 +483,21 @@ describe("routeKeyFor", () => {
   test("aliases for the same upstream model share calibration and token anchors", () => {
     const original = model({ api: { id: "upstream-model", url: "https://api.example.com/v1", npm: "@ai-sdk/openai" } })
     const alias = { ...original, id: "other-alias" } as typeof original
-    expect(ObservedWindow.routeKeyFor(original)).toBe("provider-id/upstream-model")
     expect(ObservedWindow.routeKeyFor(alias)).toBe(ObservedWindow.routeKeyFor(original))
   })
 
-  test("appends the endpoint origin for OpenAI-compatible custom providers", () => {
-    expect(
-      ObservedWindow.routeKeyFor(
-        model({
-          providerID: "custom-private-gpu",
-          api: { id: "model-id", url: "https://gpu.example.com/v1", npm: "@ai-sdk/openai-compatible" },
-        }),
-      ),
-    ).toBe("custom-private-gpu/model-id@https://gpu.example.com")
+  test("separates endpoints, including paths on the same host", () => {
+    const first = model({
+      api: { id: "model-id", url: "https://gpu.example.com/a/v1", npm: "@ai-sdk/openai-compatible" },
+    })
+    const other = { ...first, api: { ...first.api, url: "https://gpu.example.com/b/v1" } }
+    expect(ObservedWindow.routeKeyFor(first)).not.toBe(ObservedWindow.routeKeyFor(other))
   })
 
-  test("skips an unparseable endpoint URL", () => {
-    expect(
-      ObservedWindow.routeKeyFor(
-        model({ api: { id: "model-id", url: "not a url", npm: "@ai-sdk/openai-compatible" } }),
-      ),
-    ).toBe("provider-id/model-id")
+  test("unresolved endpoints have distinct opaque identities", () => {
+    const first = model({ api: { id: "model-id", url: "not a url", npm: "@ai-sdk/openai-compatible" } })
+    const other = { ...first, api: { ...first.api, url: "other unresolved url" } }
+    expect(ObservedWindow.routeKeyFor(first)).not.toBe(ObservedWindow.routeKeyFor(other))
   })
 })
 

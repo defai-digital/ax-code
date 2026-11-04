@@ -60,7 +60,19 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("google", "gemini 3.8 flash")).toBe(true)
     expect(isModelSupportedForProvider("google-vertex", "gemini_2.5_pro")).toBe(false)
     expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 3.8 Flash" })).toBe(true)
-    expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 3 Pro Preview" })).toBe(false)
+    expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 3 Pro Preview" })).toBe(true)
+  })
+
+  test("display-only renames cannot enable or disable a deployment", () => {
+    for (const id of ["deployment-123", "deepseek-flash", "gemini-3.8-flash", "gemini-2.5-pro"]) {
+      for (const name of [
+        "Gemini 2.5 migration assistant",
+        "embedding documentation helper",
+        "GPT-5.5 compatibility",
+      ]) {
+        expect(isModelSupportedForProvider("custom", id, { name })).toBe(isModelSupportedForProvider("custom", id))
+      }
+    }
   })
 
   test("hides DeepSeek V4 Flash Vision Exp and Muse Spark below 1.3", () => {

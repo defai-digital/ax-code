@@ -20,7 +20,12 @@ import { iife } from "@/util/iife"
 import { Global } from "../global"
 import path from "path"
 import fs from "fs/promises"
-import { createHash } from "node:crypto"
+import { configurationKey, resolveModelIdentity } from "./model-identity"
+import { declaredCapabilityEvidence, withCapabilityEvidence } from "./capability-evidence"
+import { cloneModelData, immutableModelData } from "./model-snapshot"
+import { resolveModel } from "./resolved-model"
+import { prepareLanguageModel } from "./request-compiler"
+import { waitForSharedModelWork } from "./shared-model-work"
 import { fileURLToPath, pathToFileURL } from "url"
 import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
@@ -33,7 +38,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { ProviderTransform } from "./transform"
-import { providerModelKey, providerModelList } from "./model-key"
+import { providerModelList } from "./model-key"
 import {
   ProviderInfo as ProviderInfoSchema,
   ProviderModel as ProviderModelSchema,
@@ -43,7 +48,7 @@ import {
 } from "./model-info"
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
-import { isModelSupportedForProvider } from "./model-support"
+import { isModelSupportedForProvider, modelSupportDecision } from "./model-support"
 import { defaultModelIDForProvider, MODEL_FORMAT_HELP, modelFamilyDefault } from "./implicit-default"
 import {
   CUSTOM_LOADERS,
@@ -316,9 +321,7 @@ export namespace Provider {
   export const resolveCredentialSource = applyCredentialSource
 
   function cacheKeyPart(value: unknown): string {
-    // Credentials and token-related settings affect SDK behavior too. Hash the
-    // complete configuration so keys distinguish them without retaining secrets.
-    return createHash("sha256").update(JSON.stringify(value)).digest("base64url")
+    return configurationKey("sdk-v2", value)
   }
 
   type Lang = Exclude<LanguageModel, string>
@@ -427,6 +430,30 @@ export namespace Provider {
 
   export const fromModelsDevProvider = convertModelsDevProvider
 
+  function connectionOptions(model: Model, options: Record<string, any>, vars?: CustomVarsLoader) {
+    const result = { ...options }
+    const runtimeEndpoint =
+      LOCAL_LLM_PROVIDER_IDS.some((id) => id === model.providerID) || isDedicatedPrivateGpuProviderID(model.providerID)
+    let url =
+      runtimeEndpoint && model.api.url
+        ? model.api.url
+        : typeof options.baseURL === "string" && options.baseURL
+          ? options.baseURL
+          : model.api.url
+    if (!url) return result
+    for (const [key, value] of Object.entries(vars?.(options) ?? {})) url = url.replaceAll("${" + key + "}", value)
+    result.baseURL = url.replace(/\$\{([^}]+)\}/g, (item, key) => Env.get(String(key)) ?? item)
+    return result
+  }
+
+  function providerView(provider: Info, vars?: CustomVarsLoader) {
+    const result = cloneModelData(provider)
+    for (const model of Object.values(result.models)) {
+      model.api.url = connectionOptions(model, result.options, vars).baseURL ?? model.api.url
+    }
+    return result
+  }
+
   const state = Instance.state(async () => {
     using _ = log.time("state")
     // Capture the cache generation at init START, not completion. An init that
@@ -474,6 +501,12 @@ export namespace Provider {
 
     log.info("provider init started", { command: "provider.init", status: "started" })
     const initFailures: { source: string; error: unknown }[] = []
+    const exclusions = new Map<string, { providerID: string; modelID: string; reason: string }>()
+    const exclude = (providerID: string, modelID: string, reason: string) => {
+      exclusions.set(JSON.stringify([providerID, modelID]), { providerID, modelID, reason })
+    }
+    let revision = 0
+    const discoveryStatus: { phase: "pending" | "ready" | "partial" | "failed" } = { phase: "pending" }
 
     const configProviders = Object.entries(config.provider ?? {})
 
@@ -495,6 +528,9 @@ export namespace Provider {
         // preserves the required shape. Remeda cannot express that relation
         // in its generic merge return type.
         providers[providerID] = mergeDeep(existing, sanitized) as Info
+        for (const [id, model] of Object.entries(sanitized.models ?? {})) {
+          providers[providerID].models[id].capabilities = model.capabilities
+        }
         return
       }
       const match = database[providerID]
@@ -503,16 +539,25 @@ export namespace Provider {
     }
 
     function applyModelFilters(providerID: ProviderID, provider: Info) {
+      // Rediscovery can qualify a previously excluded model. Recompute the
+      // decision for every incoming entry instead of retaining a stale reason.
+      for (const modelID of Object.keys(provider.models)) exclusions.delete(JSON.stringify([providerID, modelID]))
       const managedAxEngine = providerID === AX_ENGINE_PROVIDER_ID && !axEngineAttached
       if (providerID === "anthropic") {
         const keep = new Set<string>(latestAnthropicFamilyModels(provider.models).map((model) => model.id))
         for (const modelID of Object.keys(provider.models)) {
-          if (!keep.has(modelID)) delete provider.models[modelID]
+          if (!keep.has(modelID)) {
+            exclude(providerID, modelID, "superseded-family-entry")
+            delete provider.models[modelID]
+          }
         }
       }
       if (providerID === "deepseek") {
         for (const [modelID, model] of Object.entries(provider.models)) {
-          if (isHiddenDeepseekLegacySku(modelID, model.name)) delete provider.models[modelID]
+          if (isHiddenDeepseekLegacySku(modelID)) {
+            exclude(providerID, modelID, "retired-catalog-sku")
+            delete provider.models[modelID]
+          }
         }
       }
       const configProvider = config.provider?.[providerID]
@@ -524,6 +569,7 @@ export namespace Provider {
             axEngineLocalRepository(model.api.id) !== localRepository ||
             (model.options.modelID !== undefined && axEngineLocalRepository(model.options.modelID) !== localRepository))
         ) {
+          exclude(providerID, modelID, "unqualified-managed-local-model")
           delete provider.models[modelID]
           continue
         }
@@ -540,17 +586,31 @@ export namespace Provider {
             : {}),
         }
         if (!supported(providerID, model.api.id, { id: model.api.id, name: model.name, family: model.family })) {
+          exclude(
+            providerID,
+            modelID,
+            modelSupportDecision(providerID, model.api.id, model).reason ?? "unsupported-model-policy",
+          )
           delete provider.models[modelID]
           continue
         }
-        if (modelID === "gpt-5-chat-latest") delete provider.models[modelID]
-        if (model.status === "alpha" && !Flag.AX_CODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
-        if (model.status === "deprecated") delete provider.models[modelID]
-        if (
-          (configProvider?.blacklist && configProvider.blacklist.includes(modelID)) ||
-          (configProvider?.whitelist && !configProvider.whitelist.includes(modelID))
-        )
+        const exclusion =
+          modelID === "gpt-5-chat-latest"
+            ? "unsupported-model-policy"
+            : model.status === "alpha" && !Flag.AX_CODE_ENABLE_EXPERIMENTAL_MODELS
+              ? "experimental-model-disabled"
+              : model.status === "deprecated"
+                ? "deprecated-model"
+                : configProvider?.blacklist?.includes(modelID)
+                  ? "configured-blacklist"
+                  : configProvider?.whitelist && !configProvider.whitelist.includes(modelID)
+                    ? "outside-configured-whitelist"
+                    : undefined
+        if (exclusion) {
+          exclude(providerID, modelID, exclusion)
           delete provider.models[modelID]
+          continue
+        }
 
         try {
           model.variants = mapValues(ProviderTransform.variants(model), (v) => v)
@@ -598,7 +658,14 @@ export namespace Provider {
       }
       for (const [modelID, model] of Object.entries(provider.models ?? {})) {
         const nextID = model.id ?? modelID
-        if (!supported(providerID, nextID, model)) continue
+        if (!supported(providerID, nextID, model)) {
+          exclude(
+            providerID,
+            modelID,
+            modelSupportDecision(providerID, nextID, model).reason ?? "unsupported-model-policy",
+          )
+          continue
+        }
         const existingModel = parsed.models[model.id ?? modelID]
         const name = iife(() => {
           if (model.name) return model.name
@@ -631,32 +698,46 @@ export namespace Provider {
           status: model.status ?? existingModel?.status ?? "active",
           name,
           providerID: ProviderID.make(providerID),
-          capabilities: {
-            temperature: model.temperature ?? existingModel?.capabilities?.temperature ?? false,
-            reasoning: model.reasoning ?? existingModel?.capabilities?.reasoning ?? false,
-            attachment: model.attachment ?? existingModel?.capabilities?.attachment ?? false,
-            toolcall: model.tool_call ?? existingModel?.capabilities?.toolcall ?? true,
-            input: {
-              text: model.modalities?.input?.includes("text") ?? existingModel?.capabilities?.input?.text ?? true,
-              audio: model.modalities?.input?.includes("audio") ?? existingModel?.capabilities?.input?.audio ?? false,
-              image: model.modalities?.input?.includes("image") ?? existingModel?.capabilities?.input?.image ?? false,
-              video: model.modalities?.input?.includes("video") ?? existingModel?.capabilities?.input?.video ?? false,
-              pdf: model.modalities?.input?.includes("pdf") ?? existingModel?.capabilities?.input?.pdf ?? false,
+          capabilities: withCapabilityEvidence(
+            {
+              temperature: model.temperature ?? existingModel?.capabilities?.temperature ?? false,
+              reasoning: model.reasoning ?? existingModel?.capabilities?.reasoning ?? false,
+              attachment: model.attachment ?? existingModel?.capabilities?.attachment ?? false,
+              toolcall: model.tool_call ?? existingModel?.capabilities?.toolcall ?? false,
+              input: {
+                text: model.modalities?.input?.includes("text") ?? existingModel?.capabilities?.input?.text ?? true,
+                audio: model.modalities?.input?.includes("audio") ?? existingModel?.capabilities?.input?.audio ?? false,
+                image: model.modalities?.input?.includes("image") ?? existingModel?.capabilities?.input?.image ?? false,
+                video: model.modalities?.input?.includes("video") ?? existingModel?.capabilities?.input?.video ?? false,
+                pdf: model.modalities?.input?.includes("pdf") ?? existingModel?.capabilities?.input?.pdf ?? false,
+              },
+              output: {
+                text: model.modalities?.output?.includes("text") ?? existingModel?.capabilities?.output?.text ?? true,
+                audio:
+                  model.modalities?.output?.includes("audio") ?? existingModel?.capabilities?.output?.audio ?? false,
+                image:
+                  model.modalities?.output?.includes("image") ?? existingModel?.capabilities?.output?.image ?? false,
+                video:
+                  model.modalities?.output?.includes("video") ?? existingModel?.capabilities?.output?.video ?? false,
+                pdf: model.modalities?.output?.includes("pdf") ?? existingModel?.capabilities?.output?.pdf ?? false,
+              },
+              interleaved: model.interleaved ?? existingModel?.capabilities?.interleaved ?? false,
+              // Config-declared (and previously discovered then persisted) search
+              // flag. An absent declaration stays absent rather than inheriting
+              // the catalog record's `false`: only an explicit `true` claims the
+              // capability, so "not declared" must not read as a denial.
+              websearch: model.websearch,
             },
-            output: {
-              text: model.modalities?.output?.includes("text") ?? existingModel?.capabilities?.output?.text ?? true,
-              audio: model.modalities?.output?.includes("audio") ?? existingModel?.capabilities?.output?.audio ?? false,
-              image: model.modalities?.output?.includes("image") ?? existingModel?.capabilities?.output?.image ?? false,
-              video: model.modalities?.output?.includes("video") ?? existingModel?.capabilities?.output?.video ?? false,
-              pdf: model.modalities?.output?.includes("pdf") ?? existingModel?.capabilities?.output?.pdf ?? false,
+            {
+              thinking: model.reasoning,
+              toolCalling: model.tool_call,
+              temperature: model.temperature,
+              attachment: model.attachment,
+              webSearch: model.websearch,
             },
-            interleaved: model.interleaved ?? existingModel?.capabilities?.interleaved ?? false,
-            // Config-declared (and previously discovered then persisted) search
-            // flag. An absent declaration stays absent rather than inheriting
-            // the catalog record's `false`: only an explicit `true` claims the
-            // capability, so "not declared" must not read as a denial.
-            websearch: model.websearch,
-          },
+            "config",
+            existingModel ? declaredCapabilityEvidence(existingModel.capabilities) : undefined,
+          ),
           options: mergeDeep(existingModel?.options ?? {}, model.options ?? {}),
           limit: (() => {
             const stored = {
@@ -861,6 +942,7 @@ export namespace Provider {
               10_000,
               `discovery loader '${id}' timed out`,
             )
+            if (generation !== currentModelCacheGeneration()) return
             if (authoritativeDiscovery.has(providerID) || (providerID === AX_ENGINE_PROVIDER_ID && !axEngineAttached)) {
               // Authoritative catalogs replace saved membership only after a
               // complete successful response. Failed refreshes retain fallback models.
@@ -870,6 +952,7 @@ export namespace Provider {
               providers[providerID].models[modelID] = model
             }
             applyModelFilters(providerID, providers[providerID])
+            revision++
           })().catch((e) => {
             initFailures.push({ source: `discovery:${id}`, error: e })
             log.warn("state discovery error", { id, error: e })
@@ -889,9 +972,11 @@ export namespace Provider {
 
       log.info("provider discovery completed", {
         command: "provider.discovery",
-        status: "ok",
+        status: initFailures.length ? "partial" : "ok",
         providers: recordCount(providers),
       })
+      discoveryStatus.phase = initFailures.length ? (recordCount(providers) ? "partial" : "failed") : "ready"
+      revision++
       Bus.publishDetached(Event.Updated, {})
     }
 
@@ -902,8 +987,16 @@ export namespace Provider {
     // also keeps `ready()`/`getModel()` awaiters from ever seeing a rejection.
     const discovery: Promise<void> =
       Object.keys(discoveryLoaders).length > 0
-        ? runDiscovery().catch((err) => log.warn("provider discovery failed", { err }))
-        : Promise.resolve()
+        ? runDiscovery().catch((err) => {
+            initFailures.push({ source: "discovery", error: err })
+            discoveryStatus.phase = "failed"
+            revision++
+            log.warn("provider discovery failed", { err })
+          })
+        : Promise.resolve().then(() => {
+            discoveryStatus.phase = initFailures.length ? "partial" : "ready"
+            revision++
+          })
 
     const providerCount = recordCount(providers)
     if (initFailures.length > 0) {
@@ -931,6 +1024,14 @@ export namespace Provider {
       modelLoaders,
       varsLoaders,
       discovery,
+      inspect: () => ({
+        revision: `${generation}.${revision}`,
+        exclusions: [...exclusions.values()],
+        discovery: {
+          phase: discoveryStatus.phase,
+          diagnostics: initFailures.map(({ source }) => ({ source, code: "provider-initialization-failed" })),
+        },
+      }),
     }
   })
 
@@ -945,7 +1046,40 @@ export namespace Provider {
   }
 
   export async function list() {
-    return state().then((state) => state.providers)
+    return state().then((s) =>
+      Object.fromEntries(
+        Object.entries(s.providers).map(([id, provider]) => [id, providerView(provider, s.varsLoaders[id])]),
+      ),
+    )
+  }
+
+  /** Immutable, credential-free registry view. Completion and success are separate states. */
+  export async function snapshot() {
+    const s = await state()
+    const providers = Object.fromEntries(
+      Object.entries(s.providers).map(([id, provider]) => [
+        id,
+        {
+          id: provider.id,
+          name: provider.name,
+          source: provider.source,
+          models: Object.fromEntries(
+            Object.entries(provider.models).map(([modelID, model]) => [
+              modelID,
+              resolveModel(model, connectionOptions(model, provider.options, s.varsLoaders[id])),
+            ]),
+          ),
+        },
+      ]),
+    )
+    const inspection = s.inspect()
+    return immutableModelData({
+      ...inspection,
+      // Live loaders and endpoint templates can change contracts after discovery.
+      // Include their resolved contents so equal revisions imply equal model data.
+      revision: `${inspection.revision}.${configurationKey("contracts", providers)}`,
+      providers,
+    })
   }
 
   // Await background model discovery (CLI probes, local LLM model lists) to
@@ -1053,7 +1187,7 @@ export namespace Provider {
       using _ = log.time("getSDK", {
         providerID: model.providerID,
       })
-      const options = { ...provider.options }
+      const options = connectionOptions(model, provider.options, s.varsLoaders[model.providerID])
 
       if (model.api.npm.includes("@ai-sdk/openai-compatible") && options["includeUsage"] !== false) {
         options["includeUsage"] = true
@@ -1073,31 +1207,6 @@ export namespace Provider {
         options["maxRetries"] = 0
       }
 
-      const baseURL = iife(() => {
-        let url =
-          typeof options["baseURL"] === "string" && options["baseURL"] !== "" ? options["baseURL"] : model.api.url
-        if (!url) return
-
-        // some models/providers have variable urls, ex: "https://${AZURE_RESOURCE_NAME}.services.ai.azure.com/anthropic/v1"
-        // We track this in models.dev, and then when we are resolving the baseURL
-        // we need to string replace that literal: "${AZURE_RESOURCE_NAME}"
-        const loader = s.varsLoaders[model.providerID]
-        if (loader) {
-          const vars = loader(options)
-          for (const [key, value] of Object.entries(vars)) {
-            const field = "${" + key + "}"
-            url = url.replaceAll(field, value)
-          }
-        }
-
-        url = url.replace(/\$\{([^}]+)\}/g, (item, key) => {
-          const val = Env.get(String(key))
-          return val ?? item
-        })
-        return url
-      })
-
-      if (baseURL !== undefined) options["baseURL"] = baseURL
       if (model.headers)
         options["headers"] = {
           ...options["headers"],
@@ -1372,24 +1481,14 @@ export namespace Provider {
     }
   }
 
-  function languageCacheKey(model: Model, provider: Info) {
-    const base = providerModelKey({ providerID: model.providerID, modelID: model.id })
-    try {
-      const options = cacheKeyPart({
-        providerOptions: provider.options,
-        modelOptions: model.options,
-        modelAPI: model.api,
-        modelHeaders: model.headers,
-      })
-      if (!options) return base
-      return `${base}#${options}`
-    } catch {
-      return base
-    }
+  function languageCacheKey(model: Model, provider: Info, vars?: CustomVarsLoader) {
+    return resolveModelIdentity(model, connectionOptions(model, provider.options, vars)).languageKey
   }
 
   export async function getProvider(providerID: ProviderID) {
-    return state().then((s) => s.providers[providerID])
+    return state().then((s) =>
+      s.providers[providerID] ? providerView(s.providers[providerID], s.varsLoaders[providerID]) : undefined,
+    )
   }
 
   export async function getModel(
@@ -1435,7 +1534,9 @@ export namespace Provider {
       const suggestions = matches.map((m) => m.target)
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
-    return info
+    const result = cloneModelData(info)
+    result.api.url = connectionOptions(info, provider.options, s.varsLoaders[providerID]).baseURL ?? result.api.url
+    return result
   }
 
   export async function getLanguage(
@@ -1443,13 +1544,15 @@ export namespace Provider {
     context: CustomModelLoaderContext = {},
     retryDepth = 0,
   ): Promise<Lang> {
-    const s = await state()
+    context.signal?.throwIfAborted()
+    const s = await waitForSharedModelWork(state(), context.signal)
+    context.signal?.throwIfAborted()
     const provider = s.providers[model.providerID]
     if (!provider) {
       throw new ModelNotFoundError({ providerID: model.providerID, modelID: model.id })
     }
 
-    const key = languageCacheKey(model, provider)
+    const key = languageCacheKey(model, provider, s.varsLoaders[model.providerID])
     const retryAfterInvalidation = () => {
       if (retryDepth >= MODEL_CACHE_INVALIDATION_RETRY_LIMIT) {
         throw new Error(`Provider model cache repeatedly invalidated while loading ${model.providerID}/${model.id}`)
@@ -1466,9 +1569,9 @@ export namespace Provider {
     // Other providers use in-flight dedup: the pending check and modelPending registration
     // after the loader promise is created run with no await in between, so concurrent
     // callers cannot both miss the pending entry and start duplicate loads.
-    // Each AX Engine caller needs its own live metadata refresh and cancellation,
-    // even when another caller is loading the same language model.
-    const callerOwnsLoad = model.providerID === AX_ENGINE_PROVIDER_ID
+    // AX Engine needs a live metadata refresh per call. Any caller supplying
+    // a signal also owns its preparation, independently of other callers.
+    const callerOwnsLoad = model.providerID === AX_ENGINE_PROVIDER_ID || context.signal !== undefined
     const pending = s.modelPending.get(key)
     if (pending && !callerOwnsLoad) {
       const language = await pending
@@ -1479,7 +1582,7 @@ export namespace Provider {
     const promise = Promise.resolve().then(async (): Promise<Lang> => {
       // CLI providers bypass SDK loading — their custom loaders handle everything
       if (s.modelLoaders[model.providerID] && model.api?.npm === "cli") {
-        const language = await s.modelLoaders[model.providerID](
+        const loaded = await s.modelLoaders[model.providerID](
           null,
           model.api.id,
           {
@@ -1488,14 +1591,20 @@ export namespace Provider {
           },
           context,
         )
+        context.signal?.throwIfAborted()
+        const language = prepareLanguageModel(
+          loaded,
+          model,
+          connectionOptions(model, provider.options, s.varsLoaders[model.providerID]),
+        )
         if (s.generation === currentModelCacheGeneration()) cacheLanguage(s.models, key, language as Lang)
         return language as Lang
       }
 
-      const sdk = await getSDK(model)
+      const sdk = await waitForSharedModelWork(getSDK(model), context.signal)
 
       try {
-        const language = s.modelLoaders[model.providerID]
+        const loaded = s.modelLoaders[model.providerID]
           ? await s.modelLoaders[model.providerID](
               sdk,
               model.api.id,
@@ -1503,6 +1612,12 @@ export namespace Provider {
               model.providerID === AX_ENGINE_PROVIDER_ID ? { ...context, model } : context,
             )
           : sdk.languageModel(model.api.id)
+        context.signal?.throwIfAborted()
+        const language = prepareLanguageModel(
+          loaded,
+          model,
+          connectionOptions(model, provider.options, s.varsLoaders[model.providerID]),
+        )
         if (s.generation === currentModelCacheGeneration()) cacheLanguage(s.models, key, language as Lang)
         return language as Lang
       } catch (e) {

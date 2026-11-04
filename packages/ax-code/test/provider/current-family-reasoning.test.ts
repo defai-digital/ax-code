@@ -426,11 +426,12 @@ describe("gateway model family robustness", () => {
   })
 
   test.each(["k3", "k3-256k", "gateway/k3-256k"])("%s uses the gateway Kimi model card identity", (id) => {
-    const m = { ...model(id), name: "Kimi K3-256K" }
+    const m = { ...model(id), family: "kimi", name: "Kimi K3-256K" }
     expect(T.isKimiFamily(m)).toBe(true)
     expect(T.options({ model: m, sessionID: "test" }).promptCacheKey).toBe("test")
-    expect(T.isKimiFamily({ ...m, name: "Unrelated model" })).toBe(false)
-    expect(T.isKimiFamily({ ...m, name: undefined })).toBe(false)
+    expect(T.isKimiFamily({ ...m, name: "Unrelated model" })).toBe(true)
+    expect(T.isKimiFamily({ ...m, family: undefined, name: "Kimi K3-256K" })).toBe(false)
+    expect(T.isKimiFamily({ ...m, name: undefined })).toBe(true)
   })
 
   test.each(["k30", "k3-custom", "k3-256k-other"])("%s does not infer Kimi from an ambiguous short id", (id) => {

@@ -38,7 +38,5 @@ function compareAnthropicFamilyModels(a: AnthropicFamilySource, b: AnthropicFami
   if (byDate !== 0) return byDate
   const byDated = Number(DATED_ID.test(b.id)) - Number(DATED_ID.test(a.id ?? aKey))
   if (byDated !== 0) return byDated
-  const byLatest = Number(/\(latest\)/i.test(a.name ?? "")) - Number(/\(latest\)/i.test(b.name ?? ""))
-  if (byLatest !== 0) return byLatest
   return (a.id ?? aKey).localeCompare(b.id)
 }

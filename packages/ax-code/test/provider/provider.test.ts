@@ -327,42 +327,6 @@ test("Auth.set during Instance boot init does not deadlock invalidateAll", async
   }
 })
 
-test("getLanguage registers pending model loads before awaiting them", async () => {
-  const src = await fs.readFile(path.join(import.meta.dirname, "../../src/provider/provider-impl.ts"), "utf-8")
-  const start = src.indexOf("export async function getLanguage(")
-  const end = src.indexOf("export async function closest(", start)
-  expect(start).toBeGreaterThan(-1)
-  expect(end).toBeGreaterThan(start)
-  // Strip line comments: an explanatory comment quoting one of the code
-  // patterns below would otherwise match indexOf() first and break the
-  // ordering assertions even though the code itself is correct.
-  const body = src.slice(start, end).replace(/\/\/[^\n]*/g, "")
-
-  const pendingCheck = body.indexOf("const pending = s.modelPending.get(key)")
-  const promiseCreate = body.indexOf("const promise = Promise.resolve().then")
-  const pendingSet = body.indexOf("s.modelPending.set(key, promise)")
-  const promiseAwait = body.indexOf("const language = await promise")
-
-  expect(pendingCheck).toBeGreaterThan(-1)
-  expect(promiseCreate).toBeGreaterThan(pendingCheck)
-  expect(pendingSet).toBeGreaterThan(promiseCreate)
-  expect(pendingSet).toBeLessThan(promiseAwait)
-})
-
-test("getLanguage bounds the persistent language cache", async () => {
-  const src = await fs.readFile(path.join(import.meta.dirname, "../../src/provider/provider-impl.ts"), "utf-8")
-  const start = src.indexOf("function cacheLanguage(")
-  const end = src.indexOf("export function warmup(", start)
-  expect(start).toBeGreaterThan(-1)
-  expect(end).toBeGreaterThan(start)
-  const body = src.slice(start, end).replace(/\/\/[^\n]*/g, "")
-
-  expect(body).toContain("MODEL_LANGUAGE_CACHE_MAX_ENTRIES")
-  expect(body).toContain("cache.delete(key)")
-  expect(body).toContain("while (cache.size > MODEL_LANGUAGE_CACHE_MAX_ENTRIES)")
-  expect(body).toContain("cache.delete(oldest)")
-})
-
 test("concurrent getLanguage calls share one model loader invocation", async () => {
   const providerID = ProviderID.make("single-flight-provider")
   const originalLoader = CUSTOM_LOADERS[providerID]
@@ -864,6 +828,11 @@ test("model blacklist excludes specific models", async () => {
     fn: async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.make("groq")]).toBeUndefined()
+      expect((await Provider.snapshot()).exclusions).toContainEqual({
+        providerID: "groq",
+        modelID: "qwen/qwen3.8-27b",
+        reason: "configured-blacklist",
+      })
     },
   })
 })
@@ -3192,7 +3161,7 @@ test("model with tool_call false", async () => {
   })
 })
 
-test("model defaults tool_call to true when not specified", async () => {
+test("undeclared tool calling is not silently advertised as supported", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -3222,7 +3191,7 @@ test("model defaults tool_call to true when not specified", async () => {
     directory: tmp.path,
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.make("default-tools")].models["model"].capabilities.toolcall).toBe(true)
+      expect(providers[ProviderID.make("default-tools")].models["model"].capabilities.toolcall).toBe(false)
     },
   })
 })

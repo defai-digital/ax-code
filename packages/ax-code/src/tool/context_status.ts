@@ -5,6 +5,7 @@ import { Config } from "../config/config"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { getModelCapabilities } from "../provider/model-capabilities"
+import { observedCapabilitiesForModel } from "../provider/resolved-model"
 import { SessionCompaction } from "../session/compaction"
 import {
   calculateCompactionBudget,
@@ -87,7 +88,7 @@ async function resolveBudget(model: Provider.Model): Promise<{
       `The context window for model ${model.providerID}/${model.id} is unknown: the provider reported an implausibly small window, so no budget can be reported and automatic compaction is off for this route.`,
     )
   }
-  const capabilities = getModelCapabilities(model.id, model.providerID)
+  const capabilities = getModelCapabilities(model.api.id, model.providerID, observedCapabilitiesForModel(model))
   const fallback = calculateCompactionBudget(
     {
       providerID: model.providerID,

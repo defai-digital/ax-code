@@ -15,6 +15,7 @@ import {
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { ObservedWindow } from "@/provider/observed-window"
+import { observedCapabilitiesForModel } from "@/provider/resolved-model"
 import { TokenLedger } from "@/provider/token-ledger"
 import { FILE_TOUCHING_TOOLS } from "@/tool/mutation-tools"
 import { toolInputFilePath } from "@/tool/file-path"
@@ -265,6 +266,8 @@ export namespace LLM {
     }
     const [language, cfg, provider] = await (input.setup ??
       prepareSetup({ model: input.model, abort: input.abort, config: input.config }))
+    if (!provider)
+      throw new Provider.ModelNotFoundError({ providerID: input.model.providerID, modelID: input.model.id })
 
     const localInference = isLocalInferenceConnection({
       providerID: input.model.providerID,
@@ -339,12 +342,12 @@ export namespace LLM {
     }
     const reasoningPolicyReminder = ReasoningPolicy.systemReminder(reasoningPolicyDecision)
 
-    const observedModelCapabilities = {
-      contextWindow: input.model.limit.context,
-      thinking: input.model.capabilities.reasoning,
-      toolCalling: input.model.capabilities.toolcall,
-    }
-    const longAgentProfile = longAgentProfileForModel(input.model.id, input.model.providerID, observedModelCapabilities)
+    const observedModelCapabilities = observedCapabilitiesForModel(input.model)
+    const longAgentProfile = longAgentProfileForModel(
+      input.model.api.id,
+      input.model.providerID,
+      observedModelCapabilities,
+    )
     const autonomousEnabled = ScopedFlag.autonomous()
     const SUPER_LONG_REMINDER =
       "You are operating in Super-Long mode. Before declaring any task complete: run available tests or verification commands, confirm the build is clean, and surface any repeated failure patterns explicitly rather than retrying silently."
@@ -459,7 +462,7 @@ export namespace LLM {
     // context so they are not merged into the cached system prefix. Local
     // connections append them after history; other providers retain their
     // historical last-user-message placement.
-    const cacheCaps = getModelCapabilities(input.model.id, input.model.providerID)
+    const cacheCaps = getModelCapabilities(input.model.api.id, input.model.providerID, observedModelCapabilities)
     // An explicit `promptCacheMode: "alibaba-explicit"` override marks the
     // model as verified for DashScope-style cache_control even when the
     // capability registry has not vouched for it. Unknown configured modes

@@ -23,6 +23,10 @@
 - mirror runtime domains where practical
 - prefer real integration coverage over mocks
 
+## Provider and Model Contracts
+
+Provider/model changes follow the [resolution, evidence, registry and request compilation contracts](PROVIDERS.md). Add providers through the existing facade so ordinary and auxiliary requests share deployment identity, capability evidence and final preparation.
+
 ---
 
 ## Effect Framework Policy (as of v2.11.0)

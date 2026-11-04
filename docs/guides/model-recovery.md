@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-10
+Last reviewed: 2026-11-04
 Owner: ax-code runtime
 
 AX Code preserves exact provider/model selections. Connecting a provider does not
@@ -85,3 +85,7 @@ ingress; `request` does not attest who operated an API client. Request evidence
 records the selected purpose and target. Model-generated self-descriptions and
 model names in memory or tool examples are not routing evidence. AX Trust and
 external providers retain responsibility for upstream routing and authorization.
+
+## Provider state diagnostics
+
+`ax-code debug routing` also reports the registry discovery phase and model exclusion reasons. A pending or partially failed catalog is distinguishable from a completed successful discovery. These diagnostics do not send inference requests; normal provider initialization can still run metadata/auth discovery. Missing tool-capability metadata remains unknown; custom deployments should declare `tool_call: true` only when they accept tools.

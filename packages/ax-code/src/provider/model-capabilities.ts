@@ -35,8 +35,9 @@ export type RateLimitTier = "unlimited" | "extended" | "standard"
  * - `supported`: Fully supported and stable
  * - `experimental`: Supported but may have issues or change
  * - `blocked`: Not supported or disabled
+ * - `unknown`: No qualified declaration is available
  */
-export type FeatureSupport = "supported" | "experimental" | "blocked"
+export type FeatureSupport = "supported" | "experimental" | "blocked" | "unknown"
 
 /**
  * Model capabilities declaration.
@@ -102,8 +103,8 @@ export interface ModelCapabilities {
  */
 export type ObservedModelCapabilities = {
   contextWindow?: number
-  thinking?: boolean
-  toolCalling?: boolean
+  thinking?: boolean | "unknown"
+  toolCalling?: boolean | "unknown"
 }
 
 /**
@@ -145,8 +146,8 @@ const DEFAULT_CAPABILITIES: ModelCapabilities = {
   thinking: "blocked",
   preserveThinking: "blocked",
   promptCache: "blocked",
-  toolCalling: "supported",
-  structuredOutput: "supported",
+  toolCalling: "unknown",
+  structuredOutput: "unknown",
   webOrBuiltInTools: "blocked",
   rateLimitTier: "standard",
 }
@@ -750,11 +751,22 @@ export function getModelCapabilities(
   providerId?: string,
   observed?: ObservedModelCapabilities,
 ): ModelCapabilities {
-  const capabilities = findRegisteredModelCapabilities(modelId, providerId) ?? { ...DEFAULT_CAPABILITIES }
+  const registered = findRegisteredModelCapabilities(modelId, providerId)
+  const capabilities = registered ?? { ...DEFAULT_CAPABILITIES }
   const contextWindow = observed?.contextWindow
   if (typeof contextWindow === "number" && Number.isSafeInteger(contextWindow) && contextWindow > 0) {
     capabilities.contextWindow = contextWindow
   }
+  if (observed?.thinking === false) {
+    capabilities.thinking = "blocked"
+    capabilities.preserveThinking = "blocked"
+  } else if (observed?.thinking === true && (!registered || capabilities.thinking !== "blocked"))
+    capabilities.thinking = "supported"
+  if (observed?.thinking === "unknown") capabilities.thinking = "unknown"
+  if (observed?.toolCalling === "unknown") capabilities.toolCalling = "unknown"
+  if (observed?.toolCalling === false) capabilities.toolCalling = "blocked"
+  else if (observed?.toolCalling === true && capabilities.toolCalling !== "blocked")
+    capabilities.toolCalling = "supported"
   return capabilities
 }
 
@@ -770,7 +782,9 @@ export function supportsLongAgent(modelId: string, providerId?: string, observed
   return (
     caps.contextWindow >= 64_000 &&
     observed?.thinking !== false &&
+    observed?.thinking !== "unknown" &&
     observed?.toolCalling !== false &&
+    observed?.toolCalling !== "unknown" &&
     (registered ? available(caps.thinking) : observed?.thinking === true) &&
     (registered ? available(caps.toolCalling) : observed?.toolCalling === true)
   )
@@ -782,7 +796,9 @@ export function supportsSuperLong(modelId: string, providerId?: string, observed
   return (
     caps.contextWindow >= 64_000 &&
     observed?.thinking !== false &&
+    observed?.thinking !== "unknown" &&
     observed?.toolCalling !== false &&
+    observed?.toolCalling !== "unknown" &&
     (caps.thinking === "supported" || caps.thinking === "experimental") &&
     (caps.promptCache === "supported" || caps.promptCache === "experimental")
   )

@@ -56,6 +56,7 @@ export const RoutingCommand = cmd({
         const provider = await Provider.getProvider(providerID as ProviderID)
         return provider && { models: provider.models }
       })
+      const registry = await Provider.snapshot()
       process.stdout.write(
         JSON.stringify(
           {
@@ -70,6 +71,8 @@ export const RoutingCommand = cmd({
             maxConcurrencyRetries: SessionRetry.CONCURRENCY_RETRY_MAX_ATTEMPTS,
             dispatch: false,
             availability: "not-probed",
+            discovery: registry.discovery,
+            excludedModels: registry.exclusions,
             warnings,
             notes: [
               "Only configured targets may be used; an unavailable next target stops recovery.",

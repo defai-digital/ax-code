@@ -2,6 +2,7 @@ import os from "os"
 import { CLI_PROVIDER_IDS } from "./cli/ids"
 import { modelIdFinalSegment, normalizeProviderModelId } from "./model-id"
 import { fixedTokensEstimateForProvider, usableInputTokens } from "../session/model-agent-fit"
+import { declaredCapabilityEvidence } from "./capability-evidence"
 
 // Providers allowed to surface models that don't advertise tool calling. For
 // most providers a non-toolcall model is hidden from the picker because the
@@ -139,6 +140,12 @@ export function modelSelectableForProvider(providerID: string, model: Selectable
   // Catalog candidates can be selected for explicit preparation. Their native
   // capabilities stay unverified until the AX Engine loader checks the live card.
   if (providerID === "ax-engine" && model.options?.axEngineCandidate === true) return true
+  if (
+    !TOOLCALL_OPTIONAL_PROVIDER_IDS.has(providerID) &&
+    model.capabilities &&
+    declaredCapabilityEvidence(model.capabilities)?.toolCalling.state === "unknown"
+  )
+    return false
   return providerModelSelectable({
     providerID,
     toolcall: model.capabilities?.toolcall ?? model.tool_call,

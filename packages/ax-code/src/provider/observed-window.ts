@@ -26,6 +26,7 @@ import { parseJsonRecord } from "@/util/json-record"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
+import { resolveModelIdentity } from "./model-identity"
 
 const log = Log.create({ service: "provider.observed-window" })
 
@@ -123,25 +124,11 @@ export namespace ObservedWindow {
 
   /**
    * Route key for the resolved inference identity: provider ID + resolved
-   * upstream model ID, plus the endpoint origin for custom/OpenAI-compatible
-   * providers (same provider/model served from different endpoints must not
-   * share a window). Bare user aliases are not a key.
+   * upstream model ID, protocol profile and normalized endpoint path/query.
+   * Distinct deployments must not share calibration; aliases are not a key.
    */
   export function routeKeyFor(model: Provider.Model): string {
-    const base = `${model.providerID}/${model.api.id || model.id}`
-    if (model.api.npm === "@ai-sdk/openai-compatible") {
-      const origin = endpointOrigin(model.api.url)
-      if (origin) return `${base}@${origin}`
-    }
-    return base
-  }
-
-  function endpointOrigin(url: string): string | undefined {
-    try {
-      return new URL(url).origin
-    } catch {
-      return undefined
-    }
+    return resolveModelIdentity(model).deploymentKey
   }
 
   const RecordSchema = z.object({
@@ -155,10 +142,17 @@ export namespace ObservedWindow {
   })
 
   const FileSchema = z.object({
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
     records: z.record(z.string(), z.unknown()),
     unknown: z.array(z.unknown()).optional(),
   })
+
+  const UnknownSchema = z.object({
+    routeKey: z.string().min(1),
+    catalogFingerprint: z.string().min(1),
+    updatedAt: z.number().int().min(0),
+  })
+  type UnknownRecord = Omit<z.infer<typeof UnknownSchema>, "routeKey">
 
   export type StoreOptions = {
     /** JSON persistence path; omit for an in-memory-only store. */
@@ -170,7 +164,7 @@ export namespace ObservedWindow {
     private readonly filePath?: string
     private readonly now: () => number
     private records = new Map<string, ObservedWindowRecord>()
-    private unknownRoutes = new Set<string>()
+    private unknownRoutes = new Map<string, UnknownRecord>()
     // Observed-success floor per route, tracked separately from window
     // records: a served prompt proves the window is at least this large, but
     // must not by itself become the window cap (that would trigger
@@ -228,9 +222,16 @@ export namespace ObservedWindow {
           log.warn("dropping invalid observed-window entry", { routeKey, error: record.error.message })
         }
       }
-      for (const routeKey of validated.data.unknown ?? []) {
-        if (typeof routeKey === "string") this.unknownRoutes.add(routeKey)
+      for (const value of validated.data.unknown ?? []) {
+        // Legacy string-only entries have no freshness or catalog provenance.
+        // Discard them instead of disabling compaction indefinitely.
+        const result = UnknownSchema.safeParse(value)
+        if (result.success) {
+          const { routeKey, ...record } = result.data
+          this.unknownRoutes.set(routeKey, record)
+        }
       }
+      this.boundRecords()
     }
 
     private persist(): Promise<void> {
@@ -242,27 +243,45 @@ export namespace ObservedWindow {
     }
 
     private async writeSnapshot(): Promise<void> {
+      this.boundRecords()
       if (!this.filePath || !this.dirty) return
       this.dirty = false
-      // Bound: keep the newest MAX_RECORDS by updatedAt.
-      const entries = [...this.records.entries()].sort((a, b) => b[1].updatedAt - a[1].updatedAt)
-      const dropped = entries.splice(MAX_RECORDS)
-      this.records = new Map(entries)
-      for (const [routeKey] of dropped) {
-        log.info("evicted oldest observed-window record", { routeKey })
-      }
       const payload = {
-        version: 1 as const,
+        version: 2 as const,
         records: Object.fromEntries(
           [...this.records].filter(([, record]) => record.evidence === "provider-stated" || record.confirmations >= 2),
         ),
-        unknown: [...this.unknownRoutes],
+        unknown: [...this.unknownRoutes].map(([routeKey, record]) => ({ routeKey, ...record })),
       }
       try {
         await Filesystem.write(this.filePath, JSON.stringify(payload, null, 2))
       } catch (error) {
+        this.dirty = true
         log.warn("observed-window persist failed", { filePath: this.filePath, error })
       }
+    }
+
+    private boundRecords() {
+      const all = [...this.records, ...this.unknownRoutes].sort((a, b) => b[1].updatedAt - a[1].updatedAt)
+      for (const [routeKey] of all.slice(MAX_RECORDS)) {
+        this.records.delete(routeKey)
+        this.unknownRoutes.delete(routeKey)
+        this.floors.delete(routeKey)
+      }
+    }
+
+    private currentUnknown(routeKey: string, catalogLimit?: number) {
+      const record = this.unknownRoutes.get(routeKey)
+      if (!record) return undefined
+      if (
+        this.now() - record.updatedAt <= WINDOW_TTL_MS &&
+        (catalogLimit === undefined || record.catalogFingerprint === catalogFingerprintFor(catalogLimit))
+      )
+        return record
+      this.unknownRoutes.delete(routeKey)
+      this.floors.delete(routeKey)
+      this.touch()
+      return undefined
     }
 
     private touch(): void {
@@ -282,9 +301,11 @@ export namespace ObservedWindow {
     ): Promise<void> {
       await this.ensureLoaded()
       if (!Number.isFinite(promptTokens) || promptTokens < 0) return
+      this.currentUnknown(routeKey, options.catalogLimit)
       const tokens = Math.floor(promptTokens)
       const existing = this.currentRecord(routeKey, options.catalogLimit)
       this.floors.set(routeKey, Math.max(this.floors.get(routeKey) ?? 0, tokens))
+      while (this.floors.size > MAX_RECORDS) this.floors.delete(this.floors.keys().next().value!)
       if (existing) {
         // Only a REAL ratchet refreshes the freshness clock. Refreshing it on
         // every success would pin a stale shrunken window forever: compaction
@@ -346,13 +367,14 @@ export namespace ObservedWindow {
       // Missing/invalid measurements are not evidence of a tiny window. In
       // particular, the no-ledger fallback is zero and must not disable compaction.
       if (!hasStatedLimit && (!Number.isFinite(promptTokens) || Math.floor(promptTokens) <= 0)) return
+      this.currentUnknown(routeKey, catalogLimit)
       const existing = this.currentRecord(routeKey, catalogLimit)
       const floor = Math.max(this.floors.get(routeKey) ?? 0, existing?.maxSuccessfulPromptTokens ?? 0)
 
       if (options.statedLimit !== undefined && Number.isFinite(options.statedLimit) && options.statedLimit > 0) {
         const window = Math.min(Math.floor(options.statedLimit), catalogLimit)
         if (window < MIN_PLAUSIBLE_WINDOW) {
-          this.markUnknown(routeKey, { evidence: "provider-stated", window })
+          this.markUnknown(routeKey, { evidence: "provider-stated", window, catalogLimit })
           await this.persist()
           return
         }
@@ -377,7 +399,7 @@ export namespace ObservedWindow {
       const candidate = Math.min(Math.max(0, Math.floor(promptTokens)), catalogLimit)
       const window = Math.max(candidate, floor)
       if (window < MIN_PLAUSIBLE_WINDOW) {
-        this.markUnknown(routeKey, { evidence: "boundary", window })
+        this.markUnknown(routeKey, { evidence: "boundary", window, catalogLimit })
         await this.persist()
         return
       }
@@ -391,13 +413,14 @@ export namespace ObservedWindow {
         updatedAt: this.now(),
       }
       this.records.set(routeKey, next)
+      this.boundRecords()
       this.touch()
       if (next.confirmations >= 2) await this.persist()
     }
 
     private markUnknown(
       routeKey: string,
-      evidence: { evidence: "provider-stated" | "boundary"; window: number },
+      evidence: { evidence: "provider-stated" | "boundary"; window: number; catalogLimit: number },
     ): void {
       // Auto-compaction is disabled for an unknown route, so this is never a
       // silent no-op: log the measurement that tripped the floor.
@@ -407,7 +430,10 @@ export namespace ObservedWindow {
         floor: MIN_PLAUSIBLE_WINDOW,
         evidence: evidence.evidence,
       })
-      this.unknownRoutes.add(routeKey)
+      this.unknownRoutes.set(routeKey, {
+        catalogFingerprint: catalogFingerprintFor(evidence.catalogLimit),
+        updatedAt: this.now(),
+      })
       this.records.delete(routeKey)
       this.touch()
     }
@@ -435,8 +461,8 @@ export namespace ObservedWindow {
      */
     async resolveWindow(routeKey: string, catalogLimit: number): Promise<WindowResolution> {
       await this.ensureLoaded()
-      if (this.unknownRoutes.has(routeKey)) return { kind: "unknown" }
       if (!Number.isFinite(catalogLimit) || catalogLimit <= 0) return { kind: "catalog" }
+      if (this.currentUnknown(routeKey, catalogLimit)) return { kind: "unknown" }
       const record = this.currentRecord(routeKey, catalogLimit)
       if (!record) {
         return { kind: "catalog" }
@@ -470,7 +496,7 @@ export namespace ObservedWindow {
     snapshot(): { records: Record<string, ObservedWindowRecord>; unknown: string[] } {
       return {
         records: Object.fromEntries(this.records),
-        unknown: [...this.unknownRoutes],
+        unknown: [...this.unknownRoutes.keys()],
       }
     }
   }

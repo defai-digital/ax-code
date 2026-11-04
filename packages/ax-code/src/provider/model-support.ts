@@ -73,7 +73,7 @@ function parseModelProbes(value: string) {
 }
 
 export function buildModelProbes(modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
-  return [modelID, model?.id, model?.name, model?.family]
+  return [modelID, model?.id, model?.family]
     .filter((value): value is string => typeof value === "string")
     .flatMap(parseModelProbes)
 }
@@ -149,7 +149,7 @@ function isMinimaxM27Highspeed(modelID: string, probes: readonly string[]) {
   })
 }
 
-export function isModelSupportedForProvider(providerID: string, modelID: string, model?: ModelSupportProbeInput) {
+function supportsModel(providerID: string, modelID: string, model?: ModelSupportProbeInput) {
   const probes = buildModelProbes(modelID, model)
   if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55"))) {
     return false
@@ -182,6 +182,21 @@ export function isModelSupportedForProvider(providerID: string, modelID: string,
     return supportsGlmModels(probes)
   }
   return true
+}
+
+export function modelSupportDecision(providerID: string, modelID: string, model?: ModelSupportProbeInput) {
+  if (supportsModel(providerID, modelID, model)) return { supported: true as const }
+  const probes = buildModelProbes(modelID, model)
+  const reason = isHiddenCatalogSku(modelID, model)
+    ? "retired-catalog-sku"
+    : probes.some((value) => value.includes("embedding") || value.includes("embed-"))
+      ? "non-chat-model"
+      : "unsupported-model-policy"
+  return { supported: false as const, reason }
+}
+
+export function isModelSupportedForProvider(providerID: string, modelID: string, model?: ModelSupportProbeInput) {
+  return modelSupportDecision(providerID, modelID, model).supported
 }
 
 function hasGlmMajorVersionAtLeastFive(probes: readonly string[]) {

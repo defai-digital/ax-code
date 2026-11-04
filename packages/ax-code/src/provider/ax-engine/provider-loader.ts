@@ -1,4 +1,5 @@
 import type { Provider } from "../provider"
+import { modelCapabilityEvidence, withCapabilityEvidence } from "../capability-evidence"
 import type { CustomLoader, CustomModelLoaderContext } from "../loaders"
 import { NativePerf } from "../../perf/native"
 import { ProviderID, ModelID } from "../schema"
@@ -110,16 +111,26 @@ function applyLiveContract(model: Provider.Model, contract: AxEngineLiveModelCon
     output: effective.output,
     input: inputLimit(effective.context, effective.output),
   }
-  model.capabilities = {
-    ...model.capabilities,
-    temperature: contract.capabilities.temperature ?? model.capabilities.temperature,
-    reasoning: contract.capabilities.reasoning ?? model.capabilities.reasoning,
-    toolcall: contract.toolcall,
-    attachment: contract.attachment,
-    input: clampAxEngineMultimodalInput(contract.capabilities.input ?? model.capabilities.input, model.limit.context),
-    output: contract.capabilities.output ?? model.capabilities.output,
-    interleaved: contract.capabilities.interleaved ?? model.capabilities.interleaved,
-  }
+  model.capabilities = withCapabilityEvidence(
+    {
+      ...model.capabilities,
+      temperature: contract.capabilities.temperature ?? model.capabilities.temperature,
+      reasoning: contract.capabilities.reasoning ?? model.capabilities.reasoning,
+      toolcall: contract.toolcall,
+      attachment: contract.attachment,
+      input: clampAxEngineMultimodalInput(contract.capabilities.input ?? model.capabilities.input, model.limit.context),
+      output: contract.capabilities.output ?? model.capabilities.output,
+      interleaved: contract.capabilities.interleaved ?? model.capabilities.interleaved,
+    },
+    {
+      thinking: contract.capabilities.reasoning,
+      toolCalling: contract.toolcall,
+      temperature: contract.capabilities.temperature,
+      attachment: contract.attachment,
+    },
+    "deployment",
+    modelCapabilityEvidence(model.capabilities),
+  )
   model.options = {
     ...model.options,
     apiModelID: contract.id,
@@ -270,6 +281,16 @@ export function axEngineLoader(): CustomLoader {
         release_date: def.releaseDate,
         variants: {},
       }
+      model.capabilities = withCapabilityEvidence(
+        model.capabilities,
+        {
+          thinking: def.reasoning,
+          toolCalling: def.toolcall,
+          temperature: true,
+          attachment: false,
+        },
+        "catalog",
+      )
       if (live) applyLiveContract(model, live)
       return remember(model)
     }
@@ -287,27 +308,36 @@ export function axEngineLoader(): CustomLoader {
         name: contract.id,
         family: contract.id,
         api: { id: contract.id, url: modelBaseURL, npm: "@ai-sdk/openai-compatible" },
-        capabilities: {
-          temperature: contract.capabilities.temperature ?? true,
-          reasoning: contract.capabilities.reasoning ?? false,
-          attachment: contract.attachment,
-          toolcall: contract.toolcall,
-          input: contract.capabilities.input ?? {
-            text: true,
-            audio: false,
-            image: false,
-            video: false,
-            pdf: false,
+        capabilities: withCapabilityEvidence(
+          {
+            temperature: contract.capabilities.temperature ?? true,
+            reasoning: contract.capabilities.reasoning ?? false,
+            attachment: contract.attachment,
+            toolcall: contract.toolcall,
+            input: contract.capabilities.input ?? {
+              text: true,
+              audio: false,
+              image: false,
+              video: false,
+              pdf: false,
+            },
+            output: contract.capabilities.output ?? {
+              text: true,
+              audio: false,
+              image: false,
+              video: false,
+              pdf: false,
+            },
+            interleaved: contract.capabilities.interleaved ?? false,
           },
-          output: contract.capabilities.output ?? {
-            text: true,
-            audio: false,
-            image: false,
-            video: false,
-            pdf: false,
+          {
+            thinking: contract.capabilities.reasoning,
+            toolCalling: contract.toolcall,
+            temperature: contract.capabilities.temperature,
+            attachment: contract.attachment,
           },
-          interleaved: contract.capabilities.interleaved ?? false,
-        },
+          "deployment",
+        ),
         limit: { context, input: inputLimit(context, output), output },
         status: "active",
         options: {

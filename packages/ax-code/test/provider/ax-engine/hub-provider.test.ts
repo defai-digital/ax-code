@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest"
 import { tmpdir } from "../../fixture/fixture"
 import { Instance } from "../../../src/project/instance"
 import { Provider } from "../../../src/provider/provider"
+import { modelCapabilityEvidence } from "../../../src/provider/capability-evidence"
 import { ProviderID, ModelID } from "../../../src/provider/schema"
 
 afterEach(async () => {
@@ -22,6 +23,7 @@ test("rechecks AX Engine live capabilities even when its language adapter was ca
     }),
   )
   let toolcall = true
+  let reasoning: boolean | undefined
   vi.stubGlobal(
     "fetch",
     vi.fn<typeof fetch>(async (url) => {
@@ -30,7 +32,7 @@ test("rechecks AX Engine live capabilities even when its language adapter was ca
         data: [
           {
             id: "live-candidate",
-            capabilities: { toolcall, input: { text: true }, output: { text: true } },
+            capabilities: { toolcall, reasoning, input: { text: true }, output: { text: true } },
             limit: { context: 32768, output: 8192 },
           },
         ],
@@ -42,7 +44,24 @@ test("rechecks AX Engine live capabilities even when its language adapter was ca
     fn: async () => {
       await Provider.ready()
       const model = await Provider.getModel(ProviderID.make("ax-engine"), ModelID.make("live-candidate"))
+      expect(modelCapabilityEvidence(model.capabilities).toolCalling).toEqual({
+        state: "supported",
+        source: "deployment",
+      })
+      expect(modelCapabilityEvidence(model.capabilities).thinking.state).toBe("unknown")
+      expect(modelCapabilityEvidence(model.capabilities).temperature.state).toBe("unknown")
       await Provider.getLanguage(model)
+      expect(modelCapabilityEvidence(model.capabilities).thinking.state).toBe("unknown")
+      const before = await Provider.snapshot()
+      reasoning = true
+      await Provider.getLanguage(model)
+      const after = await Provider.snapshot()
+      expect(after.revision).not.toBe(before.revision)
+      expect(before.providers["ax-engine"].models["live-candidate"].capabilities.thinking.state).toBe("unknown")
+      expect(after.providers["ax-engine"].models["live-candidate"].capabilities.thinking).toEqual({
+        state: "supported",
+        source: "deployment",
+      })
       toolcall = false
       await expect(Provider.getLanguage(model)).rejects.toThrow("AX_ENGINE_TOOLCALL_UNSUPPORTED")
     },

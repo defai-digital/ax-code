@@ -23,6 +23,7 @@ import { grokDisplayName, grokFallbackLatest, grokFamilyId, latestGrokFamilyMode
 import { museDisplayName, museFallbackLatest, museFamilyId, latestMuseFamilyModels } from "./muse-families"
 import { codexDisplayName, codexFallbackModels, codexFamilyId, latestCodexFamilyModels } from "./codex-families"
 import { LOCAL_LLM_RUNTIMES, normalizeLocalRuntimeBaseURL } from "./local-runtime"
+import { withCapabilityEvidence } from "./capability-evidence"
 
 const log = Log.create({ service: "provider.loaders" })
 
@@ -108,28 +109,38 @@ function openAICompatibleCapabilities(item: OpenAICompatibleModelItem): Provider
   const capabilities: Record<string, unknown> = isRecord(item.capabilities) ? item.capabilities : {}
   const input: Record<string, unknown> = isRecord(capabilities.input) ? capabilities.input : {}
   const output: Record<string, unknown> = isRecord(capabilities.output) ? capabilities.output : {}
-  return {
-    temperature: booleanValue(capabilities.temperature, true),
-    reasoning: booleanValue(capabilities.reasoning, false),
-    attachment: booleanValue(capabilities.attachment, false),
-    toolcall: booleanValue(capabilities.toolcall, true),
-    input: {
-      text: booleanValue(input.text, true),
-      audio: booleanValue(input.audio, false),
-      image: booleanValue(input.image, false),
-      video: booleanValue(input.video, false),
-      pdf: booleanValue(input.pdf, false),
+  return withCapabilityEvidence(
+    {
+      temperature: booleanValue(capabilities.temperature, true),
+      reasoning: booleanValue(capabilities.reasoning, false),
+      attachment: booleanValue(capabilities.attachment, false),
+      toolcall: booleanValue(capabilities.toolcall, false),
+      input: {
+        text: booleanValue(input.text, true),
+        audio: booleanValue(input.audio, false),
+        image: booleanValue(input.image, false),
+        video: booleanValue(input.video, false),
+        pdf: booleanValue(input.pdf, false),
+      },
+      output: {
+        text: booleanValue(output.text, true),
+        audio: booleanValue(output.audio, false),
+        image: booleanValue(output.image, false),
+        video: booleanValue(output.video, false),
+        pdf: booleanValue(output.pdf, false),
+      },
+      interleaved: interleavedValue(capabilities.interleaved),
+      websearch: booleanValue(capabilities.web_search, false),
     },
-    output: {
-      text: booleanValue(output.text, true),
-      audio: booleanValue(output.audio, false),
-      image: booleanValue(output.image, false),
-      video: booleanValue(output.video, false),
-      pdf: booleanValue(output.pdf, false),
+    {
+      thinking: capabilities.reasoning,
+      toolCalling: capabilities.toolcall,
+      temperature: capabilities.temperature,
+      attachment: capabilities.attachment,
+      webSearch: capabilities.web_search,
     },
-    interleaved: interleavedValue(capabilities.interleaved),
-    websearch: booleanValue(capabilities.web_search, false),
-  }
+    "deployment",
+  )
 }
 
 function openAICompatibleLimit(item: OpenAICompatibleModelItem): Provider.Model["limit"] {
