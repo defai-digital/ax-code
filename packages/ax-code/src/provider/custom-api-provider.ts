@@ -11,6 +11,7 @@ import { isLocalHostname } from "@/util/local-host"
 import { isNonChatModelID, skuKey } from "@/provider/model-selectability"
 import { isRecord } from "@/util/record"
 import { Ssrf } from "@/util/ssrf"
+import { resolveCapabilityEvidence, withCapabilityEvidence } from "./capability-evidence"
 
 export namespace CustomApiProvider {
   export const Management = z.enum(["custom-api", "ax-trust"])
@@ -372,24 +373,49 @@ export namespace CustomApiProvider {
         output: payload.output ?? fallback?.limit?.output,
       },
     })
-    const caps = findRegisteredModelCapabilities(id)
     const capabilities = isRecord(raw?.capabilities) ? raw.capabilities : undefined
-    return {
-      id,
-      name: name && name !== id ? name : fallback?.name || name || id,
-      contextWindow: inherited.context,
-      outputLimit: inherited.output,
-      toolCall: typeof capabilities?.toolcall === "boolean" ? capabilities.toolcall : (fallback?.tool_call ?? true),
-      reasoning:
-        typeof capabilities?.reasoning === "boolean"
-          ? capabilities.reasoning
-          : (fallback?.reasoning ?? (caps ? caps.thinking !== "blocked" : false)),
-      attachment: imageCapable(capabilities, raw, fallback),
-      temperature:
-        typeof capabilities?.temperature === "boolean" ? capabilities.temperature : (fallback?.temperature ?? true),
-      websearch: webSearchCapable(capabilities, raw),
-      pdf: pdfCapable(capabilities, raw),
-    }
+    const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
+    const declaredImage =
+      typeof capabilities?.vision === "boolean" ||
+      typeof abilities?.vision === "boolean" ||
+      (isRecord(raw?.modalities) && Array.isArray(raw.modalities.input) && raw.modalities.input.length > 0) ||
+      typeof capabilities?.attachment === "boolean"
+    const catalogEvidence = resolveCapabilityEvidence(
+      {
+        toolCalling: fallback?.tool_call,
+        thinking: fallback?.reasoning,
+        temperature: fallback?.temperature,
+        attachment: Array.isArray(fallback?.modalities?.input)
+          ? fallback.modalities.input.includes("image")
+          : undefined,
+      },
+      "catalog",
+    )
+    return withCapabilityEvidence(
+      {
+        id,
+        name: name && name !== id ? name : fallback?.name || name || id,
+        contextWindow: inherited.context,
+        outputLimit: inherited.output,
+        toolCall: typeof capabilities?.toolcall === "boolean" ? capabilities.toolcall : (fallback?.tool_call ?? false),
+        reasoning:
+          typeof capabilities?.reasoning === "boolean" ? capabilities.reasoning : (fallback?.reasoning ?? false),
+        attachment: imageCapable(capabilities, raw, fallback),
+        temperature:
+          typeof capabilities?.temperature === "boolean" ? capabilities.temperature : (fallback?.temperature ?? false),
+        websearch: webSearchCapable(capabilities, raw),
+        pdf: pdfCapable(capabilities, raw),
+      },
+      {
+        toolCalling: capabilities?.toolcall,
+        thinking: capabilities?.reasoning,
+        temperature: capabilities?.temperature,
+        attachment: declaredImage ? imageCapable(capabilities, raw, undefined) : undefined,
+        webSearch: webSearchCapable(capabilities, raw),
+      },
+      "deployment",
+      catalogEvidence,
+    )
   }
 
   export function parseDiscoveredModels(
@@ -539,7 +565,7 @@ export namespace CustomApiProvider {
       name: model.name,
       contextWindow: model.limit?.context ?? 0,
       outputLimit: model.limit?.output ?? 0,
-      toolCall: model.tool_call ?? true,
+      toolCall: model.tool_call ?? false,
       reasoning: model.reasoning ?? false,
       attachment: model.attachment ?? false,
       temperature: model.temperature ?? false,

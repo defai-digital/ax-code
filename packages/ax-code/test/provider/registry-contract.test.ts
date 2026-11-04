@@ -113,3 +113,30 @@ test("language cache evicts old entries while preserving recent entries", async 
     },
   )
 })
+
+test("cancellation settles promptly even when a custom loader ignores its signal", async () => {
+  const gate = Promise.withResolvers<object>()
+  let calls = 0
+  await fixture(
+    async () => ({ autoload: false, getModel: async () => (++calls === 1 ? gate.promise : { fresh: true }) }),
+    async () => {
+      const model = await Provider.getModel(id, ModelID.make("model"))
+      const controller = new AbortController()
+      let outcome: unknown
+      const waiting = Provider.getLanguage(model, { signal: controller.signal }).catch((error) => {
+        outcome = error
+      })
+      try {
+        await vi.waitFor(() => expect(calls).toBe(1))
+        controller.abort()
+        await vi.waitFor(() => expect(outcome).toMatchObject({ name: "AbortError" }), { timeout: 250 })
+      } finally {
+        gate.resolve({ cancelled: true })
+        await waiting
+      }
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(await Provider.getLanguage(model)).toEqual({ fresh: true })
+      expect(calls).toBe(2)
+    },
+  )
+})

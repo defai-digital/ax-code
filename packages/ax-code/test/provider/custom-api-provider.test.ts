@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
+import { declaredCapabilityEvidence } from "../../src/provider/capability-evidence"
 import { CustomApiProvider } from "../../src/provider/custom-api-provider"
 
 const originalFetch = globalThis.fetch
@@ -21,6 +22,31 @@ describe("custom API provider identity", () => {
 })
 
 describe("custom API provider model discovery", () => {
+  test("sparse custom cards never grant tools, reasoning or temperature from defaults or family hints", () => {
+    for (const id of ["unregistered-model", "glm-5.3"]) {
+      const [model] = CustomApiProvider.parseDiscoveredModels({ data: [{ id }] })
+      expect(model).toMatchObject({ toolCall: false, reasoning: false, temperature: false })
+      for (const feature of ["toolCalling", "thinking", "temperature"] as const)
+        expect(declaredCapabilityEvidence(model)?.[feature]).toEqual({ state: "unknown", source: "unknown" })
+    }
+  })
+
+  test("catalog evidence is preserved and explicit deployment restrictions take precedence", () => {
+    const fallback = { tool_call: true, reasoning: true, temperature: true } as any
+    const inherited = CustomApiProvider.discoveredModel("coding", undefined, { id: "coding" }, fallback)
+    expect(declaredCapabilityEvidence(inherited)?.toolCalling).toEqual({ state: "supported", source: "catalog" })
+    const restricted = CustomApiProvider.discoveredModel(
+      "coding",
+      undefined,
+      {
+        capabilities: { toolcall: false, reasoning: false, temperature: false },
+      },
+      fallback,
+    )
+    expect(restricted).toMatchObject({ toolCall: false, reasoning: false, temperature: false })
+    expect(declaredCapabilityEvidence(restricted)?.toolCalling).toEqual({ state: "unsupported", source: "deployment" })
+  })
+
   test("parses OpenAI-compatible /models payloads", () => {
     expect(
       CustomApiProvider.parseDiscoveredModels({
@@ -33,7 +59,7 @@ describe("custom API provider model discovery", () => {
         name: "GLM 5.3",
         contextWindow: 1_000_000,
         outputLimit: 16_384,
-        reasoning: true,
+        reasoning: false,
       }),
     ])
   })

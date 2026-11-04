@@ -11,6 +11,7 @@ import { Bus } from "../../src/bus"
 import { CustomApiProvider } from "../../src/provider/custom-api-provider"
 import { exactCatalogFallbackModels, FIRST_PARTY_CATALOG_IDS } from "../../src/provider/ax-trust-discovery"
 import { modelDisplayInfo } from "../../src/cli/tui/component/model-vision-label"
+import { modelCapabilityEvidence } from "../../src/provider/capability-evidence"
 import { ModelsDev } from "../../src/provider/models"
 
 afterEach(() => {
@@ -116,6 +117,22 @@ test.each([
           expect(modelDisplayInfo("deepseek-flash", refreshed.models["deepseek-flash"]).label).toBe("DeepSeek Flash 👀")
           expect(refreshed.models["text-only"].capabilities.input.image).toBe(false)
           expect(refreshed.models["text-only"].capabilities.input.pdf).toBe(false)
+          expect(modelCapabilityEvidence(refreshed.models["text-only"].capabilities).toolCalling).toEqual({
+            state: "unknown",
+            source: "unknown",
+          })
+          expect(modelCapabilityEvidence(refreshed.models["text-only"].capabilities).attachment).toEqual({
+            state: "unsupported",
+            source: "deployment",
+          })
+          expect(modelCapabilityEvidence(refreshed.models["deepseek-flash"].capabilities).toolCalling).toEqual({
+            state: "supported",
+            source: "deployment",
+          })
+          expect(modelCapabilityEvidence(model.capabilities).thinking).toEqual({
+            state: "supported",
+            source: "deployment",
+          })
           expect(updated).toHaveBeenCalledOnce()
           expect(calls).toBe(1)
           expect(await Auth.get(id)).toEqual({ type: "api", key: "startup-test-token" })
@@ -337,11 +354,19 @@ test.each([undefined, false] as const)(
               toolcall: true,
               interleaved: { field: "reasoning_content" },
             })
+            expect(modelCapabilityEvidence(model.capabilities).toolCalling).toEqual({
+              state: "supported",
+              source: "catalog",
+            })
             expect(modelDisplayInfo(model.id, model).label).toBe(`${catalogModel.name} 👀`)
           } else {
             expect(model.name).toBe("Restricted Flash")
             expect(model.limit).toEqual({ context: 32000, output: 2000 })
             expect(model.capabilities).toMatchObject({ reasoning: false, toolcall: false, attachment: false })
+            expect(modelCapabilityEvidence(model.capabilities).toolCalling).toEqual({
+              state: "unsupported",
+              source: "deployment",
+            })
             expect(modelDisplayInfo(model.id, model).vision).toBe(false)
           }
           const unknown = await Provider.getModel(ProviderID.make(id), ModelID.make("my-deepseek-flash"))

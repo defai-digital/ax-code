@@ -119,6 +119,28 @@ describe("managed custom API provider routes", () => {
     },
   )
 
+  test("listing and re-saving sparse saved metadata cannot enable tool calling", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const query = `directory=${encodeURIComponent(tmp.path)}`
+    const app = Server.Default()
+    await Config.setGlobalProvider("company-gateway", {
+      management: "custom-api",
+      npm: "@ai-sdk/openai-compatible",
+      options: { baseURL: "https://api.example.com/v1" },
+      models: { "company-model": { limit: { context: 128_000, output: 16_384 } } },
+    })
+    const list = await app.request(`/provider/custom?${query}`)
+    expect(list.status).toBe(200)
+    expect(await list.json()).toMatchObject([{ models: [{ id: "company-model", toolCall: false }] }])
+    const resave = await app.request(`/provider/custom/company-gateway?${query}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(providerBody({ apiKey: undefined, models: undefined })),
+    })
+    expect(resave.status).toBe(200)
+    expect((await Config.getGlobal()).provider?.["company-gateway"]?.models?.["company-model"]?.tool_call).toBe(false)
+  })
+
   test("moves an existing custom gateway to AX Trust without changing its ID, key, or models", async () => {
     await using tmp = await tmpdir({ git: true })
     const query = `directory=${encodeURIComponent(tmp.path)}`
@@ -349,6 +371,8 @@ describe("managed custom API provider model refresh", () => {
         contextWindow: 128_000,
         outputLimit: 16_384,
         reasoning: false,
+        toolCall: false,
+        temperature: false,
       })
 
       // A legacy `ax-trust*` id without the management flag takes the same

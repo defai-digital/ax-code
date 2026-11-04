@@ -1635,7 +1635,12 @@ export namespace Provider {
     if (!callerOwnsLoad) s.modelPending.set(key, promise)
 
     try {
-      const language = await promise
+      // Custom adapters may ignore their signal. Stop the subscriber's wait
+      // while still observing late completion; the aborted load cannot cache.
+      // AX Engine owns process cleanup and must finish that cleanup first.
+      const language = await (model.providerID === AX_ENGINE_PROVIDER_ID
+        ? promise
+        : waitForSharedModelWork(promise, context.signal))
       if (s.generation === currentModelCacheGeneration()) return language
       return retryAfterInvalidation()
     } finally {

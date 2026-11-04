@@ -462,7 +462,11 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
     "a %s startup reports a typed failure and reaps its process",
     async (mode) => {
       await using f = await fixture(mode)
-      const failure = await ensureServer({ ...f.input, readyTimeoutMs: 1_000 }).catch((error: unknown) => error)
+      // A real launcher can take about a second to execute on macOS. Give
+      // the exit case the normal fixture deadline so it tests exit handling,
+      // independently of the separate short health-timeout case.
+      const readyTimeoutMs = mode === "exit" ? f.input.readyTimeoutMs : 1_000
+      const failure = await ensureServer({ ...f.input, readyTimeoutMs }).catch((error: unknown) => error)
       expect(AxEngineStartupError.isInstance(failure)).toBe(true)
       if (!AxEngineStartupError.isInstance(failure)) throw failure
       expect(failure.data.reason).toBe(mode === "exit" ? "process-exited" : "timeout")

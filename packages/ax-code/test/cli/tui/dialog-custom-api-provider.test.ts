@@ -13,12 +13,12 @@ import {
 describe("custom API provider TUI helpers", () => {
   test("parses comma- and newline-separated model IDs with safe defaults", () => {
     expect(parseCustomApiProviderModelIDs("model-a, model-b\nmodel-c")).toEqual([
-      expect.objectContaining({ id: "model-a", contextWindow: 128_000, outputLimit: 16_384, toolCall: true }),
-      expect.objectContaining({ id: "model-b", contextWindow: 128_000, outputLimit: 16_384, toolCall: true }),
-      expect.objectContaining({ id: "model-c", contextWindow: 128_000, outputLimit: 16_384, toolCall: true }),
+      expect.objectContaining({ id: "model-a", contextWindow: 128_000, outputLimit: 16_384, toolCall: false }),
+      expect.objectContaining({ id: "model-b", contextWindow: 128_000, outputLimit: 16_384, toolCall: false }),
+      expect.objectContaining({ id: "model-c", contextWindow: 128_000, outputLimit: 16_384, toolCall: false }),
     ])
     expect(parseCustomApiProviderModelIDs("glm-5.3")).toEqual([
-      expect.objectContaining({ id: "glm-5.3", contextWindow: 1_000_000, reasoning: true }),
+      expect.objectContaining({ id: "glm-5.3", contextWindow: 1_000_000, reasoning: false }),
     ])
   })
 
