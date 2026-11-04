@@ -128,7 +128,7 @@ export namespace ObservedWindow {
    * share a window). Bare user aliases are not a key.
    */
   export function routeKeyFor(model: Provider.Model): string {
-    const base = `${model.providerID}/${model.id}`
+    const base = `${model.providerID}/${model.api.id || model.id}`
     if (model.api.npm === "@ai-sdk/openai-compatible") {
       const origin = endpointOrigin(model.api.url)
       if (origin) return `${base}@${origin}`
@@ -179,6 +179,7 @@ export namespace ObservedWindow {
     private floors = new Map<string, number>()
     private loaded: Promise<void> | undefined
     private dirty = false
+    private persistence: Promise<void> = Promise.resolve()
 
     constructor(options: StoreOptions = {}) {
       this.filePath = options.filePath
@@ -232,7 +233,15 @@ export namespace ObservedWindow {
       }
     }
 
-    private async persist(): Promise<void> {
+    private persist(): Promise<void> {
+      // An older snapshot must finish publishing before a newer observation or
+      // clear can write. Capture dirty state only when this write gets its turn.
+      const next = this.persistence.then(() => this.writeSnapshot())
+      this.persistence = next.catch(() => undefined)
+      return next
+    }
+
+    private async writeSnapshot(): Promise<void> {
       if (!this.filePath || !this.dirty) return
       this.dirty = false
       // Bound: keep the newest MAX_RECORDS by updatedAt.

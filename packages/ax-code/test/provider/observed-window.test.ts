@@ -1,7 +1,8 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { ObservedWindow } from "@/provider/observed-window"
+import { Filesystem } from "@/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
 const ROUTE = "test-provider/test-model"
@@ -339,6 +340,50 @@ describe("ObservedWindowStore persistence validation", () => {
 })
 
 describe("ObservedWindowStore clear", () => {
+  test.each(["overflow", "clear"] as const)("serializes persistence while recording %s", async (operation) => {
+    await using tmp = await tmpdir()
+    const filePath = path.join(tmp.path, "observed-windows.json")
+    const s = store({ filePath })
+    const started = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const write = Filesystem.write
+    let calls = 0
+    const spy = vi.spyOn(Filesystem, "write").mockImplementation(async (...args) => {
+      calls++
+      if (calls === 1) {
+        started.resolve()
+        await release.promise
+      }
+      return write(...args)
+    })
+    let second: Promise<void> | undefined
+    const first = s.recordOverflow(ROUTE, 50_000, { statedLimit: 32_768, catalogLimit: CATALOG })
+    try {
+      await started.promise
+      second =
+        operation === "clear"
+          ? s.clear()
+          : s.recordOverflow("other/route", 50_000, { statedLimit: 16_384, catalogLimit: CATALOG })
+      // Let the second operation run while the first disk write is blocked.
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      const writesBeforeRelease = calls
+      release.resolve()
+      await Promise.all([first, second])
+      expect(writesBeforeRelease).toBe(1)
+      const reloaded = store({ filePath })
+      if (operation === "clear") {
+        expect(await reloaded.effectiveWindow(ROUTE, CATALOG)).toBeUndefined()
+      } else {
+        expect(await reloaded.effectiveWindow(ROUTE, CATALOG)).toBe(32_768)
+        expect(await reloaded.effectiveWindow("other/route", CATALOG)).toBe(16_384)
+      }
+    } finally {
+      release.resolve()
+      await Promise.allSettled([first, second])
+      spy.mockRestore()
+    }
+  })
+
   test.each([true, false])("clear resets success floors (single route: %s)", async (single) => {
     const s = store()
     await s.recordSuccess(ROUTE, 80_000)
@@ -385,6 +430,24 @@ describe("routeKeyFor", () => {
 
   test("uses provider ID + resolved model ID", () => {
     expect(ObservedWindow.routeKeyFor(model({}))).toBe("provider-id/model-id")
+  })
+
+  test("changing the upstream model behind an alias does not reuse its observed window", async () => {
+    const s = store()
+    const first = model({ api: { id: "upstream-a", url: "https://api.example.com/v1", npm: "@ai-sdk/openai" } })
+    const second = { ...first, api: { ...first.api, id: "upstream-b" } }
+    await s.recordOverflow(ObservedWindow.routeKeyFor(first), 50_000, {
+      statedLimit: 32_768,
+      catalogLimit: CATALOG,
+    })
+    expect(await s.resolveWindow(ObservedWindow.routeKeyFor(second), CATALOG)).toEqual({ kind: "catalog" })
+  })
+
+  test("aliases for the same upstream model share calibration and token anchors", () => {
+    const original = model({ api: { id: "upstream-model", url: "https://api.example.com/v1", npm: "@ai-sdk/openai" } })
+    const alias = { ...original, id: "other-alias" } as typeof original
+    expect(ObservedWindow.routeKeyFor(original)).toBe("provider-id/upstream-model")
+    expect(ObservedWindow.routeKeyFor(alias)).toBe(ObservedWindow.routeKeyFor(original))
   })
 
   test("appends the endpoint origin for OpenAI-compatible custom providers", () => {
