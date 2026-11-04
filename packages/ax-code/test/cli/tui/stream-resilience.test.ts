@@ -347,3 +347,35 @@ test("subscription setup and acknowledgement share one connect deadline", async 
     vi.useRealTimers()
   }
 })
+
+test.each(["reconnect", "shutdown"] as const)("a stalled unsubscribe cannot block %s", async (mode) => {
+  const abort = new AbortController()
+  const cleanup = Promise.withResolvers<void>()
+  const unsubscribe = vi.fn(() => cleanup.promise)
+  const statuses: StreamConnectionStatus[] = []
+  let attempts = 0
+  const done = runResilientStream<string>({
+    signal: abort.signal,
+    reconnectBaseMs: 1,
+    reconnectMaxMs: 1,
+    subscribe: async () => ({
+      unsubscribe: ++attempts === 1 ? unsubscribe : undefined,
+      stream: (async function* () {
+        yield "event"
+      })(),
+    }),
+    onEvent: () => {
+      if (mode === "shutdown" || attempts === 2) abort.abort()
+    },
+    onStatus: (status) => statuses.push(status),
+  })
+  try {
+    await vi.waitFor(() => expect(statuses.at(-1)?.phase).toBe("stopped"), { timeout: 500 })
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(attempts).toBe(mode === "shutdown" ? 1 : 2)
+  } finally {
+    abort.abort()
+    cleanup.resolve()
+    await done
+  }
+})

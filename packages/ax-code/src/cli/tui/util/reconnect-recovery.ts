@@ -6,6 +6,7 @@ export function createReconnectRecoveryGate(input: { recover: () => void | Promi
   let hasConnectedOnce = false
   let connected = false
   let disposed = false
+  let connectionGeneration = 0
   let inFlight: Promise<void> | undefined
   let pendingError: unknown | undefined
   let pendingReconnect = false
@@ -15,8 +16,14 @@ export function createReconnectRecoveryGate(input: { recover: () => void | Promi
     if (disposed || !connected || !pendingReconnect || inFlight) return inFlight
     pendingReconnect = false
     pendingError = undefined
+    const generation = connectionGeneration
     inFlight = Promise.resolve()
-      .then(input.recover)
+      .then(() => {
+        // A disconnect/disposal can happen after admission but before this
+        // microtask starts. A newer connection must stabilize independently.
+        if (disposed || !connected || connectionGeneration !== generation) return
+        return input.recover()
+      })
       .catch((error) => {
         pendingError = error
       })
@@ -32,6 +39,7 @@ export function createReconnectRecoveryGate(input: { recover: () => void | Promi
       if (disposed) return
       connected = nextConnected
       if (!connected) {
+        connectionGeneration++
         // Connection dropped — cancel any pending stabilization so we
         // don't trigger recovery on a stale reconnect.
         cancelStabilizeTimer?.()

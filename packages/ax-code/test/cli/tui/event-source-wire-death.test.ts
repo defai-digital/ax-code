@@ -85,6 +85,54 @@ describe("createEventSource wire death propagation", () => {
     expect(statuses[0]?.error).toBe(TUI_BACKEND_EXITED)
   })
 
+  test("a late live status cannot resurrect a dead backend wire", () => {
+    const channels = new Map<string, (status: StreamConnectionStatus) => void>()
+    const client = {
+      ...fakeClient(),
+      on: (name: string, handler: (status: StreamConnectionStatus) => void) => {
+        channels.set(name, handler)
+        return () => channels.delete(name)
+      },
+    }
+    const wire = fakeWire()
+    const events = createEventSource(client as any, wire)
+    wire.onWireDeath!()
+    const terminal = events.status!()
+    channels.get("event.status")!({ connected: true, phase: "connected", attempt: 1 })
+    expect(events.status!()).toBe(terminal)
+    expect(events.status!()?.error).toBe(TUI_BACKEND_EXITED)
+  })
+
+  test("one failing status listener cannot block terminal status delivery to the others", () => {
+    const wire = fakeWire()
+    const events = createEventSource(fakeClient() as any, wire)
+    events.onStatus!(() => {
+      throw new Error("listener failed")
+    })
+    const healthy = vi.fn()
+    events.onStatus!(healthy)
+    expect(() => wire.onWireDeath!()).not.toThrow()
+    expect(healthy).toHaveBeenCalledWith(expect.objectContaining({ error: TUI_BACKEND_EXITED }))
+    expect(() =>
+      events.onStatus!(() => {
+        throw new Error("snapshot listener failed")
+      }),
+    ).not.toThrow()
+  })
+
+  test("a failing previous wire-death hook cannot suppress the terminal status", () => {
+    const wire = fakeWire({
+      onWireDeath: () => {
+        throw new Error("previous hook failed")
+      },
+    })
+    const events = createEventSource(fakeClient() as any, wire)
+    const healthy = vi.fn()
+    events.onStatus!(healthy)
+    expect(() => wire.onWireDeath!()).not.toThrow()
+    expect(healthy).toHaveBeenCalledWith(expect.objectContaining({ error: TUI_BACKEND_EXITED }))
+  })
+
   test("emits nothing without a wire", () => {
     const events = createEventSource(fakeClient() as any)
     const statuses: StreamConnectionStatus[] = []

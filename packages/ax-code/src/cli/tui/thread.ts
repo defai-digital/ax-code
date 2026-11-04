@@ -540,13 +540,22 @@ export function createWorkerFetch(client: RpcClient): typeof fetch {
 export function createEventSource(client: RpcClient, wire?: RpcWireTarget): EventSource {
   let lastStatus: StreamConnectionStatus | undefined
   let statusVersion = 0
+  let wireDead = false
   const statusListeners = new Set<(status: StreamConnectionStatus) => void>()
+  const notifyStatus = (handler: (status: StreamConnectionStatus) => void, status: StreamConnectionStatus) => {
+    try {
+      handler(status)
+    } catch (error) {
+      log.warn("event status listener failed", { error: toErrorMessage(error) })
+    }
+  }
   const emitStatus = (status: StreamConnectionStatus) => {
     statusVersion++
     lastStatus = status
-    for (const handler of statusListeners) handler(status)
+    for (const handler of statusListeners) notifyStatus(handler, status)
   }
   client.on<StreamConnectionStatus>("event.status", (status) => {
+    if (wireDead) return
     emitStatus(status)
   })
   const snapshotVersion = statusVersion
@@ -568,7 +577,13 @@ export function createEventSource(client: RpcClient, wire?: RpcWireTarget): Even
   if (wire) {
     const previous = wire.onWireDeath
     wire.onWireDeath = () => {
-      previous?.()
+      if (wireDead) return
+      wireDead = true
+      try {
+        previous?.()
+      } catch (error) {
+        log.warn("previous wire-death hook failed", { error: toErrorMessage(error) })
+      }
       emitStatus({
         connected: false,
         phase: "stopped",
@@ -604,7 +619,7 @@ export function createEventSource(client: RpcClient, wire?: RpcWireTarget): Even
       }
     },
     onStatus: (handler) => {
-      if (lastStatus) handler(lastStatus)
+      if (lastStatus) notifyStatus(handler, lastStatus)
       statusListeners.add(handler)
       return () => {
         statusListeners.delete(handler)

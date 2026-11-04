@@ -206,7 +206,9 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
           .then(() => closing.return?.())
           .catch(() => {})
       }
-      await unsubscribeStreamSubscription(subscription)
+      // Unsubscription is best-effort too: a disconnected transport's cleanup
+      // promise must not prevent the next connection or caller shutdown.
+      void unsubscribeStreamSubscription(subscription)
     }
 
     if (options.signal.aborted) break

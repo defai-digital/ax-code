@@ -287,3 +287,37 @@ test("a queued recovery cannot bypass stabilization after another disconnect", a
     vi.useRealTimers()
   }
 })
+
+test.each(["disconnect", "dispose", "flap"] as const)(
+  "a scheduled recovery rechecks %s before starting",
+  async (action) => {
+    vi.useFakeTimers()
+    const recover = vi.fn()
+    const gate = createReconnectRecoveryGate({ recover })
+    try {
+      gate.onConnectionChange(true)
+      gate.onConnectionChange(false)
+      gate.onConnectionChange(true)
+      vi.advanceTimersByTime(RECONNECT_STABILIZE_MS)
+      // The timer's background boundary queues recovery in the next microtask.
+      await Promise.resolve()
+      if (action === "dispose") gate.dispose()
+      else {
+        gate.onConnectionChange(false)
+        if (action === "flap") gate.onConnectionChange(true)
+      }
+      await gate.waitForIdle()
+      expect(recover).not.toHaveBeenCalled()
+      if (action !== "dispose") {
+        if (action === "disconnect") gate.onConnectionChange(true)
+        await vi.advanceTimersByTimeAsync(RECONNECT_STABILIZE_MS)
+        await gate.waitForIdle()
+        expect(recover).toHaveBeenCalledTimes(1)
+      }
+    } finally {
+      gate.dispose()
+      await gate.waitForIdle()
+      vi.useRealTimers()
+    }
+  },
+)
