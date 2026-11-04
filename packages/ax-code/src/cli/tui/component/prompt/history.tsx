@@ -16,10 +16,13 @@ const MAX_HISTORY_ENTRIES = 50
 const HISTORY_LOAD_DELAY_MS = 100
 const log = Log.create({ service: "tui.prompt-history" })
 
+function entryKey(entry: PromptInfo) {
+  return JSON.stringify([entry.input, entry.mode ?? null, entry.parts])
+}
+
 function mergeProjectHistory(persisted: PromptInfo[], local: PromptInfo[]) {
-  const key = (entry: PromptInfo) => JSON.stringify([entry.input, entry.mode ?? null, entry.parts])
-  const persistedKeys = persisted.map(key)
-  const localKeys = local.map(key)
+  const persistedKeys = persisted.map(entryKey)
+  const localKeys = local.map(entryKey)
   // A GET can already include the first local POSTs. Keep the local suffix
   // once, in order, including entries appended while the GET was pending.
   let overlap = Math.min(persisted.length, local.length)
@@ -144,7 +147,10 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
             input: "",
             parts: [],
           }
-        return store.history.at(nextIndex)
+        const recalled = store.history.at(nextIndex)
+        // The composer edits its own store. Never share the saved entry or its
+        // attachment parts with that mutable draft.
+        return recalled ? structuredClone(unwrap(recalled)) : undefined
       },
       append(item: PromptInfo) {
         const entry = structuredClone(unwrap(item))
@@ -152,7 +158,10 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
         let trimmed = false
         setStore(
           produce((draft) => {
-            draft.history.push(entry)
+            // Match the server's consecutive-entry deduplication while still
+            // posting each submission so a failed earlier save can be retried.
+            const last = draft.history.at(-1)
+            if (!last || entryKey(last) !== entryKey(entry)) draft.history.push(entry)
             if (draft.history.length > MAX_HISTORY_ENTRIES) {
               draft.history = draft.history.slice(-MAX_HISTORY_ENTRIES)
               trimmed = true

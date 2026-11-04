@@ -13,6 +13,7 @@ import { SessionProcessor } from "./processor"
 import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
+import { transformPromptHistory } from "./prompt/prompt-history"
 import { Config } from "@/config/config"
 import { PRUNE_MINIMUM, PRUNE_PROTECT } from "@/constants/session"
 import { Database } from "@/storage/db"
@@ -938,11 +939,11 @@ When constructing the summary, try to stick to this template:
       // kept messages survive verbatim (MessageV2.filterCompacted extends
       // past the marker by the same count). Without `keep` the range is the
       // full history — byte-identical to the pre-ADR-225 request.
-      const msgs =
+      const { messages: msgs } = await transformPromptHistory(
         input.keep !== undefined
           ? selectKeepWindow({ messages, keep: input.keep, markerID: input.parentID }).summarize
-          : [...messages]
-      await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
+          : [...messages],
+      )
       // If the history to summarize exceeds the compaction model's own window,
       // the summarization request itself overflows and compaction hard-fails,
       // which bricks the session for small-context models (observed: a

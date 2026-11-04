@@ -129,9 +129,9 @@ export async function loopMessages(input: {
   sessionID: SessionID
   cached?: MessageV2.WithParts[]
   filterCompacted?: (items: AsyncIterable<MessageV2.WithParts>) => Promise<MessageV2.WithParts[]>
-  after?: (sessionID: SessionID, lastID: MessageV2.Info["id"] | undefined) => Promise<MessageV2.WithParts[]>
+  after?: (sessionID: SessionID, lastID: MessageV2.Info["id"]) => Promise<MessageV2.WithParts[]>
 }) {
-  if (!input.cached) {
+  if (!input.cached?.length) {
     const msgs = await (input.filterCompacted ?? MessageV2.filterCompacted)(MessageV2.stream(input.sessionID))
     return {
       msgs: [...msgs],
@@ -139,7 +139,7 @@ export async function loopMessages(input: {
     }
   }
 
-  const lastID = input.cached[input.cached.length - 1]?.info.id
+  const lastID = input.cached[input.cached.length - 1]!.info.id
   const newer = await (input.after ?? MessageV2.after)(input.sessionID, lastID)
   if (newer.length > 0) input.cached.push(...newer)
   return {

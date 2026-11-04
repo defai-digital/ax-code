@@ -2,7 +2,7 @@ import { projectCurrentLoopControls } from "./prompt-missing-answer"
 import { ReasoningPolicy } from "../../control-plane/reasoning-policy"
 import type { Agent } from "../../agent/agent"
 import { NativePerf } from "../../perf/native"
-import { Plugin } from "../../plugin"
+import { transformPromptHistory } from "./prompt-history"
 import type { Provider } from "../../provider/provider"
 import MAX_STEPS from "./max-steps.txt"
 import { MessageV2 } from "../message-v2"
@@ -50,14 +50,9 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   // durable transcript (for example: previous assistant answer + current user
   // rewrite request). Clone-based callers keep `messages` as the full loop
   // history while plugins and model conversion operate on the bounded view.
-  const requestMessagesSource = projectCurrentLoopControls(input.requestMessagesSource ?? messages)
-
-  await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: requestMessagesSource })
-  // The per-message conversion cache relies on message objects being
-  // replaced (never mutated in place) when their content changes. A plugin
-  // implementing the transform hook can mutate messages arbitrarily, so
-  // disable the cache when one is registered.
-  const hasTransformPlugin = (await Plugin.list()).some((hook) => hook["experimental.chat.messages.transform"])
+  const { messages: requestMessagesSource, cacheAllowed } = await transformPromptHistory(
+    projectCurrentLoopControls(input.requestMessagesSource ?? messages),
+  )
 
   // Build system prompt and convert messages to model format in parallel.
   // Both walk the same messages/model independently with no side effects.
@@ -99,7 +94,7 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
             config: (await Config.get()).attachment?.image,
           })
     const modelMessages = await MessageV2.toModelMessages(source, input.model, {
-      cache: !hasTransformPlugin,
+      cache: cacheAllowed,
       mediaProjection,
       preserveUserMedia: input.lastUser.id,
     })

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createRoot, createSignal } from "solid-js"
+import { createStore } from "solid-js/store"
 import { PromptHistoryProvider, type usePromptHistory } from "../../../src/cli/tui/component/prompt/history"
 import type { PromptInfo } from "../../../src/cli/tui/component/prompt/prompt-info"
 
@@ -87,6 +88,40 @@ describe("prompt history recall", () => {
     expect(history.move(-1, "latest prompt")?.input).toBe("older prompt")
     expect(history.move(1, "older prompt")?.input).toBe("latest prompt")
     expect(history.move(1, "latest prompt")?.input).toBe("")
+  })
+
+  test("editing a recalled prompt cannot change the saved input or nested parts", () => {
+    const { history } = setup()
+    const original: PromptInfo = {
+      input: "original prompt",
+      mode: "normal",
+      parts: [{ type: "text", text: "original attachment", source: { text: { start: 0, end: 8, value: "original" } } }],
+    }
+    history.append(original)
+    const [composer, setComposer] = createStore({ prompt: history.move(-1, "")! })
+    setComposer("prompt", "input", "edited prompt")
+    setComposer("prompt", "parts", 0, { type: "text", text: "edited attachment" })
+    expect(composer.prompt.input).toBe("edited prompt")
+    expect(history.move(-1, "")).toEqual(original)
+  })
+
+  test("consecutive duplicate submissions are recalled once, matching persisted history", () => {
+    const { history } = setup()
+    history.append(entry("older prompt"))
+    history.append(entry("latest prompt"))
+    history.append(entry("latest prompt"))
+    expect(history.move(-1, "")?.input).toBe("latest prompt")
+    expect(history.move(-1, "latest prompt")?.input).toBe("older prompt")
+  })
+
+  test("duplicate detection preserves prompts with different modes or attachment parts", () => {
+    const { history } = setup()
+    history.append(entry("same prompt"))
+    history.append({ ...entry("same prompt"), mode: "shell" })
+    history.append({ ...entry("same prompt"), parts: [{ type: "text", text: "attachment" }] })
+    expect(history.move(-1, "")?.parts).toEqual([{ type: "text", text: "attachment" }])
+    expect(history.move(-1, "same prompt")?.mode).toBe("shell")
+    expect(history.move(-1, "same prompt")?.mode).toBe("normal")
   })
 
   test("retains prompts submitted while workspace history is loading", async () => {
