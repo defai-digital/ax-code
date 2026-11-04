@@ -20,6 +20,7 @@ import { iife } from "@/util/iife"
 import { Global } from "../global"
 import path from "path"
 import fs from "fs/promises"
+import { createHash } from "node:crypto"
 import { fileURLToPath, pathToFileURL } from "url"
 import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
@@ -186,18 +187,6 @@ export namespace Provider {
     return next
   }
 
-  function isSecretOptionKey(key: string) {
-    const lower = key.toLowerCase()
-    return (
-      lower.includes("apikey") ||
-      lower.includes("api_key") ||
-      lower.includes("token") ||
-      lower.includes("secret") ||
-      lower.includes("password") ||
-      lower === "key"
-    )
-  }
-
   // ADR-247: read compatibility.body_encoding from the merged provider
   // options. The options object is a Record<string, unknown> at this layer;
   // invalid values are coerced to undefined so a stray string from a
@@ -326,17 +315,10 @@ export namespace Provider {
    */
   export const resolveCredentialSource = applyCredentialSource
 
-  function redactCacheKeyValue(value: unknown): unknown {
-    if (Array.isArray(value)) return value.map(redactCacheKeyValue)
-    if (!value || typeof value !== "object") return value
-    const entries = Object.entries(value)
-      .filter(([key]) => !isSecretOptionKey(key))
-      .map(([key, item]) => [key, redactCacheKeyValue(item)] as const)
-    return Object.fromEntries(entries)
-  }
-
   function cacheKeyPart(value: unknown): string {
-    return Buffer.from(JSON.stringify(redactCacheKeyValue(value))).toString("base64url")
+    // Credentials and token-related settings affect SDK behavior too. Hash the
+    // complete configuration so keys distinguish them without retaining secrets.
+    return createHash("sha256").update(JSON.stringify(value)).digest("base64url")
   }
 
   type Lang = Exclude<LanguageModel, string>
@@ -1396,10 +1378,8 @@ export namespace Provider {
       const options = cacheKeyPart({
         providerOptions: provider.options,
         modelOptions: model.options,
-        modelAPI: {
-          npm: model.api.npm,
-          id: model.api.id,
-        },
+        modelAPI: model.api,
+        modelHeaders: model.headers,
       })
       if (!options) return base
       return `${base}#${options}`

@@ -988,6 +988,47 @@ describe("ProviderTransform.schema - Moonshot / Kimi", () => {
   })
 })
 
+describe("ProviderTransform.schema - gemini literal data", () => {
+  const model = { providerID: "google", api: { id: "gemini-3.8-flash" } } as any
+
+  test("preserves schema-shaped objects in default, examples, and const", () => {
+    const literal = { type: "array", enum: [1, 2], properties: { label: "value" }, required: ["label"] }
+    const schema = {
+      type: "object",
+      properties: {
+        payload: { type: "object", default: literal, examples: [literal], const: literal },
+        level: { type: "integer", enum: [1, 2] },
+      },
+    }
+    const original = structuredClone(schema)
+    const result = ProviderTransform.schema(model, schema as any) as any
+    expect(result.properties.payload).toEqual(original.properties.payload)
+    expect(result.properties.level).toEqual({ type: "string", enum: ["1", "2"] })
+    expect(schema).toEqual(original)
+  })
+
+  test("sanitizes schemas whose property and definition names match data keywords", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        default: { type: "integer", enum: [1, 2] },
+        examples: { type: "array" },
+        const: { type: "boolean", enum: [true, false] },
+        enum: { type: "array" },
+      },
+      $defs: { default: { type: "integer", enum: [3, 4] } },
+    }
+    const result = ProviderTransform.schema(model, schema as any) as any
+    expect(result.properties).toEqual({
+      default: { type: "string", enum: ["1", "2"] },
+      examples: { type: "array", items: { type: "string" } },
+      const: { type: "boolean" },
+      enum: { type: "array", items: { type: "string" } },
+    })
+    expect(result.$defs.default).toEqual({ type: "string", enum: ["3", "4"] })
+  })
+})
+
 describe("ProviderTransform.schema - gemini array items", () => {
   test("adds missing items for array properties", () => {
     const geminiModel = {

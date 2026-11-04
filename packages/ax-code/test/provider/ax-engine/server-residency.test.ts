@@ -43,8 +43,7 @@ async function fixture(mode: "ready" | "unready" | "exit" | "reload" = "ready") 
   const script = path.join(tmp.path, "ax-engine-fixture.cjs")
   await fs.writeFile(
     script,
-    `if (${mode === "exit"}) process.exit(7)
-const http = require("node:http")
+    `const http = require("node:http")
 const port = Number(process.argv[process.argv.indexOf("--port") + 1])
 http.createServer((req, res) => {
   if (${mode === "reload"} && req.url === "/v1/model/load") {
@@ -58,7 +57,10 @@ http.createServer((req, res) => {
   )
   const binary = path.join(tmp.path, "ax-engine")
   const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
-  await fs.writeFile(binary, `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(script)} "$@"\n`, { mode: 0o755 })
+  // Exit in the launcher itself so the startup-failure test does not race a
+  // second Node process boot against its short readiness deadline.
+  const launch = mode === "exit" ? "exit 7" : `exec ${quote(process.execPath)} ${quote(script)} "$@"`
+  await fs.writeFile(binary, `#!/bin/sh\n${launch}\n`, { mode: 0o755 })
   const children: ReturnType<typeof Process.spawn>[] = []
   const spawned: Array<{ cmd: string[]; env?: NodeJS.ProcessEnv | null }> = []
   const spawn = Process.spawn
@@ -469,6 +471,7 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
       expect(failure.message).toContain("read access to the configured model path")
       expect(f.children).toHaveLength(1)
       await expect(f.children[0].exited).resolves.toBeTypeOf("number")
+      if (mode === "exit") await expect(f.children[0].exited).resolves.toBe(7)
       await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
     },
   )

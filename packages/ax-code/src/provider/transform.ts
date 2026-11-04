@@ -1651,6 +1651,11 @@ export namespace ProviderTransform {
     return OUTPUT_TOKEN_MAX
   }
 
+  // Data values must not be traversed as schemas. Schema maps instead contain
+  // arbitrary names, including names such as "default" and "enum".
+  const schemaDataKeywords = new Set(["default", "examples", "const", "enum"])
+  const schemaMapKeywords = new Set(["properties", "patternProperties", "definitions", "$defs", "dependentSchemas"])
+
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
     // Function-calling APIs want an object root. A tool whose parameters are
     // a top-level discriminated union (`browser_workflow`, `computer_action`)
@@ -1664,13 +1669,6 @@ export namespace ProviderTransform {
     // Moonshot expands $ref before validation and rejects sibling keywords
     // (description on the same node) plus tuple-style `items` arrays.
     if (isKimiFamily(model)) {
-      // Keywords whose values are literal data, not schemas. Recursing into
-      // them would rewrite example payloads (a tuple-looking array inside
-      // `default`/`examples` must not be collapsed as schema `items`).
-      const dataKeywords = new Set(["default", "examples", "const", "enum"])
-      // Keywords whose value maps names to schemas. Those names are not
-      // keywords, so a property called `default` is still a schema.
-      const schemaMapKeywords = new Set(["properties", "patternProperties", "definitions", "$defs", "dependentSchemas"])
       const sanitizeMoonshot = (obj: unknown, schemaMap = false): unknown => {
         if (obj === null || typeof obj !== "object") return obj
         if (Array.isArray(obj)) return obj.map((item) => sanitizeMoonshot(item))
@@ -1690,7 +1688,7 @@ export namespace ProviderTransform {
         const result = Object.fromEntries(
           Object.entries(record).map(([key, value]) => [
             key,
-            dataKeywords.has(key) ? value : sanitizeMoonshot(value, schemaMapKeywords.has(key)),
+            schemaDataKeywords.has(key) ? value : sanitizeMoonshot(value, schemaMapKeywords.has(key)),
           ]),
         ) as Record<string, unknown>
         if (Array.isArray(result.items)) result.items = result.items[0] ?? {}
@@ -1729,7 +1727,7 @@ export namespace ProviderTransform {
       }
 
       const active = new WeakSet<object>()
-      const sanitizeGemini = (obj: any): any => {
+      const sanitizeGemini = (obj: any, schemaMap = false): any => {
         if (obj === null || typeof obj !== "object") {
           return obj
         }
@@ -1739,13 +1737,16 @@ export namespace ProviderTransform {
 
         if (Array.isArray(obj)) {
           try {
-            return obj.map(sanitizeGemini)
+            return obj.map((item) => sanitizeGemini(item))
           } finally {
             active.delete(obj)
           }
         }
 
         try {
+          if (schemaMap) {
+            return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, sanitizeGemini(value)]))
+          }
           const result: any = {}
           // A nullable node carries type as an array (["object","null"]). Its
           // enum must not stringify the null literal (that would turn it into
@@ -1755,8 +1756,10 @@ export namespace ProviderTransform {
             if (key === "enum" && Array.isArray(value)) {
               // Convert all enum values to strings
               result[key] = (nullable ? value.filter((v) => v !== null) : value).map((v) => String(v))
+            } else if (schemaDataKeywords.has(key)) {
+              result[key] = value
             } else if (isRecord(value) || Array.isArray(value)) {
-              result[key] = sanitizeGemini(value)
+              result[key] = sanitizeGemini(value, schemaMapKeywords.has(key))
             } else {
               result[key] = value
             }
