@@ -126,6 +126,16 @@ export namespace Rpc {
     return result
   }
 
+  function requestHandler(rpc: Definition, method: unknown) {
+    // Only explicitly registered methods belong to the RPC interface. Looking
+    // through the prototype chain can invoke Object.prototype functions.
+    const handler = typeof method === "string" && Object.hasOwn(rpc, method) ? rpc[method] : undefined
+    if (typeof handler !== "function") {
+      throw new Error(`Unknown RPC method: ${typeof method === "string" ? method : "<invalid>"}`)
+    }
+    return handler
+  }
+
   export function listen(rpc: Definition) {
     const active = new Map<number, AbortController>()
     bindEmitMessage((data) => postMessage(data), "listen")
@@ -142,8 +152,6 @@ export namespace Rpc {
         return
       }
       if (parsed.type === "rpc.request") {
-        const handler = rpc[parsed.method]
-        if (typeof handler !== "function") return
         const controller = new AbortController()
         active.set(parsed.id, controller)
         // Route responses through `emitMessage` so the same indirection
@@ -153,6 +161,7 @@ export namespace Rpc {
         // from `emit()` and `listenStdio`'s `safeWrite`-based path,
         // which made future wrapping (logging, buffering) fragile.
         try {
+          const handler = requestHandler(rpc, parsed.method)
           const result = await handler(parsed.input, { signal: controller.signal })
           if (!controller.signal.aborted) emitMessage?.(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
         } catch (error) {
@@ -216,11 +225,10 @@ export namespace Rpc {
         return
       }
       if (parsed.type !== "rpc.request") return
-      const handler = rpc[parsed.method]
-      if (typeof handler !== "function") return
       const controller = new AbortController()
       active.set(parsed.id, controller)
       try {
+        const handler = requestHandler(rpc, parsed.method)
         const result = await handler(parsed.input, { signal: controller.signal })
         if (!controller.signal.aborted) safeWrite(JSON.stringify({ type: "rpc.result", result, id: parsed.id }) + "\n")
       } catch (error) {
@@ -402,12 +410,13 @@ export namespace Rpc {
             sent = true
             target.postMessage(message)
           } catch (error) {
-            // A dead/closed transport throws synchronously on send. Without
-            // cleanup the pending entry and its timer would leak until the
-            // 60s timeout fires, keeping the event loop alive.
+            // Serialization failures affect this call only. A synchronous send
+            // failure also closes the client so other calls cannot hang until
+            // their deadlines or keep sending through the broken transport.
             cleanup()
             pending.delete(requestId)
             reject(error instanceof Error ? error : new Error(toErrorMessage(error)))
+            if (sent) handleWireDeath()
           }
         })
       },

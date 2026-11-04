@@ -92,6 +92,40 @@ describe("Rpc", () => {
       return pair
     }
 
+    test.each(["missing", "toString", "constructor", "__proto__", "inherited"])(
+      "rejects unregistered method %s without waiting for the deadline",
+      async (method) => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+        const inherited = vi.fn(() => "unexpected")
+        const definition = Object.assign(Object.create({ inherited }), { run: () => "ok" })
+        const pair = connect(definition)
+        const client = Rpc.client<{ [method: string]: (input: undefined) => string }>(pair.target)
+        const settled = vi.fn()
+        const pending = client.call(method, undefined).then(settled, settled)
+        try {
+          await flushMicrotasks()
+          expect(settled).toHaveBeenCalledWith(expect.objectContaining({ message: `Unknown RPC method: ${method}` }))
+          expect(inherited).not.toHaveBeenCalled()
+          expect(vi.getTimerCount()).toBe(0)
+          await expect(client.call("run", undefined)).resolves.toBe("ok")
+        } finally {
+          pair.target.onWireDeath?.()
+          await pending
+          await pair.restore()
+        }
+      },
+    )
+
+    test("allows explicitly registered methods with Object.prototype names", async () => {
+      const pair = connect({ toString: () => "registered" })
+      try {
+        const client = Rpc.client<{ toString(input: undefined): string }>(pair.target)
+        await expect(client.call("toString", undefined)).resolves.toBe("registered")
+      } finally {
+        await pair.restore()
+      }
+    })
+
     test("rejects pre-aborted calls without dispatching", async () => {
       const run = vi.fn(() => "ok")
       const pair = connect({ run })
@@ -233,6 +267,56 @@ describe("Rpc", () => {
     await expect(pending).rejects.toThrow("RPC wire closed")
     expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function))
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  test("a synchronous send failure rejects other pending calls and closes the client", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const failure = new Error("transport failed")
+    const postMessage = vi
+      .fn()
+      .mockImplementationOnce(() => {})
+      .mockImplementation(() => {
+        throw failure
+      })
+    const target: Endpoint = { onmessage: null, postMessage }
+    const client = Rpc.client<{ run(input: undefined): string }>(target)
+    const controller = new AbortController()
+    const removeListener = vi.spyOn(controller.signal, "removeEventListener")
+    const firstSettled = vi.fn()
+    const first = client.call("run", undefined, { signal: controller.signal }).then(firstSettled, firstSettled)
+    try {
+      await expect(client.call("run", undefined)).rejects.toBe(failure)
+      await flushMicrotasks()
+      expect(firstSettled).toHaveBeenCalledWith(expect.objectContaining({ message: "RPC wire closed" }))
+      expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function))
+      expect(vi.getTimerCount()).toBe(0)
+      await expect(client.call("run", undefined)).rejects.toThrow("RPC wire closed")
+      expect(postMessage).toHaveBeenCalledTimes(2)
+    } finally {
+      target.onWireDeath?.()
+      await first
+    }
+  })
+
+  test("request serialization failure leaves other calls and the transport usable", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const postMessage = vi.fn()
+    const target: Endpoint = { onmessage: null, postMessage }
+    const client = Rpc.client<{ run(input: unknown): string }>(target)
+    const pending = client.call("run", undefined)
+    try {
+      const circular: Record<string, unknown> = {}
+      circular.self = circular
+      await expect(client.call("run", circular)).rejects.toBeInstanceOf(TypeError)
+      expect(postMessage).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(1)
+      await target.onmessage?.({ data: JSON.stringify({ type: "rpc.result", id: 0, result: "ok" }) })
+      await expect(pending).resolves.toBe("ok")
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      target.onWireDeath?.()
+      await pending.catch(() => {})
+    }
   })
 
   test("does not send a request cancelled during serialization", async () => {
