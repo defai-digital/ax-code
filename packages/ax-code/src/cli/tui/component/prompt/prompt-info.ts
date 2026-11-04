@@ -47,7 +47,9 @@ export function parsePromptInfo(value: unknown): PromptInfo | undefined {
 }
 
 export function parsePromptInfoList(value: unknown): PromptInfo[] {
-  const parsed = z.array(PromptInfoSchema).safeParse(value)
-  if (!parsed.success) return []
-  return parsed.data.filter(isPromptInfo)
+  if (!Array.isArray(value)) return []
+  return value.flatMap((row) => {
+    const parsed = parsePromptInfo(row)
+    return parsed ? [parsed] : []
+  })
 }

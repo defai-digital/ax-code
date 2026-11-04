@@ -21,6 +21,23 @@ describe("tui prompt info decoding", () => {
     expect(parsePromptInfo(["hello"])).toBeUndefined()
   })
 
+  test("keeps valid neighboring rows when one history entry is malformed", () => {
+    expect(
+      parsePromptInfoList([
+        { input: "first", parts: [] },
+        null,
+        { input: 42, parts: [] },
+        { input: "bad mode", mode: "invalid", parts: [] },
+        { input: "bad parts", parts: "invalid" },
+        { input: "bad part type", parts: [{ text: "missing type" }] },
+        { input: "last" },
+      ]),
+    ).toEqual([
+      { input: "first", parts: [] },
+      { input: "last", parts: [] },
+    ])
+  })
+
   test("parses prompt info lists with the same boundary rules", () => {
     expect(
       parsePromptInfoList([

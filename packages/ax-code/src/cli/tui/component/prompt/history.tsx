@@ -43,6 +43,7 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
     const toast = useToast()
     let writeWarningShown = false
     let loadGeneration = 0
+    const pendingWrites = new Map<string | undefined, Promise<void>>()
 
     function historyHeaders(input: { directory?: string; contentType?: string } = {}) {
       return directoryRequestHeaders({
@@ -68,6 +69,21 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
         body: JSON.stringify(entry),
       })
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
+    }
+
+    function queueProjectHistory(entry: PromptInfo, directory: string | undefined) {
+      // Requests may reach the server out of order when sent concurrently.
+      // Sequence each workspace independently, including across directory switches.
+      const previous = pendingWrites.get(directory)
+      const write = previous
+        ? previous.catch(() => undefined).then(() => appendProjectHistory(entry, directory))
+        : appendProjectHistory(entry, directory)
+      pendingWrites.set(directory, write)
+      const release = () => {
+        if (pendingWrites.get(directory) === write) pendingWrites.delete(directory)
+      }
+      void write.then(release, release)
+      return write
     }
 
     async function refreshProjectHistory(directory: string | undefined) {
@@ -96,6 +112,9 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
     onMount(() => {
       const cancel = scheduleDeferredStartupTask(
         async () => {
+          // A directory change may already have started the current load. A
+          // second GET would merge previously loaded rows as local submissions.
+          if (loadGeneration !== 0) return
           await refreshProjectHistory(sdk.directory)
         },
         {
@@ -174,7 +193,7 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
           writeWarningShown = false
         }
 
-        void appendProjectHistory(entry, directory)
+        void queueProjectHistory(entry, directory)
           .then(() => {
             writeWarningShown = false
           })

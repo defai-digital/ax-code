@@ -55,8 +55,10 @@ beforeEach(() => {
   mocked.fetch.mockReset().mockResolvedValue(Response.json([]))
   mocked.startup = undefined
 })
-afterEach(() => {
+afterEach(async () => {
   for (const dispose of disposals.splice(0)) dispose()
+  // Drain completed POST queues before the next test replaces the fetch mock.
+  await new Promise<void>((resolve) => setImmediate(resolve))
 })
 
 function setup() {
@@ -122,6 +124,65 @@ describe("prompt history recall", () => {
     expect(history.move(-1, "")?.parts).toEqual([{ type: "text", text: "attachment" }])
     expect(history.move(-1, "same prompt")?.mode).toBe("shell")
     expect(history.move(-1, "same prompt")?.mode).toBe("normal")
+  })
+
+  test.each([false, true])("saves prompts in submission order even if the first write fails=%s", async (fails) => {
+    const { history } = setup()
+    const first = Promise.withResolvers<Response>()
+    const writes: string[] = []
+    mocked.fetch.mockImplementation(async (_url, init) => {
+      if (init?.method !== "POST") return Response.json([])
+      const input = JSON.parse(String(init.body)).input as string
+      writes.push(input)
+      return input === "first" ? first.promise : Response.json(true)
+    })
+    history.append(entry("first"))
+    history.append(entry("second"))
+    try {
+      await vi.waitFor(() => expect(writes.length).toBeGreaterThan(0))
+      expect(writes).toEqual(["first"])
+    } finally {
+      first.resolve(fails ? new Response("failed", { status: 500 }) : Response.json(true))
+    }
+    await vi.waitFor(() => expect(writes).toEqual(["first", "second"]))
+  })
+
+  test("a blocked write in one workspace cannot block saves in another workspace", async () => {
+    const { history, setDirectory } = setup()
+    const first = Promise.withResolvers<Response>()
+    const writes: { input: string; directory: string | null }[] = []
+    mocked.fetch.mockImplementation(async (_url, init) => {
+      if (init?.method !== "POST") return Response.json([])
+      const input = JSON.parse(String(init.body)).input as string
+      writes.push({ input, directory: new Headers(init.headers).get("x-opencode-directory") })
+      return input === "project A first" ? first.promise : Response.json(true)
+    })
+    history.append(entry("project A first"))
+    history.append(entry("project A second"))
+    setDirectory("/project-b")
+    history.append(entry("project B first"))
+    try {
+      await vi.waitFor(() => expect(writes.some((row) => row.input === "project B first")).toBe(true))
+      expect(writes).toEqual([
+        { input: "project A first", directory: "/project-a" },
+        { input: "project B first", directory: "/project-b" },
+      ])
+    } finally {
+      first.resolve(Response.json(true))
+    }
+    await vi.waitFor(() => expect(writes.at(-1)).toEqual({ input: "project A second", directory: "/project-a" }))
+  })
+
+  test("deferred startup does not reload an already loaded workspace or repeat old prompts", async () => {
+    const { history, setDirectory } = setup()
+    mocked.fetch.mockResolvedValue(Response.json([entry("older"), entry("newer")]))
+    setDirectory("/project-b")
+    await vi.waitFor(() => expect(history.move(-1, "")?.input).toBe("newer"))
+    mocked.fetch.mockResolvedValue(Response.json([entry("older"), entry("newer"), entry("external")]))
+    await mocked.startup!()
+    expect(history.move(-1, "newer")?.input).toBe("older")
+    expect(history.move(-1, "older")?.input).toBe("older")
+    expect(mocked.fetch.mock.calls).toHaveLength(1)
   })
 
   test("retains prompts submitted while workspace history is loading", async () => {
