@@ -226,6 +226,7 @@ const startEventStream = async (input: { directory?: string }) => {
           sseMaxRetryAttempts: 0,
           ...(lastEventID ? { headers: { "Last-Event-ID": lastEventID } } : {}),
           onSseEvent: (event) => {
+            if (signal.aborted || connectionSignal.aborted) return
             if (typeof event.id === "string" && event.id.length > 0) lastEventID = event.id
           },
         },

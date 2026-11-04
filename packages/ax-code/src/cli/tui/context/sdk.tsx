@@ -160,6 +160,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
               sseMaxRetryAttempts: 0,
               ...(lastEventID ? { headers: { "Last-Event-ID": lastEventID } } : {}),
               onSseEvent: (event) => {
+                if (!isCurrentStream() || signal.aborted) return
                 if (typeof event.id === "string" && event.id.length > 0) lastEventID = event.id
               },
             },

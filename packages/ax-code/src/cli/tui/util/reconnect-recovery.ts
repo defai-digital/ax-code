@@ -36,6 +36,7 @@ export function createReconnectRecoveryGate(input: { recover: () => void | Promi
         // don't trigger recovery on a stale reconnect.
         cancelStabilizeTimer?.()
         cancelStabilizeTimer = undefined
+        pendingReconnect = false
         return
       }
       if (!hasConnectedOnce) {

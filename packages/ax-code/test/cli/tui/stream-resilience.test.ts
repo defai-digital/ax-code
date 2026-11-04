@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { runResilientStream, type StreamConnectionStatus } from "../../../src/cli/tui/util/resilient-stream"
 
@@ -245,4 +245,105 @@ describe("runResilientStream", () => {
     expect(statuses.some((status) => status.reason === "connect-timeout")).toBe(true)
     expect(statuses.filter((status) => status.phase === "connected")).toHaveLength(1)
   })
+})
+
+test.each(["connect-timeout", "watchdog-timeout"] as const)(
+  "%s reconnects even when the iterator ignores cancellation",
+  async (reason) => {
+    const abort = new AbortController()
+    const stalled = Promise.withResolvers<IteratorResult<string>>()
+    const closing = Promise.withResolvers<IteratorResult<string>>()
+    const closeIterator = vi.fn(() => closing.promise)
+    const statuses: StreamConnectionStatus[] = []
+    const events: string[] = []
+    let attempts = 0
+    const done = runResilientStream<string>({
+      signal: abort.signal,
+      connectTimeoutMs: 20,
+      watchdogMs: 20,
+      reconnectBaseMs: 1,
+      reconnectMaxMs: 1,
+      ...(reason === "connect-timeout" ? { isReadyEvent: (event: string) => event === "ready" } : {}),
+      onStatus: (status) => statuses.push(status),
+      onEvent: (event) => {
+        events.push(event)
+        abort.abort()
+      },
+      subscribe: async () => {
+        if (++attempts === 1)
+          return {
+            stream: { [Symbol.asyncIterator]: () => ({ next: () => stalled.promise, return: closeIterator }) },
+          }
+        return {
+          stream: (async function* () {
+            yield "ready"
+          })(),
+        }
+      },
+    })
+    try {
+      await vi.waitFor(() => expect(attempts).toBe(2), { timeout: 500 })
+      await done
+      expect(events).toEqual(["ready"])
+      expect(closeIterator).toHaveBeenCalledTimes(1)
+      expect(statuses.some((status) => status.reason === reason)).toBe(true)
+    } finally {
+      abort.abort()
+      stalled.resolve({ done: true, value: undefined })
+      closing.resolve({ done: true, value: undefined })
+      await done
+    }
+  },
+)
+
+test("cancelling an uncooperative subscription stops promptly and cleans its late result", async () => {
+  const abort = new AbortController()
+  const late = Promise.withResolvers<{ stream: AsyncIterable<string>; unsubscribe: () => void }>()
+  const unsubscribe = vi.fn()
+  const statuses: StreamConnectionStatus[] = []
+  const done = runResilientStream<string>({
+    signal: abort.signal,
+    connectTimeoutMs: 10_000,
+    onEvent: () => {},
+    onStatus: (status) => statuses.push(status),
+    subscribe: () => late.promise,
+  })
+  abort.abort()
+  try {
+    await vi.waitFor(() => expect(statuses.at(-1)?.phase).toBe("stopped"), { timeout: 500 })
+  } finally {
+    late.resolve({ stream: (async function* () {})(), unsubscribe })
+    await done
+  }
+  expect(unsubscribe).toHaveBeenCalledTimes(1)
+  expect(statuses.some((status) => status.connected)).toBe(false)
+})
+
+test("subscription setup and acknowledgement share one connect deadline", async () => {
+  vi.useFakeTimers()
+  const abort = new AbortController()
+  const stalled = Promise.withResolvers<IteratorResult<string>>()
+  const subscription = Promise.withResolvers<{ stream: AsyncIterable<string> }>()
+  const statuses: StreamConnectionStatus[] = []
+  const done = runResilientStream<string>({
+    signal: abort.signal,
+    connectTimeoutMs: 100,
+    reconnectBaseMs: 1,
+    isReadyEvent: (event) => event === "ready",
+    onEvent: () => {},
+    onStatus: (status) => statuses.push(status),
+    subscribe: () => subscription.promise,
+  })
+  try {
+    await vi.advanceTimersByTimeAsync(60)
+    subscription.resolve({ stream: { [Symbol.asyncIterator]: () => ({ next: () => stalled.promise }) } })
+    await vi.advanceTimersByTimeAsync(40)
+    expect(statuses.some((status) => status.reason === "connect-timeout")).toBe(true)
+    expect(statuses.some((status) => status.connected)).toBe(false)
+  } finally {
+    abort.abort()
+    stalled.resolve({ done: true, value: undefined })
+    await done
+    vi.useRealTimers()
+  }
 })

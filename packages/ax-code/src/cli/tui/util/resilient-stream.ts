@@ -59,6 +59,29 @@ async function sleepInterruptibly(signal: AbortSignal, ms: number) {
   }
 }
 
+/** Stop waiting on a transport even when it ignores cancellation; observe late failures. */
+function waitForConnection<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort)
+      reject(signal.reason)
+    }
+    signal.addEventListener("abort", onAbort, { once: true })
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort)
+        if (signal.aborted) reject(signal.reason)
+        else resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort)
+        reject(error)
+      },
+    )
+    if (signal.aborted) onAbort()
+  })
+}
+
 export async function runResilientStream<T>(options: ResilientStreamOptions<T>) {
   const connectTimeoutMs = options.connectTimeoutMs ?? STREAM_CONNECT_TIMEOUT_MS
   const watchdogMs = options.watchdogMs ?? STREAM_WATCHDOG_MS
@@ -79,21 +102,26 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
     })
 
     const connectionAbort = new AbortController()
-    const forwardAbort = () => connectionAbort.abort()
+    const forwardAbort = () => connectionAbort.abort(options.signal.reason)
     const removeAbortListener = registerTuiEventListener(options.signal, "abort", forwardAbort, {
       name: "resilient-stream-abort-forward",
       options: { once: true },
     })
 
+    if (options.signal.aborted) forwardAbort()
+
     let connectTimer: ReturnType<typeof setTimeout> | undefined
     let watchdog: ReturnType<typeof setTimeout> | undefined
     let abortReason: StreamDisconnectReason | undefined
     let subscription: StreamSubscription<T> | undefined
+    let iterator: AsyncIterator<T> | undefined
+    let iteratorDone = false
     let ready = options.isReadyEvent === undefined
 
     const abortConnection = (reason: StreamDisconnectReason) => {
+      if (connectionAbort.signal.aborted) return
       abortReason = reason
-      if (!connectionAbort.signal.aborted) connectionAbort.abort()
+      connectionAbort.abort()
     }
     const resetWatchdog = () => {
       if (watchdog) clearTimeout(watchdog)
@@ -101,6 +129,9 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
     }
 
     try {
+      connectionAbort.signal.throwIfAborted()
+      // One deadline covers both subscription setup and a lazy stream's ack.
+      connectTimer = setTimeout(() => abortConnection("connect-timeout"), connectTimeoutMs)
       const subscribePromise = options.subscribe(connectionAbort.signal)
       subscribePromise
         .then((lateSubscription) => {
@@ -109,16 +140,11 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
           }
         })
         .catch(() => {})
-      const connectTimeout = new Promise<never>((_, reject) => {
-        connectTimer = setTimeout(() => {
-          abortConnection("connect-timeout")
-          reject(new Error("Event stream connection timed out"))
-        }, connectTimeoutMs)
-      })
-      subscription = await Promise.race([subscribePromise, connectTimeout])
-      if (connectTimer) clearTimeout(connectTimer)
+      subscription = await waitForConnection(subscribePromise, connectionAbort.signal)
 
       if (ready) {
+        if (connectTimer) clearTimeout(connectTimer)
+        connectTimer = undefined
         reconnectDelay = reconnectBaseMs
         options.onStatus?.({
           connected: true,
@@ -126,16 +152,17 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
           attempt,
         })
         resetWatchdog()
-      } else {
-        // Some streaming SDKs return an async generator before they perform
-        // the HTTP request. Keep the connect deadline active until the server
-        // emits its subscription acknowledgement; otherwise a dead generator
-        // is incorrectly reported as connected and recovery can race ahead of
-        // the actual subscription.
-        connectTimer = setTimeout(() => abortConnection("connect-timeout"), connectTimeoutMs)
       }
 
-      for await (const event of subscription.stream) {
+      iterator = subscription.stream[Symbol.asyncIterator]()
+      while (true) {
+        connectionAbort.signal.throwIfAborted()
+        const next = await waitForConnection(iterator.next(), connectionAbort.signal)
+        if (next.done) {
+          iteratorDone = true
+          break
+        }
+        const event = next.value
         if (options.signal.aborted || connectionAbort.signal.aborted) break
         if (!ready && options.isReadyEvent?.(event)) {
           ready = true
@@ -167,10 +194,19 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
         error: toErrorMessage(error),
       })
     } finally {
-      await unsubscribeStreamSubscription(subscription)
       if (connectTimer) clearTimeout(connectTimer)
       if (watchdog) clearTimeout(watchdog)
       runTuiCleanup(removeAbortListener, { name: "resilient-stream-abort-listener-cleanup" })
+      connectionAbort.abort()
+      if (iterator && !iteratorDone) {
+        // An async generator's return() can queue behind its stalled next().
+        // Request cleanup without making reconnection wait for that transport.
+        const closing = iterator
+        void Promise.resolve()
+          .then(() => closing.return?.())
+          .catch(() => {})
+      }
+      await unsubscribeStreamSubscription(subscription)
     }
 
     if (options.signal.aborted) break

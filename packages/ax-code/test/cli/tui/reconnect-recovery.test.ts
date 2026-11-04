@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { createReconnectRecoveryGate, RECONNECT_STABILIZE_MS } from "../../../src/cli/tui/util/reconnect-recovery"
 
@@ -251,4 +251,39 @@ describe("createReconnectRecoveryGate", () => {
 
     expect(recoveries).toEqual(["session-new"])
   })
+})
+
+test("a queued recovery cannot bypass stabilization after another disconnect", async () => {
+  vi.useFakeTimers()
+  const first = Promise.withResolvers<void>()
+  let calls = 0
+  const gate = createReconnectRecoveryGate({
+    recover: async () => {
+      if (++calls === 1) await first.promise
+    },
+  })
+  try {
+    gate.onConnectionChange(true)
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+    await vi.advanceTimersByTimeAsync(RECONNECT_STABILIZE_MS)
+    expect(calls).toBe(1)
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+    await vi.advanceTimersByTimeAsync(RECONNECT_STABILIZE_MS)
+    // A stable reconnect queued recovery behind the first in-flight pass.
+    gate.onConnectionChange(false)
+    gate.onConnectionChange(true)
+    first.resolve()
+    await gate.waitForIdle()
+    expect(calls).toBe(1)
+    await vi.advanceTimersByTimeAsync(RECONNECT_STABILIZE_MS)
+    await gate.waitForIdle()
+    expect(calls).toBe(2)
+  } finally {
+    first.resolve()
+    gate.dispose()
+    await gate.waitForIdle()
+    vi.useRealTimers()
+  }
 })

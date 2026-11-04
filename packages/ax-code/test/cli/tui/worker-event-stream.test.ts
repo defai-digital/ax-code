@@ -8,6 +8,8 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 // sseGeneration guard from context/sdk.tsx.
 
 const streamState = vi.hoisted(() => ({
+  subscribe: undefined as ((signal: AbortSignal) => Promise<unknown>) | undefined,
+  subscriptions: [] as { headers?: Record<string, string>; onSseEvent: (event: { id: string }) => void }[],
   active: 0,
   started: 0,
   emitted: [] as unknown[],
@@ -18,10 +20,15 @@ const serverFetch = vi.hoisted(() => vi.fn(async (_request: Request) => new Resp
 afterEach(() => serverFetch.mockReset())
 
 vi.mock("@tui/util/resilient-stream", () => ({
-  runResilientStream: (opts: { signal: AbortSignal; onEvent?: (event: unknown) => void }) => {
+  runResilientStream: (opts: {
+    signal: AbortSignal
+    subscribe: (signal: AbortSignal) => Promise<unknown>
+    onEvent?: (event: unknown) => void
+  }) => {
     streamState.started++
     streamState.active++
     streamState.onEvent = opts.onEvent
+    streamState.subscribe = opts.subscribe
     return new Promise<void>((resolve) => {
       const finish = () => {
         streamState.active--
@@ -68,7 +75,16 @@ vi.mock("@/util/rpc", () => ({
 vi.mock("@/cli/upgrade", () => ({ upgrade: async () => {} }))
 vi.mock("@/config/config", () => ({ Config: { global: { reset: () => {} } } }))
 vi.mock("@/bus/global", () => ({ GlobalBus: { on: () => {}, off: () => {} } }))
-vi.mock("@ax-code/sdk/v2", () => ({ createAxCodeClient: () => ({ event: { subscribe: async () => ({}) } }) }))
+vi.mock("@ax-code/sdk/v2", () => ({
+  createAxCodeClient: () => ({
+    event: {
+      subscribe: async (_input: unknown, options: (typeof streamState.subscriptions)[number]) => {
+        streamState.subscriptions.push(options)
+        return {}
+      },
+    },
+  }),
+}))
 vi.mock("@/flag/flag", () => ({ Flag: {} }))
 vi.mock("@/debug/diagnostic-log", () => ({
   DiagnosticLog: { configure: async () => {}, installProcessDiagnostics: () => {}, recordProcess: () => {} },
@@ -185,4 +201,23 @@ describe("worker event stream lifecycle", () => {
       streamState.emitted.some((e) => (e as { properties?: { delta?: string } }).properties?.delta === "stale"),
     ).toBe(false)
   })
+})
+
+test("worker replay cursors ignore callbacks from an aborted connection", async () => {
+  const { rpc } = await import("@tui/worker")
+  streamState.subscriptions.length = 0
+  await rpc.setWorkspace({ workspaceID: "/workspace/replay-cursor" })
+  try {
+    const first = new AbortController()
+    await streamState.subscribe!(first.signal)
+    streamState.subscriptions[0].onSseEvent({ id: "first-cursor" })
+    first.abort()
+    await streamState.subscribe!(new AbortController().signal)
+    streamState.subscriptions[1].onSseEvent({ id: "current-cursor" })
+    streamState.subscriptions[0].onSseEvent({ id: "stale-cursor" })
+    await streamState.subscribe!(new AbortController().signal)
+    expect(streamState.subscriptions[2].headers?.["Last-Event-ID"]).toBe("current-cursor")
+  } finally {
+    await rpc.shutdown()
+  }
 })
