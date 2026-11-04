@@ -41,7 +41,7 @@ jobs:
         run: |
           pnpm --dir packages/sdk/js exec tsc
           pnpm --dir packages/ax-code run typecheck
-          AX_TEST_FILES=test/script/models-snapshot.test.ts,test/script/update-models.test.ts,test/provider/model-support.test.ts,test/provider/models.test.ts,test/cli/models-json.test.ts pnpm --dir packages/ax-code exec vitest run --retry 0
+          AX_TEST_FILES=test/script/models-snapshot.test.ts,test/script/update-models.test.ts,test/provider/model-support.test.ts,test/provider/models.test.ts,test/provider/provider.test.ts,test/provider/connect-list-dedupe.test.ts,test/server/provider-routes.test.ts,test/cli/models-json.test.ts pnpm --dir packages/ax-code exec vitest run --retry 0
           pnpm run check:no-cost
 
       - name: Save reviewable snapshot patch
