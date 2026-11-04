@@ -129,7 +129,14 @@ export function createSessionSyncController<TSnapshot>(input: {
 
         const existing = inFlight.get(sessionID)
         if (existing) {
-          await existing.promise
+          try {
+            await existing.promise
+          } catch (error) {
+            // A reconnect refresh (or re-entry after invalidation) still needs
+            // its own request when the old disconnected flight fails.
+            if (options?.force || existing.invalidated) continue
+            throw error
+          }
           // Shared success for the current epoch.
           if (!options?.force && fullSyncedSessions.has(sessionID)) return
           // clear/reset invalidated the flight we joined — start a fresh one

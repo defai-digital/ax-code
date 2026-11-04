@@ -264,3 +264,67 @@ describe("tui sync session coordinator", () => {
     expect(calls).toBe(2)
   })
 })
+
+test.each(["force", "clear", "reset"] as const)(
+  "a %s refresh survives failure of the older joined request",
+  async (mode) => {
+    const old = Promise.withResolvers<{ id: string }>()
+    const applied: string[] = []
+    let calls = 0
+    const controller = createSessionSyncController({
+      fetchSnapshot: async () => (++calls === 1 ? old.promise : { id: "fresh" }),
+      applySnapshot: (_session, snapshot) => {
+        applied.push(snapshot.id)
+      },
+    })
+    const first = controller.sync("session").catch((error) => error)
+    if (mode === "clear") controller.clear("session")
+    if (mode === "reset") controller.reset()
+    const recovery = controller.sync("session", mode === "force" ? { force: true } : undefined).then(
+      () => "recovered",
+      (error) => error,
+    )
+    old.reject(new Error("connection lost"))
+    expect(await first).toMatchObject({ message: "connection lost" })
+    expect(await recovery).toBe("recovered")
+    expect(calls).toBe(2)
+    expect(applied).toEqual(["fresh"])
+  },
+)
+
+test("ordinary concurrent callers share network errors without automatically retrying", async () => {
+  const old = Promise.withResolvers<{ id: string }>()
+  let calls = 0
+  const controller = createSessionSyncController({
+    fetchSnapshot: () => {
+      calls++
+      return old.promise
+    },
+    applySnapshot: () => {},
+  })
+  const first = controller.sync("session").catch((error) => error)
+  const second = controller.sync("session").catch((error) => error)
+  const error = new Error("connection lost")
+  old.reject(error)
+  expect(await first).toBe(error)
+  expect(await second).toBe(error)
+  expect(calls).toBe(1)
+})
+
+test("a forced refresh reports failure of its own fresh request without retrying forever", async () => {
+  const old = Promise.withResolvers<{ id: string }>()
+  let calls = 0
+  const controller = createSessionSyncController({
+    fetchSnapshot: async () => {
+      if (++calls === 1) return old.promise
+      throw new Error("fresh request failed")
+    },
+    applySnapshot: () => {},
+  })
+  const first = controller.sync("session").catch((error) => error)
+  const recovery = controller.sync("session", { force: true }).catch((error) => error)
+  old.reject(new Error("connection lost"))
+  await first
+  expect(await recovery).toMatchObject({ message: "fresh request failed" })
+  expect(calls).toBe(2)
+})

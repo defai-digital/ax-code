@@ -77,16 +77,17 @@ export function createRuntimeSyncActions(input: {
   const currentClient = () => resolveRuntimeSyncLazy(input.client)
   const currentDirectory = () => resolveRuntimeSyncLazy(input.directory)
 
-  // sdk.setWorkspace() swaps in a brand-new client object, so identity
-  // comparison against the client captured when a request started doubles as
-  // a workspace epoch: if it no longer matches, the user has since navigated
-  // to a different workspace/session while this request was in flight, and
-  // its (now stale) result must not be applied to the shared store — it
-  // would otherwise clobber the newly active workspace's runtime state with
-  // data belonging to the one the user left. This mirrors the epoch guard
-  // `sync-session-coordinator.ts` uses for session snapshots.
-  function requestStillCurrent(requestClient: RuntimeSyncClient) {
-    return currentClient() === requestClient
+  const latestRequests = new Map<keyof RuntimeSyncActions, object>()
+  function beginRequest(kind: keyof RuntimeSyncActions) {
+    const client = currentClient()
+    const token = {}
+    latestRequests.set(kind, token)
+    return {
+      client,
+      // A slow pre-disconnect response must not overwrite a newer refresh,
+      // even when reconnection retains the same workspace/client object.
+      isCurrent: () => currentClient() === client && latestRequests.get(kind) === token,
+    }
   }
 
   function normalizeWorkspaceList(input: unknown) {
@@ -111,10 +112,10 @@ export function createRuntimeSyncActions(input: {
     }
   }
 
-  async function syncRuntimeFlag(pathname: string, apply: (value: boolean) => void) {
+  async function syncRuntimeFlag(kind: keyof RuntimeSyncActions, pathname: string, apply: (value: boolean) => void) {
     // Scope the read to the active directory like syncIsolation; without the
     // header the server reads its own cwd's ax-code.json.
-    const requestClient = currentClient()
+    const request = beginRequest(kind)
     const body = await fetchOptionalRuntimeJson<RuntimeFlagPayload>(pathname, {
       headers: directoryRequestHeaders({
         directory: currentDirectory(),
@@ -122,12 +123,12 @@ export function createRuntimeSyncActions(input: {
       }),
     })
     if (!body) return
-    if (!requestStillCurrent(requestClient)) return
+    if (!request.isCurrent()) return
     apply(normalizeRuntimeFlagState(body))
   }
 
-  function createRuntimeFeatureSync(pathname: string, apply: (value: boolean) => void) {
-    return () => syncRuntimeFlag(pathname, apply)
+  function createRuntimeFeatureSync(kind: keyof RuntimeSyncActions, pathname: string, apply: (value: boolean) => void) {
+    return () => syncRuntimeFlag(kind, pathname, apply)
   }
 
   function superLongPath(input?: { model?: string }) {
@@ -143,29 +144,29 @@ export function createRuntimeSyncActions(input: {
 
   return {
     async syncWorkspaces() {
-      const requestClient = currentClient()
-      const result = await requestClient.worktree.list().catch(() => undefined)
+      const request = beginRequest("syncWorkspaces")
+      const result = await request.client.worktree.list().catch(() => undefined)
       if (!result?.data) return
-      if (!requestStillCurrent(requestClient)) return
+      if (!request.isCurrent()) return
       input.applyWorkspaceList(normalizeWorkspaceList(result.data))
     },
     async syncMcpStatus() {
-      const requestClient = currentClient()
-      const result = await requestClient.mcp.status().catch(() => undefined)
+      const request = beginRequest("syncMcpStatus")
+      const result = await request.client.mcp.status().catch(() => undefined)
       if (!result?.data) return
-      if (!requestStillCurrent(requestClient)) return
+      if (!request.isCurrent()) return
       input.applyMcp(normalizeMcpStatusState(result.data) as Record<string, McpStatus>)
     },
     async syncLspStatus() {
-      const requestClient = currentClient()
-      const result = await requestClient.lsp.status().catch(() => undefined)
+      const request = beginRequest("syncLspStatus")
+      const result = await request.client.lsp.status().catch(() => undefined)
       if (!result?.data) return
-      if (!requestStillCurrent(requestClient)) return
+      if (!request.isCurrent()) return
       input.applyLsp(normalizeLspStatusState<LspStatus>(result.data))
     },
     async syncDebugEngine() {
       if (!input.debugEngineEnabled) return
-      const requestClient = currentClient()
+      const request = beginRequest("syncDebugEngine")
       const body = await fetchOptionalRuntimeJson<DebugEnginePayload>("/debug-engine/pending-plans", {
         headers: directoryRequestHeaders({
           directory: currentDirectory(),
@@ -173,12 +174,12 @@ export function createRuntimeSyncActions(input: {
         }),
       })
       if (!body) return
-      if (!requestStillCurrent(requestClient)) return
+      if (!request.isCurrent()) return
       input.applyDebugEngine(normalizeDebugEngineState(body))
     },
     async syncWorkflowDashboard() {
       if (!input.workflowRuntimeEnabled || !input.applyWorkflowDashboard) return
-      const requestClient = currentClient()
+      const request = beginRequest("syncWorkflowDashboard")
       const body = await fetchOptionalRuntimeJson<WorkflowDashboardPayload>(workflowDashboardPath(), {
         headers: directoryRequestHeaders({
           directory: currentDirectory(),
@@ -186,14 +187,15 @@ export function createRuntimeSyncActions(input: {
         }),
       })
       if (!body) return
-      if (!requestStillCurrent(requestClient)) return
+      if (!request.isCurrent()) return
       input.applyWorkflowDashboard(normalizeWorkflowDashboardState(body))
     },
-    syncAutonomous: createRuntimeFeatureSync("/autonomous", input.applyAutonomous),
-    syncSmartLlm: createRuntimeFeatureSync("/smart-llm", input.applySmartLlm),
-    syncSuperLong: (superLongInput) => syncRuntimeFlag(superLongPath(superLongInput), input.applySuperLong),
+    syncAutonomous: createRuntimeFeatureSync("syncAutonomous", "/autonomous", input.applyAutonomous),
+    syncSmartLlm: createRuntimeFeatureSync("syncSmartLlm", "/smart-llm", input.applySmartLlm),
+    syncSuperLong: (superLongInput) =>
+      syncRuntimeFlag("syncSuperLong", superLongPath(superLongInput), input.applySuperLong),
     async syncIsolation() {
-      const requestClient = currentClient()
+      const request = beginRequest("syncIsolation")
       const body = await fetchOptionalRuntimeJson<IsolationPayload>("/isolation", {
         headers: directoryRequestHeaders({
           directory: currentDirectory(),
@@ -201,7 +203,7 @@ export function createRuntimeSyncActions(input: {
         }),
       })
       if (!body) return
-      if (!requestStillCurrent(requestClient)) return
+      if (!request.isCurrent()) return
       input.applyIsolation(normalizeIsolationState(body))
     },
   }

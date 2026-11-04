@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   createRuntimeSyncActions,
   type RuntimeSyncClient,
+  type RuntimeSyncActions,
   type RuntimeSyncFetchResponse,
 } from "../../../src/cli/tui/context/sync-runtime-sync"
 import type { WorkflowDashboardState } from "../../../src/cli/tui/context/sync-runtime-store"
@@ -565,3 +566,92 @@ function workflowRun(input: {
     exposedArtifactCount: 0,
   }
 }
+
+const reorderedProbes: { action: keyof RuntimeSyncActions; older: unknown; newer: unknown }[] = [
+  { action: "syncWorkspaces", older: ["old"], newer: ["new"] },
+  {
+    action: "syncMcpStatus",
+    older: { server: { status: "disconnected" } },
+    newer: { server: { status: "connected" } },
+  },
+  { action: "syncLspStatus", older: [{ id: "old" }], newer: [{ id: "new" }] },
+  { action: "syncDebugEngine", older: { count: 1 }, newer: { count: 2 } },
+  { action: "syncWorkflowDashboard", older: [workflowRun({ runID: "old", status: "running" })], newer: [] },
+  { action: "syncAutonomous", older: { enabled: false }, newer: { enabled: true } },
+  { action: "syncSmartLlm", older: { enabled: false }, newer: { enabled: true } },
+  { action: "syncSuperLong", older: { enabled: false }, newer: { enabled: true } },
+  {
+    action: "syncIsolation",
+    older: { mode: "read-only", network: false },
+    newer: { mode: "workspace-write", network: true },
+  },
+]
+
+test.each(reorderedProbes)(
+  "$action ignores an older response after a newer probe has completed",
+  async ({ action, older, newer }) => {
+    const slow = Promise.withResolvers<unknown>()
+    let calls = 0
+    const payload = async () => (++calls === 1 ? slow.promise : newer)
+    const applied: unknown[] = []
+    const apply = (value: unknown) => {
+      applied.push(value)
+    }
+    const actions = createRuntimeSyncActions({
+      url: "http://localhost",
+      directory: "/repo",
+      client: createClient({
+        worktree: { list: async () => ({ data: (await payload()) as never }) },
+        mcp: { status: async () => ({ data: (await payload()) as never }) },
+        lsp: { status: async () => ({ data: (await payload()) as never }) },
+      }),
+      fetch: async () => okJson(await payload()),
+      debugEngineEnabled: true,
+      workflowRuntimeEnabled: true,
+      applyWorkspaceList: apply,
+      applyMcp: apply,
+      applyLsp: apply,
+      applyDebugEngine: apply,
+      applyWorkflowDashboard: apply,
+      applyAutonomous: apply,
+      applySmartLlm: apply,
+      applySuperLong: apply,
+      applyIsolation: apply,
+    })
+    const stale = action === "syncSuperLong" ? actions.syncSuperLong({ model: "old-model" }) : actions[action]()
+    await (action === "syncSuperLong" ? actions.syncSuperLong({ model: "new-model" }) : actions[action]())
+    expect(applied).toHaveLength(1)
+    const fresh = structuredClone(applied[0])
+    slow.resolve(older)
+    await stale
+    expect(applied).toEqual([fresh])
+  },
+)
+
+test("refreshing one runtime flag does not invalidate an unrelated in-flight flag", async () => {
+  const slow = Promise.withResolvers<RuntimeSyncFetchResponse>()
+  const applied: Record<string, boolean> = {}
+  const actions = createRuntimeSyncActions({
+    url: "http://localhost",
+    client: createClient(),
+    debugEngineEnabled: false,
+    fetch: async (url) => (url.endsWith("/autonomous") ? slow.promise : okJson({ enabled: false })),
+    applyWorkspaceList: () => {},
+    applyMcp: () => {},
+    applyLsp: () => {},
+    applyDebugEngine: () => {},
+    applyIsolation: () => {},
+    applySuperLong: () => {},
+    applyAutonomous: (value) => {
+      applied.autonomous = value
+    },
+    applySmartLlm: (value) => {
+      applied.smartLlm = value
+    },
+  })
+  const autonomous = actions.syncAutonomous()
+  await actions.syncSmartLlm()
+  slow.resolve(okJson({ enabled: true }))
+  await autonomous
+  expect(applied).toEqual({ autonomous: true, smartLlm: false })
+})
