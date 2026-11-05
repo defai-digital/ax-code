@@ -17,6 +17,7 @@ const log = Log.create({ service: "ipc-server" })
  * and destroyed rather than held open by a courtesy message.
  */
 const FRAME_TOO_LARGE_REPLY_DEADLINE_MS = 250
+const MAX_SSE_FRAME_CHARACTERS = 16 * 1024 * 1024
 
 export type IpcServerHandle = {
   socketPath: string
@@ -359,6 +360,7 @@ async function* parseSseStream(
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
+  let skipLF = false
   let cancelled = false
   const cancel = () => {
     if (cancelled) return
@@ -371,21 +373,28 @@ async function* parseSseStream(
       const { done, value } = await waitForAbort(reader.read(), signal)
       if (done) break
       options.onActivity()
-      buffer += decoder.decode(value, { stream: true })
-      // SSE spec (RFC): events are separated by a blank line (\n\n or \r\n\r\n).
-      // Normalise CRLF to LF so a single split works for both wire formats.
-      // Preserve a trailing CR until the next chunk reveals whether it is CRLF.
-      const pendingCR = buffer.endsWith("\r")
-      const normalised = (pendingCR ? buffer.slice(0, -1) : buffer).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-      const frames = normalised.split("\n\n")
-      buffer = (frames.pop() ?? "") + (pendingCR ? "\r" : "")
-      for (const frame of frames) {
+      let chunk = decoder.decode(value, { stream: true })
+      if (chunk) {
+        // A CR terminates a line immediately. If its optional LF arrives in
+        // another chunk, swallow that LF instead of delaying a live CR frame.
+        const leadingLF = skipLF && chunk.startsWith("\n")
+        skipLF = chunk.endsWith("\r")
+        if (leadingLF) chunk = chunk.slice(1)
+        buffer += chunk.replace(/\r\n|\r/g, "\n")
+      }
+      let boundary: number
+      while ((boundary = buffer.indexOf("\n\n")) >= 0) {
+        checkSseFrameSize(boundary)
+        const frame = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
         signal.throwIfAborted()
         const event = parseSseFrame(frame, options.onMetadataID)
         if (event !== undefined) yield event
       }
+      checkSseFrameSize(buffer.length)
     }
     buffer += decoder.decode()
+    checkSseFrameSize(buffer.length)
     if (!signal.aborted && buffer.trim()) {
       const event = parseSseFrame(buffer.replace(/\r\n|\r/g, "\n"), options.onMetadataID)
       if (event !== undefined) yield event
@@ -396,6 +405,12 @@ async function* parseSseStream(
     signal.removeEventListener("abort", cancel)
     cancel()
     reader.releaseLock()
+  }
+}
+
+function checkSseFrameSize(size: number): void {
+  if (size > MAX_SSE_FRAME_CHARACTERS) {
+    throw new Error(`IPC SSE frame exceeds the maximum of ${MAX_SSE_FRAME_CHARACTERS} characters`)
   }
 }
 

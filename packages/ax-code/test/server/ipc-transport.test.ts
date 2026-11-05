@@ -17,6 +17,8 @@ import {
   type IpcMessage,
 } from "../../src/server/ipc-protocol"
 
+const SSE_FRAME_LIMIT_CHARACTERS = 16 * 1024 * 1024
+
 function eventConnection(fetch: (request: Request) => Promise<Response>, options: { stalledWrites?: boolean } = {}) {
   const disconnected = Promise.withResolvers<void>()
   const frames: IpcMessage[] = []
@@ -48,6 +50,66 @@ function eventConnection(fetch: (request: Request) => Promise<Response>, options
 }
 
 describe("ipc event subscription recovery", () => {
+  test("delivers CR-only frames before the upstream closes or sends more bytes", async () => {
+    vi.useFakeTimers()
+    const event = { type: "server.connected", properties: {} }
+    const connection = eventConnection(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\r\r`))
+            },
+          }),
+        ),
+    )
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(connection.frames).toEqual([{ type: "event", event }])
+    } finally {
+      await connection.close()
+      vi.useRealTimers()
+    }
+  })
+
+  test.each(["", "\n\n"])("cancels an oversized upstream SSE frame with suffix %j", async (suffix) => {
+    vi.useFakeTimers()
+    const cancelled = vi.fn()
+    const connection = eventConnection(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(`data: ${"x".repeat(SSE_FRAME_LIMIT_CHARACTERS)}${suffix}`))
+            },
+            cancel: cancelled,
+          }),
+        ),
+    )
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(cancelled).toHaveBeenCalledTimes(1)
+      expect(connection.frames).toEqual([])
+    } finally {
+      await connection.close()
+      vi.useRealTimers()
+    }
+  })
+
+  test("limits each frame rather than the aggregate replay chunk", async () => {
+    vi.useFakeTimers()
+    const event = { type: "message.updated", properties: { text: "x".repeat(SSE_FRAME_LIMIT_CHARACTERS / 2) } }
+    const connection = eventConnection(async () => new Response(`data: ${JSON.stringify(event)}\n\n`.repeat(2)))
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(connection.frames).toHaveLength(2)
+      expect(connection.frames.every((frame) => frame.type === "event" && frame.event !== undefined)).toBe(true)
+    } finally {
+      await connection.close()
+      vi.useRealTimers()
+    }
+  })
+
   test("a peer that stops reading is disconnected without accumulating new subscriptions", async () => {
     vi.useFakeTimers()
     let calls = 0
