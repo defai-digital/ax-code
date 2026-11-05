@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.17] - 2026-11-05
+
+### Changed
+
+- Publish the paired SDK 2.6.70 with bounded SSE parsing, cancellation, and reconnect recovery.
+- Centralize provider model identity, capability evidence, request compilation, and discovery contracts.
+
+### Fixed
+
+- Recover disconnected and stalled event streams across the TUI, SDK, workspace synchronization, and IPC while preserving delivered replay cursors.
+- Reject stale runtime state and preserve refresh requests during reconnects.
+- Keep prompt history ordered and isolated from request, plugin, and composer mutations.
+- Deliver CR-terminated IPC events immediately, preserve split CRLF framing, and bound complete and partial upstream SSE frames without limiting aggregate replay chunks.
+
 ## [7.30.16] - 2026-11-03
 
 ### Changed

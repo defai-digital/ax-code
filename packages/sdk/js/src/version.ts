@@ -5,7 +5,7 @@
  * ```ts
  * import { SDK_VERSION, isSDKVersionCompatible } from "@defai-digital/ax-code-sdk"
  *
- * console.log(SDK_VERSION) // "2.6.69"
+ * console.log(SDK_VERSION) // "2.6.70"
  * if (!isSDKVersionCompatible("^2.0.0")) {
  *   throw new Error("This plugin requires @defai-digital/ax-code-sdk ^2.0.0")
  * }
@@ -13,7 +13,7 @@
  */
 
 /** Current SDK version. Matches the `version` field in package.json. */
-export const SDK_VERSION = "2.6.69"
+export const SDK_VERSION = "2.6.70"
 
 /**
  * Check whether the current SDK version satisfies a semver range.
