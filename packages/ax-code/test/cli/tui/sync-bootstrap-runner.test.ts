@@ -247,11 +247,15 @@ describe("tui sync bootstrap runner", () => {
 
     const pending = runBootstrapPhaseTasks({
       signal: abort.signal,
+      concurrency: 1,
       tasks: [
         async () => {
           events.push("task:start")
           await gate
           events.push("task:finish")
+        },
+        async () => {
+          events.push("stale-queued-task")
         },
       ],
       onSettled() {

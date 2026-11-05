@@ -17,6 +17,40 @@ function stream(chunks: string[]) {
 }
 
 describe("control-plane/sse", () => {
+  test("accepts a large replay chunk when each complete frame is within the limit", async () => {
+    let count = 0
+    await parseSSE(stream(["data: replay\n\n".repeat(80_000)]), new AbortController().signal, () => count++)
+    expect(count).toBe(80_000)
+  })
+
+  test("tracks delivered and metadata-only cursors, including reset and invalid ids", async () => {
+    const cursors: string[] = []
+    await parseSSE(
+      stream(["id: first\ndata: hello\n\nid: metadata\n\nid: bad\0id\n\nid:\n\n"]),
+      new AbortController().signal,
+      () => {},
+      {
+        onEventID: (id) => cursors.push(id),
+      },
+    )
+    expect(cursors).toEqual(["first", "metadata", ""])
+  })
+
+  test("does not commit an event cursor when its consumer fails", async () => {
+    const cursors: string[] = []
+    await expect(
+      parseSSE(
+        stream(["id: lost\ndata: hello\n\n"]),
+        new AbortController().signal,
+        () => {
+          throw new Error("dispatch failed")
+        },
+        { onEventID: (id) => cursors.push(id) },
+      ),
+    ).rejects.toThrow("dispatch failed")
+    expect(cursors).toEqual([])
+  })
+
   test("stops dispatching buffered events when a handler cancels the stream", async () => {
     const events: unknown[] = []
     const stop = new AbortController()

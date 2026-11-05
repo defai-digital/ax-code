@@ -11,12 +11,15 @@ import { getAdaptor } from "./adaptors"
 import { parseSSE } from "./sse"
 import { Log } from "@/util/log"
 import { waitForAbortOrTimeout } from "./abort"
+import { waitForAbort } from "@/util/abort"
 import { withWorkspaceHeaders } from "@/util/workspace-headers"
 
 export namespace Workspace {
   const log = Log.create({ service: "workspace" })
   const WORKSPACE_SYNC_INITIAL_BACKOFF_MS = 1000
   const WORKSPACE_SYNC_MAX_BACKOFF_MS = 30_000
+  const WORKSPACE_SYNC_CONNECT_TIMEOUT_MS = 10_000
+  const WORKSPACE_SYNC_IDLE_TIMEOUT_MS = 60_000
   const WORKSPACE_SYNC_BASE_URL = "http://workspace.test"
   const WORKSPACE_SYNC_ENDPOINT = `${WORKSPACE_SYNC_BASE_URL}/event`
 
@@ -139,25 +142,56 @@ export namespace Workspace {
         const adaptor = getAdaptor(item.type)
         if (!adaptor) return
         let backoff = WORKSPACE_SYNC_INITIAL_BACKOFF_MS
+        let lastEventID: string | undefined
         while (!stop.signal.aborted) {
+          const attempt = new AbortController()
+          const signal = AbortSignal.any([stop.signal, attempt.signal])
+          let watchdog: ReturnType<typeof setTimeout>
+          const resetWatchdog = (ms: number) => {
+            clearTimeout(watchdog)
+            watchdog = setTimeout(() => attempt.abort(new Error("workspace sync timed out")), ms)
+            watchdog.unref?.()
+          }
+          resetWatchdog(WORKSPACE_SYNC_CONNECT_TIMEOUT_MS)
           try {
-            const response = await adaptor.fetch(item.extra, normalizeSyncRequestUrl(WORKSPACE_SYNC_ENDPOINT), {
-              signal: stop.signal,
-              headers: withWorkspaceHeaders({}, item.id),
-            })
+            const response = await waitForAbort(
+              adaptor
+                .fetch(item.extra, normalizeSyncRequestUrl(WORKSPACE_SYNC_ENDPOINT), {
+                  signal,
+                  headers: withWorkspaceHeaders(lastEventID ? { "Last-Event-ID": lastEventID } : {}, item.id),
+                })
+                .then((response) => {
+                  if (signal.aborted) {
+                    void response.body?.cancel().catch(() => {})
+                    signal.throwIfAborted()
+                  }
+                  return response
+                }),
+              signal,
+            )
             if (!response.ok) {
+              void response.body?.cancel().catch(() => {})
               throw new Error(`workspace sync endpoint returned ${response.status}`)
             }
             if (!response.body) {
               throw new Error("workspace sync endpoint returned 200 with no body")
             }
-            backoff = WORKSPACE_SYNC_INITIAL_BACKOFF_MS
-            await parseSSE(response.body, stop.signal, (payload) => {
-              GlobalBus.emit("event", {
-                directory: item.directory ?? item.id,
-                payload,
-              })
-            })
+            resetWatchdog(WORKSPACE_SYNC_IDLE_TIMEOUT_MS)
+            await parseSSE(
+              response.body,
+              signal,
+              (payload) => {
+                GlobalBus.emit("event", { directory: item.directory ?? item.id, payload })
+                backoff = WORKSPACE_SYNC_INITIAL_BACKOFF_MS
+              },
+              {
+                onActivity: () => resetWatchdog(WORKSPACE_SYNC_IDLE_TIMEOUT_MS),
+                onEventID: (id) => {
+                  lastEventID = id || undefined
+                },
+              },
+            )
+            if (!stop.signal.aborted) throw new Error("workspace sync stream ended")
           } catch (err) {
             if (stop.signal.aborted) break
             log.warn("workspace SSE sync lost, reconnecting...", {
@@ -165,9 +199,13 @@ export namespace Workspace {
               type: item.type,
               err,
             })
-            await waitForAbortOrTimeout(stop.signal, backoff)
-            backoff = Math.min(backoff * 2, WORKSPACE_SYNC_MAX_BACKOFF_MS)
+          } finally {
+            clearTimeout(watchdog!)
+            attempt.abort()
           }
+          if (stop.signal.aborted) break
+          await waitForAbortOrTimeout(stop.signal, backoff)
+          backoff = Math.min(backoff * 2, WORKSPACE_SYNC_MAX_BACKOFF_MS)
         }
       })
 

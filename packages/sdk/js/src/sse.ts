@@ -89,6 +89,29 @@ export class SseParser {
   }
 }
 
+/** Bound transport and hook waits even when an implementation ignores cancellation. */
+export function waitSse<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort)
+      reject(signal.reason)
+    }
+    signal.addEventListener("abort", abort, { once: true })
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", abort)
+        if (signal.aborted) reject(signal.reason)
+        else resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort)
+        reject(error)
+      },
+    )
+    if (signal.aborted) abort()
+  })
+}
+
 /** Retry waits stop promptly on caller abort, including custom sleep functions. */
 export async function sleepSse(ms: number, signal: AbortSignal, custom?: (ms: number) => Promise<void>) {
   if (signal.aborted) return

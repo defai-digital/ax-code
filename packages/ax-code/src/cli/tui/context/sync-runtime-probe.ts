@@ -1,5 +1,6 @@
 import type { HeadlessRuntimeProbeKey } from "@/runtime/headless/event"
 import { parseIntegerEnv } from "../util/env"
+import { withTimeout } from "@/util/timeout"
 
 export interface RuntimeSyncProbeHandlers {
   syncMcpStatus: () => Promise<void> | void
@@ -68,6 +69,7 @@ export function createRuntimeSyncProbeScheduler(
   const queued = new Map<RuntimeSyncProbeKey, RuntimeSyncProbeTask>()
   const queuedAfterInFlight = new Map<RuntimeSyncProbeKey, RuntimeSyncProbeTask>()
   const inFlight = new Set<RuntimeSyncProbeKey>()
+  const abort = new AbortController()
   let timer: NodeJS.Timeout | undefined
   let disposed = false
 
@@ -80,7 +82,7 @@ export function createRuntimeSyncProbeScheduler(
     }
 
     inFlight.add(task.key)
-    void runRuntimeSyncProbe(task).finally(() => {
+    void runRuntimeSyncProbe(task, abort.signal).finally(() => {
       inFlight.delete(task.key)
       const next = queuedAfterInFlight.get(task.key)
       queuedAfterInFlight.delete(task.key)
@@ -112,6 +114,7 @@ export function createRuntimeSyncProbeScheduler(
     schedule,
     dispose() {
       disposed = true
+      abort.abort()
       if (timer) clearTimeoutFn(timer)
       timer = undefined
       queued.clear()
@@ -120,11 +123,23 @@ export function createRuntimeSyncProbeScheduler(
   }
 }
 
-async function runRuntimeSyncProbe(input: RuntimeSyncProbeTask) {
+async function runRuntimeSyncProbe(input: RuntimeSyncProbeTask, signal: AbortSignal) {
+  let cancel!: () => void
+  const cancelled = new Promise<void>((resolve) => {
+    cancel = resolve
+    signal.addEventListener("abort", cancel, { once: true })
+  })
   try {
-    await Promise.resolve(input.run())
+    if (signal.aborted) return
+    // A disconnected request may never settle. Release its coalescing key so
+    // later events can refresh it, and clear this deadline when disposed.
+    await withTimeout(Promise.race([Promise.resolve(input.run()), cancelled]), 10_000, `${input.label}: timed out`, {
+      unref: true,
+    })
   } catch (error) {
-    input.onWarn(input.label, error)
+    if (!signal.aborted) input.onWarn(input.label, error)
+  } finally {
+    signal.removeEventListener("abort", cancel)
   }
 }
 

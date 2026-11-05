@@ -4,6 +4,7 @@ import { basename, dirname, join } from "node:path"
 import { isRecord } from "@/util/record"
 import { Log } from "@/util/log"
 import { sleep } from "@/util/timeout"
+import { waitForAbort } from "@/util/abort"
 import type { IpcErrorMessage, IpcMessage, IpcRequestMessage } from "./ipc-protocol"
 import { IpcFrameTooLargeError, readIpcMessages, writeIpcMessage } from "./ipc-protocol"
 
@@ -208,46 +209,72 @@ export class IpcConnection {
   private startEventSubscription() {
     void (async () => {
       let delay = IpcConnection.EVENT_RETRY_BASE_MS
+      let lastEventID: string | undefined
       while (!this.abortController.signal.aborted) {
+        const attempt = new AbortController()
+        const signal = AbortSignal.any([this.abortController.signal, attempt.signal])
+        let watchdog: ReturnType<typeof setTimeout> | undefined
+        const resetWatchdog = (ms = 60_000) => {
+          clearTimeout(watchdog)
+          watchdog = setTimeout(() => attempt.abort(new Error("ipc event subscription timed out")), ms)
+          watchdog.unref?.()
+        }
+        resetWatchdog(10_000)
         try {
-          const response = await this.fetch(
-            new Request("http://localhost/global/event", {
-              method: "GET",
-              headers: { accept: "text/event-stream" },
+          const response = await waitForAbort(
+            Promise.resolve(
+              this.fetch(
+                new Request("http://localhost/global/event", {
+                  method: "GET",
+                  headers: { accept: "text/event-stream", ...(lastEventID ? { "Last-Event-ID": lastEventID } : {}) },
+                  signal,
+                }),
+              ),
+            ).then((response) => {
+              if (signal.aborted) {
+                void response.body?.cancel().catch(() => {})
+                signal.throwIfAborted()
+              }
+              return response
             }),
+            signal,
           )
-          if (!response.ok || !response.body) {
+          if (!response.ok) {
+            void response.body?.cancel().catch(() => {})
             log.warn("ipc event subscription rejected", { status: response.status })
-            // Non-retryable: the route doesn't exist or isn't SSE.
-            return
+            if (response.status >= 400 && response.status < 500 && ![408, 429].includes(response.status)) return
+            throw new Error(`ipc event subscription returned ${response.status}`)
           }
-          // Reset backoff on successful connection.
-          delay = IpcConnection.EVENT_RETRY_BASE_MS
-          for await (const event of parseSseStream(response)) {
-            if (this.abortController.signal.aborted) return
-            await writeIpcMessage(this.socket, { type: "event", event }).catch(() => {
-              this.abortController.abort()
-            })
+          if (!response.body) throw new Error("ipc event subscription returned no body")
+          resetWatchdog()
+          for await (const frame of parseSseStream(response, signal, {
+            onActivity: resetWatchdog,
+            onMetadataID: (id) => {
+              lastEventID = id || undefined
+            },
+          })) {
+            signal.throwIfAborted()
+            await waitForAbort(writeIpcMessage(this.socket, { type: "event", event: frame.event }), signal).catch(
+              (error) => {
+                // A stalled write means this IPC peer stopped reading. Close
+                // its socket instead of opening more upstream subscriptions.
+                this.abortController.abort()
+                this.socket.destroy()
+                throw error
+              },
+            )
+            if (frame.id !== undefined) lastEventID = frame.id || undefined
+            delay = IpcConnection.EVENT_RETRY_BASE_MS
           }
-          // Stream ended cleanly (EOF) — server restarted. Reset backoff so the
-          // next reconnect attempt uses the base delay, not an accumulated value.
-          delay = IpcConnection.EVENT_RETRY_BASE_MS
         } catch (error) {
           if (this.abortController.signal.aborted) return
           log.debug("ipc event subscription ended, retrying", { error, delayMs: delay })
+        } finally {
+          clearTimeout(watchdog)
+          attempt.abort()
         }
         if (this.abortController.signal.aborted) return
-        await new Promise<void>((resolve) => {
-          const onAbort = () => {
-            clearTimeout(timer)
-            resolve()
-          }
-          const timer = setTimeout(() => {
-            this.abortController.signal.removeEventListener("abort", onAbort)
-            resolve()
-          }, delay)
-          this.abortController.signal.addEventListener("abort", onAbort, { once: true })
-        })
+        await sleep(delay, { signal: this.abortController.signal }).catch(() => {})
         delay = Math.min(delay * 2, IpcConnection.EVENT_RETRY_MAX_MS)
       }
     })()
@@ -324,54 +351,76 @@ async function parseResponseBody(response: Response): Promise<unknown> {
   }
 }
 
-async function* parseSseStream(response: Response): AsyncGenerator<unknown> {
+async function* parseSseStream(
+  response: Response,
+  signal: AbortSignal,
+  options: { onActivity: () => void; onMetadataID: (id: string) => void },
+): AsyncGenerator<{ event: unknown; id?: string }> {
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
+  let cancelled = false
+  const cancel = () => {
+    if (cancelled) return
+    cancelled = true
+    void reader.cancel().catch(() => {})
+  }
+  signal.addEventListener("abort", cancel, { once: true })
   try {
-    while (true) {
-      const { done, value } = await reader.read()
+    while (!signal.aborted) {
+      const { done, value } = await waitForAbort(reader.read(), signal)
       if (done) break
+      options.onActivity()
       buffer += decoder.decode(value, { stream: true })
       // SSE spec (RFC): events are separated by a blank line (\n\n or \r\n\r\n).
       // Normalise CRLF to LF so a single split works for both wire formats.
-      const normalised = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+      // Preserve a trailing CR until the next chunk reveals whether it is CRLF.
+      const pendingCR = buffer.endsWith("\r")
+      const normalised = (pendingCR ? buffer.slice(0, -1) : buffer).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
       const frames = normalised.split("\n\n")
-      buffer = frames.pop() ?? ""
+      buffer = (frames.pop() ?? "") + (pendingCR ? "\r" : "")
       for (const frame of frames) {
-        const event = parseSseFrame(frame)
+        signal.throwIfAborted()
+        const event = parseSseFrame(frame, options.onMetadataID)
         if (event !== undefined) yield event
       }
     }
     buffer += decoder.decode()
-    if (buffer.trim()) {
-      const event = parseSseFrame(buffer)
+    if (!signal.aborted && buffer.trim()) {
+      const event = parseSseFrame(buffer.replace(/\r\n|\r/g, "\n"), options.onMetadataID)
       if (event !== undefined) yield event
     }
   } finally {
     // Cancel the reader so the upstream SSE connection is torn down,
     // not just detached — otherwise the server keeps buffering events.
-    try {
-      await reader.cancel()
-    } catch {}
+    signal.removeEventListener("abort", cancel)
+    cancel()
     reader.releaseLock()
   }
 }
 
-function parseSseFrame(frame: string): unknown | undefined {
+function parseSseFrame(frame: string, onMetadataID: (id: string) => void): { event: unknown; id?: string } | undefined {
   if (!frame.trim()) return undefined
   // Collect data lines; skip comment (:) and field-only (retry:, id:, event:) lines.
   const dataLines: string[] = []
+  let id: string | undefined
   for (const line of frame.split("\n")) {
+    if (line === "id" || line.startsWith("id:")) {
+      const value = line === "id" ? "" : line.slice(3).replace(/^ /, "")
+      if (!value.includes("\0")) id = value
+    }
     if (line.startsWith("data:")) {
       // Value starts after "data:" with an optional single space.
       dataLines.push(line.length > 5 && line[5] === " " ? line.slice(6) : line.slice(5))
     }
   }
-  if (dataLines.length === 0) return undefined
+  if (dataLines.length === 0) {
+    if (id !== undefined) onMetadataID(id)
+    return undefined
+  }
   const data = dataLines.join("\n")
   try {
-    return JSON.parse(data)
+    return { event: JSON.parse(data), id }
   } catch {
     // Ignore malformed SSE frames.
     return undefined

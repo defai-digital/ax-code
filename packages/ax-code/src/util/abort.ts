@@ -34,6 +34,29 @@ export function abortAfterAny(ms: number, ...signals: AbortSignal[]) {
   }
 }
 
+/** Stop awaiting a transport that ignores cancellation, while observing late failures. */
+export function waitForAbort<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort)
+      reject(signal.reason)
+    }
+    signal.addEventListener("abort", abort, { once: true })
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", abort)
+        if (signal.aborted) reject(signal.reason)
+        else resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort)
+        reject(error)
+      },
+    )
+    if (signal.aborted) abort()
+  })
+}
+
 /** The canonical abort rejection: a DOMException named "AbortError". */
 export function abortError(): DOMException {
   return new DOMException("Aborted", "AbortError")

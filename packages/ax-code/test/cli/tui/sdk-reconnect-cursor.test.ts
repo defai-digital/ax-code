@@ -14,7 +14,7 @@ const wire = vi.hoisted(() => ({
   subscriptions: [] as {
     signal: AbortSignal
     headers?: Record<string, string>
-    onSseEvent: (event: { id: string }) => void
+    onSseEvent: (event: { id: string; data?: unknown }) => void
   }[],
 }))
 vi.mock("@ax-code/sdk/v2", () => ({
@@ -75,4 +75,28 @@ test("an aborted connection cannot overwrite a newer connection's replay cursor"
   wire.subscriptions[0].onSseEvent({ id: "stale-cursor" })
   await wire.runs[0].subscribe(new AbortController().signal)
   expect(wire.subscriptions[2].headers?.["Last-Event-ID"]).toBe("current-cursor")
+})
+
+test("an empty SSE id clears the previous replay cursor", async () => {
+  setup()
+  await wire.runs[0].subscribe(new AbortController().signal)
+  wire.subscriptions[0].onSseEvent({ id: "previous-cursor" })
+  wire.subscriptions[0].onSseEvent({ id: "" })
+  await wire.runs[0].subscribe(new AbortController().signal)
+  expect(wire.subscriptions[1].headers?.["Last-Event-ID"]).toBeUndefined()
+})
+
+test("a parsed event interrupted before delivery is replayed on reconnection", async () => {
+  setup()
+  const first = new AbortController()
+  await wire.runs[0].subscribe(first.signal)
+  wire.subscriptions[0].onSseEvent({ id: "not-delivered", data: { type: "server.heartbeat" } })
+  first.abort()
+  await wire.runs[0].subscribe(new AbortController().signal)
+  expect(wire.subscriptions[1].headers?.["Last-Event-ID"]).toBeUndefined()
+  const event = { type: "server.heartbeat", properties: {} }
+  wire.subscriptions[1].onSseEvent({ id: "delivered", data: event })
+  await wire.runs[0].onEvent(event)
+  await wire.runs[0].subscribe(new AbortController().signal)
+  expect(wire.subscriptions[2].headers?.["Last-Event-ID"]).toBe("delivered")
 })

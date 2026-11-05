@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import {
   AX_CODE_TUI_RUNTIME_SYNC_PROBE_DELAY_MS,
   createRuntimeSyncProbeScheduler,
@@ -6,6 +6,45 @@ import {
 } from "../../../src/cli/tui/context/sync-runtime-probe"
 
 describe("tui sync runtime probe", () => {
+  test("a stalled network probe releases its key so a queued refresh can run", async () => {
+    vi.useFakeTimers()
+    const scheduler = createRuntimeSyncProbeScheduler({ delayMs: 0 })
+    try {
+      const warnings = vi.fn()
+      const current = vi.fn()
+      scheduler.schedule({ key: "mcp", label: "mcp failed", run: () => new Promise(() => {}), onWarn: warnings })
+      await vi.advanceTimersByTimeAsync(0)
+      scheduler.schedule({ key: "mcp", label: "mcp refresh failed", run: current, onWarn: warnings })
+      await vi.advanceTimersByTimeAsync(10_001)
+      expect(current).toHaveBeenCalledTimes(1)
+      expect(warnings).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      scheduler.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  test("disposing a stalled probe clears its deadline without warning or rerunning", async () => {
+    vi.useFakeTimers()
+    const scheduler = createRuntimeSyncProbeScheduler({ delayMs: 0 })
+    try {
+      const warnings = vi.fn()
+      const current = vi.fn()
+      scheduler.schedule({ key: "mcp", label: "mcp failed", run: () => new Promise(() => {}), onWarn: warnings })
+      await vi.advanceTimersByTimeAsync(0)
+      scheduler.schedule({ key: "mcp", label: "mcp refresh failed", run: current, onWarn: warnings })
+      scheduler.dispose()
+      await vi.advanceTimersByTimeAsync(10_001)
+      expect(current).not.toHaveBeenCalled()
+      expect(warnings).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      scheduler.dispose()
+      vi.useRealTimers()
+    }
+  })
+
   test("creates labeled runtime probe tasks from headless probe keys", async () => {
     const calls: string[] = []
     const warnings: Array<{ label: string; error: unknown }> = []

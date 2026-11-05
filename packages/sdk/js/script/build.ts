@@ -209,7 +209,7 @@ async function patchGeneratedSseClient(outputPath: string) {
   const helperPath = path.relative(path.dirname(file), path.join(dir, "src/sse.js")).replaceAll("\\", "/")
   source = source.replace(
     'import type { Config } from "./types.gen.js"',
-    `import type { Config } from "./types.gen.js"\nimport { SseParser, SseFrameLimitError, sleepSse } from "${helperPath}"`,
+    `import type { Config } from "./types.gen.js"\nimport { SseParser, SseFrameLimitError, sleepSse, waitSse } from "${helperPath}"`,
   )
   const framing = /            buffer \+= value[\s\S]*?              let data: unknown/
   const next = source.replace(
@@ -251,6 +251,73 @@ async function patchGeneratedSseClient(outputPath: string) {
       "      const headers = new Headers(options.headers)\n\n      if (lastEventId !== undefined)",
     )
     .replace("            reader.cancel()", "            void reader.cancel().catch(() => undefined)")
+
+  const cancellationPatches: Array<[string, string]> = [
+    [
+      "        if (!response.ok) throw new Error(`SSE failed: ${response.status} ${response.statusText}`)",
+      `        if (!response.ok) {
+          void response.body?.cancel().catch(() => undefined)
+          throw new Error(\`SSE failed: \${response.status} \${response.statusText}\`)
+        }`,
+    ],
+    [
+      "const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()",
+      `// Read bytes directly so cancellation reaches the transport immediately.
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()`,
+    ],
+    [
+      "request = await onRequest(url, requestInit)",
+      "request = await waitSse(onRequest(url, requestInit), attemptController.signal)",
+    ],
+    [
+      "const response = await _fetch(request)",
+      `const response = await waitSse(_fetch(request).then((response) => {
+          // An abandoned fetch may resolve after its attempt has expired.
+          if (attemptController.signal.aborted) {
+            void response.body?.cancel().catch(() => undefined)
+            attemptController.signal.throwIfAborted()
+          }
+          return response
+        }), attemptController.signal)`,
+    ],
+    [
+      "const { done, value } = await reader.read()",
+      "const { done, value } = await waitSse(reader.read(), attemptController.signal)",
+    ],
+    [
+      "for (const block of parser.feed(value)) {",
+      "for (const block of parser.feed(decoder.decode(value, { stream: true }))) {\n              attemptController.signal.throwIfAborted()",
+    ],
+    ["if (block.id !== undefined) lastEventId = block.id", "const eventId = block.id ?? lastEventId"],
+    ["await responseValidator(data)", "await waitSse(responseValidator(data), attemptController.signal)"],
+    [
+      "data = await responseTransformer(data)",
+      "data = await waitSse(responseTransformer(data), attemptController.signal)",
+    ],
+    [
+      "              onSseEvent?.({",
+      "              attemptController.signal.throwIfAborted()\n              onSseEvent?.({",
+    ],
+    ["id: lastEventId,", "id: eventId,"],
+    [
+      "              if (dataLines.length) {\n                //",
+      `              // Commit the cursor only after validation and delivery succeed.
+              lastEventId = eventId
+              attemptController.signal.throwIfAborted()
+              if (dataLines.length) {
+                //`,
+    ],
+    ["            await reader.cancel().catch(() => undefined)", "            abortHandler()"],
+    [
+      "        const abortHandler = () => {\n          try {",
+      "        let cancelled = false\n        const abortHandler = () => {\n          if (cancelled) return\n          cancelled = true\n          try {",
+    ],
+  ]
+  for (const [before, after] of cancellationPatches) {
+    if (!source.includes(before)) throw new Error(`Generated SSE cancellation changed shape: ${file}: ${before}`)
+    source = source.replace(before, after)
+  }
 
   await fs.writeFile(file, source)
 }

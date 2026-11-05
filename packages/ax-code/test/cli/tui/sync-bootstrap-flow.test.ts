@@ -63,6 +63,69 @@ function createClient() {
 }
 
 describe("tui sync bootstrap flow", () => {
+  test.each(["reconnect", "stop"])("invalidates deferred responses after %s with the same client", async (action) => {
+    const [store, setStore] = createStore(createInitialSyncState())
+    const guards: Array<() => boolean> = []
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    let mcpCalls = 0
+    const client = createClient()
+    client.mcp.status = async () => {
+      if (++mcpCalls === 1) await gate
+      return { data: { test: { status: "connected" } } }
+    }
+    const flow = createSyncBootstrapFlow({
+      store,
+      setStatus: (status) => setStore("status", status),
+      setSessionLoaded: (loaded) => setStore("session_loaded", loaded),
+      resetSessionSync: () => undefined,
+      wrap: async (_label, promise) => promise,
+      client,
+      syncIsolation: async () => undefined,
+      syncAutonomous: async () => undefined,
+      syncWorkspaces: async () => undefined,
+      syncDebugEngine: async () => undefined,
+      syncSmartLlm: async () => undefined,
+      syncSuperLong: async () => undefined,
+      syncWorkflowDashboard: async () => undefined,
+      createTasks(requests, onProvidersReady, isRequestCurrent) {
+        guards.push(isRequestCurrent)
+        return createStoreBackedBootstrapTasks({
+          continueFromArgs: false,
+          store,
+          setStore,
+          requests,
+          onProvidersReady,
+          isRequestCurrent,
+        })
+      },
+      createSpan: () => () => undefined,
+      recordStartup: () => undefined,
+      logWarn: () => undefined,
+      logError: () => undefined,
+      onFailure: () => undefined,
+      deferredDelayMs: 0,
+    })
+    await flow.run()
+    await nextTick()
+    expect(mcpCalls).toBe(1)
+    expect(guards[0]()).toBe(true)
+    if (action === "reconnect") await flow.run()
+    else flow.stop()
+    expect(guards[0]()).toBe(false)
+    release()
+    await nextTick()
+    if (action === "stop") expect(store.mcp).toEqual({})
+    else {
+      expect(guards[1]()).toBe(true)
+      expect(store.mcp).toEqual({ test: { status: "connected" } })
+    }
+    flow.stop()
+    const runsBeforeStop = guards.length
+    await flow.run()
+    expect(guards).toHaveLength(runsBeforeStop)
+  })
+
   test("exposes bounded deferred bootstrap tuning for packaged startup support", () => {
     expect(tuiDeferredBootstrapDelayMs({})).toBe(2_000)
     expect(tuiDeferredBootstrapDelayMs({ [AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS]: "0" })).toBe(0)

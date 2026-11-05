@@ -8,6 +8,208 @@ const clients = [
 ] as const
 
 describe.each(clients)("generated SSE client %s", (_name, createSseClient) => {
+  test("cancels failed HTTP response bodies before reconnecting", async () => {
+    const cancelled = vi.fn()
+    const { stream } = createSseClient({
+      url: "http://localhost/events",
+      sseMaxRetryAttempts: 0,
+      fetch: async () => new Response(new ReadableStream({ cancel: cancelled }), { status: 503 }),
+    })
+    await expect(stream.next()).resolves.toEqual({ done: true, value: undefined })
+    expect(cancelled).toHaveBeenCalledTimes(1)
+  })
+
+  test("a stalled body cancellation cannot block the next connection", async () => {
+    vi.useFakeTimers()
+    const abort = new AbortController()
+    try {
+      let calls = 0
+      const cancelled = vi.fn(() => new Promise<void>(() => {}))
+      const delivered = vi.fn()
+      const { stream } = createSseClient({
+        url: "http://localhost/events",
+        signal: abort.signal,
+        sseIdleTimeout: 5,
+        sseDefaultRetryDelay: 0,
+        fetch: async () =>
+          ++calls === 1
+            ? new Response(new ReadableStream({ cancel: cancelled }))
+            : new Response('data: "recovered"\n\n'),
+      })
+      const next = stream.next().then(delivered)
+      await vi.advanceTimersByTimeAsync(6)
+      expect(delivered).toHaveBeenCalledWith({ done: false, value: "recovered" })
+      expect(cancelled).toHaveBeenCalledTimes(1)
+      await next
+      await stream.return(undefined)
+    } finally {
+      abort.abort()
+      vi.useRealTimers()
+    }
+  })
+
+  test("cancels a response that arrives after its connection timed out", async () => {
+    vi.useFakeTimers()
+    const abort = new AbortController()
+    try {
+      const late = Promise.withResolvers<Response>()
+      const cancelled = vi.fn()
+      let calls = 0
+      const delivered = vi.fn()
+      const { stream } = createSseClient({
+        url: "http://localhost/events",
+        signal: abort.signal,
+        sseIdleTimeout: 5,
+        sseDefaultRetryDelay: 0,
+        fetch: async () => (++calls === 1 ? late.promise : new Response('data: "current"\n\n')),
+      })
+      const next = stream.next().then(delivered)
+      await vi.advanceTimersByTimeAsync(6)
+      expect(delivered).toHaveBeenCalledWith({ done: false, value: "current" })
+      late.resolve(new Response(new ReadableStream({ cancel: cancelled })))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(cancelled).toHaveBeenCalledTimes(1)
+      await next
+      await stream.return(undefined)
+    } finally {
+      abort.abort()
+      vi.useRealTimers()
+    }
+  })
+
+  test.each(["responseValidator", "responseTransformer"] as const)("abort interrupts a stalled %s", async (hook) => {
+    vi.useFakeTimers()
+    const abort = new AbortController()
+    try {
+      const delivered = vi.fn()
+      const hookFn = vi.fn(() => new Promise<unknown>(() => {}))
+      const { stream } = createSseClient({
+        url: "http://localhost/events",
+        signal: abort.signal,
+        sseIdleTimeout: 0,
+        [hook]: hookFn,
+        fetch: async () => new Response('id: undelivered\ndata: {"ok":true}\n\n'),
+      })
+      const next = stream.next().then(delivered)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(hookFn).toHaveBeenCalledTimes(1)
+      abort.abort()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(delivered).toHaveBeenCalledWith({ done: true, value: undefined })
+      await next
+    } finally {
+      abort.abort()
+      vi.useRealTimers()
+    }
+  })
+
+  test.each(["fetch", "onRequest"])("idle timeout escapes a stalled %s that ignores cancellation", async (stage) => {
+    vi.useFakeTimers()
+    const abort = new AbortController()
+    try {
+      let calls = 0
+      const stalled = () => ++calls === 1
+      const received = vi.fn()
+      const { stream } = createSseClient({
+        url: "http://localhost/events",
+        signal: abort.signal,
+        sseIdleTimeout: 5,
+        sseDefaultRetryDelay: 0,
+        onRequest:
+          stage === "onRequest"
+            ? async (url, init) => {
+                if (stalled()) return new Promise<Request>(() => {})
+                return new Request(url, init)
+              }
+            : undefined,
+        fetch: async () => {
+          if (stage === "fetch" && stalled()) return new Promise<Response>(() => {})
+          return new Response('data: "recovered"\n\n')
+        },
+      })
+      const next = stream.next().then(received)
+      await vi.advanceTimersByTimeAsync(6)
+      expect(received).toHaveBeenCalledWith({ done: false, value: "recovered" })
+      await next
+      await stream.return(undefined)
+      expect(calls).toBe(2)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      abort.abort()
+      vi.useRealTimers()
+    }
+  })
+
+  test.each(["fetch", "onRequest"])("caller abort escapes a stalled %s without an idle timeout", async (stage) => {
+    vi.useFakeTimers()
+    const abort = new AbortController()
+    try {
+      const finished = vi.fn()
+      const { stream } = createSseClient({
+        url: "http://localhost/events",
+        signal: abort.signal,
+        sseIdleTimeout: 0,
+        onRequest: stage === "onRequest" ? () => new Promise<Request>(() => {}) : undefined,
+        fetch: () => new Promise<Response>(() => {}),
+      })
+      const next = stream.next().then(finished)
+      await vi.advanceTimersByTimeAsync(0)
+      abort.abort()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(finished).toHaveBeenCalledWith({ done: true, value: undefined })
+      await next
+    } finally {
+      abort.abort()
+      vi.useRealTimers()
+    }
+  })
+
+  test("does not deliver buffered frames after caller cancellation", async () => {
+    const abort = new AbortController()
+    const events: unknown[] = []
+    const { stream } = createSseClient({
+      url: "http://localhost/events",
+      signal: abort.signal,
+      sseIdleTimeout: 0,
+      onSseEvent: (event) => events.push(event.data),
+      fetch: async () => new Response('data: "first"\n\ndata: "stale"\n\n'),
+    })
+    await expect(stream.next()).resolves.toEqual({ done: false, value: "first" })
+    abort.abort()
+    await expect(stream.next()).resolves.toEqual({ done: true, value: undefined })
+    expect(events).toEqual(["first"])
+  })
+
+  test("does not advance the replay cursor past a rejected event", async () => {
+    let validations = 0
+    const cursors: Array<string | null> = []
+    const { stream } = createSseClient({
+      url: "http://localhost/events",
+      sseIdleTimeout: 0,
+      sseDefaultRetryDelay: 0,
+      responseValidator: async () => {
+        if (++validations === 2) throw new Error("temporary validation failure")
+      },
+      fetch: async (request) => {
+        const cursor = (request as Request).headers.get("Last-Event-ID")
+        cursors.push(cursor)
+        return new Response(
+          cursor === null
+            ? 'id: first\ndata: {"value":1}\n\nid: second\ndata: {"value":2}\n\n'
+            : cursor === "first"
+              ? 'id: second\ndata: {"value":2}\n\n'
+              : "",
+        )
+      },
+      sseMaxRetryAttempts: 1,
+    })
+    await expect(stream.next()).resolves.toEqual({ done: false, value: { value: 1 } })
+    const second = await stream.next()
+    await stream.return(undefined)
+    expect(cursors).toEqual([null, "first"])
+    expect(second).toEqual({ done: false, value: { value: 2 } })
+  })
+
   test("backs off consecutive failures after an unsuccessful stream", async () => {
     let fetchCalls = 0
     const sleepDelays: number[] = []

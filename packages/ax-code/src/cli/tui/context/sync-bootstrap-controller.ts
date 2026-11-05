@@ -1,7 +1,7 @@
 import { runTuiBackgroundTask, type TuiBackgroundTaskLogger } from "../util/background-task"
 
 export interface BootstrapController {
-  run: () => Promise<void>
+  run: (options?: { force?: boolean }) => Promise<void>
   runInBackground: () => void
 }
 
@@ -12,9 +12,21 @@ export function createBootstrapController(input: {
   logger?: TuiBackgroundTaskLogger
 }): BootstrapController {
   let inFlight: Promise<void> | undefined
+  let queued: Promise<void> | undefined
 
-  const run = () => {
-    if (inFlight) return inFlight
+  const run: BootstrapController["run"] = (options) => {
+    if (inFlight) {
+      if (!options?.force) return inFlight
+      // Recovery must read state after the disconnected run, even if that
+      // older request fails. Coalesce refreshes into one following run.
+      queued ??= inFlight
+        .catch(() => undefined)
+        .then(() => {
+          queued = undefined
+          return run()
+        })
+      return queued
+    }
     inFlight = Promise.resolve()
       .then(input.run)
       .finally(() => {

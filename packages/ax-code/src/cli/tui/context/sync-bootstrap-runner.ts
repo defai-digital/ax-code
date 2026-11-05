@@ -48,7 +48,11 @@ export async function runBootstrapPhaseTasks(input: BootstrapPhaseTaskInput) {
     }
   }
 
-  const summary = await settleBootstrapPhase(input.tasks, {
+  const tasks = input.tasks.map((task) => () => {
+    if (input.signal?.aborted) return Promise.resolve()
+    return task()
+  })
+  const summary = await settleBootstrapPhase(tasks, {
     onRejected: input.onRejected,
     concurrency: input.concurrency,
   })

@@ -220,7 +220,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       run: bootstrapFlow.run,
     })
     onCleanup(() => bootstrapFlow.stop())
-    const bootstrap = bootstrapController.run
+    const bootstrap = () => bootstrapController.run({ force: true })
     const startupCoordinator = createSyncStartupCoordinator({
       runBootstrapInBackground: () => bootstrapController.runInBackground(),
       debugEngineEnabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,

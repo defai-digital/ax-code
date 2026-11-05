@@ -90,6 +90,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     let last = 0
     let sseGeneration = 0
     let lastEventID: string | undefined
+    let pendingEventID: string | undefined
 
     const flush = () => {
       if (queue.length === 0) return
@@ -152,8 +153,9 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       void runResilientStream<TuiRuntimeEvent>({
         signal: outer.signal,
         isReadyEvent: (event) => event.type === "server.connected",
-        subscribe: (signal) =>
-          sdk.event.subscribe(
+        subscribe: (signal) => {
+          pendingEventID = lastEventID
+          return sdk.event.subscribe(
             {},
             {
               signal,
@@ -161,13 +163,20 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
               ...(lastEventID ? { headers: { "Last-Event-ID": lastEventID } } : {}),
               onSseEvent: (event) => {
                 if (!isCurrentStream() || signal.aborted) return
-                if (typeof event.id === "string" && event.id.length > 0) lastEventID = event.id
+                if (typeof event.id !== "string") return
+                pendingEventID = event.id || undefined
+                // Metadata-only frames have no yielded event to acknowledge.
+                if (event.data === undefined) lastEventID = pendingEventID
               },
             },
-          ),
+          )
+        },
         onEvent: (event) => {
           if (!isCurrentStream()) return
           handleEvent(event)
+          // Parsing precedes iterator delivery. A watchdog can interrupt that
+          // handoff, so only acknowledge data once it reaches the event queue.
+          lastEventID = pendingEventID
         },
         onStatus: (status) => {
           if (!isCurrentStream()) return

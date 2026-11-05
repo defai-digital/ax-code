@@ -119,8 +119,8 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   createTasks: (
     requests: SyncBootstrapAssemblyRequests,
     onProvidersReady: (failed: boolean) => void,
-    // True while no later run() has swapped in a new client (e.g. via
-    // sdk.setWorkspace() on a session/workspace switch). Deferred tasks keep
+    // True while this run is active and still uses the current client.
+    // Reconnects can supersede a run without changing clients. Deferred tasks keep
     // running in the background after run() itself has already returned (see
     // scheduleBackground below), so without this a slow LSP/MCP/VCS/formatter
     // response built against the old workspace's client could land after a
@@ -149,9 +149,11 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   })
   let activeRunAbort: AbortController | undefined
   let runTail: Promise<void> = Promise.resolve()
+  let stopped = false
 
   return {
     async run() {
+      if (stopped) return
       activeRunAbort?.abort()
       const runAbort = new AbortController()
       activeRunAbort = runAbort
@@ -177,12 +179,13 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
             // deferred/background tasks can detect a later run swapping in a
             // new one (workspace switch) instead of trusting a live read.
             const requestClient = resolveClient()
-            const isRequestCurrent = () => resolveClient() === requestClient
+            const isRequestCurrent = () => !runAbort.signal.aborted && resolveClient() === requestClient
             const requests = createSyncBootstrapRequests({
               wrap: input.wrap,
               client: requestClient,
               sessionListStart: now() - BOOTSTRAP_SESSION_LIST_WINDOW_MS,
               onSessionListSettled() {
+                if (!isRequestCurrent()) return
                 input.setSessionLoaded(true)
                 input.recordStartup("tui.startup.sessionListReady")
               },
@@ -227,10 +230,6 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
           } catch (error) {
             if (runAbort.signal.aborted) return
             await bootstrapLifecycle.fail(error, finishDeferredBootstrap, finishCoreBootstrap)
-          } finally {
-            if (activeRunAbort === runAbort) {
-              activeRunAbort = undefined
-            }
           }
         })
 
@@ -238,6 +237,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
       await run
     },
     stop() {
+      stopped = true
       activeRunAbort?.abort()
       activeRunAbort = undefined
     },

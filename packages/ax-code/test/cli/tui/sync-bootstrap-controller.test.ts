@@ -3,6 +3,27 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { createBootstrapController } from "../../../src/cli/tui/context/sync-bootstrap-controller"
 
 describe("tui sync bootstrap controller", () => {
+  test.each([false, true])("queues a reconnect refresh after an older run settles (failed=%s)", async (failed) => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    let calls = 0
+    const controller = createBootstrapController({
+      name: "reconnect-bootstrap",
+      async run() {
+        if (++calls !== 1) return
+        await gate
+        if (failed) throw new Error("disconnected")
+      },
+    })
+    const first = controller.run().catch(() => undefined)
+    await Promise.resolve()
+    const refresh = controller.run({ force: true })
+    expect(controller.run({ force: true })).toBe(refresh)
+    release()
+    await Promise.all([first, refresh])
+    expect(calls).toBe(2)
+  })
+
   test("deduplicates concurrent bootstrap runs and allows a new run after completion", async () => {
     let calls = 0
     let release: (() => void) | undefined

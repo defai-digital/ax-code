@@ -179,6 +179,7 @@ const startEventStream = async (input: { directory?: string }) => {
     signal,
   })
   let lastEventID: string | undefined
+  let pendingEventID: string | undefined
 
   const publishStatus = (status: StreamConnectionStatus) => {
     if (signal.aborted) return
@@ -218,8 +219,9 @@ const startEventStream = async (input: { directory?: string }) => {
   const done = runResilientStream<AxCodeEvent>({
     signal,
     isReadyEvent: (event) => event.type === "server.connected",
-    subscribe: (connectionSignal) =>
-      sdk.event.subscribe(
+    subscribe: (connectionSignal) => {
+      pendingEventID = lastEventID
+      return sdk.event.subscribe(
         {},
         {
           signal: connectionSignal,
@@ -227,13 +229,18 @@ const startEventStream = async (input: { directory?: string }) => {
           ...(lastEventID ? { headers: { "Last-Event-ID": lastEventID } } : {}),
           onSseEvent: (event) => {
             if (signal.aborted || connectionSignal.aborted) return
-            if (typeof event.id === "string" && event.id.length > 0) lastEventID = event.id
+            if (typeof event.id !== "string") return
+            pendingEventID = event.id || undefined
+            if (event.data === undefined) lastEventID = pendingEventID
           },
         },
-      ),
+      )
+    },
     onEvent: (event) => {
       if (signal.aborted) return
       coalescer.push(event)
+      // Do not acknowledge parsed frames discarded by an interrupted read.
+      lastEventID = pendingEventID
     },
     onStatus: publishStatus,
     onError: (error, status) => {

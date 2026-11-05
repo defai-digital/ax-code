@@ -1,5 +1,6 @@
 import { Log } from "@/util/log"
 import { parseJsonPayload } from "@/util/json-value"
+import { waitForAbort } from "@/util/abort"
 
 const log = Log.create({ service: "control-plane.sse" })
 const MAX_SSE_BUFFER_CHARS = 1024 * 1024
@@ -31,6 +32,7 @@ export async function parseSSE(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
   onEvent: (event: unknown) => void,
+  options: { onActivity?: () => void; onEventID?: (id: string) => void } = {},
 ) {
   const reader = body.getReader()
   const decoder = new TextDecoder()
@@ -64,7 +66,7 @@ export async function parseSSE(
         data.push(raw)
         continue
       }
-      if (key === "id") {
+      if (key === "id" && !raw.includes("\0")) {
         id = raw
         continue
       }
@@ -84,28 +86,31 @@ export async function parseSSE(
     }
 
     const text = data.join("\n")
-    if (!text) return
+    if (!text) {
+      if (id !== undefined) options.onEventID?.(id)
+      return
+    }
 
     // Separate the JSON.parse try from the onEvent try. The previous
     // single-try/catch swallowed any error thrown inside onEvent —
     // including real handler bugs — as if it were a parse failure,
     // silently dropping events with no feedback.
     onEvent(parseSSEData(text, { id, retry }) as Parameters<typeof onEvent>[0])
+    if (id !== undefined) options.onEventID?.(id)
   }
 
   try {
     while (!signal.aborted) {
-      const next = await reader.read()
+      const next = await waitForAbort(reader.read(), signal).catch((error) => {
+        if (signal.aborted) return { done: true as const, value: undefined }
+        throw error
+      })
       if (next.done) {
         flushTrailing = true
         break
       }
+      options.onActivity?.()
       const chunk = decoder.decode(next.value, { stream: true })
-      const nextSize = buf.length + chunk.length
-      if (nextSize > MAX_SSE_BUFFER_CHARS) {
-        log.warn("SSE buffer exceeded limit", { size: nextSize, max: MAX_SSE_BUFFER_CHARS })
-        throw new Error(`SSE buffer exceeded maximum size (${MAX_SSE_BUFFER_CHARS} chars)`)
-      }
       buf += chunk
 
       // A synchronous handler may abort after the first frame in this chunk.
@@ -115,10 +120,12 @@ export async function parseSSE(
         if (!boundary) break
         const idx = boundary.index
         const gap = boundary[0].length
+        checkBufferSize(idx + gap)
         const block = buf.slice(0, idx)
         buf = buf.slice(idx + gap)
         emit(block)
       }
+      checkBufferSize(buf.length)
     }
     if (!signal.aborted) flushTrailing = true
   } finally {
@@ -134,6 +141,13 @@ export async function parseSSE(
       // Funnel through the same guarded `cancel()` so an abort-driven
       // exit doesn't double-cancel.
       cancel()
+      reader.releaseLock()
     }
   }
+}
+
+function checkBufferSize(size: number) {
+  if (size <= MAX_SSE_BUFFER_CHARS) return
+  log.warn("SSE buffer exceeded limit", { size, max: MAX_SSE_BUFFER_CHARS })
+  throw new Error(`SSE buffer exceeded maximum size (${MAX_SSE_BUFFER_CHARS} chars)`)
 }

@@ -9,7 +9,10 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 
 const streamState = vi.hoisted(() => ({
   subscribe: undefined as ((signal: AbortSignal) => Promise<unknown>) | undefined,
-  subscriptions: [] as { headers?: Record<string, string>; onSseEvent: (event: { id: string }) => void }[],
+  subscriptions: [] as {
+    headers?: Record<string, string>
+    onSseEvent: (event: { id: string; data?: unknown }) => void
+  }[],
   active: 0,
   started: 0,
   emitted: [] as unknown[],
@@ -217,6 +220,42 @@ test("worker replay cursors ignore callbacks from an aborted connection", async 
     streamState.subscriptions[0].onSseEvent({ id: "stale-cursor" })
     await streamState.subscribe!(new AbortController().signal)
     expect(streamState.subscriptions[2].headers?.["Last-Event-ID"]).toBe("current-cursor")
+  } finally {
+    await rpc.shutdown()
+  }
+})
+
+test("worker replay cursors honor an empty SSE id reset", async () => {
+  const { rpc } = await import("@tui/worker")
+  streamState.subscriptions.length = 0
+  await rpc.setWorkspace({ workspaceID: "/workspace/reset-cursor" })
+  try {
+    await streamState.subscribe!(new AbortController().signal)
+    streamState.subscriptions[0].onSseEvent({ id: "previous-cursor" })
+    streamState.subscriptions[0].onSseEvent({ id: "" })
+    await streamState.subscribe!(new AbortController().signal)
+    expect(streamState.subscriptions[1].headers?.["Last-Event-ID"]).toBeUndefined()
+  } finally {
+    await rpc.shutdown()
+  }
+})
+
+test("worker replays parsed events interrupted before delivery", async () => {
+  const { rpc } = await import("@tui/worker")
+  streamState.subscriptions.length = 0
+  await rpc.setWorkspace({ workspaceID: "/workspace/delivery-cursor" })
+  try {
+    const first = new AbortController()
+    await streamState.subscribe!(first.signal)
+    streamState.subscriptions[0].onSseEvent({ id: "not-delivered", data: { type: "server.heartbeat" } })
+    first.abort()
+    await streamState.subscribe!(new AbortController().signal)
+    expect(streamState.subscriptions[1].headers?.["Last-Event-ID"]).toBeUndefined()
+    const event = { type: "server.heartbeat", properties: {} }
+    streamState.subscriptions[1].onSseEvent({ id: "delivered", data: event })
+    streamState.onEvent!(event)
+    await streamState.subscribe!(new AbortController().signal)
+    expect(streamState.subscriptions[2].headers?.["Last-Event-ID"]).toBe("delivered")
   } finally {
     await rpc.shutdown()
   }

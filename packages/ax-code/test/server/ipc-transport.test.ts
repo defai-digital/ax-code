@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Hono } from "hono"
 import { realpathSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -16,6 +16,148 @@ import {
   writeIpcMessage,
   type IpcMessage,
 } from "../../src/server/ipc-protocol"
+
+function eventConnection(fetch: (request: Request) => Promise<Response>, options: { stalledWrites?: boolean } = {}) {
+  const disconnected = Promise.withResolvers<void>()
+  const frames: IpcMessage[] = []
+  const socket = {
+    destroyed: false,
+    write(chunk: Buffer, callback: (error?: Error) => void) {
+      frames.push(...decodeIpcFrames(chunk).messages)
+      if (!options.stalledWrites) callback()
+      return true
+    },
+    destroy() {
+      socket.destroyed = true
+      disconnected.resolve()
+    },
+    async *[Symbol.asyncIterator](): AsyncGenerator<Buffer> {
+      await disconnected.promise
+    },
+  }
+  const connection = new IpcConnection(fetch, socket as unknown as Socket)
+  const handled = connection.handle()
+  return {
+    frames,
+    isClosed: () => socket.destroyed,
+    async close() {
+      disconnected.resolve()
+      await handled
+    },
+  }
+}
+
+describe("ipc event subscription recovery", () => {
+  test("a peer that stops reading is disconnected without accumulating new subscriptions", async () => {
+    vi.useFakeTimers()
+    let calls = 0
+    const connection = eventConnection(
+      async () => {
+        calls++
+        return new Response('data: {"type":"server.connected","properties":{}}\n\n')
+      },
+      { stalledWrites: true },
+    )
+    try {
+      await vi.advanceTimersByTimeAsync(60_251)
+      expect(connection.isClosed()).toBe(true)
+      expect(calls).toBe(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      await connection.close()
+      vi.useRealTimers()
+    }
+  })
+
+  test("SSE CRLF framing survives every transport split", async () => {
+    vi.useFakeTimers()
+    const event = { type: "server.connected", properties: { split: true } }
+    const bytes = new TextEncoder().encode(`id: cursor\r\ndata: ${JSON.stringify(event)}\r\n\r\n`)
+    try {
+      for (let split = 1; split < bytes.length; split++) {
+        const connection = eventConnection(
+          async () =>
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  controller.enqueue(bytes.slice(0, split))
+                  controller.enqueue(bytes.slice(split))
+                  controller.close()
+                },
+              }),
+            ),
+        )
+        try {
+          await vi.advanceTimersByTimeAsync(0)
+          expect(connection.frames, `split ${split}`).toEqual([{ type: "event", event }])
+        } finally {
+          await connection.close()
+          await vi.advanceTimersByTimeAsync(0)
+        }
+      }
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("disconnect cancels an idle SSE subscription immediately", async () => {
+    const cancelled = vi.fn()
+    let request!: Request
+    const connection = eventConnection(async (input) => {
+      request = input
+      return new Response(new ReadableStream({ cancel: cancelled }))
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await connection.close()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(request.signal.aborted).toBe(true)
+    expect(cancelled).toHaveBeenCalledTimes(1)
+  })
+
+  test("retries temporary HTTP failures and resumes the delivered cursor", async () => {
+    vi.useFakeTimers()
+    let calls = 0
+    const cursors: Array<string | null> = []
+    const cancelled = vi.fn()
+    const connection = eventConnection(async (request) => {
+      cursors.push(request.headers.get("Last-Event-ID"))
+      if (++calls === 1) return new Response(new ReadableStream({ cancel: cancelled }), { status: 503 })
+      if (calls === 2) return new Response('id: delivered\ndata: {"type":"server.connected","properties":{}}\n\n')
+      return new Response(new ReadableStream())
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(501)
+      expect(calls).toBe(3)
+      expect(cursors).toEqual([null, null, "delivered"])
+      expect(cancelled).toHaveBeenCalledTimes(1)
+      expect(connection.frames).toHaveLength(1)
+    } finally {
+      await connection.close()
+      vi.useRealTimers()
+    }
+  })
+
+  test.each(["fetch", "idle"])("recovers a stalled %s and stops cleanly", async (stage) => {
+    vi.useFakeTimers()
+    let calls = 0
+    const connection = eventConnection(async () => {
+      calls++
+      if (stage === "fetch") return new Promise<Response>(() => {})
+      return new Response(new ReadableStream())
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(stage === "fetch" ? 10_251 : 60_251)
+      expect(calls).toBe(2)
+      await connection.close()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      await connection.close()
+      vi.useRealTimers()
+    }
+  })
+})
 
 describe("ipc server transport", () => {
   let socketPath: string
