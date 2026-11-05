@@ -19,6 +19,7 @@ changes belong to AX Coder.
 - Reject stale runtime state and preserve refresh requests during reconnects.
 - Keep prompt history ordered and isolated from request, plugin, and composer mutations.
 - Deliver CR-terminated IPC events immediately, preserve split CRLF framing, and bound complete and partial upstream SSE frames without limiting aggregate replay chunks.
+- Bound cached provider SDK configurations when endpoints or routing headers change repeatedly.
 
 ## [7.30.16] - 2026-11-03
 

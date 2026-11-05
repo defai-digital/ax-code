@@ -107,7 +107,7 @@ export namespace Provider {
   // was itself re-initialized.
   const modelCacheGenerations = new Map<string, number>()
   const MODEL_CACHE_INVALIDATION_RETRY_LIMIT = 8
-  const MODEL_LANGUAGE_CACHE_MAX_ENTRIES = 512
+  const MODEL_CACHE_MAX_ENTRIES = 512
 
   function currentModelCacheGeneration(): number {
     try {
@@ -117,13 +117,12 @@ export namespace Provider {
     }
   }
 
-  function cacheLanguage(cache: Map<string, Lang>, key: string, language: Lang) {
-    // Move refreshed entries to the end and evict least-recently-cached models.
-    // Custom providers can expose an unbounded model catalog, so this process-wide
-    // cache must not retain every model ever selected.
+  function cacheModelValue<T>(cache: Map<string, T>, key: string, value: T): void {
+    // Bound both language models and SDK configurations. Dynamic endpoints or
+    // routing headers must not retain every configuration selected in an instance.
     cache.delete(key)
-    cache.set(key, language)
-    while (cache.size > MODEL_LANGUAGE_CACHE_MAX_ENTRIES) {
+    cache.set(key, value)
+    while (cache.size > MODEL_CACHE_MAX_ENTRIES) {
       const oldest = cache.keys().next().value
       if (oldest === undefined) break
       cache.delete(oldest)
@@ -1362,7 +1361,7 @@ export namespace Provider {
             name: model.providerID,
             ...options,
           })
-          s.sdk.set(key, loaded)
+          cacheModelValue(s.sdk, key, loaded)
           return loaded
         }
 
@@ -1466,7 +1465,7 @@ export namespace Provider {
           name: model.providerID,
           ...options,
         })
-        s.sdk.set(key, loaded)
+        cacheModelValue(s.sdk, key, loaded)
         return loaded as SDK
       })()
 
@@ -1597,7 +1596,7 @@ export namespace Provider {
           model,
           connectionOptions(model, provider.options, s.varsLoaders[model.providerID]),
         )
-        if (s.generation === currentModelCacheGeneration()) cacheLanguage(s.models, key, language as Lang)
+        if (s.generation === currentModelCacheGeneration()) cacheModelValue(s.models, key, language as Lang)
         return language as Lang
       }
 
@@ -1618,7 +1617,7 @@ export namespace Provider {
           model,
           connectionOptions(model, provider.options, s.varsLoaders[model.providerID]),
         )
-        if (s.generation === currentModelCacheGeneration()) cacheLanguage(s.models, key, language as Lang)
+        if (s.generation === currentModelCacheGeneration()) cacheModelValue(s.models, key, language as Lang)
         return language as Lang
       } catch (e) {
         if (e instanceof NoSuchModelError)
