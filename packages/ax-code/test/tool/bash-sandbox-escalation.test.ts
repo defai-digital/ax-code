@@ -89,6 +89,22 @@ describe("detectSandboxDenial", () => {
     )
   })
 
+  test("treats EROFS as a bubblewrap denial only", () => {
+    // bubblewrap mounts protected paths (.git) read-only, so a git config write fails with
+    // EROFS (exit 255) instead of Seatbelt's EPERM.
+    const bwrap = { ...base, exit: 255, wrap: { ...seatbeltWrap, mechanism: "bubblewrap" as const } }
+    const erofs = "error: could not lock config file .git/config: Read-only file system"
+    expect(detectSandboxDenial({ ...bwrap, output: erofs })).toEqual({
+      mechanism: "bubblewrap",
+      evidence: "Read-only file system",
+    })
+    // Seatbelt never produces EROFS for its denials; do not prompt for it there.
+    expect(detectSandboxDenial({ ...base, exit: 255, output: erofs })).toBeUndefined()
+    // The read-only isolation floor and successful runs still never escalate.
+    expect(detectSandboxDenial({ ...bwrap, output: erofs, isolation: { ...bwrap.isolation!, mode: "read-only" } })).toBeUndefined()
+    expect(detectSandboxDenial({ ...bwrap, exit: 0, output: erofs })).toBeUndefined()
+  })
+
   test("never matches ordinary command failures", () => {
     // EACCES from plain file permissions — explicitly out of scope.
     expect(detectSandboxDenial({ ...base, output: "cat: secret: Permission denied" })).toBeUndefined()

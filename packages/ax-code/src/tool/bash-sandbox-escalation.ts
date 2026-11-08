@@ -42,6 +42,11 @@ export type SandboxDenial = {
 //   is deliberately NOT matched: it fires constantly outside any sandbox.
 const SANDBOX_MECHANISM_PATTERNS: RegExp[] = [/^sandbox-exec: /m, /\bdeny\(\d+\) [a-z][a-z-]+/, /^bwrap: /m]
 const EPERM_PATTERN = /Operation not permitted/g
+// bubblewrap mounts everything outside the workspace and temp roots read-only and
+// re-masks protected paths (.git, .ax-code) read-only, so its denials surface as EROFS
+// ("could not lock config file .git/config: Read-only file system") rather than EPERM.
+// Matched only for bubblewrap-wrapped runs; Seatbelt denials stay on EPERM.
+const BUBBLEWRAP_EROFS_PATTERN = /Read-only file system/
 // Seatbelt allows `signal`; these utilities fail with EPERM for ordinary
 // permission reasons even with the wrap off. Matching them would prompt
 // isolation_escalation, then retry unsandboxed and fail the same way.
@@ -84,6 +89,10 @@ export function detectSandboxDenial(input: {
   if (input.exit === null || input.exit === 0) return undefined
   for (const pattern of SANDBOX_MECHANISM_PATTERNS) {
     const match = pattern.exec(input.output)
+    if (match) return { mechanism: input.wrap.mechanism, evidence: match[0] }
+  }
+  if (input.wrap.mechanism === "bubblewrap") {
+    const match = BUBBLEWRAP_EROFS_PATTERN.exec(input.output)
     if (match) return { mechanism: input.wrap.mechanism, evidence: match[0] }
   }
   for (const match of input.output.matchAll(EPERM_PATTERN)) {
