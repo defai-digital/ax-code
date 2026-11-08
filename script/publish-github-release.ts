@@ -9,7 +9,12 @@ import { AX_CODE_MINISIGN_PUBLIC_KEY_FILE, expandHome } from "./sign-release-ass
 import { unapprovedTrackedInternalPaths } from "./repository-policy"
 import { downloadVerifiedReleaseAssets, parseReleaseDownloadAssets } from "./download-release-assets"
 
-import { releaseArchives, releasePlatformPolicy, supportsLegacyWindowsArm64 } from "./release-platform-policy"
+import {
+  releaseArchives,
+  releaseLibraryArchives,
+  releasePlatformPolicy,
+  supportsLegacyWindowsArm64,
+} from "./release-platform-policy"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
 
@@ -75,6 +80,11 @@ export function expectedReleaseMetadataAssets() {
   return ["ax-minisign.pub", "install.sha256", "install.ps1.sha256"]
 }
 
+/** Signed library tarballs with a SHA-256 file each; absent from releases before the policy cutover. */
+export function expectedReleaseLibraryAssets(version?: string) {
+  return releaseLibraryArchives(version).flatMap((asset) => [asset, `${asset}.minisig`, `${asset}.sha256`])
+}
+
 export function expectedReleaseAssets(version?: string) {
   return [
     ...expectedReleaseArchives(version),
@@ -82,6 +92,7 @@ export function expectedReleaseAssets(version?: string) {
     ...expectedReleaseInstallerAssets(),
     ...expectedReleaseInstallerSignatures(),
     ...expectedReleaseMetadataAssets(),
+    ...expectedReleaseLibraryAssets(version),
   ]
 }
 

@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- Releases attach the Worker-hosted diff engine as a signed library tarball (`ax-code-diff-wasm.tgz`, with
+  `.minisig` and `.sha256`) so AX Code Desktop can pin it by release tag and digest. The release workflow builds it,
+  verifies an offline install, and checks its digest and signature before publishing.
+
 ### Fixed
 
 - Linux bubblewrap isolation binds the host temp roots writable instead of masking them with an empty tmpfs, so sandboxed commands see existing temp files and keep what they write there, matching the macOS Seatbelt backend.

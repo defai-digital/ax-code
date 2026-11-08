@@ -14,6 +14,7 @@ import {
   expectedReleaseAssets,
   expectedReleaseInstallerAssets,
   expectedReleaseInstallerSignatures,
+  expectedReleaseLibraryAssets,
   expectedReleaseMetadataAssets,
   expectedReleaseSignatures,
   isPrerelease,
@@ -211,12 +212,27 @@ describe("publish-github-release helpers", () => {
         ),
       ).toEqual(["ax-code-windows-arm64.zip", "ax-code-windows-arm64.zip.minisig"])
     }
-    for (const version of ["7.24.6", "v7.24.6-beta.1", "7.25.0", "8.0.0"]) {
+    for (const version of ["7.24.6", "v7.24.6-beta.1", "7.25.0", "7.30.17"]) {
       expect(expectedReleaseAssets(version)).toHaveLength(15)
       expect(expectedReleaseArchives(version)).not.toContain("ax-code-windows-arm64.zip")
     }
-    expect(expectedReleaseAssets()).toHaveLength(15)
+    expect(expectedReleaseAssets("8.0.0")).toHaveLength(18)
+    expect(expectedReleaseAssets()).toHaveLength(18)
     expect(() => expectedReleaseAssets("latest")).toThrow("Invalid release version")
+  })
+
+  test("requires the signed diff Wasm library from the library cutover onward", () => {
+    const library = ["ax-code-diff-wasm.tgz", "ax-code-diff-wasm.tgz.minisig", "ax-code-diff-wasm.tgz.sha256"]
+    for (const version of ["7.30.17", "v7.30.17", "7.30.18-beta.1", "7.24.5"]) {
+      expect(expectedReleaseLibraryAssets(version)).toEqual(version === "7.30.18-beta.1" ? library : [])
+    }
+    for (const version of ["7.30.18", "v7.31.0", "8.0.0", undefined]) {
+      expect(expectedReleaseLibraryAssets(version)).toEqual(library)
+      expect(expectedReleaseAssets(version)).toEqual(expect.arrayContaining(library))
+    }
+    const current = expectedReleaseAssets()
+    expect(missingReleaseAssets(current.filter((name) => !name.startsWith("ax-code-diff-wasm")), current)).toEqual(library)
+    expect(() => expectedReleaseLibraryAssets("latest")).toThrow("Invalid release version")
   })
 
   test("reports missing release assets", () => {
@@ -239,6 +255,9 @@ describe("publish-github-release helpers", () => {
       "ax-minisign.pub",
       "install.sha256",
       "install.ps1.sha256",
+      "ax-code-diff-wasm.tgz",
+      "ax-code-diff-wasm.tgz.minisig",
+      "ax-code-diff-wasm.tgz.sha256",
     ])
   })
 

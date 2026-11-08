@@ -541,8 +541,68 @@ jobs:
           path: packages/ax-code/dist/
           retention-days: 1
 
+  diff-wasm-package:
+    # Library tarball for products that consume the canonical diff engine (AX Code
+    # Desktop) by release tag and digest. docs/release/platforms.json lists it under
+    # libraryArchives; publish signs, uploads and verifies it with the runtime assets.
+    needs: [guard, validate]
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: rustup target add wasm32-unknown-unknown --toolchain stable
+      - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - run: cargo test --manifest-path crates/Cargo.toml -p ax-code-diff-core -p ax-code-diff
+      - run: pnpm build:native diff
+      - run: pnpm --dir packages/ax-code-diff-wasm run build
+      - run: pnpm --dir packages/ax-code-diff-wasm run typecheck
+      - run: pnpm --dir packages/ax-code-diff-wasm test
+
+      - name: Verify offline tarball consumer
+        run: pnpm --dir packages/ax-code-diff-wasm run test:tarball
+
+      - name: Pack diff Wasm library
+        run: |
+          set -euo pipefail
+          PACK_DIR="$RUNNER_TEMP/diff-wasm-pack"
+          OUT_DIR="$RUNNER_TEMP/diff-wasm-release"
+          mkdir -p "$PACK_DIR" "$OUT_DIR"
+          pnpm --dir packages/ax-code-diff-wasm pack --pack-destination "$PACK_DIR"
+          shopt -s nullglob
+          archives=("$PACK_DIR"/*.tgz)
+          if [ "${#archives[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one packed diff Wasm tarball, found ${#archives[@]}"
+            exit 1
+          fi
+          # A stable asset name, like the runtime archives; consumers pin the release tag and digest.
+          cp "${archives[0]}" "$OUT_DIR/ax-code-diff-wasm.tgz"
+          (cd "$OUT_DIR" && shasum -a 256 ax-code-diff-wasm.tgz > ax-code-diff-wasm.tgz.sha256)
+          cat "$OUT_DIR/ax-code-diff-wasm.tgz.sha256"
+          echo "DIFF_WASM_RELEASE_DIR=$OUT_DIR" >> "$GITHUB_ENV"
+
+      - name: Upload diff Wasm library artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: diff-wasm-package
+          path: ${{ env.DIFF_WASM_RELEASE_DIR }}
+          if-no-files-found: error
+          # Intermediate: publish signs and uploads it within the same run.
+          retention-days: 1
+
   publish:
-    needs: [guard, build]
+    needs: [guard, build, diff-wasm-package]
     # Runs on macOS so minisign can retrieve the signing passphrase from the
     # Apple Keychain instead of a plaintext environment variable. The
     # passphrase is injected into the ephemeral runner's login Keychain at
@@ -625,7 +685,7 @@ jobs:
           # minisignPasswordFromKeychain() in sign-release-assets.ts.
           pnpm exec tsx script/sign-release-assets.ts --dist-dir packages/ax-code/dist --secret-key "$AX_CODE_MINISIGN_KEY_DIR/ax.minisign.key" --public-key "$AX_CODE_MINISIGN_KEY_DIR/ax.pub"
           shopt -s nullglob
-          signable_assets=(packages/ax-code/dist/install packages/ax-code/dist/install.ps1 packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip)
+          signable_assets=(packages/ax-code/dist/install packages/ax-code/dist/install.ps1 packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip packages/ax-code/dist/*.tgz)
           for asset in "${signable_assets[@]}"; do
             if [ ! -f "${asset}.minisig" ]; then
               echo "::error::missing minisign signature for ${asset}"
@@ -698,6 +758,9 @@ jobs:
             packages/ax-code/dist/ax-code-linux-x64.tar.gz.minisig
             packages/ax-code/dist/ax-code-linux-arm64.tar.gz
             packages/ax-code/dist/ax-code-linux-arm64.tar.gz.minisig
+            packages/ax-code/dist/ax-code-diff-wasm.tgz
+            packages/ax-code/dist/ax-code-diff-wasm.tgz.minisig
+            packages/ax-code/dist/ax-code-diff-wasm.tgz.sha256
           )
           for file in "${files[@]}"; do
             if [ ! -f "$file" ]; then
@@ -724,6 +787,9 @@ jobs:
           EXPECTED_PS1_DIGEST="$(awk '{print $1}' "$VERIFY_DIR/install.ps1.sha256")"
           ACTUAL_PS1_DIGEST="$(shasum -a 256 "$VERIFY_DIR/install.ps1" | awk '{print $1}')"
           test "$EXPECTED_PS1_DIGEST" = "$ACTUAL_PS1_DIGEST"
+          EXPECTED_DIFF_WASM_DIGEST="$(awk '{print $1}' "$VERIFY_DIR/ax-code-diff-wasm.tgz.sha256")"
+          ACTUAL_DIFF_WASM_DIGEST="$(shasum -a 256 "$VERIFY_DIR/ax-code-diff-wasm.tgz" | awk '{print $1}')"
+          test "$EXPECTED_DIFF_WASM_DIGEST" = "$ACTUAL_DIFF_WASM_DIGEST"
 
           assets=(
             "$VERIFY_DIR/install"
@@ -732,6 +798,7 @@ jobs:
             "$VERIFY_DIR/ax-code-windows-x64.zip"
             "$VERIFY_DIR/ax-code-linux-x64.tar.gz"
             "$VERIFY_DIR/ax-code-linux-arm64.tar.gz"
+            "$VERIFY_DIR/ax-code-diff-wasm.tgz"
           )
           for asset in "${assets[@]}"; do
             signature="${asset}.minisig"
