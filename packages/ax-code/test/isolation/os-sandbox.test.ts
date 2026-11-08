@@ -4,6 +4,7 @@ import { Isolation } from "../../src/isolation"
 import { tmpdir } from "../fixture/fixture"
 import fs from "fs"
 import os from "os"
+import path from "path"
 
 // Clear both before and after so tests asserting on the default backend/mode
 // are not skewed by AX_CODE_ISOLATION_MODE / _NETWORK inherited from the parent
@@ -25,6 +26,44 @@ describe("OsSandbox.resolveBackend", () => {
   test("env overrides config", () => {
     expect(OsSandbox.resolveBackend({ configBackend: "app", envBackend: "os" })).toBe("os")
     expect(OsSandbox.resolveBackend({ configBackend: "os", envBackend: "auto" })).toBe("auto")
+  })
+})
+
+describe("OsSandbox.buildBubblewrapArgs", () => {
+  const input = (workspace: string) => ({
+    command: "true",
+    shell: "/bin/sh",
+    cwd: workspace,
+    workspaceRoot: workspace,
+    worktree: workspace,
+    network: false,
+    protectedPaths: [path.join(workspace, ".git")],
+  })
+
+  test("binds host temp roots writable instead of masking them with an empty tmpfs", async () => {
+    await using tmp = await tmpdir()
+    const args = OsSandbox.buildBubblewrapArgs(input(tmp.path))
+    const tmpRoot = OsSandbox.canonicalPath(os.tmpdir())
+    // Existing temp content stays visible and writes persist, as with Seatbelt.
+    const bind = args.findIndex((arg, index) => arg === "--bind" && args[index + 1] === tmpRoot)
+    expect(bind).toBeGreaterThan(-1)
+    expect(args[bind + 2]).toBe(tmpRoot)
+    expect(args.some((arg, index) => arg === "--tmpfs" && args[index + 1] === "/tmp")).toBe(false)
+    expect(args.some((arg, index) => arg === "--tmpfs" && args[index + 1] === tmpRoot)).toBe(false)
+  })
+
+  test("re-masks protected paths after the writable binds and unshares the network", async () => {
+    await using tmp = await tmpdir()
+    fs.mkdirSync(path.join(tmp.path, ".git"))
+    const args = OsSandbox.buildBubblewrapArgs(input(tmp.path))
+    const workspace = OsSandbox.canonicalPath(tmp.path)
+    const git = OsSandbox.canonicalPath(path.join(tmp.path, ".git"))
+    const workspaceBind = args.findIndex((arg, index) => arg === "--bind" && args[index + 1] === workspace)
+    const protectedBind = args.findIndex((arg, index) => arg === "--ro-bind" && args[index + 1] === git)
+    expect(workspaceBind).toBeGreaterThan(-1)
+    expect(protectedBind).toBeGreaterThan(workspaceBind)
+    expect(args).toContain("--unshare-net")
+    expect(args.slice(-5)).toEqual(["--chdir", workspace, "/bin/sh", "-c", "true"])
   })
 })
 

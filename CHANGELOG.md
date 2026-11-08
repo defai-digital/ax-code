@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Linux bubblewrap isolation binds the host temp roots writable instead of masking them with an empty tmpfs, so sandboxed commands see existing temp files and keep what they write there, matching the macOS Seatbelt backend.
+- Linux bubblewrap denials that surface as `Read-only file system` (for example a `git config` write to a protected `.git/config`) now offer the one-time sandbox escalation retry, as Seatbelt `Operation not permitted` denials already did.
+
 ## [7.30.17] - 2026-11-05
 
 ### Changed

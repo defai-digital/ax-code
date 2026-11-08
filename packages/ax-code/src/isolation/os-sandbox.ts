@@ -264,6 +264,46 @@ ${networkRule}
     return out
   }
 
+  /**
+   * bubblewrap arguments: the host filesystem read-only, the workspace and temp roots
+   * writable, protected paths re-masked read-only, and the network unshared when disabled.
+   */
+  export function buildBubblewrapArgs(input: WrapInput): string[] {
+    const roots = uniqueRoots(
+      [input.workspaceRoot, input.worktree, input.cwd].filter(Boolean).map((p) => canonicalPath(p as string)),
+    )
+    const args: string[] = ["--die-with-parent", "--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev"]
+    // Mirror the Seatbelt backend's tempWriteRoots() allowance: bind the host temp roots
+    // (os.tmpdir(), TMPDIR/TMP/TEMP, /tmp, /var/tmp) writable rather than masking them with
+    // an empty tmpfs. A tmpfs hid existing temp content from the command (a config file or
+    // fixture under /tmp read as missing) and discarded whatever it wrote there on exit,
+    // while the app-layer policy and Seatbelt both treat these roots as readable and writable.
+    for (const tmpRoot of tempWriteRoots()) {
+      if (fs.existsSync(tmpRoot)) args.push("--bind", tmpRoot, tmpRoot)
+    }
+    for (const root of roots) {
+      args.push("--bind", root, root)
+    }
+    // Re-mask protected paths after the writable workspace binds. Existing
+    // paths retain their contents read-only; missing paths become empty,
+    // read-only mount points so the command cannot create them later.
+    const protectedPaths = uniqueRoots((input.protectedPaths ?? []).map(canonicalPath))
+    for (const protectedPath of protectedPaths) {
+      if (fs.existsSync(protectedPath)) {
+        args.push("--ro-bind", protectedPath, protectedPath)
+      } else {
+        // An empty tmpfs masks a not-yet-created protected directory without
+        // creating that directory in the writable host bind.
+        args.push("--tmpfs", protectedPath, "--remount-ro", protectedPath)
+      }
+    }
+    if (!input.network) {
+      args.push("--unshare-net")
+    }
+    args.push("--chdir", canonicalPath(input.cwd), input.shell, "-c", input.command)
+    return args
+  }
+
   export function wrapCommand(input: WrapInput): WrapResult {
     const availability = probeAvailability()
     if (!availability.available) {
@@ -303,53 +343,8 @@ ${networkRule}
       }
     }
 
-    // bubblewrap: unshare net when network disabled; bind workspace RW, rest RO
     const bwrap = resolveSandboxBinary("linux", "bwrap") ?? "bwrap"
-    const roots = uniqueRoots(
-      [input.workspaceRoot, input.worktree, input.cwd].filter(Boolean).map((p) => canonicalPath(p as string)),
-    )
-    const args: string[] = [
-      "--die-with-parent",
-      "--ro-bind",
-      "/",
-      "/",
-      "--proc",
-      "/proc",
-      "--dev",
-      "/dev",
-      "--tmpfs",
-      "/tmp",
-    ]
-    // Mirror the Seatbelt backend's tempWriteRoots() allowance: TMPDIR/TMP/TEMP
-    // (and os.tmpdir()) commonly resolve outside /tmp — containers, systemd
-    // PrivateTmp, custom CI temp dirs. Without this, a command writing there
-    // (mktemp, a build tool staging under $TMPDIR) hits the read-only
-    // `--ro-bind / /` base even though the app-layer isolation policy and the
-    // Seatbelt backend both intend to allow it.
-    for (const tmpRoot of tempWriteRoots()) {
-      if (tmpRoot === "/tmp") continue
-      if (fs.existsSync(tmpRoot)) args.push("--tmpfs", tmpRoot)
-    }
-    for (const root of roots) {
-      args.push("--bind", root, root)
-    }
-    // Re-mask protected paths after the writable workspace binds. Existing
-    // paths retain their contents read-only; missing paths become empty,
-    // read-only mount points so the command cannot create them later.
-    const protectedPaths = uniqueRoots((input.protectedPaths ?? []).map(canonicalPath))
-    for (const protectedPath of protectedPaths) {
-      if (fs.existsSync(protectedPath)) {
-        args.push("--ro-bind", protectedPath, protectedPath)
-      } else {
-        // An empty tmpfs masks a not-yet-created protected directory without
-        // creating that directory in the writable host bind.
-        args.push("--tmpfs", protectedPath, "--remount-ro", protectedPath)
-      }
-    }
-    if (!input.network) {
-      args.push("--unshare-net")
-    }
-    args.push("--chdir", canonicalPath(input.cwd), input.shell, "-c", input.command)
+    const args = buildBubblewrapArgs(input)
 
     return {
       active: true,
