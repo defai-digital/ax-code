@@ -6,5 +6,9 @@
     "ax-code-linux-x64.tar.gz",
     "ax-code-linux-arm64.tar.gz"
   ],
-  "legacyWindowsArm64Archive": "ax-code-windows-arm64.zip"
+  "legacyWindowsArm64Archive": "ax-code-windows-arm64.zip",
+  "libraryArchivesFrom": "7.30.18",
+  "libraryArchives": [
+    "ax-code-diff-wasm.tgz"
+  ]
 }

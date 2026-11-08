@@ -4,6 +4,7 @@ import {
   expectedReleaseArchives,
   expectedReleaseInstallerAssets,
   expectedReleaseInstallerSignatures,
+  expectedReleaseLibraryAssets,
   expectedReleaseMetadataAssets,
   expectedReleaseSignatures,
 } from "./publish-github-release"
@@ -153,8 +154,26 @@ describe("release asset workflow", () => {
       expect(verify).toContain(asset)
     }
 
+    for (const asset of expectedReleaseLibraryAssets()) expect(upload).toContain(asset)
+    expect(verify).toContain('"$VERIFY_DIR/ax-code-diff-wasm.tgz"')
+    expect(verify).toContain("EXPECTED_DIFF_WASM_DIGEST")
     expect(upload).toContain('if [ ! -f "$file" ]')
     expect(upload).not.toMatch(/dist\/\*\.(?:zip|tar\.gz)/)
     expect(verify).not.toMatch(/VERIFY_DIR"\/\*\.(?:zip|tar\.gz)/)
+  })
+
+  test("builds, consumer-tests and packs the diff Wasm library before publish signs it", () => {
+    const job = workflow.slice(workflow.indexOf("\n  diff-wasm-package:"), workflow.indexOf("\n  publish:"))
+    const build = job.indexOf("pnpm --dir packages/ax-code-diff-wasm run build")
+    const consumer = job.indexOf("pnpm --dir packages/ax-code-diff-wasm run test:tarball")
+    const pack = job.indexOf("pnpm --dir packages/ax-code-diff-wasm pack")
+    expect(build).toBeGreaterThan(-1)
+    expect(consumer).toBeGreaterThan(build)
+    expect(pack).toBeGreaterThan(consumer)
+    expect(job).toContain("shasum -a 256 ax-code-diff-wasm.tgz > ax-code-diff-wasm.tgz.sha256")
+    expect(job).toContain("name: diff-wasm-package")
+    expect(workflow).toMatch(/\n  publish:\n    needs: \[guard, build, diff-wasm-package\]/)
+    const signing = workflow.slice(workflow.indexOf("- name: Sign release assets"), workflow.indexOf("- name: Clean up Keychain passphrase"))
+    expect(signing).toContain("packages/ax-code/dist/*.tgz")
   })
 })

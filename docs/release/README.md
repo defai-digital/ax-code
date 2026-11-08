@@ -56,3 +56,9 @@ changes and signed packages are published separately in [AX Code Desktop release
 - [AX Code v7.2.0](notes-v7.2.0.md)
 
 Windows distributions support AMD64 (x64) only starting with v7.24.6. Earlier signed Windows ARM64 artifacts remain immutable. The [release platform policy](platforms.json) defines the version boundary and required archive inventory: 15 required distribution assets from v7.24.6, compared with 17 for earlier releases. Linux arm64 and Apple Silicon macOS remain supported.
+
+Starting with v7.30.18, each release also carries the Worker-hosted diff engine as a library tarball for products that
+consume it by tag and digest, such as AX Code Desktop: `ax-code-diff-wasm.tgz` with its minisign signature and
+`ax-code-diff-wasm.tgz.sha256`. The release workflow builds it, runs the offline tarball consumer check, then signs,
+uploads and verifies it with the runtime assets. That brings the required inventory to 18 assets from v7.30.18. The
+`libraryArchivesFrom` and `libraryArchives` fields in the platform policy define the boundary.
