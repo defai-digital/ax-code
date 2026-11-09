@@ -6,6 +6,13 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- The Worker-hosted diff engine (`@ax-code/diff-wasm`) returns a coarser preview marked `approximate: true` instead of
+  rejecting when a large rewrite exhausts the edit-distance work budget. The common prefix and suffix stay exact,
+  unique-line anchors keep sparse edits as separate hunks, and the hunks still apply exactly. Previews within budget
+  are unchanged, byte, line, output and cancellation limits still reject, and the native CLI preview is unchanged.
+
 ## [7.30.18] - 2026-11-09
 
 ### Changed

@@ -7,7 +7,11 @@ const encoder = new TextEncoder()
 
 export type DuplicateGroup = { indices: number[]; score: number }
 export type Hunk = { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }
-export type DiffPreview = { version: 1; additions: number; deletions: number; hunks: Hunk[] }
+/**
+ * `approximate` is present, and `true`, only when the edit-distance work budget ran out and the
+ * preview fell back to a coarser but still exact-applying edit script. Exact previews omit it.
+ */
+export type DiffPreview = { version: 1; additions: number; deletions: number; hunks: Hunk[]; approximate?: true }
 export type PatchChunk = { old_lines: string[]; new_lines: string[]; change_context?: string; is_end_of_file?: boolean }
 export type Operation =
   | { type: "compare"; tokensJson: string; threshold: number }
@@ -138,6 +142,7 @@ export function decodePreview(json: string): DiffPreview {
     throw new Error("Invalid diff preview")
   for (const key of ["additions", "deletions"])
     if (!Number.isSafeInteger(value[key]) || (value[key] as number) < 0) throw new Error("Invalid diff counts")
+  if ("approximate" in value && value.approximate !== true) throw new Error("Invalid diff approximation flag")
   for (const hunk of value.hunks) validateHunk(hunk)
   return value as DiffPreview
 }
