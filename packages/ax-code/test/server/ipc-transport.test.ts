@@ -342,6 +342,33 @@ describe("ipc server transport", () => {
     )
   })
 
+  test.each(["disconnect", "shutdown"])("aborts routed requests on %s", async (action) => {
+    const started = Promise.withResolvers<Request>()
+    const cancelled = Promise.withResolvers<void>()
+    server = await listenIpc({
+      socketPath,
+      fetch: async (request) => {
+        if (new URL(request.url).pathname === "/global/event") return new Response(null, { status: 404 })
+        request.signal.addEventListener("abort", () => cancelled.resolve(), { once: true })
+        started.resolve(request)
+        await cancelled.promise
+        return Response.json(true)
+      },
+    })
+    const socket = await connectSocket(socketPath)
+    try {
+      await writeIpcMessage(socket, { type: "request", id: "pending", method: "GET", path: "/pending" })
+      const request = await started.promise
+      expect(request.signal.aborted).toBe(false)
+      if (action === "shutdown") await server.stop()
+      else socket.destroy()
+      await expect.poll(() => request.signal.aborted).toBe(true)
+    } finally {
+      cancelled.resolve()
+      socket.destroy()
+    }
+  })
+
   test("streams SSE events over IPC", async () => {
     const app = createTestApp()
     server = await listenIpc({ socketPath, fetch: app.fetch })

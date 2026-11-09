@@ -203,6 +203,7 @@ export class IpcConnection {
         method: message.method,
         headers,
         body,
+        signal: this.abortController.signal,
       }),
     )
   }
