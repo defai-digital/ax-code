@@ -270,6 +270,12 @@ are useful evidence; they do not establish the absence of all leaks.
 
 ### Paired performance comparison
 
+For representative application workloads and an isolated native/WASM Unicode
+width experiment, see [AX TUI performance and WASM evaluation](../../docs/guides/ax-tui-performance.md).
+Use `pnpm run bench:application`, `pnpm run build:wasm-experiment`, and
+`pnpm run bench:wasm-experiment`. The experiment is development-only and does
+not change the production renderer, ABI, or package exports.
+
 ```sh
 mkdir -p .internal/quality-comparison
 npm install --prefix .internal/quality-comparison --save-exact --no-audit --no-fund @opentui/core@0.6.6

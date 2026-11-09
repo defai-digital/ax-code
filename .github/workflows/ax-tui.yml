@@ -83,6 +83,16 @@ jobs:
         shell: bash
         run: pnpm --dir packages/ax-tui run test:native
 
+      - name: Build native and WASM width experiment
+        shell: bash
+        run: pnpm --dir packages/ax-tui run build:wasm-experiment
+
+      - name: Qualify native and WASM width parity
+        shell: bash
+        env:
+          AX_CODE_TUI_REQUIRE_TEXT_WIDTH_EXPERIMENT: "1"
+        run: pnpm --dir packages/ax-tui exec vitest run test/text-width-experiment.test.ts
+
       - name: Verify publication payload
         if: runner.os == 'Linux'
         run: pnpm --dir packages/ax-tui run check:package

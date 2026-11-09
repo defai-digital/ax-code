@@ -1,6 +1,7 @@
 // Import all test modules
 const text_buffer_tests = @import("tests/text-buffer_test.zig");
 const text_buffer_highlights_tests = @import("tests/text-buffer-highlights_test.zig");
+const text_buffer_spans_tests = @import("tests/text-buffer-spans_test.zig");
 const text_buffer_view_tests = @import("tests/text-buffer-view_test.zig");
 const text_buffer_selection_tests = @import("tests/text-buffer-selection_test.zig");
 const text_buffer_drawing_tests = @import("tests/text-buffer-drawing_test.zig");
@@ -43,6 +44,7 @@ const ansi_tests = @import("tests/ansi_test.zig");
 comptime {
     _ = text_buffer_tests;
     _ = text_buffer_highlights_tests;
+    _ = text_buffer_spans_tests;
     _ = text_buffer_view_tests;
     _ = text_buffer_selection_tests;
     _ = text_buffer_drawing_tests;

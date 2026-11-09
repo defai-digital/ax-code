@@ -1,8 +1,10 @@
 import { defineStruct, defineEnum } from "bun-ffi-structs"
-import { ptr, toArrayBuffer, type Pointer } from "../platform/ffi.js"
+import { toArrayBuffer, type Pointer } from "../platform/ffi.js"
 import { RGBA, normalizeColorValue } from "../lib/rgba.js"
 
-const rgbaPackTransform = (rgba?: RGBA) => (rgba ? ptr(rgba.buffer) : null)
+// Give the packer the view so it retains the backing storage with the packed
+// struct. A raw pointer alone lets temporary normalized colors be collected.
+const rgbaPackTransform = (rgba?: RGBA) => (rgba ? rgba.buffer : null)
 const rgbaUnpackTransform = (ptr?: Pointer) =>
   ptr ? RGBA.fromArray(new Uint16Array(toArrayBuffer(ptr, 0, 8))) : undefined
 
@@ -42,6 +44,16 @@ export const StyledChunkStruct = defineStruct(
   ],
   {
     mapValue: (chunk: StyledChunkInput): StyledChunkInput => {
+      // Renderables normally provide RGBA values already. The packer only
+      // reads this object, so avoid allocating wrappers and a copy per chunk.
+      if (
+        (chunk.fg == null || chunk.fg instanceof RGBA) &&
+        (chunk.bg == null || chunk.bg instanceof RGBA) &&
+        (!chunk.link || typeof chunk.link === "string")
+      ) {
+        return chunk
+      }
+
       const normalizedFg = normalizeColorValue(chunk.fg ?? null)
       const normalizedBg = normalizeColorValue(chunk.bg ?? null)
 

@@ -801,6 +801,43 @@ pub const UnifiedTextBuffer = struct {
 
         const highlights = self.line_highlights.items[line_idx].items;
 
+        // Styled text normally supplies ordered, disjoint highlights. Preserve
+        // every boundary directly, avoiding temporary events, sorting and an
+        // active-highlight hash map. Overlaps and unordered input still use
+        // the priority-aware sweep below.
+        var ordered_end: u32 = 0;
+        const ordered = for (highlights) |hl| {
+            if (hl.col_start < ordered_end) break false;
+            ordered_end = hl.col_end;
+        } else true;
+        if (ordered) {
+            var current_col: u32 = 0;
+            for (highlights) |hl| {
+                if (current_col < hl.col_start) {
+                    try self.line_spans.items[line_idx].append(self.global_allocator, .{
+                        .col = current_col,
+                        .style_id = 0,
+                        .next_col = hl.col_start,
+                    });
+                }
+                try self.line_spans.items[line_idx].append(self.global_allocator, .{
+                    .col = hl.col_start,
+                    .style_id = hl.style_id,
+                    .next_col = hl.col_end,
+                });
+                current_col = hl.col_end;
+            }
+            const line_width = self.lineWidthAt(@intCast(line_idx));
+            if (current_col < line_width) {
+                try self.line_spans.items[line_idx].append(self.global_allocator, .{
+                    .col = current_col,
+                    .style_id = 0,
+                    .next_col = line_width,
+                });
+            }
+            return;
+        }
+
         // Collect all boundary columns
         const Event = struct {
             col: u32,
@@ -915,65 +952,48 @@ pub const UnifiedTextBuffer = struct {
         hl_ref: u16,
         internal: bool,
     ) TextBufferError!void {
-        const line_count = self.getLineCount();
+        const line_count = self._rope.markerCount(.linestart);
         if (char_start >= char_end or line_count == 0) {
             return;
         }
 
-        // Walk lines to find which lines this highlight affects
-        const Context = struct {
-            buffer: *Self,
-            char_start: u32,
-            char_end: u32,
-            style_id: u32,
-            priority: u8,
-            hl_ref: u16,
-            internal: bool,
-            start_line_idx: ?usize = null,
-
-            fn callback(ctx_ptr: *anyopaque, line_info: LineInfo) void {
-                const ctx = @as(*@This(), @ptrCast(@alignCast(ctx_ptr)));
-                const line_start_col_offset = line_info.col_offset;
-                const line_end_col_offset = line_info.col_offset + line_info.width_cols;
-
-                // Skip lines before the highlight
-                if (line_end_col_offset <= ctx.char_start) return;
-                // Stop after the highlight ends
-                if (line_start_col_offset >= ctx.char_end) return;
-
-                // This line overlaps with the highlight
-                const col_start = if (ctx.char_start > line_start_col_offset)
-                    ctx.char_start - line_start_col_offset
-                else
-                    0;
-
-                const col_end = if (ctx.char_end < line_end_col_offset)
-                    ctx.char_end - line_start_col_offset
-                else
-                    line_info.width_cols;
-
-                ctx.buffer.addHighlightInternal(
-                    line_info.line_idx,
-                    col_start,
-                    col_end,
-                    ctx.style_id,
-                    ctx.priority,
-                    ctx.hl_ref,
-                    ctx.internal,
-                ) catch {};
+        // Marker weights include one column per preceding newline, while this
+        // API uses display columns excluding newlines (as walkLines(false) did).
+        // Find the last line starting at or before the range. Taking the upper
+        // bound skips leading/adjacent empty lines that share the same offset.
+        var left: u32 = 0;
+        var right = line_count;
+        while (left < right) {
+            const mid = left + (right - left) / 2;
+            const marker = self._rope.getMarker(.linestart, mid) orelse return;
+            const line_start = marker.global_weight - mid;
+            if (line_start <= char_start) {
+                left = mid + 1;
+            } else {
+                right = mid;
             }
-        };
+        }
 
-        var ctx: Context = .{
-            .buffer = self,
-            .char_start = char_start,
-            .char_end = char_end,
-            .style_id = style_id,
-            .priority = priority,
-            .hl_ref = hl_ref,
-            .internal = internal,
-        };
-        iter_mod.walkLines(&self._rope, &ctx, Context.callback, false);
+        // Reuse the rope's lazy marker index: no per-highlight line allocation
+        // or full-document scan. Cost is O(log(lines) + lines in the range).
+        var line_idx = left -| 1;
+        while (line_idx < line_count) : (line_idx += 1) {
+            const marker = self._rope.getMarker(.linestart, line_idx) orelse return;
+            const line_start = marker.global_weight - line_idx;
+            if (line_start >= char_end) break;
+            const line_end = line_start + iter_mod.lineWidthAt(&self._rope, line_idx);
+            if (line_end <= char_start) continue;
+
+            self.addHighlightInternal(
+                line_idx,
+                @max(char_start, line_start) - line_start,
+                @min(char_end, line_end) - line_start,
+                style_id,
+                priority,
+                hl_ref,
+                internal,
+            ) catch {};
+        }
     }
 
     fn clearInternalHighlights(self: *Self) void {

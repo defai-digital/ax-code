@@ -98,6 +98,7 @@ For standalone questions about selected files through AX Trust caching, see
 - [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
 - [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.
 - [Performance](guides/performance.md) — coding tool profiles and local request-timing diagnostics.
+- [AX TUI performance](guides/ax-tui-performance.md) — renderer workloads, CPU profiles, and native/WASM Unicode width evaluation.
 - [Memory usage](guides/memory-usage.md) — memory profiles, cache retention, and background output limits.
 - [Local Evidence Cache](guides/evidence-cache.md) — optional SQLite and RocksDB evidence reuse, qualification, and rollback.
 - [Lifecycle Hooks](guides/hooks.md) — hook events and bundled policy packs.

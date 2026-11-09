@@ -1,6 +1,6 @@
 import { type Pointer } from "../platform/ffi.js";
 import { RGBA } from "../lib/rgba.js";
-declare const rgbaPackTransform: (rgba?: RGBA) => Pointer | null;
+declare const rgbaPackTransform: (rgba?: RGBA) => Uint16Array<ArrayBufferLike> | null;
 declare const rgbaUnpackTransform: (ptr?: Pointer) => RGBA | undefined;
 type StyledChunkInput = {
     text: string;

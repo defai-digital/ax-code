@@ -60,6 +60,23 @@ and terminal suites, and the source renderer integration guard this boundary.
 
 ## Stability and boundary contracts
 
+- `packed-color-lifetime`: packed styled chunks and cursor options retain color
+  array views with their packed buffer, including temporary colors created by
+  normalization. Already normalized RGBA chunks without object links avoid a
+  redundant object copy. Guard: `test/zig-structs.test.ts` forces GC before
+  decoding packed colors, links and Unicode, and checks frozen inputs.
+- `ordered-highlight-spans`: ordered, disjoint native highlights build spans
+  directly in one pass, retaining gaps and adjacent same-style boundaries.
+  Unordered and overlapping input retains the existing priority sweep. The
+  warmed path reuses output storage without temporary events or an active map.
+  Guard: `native/renderer/tests/text-buffer-spans_test.zig` checks a boundary
+  oracle, priority fallback, removal transitions and allocation failure.
+- `indexed-highlight-ranges`: native range insertion seeks the rope's cached
+  line-start markers and visits only the range's lines. Display-column offsets
+  exclude newline weights, with equal offsets from empty lines resolved by an
+  upper-bound search. Chunk styles, links, and the ABI are preserved. Guard:
+  `native/renderer/tests/text-buffer-highlights_test.zig` compares against a
+  full-line-walk oracle and checks repeated multiline styled text and link cleanup.
 - `editor-view-lifetime`: independently disposed editor views use a reclaiming
   allocator instead of the process-lifetime arena. Overlapping non-LIFO teardown
   must not grow that arena. Guard: `test/editor-view-lifecycle.test.ts`; the mixed

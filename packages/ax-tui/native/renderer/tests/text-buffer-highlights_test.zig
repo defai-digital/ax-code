@@ -4,10 +4,152 @@ const ansi = @import("../ansi.zig");
 const gp = @import("../grapheme.zig");
 const link = @import("../link.zig");
 const ss = @import("../syntax-style.zig");
+const utf8 = @import("../utf8.zig");
 
 const TextBuffer = text_buffer.UnifiedTextBuffer;
 const RGBA = text_buffer.RGBA;
 const Highlight = text_buffer.Highlight;
+
+// The range API uses display columns with newline weights excluded. An
+// independent, full line walk is the oracle for the indexed implementation.
+fn expectRangeMatchesLineWalk(tb: *TextBuffer, start: u32, end: u32) !void {
+    tb.clearAllHighlights();
+    try tb.addHighlightByCharRange(start, end, 7, 3, 91);
+    var offset: u32 = 0;
+    for (0..tb.getLineCount()) |line| {
+        const width = tb.lineWidthAt(@intCast(line));
+        const line_end = offset + width;
+        const highlights = tb.getLineHighlights(line);
+        if (start < end and width > 0 and line_end > start and offset < end) {
+            try std.testing.expectEqual(@as(usize, 1), highlights.len);
+            try std.testing.expectEqualDeep(Highlight{
+                .col_start = @max(start, offset) - offset,
+                .col_end = @min(end, line_end) - offset,
+                .style_id = 7,
+                .priority = 3,
+                .hl_ref = 91,
+                .internal = false,
+            }, highlights[0]);
+        } else {
+            try std.testing.expectEqual(@as(usize, 0), highlights.len);
+        }
+        offset = line_end;
+    }
+}
+
+test "TextBuffer indexed highlights match line walk at every boundary and after replacement" {
+    const pool = gp.initGlobalPool(std.testing.allocator);
+    defer gp.deinitGlobalPool();
+    const link_pool = link.initGlobalLinkPool(std.testing.allocator);
+    defer link.deinitGlobalLinkPool();
+
+    for ([_]utf8.WidthMethod{ .unicode, .wcwidth, .no_zwj }) |method| {
+        const tb = try TextBuffer.init(std.testing.allocator, pool, link_pool, method);
+        defer tb.deinit();
+        for ([_][]const u8{ "", "\n\n\n", "\n\na\n\nbc\n\n", "a\r\n\r\nb\r\nc", "\n中e\u{301}\t\n\n👩‍🚀\nZ\n", "\u{301}\n\u{200d}\nAB\n\n" }) |text| {
+            try tb.setText(text);
+            const limit = tb.getLength() + 2;
+            for (0..limit + 1) |start| {
+                for (0..limit + 1) |end| {
+                    try expectRangeMatchesLineWalk(tb, @intCast(start), @intCast(end));
+                }
+            }
+            try expectRangeMatchesLineWalk(tb, 0, std.math.maxInt(u32));
+            try expectRangeMatchesLineWalk(tb, std.math.maxInt(u32), std.math.maxInt(u32));
+            try tb.append("\n\n新\t👋🏿\n");
+            try expectRangeMatchesLineWalk(tb, 1, std.math.maxInt(u32));
+            try expectRangeMatchesLineWalk(tb, tb.getLength() - 1, tb.getLength());
+        }
+    }
+}
+
+test "TextBuffer indexed highlights match seeded ranges across many empty and Unicode lines" {
+    const pool = gp.initGlobalPool(std.testing.allocator);
+    defer gp.deinitGlobalPool();
+    const link_pool = link.initGlobalLinkPool(std.testing.allocator);
+    defer link.deinitGlobalLinkPool();
+    var prng = std.Random.DefaultPrng.init(0xa871);
+    const random = prng.random();
+    var content: std.ArrayListUnmanaged(u8) = .{};
+    defer content.deinit(std.testing.allocator);
+    const lines = [_][]const u8{ "", "abc", "中文", "cafe\u{301}", "👩‍🚀👋🏿", "\tX", "\u{200d}", "\u{301}" };
+    for (0..300) |_| {
+        try content.appendSlice(std.testing.allocator, lines[random.uintLessThan(usize, lines.len)]);
+        try content.append(std.testing.allocator, '\n');
+    }
+    for ([_]utf8.WidthMethod{ .unicode, .wcwidth, .no_zwj }) |method| {
+        const tb = try TextBuffer.init(std.testing.allocator, pool, link_pool, method);
+        defer tb.deinit();
+        try tb.setText(content.items);
+        for (0..500) |_| {
+            const start = random.uintLessThan(u32, tb.getLength() + 10);
+            const end = random.uintLessThan(u32, tb.getLength() + 10);
+            try expectRangeMatchesLineWalk(tb, start, end);
+        }
+    }
+}
+
+test "TextBuffer indexed styled chunks preserve multiline styles and hyperlink lifetime" {
+    const pool = gp.initGlobalPool(std.testing.allocator);
+    defer gp.deinitGlobalPool();
+    const link_pool = link.initGlobalLinkPool(std.testing.allocator);
+    defer link.deinitGlobalLinkPool();
+    const texts = [_][]const u8{ "\n\nAB\n\n", "中e\u{301}\t", "\n\n👩‍🚀\nZ\n\n" };
+    const red = ansi.rgbaFromFloats(1, 0, 0, 1);
+    const blue = ansi.rgbaFromFloats(0, 0, 1, 1);
+    const url = "https://example.com/unicode";
+    const chunks = [_]text_buffer.StyledChunk{
+        .{ .text_ptr = texts[0].ptr, .text_len = texts[0].len, .fg_ptr = &red, .bg_ptr = null, .attributes = 1 },
+        .{ .text_ptr = texts[1].ptr, .text_len = texts[1].len, .fg_ptr = &blue, .bg_ptr = &red, .attributes = 2, .link_ptr = url.ptr, .link_len = url.len },
+        .{ .text_ptr = texts[2].ptr, .text_len = texts[2].len, .fg_ptr = null, .bg_ptr = null, .attributes = 4 },
+    };
+    for ([_]utf8.WidthMethod{ .unicode, .wcwidth, .no_zwj }) |method| {
+        const style = try ss.SyntaxStyle.init(std.testing.allocator);
+        defer style.deinit();
+        const tb = try TextBuffer.init(std.testing.allocator, pool, link_pool, method);
+        defer tb.deinit();
+        tb.setSyntaxStyle(style);
+        for (0..3) |_| {
+            try tb.setStyledText(&chunks);
+            var offset: u32 = 0;
+            for (0..tb.getLineCount()) |line| {
+                const line_end = offset + tb.lineWidthAt(@intCast(line));
+                const highlights = tb.getLineHighlights(line);
+                var expected_count: usize = 0;
+                var chunk_start: u32 = 0;
+                for (texts, 0..) |text, index| {
+                    const chunk_end = chunk_start + tb.measureText(text);
+                    if (chunk_start < chunk_end and line_end > offset and line_end > chunk_start and offset < chunk_end) {
+                        var name: [32]u8 = undefined;
+                        const style_id = style.resolveByName(try std.fmt.bufPrint(&name, "chunk{d}", .{index})).?;
+                        try std.testing.expect(expected_count < highlights.len);
+                        try std.testing.expectEqualDeep(Highlight{
+                            .col_start = @max(chunk_start, offset) - offset,
+                            .col_end = @min(chunk_end, line_end) - offset,
+                            .style_id = style_id,
+                            .priority = 1,
+                            .hl_ref = 0,
+                            .internal = true,
+                        }, highlights[expected_count]);
+                        expected_count += 1;
+                    }
+                    chunk_start = chunk_end;
+                }
+                try std.testing.expectEqual(expected_count, highlights.len);
+                offset = line_end;
+            }
+            const linked_style = style.getStyleByName("chunk1").?;
+            try std.testing.expectEqualDeep(@as(?RGBA, blue), linked_style.fg);
+            try std.testing.expectEqualDeep(@as(?RGBA, red), linked_style.bg);
+            const link_id = ansi.TextAttributes.getLinkId(linked_style.attributes);
+            try std.testing.expect(link_id != 0);
+            try std.testing.expectEqualStrings(url, try link_pool.get(link_id));
+            try std.testing.expectEqual(@as(u32, 1), try link_pool.getRefcount(link_id));
+        }
+        try tb.setText("replacement");
+        try std.testing.expectEqual(@as(u64, 0), link_pool.getLiveSlotCount());
+    }
+}
 
 test "TextBuffer coords - addHighlightByCoords" {
     const pool = gp.initGlobalPool(std.testing.allocator);

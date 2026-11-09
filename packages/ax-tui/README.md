@@ -34,6 +34,10 @@ AX Code depends on the package with `workspace:@defai-digital/ax-tui@*`.
 Application code keeps importing `ax-tui`
 and `ax-tui/solid`. The public package name remains `@defai-digital/ax-tui`.
 
+For repeatable application benchmarks, CPU profiles, and the development-only
+native/WASM Unicode width experiment, see the
+[performance guide](../../docs/guides/ax-tui-performance.md).
+
 Node.js 26+ is required; native rendering additionally requires `--experimental-ffi`.
 Headless rendering uses the same native backend and does not require a TTY.
 

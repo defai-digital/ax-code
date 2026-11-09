@@ -12779,7 +12779,7 @@ var TextBuffer = class {
 
 // src/core/zig-structs.ts
 import { defineStruct, defineEnum } from "bun-ffi-structs";
-var rgbaPackTransform = (rgba) => rgba ? ptr(rgba.buffer) : null;
+var rgbaPackTransform = (rgba) => rgba ? rgba.buffer : null;
 var rgbaUnpackTransform = (ptr2) => ptr2 ? RGBA.fromArray(new Uint16Array(toArrayBuffer(ptr2, 0, 8))) : void 0;
 var StyledChunkStruct = defineStruct(
   [
@@ -12809,6 +12809,9 @@ var StyledChunkStruct = defineStruct(
   ],
   {
     mapValue: (chunk) => {
+      if ((chunk.fg == null || chunk.fg instanceof RGBA) && (chunk.bg == null || chunk.bg instanceof RGBA) && (!chunk.link || typeof chunk.link === "string")) {
+        return chunk;
+      }
       const normalizedFg = normalizeColorValue(chunk.fg ?? null);
       const normalizedBg = normalizeColorValue(chunk.bg ?? null);
       if (!chunk.link || typeof chunk.link === "string") {
