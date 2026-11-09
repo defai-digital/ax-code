@@ -7762,8 +7762,8 @@
           ]
         },
         "limit": {
-          "context": 1048000,
-          "input": 1048000,
+          "context": 1040000,
+          "input": 1040000,
           "output": 32768
         },
         "canonical_model_id": "thinkingmachines/inkling"
@@ -78425,29 +78425,6 @@
         "canonical_model_id": "alibaba/qwen3-next-80b-a3b-instruct",
         "temperature": true
       },
-      "mercury-2": {
-        "id": "mercury-2",
-        "name": "Mercury 2",
-        "family": "mercury",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "release_date": "2026-02-24",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 128000,
-          "output": 50000
-        },
-        "canonical_model_id": "inception/mercury-2",
-        "temperature": true
-      },
       "nvidia-nemotron-3-nano-30b-a3b": {
         "id": "nvidia-nemotron-3-nano-30b-a3b",
         "name": "NVIDIA Nemotron 3 Nano 30B",
@@ -78829,29 +78806,6 @@
         "tool_call": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash",
         "status": "deprecated"
-      },
-      "mercury-2-5": {
-        "attachment": false,
-        "family": "mercury",
-        "id": "mercury-2-5",
-        "limit": {
-          "context": 260000,
-          "output": 65536
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Mercury 2.5",
-        "reasoning": true,
-        "release_date": "2026-09-08",
-        "tool_call": true,
-        "canonical_model_id": "inception/mercury-2.5",
-        "temperature": true
       },
       "qwen-3-8-flash": {
         "attachment": true,
@@ -79305,29 +79259,6 @@
         "release_date": "2026-10-17",
         "temperature": true,
         "tool_call": true
-      },
-      "mercury-3": {
-        "attachment": false,
-        "family": "mercury",
-        "id": "mercury-3",
-        "limit": {
-          "context": 1000000,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Mercury 3",
-        "reasoning": true,
-        "release_date": "2026-10-16",
-        "tool_call": true,
-        "canonical_model_id": "inception/mercury-3",
-        "temperature": true
       },
       "minimax-m3-1-flash": {
         "attachment": true,
@@ -96577,8 +96508,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "output": 235929
+          "context": 256000,
+          "output": 64000
         },
         "canonical_model_id": "alibaba/qwen3.5-397b-a17b"
       },
@@ -99920,7 +99851,7 @@
         },
         "limit": {
           "context": 131072,
-          "output": 117964
+          "output": 16384
         },
         "canonical_model_id": "meta/llama-3.1-8b-instruct"
       },
@@ -103189,28 +103120,6 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "reflection/beam-1.0-501b-a23b"
-      },
-      "reflection/beam-free": {
-        "attachment": false,
-        "family": "beam",
-        "id": "reflection/beam-free",
-        "limit": {
-          "context": 1048576,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Reflection: Beam 1.0 (free)",
-        "reasoning": true,
-        "release_date": "2025-08-26",
-        "temperature": true,
-        "tool_call": true
       },
       "deepseek/deepseek-v4.1-flash-1017": {
         "attachment": true,
@@ -112514,7 +112423,7 @@
         "id": "meta/muse-spark-open",
         "limit": {
           "context": 1048576,
-          "output": 262144
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -132946,7 +132855,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 32768
+          "output": 65536
         },
         "modalities": {
           "input": [
@@ -135288,7 +135197,8 @@
           "context": 32768,
           "output": 32768
         },
-        "canonical_model_id": "alibaba/qwen3-30b-a3b"
+        "canonical_model_id": "alibaba/qwen3-30b-a3b",
+        "status": "deprecated"
       },
       "@cf/qwen/qwen3.8-27b": {
         "id": "@cf/qwen/qwen3.8-27b",
@@ -135335,7 +135245,8 @@
           "context": 24000,
           "output": 24000
         },
-        "canonical_model_id": "alibaba/qwq-32b"
+        "canonical_model_id": "alibaba/qwq-32b",
+        "status": "deprecated"
       },
       "@cf/qwen/qwen2.5-coder-32b-instruct": {
         "id": "@cf/qwen/qwen2.5-coder-32b-instruct",
@@ -135381,7 +135292,8 @@
           "context": 1048576,
           "output": 1048576
         },
-        "canonical_model_id": "deepseek/deepseek-v4-pro-0813"
+        "canonical_model_id": "deepseek/deepseek-v4-pro-0813",
+        "status": "deprecated"
       },
       "@cf/deepseek-ai/deepseek-v4-flash-0731": {
         "id": "@cf/deepseek-ai/deepseek-v4-flash-0731",
@@ -135404,7 +135316,8 @@
           "context": 1048576,
           "output": 1048576
         },
-        "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "status": "deprecated"
       },
       "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b": {
         "id": "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
@@ -135427,7 +135340,8 @@
           "context": 80000,
           "output": 80000
         },
-        "canonical_model_id": "deepseek/deepseek-r1"
+        "canonical_model_id": "deepseek/deepseek-r1",
+        "status": "deprecated"
       },
       "@cf/mistralai/mistral-small-3.1-24b-instruct": {
         "id": "@cf/mistralai/mistral-small-3.1-24b-instruct",
@@ -135475,7 +135389,8 @@
           "context": 256000,
           "output": 256000
         },
-        "canonical_model_id": "nvidia/nemotron-3-super-120b-a12b"
+        "canonical_model_id": "nvidia/nemotron-3-super-120b-a12b",
+        "status": "deprecated"
       },
       "@cf/google/gemma-4-26b-a4b-it": {
         "id": "@cf/google/gemma-4-26b-a4b-it",
@@ -135524,7 +135439,8 @@
           "context": 1048576,
           "output": 1048576
         },
-        "canonical_model_id": "zhipuai/glm-5.3-flash"
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "status": "deprecated"
       },
       "@cf/zai-org/glm-5.3": {
         "id": "@cf/zai-org/glm-5.3",
@@ -135616,7 +135532,8 @@
           "context": 32000,
           "output": 32000
         },
-        "canonical_model_id": "meta/llama-3.1-8b-instruct"
+        "canonical_model_id": "meta/llama-3.1-8b-instruct",
+        "status": "deprecated"
       },
       "@cf/meta/llama-3.2-3b-instruct": {
         "id": "@cf/meta/llama-3.2-3b-instruct",
@@ -135639,7 +135556,8 @@
           "context": 80000,
           "output": 80000
         },
-        "canonical_model_id": "meta/llama-3.2-3b"
+        "canonical_model_id": "meta/llama-3.2-3b",
+        "status": "deprecated"
       },
       "@cf/meta/llama-3.2-1b-instruct": {
         "id": "@cf/meta/llama-3.2-1b-instruct",
@@ -135662,7 +135580,8 @@
           "context": 60000,
           "output": 60000
         },
-        "canonical_model_id": "meta/llama-3.2-1b"
+        "canonical_model_id": "meta/llama-3.2-1b",
+        "status": "deprecated"
       },
       "@cf/meta/llama-4-scout-17b-16e-instruct": {
         "id": "@cf/meta/llama-4-scout-17b-16e-instruct",
@@ -135826,7 +135745,8 @@
           "context": 262144,
           "output": 262144
         },
-        "canonical_model_id": "moonshotai/kimi-k2.7-code"
+        "canonical_model_id": "moonshotai/kimi-k2.7-code",
+        "status": "deprecated"
       },
       "@cf/deepseek-ai/deepseek-v4.1-flash-1017": {
         "attachment": true,
