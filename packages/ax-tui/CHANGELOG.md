@@ -5,6 +5,12 @@ All notable changes to ax-tui are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- Index native highlight ranges and build ordered style spans without temporary allocations, retaining packed color
+  storage across garbage collection.
+- Reuse the native Yoga layout output buffer per render library while still returning independent layout snapshots.
+
 ### Fixed
 
 - Release removed children from a parent's pending layout set so hidden parents whose rows churn no longer retain every destroyed child.
