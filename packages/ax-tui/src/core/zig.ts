@@ -96,9 +96,7 @@ function resolveVendoredNativeTarget(): NativeTarget {
       // Match the build tooling: an unset override on a host without glibc
       // means musl. Keep glibc when the runtime report is unavailable (Bun)
       // or when the caller explicitly selected glibc.
-      const report = process.report?.getReport?.() as
-        | { header?: { glibcVersionRuntime?: string } }
-        | undefined
+      const report = process.report?.getReport?.() as { header?: { glibcVersionRuntime?: string } } | undefined
       const muslHost =
         libc === "musl" ||
         ((libc === undefined || libc === "") && report !== undefined && !report.header?.glibcVersionRuntime)
@@ -2520,6 +2518,8 @@ class FFIRenderLib implements RenderLib {
   private _anyEventHandlers: Array<(name: string, data: ArrayBuffer) => void> = []
   private nativeSpanFeedCallbackWrapper: FFICallbackInstance | null = null
   private nativeSpanFeedHandlers = new Map<Pointer, NativeSpanFeedEventHandler>()
+  private readonly yogaLayoutOutput = new Float32Array(6)
+  private yogaLayoutOutputPtr?: Pointer
 
   constructor(libPath?: string) {
     this.native = openRenderLibrary(libPath)
@@ -3627,8 +3627,10 @@ class FFIRenderLib implements RenderLib {
   }
 
   public yogaNodeGetComputedLayout(node: Pointer): NativeYogaLayout {
-    const layout = new Float32Array(6)
-    this.native.symbols.yogaNodeGetComputedLayout(node, ptr(layout))
+    // The native getter only copies six floats and invokes no callbacks. Reuse
+    // its output storage, but return owned values so later reads cannot alias it.
+    const layout = this.yogaLayoutOutput
+    this.native.symbols.yogaNodeGetComputedLayout(node, (this.yogaLayoutOutputPtr ??= ptr(layout)))
     return {
       left: layout[0]!,
       top: layout[1]!,

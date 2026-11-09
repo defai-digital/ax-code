@@ -457,3 +457,91 @@ regression, native/WASM experiment parity, and terminal/application acceptance.
 TypeScript, generated renderer output, all native vendor hashes, 22-struct ABI
 layout, package payload and repository structure checks passed. Native sources
 and ABI version 3 are unchanged by this TypeScript correction.
+
+## Scroll stability control and Yoga layout reads
+
+A further scroll investigation added an A/A control using the exact same native
+artifact in both arms. The comparison then repeated A/B with the indexed-only
+reference and ordered-span candidate. Each experiment used seven alternating
+fresh-process pairs, eight warmup operations and forty measured operations per
+child (280 operations per arm). Both used the same generated JavaScript.
+
+| Comparison                 | First arm median ms | Second arm median ms | Range of paired second/first ratios |
+| -------------------------- | ------------------: | -------------------: | ----------------------------------- |
+| Same native artifact (A/A) |               9.514 |                9.669 | 0.821-1.114                         |
+| Indexed versus spans (A/B) |              11.434 |               11.367 | 0.921-1.064                         |
+
+The medians summarize per-process medians. All ticks, cell counts, output byte
+counts, chunk counts and completed frame counts matched. The earlier 8% higher
+scroll median did not recur as a stable effect in this A/B experiment; A/A
+pair variability was larger than that earlier difference. This does not prove
+equivalence or rule out a smaller regression. These single-host measurements
+with uncontrolled background load cannot attribute the earlier difference to
+the native change. Raw reports and exact artifact identities are retained as
+`scroll-stability-aa.json` and `scroll-stability-ab.json` in the benchmark
+directory; the native reference hashes match the earlier span comparison.
+The A/A and A/B experiments ran separately; compare arms within each row rather
+than absolute times across the two experiments.
+
+The previous scroll diagnostic recorded 91,305 Yoga layout reads during setup,
+warmup, 200 measured operations and cleanup. Each JavaScript getter allocated
+a fresh six-float array and acquired its address. The native getter only copies
+six floats and invokes no callbacks, so the renderer library now retains one
+24-byte output array and lazily caches its pointer per library instance. Every
+read still returns a new object containing copied numeric values. Retained
+snapshots cannot be overwritten by a subsequent read or mutate later layouts.
+The native ABI, layouts, frame scheduling and output transport are unchanged.
+
+Yoga remains the framework's layout engine. Renderable construction creates
+Yoga nodes, and root layout still calls native `YGNodeCalculateLayout`. Yoga
+determines box sizes and positions using its Flexbox model; drawing and text
+processing remain separate. See [Yoga's scope](https://www.yogalayout.dev/docs/about-yoga).
+Reusing a result buffer does not replace that engine, and a WASM execution
+backend would still need layout computation. The measurements here do not
+justify replacing Yoga or reimplementing its layout behavior.
+
+`test/yoga-layout.test.ts` checks fractional geometry across two nodes, later
+layout mutations, independent returned snapshots, output-address reuse and
+forced GC after other native text reads evict temporary owners from the FFI
+pointer-pin ring. The old getter failed the address-reuse guard; the new getter
+passes together with the virtual-list and rendering scheduler regressions.
+
+A native-getter comparison used seven alternating fresh-process pairs, five
+warmup batches and twenty measured batches of 20,000 reads each. Two nodes
+with distinct widths alternate to verify the copied results. The reference
+reproduces the old getter; the candidate calls the actual generated production
+getter. Median of process medians fell from 0.145 to 0.052 microseconds per
+read, approximately 2.8 times faster. Every pair improved. This is a getter
+microbenchmark, not a whole-application speedup. The report, raw samples,
+production source hash, renderer manifest hash and driver hash are retained in
+`yoga-layout-production.json`; the earlier prototype is retained separately
+in `yoga-layout-prototype.json`.
+
+Seven additional alternating application pairs used eight warmup operations
+and twenty measured operations per workload and child. The reference replaces
+only the layout getter with its previous implementation; the candidate uses
+the actual generated getter. Both arms use the same native library and the
+same application inputs. Median columns summarize seven process medians; p95
+summarizes 140 measured operations per arm.
+
+| Workload                           | Previous getter median ms | Reused output median ms | Previous p95 ms | Reused output p95 ms |
+| ---------------------------------- | ------------------------: | ----------------------: | --------------: | -------------------: |
+| Streaming Markdown                 |                     1.907 |                   1.875 |           2.175 |                2.025 |
+| Long conversation jumps            |                     9.128 |                   9.094 |          11.302 |               11.230 |
+| Resize/reflow                      |                     1.844 |                   1.847 |           1.979 |                1.983 |
+| Large highlighted code replacement |                    62.409 |                  63.437 |          66.882 |               70.050 |
+
+All ticks, cell counts, output byte counts and styled-chunk counts matched.
+Markdown completed-frame counts varied without changes to those output counts;
+frame counts matched for the other workloads. The application results show no
+consistent overall speedup: the large-code median was approximately 1.6% higher
+while scrolling was nearly unchanged. The getter's allocation reduction and
+microbenchmark result do not justify attributing an end-user latency improvement
+to this change. All raw samples, CPU observations and code identities are in
+`layout-application-paired.json`.
+
+Qualification passed 935 package tests (1 skip), including the layout ownership
+and GC regression, virtual-list behavior, scheduling, native/WASM width parity,
+and terminal/application acceptance. TypeScript, generated renderer output,
+native vendor hashes, ABI layout, package payload and repository structure
+checks passed. This change does not modify native sources or native artifacts.

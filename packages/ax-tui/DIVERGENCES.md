@@ -60,6 +60,11 @@ and terminal suites, and the source renderer integration guard this boundary.
 
 ## Stability and boundary contracts
 
+- `yoga-layout-output`: each renderer library instance reuses one six-float
+  native layout output buffer and its lazily acquired pointer. Every read still
+  returns an independent object; native reads are synchronous and callback-free.
+  Guard: `test/yoga-layout.test.ts` checks fractional geometry across nodes,
+  snapshot ownership, GC after pointer-pin eviction, and output-address reuse.
 - `packed-color-lifetime`: packed styled chunks and cursor options retain color
   array views with their packed buffer, including temporary colors created by
   normalization. Already normalized RGBA chunks without object links avoid a

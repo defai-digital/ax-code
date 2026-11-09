@@ -14649,6 +14649,8 @@ var FFIRenderLib = class {
   _anyEventHandlers = [];
   nativeSpanFeedCallbackWrapper = null;
   nativeSpanFeedHandlers = /* @__PURE__ */ new Map();
+  yogaLayoutOutput = new Float32Array(6);
+  yogaLayoutOutputPtr;
   constructor(libPath) {
     this.native = openRenderLibrary(libPath);
     try {
@@ -15444,8 +15446,8 @@ var FFIRenderLib = class {
     return this.native.symbols.yogaNodeGetAlwaysFormsContainingBlock(node);
   }
   yogaNodeGetComputedLayout(node) {
-    const layout = new Float32Array(6);
-    this.native.symbols.yogaNodeGetComputedLayout(node, ptr(layout));
+    const layout = this.yogaLayoutOutput;
+    this.native.symbols.yogaNodeGetComputedLayout(node, this.yogaLayoutOutputPtr ??= ptr(layout));
     return {
       left: layout[0],
       top: layout[1],
