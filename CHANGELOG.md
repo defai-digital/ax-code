@@ -6,6 +6,13 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.18] - 2026-11-09
+
+### Changed
+
+- Publish the paired SDK 2.6.71 maintenance release without changing the server API contract.
+- Refresh the upstream model catalog and include the AX TUI styled-text and Yoga layout improvements.
+
 ### Added
 
 - Releases attach the Worker-hosted diff engine as a signed library tarball (`ax-code-diff-wasm.tgz`, with
@@ -14,6 +21,9 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Abort routed IPC requests when their client disconnects or the server shuts down, allowing provider discovery and installs to stop promptly.
+- Restore public documentation export and lifecycle metadata for the AX TUI performance guide.
+- Use a portable module URL for Windows native/Wasm text-width qualification.
 - Linux bubblewrap isolation binds the host temp roots writable instead of masking them with an empty tmpfs, so sandboxed commands see existing temp files and keep what they write there, matching the macOS Seatbelt backend.
 - Linux bubblewrap denials that surface as `Read-only file system` (for example a `git config` write to a protected `.git/config`) now offer the one-time sandbox escalation retry, as Seatbelt `Operation not permitted` denials already did.
 
