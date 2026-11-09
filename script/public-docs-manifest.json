@@ -82,6 +82,10 @@
       "page": "guides/autonomous"
     },
     {
+      "source": "docs/guides/ax-tui-performance.md",
+      "page": "guides/ax-tui-performance"
+    },
+    {
       "source": "docs/guides/cloud-operations.md",
       "page": "guides/cloud-operations"
     },

@@ -1,11 +1,16 @@
 # AX TUI performance and WASM evaluation
 
+Status: Active
+Scope: current-state
+Last reviewed: 2026-11-09
+Owner: ax-code runtime
+
 AX TUI keeps its Zig native renderer as the production backend. Tree-sitter
 already runs as WASM in a worker. A separate, source-only width experiment
 evaluates WASM portability and call overhead without changing the renderer ABI,
 package exports, installation requirements, or backend selection.
 
-## Implementation plan
+## Evaluation method
 
 1. Establish repeatable framework workloads for streaming Markdown, a long
    virtualized conversation, resize/reflow, and large syntax-highlighted code.
@@ -29,8 +34,7 @@ From the repository root, with workspace dependencies installed:
 pnpm --dir packages/ax-tui run bench:application
 ```
 
-The default report is
-`packages/ax-tui/.internal/benchmarks/application.json`. It contains seven fresh
+The default report is `application.json` in the package's gitignored local benchmark directory. It contains seven fresh
 process samples, each with eight warmup operations and forty measured operations
 per workload. A shorter run is useful while developing the harness:
 
@@ -104,8 +108,8 @@ On macOS, Zig 0.15.2 may need the compatible SDK prepared by
 must make that script's `ax-tui-xcrun` wrapper available on PATH and set
 `AX_CODE_TUI_MACOS_SDK` to the prepared SDK, or use an already compatible SDK.
 
-Generated artifacts, caches, manifest, and reports stay under
-`packages/ax-tui/.internal/`. The experiment is excluded from the published
+Generated artifacts, caches, manifest, and reports stay in the package's
+gitignored local working directory. The experiment is excluded from the published
 package and has no production import or automatic fallback.
 
 The kernel imports `native/renderer/utf8.zig`. Its build uses the production
@@ -188,7 +192,7 @@ memory was 1,572,864 bytes. These are a single-host kernel result, not a
 renderer speed comparison or an application memory estimate. Native remains
 the production choice; WASM remains an optional portability experiment.
 
-The raw report is `packages/ax-tui/.internal/benchmarks/text-width.json`.
+The raw report is `text-width.json` in the local benchmark directory.
 Rerun on each intended host rather than treating these numbers as universal.
 
 The application run used seven fresh processes, two warmup operations and five
@@ -216,7 +220,7 @@ These nested measurements do not isolate pure FFI call overhead and do not
 establish that compiling this path to WASM would improve it.
 
 The original application report is preserved as
-`packages/ax-tui/.internal/benchmarks/application-before-highlight-index.json`.
+`application-before-highlight-index.json` in the local benchmark directory.
 
 ## Indexed native highlight insertion
 
@@ -273,7 +277,7 @@ in other workloads include scheduling variability; no across-the-board speedup
 is claimed. Real terminal latency and full AX Code/Solid behavior remain outside
 this harness.
 
-Raw reports are preserved under `packages/ax-tui/.internal/benchmarks/`:
+Raw reports are preserved in the local benchmark directory:
 
 - `application-before-highlight-index.json`
 - `application-after-highlight-index.json`
@@ -292,7 +296,7 @@ call from roughly 12-14 ms of JavaScript packing/encoding in the 47 ms submissio
 Native stack sampling identified repeated allocation of per-line boundary events
 and active-highlight hash maps inside `rebuildLineSpans` as the next hotspot.
 The diagnostic sample is retained as
-`packages/ax-tui/.internal/benchmarks/styled-text-after-index.sample.txt`.
+`styled-text-after-index.sample.txt` in the local benchmark directory.
 
 Native span rebuilding now recognizes ordered, non-overlapping highlights and
 emits their spans in a linear pass. It reuses the existing output array after
@@ -353,7 +357,7 @@ workloads. Those results are retained rather than discarded. Background load
 was not controlled, and these single-host results do not establish statistical
 significance, real-terminal latency, or full AX Code/Solid performance.
 
-Raw evidence is retained under `packages/ax-tui/.internal/benchmarks/`:
+Raw evidence is retained in the local benchmark directory:
 
 - `linear-spans-paired-comparison.json`, including all samples, identities, and
   harness hashes
