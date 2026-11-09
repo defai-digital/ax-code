@@ -13,6 +13,7 @@ export interface DiffEngine {
   readonly backend: "wasm-worker"
   /** One in-flight call per instance; concurrent submissions fail without queueing. */
   compare(rows: readonly (readonly string[])[], threshold: number, options?: CompareOptions): Promise<DuplicateGroup[]>
+  /** Exact within the work budget; beyond it, a coarser preview marked `approximate: true`. */
   diff(before: string, after: string, options?: CompareOptions & { normalize?: boolean }): Promise<DiffPreview>
   /** Strict one-based preview coordinates; preserves bytes and rejects stale context. */
   applyHunks(original: string, hunks: readonly Hunk[], options?: CompareOptions): Promise<string>

@@ -56,7 +56,7 @@ try {
   const before = "hello\r\n"
   const after = "你好😀"
   const preview = await engine.diff(before, after)
-  // { version: 1, additions, deletions, hunks }
+  // { version: 1, additions, deletions, hunks }, plus approximate: true for coarse previews
   const result = await engine.applyHunks(before, preview.hunks)
   // result === after, including the absent final newline.
   const groups = await engine.compare([["a"], ["a", "b"], ["b"]], 0.5)
@@ -74,6 +74,18 @@ unified diff files or search fuzzily. Applying a selected subset requires
 rebasing its `newStart` coordinates. `diff(..., { normalize: true })` produces
 LF-normalized hunks while preserving the native API's raw addition/deletion
 counts; apply those hunks to an explicitly LF-normalized source.
+
+Within the algorithmic work budget, `diff` output is exact and identical to the
+native preview, and it has no `approximate` key. When a large rewrite exhausts
+that budget, `diff` returns a coarser preview marked `approximate: true` instead
+of rejecting. The common prefix and suffix stay exact; lines that occur once on
+each side anchor the middle, and each gap between anchors is diffed exactly
+under a small bounded budget or emitted as one remove-all/add-all block. Such a
+preview is not minimal and may differ from jsdiff, but its hunks and counts are
+consistent and `applyHunks(before, preview.hunks)` reproduces `after` exactly.
+The fallback work is bounded separately, so it cannot run unbounded. Label
+approximate previews if users compare them with exact diffs. `version` stays 1.
+The native CLI preview keeps rejecting such inputs.
 
 `applyPatch(file, original, chunks)` is a separate API matching the existing
 native patch worker, including whitespace matching, smart punctuation
@@ -94,7 +106,8 @@ admission cannot be interrupted mid-encoding. There is no native or JS fallback
 inside this API. `createDuplicateComparator` is an alias for `createDiffEngine`.
 
 Each text or serialized payload is limited to 16 MiB. Rust also caps combined
-input, output, lines and algorithmic work. Hunk application accepts at most
+input, output and lines; algorithmic work beyond its budget yields an
+approximate preview rather than an error. Hunk application accepts at most
 4,096 hunks and 200,000 source/output lines. Duplicate inputs allow 10,000 rows,
 200,000 tokens and 16 MiB JSON, with output capped at 1 MiB. Strings must be
 well-formed Unicode and thresholds finite. Inputs outside these bounds reject;

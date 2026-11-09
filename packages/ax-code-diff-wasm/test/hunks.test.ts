@@ -87,3 +87,32 @@ test("patch chunks retain native matching and final-newline semantics", async ()
     await engine.close()
   }
 })
+test("work-budget overruns return an approximate preview that still roundtrips", async () => {
+  const engine = createDiffEngine()
+  try {
+    const rewrite = (tag: string, eol: string) =>
+      Array.from(
+        { length: 10_000 },
+        (_, i) => `  const v${i} = compute(${(i * 7919) % 10007}, "${tag}${i}")${eol}`,
+      ).join("")
+    for (const eol of ["\n", "\r\n"]) {
+      const before = rewrite("a", eol)
+      const after = "head 中文😀" + eol + rewrite("b", eol) + "tail without newline"
+      const started = performance.now()
+      const preview = await engine.diff(before, after)
+      const elapsed = performance.now() - started
+      expect(preview.approximate).toBe(true)
+      expect(preview.version).toBe(1)
+      expect(preview).toMatchObject({ additions: 10_002, deletions: 10_000 })
+      expect(elapsed).toBeLessThan(5_000)
+      expect(await engine.applyHunks(before, preview.hunks)).toBe(after)
+      await expect(native.diffPreviewAsync(before, after, false, new native.DiffCancellation())).rejects.toThrow(
+        "resource limit",
+      )
+    }
+    const exact = await engine.diff("a\nb\n", "a\nc\n")
+    expect("approximate" in exact).toBe(false)
+  } finally {
+    await engine.close()
+  }
+})

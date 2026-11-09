@@ -15,7 +15,7 @@ pub fn duplicate_groups(tokens_json: &str, threshold: f64) -> Result<String, JsV
 
 #[wasm_bindgen]
 pub fn diff_preview(before: &str, after: &str, normalize: bool) -> Result<String, JsValue> {
-    ax_code_diff_core::preview::preview(before, after, normalize, &|| false)
+    ax_code_diff_core::preview::preview_with_fallback(before, after, normalize, &|| false)
         .map_err(|error| JsValue::from_str(&error.reason))
 }
 
