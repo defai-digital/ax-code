@@ -34,7 +34,7 @@ test.skipIf(!built)("native and WASM share Unicode results, reject invalid batch
 })
 
 test.skipIf(!built)("WASM width evaluation runs without native FFI enabled", () => {
-  const script = fileURLToPath(new URL("../script/text-width-kernel.ts", import.meta.url))
+  const script = new URL("../script/text-width-kernel.ts", import.meta.url).href
   const child = spawnSync(
     process.execPath,
     [
