@@ -323,6 +323,39 @@ if (!fetched["minimax-cli"].models?.["minimax-cli"]) {
     },
   }
 }
+// DeepSeek Harness headless has no model flag, so the bridge exposes one
+// default entry; dsh's profile model route picks the DeepSeek model.
+const DSH_CLI_DEFAULT_MODEL = {
+  id: "dsh-cli",
+  name: "DeepSeek Harness",
+  family: "deepseek",
+  attachment: false,
+  reasoning: false,
+  tool_call: false,
+  temperature: false,
+  release_date: "2026-08-01",
+  modalities: {
+    input: ["text"],
+    output: ["text"],
+  },
+  limit: {
+    context: 1048576,
+    output: 393216,
+  },
+  options: {},
+  status: "active",
+}
+if (!fetched["dsh-cli"]) {
+  fetched["dsh-cli"] = {
+    id: "dsh-cli",
+    name: "DeepSeek Harness",
+    env: [],
+    npm: "cli",
+    models: {
+      "dsh-cli": DSH_CLI_DEFAULT_MODEL,
+    },
+  }
+}
 if (!fetched["qoder-cli"]) {
   fetched["qoder-cli"] = {
     id: "qoder-cli",
@@ -376,6 +409,12 @@ if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
       options: {},
       status: "active",
     },
+  }
+}
+if (!fetched["dsh-cli"].models?.["dsh-cli"]) {
+  fetched["dsh-cli"].models = {
+    ...(fetched["dsh-cli"].models ?? {}),
+    "dsh-cli": DSH_CLI_DEFAULT_MODEL,
   }
 }
 
@@ -904,6 +943,12 @@ if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
       options: {},
       status: "active",
     },
+  }
+}
+if (!fetched["dsh-cli"].models?.["dsh-cli"]) {
+  fetched["dsh-cli"].models = {
+    ...(fetched["dsh-cli"].models ?? {}),
+    "dsh-cli": DSH_CLI_DEFAULT_MODEL,
   }
 }
 

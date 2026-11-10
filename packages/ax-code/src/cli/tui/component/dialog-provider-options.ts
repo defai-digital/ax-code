@@ -74,6 +74,7 @@ export const CLI_BINARIES: Record<string, string> = {
   "muse-cli": "muse",
   "minimax-cli": "mcode",
   "qoder-cli": "qodercli",
+  "dsh-cli": "dsh",
 }
 
 export const OFFLINE_PROVIDERS = new Set<string>(LOCAL_RUNTIME_PROVIDER_IDS)

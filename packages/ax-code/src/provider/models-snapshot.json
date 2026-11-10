@@ -155654,5 +155654,37 @@
     },
     "name": "Wally",
     "npm": "@ai-sdk/openai-compatible"
+  },
+  "dsh-cli": {
+    "id": "dsh-cli",
+    "name": "DeepSeek Harness",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "dsh-cli": {
+        "id": "dsh-cli",
+        "name": "DeepSeek Harness",
+        "family": "deepseek",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-08-01",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
   }
 }

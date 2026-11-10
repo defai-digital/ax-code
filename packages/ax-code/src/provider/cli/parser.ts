@@ -462,3 +462,50 @@ export const minimaxCliParser: CliOutputParser = {
     return stringField(item, "delta") ?? stringField(event, "delta") ?? null
   },
 }
+
+// DeepSeek Harness headless `--json` events: `session`, `status`, `thinking`,
+// `text`, `tool_call`, `tool_result`, then one `final` carrying the run's
+// terminal `reason` and the last non-empty assistant text. Only `final` is
+// authoritative; a run that never reaches it fell over before completing.
+function dshFinalError(event: CliJsonObject): string | undefined {
+  const reason = recordField(event, "reason")
+  const kind = stringField(reason, "kind")
+  if (!reason || kind === "completed") return undefined
+  const error = isRecord(reason.error) ? reason.error : undefined
+  const code = stringField(error, "code")
+  const message = stringField(error, "message") ?? `run ended with reason "${kind ?? "unknown"}"`
+  const detail = code ? `${code}: ${message}` : message
+  if (code === "MISSING_CREDENTIAL")
+    return `DeepSeek Harness has no API key (${detail}). Export DEEPSEEK_API_KEY or add it to ~/.dsh/.env, then retry.`
+  return `DeepSeek Harness run failed: ${detail}`
+}
+
+export const dshCliParser: CliOutputParser = {
+  parseComplete(output: string) {
+    const parts: string[] = []
+    let sawJsonEvent = false
+    for (const line of output.split("\n")) {
+      const event = parseCliJsonEventLine(line)
+      if (!event) continue
+      sawJsonEvent = true
+      if (event.type === "final") {
+        const error = dshFinalError(event)
+        if (error) throw new CliOutputError(error)
+        if (typeof event.text === "string" && event.text) return { text: event.text }
+        continue
+      }
+      if (event.type === "text" && typeof event.text === "string" && event.text) parts.push(event.text)
+    }
+    if (parts.length) return { text: parts.join("\n") }
+    if (sawJsonEvent) return { text: "" }
+    return { text: rawCompleteText(output) }
+  },
+  parseStreamLine(line: string) {
+    const event = parseCliJsonEventLine(line)
+    if (!event) return null
+    // `final` repeats the last assistant text already streamed as `text`;
+    // failures exit nonzero and surface through the shared exit-code path.
+    if (event.type === "text" && typeof event.text === "string" && event.text) return event.text
+    return null
+  },
+}

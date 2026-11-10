@@ -21,6 +21,7 @@ import { parseJsonResult } from "../../util/json-value"
 import { Shell } from "@/shell/shell"
 import { Instance } from "@/project/instance"
 import { cliEffortArgs, cliEffortFromProviderOptions } from "./effort"
+import { dshLauncherArgs, ensureDshPrivacyPatch } from "./dsh"
 
 const log = Log.create({ service: "provider.cli-language-model" })
 
@@ -79,6 +80,8 @@ export function cliEnv(providerEnvKeys: readonly string[] = [], providerID?: str
   // Qoder runs its command tool through $SHELL. A login Bash shell can load
   // unrelated user profile scripts or fail before the requested command runs.
   if (providerID === "qoder-cli" && process.platform !== "win32") env.SHELL = "/bin/sh"
+  // DeepSeek Harness defaults to FEEDBACK_ONLY OTel session telemetry.
+  if (providerID === "dsh-cli") env.DSH_TELEMETRY_MODE = "DISABLED"
   // Provider metadata may name additional non-secret runtime variables, but
   // it must not punch through the sanitizer. In particular, project config
   // can override provider metadata and must not be able to request arbitrary
@@ -202,6 +205,7 @@ export function buildCliCommand(
 ) {
   const cmd = [
     config.binary,
+    ...(config.providerID === "dsh-cli" ? dshLauncherArgs() : []),
     ...config.args,
     ...autonomousCliArgs(config.providerID),
     ...cliEffortArgs(config.providerID, effort, config.efforts),
@@ -281,6 +285,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       if (this.config.promptMode === "file") promptFile = await materializeCliPrompt(text)
       // Materializing attachments or the prompt yields to cancellation.
       if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
+      if (this.config.providerID === "dsh-cli") await ensureDshPrivacyPatch()
       const cmd = this.buildCmd(promptFile?.file ?? text, options.providerOptions)
       assertCliCommandSize(cmd, this.config.providerID)
       const proc = Process.spawn(cmd, {

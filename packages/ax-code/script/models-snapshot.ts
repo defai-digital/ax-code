@@ -8,6 +8,7 @@ export const LOCAL_PROVIDER_IDS = [
   "muse-cli",
   "minimax-cli",
   "qoder-cli",
+  "dsh-cli",
   "ollama",
   "ax-studio",
 ] as const
@@ -133,6 +134,34 @@ const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
       },
     },
   },
+  "dsh-cli": {
+    id: "dsh-cli",
+    name: "DeepSeek Harness",
+    env: [],
+    npm: "cli",
+    models: {
+      "dsh-cli": {
+        id: "dsh-cli",
+        name: "DeepSeek Harness",
+        family: "deepseek",
+        attachment: false,
+        reasoning: false,
+        tool_call: false,
+        temperature: false,
+        release_date: "2026-08-01",
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        limit: {
+          context: 1048576,
+          output: 393216,
+        },
+        options: {},
+        status: "active",
+      },
+    },
+  },
 }
 
 export function preserveLocalProviders(fetched: ModelsSnapshot, existing: ModelsSnapshot) {
@@ -174,6 +203,14 @@ export function preserveLocalProviders(fetched: ModelsSnapshot, existing: Models
     qoderCli.models = {
       ...(qoderCli.models ?? {}),
       "qoder-cli": qoderCliDefault.models["qoder-cli"],
+    }
+  }
+  const dshCli = next["dsh-cli"] as { models?: Record<string, unknown> } | undefined
+  const dshCliDefault = LOCAL_PROVIDER_DEFAULTS["dsh-cli"] as { models: Record<string, unknown> }
+  if (dshCli && !dshCli.models?.["dsh-cli"]) {
+    dshCli.models = {
+      ...(dshCli.models ?? {}),
+      "dsh-cli": dshCliDefault.models["dsh-cli"],
     }
   }
   return next

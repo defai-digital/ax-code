@@ -16,7 +16,7 @@ export const CUSTOM_API_PROVIDER_OPTION_ID = "__custom-api__"
 /** Sentinel option id for adding an AX Trust gateway. */
 export const AX_TRUST_PROVIDER_OPTION_ID = "__ax-trust__"
 
-/** Bundled CLI provider ids (`claude-code`, `codex-cli`, `grok-build-cli`, `kimi-cli`, `muse-cli`, `minimax-cli`, `qoder-cli`). */
+/** Bundled CLI provider ids (`claude-code`, `codex-cli`, `grok-build-cli`, `kimi-cli`, `muse-cli`, `minimax-cli`, `qoder-cli`, `dsh-cli`). */
 export const CLI_PROVIDER_IDS = [
   "claude-code",
   "codex-cli",
@@ -25,6 +25,7 @@ export const CLI_PROVIDER_IDS = [
   "muse-cli",
   "minimax-cli",
   "qoder-cli",
+  "dsh-cli",
 ] as const
 /** One of the bundled CLI provider ids. */
 export type CliProviderID = (typeof CLI_PROVIDER_IDS)[number]

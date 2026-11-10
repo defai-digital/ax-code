@@ -6,6 +6,7 @@ import {
   minimaxCliParser,
   museCliParser,
   qoderCliParser,
+  dshCliParser,
   type CliOutputParser,
 } from "./parser"
 
@@ -75,6 +76,18 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     parser: qoderCliParser,
     promptMode: "stdin",
     workspaceArg: "--cwd",
+  },
+  // DeepSeek Harness: one-shot headless profile with NDJSON events. The task
+  // arrives on stdin (dsh reads stdin when the positional task is omitted).
+  // workspace-write keeps edits inside the session workspace; approval never
+  // rejects calls that would need dsh's interactive prompt. dsh uses the
+  // invoking directory as its workspace, so no workspace flag exists. The
+  // privacy `--patch` launcher flag is prepended in buildCliCommand.
+  "dsh-cli": {
+    binary: "dsh",
+    args: ["--profile", "headless", "--json", "--permission-mode", "workspace-write", "--approval-policy", "never"],
+    parser: dshCliParser,
+    promptMode: "stdin",
   },
 }
 

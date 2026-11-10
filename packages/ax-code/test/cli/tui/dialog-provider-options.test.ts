@@ -364,7 +364,7 @@ describe("provider dialog options", () => {
         })),
       ).toEqual([
         { value: "api", description: "2 providers" },
-        { value: "cli", description: "7 providers" },
+        { value: "cli", description: "8 providers" },
         { value: "ax-engine", description: "1 provider" },
         { value: "local", description: "6 providers" },
         { value: "private-gpu", description: "14 providers" },

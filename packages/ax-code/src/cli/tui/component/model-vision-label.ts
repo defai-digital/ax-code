@@ -8,6 +8,7 @@ const CLI_WEB_SEARCH_PROVIDER_IDS = new Set([
   "muse-cli",
   "minimax-cli",
   "qoder-cli",
+  "dsh-cli",
 ])
 
 export type DisplayCapableModel = {

@@ -15,6 +15,7 @@ const WEB_SEARCH_CLI_PROVIDERS = new Set([
   "muse-cli",
   "minimax-cli",
   "qoder-cli",
+  "dsh-cli",
 ])
 
 const CLI_WEB_SEARCH_HINT = [

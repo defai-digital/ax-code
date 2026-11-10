@@ -401,6 +401,7 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "muse-cli": "Muse Code CLI default",
   "minimax-cli": "MiniMax Code CLI default",
   "qoder-cli": "Qoder CLI default",
+  "dsh-cli": "DeepSeek Harness default",
 }
 
 // A stale standalone `codex` launcher can shadow the newer executable bundled
@@ -968,6 +969,7 @@ const kimiCli = getCliProviderDefinition("kimi-cli")!
 const museCli = getCliProviderDefinition("muse-cli")!
 const minimaxCli = getCliProviderDefinition("minimax-cli")!
 const qoderCli = getCliProviderDefinition("qoder-cli")!
+const dshCli = getCliProviderDefinition("dsh-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   // Official DeepSeek cloud API — OpenAI-compatible (OpenCode: npm
@@ -1065,5 +1067,14 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     promptMode: qoderCli.promptMode,
     promptFlag: qoderCli.promptFlag,
     workspaceArg: qoderCli.workspaceArg,
+  }),
+  "dsh-cli": cliLoader({
+    providerID: "dsh-cli",
+    binary: dshCli.binary,
+    args: dshCli.args,
+    parser: dshCli.parser,
+    promptMode: dshCli.promptMode,
+    promptFlag: dshCli.promptFlag,
+    workspaceArg: dshCli.workspaceArg,
   }),
 }

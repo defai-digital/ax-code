@@ -17,6 +17,7 @@ const DEFAULTS: Record<string, string> = {
   "muse-cli": "muse-cli",
   "minimax-cli": "minimax-cli",
   "qoder-cli": "qoder-cli",
+  "dsh-cli": "dsh-cli",
 }
 
 const KIMI_CODE_LEGACY_MODEL_IDS = new Set(["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"])
@@ -231,6 +232,8 @@ const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "muse-cli": resolveMuseModel,
   "minimax-cli": resolveMiniMaxModel,
   "qoder-cli": resolveQoderModel,
+  // dsh headless has no model flag; the profile's model route decides.
+  "dsh-cli": async () => ({ model: DEFAULTS["dsh-cli"]!, source: "default" }),
 }
 
 export async function resolveCliModel(providerID: string): Promise<CliModelInfo> {
