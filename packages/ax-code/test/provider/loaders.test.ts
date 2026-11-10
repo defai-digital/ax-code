@@ -8,9 +8,10 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import { which } from "../../src/util/which"
 import { selectPreferredCodexBinary } from "../../src/provider/cli/binary"
-import { CUSTOM_LOADERS, resolveCliBinary } from "../../src/provider/loaders"
+import { CUSTOM_LOADERS, minimaxCliFamilyModels, resolveCliBinary } from "../../src/provider/loaders"
 import { Config } from "../../src/config/config"
 import { Global } from "../../src/global"
+import { ModelsDev } from "../../src/provider/models"
 
 const originalFetch = globalThis.fetch
 
@@ -129,6 +130,110 @@ describe("CLI provider loaders", () => {
       baseModelID: "minimax-cli",
       discoveredModelIDs: ["MiniMax-M3"],
     })
+  })
+})
+
+describe("MiniMax CLI family models", () => {
+  afterEach(() => {
+    // Restore the ModelsDev.get stub so later suites in this file see the real
+    // catalog; the file-level afterEach does not restore spies.
+    vi.restoreAllMocks()
+  })
+
+  function minimaxCliProvider(): Provider.Info {
+    return {
+      id: ProviderID.make("minimax-cli"),
+      models: {
+        [ModelID.make("minimax-cli")]: {
+          id: ModelID.make("minimax-cli"),
+          providerID: ProviderID.make("minimax-cli"),
+          name: "MiniMax Code CLI default",
+          api: { id: "minimax-cli", npm: "cli", url: "" },
+          family: "minimax",
+          release_date: "",
+          limit: { context: 1_048_576, output: 512_000 },
+          capabilities: {
+            temperature: true,
+            reasoning: true,
+            attachment: true,
+            toolcall: true,
+            interleaved: false,
+            input: { image: true, pdf: false },
+            output: { image: false, pdf: false },
+          },
+          options: {},
+          headers: {},
+          status: "active",
+          variants: {},
+        },
+      },
+    } as unknown as Provider.Info
+  }
+
+  function minimaxSnapshot(ids = ["MiniMax-M2.7", "MiniMax-M3.1-Flash"]) {
+    return {
+      minimax: {
+        models: Object.fromEntries(
+          ids.map((id) => [
+            id,
+            {
+              id,
+              name: id,
+              family: "minimax",
+              release_date: id.includes("M3") ? "2026-06-01" : "2026-03-18",
+            },
+          ]),
+        ),
+      },
+    } as unknown as Record<string, ModelsDev.Provider>
+  }
+
+  test("offers only the M3 family MiniMax Code can serve", async () => {
+    vi.spyOn(ModelsDev, "get").mockResolvedValue(
+      minimaxSnapshot(["MiniMax-M2.5", "MiniMax-M2.7", "MiniMax-M3.1-Flash"]),
+    )
+    const models = await minimaxCliFamilyModels(minimaxCliProvider())
+    expect(Object.keys(models).sort()).toEqual(["MiniMax-M3.1-Flash"])
+    expect(models["MiniMax-M2.7"]).toBeUndefined()
+    expect(models["MiniMax-M2.5"]).toBeUndefined()
+  })
+
+  test("maps a minimax/-prefixed default onto the existing catalog entry", async () => {
+    vi.spyOn(ModelsDev, "get").mockResolvedValue(minimaxSnapshot())
+    const models = await minimaxCliFamilyModels(minimaxCliProvider(), "minimax/MiniMax-M3.1-Flash")
+    expect(Object.keys(models).sort()).toEqual(["MiniMax-M3.1-Flash"])
+  })
+
+  test("still adds an M2 model the MiniMax Code config resolves to", async () => {
+    vi.spyOn(ModelsDev, "get").mockResolvedValue(minimaxSnapshot())
+    const models = await minimaxCliFamilyModels(minimaxCliProvider(), "minimax/MiniMax-M2.7")
+    expect(Object.keys(models).sort()).toEqual(["MiniMax-M2.7", "MiniMax-M3.1-Flash"])
+    expect(models["MiniMax-M2.7"]?.api.id).toBe("MiniMax-M2.7")
+  })
+
+  test("keeps other provider prefixes as their own entries", async () => {
+    vi.spyOn(ModelsDev, "get").mockResolvedValue(minimaxSnapshot())
+    const models = await minimaxCliFamilyModels(minimaxCliProvider(), "openrouter/foo")
+    expect(models["openrouter/foo"]?.api.id).toBe("openrouter/foo")
+    expect(models["foo"]).toBeUndefined()
+  })
+
+  test("adds an unknown bare id unchanged", async () => {
+    vi.spyOn(ModelsDev, "get").mockResolvedValue(minimaxSnapshot())
+    const models = await minimaxCliFamilyModels(minimaxCliProvider(), "MiniMax-Unknown")
+    expect(models["MiniMax-Unknown"]?.api.id).toBe("MiniMax-Unknown")
+  })
+
+  test("maps a prefixed catalog id that is not the latest SKU", async () => {
+    vi.spyOn(ModelsDev, "get").mockResolvedValue(
+      minimaxSnapshot(["MiniMax-M2.5", "MiniMax-M2.7", "MiniMax-M3.1-Flash"]),
+    )
+    const models = await minimaxCliFamilyModels(minimaxCliProvider(), "minimax/MiniMax-M2.5")
+    // The resolved M2.5 entry survives as the config's own model; the rest of
+    // the M2 family is no longer offered by default.
+    expect(Object.keys(models).sort()).toEqual(["MiniMax-M2.5", "MiniMax-M3.1-Flash"])
+    expect(models["MiniMax-M2.7"]).toBeUndefined()
+    expect(models["minimax/MiniMax-M2.5"]).toBeUndefined()
   })
 })
 

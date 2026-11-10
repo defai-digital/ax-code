@@ -21,6 +21,7 @@ import { Shell } from "@/shell/shell"
 import { Instance } from "@/project/instance"
 import { cliEffortArgs, cliEffortFromProviderOptions } from "./effort"
 import { dshLauncherArgs, ensureDshPrivacyPatch } from "./dsh"
+import { minimaxModelArg } from "./minimax"
 
 const log = Log.create({ service: "provider.cli-language-model" })
 
@@ -199,7 +200,9 @@ export function buildCliCommand(
     ...cliEffortArgs(config.providerID, effort, config.efforts),
   ]
   if (config.workspaceArg && workspaceDirectory) cmd.push(config.workspaceArg, workspaceDirectory)
-  if (config.modelID !== config.providerID) cmd.push("--model", config.modelID)
+  if (config.modelID !== config.providerID) {
+    cmd.push("--model", config.providerID === "minimax-cli" ? minimaxModelArg(config.modelID) : config.modelID)
+  }
   if (config.promptMode === "arg") cmd.push(config.promptFlag ?? "-p", prompt)
   if (config.promptMode === "positional") cmd.push(prompt)
   // File mode receives an already-materialized path, never the prompt text.

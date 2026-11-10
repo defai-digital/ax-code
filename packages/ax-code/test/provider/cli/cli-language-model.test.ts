@@ -1386,9 +1386,48 @@ describe("CliLanguageModel", () => {
     )
 
     expect(cmd).toContain("--model")
-    expect(cmd[cmd.indexOf("--model") + 1]).toBe("MiniMax-M3")
+    expect(cmd[cmd.indexOf("--model") + 1]).toBe("minimax/MiniMax-M3")
     expect(cmd).toContain("--effort")
     expect(cmd[cmd.indexOf("--effort") + 1]).toBe("high")
+  })
+
+  test("sends MiniMax Code a provider-qualified model id", () => {
+    const definition = CLI_PROVIDER_DEFINITIONS["minimax-cli"]!
+    const modelArgFor = (modelID: string) => {
+      const cmd = buildCliCommand(
+        {
+          providerID: "minimax-cli",
+          modelID,
+          binary: "mcode",
+          args: definition.args,
+          parser: definition.parser,
+          promptMode: "stdin",
+        },
+        "write file",
+      )
+      return cmd[cmd.indexOf("--model") + 1]
+    }
+
+    // mcode rejects a bare id with "--model must use provider/model".
+    expect(modelArgFor("MiniMax-M3")).toBe("minimax/MiniMax-M3")
+    // An id that already names a provider is forwarded unchanged.
+    expect(modelArgFor("minimax/MiniMax-M3")).toBe("minimax/MiniMax-M3")
+    expect(modelArgFor("openrouter/foo")).toBe("openrouter/foo")
+  })
+
+  test("leaves other CLI providers' bare model ids unchanged", () => {
+    const cmd = buildCliCommand(
+      {
+        providerID: "codex-cli",
+        modelID: "gpt-5.6",
+        binary: "codex",
+        args: ["exec", "--json"],
+        parser: streamJsonParser,
+        promptMode: "stdin",
+      },
+      "write file",
+    )
+    expect(cmd[cmd.indexOf("--model") + 1]).toBe("gpt-5.6")
   })
 
   test("maps effort to each supported CLI's native arguments", () => {

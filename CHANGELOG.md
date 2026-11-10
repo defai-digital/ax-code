@@ -33,7 +33,12 @@ changes belong to AX Coder.
   `low`/`high`/`max` effort variants through `reasoning.effort`. A `protocolProfile: "glm5.3"` override keeps working
   as an alias of the new `glm5` family.
 - MiniMax Code CLI (`minimax-cli`) works with mcode 0.7.6, whose renamed stream-json fields left AX Code with no
-  assistant text, so login and every bridged run reported an empty answer.
+  assistant text, so login and every bridged run reported an empty answer. Selecting a non-default model no longer
+  fails with "--model must use provider/model": AX Code now sends `minimax/<id>`. The model list drops the duplicate
+  `minimax/`-prefixed entry and offers only the M3 family, because MiniMax Code silently runs its default model when
+  asked for an M2 id.
+- `ax-code providers login <cli-provider>` works without an interactive terminal. CLI providers need no credential
+  prompt, so login runs the bridge probe directly; a failing probe exits non-zero and says to sign in with that CLI.
 - MiniMax M3.1 and later M3.x models (including M3.1-Flash) no longer get a `none` reasoning variant or a
   disabled-thinking request, which the API rejects because thinking is always on from M3.1. M3.1-Flash on
   OpenAI-compatible routes such as AX Trust now gets the M3 family's chat settings (`reasoning_split`), not a generic

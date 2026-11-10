@@ -20,6 +20,12 @@ import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { AX_ENGINE_QUANTIZATION_IDS } from "../../src/provider/ax-engine"
 
+const probeCliProviderMock = vi.hoisted(() => vi.fn())
+vi.mock("../../src/provider/cli/connect", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/provider/cli/connect")>()
+  return { ...actual, probeCliProvider: probeCliProviderMock }
+})
+
 const originalCwd = process.cwd()
 const authFile = path.join(Global.Path.data, "auth.json")
 const authLockFile = `${authFile}.lock`
@@ -30,6 +36,7 @@ beforeEach(() => {
   // The login handler refuses to run without a TTY (#393); prompt-mocking
   // tests simulate an interactive session instead.
   stdin.isTTY = true
+  probeCliProviderMock.mockReset()
 })
 
 afterEach(async () => {
@@ -343,12 +350,181 @@ describe("providers command", () => {
       )
       expect(passwordSpy).not.toHaveBeenCalled()
       expect(autocompleteSpy).not.toHaveBeenCalled()
+      expect(probeCliProviderMock).not.toHaveBeenCalled()
       expect(await Auth.get("google")).toBeUndefined()
     } finally {
       introSpy.mockRestore()
       errorSpy.mockRestore()
       passwordSpy.mockRestore()
       autocompleteSpy.mockRestore()
+      process.exitCode = previousExitCode
+    }
+  })
+
+  test("providers login runs the CLI probe without a TTY and stores a cli credential", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
+    const invalidateSpy = vi.spyOn(Provider, "invalidate").mockResolvedValue()
+
+    const previousExitCode = process.exitCode
+    try {
+      stdin.isTTY = false
+      process.exitCode = 0
+      probeCliProviderMock.mockResolvedValue({
+        binary: "/usr/local/bin/codex",
+        model: { model: "gpt-5.6", source: "default" },
+      })
+
+      await ProvidersLoginCommand.handler({ provider: "codex-cli" } as any)
+
+      expect(probeCliProviderMock).toHaveBeenCalledWith("codex-cli")
+      expect(await Auth.get("codex-cli")).toEqual({ type: "api", key: "cli" })
+      expect(successSpy).toHaveBeenCalledWith("Login successful")
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+      expect(process.exitCode).toBe(0)
+    } finally {
+      await Auth.remove("codex-cli").catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      successSpy.mockRestore()
+      invalidateSpy.mockRestore()
+      process.exitCode = previousExitCode
+    }
+  })
+
+  test("providers login runs the CLI probe from a positional id without a TTY", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
+    const invalidateSpy = vi.spyOn(Provider, "invalidate").mockResolvedValue()
+
+    const previousExitCode = process.exitCode
+    try {
+      stdin.isTTY = false
+      process.exitCode = 0
+      probeCliProviderMock.mockResolvedValue({
+        binary: "/usr/local/bin/codex",
+        model: { model: "gpt-5.6", source: "default" },
+      })
+
+      await ProvidersLoginCommand.handler({ url: "codex-cli" } as any)
+
+      expect(probeCliProviderMock).toHaveBeenCalledWith("codex-cli")
+      expect(await Auth.get("codex-cli")).toEqual({ type: "api", key: "cli" })
+      expect(successSpy).toHaveBeenCalledWith("Login successful")
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+      expect(process.exitCode).toBe(0)
+    } finally {
+      await Auth.remove("codex-cli").catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      successSpy.mockRestore()
+      invalidateSpy.mockRestore()
+      process.exitCode = previousExitCode
+    }
+  })
+
+  test("providers login resolves a CLI provider display name case-insensitively without a TTY", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
+    const invalidateSpy = vi.spyOn(Provider, "invalidate").mockResolvedValue()
+
+    const previousExitCode = process.exitCode
+    try {
+      stdin.isTTY = false
+      process.exitCode = 0
+      probeCliProviderMock.mockResolvedValue({
+        binary: "/usr/local/bin/grok",
+        model: { model: "grok-4", source: "default" },
+      })
+
+      await ProvidersLoginCommand.handler({ provider: "grok build cli" } as any)
+
+      expect(probeCliProviderMock).toHaveBeenCalledWith("grok-build-cli")
+      expect(await Auth.get("grok-build-cli")).toEqual({ type: "api", key: "cli" })
+      expect(successSpy).toHaveBeenCalledWith("Login successful")
+      expect(process.exitCode).toBe(0)
+    } finally {
+      await Auth.remove("grok-build-cli").catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      successSpy.mockRestore()
+      invalidateSpy.mockRestore()
+      process.exitCode = previousExitCode
+    }
+  })
+
+  test("providers login keeps the well-known URL flow when --provider is also set", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const passwordSpy = vi.spyOn(prompts, "password").mockResolvedValue("well-known-token")
+    const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
+    const assertSpy = vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    const fetchSpy = vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
+      ok: true,
+      async json() {
+        return {
+          auth: {
+            env: "MY_AUTH_TOKEN",
+          },
+        }
+      },
+    } as any)
+
+    try {
+      await ProvidersLoginCommand.handler({ url: "https://example.com", provider: "codex-cli" } as any)
+
+      expect(probeCliProviderMock).not.toHaveBeenCalled()
+      expect(assertSpy).toHaveBeenCalledWith("https://example.com/.well-known/ax-code", "providers-add")
+      expect(fetchSpy).toHaveBeenCalled()
+      expect(await Auth.get("https://example.com")).toEqual({
+        type: "wellknown",
+        key: "MY_AUTH_TOKEN",
+        token: "well-known-token",
+      })
+      expect(successSpy).toHaveBeenCalledWith("Logged into https://example.com")
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      await Auth.remove("https://example.com").catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      passwordSpy.mockRestore()
+      successSpy.mockRestore()
+      assertSpy.mockRestore()
+      fetchSpy.mockRestore()
+    }
+  })
+
+  test("providers login stores nothing and exits non-zero when the CLI probe fails", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
+    const invalidateSpy = vi.spyOn(Provider, "invalidate").mockResolvedValue()
+
+    const previousExitCode = process.exitCode
+    try {
+      stdin.isTTY = false
+      process.exitCode = 0
+      probeCliProviderMock.mockRejectedValue(new Error("codex CLI probe failed: not signed in"))
+
+      await ProvidersLoginCommand.handler({ provider: "codex-cli" } as any)
+
+      expect(probeCliProviderMock).toHaveBeenCalledWith("codex-cli")
+      expect(await Auth.get("codex-cli")).toBeUndefined()
+      expect(process.exitCode).toBe(1)
+      expect(errorSpy).toHaveBeenCalledWith("codex CLI probe failed: not signed in")
+      expect(infoSpy).toHaveBeenCalledWith("Sign in with the codex CLI first, then run this command again.")
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      await Auth.remove("codex-cli").catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
+      infoSpy.mockRestore()
+      invalidateSpy.mockRestore()
       process.exitCode = previousExitCode
     }
   })

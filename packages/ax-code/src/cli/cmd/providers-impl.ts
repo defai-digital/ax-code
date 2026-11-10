@@ -674,6 +674,48 @@ export const ProvidersLoginCommand = cmd({
       return
     }
 
+    // CLI providers authenticate through their own CLI. Login only verifies the
+    // bridge with a probe and records it, so it needs no prompt or TTY and must
+    // never fall into the API-key prompt below.
+    const loginCliProvider = async (provider: string) => {
+      const definition = getCliProviderDefinition(provider)!
+      const result = await probeCliProvider(provider).catch((error) => {
+        prompts.log.error(toErrorMessage(error))
+        prompts.log.info(`Sign in with the ${definition.binary} CLI first, then run this command again.`)
+        return undefined
+      })
+      if (!result) {
+        process.exitCode = 1
+        prompts.outro("Done")
+        return
+      }
+      await setProviderAuth(provider, { type: "api", key: "cli" })
+      prompts.log.success("Login successful")
+      prompts.outro("Done")
+    }
+    // Match a provider id first, then the same display name the interactive
+    // picker shows (from the model catalog) so "Grok Build CLI" logs in the
+    // same way as "grok-build-cli".
+    const resolveCliLoginProvider = async (input: string) => {
+      if (getCliProviderDefinition(input)) return input
+      const catalog = await ModelsDev.get().catch(() => undefined)
+      if (!catalog) return undefined
+      const lower = input.toLowerCase()
+      const matched = Object.entries(catalog).find(
+        ([id, provider]) => getCliProviderDefinition(id) !== undefined && provider.name.toLowerCase() === lower,
+      )
+      return matched?.[0]
+    }
+
+    // A positional http(s) URL belongs to the well-known flow below; it keeps
+    // precedence over --provider so the URL is never silently ignored.
+    const urlArg = Boolean(args.url && isHttpProviderUrl(args.url))
+    const cliProvider = urlArg || !requestedProvider ? undefined : await resolveCliLoginProvider(requestedProvider)
+    if (cliProvider) {
+      await loginCliProvider(cliProvider)
+      return
+    }
+
     // Every path below ends in an interactive prompt (provider/method picker
     // or API key entry) — even with --provider/--method the key prompt still
     // needs a real TTY. With piped stdin the prompt never settles and the
@@ -892,22 +934,8 @@ export const ProvidersLoginCommand = cmd({
           )
         }
 
-        const cliProvider = getCliProviderDefinition(provider)
-        if (cliProvider) {
-          const result = await probeCliProvider(provider).catch((error) => {
-            prompts.log.error(toErrorMessage(error))
-            return undefined
-          })
-          if (!result) {
-            prompts.outro("Done")
-            return
-          }
-          await setProviderAuth(provider, {
-            type: "api",
-            key: "cli",
-          })
-          prompts.log.success("Login successful")
-          prompts.outro("Done")
+        if (getCliProviderDefinition(provider)) {
+          await loginCliProvider(provider)
           return
         }
 

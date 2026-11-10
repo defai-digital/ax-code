@@ -687,7 +687,7 @@ function collectMiniMaxCatalog(snapshot: Record<string, ModelsDev.Provider>): Re
   return collected
 }
 
-async function minimaxCliFamilyModels(
+export async function minimaxCliFamilyModels(
   provider: Provider.Info,
   resolved?: string,
 ): Promise<Record<string, Provider.Model>> {
@@ -696,6 +696,10 @@ async function minimaxCliFamilyModels(
   const catalog = collectMiniMaxCatalog(await ModelsDev.get())
   const models: Record<string, Provider.Model> = {}
   for (const item of latestMiniMaxFamilyModels(catalog)) {
+    // MiniMax Code only serves the M3 family. Its own catalog silently
+    // substitutes the default model when asked for an M2 id, so offering one
+    // would run a different model than the picker shows.
+    if (minimaxFamilyId({ id: item.id, family: item.family }) !== "minimax-m3") continue
     models[item.id] = overlayCliCatalogModel(
       base,
       item,
@@ -704,23 +708,31 @@ async function minimaxCliFamilyModels(
       minimaxFamilyId({ id: item.id, family: item.family }),
     )
   }
-  if (resolved && resolved !== "minimax-cli" && !models[resolved] && catalog[resolved]) {
-    const item = catalog[resolved]!
-    models[resolved] = overlayCliCatalogModel(
+  // MiniMax Code's config.yaml stores its default as `<provider>/<model>`,
+  // while the catalog and family map use bare ids. Map only its own
+  // `minimax/` prefix onto the existing entry; other prefixes stay distinct.
+  let requested = resolved
+  if (resolved?.startsWith("minimax/")) {
+    const bare = resolved.slice("minimax/".length)
+    if (models[bare] || catalog[bare]) requested = bare
+  }
+  if (requested && requested !== "minimax-cli" && !models[requested] && catalog[requested]) {
+    const item = catalog[requested]!
+    models[requested] = overlayCliCatalogModel(
       base,
       item,
       "minimax-cli",
-      minimaxDisplayName(item.name, resolved),
+      minimaxDisplayName(item.name, requested),
       minimaxFamilyId({ id: item.id, family: item.family }),
     )
-  } else if (resolved && resolved !== "minimax-cli" && !models[resolved]) {
-    const id = ModelID.make(resolved)
+  } else if (requested && requested !== "minimax-cli" && !models[requested]) {
+    const id = ModelID.make(requested)
     models[id] = {
       ...base,
       id,
       providerID: ProviderID.make("minimax-cli"),
-      api: { ...base.api, id: resolved },
-      name: minimaxDisplayName(undefined, resolved),
+      api: { ...base.api, id: requested },
+      name: minimaxDisplayName(undefined, requested),
     }
   }
   return models
