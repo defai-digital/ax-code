@@ -1,4 +1,4 @@
-import { familyReleaseTime, familySortKey, latestFamilyModels } from "./family-shared"
+import { familyDisplayName, familyReleaseTime, familySortKey, latestFamilyModels } from "./family-shared"
 
 const FAMILY_ORDER = ["kimi-k3", "kimi-coding"] as const
 
@@ -7,6 +7,10 @@ export type KimiFamilySource = {
   name?: string
   family?: string
   release_date?: string
+}
+
+export function kimiDisplayName(name: string | undefined, fallback: string): string {
+  return familyDisplayName(name, fallback, { stripOpenRouterPrefix: true })
 }
 
 export function kimiFamilyId(input: { id?: string; family?: string }): string | undefined {

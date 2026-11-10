@@ -13,6 +13,11 @@ changes belong to AX Coder.
   unique-line anchors keep sparse edits as separate hunks, and the hunks still apply exactly. Previews within budget
   are unchanged, byte, line, output and cancellation limits still reject, and the native CLI preview is unchanged.
 
+### Added
+
+- Restore Kimi Code CLI (`kimi-cli`), MiniMax Code CLI (`minimax-cli`), and Qoder CLI (`qoder-cli`) as bundled CLI
+  providers, including their parsers, model resolution, login and connect surfaces, and catalog defaults.
+
 ## [7.30.18] - 2026-11-09
 
 ### Changed

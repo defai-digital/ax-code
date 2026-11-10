@@ -155,8 +155,8 @@ describe("provider routes", () => {
     expect(ids).not.toContain("ainetcafe")
     // Local runtimes stay visible through their own category path, as before.
     expect(ids).toEqual(expect.arrayContaining(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"]))
-    // CLI adapters stay curated-only.
-    expect(ids).not.toContain("qoder-cli")
+    // CLI adapters stay curated-only: retired adapters never return via the catalog.
+    expect(ids).not.toContain("antigravity-cli")
     expect(ids).not.toContain("gemini-cli")
   })
 

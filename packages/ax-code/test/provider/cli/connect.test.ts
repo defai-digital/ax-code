@@ -206,7 +206,9 @@ describe("probeCliLanguageModel", () => {
     await using tmp = await tmpdir()
     const spawn = vi
       .spyOn(Process, "spawn")
-      .mockImplementation(() => successfulChild('{"payload_type":"run.output.delta","payload":{"text":"OK"}}\n'))
+      .mockImplementation(() =>
+        successfulChild('{"type":"item.completed","item":{"id":"item_1","type":"assistant_message","text":"OK"}}\n'),
+      )
 
     try {
       await Instance.provide({
