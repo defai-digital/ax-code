@@ -3545,29 +3545,6 @@
           "output": 16384
         }
       },
-      "ernie-5.0-thinking-preview": {
-        "id": "ernie-5.0-thinking-preview",
-        "name": "Ernie 5.0 Thinking Preview",
-        "family": "ernie",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": false,
-        "release_date": "2025-11-18",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 128000,
-          "input": 128000,
-          "output": 16384
-        }
-      },
       "mercury-coder-small": {
         "id": "mercury-coder-small",
         "name": "Mercury Coder Small",
@@ -3840,27 +3817,6 @@
           "output": 16384
         }
       },
-      "asi1-mini": {
-        "id": "asi1-mini",
-        "name": "ASI1 Mini",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2025-03-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 128000,
-          "input": 128000,
-          "output": 16384
-        }
-      },
       "command-a-reasoning-08-2025": {
         "id": "command-a-reasoning-08-2025",
         "name": "Cohere Command A (08/2025)",
@@ -3952,28 +3908,6 @@
           "context": 262144,
           "input": 262144,
           "output": 16384
-        }
-      },
-      "ernie-5.1:thinking": {
-        "id": "ernie-5.1:thinking",
-        "name": "ERNIE 5.1 Thinking",
-        "family": "ernie",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": false,
-        "release_date": "2026-05-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 119000,
-          "input": 119000,
-          "output": 64000
         }
       },
       "universal-summarizer": {
@@ -4134,28 +4068,6 @@
           "output": 128000
         },
         "canonical_model_id": "bytedance-seed/seed-2.0-code"
-      },
-      "ernie-5.1": {
-        "id": "ernie-5.1",
-        "name": "ERNIE 5.1",
-        "family": "ernie",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2026-05-10",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 119000,
-          "input": 119000,
-          "output": 64000
-        }
       },
       "gemma-4-26b-a4b-it-chimerax": {
         "id": "gemma-4-26b-a4b-it-chimerax",
@@ -7986,54 +7898,6 @@
           "output": 16384
         }
       },
-      "bytedance/doubao-seed-2.1-turbo": {
-        "id": "bytedance/doubao-seed-2.1-turbo",
-        "name": "Doubao Seed 2.1 Turbo",
-        "family": "seed",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2026-06-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "input": 256000,
-          "output": 128000
-        },
-        "canonical_model_id": "bytedance-seed/seed-2.1-turbo",
-        "temperature": true
-      },
-      "bytedance/doubao-seed-2.1-pro": {
-        "id": "bytedance/doubao-seed-2.1-pro",
-        "name": "Doubao Seed 2.1 Pro",
-        "family": "seed",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2026-06-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "input": 256000,
-          "output": 128000
-        },
-        "canonical_model_id": "bytedance-seed/seed-2.1-pro",
-        "temperature": true
-      },
       "bytedance/doubao-seed-character": {
         "id": "bytedance/doubao-seed-character",
         "name": "Doubao Seed Character",
@@ -8210,31 +8074,6 @@
         "canonical_model_id": "google/gemma-4-31b-it",
         "temperature": true
       },
-      "TEE/qwen2.5-vl-72b-instruct": {
-        "id": "TEE/qwen2.5-vl-72b-instruct",
-        "name": "Qwen2.5 VL 72B TEE",
-        "family": "qwen",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2025-01-26",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 65536,
-          "input": 65536,
-          "output": 8192
-        },
-        "canonical_model_id": "alibaba/qwen2-5-vl-72b-instruct",
-        "temperature": true
-      },
       "TEE/gemma4-31b:thinking": {
         "id": "TEE/gemma4-31b:thinking",
         "name": "Gemma 4 31B Thinking TEE",
@@ -8259,30 +8098,6 @@
         },
         "canonical_model_id": "google/gemma-4-31b-it",
         "temperature": true
-      },
-      "TEE/qwen3.5-397b-a17b": {
-        "id": "TEE/qwen3.5-397b-a17b",
-        "name": "Qwen3.5 397B A17B TEE",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-02-15",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 65536
-        },
-        "canonical_model_id": "alibaba/qwen3.5-397b-a17b"
       },
       "TEE/gemma-4-26b-a4b-uncensored": {
         "id": "TEE/gemma-4-26b-a4b-uncensored",
@@ -11442,28 +11257,6 @@
         "release_date": "2026-09-06",
         "tool_call": true
       },
-      "agnes-3.0-flash": {
-        "attachment": true,
-        "id": "agnes-3.0-flash",
-        "limit": {
-          "context": 524288,
-          "input": 524288,
-          "output": 65536
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Agnes 3.0 Flash",
-        "reasoning": true,
-        "release_date": "2026-09-09",
-        "tool_call": true
-      },
       "deepseek/deepseek-v4.1-flash": {
         "attachment": true,
         "family": "deepseek-flash",
@@ -12703,8 +12496,7 @@
         "modalities": {
           "input": [
             "text",
-            "image",
-            "video"
+            "image"
           ],
           "output": [
             "text"
@@ -13268,7 +13060,6 @@
           "input": [
             "text",
             "image",
-            "video",
             "pdf"
           ],
           "output": [
@@ -13770,8 +13561,8 @@
         "attachment": true,
         "id": "stepfun/step-5-preview",
         "limit": {
-          "context": 1000000,
-          "input": 1000000,
+          "context": 1048576,
+          "input": 1048576,
           "output": 65536
         },
         "modalities": {
@@ -15104,98 +14895,6 @@
         "release_date": "2026-10-27",
         "tool_call": true
       },
-      "deepseek/deepseek-v4.1-flash-1017-uncensored": {
-        "attachment": true,
-        "family": "deepseek",
-        "id": "deepseek/deepseek-v4.1-flash-1017-uncensored",
-        "limit": {
-          "context": 1048576,
-          "input": 1048576,
-          "output": 393216
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4.1 Flash 1017 Uncensored",
-        "reasoning": true,
-        "release_date": "2026-10-27",
-        "tool_call": true
-      },
-      "deepseek/deepseek-v4.1-flash-1017-uncensored:thinking": {
-        "attachment": true,
-        "family": "deepseek",
-        "id": "deepseek/deepseek-v4.1-flash-1017-uncensored:thinking",
-        "limit": {
-          "context": 1048576,
-          "input": 1048576,
-          "output": 393216
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4.1 Flash 1017 Uncensored Thinking",
-        "reasoning": true,
-        "release_date": "2026-10-27",
-        "tool_call": true
-      },
-      "deepseek/deepseek-v4.1-flash-uncensored": {
-        "attachment": true,
-        "family": "deepseek",
-        "id": "deepseek/deepseek-v4.1-flash-uncensored",
-        "limit": {
-          "context": 1048576,
-          "input": 1048576,
-          "output": 393216
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4.1 Flash Uncensored",
-        "reasoning": true,
-        "release_date": "2026-10-01",
-        "tool_call": true
-      },
-      "deepseek/deepseek-v4.1-flash-uncensored:thinking": {
-        "attachment": true,
-        "family": "deepseek",
-        "id": "deepseek/deepseek-v4.1-flash-uncensored:thinking",
-        "limit": {
-          "context": 1048576,
-          "input": 1048576,
-          "output": 393216
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4.1 Flash Uncensored Thinking",
-        "reasoning": true,
-        "release_date": "2026-10-01",
-        "tool_call": true
-      },
       "gemma-4-12b-it-starry-ocean": {
         "attachment": true,
         "family": "gemma",
@@ -16284,6 +15983,123 @@
         "reasoning": false,
         "release_date": "2026-11-07",
         "tool_call": false
+      },
+      "anthropic/claude-fable-5.2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5.2",
+        "limit": {
+          "context": 1000000,
+          "input": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "orca/orcacyber-flash-1.0": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "orca/orcacyber-flash-1.0",
+        "limit": {
+          "context": 1048064,
+          "input": 1048064,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "OrcaCyber DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "tool_call": true
+      },
+      "orca/orcacyber-flash-1.0:thinking": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "orca/orcacyber-flash-1.0:thinking",
+        "limit": {
+          "context": 1048064,
+          "input": 1048064,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "OrcaCyber DeepSeek V4.1 Flash Thinking",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "tool_call": true
+      },
+      "orca/orcacyber-glm-5.3-flash": {
+        "attachment": true,
+        "family": "glm",
+        "id": "orca/orcacyber-glm-5.3-flash",
+        "limit": {
+          "context": 1048064,
+          "input": 1048064,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "OrcaCyber GLM 5.3 Flash",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "tool_call": true
+      },
+      "orca/orcacyber-mimo-flash": {
+        "attachment": false,
+        "family": "mimo",
+        "id": "orca/orcacyber-mimo-flash",
+        "limit": {
+          "context": 1048064,
+          "input": 1048064,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "OrcaCyber MiMo V2.6 Flash",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "tool_call": true
       }
     }
   },
@@ -31562,10 +31378,158 @@
           ]
         },
         "name": "DeepSeek V4.1 Flash 1017 (scx-ai-gp)",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-17",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
+      },
+      "anthropic/claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2 (Anthropic)",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "aws-bedrock/claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "aws-bedrock/claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2 (AWS Bedrock)",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "canopywave/deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "canopywave/deepseek-v4-flash-0731",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4-flash-0731 (CanopyWave)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "canopywave/qwen3.8-flash": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-flash",
+        "family": "qwen",
+        "id": "canopywave/qwen3.8-flash",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Flash (CanopyWave)",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "temperature": true,
+        "tool_call": true
+      },
+      "consensusprotocol/deepseek-v4.1-flash-uncensored": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "consensusprotocol/deepseek-v4.1-flash-uncensored",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 Uncensored (HeimdaLLM) (consensusprotocol)",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": true,
+        "tool_call": true
+      },
+      "meta/muse-ember-1.0": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-ember-1.0",
+        "family": "muse",
+        "id": "meta/muse-ember-1.0",
+        "limit": {
+          "context": 1048576,
+          "output": 524288
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Ember 1.0 (Meta)",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -36210,6 +36174,33 @@
         "release_date": "2026-11-04",
         "temperature": true,
         "tool_call": false
+      },
+      "Qwen/Qwen3.5-27B-TEE": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.5-27b",
+        "family": "qwen",
+        "id": "Qwen/Qwen3.5-27B-TEE",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.5 27B TEE",
+        "reasoning": true,
+        "release_date": "2026-02-23",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -43199,6 +43190,45 @@
         "name": "Gemini 4 Argon",
         "reasoning": true,
         "release_date": "2026-10-13",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-fable-5-2@default": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "experimental": {
+          "modes": {
+            "fast": {
+              "provider": {
+                "body": {
+                  "speed": "fast"
+                }
+              }
+            }
+          }
+        },
+        "family": "claude-fable",
+        "id": "claude-fable-5-2@default",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "provider": {
+          "npm": "@ai-sdk/google-vertex/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-09",
         "temperature": false,
         "tool_call": true
       }
@@ -60549,6 +60579,56 @@
         "release_date": "2026-10-13",
         "temperature": false,
         "tool_call": true
+      },
+      "openai/gpt-6.1-terra": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.1-terra",
+        "family": "gpt-terra",
+        "id": "openai/gpt-6.1-terra",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.1 Terra",
+        "reasoning": true,
+        "release_date": "2026-10-26",
+        "temperature": false,
+        "tool_call": true
+      },
+      "tencent/hy4": {
+        "attachment": true,
+        "canonical_model_id": "tencent/hy4",
+        "family": "Hy",
+        "id": "tencent/hy4",
+        "limit": {
+          "context": 1048576,
+          "input": 983010,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Hy4",
+        "reasoning": true,
+        "release_date": "2026-11-04",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -64614,6 +64694,45 @@
         "name": "Claude Haiku 5.5",
         "reasoning": true,
         "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "experimental": {
+          "modes": {
+            "fast": {
+              "provider": {
+                "body": {
+                  "speed": "fast"
+                }
+              }
+            }
+          }
+        },
+        "family": "claude-fable",
+        "headers": {
+          "anthropic-beta": "context-1m-2025-08-07"
+        },
+        "id": "claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
         "temperature": false,
         "tool_call": true
       }
@@ -73729,6 +73848,79 @@
         "reasoning": true,
         "release_date": "2026-11-06",
         "tool_call": true
+      },
+      "anthropic/claude-fable-5.2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5.2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "anthropic/claude-fable-5.2-fast": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5.2-fast",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2 (Fast)",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "meta/muse-ember": {
+        "attachment": true,
+        "family": "muse",
+        "id": "meta/muse-ember",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Ember",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "tool_call": true
       }
     }
   },
@@ -77018,6 +77210,33 @@
         "release_date": "2026-10-12",
         "temperature": true,
         "tool_call": true
+      },
+      "muse-ember-1.0": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-ember-1.0",
+        "family": "muse",
+        "id": "muse-ember-1.0",
+        "limit": {
+          "context": 1048576,
+          "output": 524288
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Ember",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -77262,7 +77481,8 @@
         "limit": {
           "context": 256000,
           "output": 8192
-        }
+        },
+        "status": "deprecated"
       },
       "qwen-3-6-plus": {
         "id": "qwen-3-6-plus",
@@ -79395,6 +79615,30 @@
         "name": "DeepSeek V4.1 Flash 1017 Ultrafast",
         "reasoning": true,
         "release_date": "2026-10-23",
+        "tool_call": true
+      },
+      "claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -83680,6 +83924,104 @@
         "name": "Step 5 Preview",
         "reasoning": true,
         "release_date": "2026-09-16",
+        "temperature": true,
+        "tool_call": true
+      },
+      "claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4-flash-0731",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4-flash-0731",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4.1-flash-uncensored": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "deepseek-v4.1-flash-uncensored",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 Uncensored (HeimdaLLM)",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": true,
+        "tool_call": true
+      },
+      "muse-ember-1.0": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-ember-1.0",
+        "family": "muse",
+        "id": "muse-ember-1.0",
+        "limit": {
+          "context": 1048576,
+          "output": 524288
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Ember 1.0",
+        "reasoning": true,
+        "release_date": "2026-11-09",
         "temperature": true,
         "tool_call": true
       }
@@ -101310,6 +101652,81 @@
         "release_date": "2026-10-26",
         "temperature": false,
         "tool_call": true
+      },
+      "anthropic.claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic.claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "global.anthropic.claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "global.anthropic.claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2 (Global)",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "us.anthropic.claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "us.anthropic.claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2 (US)",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -105218,6 +105635,31 @@
         "reasoning": true,
         "release_date": "2026-08-14",
         "temperature": true,
+        "tool_call": true
+      },
+      "anthropic/claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -110030,8 +110472,7 @@
         "reasoning": true,
         "release_date": "2026-10-19",
         "temperature": true,
-        "tool_call": true,
-        "status": "deprecated"
+        "tool_call": true
       },
       "crouton-alpha-free": {
         "attachment": true,
@@ -110059,7 +110500,8 @@
         "reasoning": true,
         "release_date": "2026-11-03",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "status": "deprecated"
       },
       "flint-40b-free": {
         "attachment": false,
@@ -110197,6 +110639,95 @@
         },
         "reasoning": true,
         "release_date": "2026-11-05",
+        "temperature": true,
+        "tool_call": true
+      },
+      "claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "provider": {
+          "api": "https://opencode.ai/inference/anthropic/v1",
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "longcat-2.5-free": {
+        "attachment": true,
+        "canonical_model_id": "meituan/longcat-2.5",
+        "family": "longcat",
+        "id": "longcat-2.5-free",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "LongCat 2.5 Free",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-02",
+        "temperature": false,
+        "tool_call": true
+      },
+      "muse-ember-1.0": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-ember-1.0",
+        "family": "muse",
+        "id": "muse-ember-1.0",
+        "limit": {
+          "context": 1048576,
+          "output": 270000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Ember 1.0",
+        "provider": {
+          "api": "https://opencode.ai/inference/openai/v1",
+          "npm": "@ai-sdk/openai"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-09",
         "temperature": true,
         "tool_call": true
       }
@@ -134323,6 +134854,42 @@
         "release_date": "2026-10-07",
         "temperature": false,
         "tool_call": true
+      },
+      "claude-fable-5-2@default": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "experimental": {
+          "modes": {
+            "fast": {
+              "provider": {
+                "body": {
+                  "speed": "fast"
+                }
+              }
+            }
+          }
+        },
+        "family": "claude-fable",
+        "id": "claude-fable-5-2@default",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -135906,7 +136473,8 @@
         "reasoning": true,
         "release_date": "2026-11-03",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "status": "deprecated"
       },
       "hy4": {
         "attachment": true,
@@ -135934,6 +136502,36 @@
         "reasoning": true,
         "release_date": "2026-11-04",
         "temperature": true,
+        "tool_call": true
+      },
+      "longcat-2.5-free": {
+        "attachment": true,
+        "canonical_model_id": "meituan/longcat-2.5",
+        "family": "longcat",
+        "id": "longcat-2.5-free",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "LongCat 2.5 Free",
+        "provider": {
+          "api": "https://opencode.ai/inference/go/openai/v1"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-02",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -137392,29 +137990,6 @@
           "output": 4096
         },
         "canonical_model_id": "meta/llama-3.3-70b-instruct"
-      },
-      "nebius/deepseek-ai/DeepSeek-V4-Flash-0731": {
-        "id": "nebius/deepseek-ai/DeepSeek-V4-Flash-0731",
-        "name": "DeepSeek V4 Flash 0731 (Nebius)",
-        "family": "deepseek-flash",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-07-31",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1048576,
-          "output": 384000
-        },
-        "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
       },
       "nebius/nvidia/Nemotron-3-Ultra-550b-a55b": {
         "id": "nebius/nvidia/Nemotron-3-Ultra-550b-a55b",
@@ -141282,30 +141857,6 @@
         "tool_call": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash"
       },
-      "nebius/deepseek-ai/DeepSeek-V4.1-Flash": {
-        "attachment": true,
-        "family": "deepseek-flash",
-        "id": "nebius/deepseek-ai/DeepSeek-V4.1-Flash",
-        "limit": {
-          "context": 1048576,
-          "output": 384000
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4.1 Flash (Nebius)",
-        "reasoning": true,
-        "release_date": "2026-09-10",
-        "temperature": true,
-        "tool_call": true,
-        "canonical_model_id": "deepseek/deepseek-v4.1-flash"
-      },
       "anthropic/claude-opus-5-5": {
         "attachment": true,
         "family": "claude-opus",
@@ -143125,7 +143676,7 @@
         "tool_call": true
       },
       "arkanecloud/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
-        "attachment": false,
+        "attachment": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
         "family": "deepseek-flash",
         "id": "arkanecloud/deepseek-ai/DeepSeek-V4.1-Flash-1017",
@@ -143135,7 +143686,8 @@
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -144317,6 +144869,31 @@
         "reasoning": true,
         "release_date": "2026-11-04",
         "temperature": true,
+        "tool_call": true
+      },
+      "anthropic/claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -151817,7 +152394,7 @@
         "id": "meta-llama/llama-3.3-70b-instruct",
         "limit": {
           "context": 131072,
-          "output": 32768
+          "output": 115200
         },
         "modalities": {
           "input": [
@@ -152749,7 +153326,7 @@
         "id": "meta/muse-spark-open",
         "limit": {
           "context": 1048576,
-          "output": 943718
+          "output": 131072
         },
         "modalities": {
           "input": [
