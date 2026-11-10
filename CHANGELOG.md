@@ -8,6 +8,9 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- ACP session replay preserves non-UTF-8 binary data URL attachments and normalizes declared or fallback media
+  types, so uppercase image types replay as images. Filename parameters containing `/` no longer replace the media
+  type with a parameter value.
 - CLI attachments preserve arbitrary bytes in percent-encoded data URLs instead of silently dropping non-UTF-8
   images and files. CLI and text attachments share decoding for escaped base64 payloads and case-insensitive
   `;base64` markers, without mistaking MIME parameters such as `;base64=disabled` for an encoding flag.

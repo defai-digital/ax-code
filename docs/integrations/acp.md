@@ -40,6 +40,10 @@ Typical host sequence:
 3. `session/prompt` — send user text; agent runs tools and returns a stop reason
 4. `session/load` — resume a session id known to the host
 
+Session loading replays saved file attachments. Data URLs preserve the original bytes for image content and binary
+resource blobs, including percent-encoded files. Media types are normalized to lowercase without parameters; an
+omitted media type uses the saved file's type. Text resources are decoded as UTF-8.
+
 ## Zed example
 
 ```json

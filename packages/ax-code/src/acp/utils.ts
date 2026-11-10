@@ -3,6 +3,7 @@ import type { PlanEntry } from "@agentclientprotocol/sdk"
 import { z } from "zod"
 import { parseJsonPayload } from "@/util/json-value"
 import { Todo } from "@/session/todo"
+import { decodeDataUrlBytes } from "@/util/data-url"
 
 const ACP_TODO_STATUSES: ReadonlyArray<PlanEntry["status"]> = ["pending", "in_progress", "completed"]
 
@@ -53,51 +54,20 @@ export function parseTodoPlanEntries(rawOutput: string): PlanEntry[] | null {
   return decodeTodoPlanEntries(parsed)
 }
 
-function isBase64Payload(value: string) {
-  return value.length > 0 && value.length % 4 !== 1 && /^[A-Za-z0-9+/]*={0,2}$/.test(value)
-}
-
-function normalizeBase64DataUrlBody(value: string): string | undefined {
-  let decoded: string
-  try {
-    decoded = decodeURIComponent(value)
-  } catch {
-    return undefined
-  }
-  const normalized = decoded.replace(/\s+/g, "")
-  return isBase64Payload(normalized) ? normalized : undefined
-}
-
 export function decodeReplayDataUrl(url: string, fallbackMime: string) {
+  const fallback = fallbackMime.split(";")[0]?.trim().toLowerCase() || "application/octet-stream"
   const comma = url.indexOf(",")
   if (!/^data:/i.test(url) || comma < 0) {
-    return { mimeType: fallbackMime, base64Data: "", text: "" }
+    return { mimeType: fallback, base64Data: "", text: "" }
   }
 
-  const metadata = url.slice("data:".length, comma)
-  const body = url.slice(comma + 1)
-  const metadataParts = metadata.split(";").filter(Boolean)
-  const mimeType = metadataParts.find((part) => part.includes("/")) ?? fallbackMime
-  const isBase64 = metadataParts.some((part) => part.toLowerCase() === "base64")
-  if (isBase64) {
-    const normalizedBody = normalizeBase64DataUrlBody(body)
-    if (!normalizedBody) return { mimeType, base64Data: "", text: "" }
-    return {
-      mimeType,
-      base64Data: normalizedBody,
-      text: Buffer.from(normalizedBody, "base64").toString("utf-8"),
-    }
-  }
-
-  try {
-    const text = decodeURIComponent(body)
-    return {
-      mimeType,
-      base64Data: Buffer.from(text, "utf-8").toString("base64"),
-      text,
-    }
-  } catch {
-    return { mimeType, base64Data: "", text: "" }
+  const declaredMime = url.slice("data:".length, comma).split(";")[0]?.trim().toLowerCase()
+  const mimeType = declaredMime?.includes("/") ? declaredMime : fallback
+  const bytes = decodeDataUrlBytes(url)
+  return {
+    mimeType,
+    base64Data: bytes?.toString("base64") ?? "",
+    text: bytes?.toString("utf8") ?? "",
   }
 }
 

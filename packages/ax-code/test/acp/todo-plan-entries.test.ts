@@ -96,6 +96,43 @@ describe("ACP replay data URL decoding", () => {
       text: "hello world",
     })
   })
+
+  test("preserves every byte in percent-encoded binary replay attachments", () => {
+    const bytes = Buffer.from(Array.from({ length: 256 }, (_, index) => index))
+    const encoded = [...bytes].map((byte) => `%${byte.toString(16).padStart(2, "0")}`).join("")
+    const decoded = ACP.decodeReplayDataUrl(`data:application/octet-stream,${encoded}`, "text/plain")
+
+    expect(decoded.mimeType).toBe("application/octet-stream")
+    expect(Buffer.from(decoded.base64Data, "base64")).toEqual(bytes)
+    expect(decoded.text).toBe(bytes.toString("utf8"))
+  })
+
+  test.each([
+    ["data:IMAGE/PNG;BASE64,cG5n", "application/octet-stream", "image/png"],
+    ["data:;base64,cG5n", " IMAGE/PNG; charset=binary ", "image/png"],
+    ["data:;name=folder/file;base64,cG5n", "image/png", "image/png"],
+  ])("normalizes replay media type for %s", (url, fallbackMime, mimeType) => {
+    expect(ACP.decodeReplayDataUrl(url, fallbackMime)).toEqual({ mimeType, base64Data: "cG5n", text: "png" })
+  })
+
+  test("canonicalizes valid unpadded base64 replay data", () => {
+    expect(ACP.decodeReplayDataUrl("data:application/octet-stream;base64,YQ", "text/plain")).toEqual({
+      mimeType: "application/octet-stream",
+      base64Data: "YQ==",
+      text: "a",
+    })
+  })
+
+  test.each(["data:application/pdf,%", "data:application/pdf,%GG", "data:application/pdf;base64,%FF"])(
+    "keeps invalid binary replay data empty for %s",
+    (url) => {
+      expect(ACP.decodeReplayDataUrl(url, "text/plain")).toEqual({
+        mimeType: "application/pdf",
+        base64Data: "",
+        text: "",
+      })
+    },
+  )
 })
 
 describe("ACP session list cursor parsing", () => {

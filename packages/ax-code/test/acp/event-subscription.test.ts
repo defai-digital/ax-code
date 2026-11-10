@@ -847,7 +847,12 @@ describe("acp.agent event subscription", () => {
     })
   })
 
-  test("replays data URL file attachments case-insensitively", async () => {
+  test.each([
+    ["uppercase scheme", "DATA:image/png;base64,cG5n", "png"],
+    ["percent-encoded binary", "data:image/png,%89PNG%00%ff", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0xff])],
+    ["uppercase media type", "data:IMAGE/PNG;BASE64,cG5n", "png"],
+    ["omitted media type with a filename parameter", "data:;name=folder/file;base64,cG5n", "png"],
+  ])("replays data URL image attachments with %s", async (_name, url, bytes) => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
@@ -866,9 +871,15 @@ describe("acp.agent event subscription", () => {
               parts: [
                 {
                   type: "file",
-                  url: `DATA:image/png;base64,${Buffer.from("png").toString("base64")}`,
+                  url,
                   filename: "capture.png",
                   mime: "image/png",
+                },
+                {
+                  type: "file",
+                  url: "data:APPLICATION/PDF,%25PDF-1.4%00%ff",
+                  filename: "report.pdf",
+                  mime: "application/pdf",
                 },
               ],
             },
@@ -885,8 +896,22 @@ describe("acp.agent event subscription", () => {
               content: {
                 type: "image",
                 mimeType: "image/png",
-                data: Buffer.from("png").toString("base64"),
+                data: Buffer.from(bytes).toString("base64"),
                 uri: pathToFileURL("capture.png").href,
+              },
+            },
+          })
+          expect(sessionUpdates).toContainEqual({
+            sessionId,
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              content: {
+                type: "resource",
+                resource: {
+                  uri: pathToFileURL("report.pdf").href,
+                  mimeType: "application/pdf",
+                  blob: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0, 0xff]).toString("base64"),
+                },
               },
             },
           })
