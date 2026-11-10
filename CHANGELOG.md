@@ -8,6 +8,8 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Empty base64 file attachments are preserved instead of silently omitted. Malformed base64 padding is rejected
+  consistently instead of being silently accepted by the Node decoder.
 - Codex CLI discovery prefers a successfully versioned executable when an earlier PATH launcher fails its version
   probe or prints an unrecognized version. If every probe is unavailable, PATH order remains the fallback.
 - TUI, headless, and ACP model selection no longer accept unadvertised inherited names such as `constructor` or

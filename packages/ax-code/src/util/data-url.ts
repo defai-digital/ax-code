@@ -1,6 +1,9 @@
 export function decodeBase64Bytes(value: string): Buffer | undefined {
   const normalized = value.replace(/\s+/g, "")
-  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return undefined
+  // Empty input is a valid zero-byte attachment. Padding, when present,
+  // must complete a four-character group; Node otherwise silently ignores it.
+  if (normalized.includes("=") && normalized.length % 4 !== 0) return undefined
+  if (normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return undefined
   return Buffer.from(normalized, "base64")
 }
 

@@ -1,5 +1,15 @@
 import { describe, expect, test } from "vitest"
-import { decodeDataUrl, decodeDataUrlBytes } from "../../src/util/data-url"
+import { decodeBase64Bytes, decodeDataUrl, decodeDataUrlBytes } from "../../src/util/data-url"
+
+describe("decodeBase64Bytes", () => {
+  test.each(["", " \n\t", "YQ", "YQ==", "YWI", "YWI=", "YWJj"])("decodes valid payload %j", (value) => {
+    expect(decodeBase64Bytes(value)).toEqual(Buffer.from(value, "base64"))
+  })
+
+  test.each(["=", "==", "YQ=", "YWI==", "YWJj=", "Y=Q=", "A"])("rejects malformed padding in %j", (value) => {
+    expect(decodeBase64Bytes(value)).toBeUndefined()
+  })
+})
 
 describe("decodeDataUrl", () => {
   test("decodes base64 data URLs", () => {
@@ -31,6 +41,7 @@ describe("decodeDataUrl", () => {
     ["data:,文字%E2%9C%93", "文字✓"],
     ["data:text/plain;charset=utf-8;BASE64,5paH5a2X", "文字"],
     ["data:,", ""],
+    ["data:application/octet-stream;base64,", ""],
   ])("preserves payload content in %s", (url, expected) => {
     expect(decodeDataUrlBytes(url)).toEqual(Buffer.from(expected))
     expect(decodeDataUrl(url)).toBe(expected)
@@ -43,6 +54,7 @@ describe("decodeDataUrl", () => {
     "data:text/plain;base64,SGVsbG8%3",
     "data:text/plain;base64,%FF",
     "data:text/plain;base64,not base64!!",
+    "data:text/plain;base64,YQ%3D",
     "data:text/plain",
     "https://example.com/hello,world",
   ])("rejects malformed data URL %s", (url) => {

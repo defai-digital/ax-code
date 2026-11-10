@@ -120,4 +120,20 @@ describe("materializeCliAttachments", () => {
     expect(result.refs[0]!.path).toBeUndefined()
     await result.cleanup()
   })
+
+  test.each(["", "data:application/octet-stream;base64,", new URL("data:application/octet-stream;base64,")])(
+    "materializes an empty base64 attachment from %s",
+    async (data) => {
+      const prompt: LanguageModelV3Prompt = [
+        { role: "user", content: [{ type: "file", data, mediaType: "application/octet-stream" }] },
+      ]
+      const result = await materializeCliAttachments(prompt)
+      try {
+        expect(result.refs).toHaveLength(1)
+        expect(await readFile(result.refs[0]!.path!)).toEqual(Buffer.alloc(0))
+      } finally {
+        await result.cleanup()
+      }
+    },
+  )
 })
