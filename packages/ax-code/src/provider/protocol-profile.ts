@@ -41,7 +41,9 @@ export function isGlm5ModelSegment(segment: string): boolean {
 // MiniMax M3 family: M3, M3.1, M3.1-Flash, and later M3.x releases. M3 lets
 // thinking be disabled; from M3.1 on thinking is always on and the API
 // rejects `thinking: { type: "disabled" }` (verified on M3.1-Flash).
-const MINIMAX_M3_SEGMENT = /^minimax-m3(?:\.(\d+))?(?:-flash)?$/
+// Gateways also spell the minor `m3-1` / `m3p1`, and MiniMax's coding plan
+// lists a `-Preview` SKU; quantized deployment suffixes (`-FP8`) stay out.
+const MINIMAX_M3_SEGMENT = /^minimax-m3(?:(?:[.-]|p)\d{1,2}(?!\d))?(?:-flash)?(?:-preview)?$/
 
 /** Final model-id segment names a MiniMax M3-family SKU. */
 export function isMiniMaxM3ModelSegment(segment: string): boolean {

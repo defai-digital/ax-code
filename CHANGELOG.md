@@ -15,6 +15,9 @@ changes belong to AX Coder.
   failed with "Sign in with the undefined CLI"; it is handled as any other unknown provider.
 - MiniMax M3.1 spelled `minimax-m3-1-flash` or `minimax-m3p1-flash` by a gateway no longer offers a `none` variant
   or sends `thinking: { type: "disabled" }`, which M3.1 rejects.
+- MiniMax M3.1 spelled `minimax-m3-1-flash` or `minimax-m3p1-flash`, and `MiniMax-M3.1-Flash-Preview`, now default to
+  the vendor 512k context window like other M3-family SKUs instead of the 1M catalog window, and a bare
+  `minimax-m3-1-flash` gets the M3 request settings on OpenAI-compatible routes.
 
 ## [7.30.20] - 2026-11-10
 

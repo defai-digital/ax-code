@@ -33,19 +33,29 @@ const router = (id: string) =>
 const official = (id: string) => model("minimax", id, "https://api.minimax.io/anthropic/v1", "@ai-sdk/anthropic")
 
 describe("MiniMax M3 family", () => {
-  test.each(["MiniMax-M3", "MiniMax-M3.1-Flash", "MiniMax-M3.1", "MiniMax-M3.2-Flash", "minimax-m3.1-flash"])(
-    "%s resolves to the minimax-m3 chat family on an OpenAI-compatible route",
-    (id) => {
-      expect(resolveProtocolProfile(router(id)).reasoningFamily).toBe("minimax-m3")
-    },
-  )
+  test.each([
+    "MiniMax-M3",
+    "MiniMax-M3.1-Flash",
+    "MiniMax-M3.1",
+    "MiniMax-M3.2-Flash",
+    "minimax-m3.1-flash",
+    "minimax-m3-1-flash",
+    "minimax-m3p1-flash",
+    "MiniMax-M3.1-Flash-Preview",
+  ])("%s resolves to the minimax-m3 chat family on an OpenAI-compatible route", (id) => {
+    expect(resolveProtocolProfile(router(id)).reasoningFamily).toBe("minimax-m3")
+  })
 
-  test.each(["MiniMaxAI/MiniMax-M3", "MiniMax-M30", "MiniMax-M3.1-Flash-FP8", "MiniMax-M2.5"])(
-    "%s does not get the native chat family",
-    (id) => {
-      expect(resolveProtocolProfile(router(id)).reasoningFamily).toBeUndefined()
-    },
-  )
+  test.each([
+    "MiniMaxAI/MiniMax-M3",
+    "MiniMax-M30",
+    "MiniMax-M3.1-Flash-FP8",
+    "MiniMax-M2.5",
+    "accounts/fireworks/models/minimax-m3p1-flash",
+    "MiniMax-M3-0601",
+  ])("%s does not get the native chat family", (id) => {
+    expect(resolveProtocolProfile(router(id)).reasoningFamily).toBeUndefined()
+  })
 
   test("M3.1 and later always think; M3 does not", () => {
     for (const id of [
@@ -112,6 +122,25 @@ describe("MiniMax M3 default context window", () => {
       expect(m.limit.output).toBe(524_288)
     }
     expect(defaultContextWindow(router("MiniMax-M2.7"))).toBeUndefined()
+  })
+
+  test("applies the vendor window to gateway and preview spellings of M3.1", () => {
+    // Regression: these kept the 1M catalog window because the family match
+    // only accepted the dotted id.
+    for (const m of [
+      model("empiriolabs", "minimax-m3-1-flash", "https://api.example.com/v1", "@ai-sdk/openai-compatible"),
+      model(
+        "fireworks-ai",
+        "accounts/fireworks/models/minimax-m3p1-flash",
+        "https://api.fireworks.ai/inference/v1",
+        "@ai-sdk/openai-compatible",
+      ),
+      official("MiniMax-M3.1-Flash-Preview"),
+    ]) {
+      applyDefaultContextWindow(m, false)
+      expect(m.limit.context, m.api.id).toBe(512_000)
+    }
+    expect(defaultContextWindow(router("MiniMax-M3.1-Flash-FP8"))).toBeUndefined()
   })
 
   test("keeps an explicit window and never raises a smaller one", () => {
