@@ -23,6 +23,21 @@ changes belong to AX Coder.
 - List Anthropic (`anthropic`) among the suggested API providers in `/connect` and `ax-code providers login`, so
   Claude can be used with an Anthropic API key without `enabled_providers` opt-in.
 
+### Fixed
+
+- GLM 5.x models (GLM 5.3 and every later 5.x release, including Flash and FlashX) no longer reason at the
+  server-default `max` effort on every agent turn. On agent-sized prompts that spent the whole 32k output budget on
+  hidden reasoning, ending the turn with no answer or exceeding the stream duration limit on slower routes. AX Code
+  now sends `low` in Auto mode on every route (Z.AI, Zhipu, OpenRouter, and routers in front of them), lowers
+  policy-selected `max` to `high`, and keeps an explicit effort as chosen. OpenRouter GLM 5.x gains
+  `low`/`high`/`max` effort variants through `reasoning.effort`. A `protocolProfile: "glm5.3"` override keeps working
+  as an alias of the new `glm5` family.
+- A turn truncated after spending its budget on reasoning is retried at a lower effort (`max` → `high` → `low`)
+  instead of re-sending the same request.
+- Permanent Z.AI/Zhipu account errors (exhausted balance or plan quota) are no longer retried, the 1261
+  "Prompt too long" rejection triggers compaction, and `glm-5.3-flashx` and gateway tier suffixes get the GLM 5.x
+  request settings.
+
 ### Removed
 
 - Retire the closed-source Claude Code (`claude-code`), Muse Code (`muse-cli`), and Qoder CLI (`qoder-cli`) CLI

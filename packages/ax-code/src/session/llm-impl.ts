@@ -136,6 +136,12 @@ export namespace LLM {
      * multi-minute full max_tokens windows when the model ignores them.
      */
     maxOutputTokens?: number
+    /**
+     * Upper bound on chat reasoning effort for this request. The prompt loop
+     * lowers it after a turn spends its output budget on reasoning, so the
+     * recovery turn is not the same request that was just truncated.
+     */
+    reasoningEffortCap?: ProviderTransform.ReasoningEffortCap
     /** Replay correlation for the final AX/AI-SDK pre-adapter request boundary. */
     replay?: {
       messageID?: string
@@ -417,9 +423,15 @@ export namespace LLM {
       mergeDeep(variant),
       mergeDeep(reasoningPolicyDecision.options),
     )
+    const bounded = input.small
+      ? merged
+      : ProviderTransform.boundChatReasoningEffort(input.model, merged, {
+          explicit: reasoningPolicyDecision.unappliedReason === "explicit_override",
+          cap: input.reasoningEffortCap,
+        })
     const options: Record<string, any> = ProviderTransform.sanitizeOptions(
       input.model,
-      input.small ? ProviderTransform.applySmallOverrides(input.model, merged, provider?.options ?? {}) : merged,
+      input.small ? ProviderTransform.applySmallOverrides(input.model, merged, provider?.options ?? {}) : bounded,
     )
     // Context packing is prompt text, independent of cache transport and
     // marathon deadlines. Explicit Super-Long still supports narrow models.

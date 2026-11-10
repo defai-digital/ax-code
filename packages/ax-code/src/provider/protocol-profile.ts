@@ -8,8 +8,12 @@ type ProtocolModel = {
   options?: Record<string, unknown>
 }
 
-export type ChatReasoningFamily = "qwen3.8" | "glm5.3" | "deepseek-v4" | "minimax-m3" | "minimax-m2.7"
-const families: readonly string[] = ["qwen3.8", "glm5.3", "deepseek-v4", "minimax-m3", "minimax-m2.7"]
+// `glm5` is GLM 5.3 and every later 5.x release (5.4, 5.5, ...): one request
+// contract (`reasoning_effort` low/high/max, server default max).
+export type ChatReasoningFamily = "qwen3.8" | "glm5" | "deepseek-v4" | "minimax-m3" | "minimax-m2.7"
+const families: readonly string[] = ["qwen3.8", "glm5", "deepseek-v4", "minimax-m3", "minimax-m2.7"]
+// Config written before the family covered all of GLM 5.x.
+const LEGACY_FAMILY_ALIASES: Record<string, ChatReasoningFamily> = { "glm5.3": "glm5" }
 
 export function isKimiProtocol(model: ProtocolModel): boolean {
   if (["kimi-for-coding", "kimi-cloud-plan", "moonshotai", "moonshotai-cn"].includes(model.providerID)) return true
@@ -22,8 +26,36 @@ export function isKimiProtocol(model: ProtocolModel): boolean {
   }
 }
 
+// GLM 5.3 is the first 5.x release with the current contract; 5.2 and older
+// keep their own handling. FlashX (and its -legal SKU) shares the Flash
+// settings; gateways may append a -free/-flex tier or a :tag / @version suffix.
+const GLM5_SEGMENT = /^glm-5\.(\d+)(?:-flash(?:x(?:-legal)?)?)?(?:-(?:free|flex))?(?:[:@].*)?$/
+const GLM5_FIRST_MINOR = 3
+
+/** Final model-id segment names a GLM 5.x SKU (5.3 or later) with the current reasoning contract. */
+export function isGlm5ModelSegment(segment: string): boolean {
+  const match = GLM5_SEGMENT.exec(segment.toLowerCase())
+  return match !== null && Number(match[1]) >= GLM5_FIRST_MINOR
+}
+
+/**
+ * OpenRouter serves GLM 5.x behind its own `reasoning: { effort }` object
+ * instead of Z.AI's `reasoning_effort`, so it is not part of the glm5 chat
+ * family but still needs AX Code's GLM effort defaults.
+ */
+export function isOpenRouterGlm5(model: ProtocolModel): boolean {
+  let host = ""
+  try {
+    host = new URL(model.api.url ?? "").hostname
+  } catch {}
+  const openrouter =
+    model.providerID === "openrouter" || host === "openrouter.ai" || model.api.npm === "@openrouter/ai-sdk-provider"
+  return openrouter && isGlm5ModelSegment(modelIdFinalSegment(model.api.id))
+}
+
 function reasoningFamily(model: ProtocolModel): ChatReasoningFamily | undefined {
   const explicit = model.options?.protocolProfile
+  if (typeof explicit === "string" && LEGACY_FAMILY_ALIASES[explicit]) return LEGACY_FAMILY_ALIASES[explicit]
   if (typeof explicit === "string" && families.includes(explicit)) return explicit as ChatReasoningFamily
   if (explicit === "openai-compatible" || explicit === "dashscope") return undefined
   if (model.api.npm !== "@ai-sdk/openai-compatible" || model.options?.nativeReasoning === false) return undefined
@@ -61,9 +93,7 @@ function reasoningFamily(model: ProtocolModel): ChatReasoningFamily | undefined 
     (host.startsWith("dashscope-") && host.endsWith(".aliyuncs.com"))
   )
     return undefined
-  // FlashX (and its -legal SKU) shares the Flash request settings; gateways
-  // may append a -free/-flex tier or a :tag / @version suffix.
-  if (/^glm-5\.3(?:-flash(?:x(?:-legal)?)?)?(?:-(?:free|flex))?(?:[:@].*)?$/.test(segment)) return "glm5.3"
+  if (isGlm5ModelSegment(segment)) return "glm5"
   if (/^deepseek-(?:v4-(?:pro|flash)|flash)$/.test(id)) return "deepseek-v4"
   if (id === "minimax-m3" || id === "minimax-m2.7") return id
   return undefined

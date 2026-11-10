@@ -139,6 +139,7 @@ import {
   promptLoopLimits,
 } from "./prompt/prompt-loop-config"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { ProviderTransform } from "@/provider/transform"
 import { LLM } from "./llm"
 import { clearSessionToolCycleRing, sessionToolCycleSignatures } from "./tool-cycle-ring"
 import { GOAL_CEILING_CONVERGENCE_STEPS, ORDINARY_RUN_CEILING_CONVERGENCE_STEPS } from "@/constants/session"
@@ -593,6 +594,10 @@ export namespace SessionPrompt {
     // truncated recovery). Soft "keep it short" text is not enough on local
     // models that ignore word limits and re-fill the full model output budget.
     let pendingMaxOutputTokens: number | undefined
+    // Lowered after a turn ends `length` having spent its budget on hidden
+    // reasoning; kept for the rest of this prompt so later turns do not hit
+    // the same wall.
+    let reasoningEffortCap: ProviderTransform.ReasoningEffortCap | undefined
     let activeTurnProfile: TurnExecutionProfile | undefined
     // The AX Engine read-only ladder's state, grouped as one object so the
     // loop's scope carries a single name for this guard instead of six loose
@@ -1503,6 +1508,7 @@ export namespace SessionPrompt {
             config: cfg,
             setup: providerSetup,
             maxOutputTokens: maxOutputTokensForRequest,
+            reasoningEffortCap,
           },
           {
             synthesisOnly: guardedSynthesis,
@@ -1930,6 +1936,22 @@ export namespace SessionPrompt {
 
         if (truncatedTurnTransition.action === "recover") {
           previousTruncatedModelOutputPrefix = currentTruncatedModelOutputPrefix
+          const truncatedUsage = processor.lastStepUsage ?? processor.message.tokens
+          // `output` excludes reasoning when the provider reports output details
+          // and includes it otherwise; reasoning above half of `output` holds
+          // for a reasoning-dominated turn under either convention.
+          if (truncatedUsage.reasoning * 2 > truncatedUsage.output) {
+            reasoningEffortCap = ProviderTransform.lowerReasoningEffortCap(reasoningEffortCap)
+            log.info("reasoning-dominated truncation; lowering reasoning effort", {
+              command: "session.prompt.loop",
+              status: "retry",
+              errorCode: "TRUNCATED_MODEL_TURN",
+              sessionID,
+              reasoningTokens: truncatedUsage.reasoning,
+              outputTokens: truncatedUsage.output,
+              reasoningEffortCap,
+            })
+          }
           const axEngineRecovery = model.providerID === AX_ENGINE_PROVIDER_ID
           if (axEngineRecovery) {
             const largeCodePaste = isLargeTruncatedCodePaste(truncatedOutputText)

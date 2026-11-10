@@ -132,7 +132,11 @@ describe("current-family effort contracts", () => {
     (url) => {
       const m = model("glm-5.3")
       m.api.url = url
-      expect(T.variants(m)).toEqual({})
+      const variants = T.variants(m)
+      // No native `reasoningEffort` either way; OpenRouter gets its own `reasoning.effort` dialect.
+      for (const options of Object.values(variants)) expect(options).not.toHaveProperty("reasoningEffort")
+      if (url.includes("openrouter.ai")) expect(variants.low).toEqual({ reasoning: { effort: "low" } })
+      else expect(variants).toEqual({})
     },
   )
 
@@ -229,12 +233,17 @@ describe("current-family effort contracts", () => {
     "does not add current-family controls to %s",
     (provider) => {
       const m = model("glm-5.3", provider)
-      expect(T.variants(m)).toEqual({})
+      const variants = T.variants(m)
+      for (const options of Object.values(variants)) expect(options).not.toHaveProperty("reasoningEffort")
+      if (provider === "openrouter") {
+        expect(variants.max).toEqual({ reasoning: { effort: "max" } })
+        expect(T.smallOptions(m)).toEqual({ reasoning: { effort: "low" } })
+      } else expect(variants).toEqual({})
       expect(T.smallOptions(m).reasoningEffort).toBeUndefined()
     },
   )
 
-  test.each(["glm-5.30", "deepseek-v4-proxy", "qwen3.8-max-preview", "MiniMax-M30"])(
+  test.each(["glm-6.0", "deepseek-v4-proxy", "qwen3.8-max-preview", "MiniMax-M30"])(
     "does not infer a current profile from %s",
     (id) => {
       const m = model(id)
@@ -408,7 +417,8 @@ describe("gateway model family robustness", () => {
     },
   )
 
-  test.each(["glm-5.30", "vendor/glm-5.30", "other-model", "qwen3.80-flash", "glm-5.3-proxy", "qwen3.8-flash-gguf"])(
+  // glm-5.30 is a later GLM 5.x release and joins the family; 5.2 / 6.x do not.
+  test.each(["glm-6.0", "vendor/glm-6.0", "other-model", "qwen3.80-flash", "glm-5.3-proxy", "qwen3.8-flash-gguf"])(
     "%s does not inherit the native family contract",
     (id) => {
       expect(T.sanitizeOptions(model(id), { enable_thinking: true }, "required").enable_thinking).toBe(true)

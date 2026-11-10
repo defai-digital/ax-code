@@ -2577,6 +2577,74 @@ describe("session.prompt flow", () => {
     }
   })
 
+  test("lowers the reasoning effort cap after reasoning-dominated truncations", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            steps: 10,
+          },
+        },
+      },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      let call = 0
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
+        call++
+        const text = `partial answer ${call}`
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "text-start", id: "text_1" }
+            yield { type: "text-delta", id: "text_1", text }
+            yield { type: "text-end", id: "text_1" }
+            yield {
+              type: "finish-step",
+              finishReason: "length",
+              // The whole output budget went to hidden reasoning.
+              usage: {
+                inputTokens: 10,
+                outputTokens: 32_000,
+                totalTokens: 32_010,
+                outputTokenDetails: { reasoningTokens: 31_994, textTokens: 6 },
+              },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Reasoning Truncation Test" })
+
+          await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "create a small website" }],
+          })
+
+          const caps = streamSpy!.mock.calls.map(([input]) => (input as LLM.StreamInput).reasoningEffortCap)
+          expect(caps.slice(0, 3)).toEqual([undefined, "high", "low"])
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
+
   test("stops early when a truncation retry repeats the same substantial model output", async () => {
     await using tmp = await tmpdir({
       git: true,

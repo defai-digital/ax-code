@@ -516,7 +516,10 @@ describe("session.llm.stream", () => {
   test.each([
     { id: "qwen3.8-max", effort: "xhigh" },
     { id: "qwen3.8-flash", effort: "xhigh" },
-    { id: "glm-5.3", effort: "max" },
+    // Autonomous deep selects max, which AX Code bounds to high for GLM 5.3.
+    { id: "glm-5.3", effort: "high" },
+    // Supervised Auto sends low instead of leaving GLM on the server-default max.
+    { id: "glm-5.3", effort: "low", supervised: true },
     { id: "deepseek-v4-pro", effort: "high" },
     { id: "deepseek-flash", effort: "high" },
     { id: "MiniMax-M2.7", effort: undefined },
@@ -526,7 +529,7 @@ describe("session.llm.stream", () => {
     { id: "qwen3.8-flash", effort: undefined, required: true },
   ])(
     "sends $id effort=$effort required=$required through the complete LLM path",
-    async ({ id, effort, required, unsplit }) => {
+    async ({ id, effort, required, unsplit, supervised }) => {
       const providerID = ProviderID.make("qualified-chat")
       const modelID = ModelID.make(id)
       const request = waitRequest(
@@ -559,7 +562,7 @@ describe("session.llm.stream", () => {
         directory: tmp.path,
         fn: async () => {
           const model = await Provider.getModel(providerID, modelID)
-          vi.spyOn(ScopedFlag, "autonomous").mockReturnValue(true)
+          vi.spyOn(ScopedFlag, "autonomous").mockReturnValue(!supervised)
           const sessionID = SessionID.make("session-current-family-wire")
           const stream = await LLM.stream({
             sessionID,
@@ -661,7 +664,15 @@ describe("session.llm.stream", () => {
       fn: async () => {
         const m = await Provider.getModel(providerID, modelID)
         expect(m.api.url).toBe(baseURL)
-        expect(m.variants).toEqual({})
+        // OpenRouter carries GLM effort as `reasoning.effort`, never the native reasoning_effort.
+        if (baseURL.includes("openrouter.ai"))
+          expect(m.variants).toEqual({
+            low: { reasoning: { effort: "low" } },
+            high: { reasoning: { effort: "high" } },
+            max: { reasoning: { effort: "max" } },
+            deep: { reasoning: { effort: "max" } },
+          })
+        else expect(m.variants).toEqual({})
       },
     })
   })

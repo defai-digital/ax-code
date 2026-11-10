@@ -14,7 +14,7 @@ import { AX_ENGINE_PROVIDER_ID, AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID } fr
 import { cliEffortVariants, cliModelEfforts } from "./cli/effort"
 import { wrapThinkTagText, type ThinkTagName } from "./think-tags"
 import { PromptCachePolicy } from "./prompt-cache-policy"
-import { isKimiProtocol, resolveProtocolProfile } from "./protocol-profile"
+import { isKimiProtocol, isOpenRouterGlm5, resolveProtocolProfile } from "./protocol-profile"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -924,13 +924,13 @@ export namespace ProviderTransform {
         high: { reasoningEffort: "xhigh" }, // Keep the existing user-facing alias.
         xhigh: { reasoningEffort: "xhigh" },
       }
-    if (family === "glm5.3" || family === "deepseek-v4")
+    if (family === "glm5" || family === "deepseek-v4")
       return {
         low: { reasoningEffort: "low" },
         high: { reasoningEffort: "high" },
         max: { reasoningEffort: "max" },
         // GLM defaults to max. Autonomous/recovery deep must not lower it.
-        ...(family === "glm5.3" ? { deep: { reasoningEffort: "max" } } : {}),
+        ...(family === "glm5" ? { deep: { reasoningEffort: "max" } } : {}),
       }
     return undefined
   }
@@ -1005,6 +1005,13 @@ export namespace ProviderTransform {
 
     const current = currentChatVariants(model)
     if (current) return current
+    if (isOpenRouterGlm5(model))
+      return {
+        low: { reasoning: { effort: "low" } },
+        high: { reasoning: { effort: "high" } },
+        max: { reasoning: { effort: "max" } },
+        deep: { reasoning: { effort: "max" } },
+      }
 
     const id = model.id.toLowerCase()
 
@@ -1139,7 +1146,7 @@ export namespace ProviderTransform {
 
     const family = chatReasoningFamily(input.model)
     if (
-      family === "glm5.3" &&
+      family === "glm5" &&
       input.model.capabilities.reasoning &&
       input.longAgent &&
       input.providerOptions?.preserveThinking === true
@@ -1448,10 +1455,57 @@ export namespace ProviderTransform {
     return { ...rest, thinking: { type: "disabled" } }
   }
 
+  export type ReasoningEffortCap = "low" | "high"
+  const GLM5_EFFORT_ORDER = ["low", "high", "max"] as const
+
+  /**
+   * GLM 5.x (5.3 and later) reasons at the server default `max` when no effort is sent, and
+   * at max it routinely spends the whole OUTPUT_TOKEN_MAX budget on hidden
+   * reasoning on agent-sized prompts: the turn ends `length` with no text or
+   * tool call, or exceeds the stream duration limit on slower routes. This
+   * holds on every route (Z.AI, Zhipu, or a router in front of them), so the
+   * default is decided here rather than by the route.
+   *
+   * - Auto (no explicit choice): `low`; policy-selected `max` (deep) becomes `high`.
+   * - An explicit user variant or configured effort is kept as chosen.
+   * - `cap` (set after a reasoning-dominated truncation) bounds every case,
+   *   treating an unset effort as the server default `max`.
+   */
+  export function boundChatReasoningEffort(
+    model: Provider.Model,
+    options: Record<string, any>,
+    input: { explicit: boolean; cap?: ReasoningEffortCap },
+  ): Record<string, any> {
+    if (model.capabilities.reasoning === false) return options
+    // Z.AI-style routes take top-level `reasoning_effort`; OpenRouter takes
+    // `reasoning.effort` with the same level names.
+    const nested = isOpenRouterGlm5(model)
+    if (!nested && chatReasoningFamily(model) !== "glm5") return options
+    const reasoning = isRecord(options.reasoning) ? options.reasoning : undefined
+    const current = nested ? reasoning?.effort : options.reasoningEffort
+    if (current !== undefined && !(GLM5_EFFORT_ORDER as readonly unknown[]).includes(current)) return options
+    // An explicit `reasoning.enabled: false` / max_tokens budget on OpenRouter is the caller's shape.
+    if (nested && reasoning && current === undefined && Object.keys(reasoning).length > 0) return options
+    let effort: (typeof GLM5_EFFORT_ORDER)[number] | undefined = current
+    if (!input.explicit) effort = effort === undefined ? "low" : effort === "max" ? "high" : effort
+    if (input.cap) {
+      const rank = GLM5_EFFORT_ORDER.indexOf(effort ?? "max")
+      if (rank > GLM5_EFFORT_ORDER.indexOf(input.cap)) effort = input.cap
+    }
+    if (effort === current) return options
+    return nested ? { ...options, reasoning: { ...reasoning, effort } } : { ...options, reasoningEffort: effort }
+  }
+
+  /** Next lower cap after a turn spent its output budget on reasoning. */
+  export function lowerReasoningEffortCap(cap?: ReasoningEffortCap): ReasoningEffortCap {
+    return cap === undefined ? "high" : "low"
+  }
+
   export function smallOptions(model: Provider.Model, providerOptions?: Record<string, any>) {
     const family = chatReasoningFamily(model)
     if (family && model.capabilities.reasoning === false) return {}
-    if (family === "glm5.3") return { reasoningEffort: "low", thinking: { type: "enabled" } }
+    if (family === "glm5") return { reasoningEffort: "low", thinking: { type: "enabled" } }
+    if (isOpenRouterGlm5(model) && model.capabilities.reasoning !== false) return { reasoning: { effort: "low" } }
     if (family === "deepseek-v4") return { thinking: { type: "disabled" } }
     if (family === "qwen3.8") return { enable_thinking: false }
     if (family === "minimax-m3") return { thinking: { type: "disabled" }, reasoning_split: true }

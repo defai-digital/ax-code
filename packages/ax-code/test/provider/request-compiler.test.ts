@@ -59,12 +59,27 @@ describe("final request compiler", () => {
     "glm-5.3-flashx-legal",
     "glm-5.3-free",
     "z-ai/glm-5.3:free",
-  ])("resolves %s to the glm5.3 reasoning family", (id) => {
-    expect(resolveProtocolProfile(model(id)).reasoningFamily).toBe("glm5.3")
+    // Later GLM 5.x releases share the 5.3 request contract.
+    "glm-5.4",
+    "glm-5.4-flash",
+    "z-ai/glm-5.4-flash",
+    "glm-5.10",
+    "GLM-5.4",
+  ])("resolves %s to the glm5 reasoning family", (id) => {
+    expect(resolveProtocolProfile(model(id)).reasoningFamily).toBe("glm5")
   })
 
-  test.each(["glm-5.30", "glm-5.3-highspeed", "glm-5.2", "glm-5.3-flashy"])("does not treat %s as glm5.3", (id) => {
-    expect(resolveProtocolProfile(model(id)).reasoningFamily).toBeUndefined()
+  test.each(["glm-5.2", "glm-5.1", "glm-5", "glm-5.3-highspeed", "glm-5.3-flashy", "glm-6.0", "glm-4.7-flash"])(
+    "does not treat %s as glm5",
+    (id) => {
+      expect(resolveProtocolProfile(model(id)).reasoningFamily).toBeUndefined()
+    },
+  )
+
+  test("accepts the legacy glm5.3 protocolProfile override", () => {
+    const current = model("my-deployment")
+    current.options = { protocolProfile: "glm5.3" }
+    expect(resolveProtocolProfile(current).reasoningFamily).toBe("glm5")
   })
 
   test.each([{ type: "required" }, { type: "tool", toolName: "read" }] as const)(

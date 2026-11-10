@@ -2459,7 +2459,8 @@ describe("ProviderTransform.variants", () => {
   })
 
   test("Unqualified GLM versions keep the family-wide empty variants", () => {
-    for (const id of ["glm-5.25", "glm-5.30", "glm-5"]) {
+    // glm-5.25 / glm-5.30 are later GLM 5.x releases (see "GLM 5.x reasoning effort bounds").
+    for (const id of ["glm-4.9", "glm-6.0", "glm-5"]) {
       const model = createMockModel({
         id: `togetherai/${id}`,
         providerID: "togetherai",
@@ -4248,5 +4249,105 @@ describe("Explicit prompt cache policy owns annotations", () => {
     const result = ProviderTransform.message(messages, model, {})
     expect(JSON.stringify(result)).not.toContain("cache_control")
     expect(JSON.stringify(result)).not.toContain("cacheControl")
+  })
+})
+
+describe("GLM 5.x reasoning effort bounds", () => {
+  const glm = (providerID: string, id: string, url: string, npm = "@ai-sdk/openai-compatible"): any => ({
+    id: `${providerID}/${id}`,
+    providerID,
+    api: { id, url, npm },
+    name: id,
+    capabilities: {
+      temperature: true,
+      reasoning: true,
+      attachment: false,
+      toolcall: true,
+      input: { text: true, audio: false, image: false, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+      interleaved: false,
+    },
+    limit: { context: 200_000, output: 131_072 },
+    status: "active",
+    options: {},
+    headers: {},
+    release_date: "",
+  })
+  const zai = glm("zai", "glm-5.3-flash", "https://api.z.ai/api/paas/v4")
+  const router = glm("defai-01-ax-trust-com", "glm-5.3-flash", "https://defai-01.ax-trust.com/v1")
+  const openrouter = glm("openrouter", "z-ai/glm-5.3-flash", "https://openrouter.ai/api/v1")
+  const bound = ProviderTransform.boundChatReasoningEffort
+
+  test("Auto defaults to low on every Z.AI-style route instead of the server-default max", () => {
+    for (const model of [zai, router]) {
+      expect(bound(model, {}, { explicit: false })).toEqual({ reasoningEffort: "low" })
+      // Policy-selected deep (max) becomes high.
+      expect(bound(model, { reasoningEffort: "max" }, { explicit: false })).toEqual({ reasoningEffort: "high" })
+      expect(bound(model, { reasoningEffort: "high" }, { explicit: false })).toEqual({ reasoningEffort: "high" })
+    }
+  })
+
+  test("keeps an explicit effort, but a truncation cap still bounds it", () => {
+    expect(bound(zai, { reasoningEffort: "max" }, { explicit: true })).toEqual({ reasoningEffort: "max" })
+    expect(bound(zai, {}, { explicit: true })).toEqual({})
+    expect(bound(zai, { reasoningEffort: "max" }, { explicit: true, cap: "high" })).toEqual({
+      reasoningEffort: "high",
+    })
+    // Unset explicit effort means the server default max, so the cap applies.
+    expect(bound(zai, {}, { explicit: true, cap: "low" })).toEqual({ reasoningEffort: "low" })
+    expect(bound(zai, { reasoningEffort: "low" }, { explicit: true, cap: "high" })).toEqual({ reasoningEffort: "low" })
+  })
+
+  test("OpenRouter GLM 5.3 gets effort variants and bounds through reasoning.effort", () => {
+    expect(ProviderTransform.variants(openrouter)).toEqual({
+      low: { reasoning: { effort: "low" } },
+      high: { reasoning: { effort: "high" } },
+      max: { reasoning: { effort: "max" } },
+      deep: { reasoning: { effort: "max" } },
+    })
+    expect(bound(openrouter, {}, { explicit: false })).toEqual({ reasoning: { effort: "low" } })
+    expect(bound(openrouter, { reasoning: { effort: "max" } }, { explicit: false })).toEqual({
+      reasoning: { effort: "high" },
+    })
+    expect(bound(openrouter, { reasoning: { effort: "max" } }, { explicit: true, cap: "low" })).toEqual({
+      reasoning: { effort: "low" },
+    })
+    // A caller-supplied OpenRouter shape without an effort level is left alone.
+    expect(bound(openrouter, { reasoning: { enabled: false } }, { explicit: false })).toEqual({
+      reasoning: { enabled: false },
+    })
+    // Other OpenRouter models keep the existing empty-variant policy.
+    expect(
+      ProviderTransform.variants(glm("openrouter", "qwen/qwen3-coder-plus", "https://openrouter.ai/api/v1")),
+    ).toEqual({})
+  })
+
+  test("applies to later GLM 5.x releases on every route", () => {
+    for (const model of [
+      glm("zai", "glm-5.4", "https://api.z.ai/api/paas/v4"),
+      glm("zai", "glm-5.4-flash", "https://api.z.ai/api/paas/v4"),
+      glm("defai-01-ax-trust-com", "glm-5.5-flash", "https://defai-01.ax-trust.com/v1"),
+    ]) {
+      expect(ProviderTransform.variants(model).max, model.api.id).toEqual({ reasoningEffort: "max" })
+      expect(bound(model, {}, { explicit: false }), model.api.id).toEqual({ reasoningEffort: "low" })
+      expect(ProviderTransform.smallOptions(model).reasoningEffort, model.api.id).toBe("low")
+    }
+    const openrouter54 = glm("openrouter", "z-ai/glm-5.4", "https://openrouter.ai/api/v1")
+    expect(ProviderTransform.variants(openrouter54).low).toEqual({ reasoning: { effort: "low" } })
+    expect(bound(openrouter54, {}, { explicit: false })).toEqual({ reasoning: { effort: "low" } })
+  })
+
+  test("leaves GLM 5.2 and older, and reasoning-disabled GLM, untouched", () => {
+    const other = glm("zai", "glm-5.2", "https://api.z.ai/api/paas/v4")
+    expect(bound(other, {}, { explicit: false })).toEqual({})
+    expect(bound({ ...zai, capabilities: { ...zai.capabilities, reasoning: false } }, {}, { explicit: false })).toEqual(
+      {},
+    )
+  })
+
+  test("each reasoning-dominated truncation lowers the cap one level", () => {
+    expect(ProviderTransform.lowerReasoningEffortCap(undefined)).toBe("high")
+    expect(ProviderTransform.lowerReasoningEffortCap("high")).toBe("low")
+    expect(ProviderTransform.lowerReasoningEffortCap("low")).toBe("low")
   })
 })
