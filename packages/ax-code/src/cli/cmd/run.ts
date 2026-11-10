@@ -255,7 +255,8 @@ export function findRunModelErrorCode(input: {
  * provider (`deepseek/deepseek-v4-pro`) after that provider was disabled and
  * a custom gateway took over serving it. `connected` narrows the fallback to
  * providers that can actually serve a turn — the full list also carries
- * catalog-only providers. Undefined when neither exists.
+ * catalog-only providers. Undefined when neither exists, or when a connected
+ * CLI provider lacks the model.
  */
 export function resolveRunModel(input: {
   providers: RunProviderList
@@ -267,9 +268,19 @@ export function resolveRunModel(input: {
   if (!findRunModelError(input) && exactIsConnected) {
     return { providerID: input.providerID, modelID: input.modelID }
   }
+  // A connected CLI bridge is the user's own subscription: a model it does not
+  // list is an error to report, never a turn to move onto a gateway.
+  if (exactIsConnected && isListedCliProvider(input)) return undefined
   const connected = input.connected
   const candidates = connected ? input.providers.filter((provider) => connected.includes(provider.id)) : input.providers
   return sameSkuOnConnectedProvider(candidates, input)
+}
+
+function isListedCliProvider(input: { providers: RunProviderList; providerID: string }) {
+  return (
+    Object.hasOwn(CLI_PROVIDER_DEFINITIONS, input.providerID) &&
+    input.providers.some((provider) => provider.id === input.providerID)
+  )
 }
 
 export async function refreshRunProvidersOnModelMiss(input: {

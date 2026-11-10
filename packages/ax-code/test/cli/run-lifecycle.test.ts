@@ -287,6 +287,34 @@ test("run command follows an explicit model to the connected provider serving th
   expect(refreshes).toBe(1)
 })
 
+test("run command reports a model a connected CLI provider lacks instead of rerouting", () => {
+  const providers = [
+    { id: "minimax-cli", models: { "MiniMax-M3.1-Flash": {} } },
+    { id: "gateway", models: { "MiniMax-M3": {}, "MiniMax-M3.1-Flash": {} } },
+  ]
+  const missing = { providers, providerID: "minimax-cli", modelID: "MiniMax-M3" }
+
+  expect(resolveRunModel({ ...missing, connected: ["gateway", "minimax-cli"] })).toBeUndefined()
+  expect(resolveRunModel(missing)).toBeUndefined()
+  expect(findRunModelError(missing)).toContain('Model "MiniMax-M3" not found for provider "minimax-cli"')
+
+  // A CLI provider that is not connected still follows the SKU, as any
+  // disconnected provider does.
+  expect(resolveRunModel({ ...missing, connected: ["gateway"] })).toEqual({
+    providerID: "gateway",
+    modelID: "MiniMax-M3",
+  })
+  // A non-CLI provider lacking the model keeps following the SKU.
+  expect(
+    resolveRunModel({
+      providers: [{ id: "deepseek", models: {} }, providers[1]],
+      connected: ["deepseek", "gateway"],
+      providerID: "deepseek",
+      modelID: "MiniMax-M3",
+    }),
+  ).toEqual({ providerID: "gateway", modelID: "MiniMax-M3" })
+})
+
 test.each([
   ["deepseek", "deepseek-flash"],
   ["glm", "glm-5.3-flash"],
