@@ -2,7 +2,9 @@ import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
 import { parse as parseToml } from "smol-toml"
+import { parse as parseYaml } from "yaml"
 import { Filesystem } from "../../util/filesystem"
+import { isRecord } from "../../util/record"
 import { parseCliJsonObject, type CliJsonObject } from "./json"
 import { codexHome } from "./home"
 
@@ -112,9 +114,14 @@ function minimaxDataDir() {
 }
 
 function resolveYamlDefaultModel(yaml: string): string | undefined {
-  const match = yaml.match(/^\s*defaultModel:\s*(?:"([^"]+)"|'([^']+)'|([^\s#]+))/m)
-  const value = match?.[1] ?? match?.[2] ?? match?.[3]
-  return value?.trim() || undefined
+  try {
+    const settings: unknown = parseYaml(yaml, { logLevel: "error" })
+    if (!isRecord(settings) || !Object.hasOwn(settings, "defaultModel")) return undefined
+    const value = settings.defaultModel
+    return typeof value === "string" ? value.trim() || undefined : undefined
+  } catch {
+    return undefined
+  }
 }
 
 async function resolveMiniMaxModel(): Promise<CliModelInfo> {

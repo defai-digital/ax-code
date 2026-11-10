@@ -337,8 +337,26 @@ describe("resolveCliModel", () => {
   test("minimax-cli respects MCODE_MODEL env var", async () => {
     await using tmp = await tmpdir()
     await withMiniMaxEnv({ home: tmp.path, model: "MiniMax-M3", dataDir: null }, async () => {
+      await fs.mkdir(path.join(tmp.path, ".minimax"))
+      await fs.writeFile(path.join(tmp.path, ".minimax", "config.yaml"), "defaultModel: [broken")
       const info = await resolveCliModel("minimax-cli")
       expect(info).toEqual({ model: "MiniMax-M3", source: "MCODE_MODEL" })
+    })
+  })
+
+  test.each(["MINIMAX_DATA_DIR", "MAVIS_DATA_DIR"])("minimax-cli reads YAML from %s", async (envName) => {
+    await using tmp = await tmpdir()
+    vi.stubEnv("AX_CODE_TEST_HOME", undefined)
+    vi.stubEnv("MCODE_MODEL", undefined)
+    vi.stubEnv("MINIMAX_DATA_DIR", envName === "MINIMAX_DATA_DIR" ? tmp.path : undefined)
+    vi.stubEnv("MAVIS_DATA_DIR", path.join(tmp.path, "legacy"))
+    await fs.mkdir(path.join(tmp.path, "legacy"))
+    await fs.writeFile(path.join(tmp.path, "config.yaml"), '"defaultModel": "minimax_oauth/MiniMax-M3"')
+    await fs.writeFile(path.join(tmp.path, "legacy", "config.yaml"), "defaultModel: legacy-model")
+
+    expect(await resolveCliModel("minimax-cli")).toEqual({
+      model: envName === "MINIMAX_DATA_DIR" ? "minimax_oauth/MiniMax-M3" : "legacy-model",
+      source: `$${envName}/config.yaml`,
     })
   })
 
@@ -354,6 +372,68 @@ describe("resolveCliModel", () => {
         model: "minimax_oauth/MiniMax-M3",
         source: "test-home ~/.minimax/config.yaml",
       })
+    })
+  })
+
+  test.each([
+    ["plain scalar and comment", "defaultModel: minimax_oauth/MiniMax-M3 # selected model"],
+    ["single-quoted scalar", "defaultModel: 'minimax_oauth/MiniMax-M3'"],
+    ["quoted key", '"defaultModel": "minimax_oauth/MiniMax-M3"'],
+    ["flow mapping", '{ "defaultModel": "minimax_oauth/MiniMax-M3" }'],
+    ["escaped scalar", 'defaultModel: "minimax_oauth\\u002fMiniMax-M3"'],
+    ["block scalar", "defaultModel: >-\n  minimax_oauth/MiniMax-M3\n"],
+    [
+      "nested default before the root default",
+      "profiles:\n  example:\n    defaultModel: example-model\ndefaultModel: minimax_oauth/MiniMax-M3",
+    ],
+    [
+      "model-looking text in a block scalar",
+      "instructions: |\n  defaultModel: example-model\ndefaultModel: minimax_oauth/MiniMax-M3",
+    ],
+    ["scalar alias", "selected: &selected minimax_oauth/MiniMax-M3\ndefaultModel: *selected"],
+  ])("minimax-cli parses YAML with %s", async (_name, yaml) => {
+    await using tmp = await tmpdir()
+    await withMiniMaxEnv({ home: tmp.path, model: null, dataDir: null }, async () => {
+      const configDir = path.join(tmp.path, ".minimax")
+      await fs.mkdir(configDir)
+      await fs.writeFile(path.join(configDir, "config.yaml"), yaml)
+
+      expect(await resolveCliModel("minimax-cli")).toEqual({
+        model: "minimax_oauth/MiniMax-M3",
+        source: "test-home ~/.minimax/config.yaml",
+      })
+    })
+  })
+
+  test.each([
+    "defaultModel:\ntheme: dark",
+    "defaultModel: null",
+    "defaultModel: ~",
+    "defaultModel: false",
+    "defaultModel: 42",
+    'defaultModel: ""',
+    'defaultModel: "   "',
+    "defaultModel: []",
+    "defaultModel: [example-model]",
+    "defaultModel: { id: example-model }",
+    "profiles:\n  example:\n    defaultModel: example-model",
+    "instructions: |\n  defaultModel: example-model",
+    "defaultModel: first-model\ndefaultModel: second-model",
+    "defaultModel: example-model\nbroken: [",
+    "defaultModel: example-model\n---\ndefaultModel: second-model",
+    "defaultModel: *missing",
+    "- defaultModel: example-model",
+    "null",
+    "example-model",
+    "__proto__:\n  defaultModel: example-model",
+  ])("minimax-cli falls back to its default for config %s", async (yaml) => {
+    await using tmp = await tmpdir()
+    await withMiniMaxEnv({ home: tmp.path, model: null, dataDir: null }, async () => {
+      const configDir = path.join(tmp.path, ".minimax")
+      await fs.mkdir(configDir)
+      await fs.writeFile(path.join(configDir, "config.yaml"), yaml)
+
+      expect(await resolveCliModel("minimax-cli")).toEqual({ model: "minimax-cli", source: "default" })
     })
   })
 

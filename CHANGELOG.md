@@ -8,6 +8,9 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- MiniMax CLI model discovery parses the top-level YAML `defaultModel` instead of matching text in nested mappings
+  or block strings. Empty, non-string, duplicate, and malformed settings fall back to the CLI default; quoted keys,
+  escaped strings, and block scalars resolve correctly.
 - CLI model resolution, native model-cache reads, reasoning effort selection, and credential forwarding reject
   inherited provider names such as `constructor` and `toString` without invoking object prototype methods or throwing.
 - Codex and Kimi CLI model settings use TOML parsing, so examples inside multiline strings and nested table keys

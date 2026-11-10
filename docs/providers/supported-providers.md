@@ -210,6 +210,11 @@ For Kimi Code membership, install the local `kimi` binary, run `kimi login`, the
 
 For MiniMax Code, install the local `mcode` binary (`npm install -g @minimax-ai/code` or the official installer), run `mcode login`, then `ax-code providers login minimax-cli`. AX Code reuses the MiniMax Code CLI session (`~/.minimax`) rather than storing a hosted Token Plan key. The hosted `minimax-coding-plan` / `minimax-cn-coding-plan` API providers remain separate connections. Do not use `mmx-cli` for this provider.
 
+MiniMax model discovery prefers `MCODE_MODEL`, then the top-level string `defaultModel` in
+`$MINIMAX_DATA_DIR/config.yaml`, `$MAVIS_DATA_DIR/config.yaml`, or `~/.minimax/config.yaml` (the first configured
+directory is used). Nested keys and examples inside block strings do not select a model. Missing, empty, non-string,
+or malformed settings leave model selection to the CLI's default.
+
 For DeepSeek Harness, install the local `dsh` binary (`npm install -g @deepseek-ai/dsh`), put `DEEPSEEK_API_KEY` in your environment or in `~/.dsh/.env`, then `ax-code providers login dsh-cli`. AX Code runs `dsh --profile headless --json` with the `workspace-write` permission preset and approval policy `never`, in the session's working directory. dsh picks the DeepSeek model from its own profile; headless mode has no model flag. dsh uploads session logs with DeepSeek API requests and sends OTel session telemetry by default, so every bridged run passes a launcher `--patch` overlay (written to AX Code's cache directory as `dsh-privacy.patch.yml`) that disables both, and sets `DSH_TELEMETRY_MODE=DISABLED`. The hosted `deepseek` API provider remains a separate connection in which AX Code runs the agent loop itself.
 
 ### Why some coding-agent CLIs are not supported
