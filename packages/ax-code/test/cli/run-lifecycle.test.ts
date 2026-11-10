@@ -313,11 +313,11 @@ test("run command waits for discovery only after the requested model misses", as
 
   const local = refreshRunProvidersOnModelMiss({
     providers: known,
-    providerID: "grok-build-cli",
-    modelID: "grok-4.5",
+    providerID: "kimi-cli",
+    modelID: "kimi-code/k3",
     refresh: async () => {
       await discovery
-      return [{ id: "grok-build-cli", models: { "grok-4.5": {} } }]
+      return [{ id: "kimi-cli", models: { "kimi-code/k3": {} } }]
     },
   }).then((providers) => {
     settled = true
@@ -326,7 +326,7 @@ test("run command waits for discovery only after the requested model misses", as
   await Promise.resolve()
   expect(settled).toBe(false)
   release()
-  await expect(local).resolves.toEqual([{ id: "grok-build-cli", models: { "grok-4.5": {} } }])
+  await expect(local).resolves.toEqual([{ id: "kimi-cli", models: { "kimi-code/k3": {} } }])
   expect(settled).toBe(true)
 })
 

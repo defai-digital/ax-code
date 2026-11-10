@@ -202,7 +202,7 @@ describe("probeCliLanguageModel", () => {
     }
   })
 
-  test("probe passes Muse --workspace from the bundled definition", async () => {
+  test("probe passes MiniMax --cwd from the bundled definition", async () => {
     await using tmp = await tmpdir()
     const spawn = vi
       .spyOn(Process, "spawn")
@@ -213,16 +213,18 @@ describe("probeCliLanguageModel", () => {
         directory: tmp.path,
         fn: async () => {
           await probeCliLanguageModel({
-            providerID: "muse-cli",
-            modelID: "muse-cli",
-            binary: "muse",
+            providerID: "minimax-cli",
+            modelID: "minimax-cli",
+            binary: "mcode",
           })
         },
       })
 
       const cmd = spawn.mock.calls[0]?.[0] as string[]
-      expect(cmd).toContain("--workspace")
-      expect(cmd[cmd.indexOf("--workspace") + 1]).toBe(tmp.path)
+      expect(cmd).toContain("--cwd")
+      expect(cmd[cmd.indexOf("--cwd") + 1]).toBe(tmp.path)
+      expect(cmd).toContain("--input")
+      expect(cmd).toContain("-")
     } finally {
       spawn.mockRestore()
     }

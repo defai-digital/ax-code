@@ -31,10 +31,10 @@ describe("resolveConnectedProviderID", () => {
   })
 
   test("maps colloquial names for cli providers", () => {
-    const cliConnected = ["grok-build-cli", "claude-code", "codex-cli"]
+    const cliConnected = ["grok-build-cli", "kimi-cli", "claude-code", "codex-cli"]
     expect(resolveConnectedProviderID("gemini", cliConnected)).toBeUndefined()
-    expect(resolveConnectedProviderID("kimi", cliConnected)).toBeUndefined()
-    expect(resolveConnectedProviderID("Kimi Code", ["kimi-cloud-plan"])).toBe("kimi-cloud-plan")
+    expect(resolveConnectedProviderID("kimi", cliConnected)).toBe("kimi-cli")
+    expect(resolveConnectedProviderID("Kimi Code", cliConnected)).toBe("kimi-cli")
     expect(resolveConnectedProviderID("Grok Build CLI", cliConnected)).toBe("grok-build-cli")
     expect(resolveConnectedProviderID("qodercli", cliConnected)).toBeUndefined()
     expect(resolveConnectedProviderID("claude", cliConnected)).toBe("claude-code")
@@ -52,15 +52,15 @@ describe("resolveConnectedProviderID", () => {
 
   test("prefers bundled CLI ids when both CLI and hosted providers are connected", () => {
     expect(resolveConnectedProviderID("muse", ["meta", "muse-cli"])).toBe("muse-cli")
-    expect(resolveConnectedProviderID("mcode", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-coding-plan")
-    expect(resolveConnectedProviderID("minimax", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-coding-plan")
+    expect(resolveConnectedProviderID("mcode", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-cli")
+    expect(resolveConnectedProviderID("minimax", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-cli")
   })
 
   test("maps plan-provider colloquial names to the connected first-party id", () => {
     const connected = [
       "alibaba-token-plan",
       "zai-coding-plan",
-      "kimi-cloud-plan",
+      "kimi-cli",
       "minimax-coding-plan",
       "grok-build-cli",
       "ax-trust-defai-digital",
@@ -72,7 +72,7 @@ describe("resolveConnectedProviderID", () => {
     expect(resolveConnectedProviderID("zai", connected)).toBe("zai-coding-plan")
     expect(resolveConnectedProviderID("Z.AI", connected)).toBe("zai-coding-plan")
     expect(resolveConnectedProviderID("zhipu", connected)).toBe("zai-coding-plan")
-    expect(resolveConnectedProviderID("moonshot", connected)).toBe("kimi-cloud-plan")
+    expect(resolveConnectedProviderID("moonshot", connected)).toBe("kimi-cli")
     expect(resolveConnectedProviderID("grok-4.6", connected)).toBe("grok-build-cli")
     expect(resolveConnectedProviderID("ax-trust", connected)).toBe("ax-trust-defai-digital")
   })
@@ -282,7 +282,7 @@ describe("resolveExplicitMemberSelection", () => {
     const result = resolveExplicitMemberSelection({
       requestedProvider: "kimi",
       ...mixedGateway,
-      disabledIDs: ["kimi-cloud-plan"],
+      disabledIDs: ["kimi-cli"],
     })
     expect(result).toMatchObject({
       member: { providerID: "ax-trust-defai-digital", modelID: "k3" },

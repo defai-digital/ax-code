@@ -135,8 +135,7 @@ describe("provider routes", () => {
     expect(ids).not.toContain("qoder-cli")
     expect(ids).not.toContain("gemini-cli")
     expect(ids).not.toContain("antigravity-cli")
-    expect(ids).not.toContain("kimi-cli")
-    expect(ids).not.toContain("minimax-cli")
+    expect(ids).toContain("kimi-cli")
   })
 
   test("shows full-catalog API cloud providers by default while zero-model entries stay hidden", async () => {

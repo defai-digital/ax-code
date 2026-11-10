@@ -58,7 +58,7 @@ describe("update-models script", () => {
 
     // CLI providers should be preserved from the existing snapshot and keep
     // image capability metadata aligned with the CLI attachment adapter.
-    const cliProviders = ["claude-code", "codex-cli", "grok-build-cli"]
+    const cliProviders = ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli"]
     for (const id of cliProviders) {
       const provider = data[id]
       const model = provider?.models?.[id]
@@ -77,16 +77,7 @@ describe("update-models script", () => {
       snapshotPath,
       JSON.stringify(
         Object.fromEntries(
-          [
-            "claude-code",
-            "gemini-cli",
-            "codex-cli",
-            "grok-build-cli",
-            "qoder-cli",
-            "antigravity-cli",
-            "kimi-cli",
-            "minimax-cli",
-          ].map(
+          ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli", "qoder-cli", "antigravity-cli", "kimi-cli"].map(
             // Retired ids stay in the stale input on purpose: the refresh must drop them.
             (id) => [id, staleCliProvider(id)],
           ),
@@ -102,7 +93,7 @@ describe("update-models script", () => {
 
     expect(result.status).toBe(0)
     const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
-    for (const id of ["claude-code", "codex-cli", "grok-build-cli"]) {
+    for (const id of ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli"]) {
       const model = data[id]?.models?.[id]
       expect(model?.attachment).toBe(true)
       expect(model?.modalities?.input).toEqual(expect.arrayContaining(["text", "image"]))
@@ -111,8 +102,6 @@ describe("update-models script", () => {
     expect(data["gemini-cli"]).toBeUndefined()
     expect(data["antigravity-cli"]).toBeUndefined()
     expect(data["qoder-cli"]).toBeUndefined()
-    expect(data["kimi-cli"]).toBeUndefined()
-    expect(data["minimax-cli"]).toBeUndefined()
   })
 
   test("drops the direct xai provider and preserves the Grok CLI bridge", async () => {
@@ -183,8 +172,6 @@ describe("update-models script", () => {
     expect(data["ax-serving"]).toBeUndefined()
     expect(data.lmstudio).toBeUndefined()
     expect(data["qoder-cli"]).toBeUndefined()
-    expect(data["kimi-cli"]).toBeUndefined()
-    expect(data["minimax-cli"]).toBeUndefined()
   })
 
   test("preserves upstream Groq limits instead of replacing them with fallback metadata", async () => {
