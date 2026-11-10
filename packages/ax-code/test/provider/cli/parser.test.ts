@@ -1,17 +1,14 @@
 import { describe, expect, test } from "vitest"
 import {
-  claudeCodeParser,
   CliOutputError,
   codexCliParser,
   grokBuildCliParser,
   kimiCliParser,
-  museCliParser,
   minimaxCliParser,
-  qoderCliParser,
   parseCliJsonEventLine,
 } from "../../../src/provider/cli/parser"
 
-describe("claudeCodeParser", () => {
+describe("parseCliJsonEventLine", () => {
   test("decodes CLI JSON event lines with non-JSON fallback", () => {
     expect(parseCliJsonEventLine('  {"type":"result","result":"OK"}  ')).toEqual({
       type: "result",
@@ -20,33 +17,6 @@ describe("claudeCodeParser", () => {
     expect(parseCliJsonEventLine("plain text")).toBeUndefined()
     expect(parseCliJsonEventLine("{not json")).toBeUndefined()
     expect(parseCliJsonEventLine("")).toBeUndefined()
-  })
-
-  test("streams delta events without duplicating final assistant output", () => {
-    expect(claudeCodeParser.parseStreamLine('{"type":"content_block_delta","delta":{"text":"OK"}}')).toBe("OK")
-    expect(
-      claudeCodeParser.parseStreamLine('{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}'),
-    ).toBeNull()
-    expect(claudeCodeParser.parseStreamLine('{"type":"result","result":"OK"}')).toBe("OK")
-  })
-
-  test("complete parsing still extracts the final response text", () => {
-    const output = [
-      '{"type":"assistant","message":{"content":[{"type":"text","text":"Hello"}]}}',
-      '{"type":"result","result":"Hello"}',
-    ].join("\n")
-
-    expect(claudeCodeParser.parseComplete(output)).toEqual({ text: "Hello" })
-  })
-
-  test("ignores malformed nested assistant content blocks", () => {
-    const output = [
-      '{"type":"assistant","message":{"content":[{"type":"text","text":123},{"type":"image","text":"ignored"}]}}',
-      '{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}',
-    ].join("\n")
-
-    expect(claudeCodeParser.parseComplete(output)).toEqual({ text: "OK" })
-    expect(claudeCodeParser.parseStreamLine('{"type":"content_block_delta","delta":{"text":123}}')).toBeNull()
   })
 })
 
@@ -138,19 +108,11 @@ describe("provider CLI raw stream text", () => {
     expect(kimiCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
   })
 
-  test("qoder parser ignores non-JSON stream lines like Claude stream-json", () => {
-    expect(qoderCliParser.parseStreamLine("  indented output  ")).toBeNull()
-    expect(qoderCliParser.parseStreamLine("qodercli banner")).toBeNull()
-  })
-
   test("raw complete fallback preserves model whitespace", () => {
-    expect(claudeCodeParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(codexCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(grokBuildCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(kimiCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
-    expect(museCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(minimaxCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
-    expect(qoderCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
   })
 })
 
@@ -197,58 +159,6 @@ describe("kimiCliParser", () => {
       '{"role":"meta","content":"To resume this session: kimi -r session_x"}',
     ].join("\n")
     expect(kimiCliParser.parseComplete(toolOnly)).toEqual({ text: "" })
-  })
-})
-
-describe("museCliParser", () => {
-  test("concatenates output deltas and ignores control events", () => {
-    const output = [
-      '{"payload_type":"runtime.command.accepted","payload":{"kind":"command_accepted"}}',
-      '{"payload_type":"run.output.delta","payload":{"kind":"run_output_delta","text":"Hello "}}',
-      '{"payload_type":"task.lifecycle.started","payload":{"kind":"task_lifecycle"}}',
-      '{"payload_type":"run.output.delta","payload":{"kind":"run_output_delta","text":"world"}}',
-      '{"payload_type":"run.terminal.completed","payload":{"kind":"run_terminal","terminal":"completed","text":"Hello world"}}',
-    ].join("\n")
-
-    expect(museCliParser.parseComplete(output)).toEqual({ text: "Hello world" })
-  })
-
-  test("streams only output deltas", () => {
-    expect(museCliParser.parseStreamLine('{"payload_type":"run.output.delta","payload":{"text":"OK"}}')).toBe("OK")
-    expect(
-      museCliParser.parseStreamLine(
-        '{"payload_type":"run.terminal.completed","payload":{"terminal":"completed","text":"OK"}}',
-      ),
-    ).toBeNull()
-    expect(museCliParser.parseStreamLine('{"payload_type":"task.lifecycle.started","payload":{}}')).toBeNull()
-    expect(museCliParser.parseStreamLine("muse: workspace root: /tmp")).toBeNull()
-  })
-
-  test("falls back to terminal text when no deltas were emitted", () => {
-    expect(
-      museCliParser.parseComplete(
-        '{"payload_type":"run.terminal.completed","payload":{"terminal":"completed","text":"OK\\n"}}',
-      ),
-    ).toEqual({ text: "OK\n" })
-  })
-
-  test("does not leak control JSON when no assistant text is present", () => {
-    expect(
-      museCliParser.parseComplete('{"payload_type":"runtime.command.accepted","payload":{"kind":"command_accepted"}}'),
-    ).toEqual({ text: "" })
-  })
-
-  test("surfaces a failed terminal as a CLI output error", () => {
-    const output = [
-      '{"payload_type":"run.output.delta","payload":{"text":"partial"}}',
-      '{"payload_type":"run.terminal.completed","payload":{"terminal":"failed","reason":"authentication required"}}',
-    ].join("\n")
-
-    expect(() => museCliParser.parseComplete(output)).toThrow(CliOutputError)
-    expect(() => museCliParser.parseComplete(output)).toThrow("authentication required")
-    expect(() =>
-      museCliParser.parseComplete('{"payload_type":"run.terminal.failed","payload":{"reason":"login required"}}'),
-    ).toThrow("login required")
   })
 })
 
@@ -301,33 +211,6 @@ describe("minimaxCliParser", () => {
     ).toThrow(CliOutputError)
     expect(() => minimaxCliParser.parseComplete('{"type":"turn.failed","error":{"message":"login required"}}')).toThrow(
       "login required",
-    )
-  })
-})
-
-describe("qoderCliParser", () => {
-  test("extracts Claude-style assistant content blocks", () => {
-    const output = [
-      '{"type":"system","subtype":"init"}',
-      '{"type":"assistant","message":{"content":[{"type":"text","text":"Hello world"}]}}',
-    ].join("\n")
-    expect(qoderCliParser.parseComplete(output)).toEqual({ text: "Hello world" })
-  })
-
-  test("streams content_block_delta events", () => {
-    expect(qoderCliParser.parseStreamLine('{"type":"content_block_delta","delta":{"text":"OK"}}')).toBe("OK")
-    expect(qoderCliParser.parseStreamLine('{"type":"system","subtype":"init"}')).toBeNull()
-  })
-
-  test("surfaces authentication_failed as a CLI output error", () => {
-    expect(() =>
-      qoderCliParser.parseComplete('{"type":"system","subtype":"api_retry","error":"authentication_failed"}'),
-    ).toThrow(CliOutputError)
-    expect(() =>
-      qoderCliParser.parseComplete('{"type":"system","subtype":"api_retry","error":"authentication_failed"}'),
-    ).toThrow("qodercli login")
-    expect(() => qoderCliParser.parseComplete('{"type":"error","error":{"message":"Please login first"}}')).toThrow(
-      "Please login first",
     )
   })
 })

@@ -61,144 +61,21 @@ describe("probeCliLanguageModel", () => {
     ).rejects.toThrow(/CLI exited with code 7: broken probe/)
   })
 
-  test("Claude auth probe includes --verbose for stream-json compatibility", async () => {
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(""),
-      stderr: Buffer.from(""),
-      code: 0,
-      exitCode: 0,
-      text() {
-        return ""
-      },
-    } as any)
-
+  test("bundled CLI providers have no pre-probe auth check", async () => {
+    const run = vi.spyOn(Process, "run")
     try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toBeUndefined()
-      expect(runSpy).toHaveBeenCalledTimes(1)
-      expect(runSpy.mock.calls[0]?.[0]).toEqual([
-        "claude",
-        "--print",
-        "--verbose",
-        "--output-format",
-        "stream-json",
-        "ping",
-      ])
+      for (const [providerID, binary] of [
+        ["codex-cli", "codex"],
+        ["grok-build-cli", "grok"],
+        ["kimi-cli", "kimi"],
+        ["minimax-cli", "mcode"],
+        ["dsh-cli", "dsh"],
+      ]) {
+        await expect(checkCliProviderAuth(providerID, binary)).resolves.toBeUndefined()
+      }
+      expect(run).not.toHaveBeenCalled()
     } finally {
-      runSpy.mockRestore()
-    }
-  })
-
-  test("Claude auth probe forwards Anthropic API key env", async () => {
-    const original = process.env.ANTHROPIC_API_KEY
-    process.env.ANTHROPIC_API_KEY = "anthropic-key"
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(""),
-      stderr: Buffer.from(""),
-      code: 0,
-      exitCode: 0,
-      text() {
-        return ""
-      },
-    } as any)
-
-    try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toBeUndefined()
-      expect(runSpy.mock.calls[0]?.[1]?.env?.ANTHROPIC_API_KEY).toBe("anthropic-key")
-    } finally {
-      runSpy.mockRestore()
-      if (original === undefined) delete process.env.ANTHROPIC_API_KEY
-      else process.env.ANTHROPIC_API_KEY = original
-    }
-  })
-
-  test("Claude auth probe does not reject apiKeySource none without an auth error", async () => {
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(
-        [
-          JSON.stringify({ type: "system", subtype: "init", apiKeySource: "none" }),
-          JSON.stringify({ type: "result", subtype: "success", result: "OK" }),
-        ].join("\n"),
-      ),
-      stderr: Buffer.from(""),
-      code: 0,
-      exitCode: 0,
-      text() {
-        return ""
-      },
-    } as any)
-
-    try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toBeUndefined()
-    } finally {
-      runSpy.mockRestore()
-    }
-  })
-
-  test("Claude auth probe reports explicit authentication failures", async () => {
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(
-        [
-          JSON.stringify({ type: "system", subtype: "init", apiKeySource: "none" }),
-          JSON.stringify({ type: "assistant", error: "authentication_failed" }),
-        ].join("\n"),
-      ),
-      stderr: Buffer.from(""),
-      code: 1,
-      exitCode: 1,
-      text() {
-        return ""
-      },
-    } as any)
-
-    try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("Claude CLI is not logged in")
-    } finally {
-      runSpy.mockRestore()
-    }
-  })
-
-  test("Claude auth probe reports authentication failures written to stderr", async () => {
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(""),
-      stderr: Buffer.from(JSON.stringify({ type: "error", error: { message: "Please login first" } }) + "\n"),
-      code: 1,
-      exitCode: 1,
-      text() {
-        return ""
-      },
-    } as any)
-
-    try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("Claude CLI is not logged in")
-    } finally {
-      runSpy.mockRestore()
-    }
-  })
-
-  test("probe passes bundled workspaceArg into the spawned CLI", async () => {
-    await using tmp = await tmpdir()
-    const spawn = vi
-      .spyOn(Process, "spawn")
-      .mockImplementation(() => successfulChild('{"payload_type":"run.output.delta","payload":{"text":"OK"}}\n'))
-
-    try {
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          await probeCliLanguageModel({
-            providerID: "muse-cli",
-            modelID: "muse-cli",
-            binary: "muse",
-          })
-        },
-      })
-
-      const cmd = spawn.mock.calls[0]?.[0] as string[]
-      expect(cmd).toContain("--trust-workspace")
-      expect(cmd).toContain("--workspace")
-      expect(cmd[cmd.indexOf("--workspace") + 1]).toBe(tmp.path)
-    } finally {
-      spawn.mockRestore()
+      run.mockRestore()
     }
   })
 

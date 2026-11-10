@@ -15,8 +15,20 @@ changes belong to AX Coder.
 
 ### Added
 
-- Restore Kimi Code CLI (`kimi-cli`), MiniMax Code CLI (`minimax-cli`), and Qoder CLI (`qoder-cli`) as bundled CLI
-  providers, including their parsers, model resolution, login and connect surfaces, and catalog defaults.
+- Restore Kimi Code CLI (`kimi-cli`) and MiniMax Code CLI (`minimax-cli`) as bundled CLI providers, including their
+  parsers, model resolution, login and connect surfaces, and catalog defaults.
+- Add DeepSeek Harness (`dsh-cli`) as a bundled CLI provider. AX Code runs `dsh --profile headless --json` with the
+  `workspace-write` permission preset and disables dsh's default session-log upload and OTel session telemetry on
+  every bridged run.
+- List Anthropic (`anthropic`) among the suggested API providers in `/connect` and `ax-code providers login`, so
+  Claude can be used with an Anthropic API key without `enabled_providers` opt-in.
+
+### Removed
+
+- Retire the closed-source Claude Code (`claude-code`), Muse Code (`muse-cli`), and Qoder CLI (`qoder-cli`) CLI
+  providers. AX Code now bridges only coding-agent CLIs whose source is public. Use the `anthropic` API provider for
+  Claude and the `meta` API provider for Muse Spark; see Supported Providers for the rationale.
+- Retire the Kilo Gateway (`kilo`) provider.
 
 ## [7.30.18] - 2026-11-09
 

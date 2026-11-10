@@ -132,10 +132,11 @@ describe("provider routes", () => {
     expect(ids).toContain("custom-private-gpu")
     expect(ids).toContain("grok-build-cli")
     expect(ids).toEqual(expect.arrayContaining(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"]))
-    expect(ids).toContain("qoder-cli")
-    expect(ids).not.toContain("gemini-cli")
-    expect(ids).not.toContain("antigravity-cli")
-    expect(ids).toContain("kimi-cli")
+    expect(ids).toContain("anthropic")
+    expect(ids).toEqual(expect.arrayContaining(["codex-cli", "kimi-cli", "minimax-cli", "dsh-cli"]))
+    for (const retired of ["gemini-cli", "antigravity-cli", "claude-code", "muse-cli", "qoder-cli"]) {
+      expect(ids).not.toContain(retired)
+    }
   })
 
   test("shows full-catalog API cloud providers by default while zero-model entries stay hidden", async () => {

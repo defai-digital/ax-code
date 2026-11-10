@@ -13,9 +13,12 @@ describe("cloud API providers: DeepSeek + Meta Muse Spark", () => {
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("zai")
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("minimax-coding-plan")
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("minimax-cn-coding-plan")
-    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("muse-cli")
+    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("anthropic")
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("minimax-cli")
-    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("qoder-cli")
+    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("dsh-cli")
+    for (const retired of ["claude-code", "muse-cli", "qoder-cli"]) {
+      expect(DEFAULT_SETUP_PROVIDER_IDS).not.toContain(retired)
+    }
     expect(
       shouldShowProviderInList({
         key: "deepseek",
@@ -124,7 +127,8 @@ describe("isApiCloudCatalogProvider", () => {
 
   test("rejects CLI adapters, local runtimes, private GPU vendors, and ax-engine", async () => {
     const all = await ModelsDev.get()
-    expect(isApiCloudCatalogProvider("claude-code", all["claude-code"])).toBe(false)
+    expect(all["codex-cli"]).toBeDefined()
+    expect(isApiCloudCatalogProvider("codex-cli", all["codex-cli"]!)).toBe(false)
     expect(isApiCloudCatalogProvider("local-llm", all["local-llm"])).toBe(false)
     expect(isApiCloudCatalogProvider("ax-engine", all["ax-engine"])).toBe(false)
     // Id-based exclusions apply even when a fabricated record carries models.

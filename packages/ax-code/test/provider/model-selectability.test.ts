@@ -47,9 +47,8 @@ describe("modelSelectableForProvider", () => {
 
   test("does not reject models whose output capability is not known", () => {
     expect(modelSelectableForProvider("grok-build-cli", { capabilities: { toolcall: false } })).toBe(true)
-    expect(modelSelectableForProvider("muse-cli", { capabilities: { toolcall: false } })).toBe(true)
     expect(modelSelectableForProvider("minimax-cli", { capabilities: { toolcall: false } })).toBe(true)
-    expect(modelSelectableForProvider("qoder-cli", { capabilities: { toolcall: false } })).toBe(true)
+    expect(modelSelectableForProvider("dsh-cli", { capabilities: { toolcall: false } })).toBe(true)
   })
 })
 
@@ -194,7 +193,7 @@ describe("sameSkuOnConnectedProvider", () => {
   })
 
   test("resolves deterministically when several providers serve the same model", () => {
-    const first = { id: "claude-code", models: { "claude-sonnet-5": { tool_call: true } } }
+    const first = { id: "anthropic-proxy", models: { "claude-sonnet-5": { tool_call: true } } }
     const second = { id: "anthropic-gateway", models: { "claude-sonnet-5": { tool_call: true } } }
     const requested = { providerID: "anthropic", modelID: "claude-sonnet-5" }
     const forward = sameSkuOnConnectedProvider([first, second], requested)

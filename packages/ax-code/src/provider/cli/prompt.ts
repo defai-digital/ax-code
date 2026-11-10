@@ -8,13 +8,10 @@ export interface CliPromptOptions {
 }
 
 const WEB_SEARCH_CLI_PROVIDERS = new Set([
-  "claude-code",
   "codex-cli",
   "grok-build-cli",
   "kimi-cli",
-  "muse-cli",
   "minimax-cli",
-  "qoder-cli",
   "dsh-cli",
 ])
 

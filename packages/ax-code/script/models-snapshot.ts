@@ -1,13 +1,10 @@
 import { RETIRED_PROVIDER_IDS } from "../src/provider/retired-providers"
 
 export const LOCAL_PROVIDER_IDS = [
-  "claude-code",
   "codex-cli",
   "grok-build-cli",
   "kimi-cli",
-  "muse-cli",
   "minimax-cli",
-  "qoder-cli",
   "dsh-cli",
   "ollama",
   "ax-studio",
@@ -50,34 +47,6 @@ const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
       },
     },
   },
-  "muse-cli": {
-    id: "muse-cli",
-    name: "Muse Code CLI",
-    env: [],
-    npm: "cli",
-    models: {
-      "muse-cli": {
-        id: "muse-cli",
-        name: "Muse Code CLI",
-        family: "muse",
-        attachment: true,
-        reasoning: false,
-        tool_call: false,
-        temperature: false,
-        release_date: "2026-09-17",
-        modalities: {
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 1048576,
-          output: 131072,
-        },
-        options: {},
-        status: "active",
-      },
-    },
-  },
   "minimax-cli": {
     id: "minimax-cli",
     name: "MiniMax Code CLI",
@@ -100,34 +69,6 @@ const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
         limit: {
           context: 1048576,
           output: 512000,
-        },
-        options: {},
-        status: "active",
-      },
-    },
-  },
-  "qoder-cli": {
-    id: "qoder-cli",
-    name: "Qoder CLI",
-    env: [],
-    npm: "cli",
-    models: {
-      "qoder-cli": {
-        id: "qoder-cli",
-        name: "Qoder CLI",
-        family: "qoder",
-        attachment: true,
-        reasoning: false,
-        tool_call: false,
-        temperature: false,
-        release_date: "2026-06-01",
-        modalities: {
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 200000,
-          output: 16384,
         },
         options: {},
         status: "active",
@@ -181,28 +122,12 @@ export function preserveLocalProviders(fetched: ModelsSnapshot, existing: Models
       "grok-build-cli": grokBuildCliDefault.models["grok-build-cli"],
     }
   }
-  const museCli = next["muse-cli"] as { models?: Record<string, unknown> } | undefined
-  const museCliDefault = LOCAL_PROVIDER_DEFAULTS["muse-cli"] as { models: Record<string, unknown> }
-  if (museCli && !museCli.models?.["muse-cli"]) {
-    museCli.models = {
-      ...(museCli.models ?? {}),
-      "muse-cli": museCliDefault.models["muse-cli"],
-    }
-  }
   const minimaxCli = next["minimax-cli"] as { models?: Record<string, unknown> } | undefined
   const minimaxCliDefault = LOCAL_PROVIDER_DEFAULTS["minimax-cli"] as { models: Record<string, unknown> }
   if (minimaxCli && !minimaxCli.models?.["minimax-cli"]) {
     minimaxCli.models = {
       ...(minimaxCli.models ?? {}),
       "minimax-cli": minimaxCliDefault.models["minimax-cli"],
-    }
-  }
-  const qoderCli = next["qoder-cli"] as { models?: Record<string, unknown> } | undefined
-  const qoderCliDefault = LOCAL_PROVIDER_DEFAULTS["qoder-cli"] as { models: Record<string, unknown> }
-  if (qoderCli && !qoderCli.models?.["qoder-cli"]) {
-    qoderCli.models = {
-      ...(qoderCli.models ?? {}),
-      "qoder-cli": qoderCliDefault.models["qoder-cli"],
     }
   }
   const dshCli = next["dsh-cli"] as { models?: Record<string, unknown> } | undefined

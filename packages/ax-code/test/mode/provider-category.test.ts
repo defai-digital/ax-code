@@ -39,7 +39,7 @@ describe("provider connect category", () => {
     expect(providerConnectCategoryLabel("ax-engine")).toBe("AX-Engine runtime")
     expect(providerConnectCategoryLabel("ollama")).toBe("Local LLM runtime")
     expect(providerConnectCategoryLabel("runpod")).toBe("Private GPU cloud")
-    expect(providerConnectCategoryLabel("claude-code")).toBe("CLI Provider")
+    expect(providerConnectCategoryLabel("codex-cli")).toBe("CLI Provider")
     expect(providerConnectCategoryLabel("openai")).toBe("API Cloud Provider")
     expect(providerConnectCategoryLabel("ax-trust-defai-digital")).toBe("AX Trust")
   })

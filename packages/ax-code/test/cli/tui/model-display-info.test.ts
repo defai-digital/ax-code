@@ -3,15 +3,7 @@ import { modelDisplayInfo, supportsWebSearch } from "../../../src/cli/tui/compon
 
 describe("modelDisplayInfo", () => {
   test("adds web search marker for CLI providers with built-in web search", () => {
-    for (const providerID of [
-      "claude-code",
-      "codex-cli",
-      "grok-build-cli",
-      "kimi-cli",
-      "muse-cli",
-      "minimax-cli",
-      "qoder-cli",
-    ]) {
+    for (const providerID of ["codex-cli", "grok-build-cli", "kimi-cli", "minimax-cli", "dsh-cli"]) {
       const display = modelDisplayInfo(providerID, {
         providerID,
         name: providerID,
@@ -24,7 +16,7 @@ describe("modelDisplayInfo", () => {
   })
 
   test("shows vision marker for CLI providers with image input", () => {
-    for (const providerID of ["claude-code", "codex-cli", "grok-build-cli"]) {
+    for (const providerID of ["codex-cli", "grok-build-cli", "kimi-cli"]) {
       const display = modelDisplayInfo(providerID, {
         providerID,
         name: `${providerID} default`,
@@ -37,18 +29,20 @@ describe("modelDisplayInfo", () => {
   })
 
   test("does not advertise web search for retired CLI providers", () => {
-    expect(supportsWebSearch({ providerID: "gemini-cli" })).toBe(false)
+    for (const providerID of ["gemini-cli", "claude-code", "muse-cli", "qoder-cli"]) {
+      expect(supportsWebSearch({ providerID })).toBe(false)
+    }
   })
 
   test("does not duplicate markers already present in the model name", () => {
-    const display = modelDisplayInfo("claude-code", {
-      providerID: "claude-code",
-      name: "Claude Code default 🌐",
+    const display = modelDisplayInfo("codex-cli", {
+      providerID: "codex-cli",
+      name: "Codex CLI default 🌐",
       capabilities: { input: { image: true } },
     })
 
-    expect(display.label).toBe("Claude Code default 👀 🌐")
-    expect(display.searchText).toBe("Claude Code default")
+    expect(display.label).toBe("Codex CLI default 👀 🌐")
+    expect(display.searchText).toBe("Codex CLI default")
   })
 
   test("marks Alibaba server-side search models", () => {
@@ -89,10 +83,9 @@ describe("modelDisplayInfo", () => {
   test("keeps marking CLI models when the snapshot declares no search flag", () => {
     // The bundled snapshot sets websearch:false on every model, so a false
     // declaration must stay additive-only and never veto the allowlist.
-    expect(supportsWebSearch({ providerID: "claude-code", capabilities: { websearch: false } })).toBe(true)
     expect(supportsWebSearch({ providerID: "codex-cli", capabilities: { websearch: false } })).toBe(true)
     expect(supportsWebSearch({ providerID: "grok-build-cli" })).toBe(true)
-    expect(supportsWebSearch({ providerID: "muse-cli", capabilities: { websearch: false } })).toBe(true)
+    expect(supportsWebSearch({ providerID: "dsh-cli", capabilities: { websearch: false } })).toBe(true)
   })
 
   test("does not mark models without direct web search support", () => {

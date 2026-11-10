@@ -363,7 +363,7 @@ describe("Council.selectDiverseMembers", () => {
         { providerID: "google", id: 1 },
         { providerID: "zhipuai", id: 2 },
         { providerID: "openrouter", id: 3 },
-        { providerID: "claude-code", id: 4 },
+        { providerID: "anthropic", id: 4 },
       ],
       3,
     )
@@ -382,13 +382,13 @@ describe("Council.selectDiverseMembers", () => {
     expect(unique.map((member) => member.id)).toEqual([1, 3])
   })
 
-  test("keeps Grok Build, Kimi Code, and Claude Code as distinct ensemble families", () => {
+  test("keeps Grok Build, Kimi Code, and MiniMax Code as distinct ensemble families", () => {
     const selected = Council.selectDiverseMembers(
-      [{ providerID: "grok-build-cli" }, { providerID: "kimi-cli" }, { providerID: "claude-code" }],
+      [{ providerID: "grok-build-cli" }, { providerID: "kimi-cli" }, { providerID: "minimax-cli" }],
       3,
     )
 
-    expect(selected.map((member) => member.providerID)).toEqual(["grok-build-cli", "kimi-cli", "claude-code"])
+    expect(selected.map((member) => member.providerID)).toEqual(["grok-build-cli", "kimi-cli", "minimax-cli"])
   })
 })
 

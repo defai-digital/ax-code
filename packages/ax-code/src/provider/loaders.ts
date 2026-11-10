@@ -18,10 +18,8 @@ import { axEngineLoader } from "./ax-engine/provider-loader"
 import { PRIVATE_GPU_LOADERS } from "./private-gpu/loader"
 import { isRecord } from "@/util/record"
 import { ModelsDev } from "./models"
-import { claudeDisplayName, claudeFamilyId, latestAnthropicFamilyModels } from "./anthropic-families"
 import { grokDisplayName, grokFallbackLatest, grokFamilyId, latestGrokFamilyModels } from "./grok-families"
 import { kimiDisplayName, kimiFallbackModels, kimiFamilyId, latestKimiFamilyModels } from "./kimi-families"
-import { museDisplayName, museFallbackLatest, museFamilyId, latestMuseFamilyModels } from "./muse-families"
 import {
   minimaxDisplayName,
   minimaxFallbackLatest,
@@ -394,13 +392,10 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
 }
 
 const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
-  "claude-code": "Claude Code default",
   "codex-cli": "Codex CLI default",
   "grok-build-cli": "Grok Build CLI default",
   "kimi-cli": "Kimi Code CLI default",
-  "muse-cli": "Muse Code CLI default",
   "minimax-cli": "MiniMax Code CLI default",
-  "qoder-cli": "Qoder CLI default",
   "dsh-cli": "DeepSeek Harness default",
 }
 
@@ -559,49 +554,6 @@ function nativeCliModels(
   return models
 }
 
-async function claudeCodeFamilyModels(
-  provider: Provider.Info,
-  resolved?: string,
-): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
-  if (!base) return {}
-  const catalog = (await ModelsDev.get()).anthropic?.models ?? {}
-  const native = await readNativeCliModels("claude-code")
-  const models: Record<string, Provider.Model> =
-    native.length > 0 ? nativeCliModels(base, native, catalog, "claude-code", claudeFamilyId) : {}
-  if (native.length === 0) {
-    for (const item of latestAnthropicFamilyModels(catalog)) {
-      models[item.id] = overlayCliCatalogModel(
-        base,
-        item,
-        "claude-code",
-        claudeDisplayName(item.name, item.id),
-        claudeFamilyId({ id: item.id, family: item.family }),
-      )
-    }
-  }
-  if (resolved && resolved !== "claude-code" && !models[resolved] && catalog[resolved]) {
-    const item = catalog[resolved]!
-    models[resolved] = overlayCliCatalogModel(
-      base,
-      item,
-      "claude-code",
-      claudeDisplayName(item.name, resolved),
-      claudeFamilyId({ id: item.id, family: item.family }),
-    )
-  } else if (resolved && resolved !== "claude-code" && !models[resolved]) {
-    const id = ModelID.make(resolved)
-    models[id] = {
-      ...base,
-      id,
-      providerID: ProviderID.make("claude-code"),
-      api: { ...base.api, id: resolved },
-      name: claudeDisplayName(undefined, resolved),
-    }
-  }
-  return models
-}
-
 function collectGrokCatalog(snapshot: Record<string, ModelsDev.Provider>): Record<string, ModelsDev.Model> {
   const collected: Record<string, ModelsDev.Model> = {}
   for (const provider of Object.values(snapshot)) {
@@ -716,62 +668,6 @@ async function codexCliFamilyModels(
       providerID: ProviderID.make("codex-cli"),
       api: { ...base.api, id: resolved },
       name: codexDisplayName(undefined, resolved),
-    }
-  }
-  return models
-}
-
-function collectMuseCatalog(snapshot: Record<string, ModelsDev.Provider>): Record<string, ModelsDev.Model> {
-  const collected: Record<string, ModelsDev.Model> = {}
-  const meta = snapshot.meta?.models ?? {}
-  for (const [id, model] of Object.entries(meta)) {
-    if (!museFamilyId({ id: model.id ?? id, family: model.family })) continue
-    const key = (model.id ?? id).split("/").pop() ?? id
-    if (!collected[key]) collected[key] = { ...model, id: key }
-  }
-  const fallback = museFallbackLatest()
-  if (!collected[fallback.id]) collected[fallback.id] = fallback as ModelsDev.Model
-  return collected
-}
-
-async function museCliFamilyModels(
-  provider: Provider.Info,
-  resolved?: string,
-): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
-  if (!base) return {}
-  const catalog = collectMuseCatalog(await ModelsDev.get())
-  const native = await readNativeCliModels("muse-cli")
-  const models: Record<string, Provider.Model> =
-    native.length > 0 ? nativeCliModels(base, native, catalog, "muse-cli", museFamilyId) : {}
-  if (native.length === 0) {
-    for (const item of latestMuseFamilyModels(catalog)) {
-      models[item.id] = overlayCliCatalogModel(
-        base,
-        item,
-        "muse-cli",
-        museDisplayName(item.name, item.id),
-        museFamilyId({ id: item.id, family: item.family }),
-      )
-    }
-  }
-  if (resolved && resolved !== "muse-cli" && !models[resolved] && catalog[resolved]) {
-    const item = catalog[resolved]!
-    models[resolved] = overlayCliCatalogModel(
-      base,
-      item,
-      "muse-cli",
-      museDisplayName(item.name, resolved),
-      museFamilyId({ id: item.id, family: item.family }),
-    )
-  } else if (resolved && resolved !== "muse-cli" && !models[resolved]) {
-    const id = ModelID.make(resolved)
-    models[id] = {
-      ...base,
-      id,
-      providerID: ProviderID.make("muse-cli"),
-      api: { ...base.api, id: resolved },
-      name: museDisplayName(undefined, resolved),
     }
   }
   return models
@@ -926,11 +822,6 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         const authError = await checkCliProviderAuth(opts.providerID, path)
         if (authError) return {}
         const resolved = await resolveCliModel(opts.providerID)
-        if (opts.providerID === "claude-code") {
-          const models = await claudeCodeFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
         if (opts.providerID === "grok-build-cli") {
           const models = await grokBuildFamilyModels(current, resolved.model)
           if (Object.keys(models).length > 0) delete current.models[opts.providerID]
@@ -946,11 +837,6 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
           if (Object.keys(models).length > 0) delete current.models[opts.providerID]
           return models
         }
-        if (opts.providerID === "muse-cli") {
-          const models = await museCliFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
         if (opts.providerID === "minimax-cli") {
           const models = await minimaxCliFamilyModels(current, resolved.model)
           if (Object.keys(models).length > 0) delete current.models[opts.providerID]
@@ -962,13 +848,10 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
   }
 }
 
-const claudeCode = getCliProviderDefinition("claude-code")!
 const codexCli = getCliProviderDefinition("codex-cli")!
 const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
 const kimiCli = getCliProviderDefinition("kimi-cli")!
-const museCli = getCliProviderDefinition("muse-cli")!
 const minimaxCli = getCliProviderDefinition("minimax-cli")!
-const qoderCli = getCliProviderDefinition("qoder-cli")!
 const dshCli = getCliProviderDefinition("dsh-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
@@ -1009,14 +892,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   ),
   "ax-engine": axEngineLoader(),
   ...PRIVATE_GPU_LOADERS,
-  "claude-code": cliLoader({
-    providerID: "claude-code",
-    binary: claudeCode.binary,
-    args: claudeCode.args,
-    parser: claudeCode.parser,
-    promptMode: claudeCode.promptMode,
-    promptFlag: claudeCode.promptFlag,
-  }),
   "codex-cli": cliLoader({
     providerID: "codex-cli",
     binary: codexCli.binary,
@@ -1041,15 +916,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     promptMode: kimiCli.promptMode,
     promptFlag: kimiCli.promptFlag,
   }),
-  "muse-cli": cliLoader({
-    providerID: "muse-cli",
-    binary: museCli.binary,
-    args: museCli.args,
-    parser: museCli.parser,
-    promptMode: museCli.promptMode,
-    promptFlag: museCli.promptFlag,
-    workspaceArg: museCli.workspaceArg,
-  }),
   "minimax-cli": cliLoader({
     providerID: "minimax-cli",
     binary: minimaxCli.binary,
@@ -1058,15 +924,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     promptMode: minimaxCli.promptMode,
     promptFlag: minimaxCli.promptFlag,
     workspaceArg: minimaxCli.workspaceArg,
-  }),
-  "qoder-cli": cliLoader({
-    providerID: "qoder-cli",
-    binary: qoderCli.binary,
-    args: qoderCli.args,
-    parser: qoderCli.parser,
-    promptMode: qoderCli.promptMode,
-    promptFlag: qoderCli.promptFlag,
-    workspaceArg: qoderCli.workspaceArg,
   }),
   "dsh-cli": cliLoader({
     providerID: "dsh-cli",

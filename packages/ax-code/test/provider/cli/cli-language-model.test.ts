@@ -1,7 +1,44 @@
 import { test, expect, describe, vi } from "vitest"
 import { buildCliCommand, CliLanguageModel, extractJsonPayload } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
-import { claudeCodeParser, grokBuildCliParser } from "../../../src/provider/cli/parser"
+import { grokBuildCliParser, parseCliJsonEventLine, type CliOutputParser } from "../../../src/provider/cli/parser"
+
+// Generic Claude-style stream-json parser for CliLanguageModel behavior tests:
+// `content_block_delta` streams text, `assistant` content blocks and `result`
+// carry the final answer, and non-JSON stdout falls back to raw text.
+function streamJsonText(line: string): string | null {
+  const event = parseCliJsonEventLine(line)
+  if (!event) return null
+  const delta = event.delta as { text?: unknown } | undefined
+  if (event.type === "content_block_delta" && typeof delta?.text === "string") return delta.text
+  if (event.type === "result" && typeof event.result === "string") return event.result
+  return null
+}
+const streamJsonParser: CliOutputParser = {
+  parseComplete(output) {
+    const parts: string[] = []
+    let structured = false
+    for (const line of output.split("\n")) {
+      const event = parseCliJsonEventLine(line)
+      if (!event) continue
+      structured = true
+      if (event.type === "result" && typeof event.result === "string") return { text: event.result }
+      const content = (event.message as { content?: unknown } | undefined)?.content
+      if (event.type === "assistant" && Array.isArray(content)) {
+        const text = content
+          .filter((block) => block?.type === "text" && typeof block.text === "string")
+          .map((block) => block.text)
+          .join("")
+        if (text) parts.push(text)
+      }
+    }
+    if (parts.length) return { text: parts.join("\n") }
+    if (structured) return { text: "" }
+    const raw = output.replace(/\r?\n$/, "")
+    return { text: raw.trim() ? raw : "" }
+  },
+  parseStreamLine: streamJsonText,
+}
 import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
@@ -16,7 +53,7 @@ function makeModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageM
     modelID: "test-model",
     binary: "echo",
     args: [],
-    parser: claudeCodeParser,
+    parser: streamJsonParser,
     promptMode: "arg",
     promptFlag: "-p",
     ...overrides,
@@ -197,7 +234,7 @@ describe("CliLanguageModel", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const model = makeModel({ parser: claudeCodeParser })
+          const model = makeModel({ parser: streamJsonParser })
           const { stream } = await model.doStream({
             prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
           })
@@ -1259,124 +1296,6 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("adds Claude Code permission bypass in autonomous mode", () => {
-    process.env.AX_CODE_AUTONOMOUS = "true"
-    try {
-      const cmd = buildCliCommand(
-        {
-          providerID: "claude-code",
-          modelID: "claude-sonnet-4-6",
-          binary: "claude",
-          args: ["--print", "--output-format", "stream-json"],
-          parser: claudeCodeParser,
-          promptMode: "positional",
-        },
-        "write file",
-      )
-      expect(cmd).toContain("--dangerously-skip-permissions")
-      expect(cmd.at(-1)).toBe("write file")
-    } finally {
-      restoreAutonomous()
-    }
-  })
-
-  test("keeps Claude Code prompt out of argv for stdin delivery", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["claude-code"]
-    expect(definition).toBeDefined()
-
-    const cmd = buildCliCommand(
-      {
-        providerID: "claude-code",
-        modelID: "claude-code",
-        binary: "claude",
-        args: definition?.args ?? [],
-        parser: claudeCodeParser,
-        promptMode: definition?.promptMode ?? "stdin",
-      },
-      "write file",
-    )
-
-    expect(cmd).not.toContain("-p")
-    expect(cmd).toContain("--print")
-    expect(cmd).not.toContain("write file")
-  })
-
-  test("passes Qoder CLI prompt through headless print stdin", () => {
-    process.env.AX_CODE_AUTONOMOUS = "false"
-    try {
-      const definition = CLI_PROVIDER_DEFINITIONS["qoder-cli"]
-      expect(definition).toBeDefined()
-
-      const cmd = buildCliCommand(
-        {
-          providerID: "qoder-cli",
-          modelID: "qoder-cli",
-          binary: "qodercli",
-          args: definition?.args ?? [],
-          parser: definition!.parser,
-          promptMode: definition?.promptMode ?? "stdin",
-          workspaceArg: definition?.workspaceArg,
-        },
-        "write file",
-        "/repo",
-      )
-
-      expect(cmd).toEqual([
-        "qodercli",
-        "-p",
-        "--output-format",
-        "stream-json",
-        "--permission-mode",
-        "dont_ask",
-        "--cwd",
-        "/repo",
-      ])
-      expect(cmd).not.toContain("write file")
-    } finally {
-      restoreAutonomous()
-    }
-  })
-
-  test("adds autonomous-only flags by default", () => {
-    delete process.env.AX_CODE_AUTONOMOUS
-    try {
-      const cmd = buildCliCommand(
-        {
-          providerID: "claude-code",
-          modelID: "claude-sonnet-4-6",
-          binary: "claude",
-          args: ["--print"],
-          parser: claudeCodeParser,
-          promptMode: "positional",
-        },
-        "write file",
-      )
-      expect(cmd).toContain("--dangerously-skip-permissions")
-    } finally {
-      restoreAutonomous()
-    }
-  })
-
-  test("omits autonomous-only flags when explicitly disabled", () => {
-    process.env.AX_CODE_AUTONOMOUS = "false"
-    try {
-      const cmd = buildCliCommand(
-        {
-          providerID: "claude-code",
-          modelID: "claude-sonnet-4-6",
-          binary: "claude",
-          args: ["--print"],
-          parser: claudeCodeParser,
-          promptMode: "positional",
-        },
-        "write file",
-      )
-      expect(cmd).not.toContain("--dangerously-skip-permissions")
-    } finally {
-      restoreAutonomous()
-    }
-  })
-
   test("omits --model when using a CLI provider default model", () => {
     const cmd = buildCliCommand(
       {
@@ -1412,65 +1331,6 @@ describe("CliLanguageModel", () => {
     )
 
     expect(cmd).toEqual(["grok", "--prompt-file", "/tmp/prompt.txt"])
-  })
-
-  test("passes Muse CLI prompt file through headless exec", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["muse-cli"]
-    expect(definition).toBeDefined()
-
-    const cmd = buildCliCommand(
-      {
-        providerID: "muse-cli",
-        modelID: "muse-cli",
-        binary: "muse",
-        args: definition?.args ?? [],
-        parser: definition!.parser,
-        promptMode: definition?.promptMode ?? "file",
-        promptFlag: definition?.promptFlag,
-        workspaceArg: definition?.workspaceArg,
-      },
-      "/tmp/prompt.txt",
-      "/repo",
-    )
-
-    expect(cmd).toEqual([
-      "muse",
-      "exec",
-      "--json",
-      "--approval-mode",
-      "never",
-      "--disable-approval",
-      "--trust-workspace",
-      "--workspace",
-      "/repo",
-      "--prompt-file",
-      "/tmp/prompt.txt",
-    ])
-    expect(cmd).not.toContain("--disable-write")
-    expect(cmd).not.toContain("--yolo")
-  })
-
-  test("passes Muse CLI model and effort flags", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["muse-cli"]
-    const cmd = buildCliCommand(
-      {
-        providerID: "muse-cli",
-        modelID: "muse-spark-1.3",
-        binary: "muse",
-        args: definition?.args ?? [],
-        parser: definition!.parser,
-        promptMode: definition?.promptMode ?? "file",
-        promptFlag: definition?.promptFlag,
-      },
-      "/tmp/prompt.txt",
-      undefined,
-      "max",
-    )
-
-    expect(cmd).toContain("--model")
-    expect(cmd[cmd.indexOf("--model") + 1]).toBe("muse-spark-1.3")
-    expect(cmd).toContain("--reasoning-effort")
-    expect(cmd[cmd.indexOf("--reasoning-effort") + 1]).toBe("max")
   })
 
   test("passes MiniMax Code CLI prompt through headless exec stdin", () => {
@@ -1532,29 +1392,13 @@ describe("CliLanguageModel", () => {
   })
 
   test("maps effort to each supported CLI's native arguments", () => {
-    const claude = buildCliCommand(
-      {
-        providerID: "claude-code",
-        modelID: "claude-code",
-        binary: "claude",
-        args: ["--print"],
-        parser: claudeCodeParser,
-        promptMode: "positional",
-      },
-      "write file",
-      undefined,
-      "max",
-    )
-    expect(claude).toContain("--effort")
-    expect(claude[claude.indexOf("--effort") + 1]).toBe("max")
-
     const codex = buildCliCommand(
       {
         providerID: "codex-cli",
         modelID: "codex-cli",
         binary: "codex",
         args: ["exec", "--json"],
-        parser: claudeCodeParser,
+        parser: streamJsonParser,
         promptMode: "stdin",
       },
       "write file",
@@ -1603,19 +1447,19 @@ describe("CliLanguageModel", () => {
     const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild())
     try {
       const model = makeModel({
-        providerID: "claude-code",
-        modelID: "claude-code",
-        binary: "claude",
-        args: ["--print"],
+        providerID: "grok-build-cli",
+        modelID: "grok-build-cli",
+        binary: "grok",
+        args: [],
         promptMode: "positional",
       })
       await model.doGenerate({
         prompt: [{ role: "user", content: [{ type: "text", text: "write file" }] }],
-        providerOptions: { "claude-code": { effort: "max" } },
+        providerOptions: { "grok-build-cli": { effort: "medium" } },
       })
       const command = spawn.mock.calls[0]?.[0]
-      expect(command).toContain("--effort")
-      expect(command[command.indexOf("--effort") + 1]).toBe("max")
+      expect(command).toContain("--reasoning-effort")
+      expect(command[command.indexOf("--reasoning-effort") + 1]).toBe("medium")
     } finally {
       spawn.mockRestore()
     }
@@ -1703,7 +1547,7 @@ describe("CliLanguageModel", () => {
         modelID: "custom-cli",
         binary: "customcli",
         args: [],
-        parser: claudeCodeParser,
+        parser: streamJsonParser,
         promptMode: "arg",
         promptFlag: "-p",
         workspaceArg: "--add-dir",

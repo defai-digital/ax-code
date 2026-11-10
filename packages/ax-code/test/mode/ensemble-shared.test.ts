@@ -31,27 +31,35 @@ describe("resolveConnectedProviderID", () => {
   })
 
   test("maps colloquial names for cli providers", () => {
-    const cliConnected = ["grok-build-cli", "kimi-cli", "claude-code", "codex-cli", "qoder-cli"]
+    const cliConnected = ["grok-build-cli", "kimi-cli", "codex-cli", "dsh-cli"]
     expect(resolveConnectedProviderID("gemini", cliConnected)).toBeUndefined()
     expect(resolveConnectedProviderID("kimi", cliConnected)).toBe("kimi-cli")
     expect(resolveConnectedProviderID("Kimi Code", cliConnected)).toBe("kimi-cli")
     expect(resolveConnectedProviderID("Grok Build CLI", cliConnected)).toBe("grok-build-cli")
-    expect(resolveConnectedProviderID("qodercli", cliConnected)).toBe("qoder-cli")
-    expect(resolveConnectedProviderID("claude", cliConnected)).toBe("claude-code")
+    expect(resolveConnectedProviderID("dsh", cliConnected)).toBe("dsh-cli")
+    expect(resolveConnectedProviderID("deepseek-harness", cliConnected)).toBe("dsh-cli")
+    expect(resolveConnectedProviderID("qodercli", cliConnected)).toBeUndefined()
+    expect(resolveConnectedProviderID("claude", cliConnected)).toBeUndefined()
+    expect(resolveConnectedProviderID("claude", ["anthropic", ...cliConnected])).toBe("anthropic")
     expect(resolveConnectedProviderID("openai", cliConnected)).toBe("codex-cli")
     expect(resolveConnectedProviderID("chatgpt", cliConnected)).toBe("codex-cli")
     expect(resolveConnectedProviderID("gemini", ["google"])).toBe("google")
   })
 
   test("maps colloquial minimax to the coding-plan provider when connected", () => {
-    const connected = ["ax-trust-defai-digital", "claude-code", "minimax-coding-plan"]
+    const connected = ["ax-trust-defai-digital", "codex-cli", "minimax-coding-plan"]
     expect(resolveConnectedProviderID("minimax", connected)).toBe("minimax-coding-plan")
     expect(resolveConnectedProviderID("MiniMax Token Plan", connected)).toBe("minimax-coding-plan")
     expect(resolveConnectedProviderID("deepseek", connected)).toBeUndefined()
   })
 
+  test("maps colloquial Muse names to the Meta API provider", () => {
+    expect(resolveConnectedProviderID("muse", ["meta"])).toBe("meta")
+    expect(resolveConnectedProviderID("Muse Spark", ["meta"])).toBe("meta")
+    expect(resolveConnectedProviderID("muse", ["kimi-cli"])).toBeUndefined()
+  })
+
   test("prefers bundled CLI ids when both CLI and hosted providers are connected", () => {
-    expect(resolveConnectedProviderID("muse", ["meta", "muse-cli"])).toBe("muse-cli")
     expect(resolveConnectedProviderID("mcode", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-cli")
     expect(resolveConnectedProviderID("minimax", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-cli")
   })

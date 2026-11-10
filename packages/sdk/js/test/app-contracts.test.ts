@@ -22,13 +22,12 @@ describe("application contracts", () => {
   })
 
   test("classifies provider connection choices", () => {
-    expect(CLI_PROVIDER_IDS).toContain("grok-build-cli")
-    expect(CLI_PROVIDER_IDS).toContain("muse-cli")
-    expect(CLI_PROVIDER_IDS).toContain("minimax-cli")
-    expect(CLI_PROVIDER_IDS).toContain("qoder-cli")
-    expect(providerConnectCategory("muse-cli")).toBe("cli")
+    expect([...CLI_PROVIDER_IDS].sort()).toEqual(["codex-cli", "dsh-cli", "grok-build-cli", "kimi-cli", "minimax-cli"])
+    for (const retired of ["claude-code", "muse-cli", "qoder-cli"]) {
+      expect(CLI_PROVIDER_IDS).not.toContain(retired)
+    }
     expect(providerConnectCategory("minimax-cli")).toBe("cli")
-    expect(providerConnectCategory("qoder-cli")).toBe("cli")
+    expect(providerConnectCategory("dsh-cli")).toBe("cli")
     expect(providerConnectCategory("ax-engine")).toBe("ax-engine")
     expect(providerConnectCategory("lmstudio")).toBe("local")
     expect(providerConnectCategory("mtplx")).toBe("local")

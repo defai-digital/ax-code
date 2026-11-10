@@ -2,10 +2,12 @@
 // picker. Keep surface-specific entries (`ax-engine` and `ax-code`) at their
 // call sites.
 //
-// Cloud API-key providers (google, deepseek, meta/Muse Spark, …) must stay
-// here so /connect, providers login, and the Desktop setup dialog surface them
-// without requiring enabled_providers opt-in — same pattern OpenCode uses for
-// native deepseek + meta blocks.
+// Cloud API-key providers (google, deepseek, anthropic, meta/Muse Spark, …) must
+// stay here so /connect, providers login, and the Desktop setup dialog surface
+// them without requiring enabled_providers opt-in — same pattern OpenCode uses
+// for native deepseek + meta blocks. Anthropic (Claude) and Meta (Muse Spark)
+// are the API-key routes for users of the retired closed-source Claude Code
+// and Muse Code CLI providers.
 import { CLI_PROVIDER_IDS } from "./cli/ids"
 import { LOCAL_LLM_PROVIDER_IDS, providerConnectCategory } from "@/mode/provider-category"
 import { isPrivateGpuProviderID } from "./private-gpu/presets"
@@ -15,6 +17,7 @@ import type { ModelsDev } from "./models"
 export const DEFAULT_SETUP_PROVIDER_IDS = [
   "google",
   "deepseek",
+  "anthropic",
   "meta",
   "groq",
   "openrouter",

@@ -1,11 +1,8 @@
 import {
-  claudeCodeParser,
   codexCliParser,
   grokBuildCliParser,
   kimiCliParser,
   minimaxCliParser,
-  museCliParser,
-  qoderCliParser,
   dshCliParser,
   type CliOutputParser,
 } from "./parser"
@@ -20,12 +17,6 @@ export interface CliProviderDefinition {
 }
 
 export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
-  "claude-code": {
-    binary: "claude",
-    args: ["--print", "--verbose", "--output-format", "stream-json"],
-    parser: claudeCodeParser,
-    promptMode: "stdin",
-  },
   "codex-cli": {
     binary: "codex",
     args: ["exec", "--json", "--skip-git-repo-check"],
@@ -48,16 +39,6 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     promptMode: "arg",
     promptFlag: "-p",
   },
-  // Muse Code CLI: headless exec with durable JSONL. Prompt file avoids argv
-  // limits. Approval is disabled because AX Code cannot show Muse's TUI.
-  "muse-cli": {
-    binary: "muse",
-    args: ["exec", "--json", "--approval-mode", "never", "--disable-approval", "--trust-workspace"],
-    parser: museCliParser,
-    promptMode: "file",
-    promptFlag: "--prompt-file",
-    workspaceArg: "--workspace",
-  },
   // MiniMax Code CLI: headless exec with stream-json. Stdin via --input -
   // avoids argv limits. Permission is full because AX Code cannot show MCode's
   // interactive approval UI. Do not confuse with mmx-cli (platform CLI).
@@ -65,15 +46,6 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     binary: "mcode",
     args: ["exec", "--output-format", "stream-json", "--permission", "full", "--prompt-mode", "coding", "--input", "-"],
     parser: minimaxCliParser,
-    promptMode: "stdin",
-    workspaceArg: "--cwd",
-  },
-  // Qoder CLI: Claude-style -p/--print headless. Stdin avoids argv limits.
-  // dont_ask because AX Code cannot show Qoder's interactive approval UI.
-  "qoder-cli": {
-    binary: "qodercli",
-    args: ["-p", "--output-format", "stream-json", "--permission-mode", "dont_ask"],
-    parser: qoderCliParser,
     promptMode: "stdin",
     workspaceArg: "--cwd",
   },

@@ -30,7 +30,7 @@ export function preferredDefaultSkuForProvider(providerID: string): string | und
     return recommendations.providers["alibaba-coding-plan"]
   if (providerID.startsWith("alibaba")) return FAMILY_DEFAULTS.qwen.modelID
   if (providerID.startsWith("minimax")) return recommendations.providers.minimax
-  if (providerID === "meta" || providerID === "muse-cli") return recommendations.providers.meta
+  if (providerID === "meta") return recommendations.providers.meta
   if (providerID === "google" || providerID === "google-vertex") return recommendations.providers.google
   if (providerID === "groq") return recommendations.providers.groq
   return undefined

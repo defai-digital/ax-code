@@ -67,13 +67,10 @@ export function normalizeProviderListPayload(data: unknown): ProviderListRespons
 }
 
 export const CLI_BINARIES: Record<string, string> = {
-  "claude-code": "claude",
   "codex-cli": "codex",
   "grok-build-cli": "grok",
   "kimi-cli": "kimi",
-  "muse-cli": "muse",
   "minimax-cli": "mcode",
-  "qoder-cli": "qodercli",
   "dsh-cli": "dsh",
 }
 

@@ -1,13 +1,10 @@
 export const MODEL_VISION_MARKER = "👀"
 export const MODEL_WEB_SEARCH_MARKER = "🌐"
 const CLI_WEB_SEARCH_PROVIDER_IDS = new Set([
-  "claude-code",
   "codex-cli",
   "grok-build-cli",
   "kimi-cli",
-  "muse-cli",
   "minimax-cli",
-  "qoder-cli",
   "dsh-cli",
 ])
 

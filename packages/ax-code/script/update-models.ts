@@ -72,13 +72,10 @@ for (const id of RETIRED_PROVIDER_IDS) {
 
 // Preserve local-only provider entries that models.dev doesn't include
 const cliImageProviderIDs = [
-  "claude-code",
   "codex-cli",
   "grok-build-cli",
   "kimi-cli",
-  "muse-cli",
   "minimax-cli",
-  "qoder-cli",
 ] as const
 const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
 for (const id of localProviderIDs) {
@@ -213,61 +210,6 @@ if (!fetched["kimi-cli"].models?.["kimi-cli"]) {
     },
   }
 }
-if (!fetched["muse-cli"]) {
-  fetched["muse-cli"] = {
-    id: "muse-cli",
-    name: "Muse Code CLI",
-    env: [],
-    npm: "cli",
-    models: {
-      "muse-cli": {
-        id: "muse-cli",
-        name: "Muse Code CLI",
-        family: "muse",
-        attachment: true,
-        reasoning: false,
-        tool_call: false,
-        temperature: false,
-        release_date: "2026-09-17",
-        modalities: {
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 1048576,
-          output: 131072,
-        },
-        options: {},
-        status: "active",
-      },
-    },
-  }
-}
-if (!fetched["muse-cli"].models?.["muse-cli"]) {
-  fetched["muse-cli"].models = {
-    ...(fetched["muse-cli"].models ?? {}),
-    "muse-cli": {
-      id: "muse-cli",
-      name: "Muse Code CLI",
-      family: "muse",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-09-17",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 1048576,
-        output: 131072,
-      },
-      options: {},
-      status: "active",
-    },
-  }
-}
 if (!fetched["minimax-cli"]) {
   fetched["minimax-cli"] = {
     id: "minimax-cli",
@@ -353,61 +295,6 @@ if (!fetched["dsh-cli"]) {
     npm: "cli",
     models: {
       "dsh-cli": DSH_CLI_DEFAULT_MODEL,
-    },
-  }
-}
-if (!fetched["qoder-cli"]) {
-  fetched["qoder-cli"] = {
-    id: "qoder-cli",
-    name: "Qoder CLI",
-    env: [],
-    npm: "cli",
-    models: {
-      "qoder-cli": {
-        id: "qoder-cli",
-        name: "Qoder CLI",
-        family: "qoder",
-        attachment: true,
-        reasoning: false,
-        tool_call: false,
-        temperature: false,
-        release_date: "2026-06-01",
-        modalities: {
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 200000,
-          output: 16384,
-        },
-        options: {},
-        status: "active",
-      },
-    },
-  }
-}
-if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
-  fetched["qoder-cli"].models = {
-    ...(fetched["qoder-cli"].models ?? {}),
-    "qoder-cli": {
-      id: "qoder-cli",
-      name: "Qoder CLI",
-      family: "qoder",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-06-01",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 200000,
-        output: 16384,
-      },
-      options: {},
-      status: "active",
     },
   }
 }
@@ -870,31 +757,6 @@ if (!fetched["kimi-cli"].models?.["kimi-cli"]) {
     },
   }
 }
-if (!fetched["muse-cli"].models?.["muse-cli"]) {
-  fetched["muse-cli"].models = {
-    ...(fetched["muse-cli"].models ?? {}),
-    "muse-cli": {
-      id: "muse-cli",
-      name: "Muse Code CLI",
-      family: "muse",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-09-17",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 1048576,
-        output: 131072,
-      },
-      options: {},
-      status: "active",
-    },
-  }
-}
 if (!fetched["minimax-cli"].models?.["minimax-cli"]) {
   fetched["minimax-cli"].models = {
     ...(fetched["minimax-cli"].models ?? {}),
@@ -914,31 +776,6 @@ if (!fetched["minimax-cli"].models?.["minimax-cli"]) {
       limit: {
         context: 1048576,
         output: 512000,
-      },
-      options: {},
-      status: "active",
-    },
-  }
-}
-if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
-  fetched["qoder-cli"].models = {
-    ...(fetched["qoder-cli"].models ?? {}),
-    "qoder-cli": {
-      id: "qoder-cli",
-      name: "Qoder CLI",
-      family: "qoder",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-06-01",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 200000,
-        output: 16384,
       },
       options: {},
       status: "active",
