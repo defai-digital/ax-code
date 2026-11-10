@@ -400,6 +400,7 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "kimi-cli": "Kimi Code CLI default",
   "muse-cli": "Muse Code CLI default",
   "minimax-cli": "MiniMax Code CLI default",
+  "qoder-cli": "Qoder CLI default",
 }
 
 // A stale standalone `codex` launcher can shadow the newer executable bundled
@@ -966,6 +967,7 @@ const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
 const kimiCli = getCliProviderDefinition("kimi-cli")!
 const museCli = getCliProviderDefinition("muse-cli")!
 const minimaxCli = getCliProviderDefinition("minimax-cli")!
+const qoderCli = getCliProviderDefinition("qoder-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   // Official DeepSeek cloud API — OpenAI-compatible (OpenCode: npm
@@ -1054,5 +1056,14 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     promptMode: minimaxCli.promptMode,
     promptFlag: minimaxCli.promptFlag,
     workspaceArg: minimaxCli.workspaceArg,
+  }),
+  "qoder-cli": cliLoader({
+    providerID: "qoder-cli",
+    binary: qoderCli.binary,
+    args: qoderCli.args,
+    parser: qoderCli.parser,
+    promptMode: qoderCli.promptMode,
+    promptFlag: qoderCli.promptFlag,
+    workspaceArg: qoderCli.workspaceArg,
   }),
 }

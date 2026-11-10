@@ -73,6 +73,7 @@ export const CLI_BINARIES: Record<string, string> = {
   "kimi-cli": "kimi",
   "muse-cli": "muse",
   "minimax-cli": "mcode",
+  "qoder-cli": "qodercli",
 }
 
 export const OFFLINE_PROVIDERS = new Set<string>(LOCAL_RUNTIME_PROVIDER_IDS)

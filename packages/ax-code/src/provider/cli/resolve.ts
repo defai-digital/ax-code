@@ -16,6 +16,7 @@ const DEFAULTS: Record<string, string> = {
   "kimi-cli": "kimi-cli",
   "muse-cli": "muse-cli",
   "minimax-cli": "minimax-cli",
+  "qoder-cli": "qoder-cli",
 }
 
 const KIMI_CODE_LEGACY_MODEL_IDS = new Set(["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"])
@@ -212,6 +213,16 @@ async function resolveMiniMaxModel(): Promise<CliModelInfo> {
   return { model: DEFAULTS["minimax-cli"]!, source: "default" }
 }
 
+async function resolveQoderModel(): Promise<CliModelInfo> {
+  return resolveModelFromJsonSettings({
+    envVar: "QODER_MODEL",
+    settingsPath: ".qoder/settings.json",
+    sourceLabel: "~/.qoder/settings.json",
+    defaultModel: DEFAULTS["qoder-cli"]!,
+    read: resolveModelFromObject,
+  })
+}
+
 const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "claude-code": resolveClaudeModel,
   "codex-cli": resolveCodexModel,
@@ -219,6 +230,7 @@ const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "kimi-cli": resolveKimiModel,
   "muse-cli": resolveMuseModel,
   "minimax-cli": resolveMiniMaxModel,
+  "qoder-cli": resolveQoderModel,
 }
 
 export async function resolveCliModel(providerID: string): Promise<CliModelInfo> {

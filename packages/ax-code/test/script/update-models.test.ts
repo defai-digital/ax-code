@@ -93,7 +93,7 @@ describe("update-models script", () => {
 
     expect(result.status).toBe(0)
     const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
-    for (const id of ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli"]) {
+    for (const id of ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli", "qoder-cli"]) {
       const model = data[id]?.models?.[id]
       expect(model?.attachment).toBe(true)
       expect(model?.modalities?.input).toEqual(expect.arrayContaining(["text", "image"]))
@@ -101,7 +101,6 @@ describe("update-models script", () => {
     // Retired CLI providers must not survive a refresh, even from a stale snapshot.
     expect(data["gemini-cli"]).toBeUndefined()
     expect(data["antigravity-cli"]).toBeUndefined()
-    expect(data["qoder-cli"]).toBeUndefined()
   })
 
   test("drops the direct xai provider and preserves the Grok CLI bridge", async () => {
@@ -171,7 +170,6 @@ describe("update-models script", () => {
     expect(data["ax-studio"]?.env).toEqual(["AX_STUDIO_HOST"])
     expect(data["ax-serving"]).toBeUndefined()
     expect(data.lmstudio).toBeUndefined()
-    expect(data["qoder-cli"]).toBeUndefined()
   })
 
   test("preserves upstream Groq limits instead of replacing them with fallback metadata", async () => {
