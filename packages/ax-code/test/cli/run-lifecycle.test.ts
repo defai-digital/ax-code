@@ -231,9 +231,50 @@ test("run command follows an explicit model to the connected provider serving th
     }),
   ).toBeUndefined()
 
-  // A same-SKU hit is not a model miss: no discovery wait, no re-list.
+  // A same-SKU hit for a pinned CLI provider is provisional: the bridge joins
+  // the list only after discovery, so the complete list decides.
   let refreshes = 0
+  const discovered = [{ id: "minimax-cli", models: { "MiniMax-M3.1-Flash": {} } }, ...providers]
+  const gateway = [{ id: "127.0.0.1", models: { "MiniMax-M3.1-Flash": {} } }]
+  const pinned = { providerID: "minimax-cli", modelID: "MiniMax-M3.1-Flash" }
+  const refreshed = await refreshRunProvidersOnModelMiss({
+    providers: gateway,
+    connected: ["127.0.0.1"],
+    ...pinned,
+    refresh: async () => {
+      refreshes++
+      return discovered
+    },
+  })
+  expect(refreshes).toBe(1)
+  expect(refreshed).toBe(discovered)
+  expect(resolveRunModel({ providers: discovered, connected: ["127.0.0.1", "minimax-cli"], ...pinned })).toEqual(pinned)
+
+  // The requested provider serving the model settles it without a re-list.
   const kept = await refreshRunProvidersOnModelMiss({
+    providers: discovered,
+    connected: ["minimax-cli"],
+    ...pinned,
+    refresh: async () => {
+      refreshes++
+      return undefined
+    },
+  })
+  expect(kept).toBe(discovered)
+  expect(refreshes).toBe(1)
+
+  // A failed re-list skips validation, leaving the pin as requested.
+  expect(
+    await refreshRunProvidersOnModelMiss({
+      providers: gateway,
+      connected: ["127.0.0.1"],
+      ...pinned,
+      refresh: async () => undefined,
+    }),
+  ).toBeUndefined()
+
+  // For any other provider a same-SKU hit is not a miss: no discovery wait.
+  const fast = await refreshRunProvidersOnModelMiss({
     providers,
     providerID: "deepseek",
     modelID: "deepseek-v4-pro",
@@ -242,8 +283,8 @@ test("run command follows an explicit model to the connected provider serving th
       return undefined
     },
   })
-  expect(kept).toBe(providers)
-  expect(refreshes).toBe(0)
+  expect(fast).toBe(providers)
+  expect(refreshes).toBe(1)
 })
 
 test.each([

@@ -62,6 +62,7 @@ import { waitForRunBackground } from "./run-background-wait"
 import { printPendingScheduledTaskNotice } from "./run-schedule-notice"
 import { assertLoopbackHttpUrl } from "../../util/listen-security"
 import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
+import { CLI_PROVIDER_DEFINITIONS } from "../../provider/cli/config"
 import { DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS, readNonTtyStdin } from "../stdin"
 import { CLI_CONCISE_MAX_LINES, diffSummary, formatDiffSummary, tailLines } from "../../util/tool-output"
 import { isRunEventStreamFormat } from "./run-format"
@@ -278,7 +279,15 @@ export async function refreshRunProvidersOnModelMiss(input: {
   modelID: string
   refresh: () => Promise<RunProviderList | undefined>
 }) {
-  if (resolveRunModel(input)) return input.providers
+  const resolved = resolveRunModel(input)
+  if (!resolved) return input.refresh()
+  // A same-SKU hit for a pinned CLI provider is provisional: CLI bridges join
+  // the list only after their discovery probe, and following the SKU early
+  // would send a turn the user pinned to their own CLI through a gateway.
+  // Other providers keep the fast path, so a family alias never waits.
+  if (resolved.providerID === input.providerID || !Object.hasOwn(CLI_PROVIDER_DEFINITIONS, input.providerID)) {
+    return input.providers
+  }
   return input.refresh()
 }
 
