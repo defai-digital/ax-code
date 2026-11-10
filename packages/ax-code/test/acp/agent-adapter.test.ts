@@ -94,6 +94,33 @@ describe("ACP agent adapter", () => {
     expect(model).toEqual({ providerID: "127-0-0-1", modelID: "deepseek-v4-pro" })
   })
 
+  test("keeps a model pinned to a CLI provider instead of moving it to a gateway", async () => {
+    const gateway = {
+      id: "127-0-0-1",
+      models: {
+        "MiniMax-M3": { id: "MiniMax-M3", tool_call: true },
+        "MiniMax-M3.1-Flash": { id: "MiniMax-M3.1-Flash", tool_call: true },
+      },
+    }
+    const resolve = (model: string, providers: unknown[]) =>
+      defaultModel({
+        sdk: { config: { get: async () => ({ data: { model } }), providers: async () => ({ data: { providers } }) } },
+      } as any)
+
+    // Before the bridge's discovery probe, or while it is signed out, it is
+    // absent from the connected list.
+    expect(await resolve("minimax-cli/MiniMax-M3.1-Flash", [gateway])).toEqual({
+      providerID: "minimax-cli",
+      modelID: "MiniMax-M3.1-Flash",
+    })
+    // Connected, but it does not list the model.
+    const bridge = { id: "minimax-cli", models: { "MiniMax-M3.1-Flash": { id: "MiniMax-M3.1-Flash" } } }
+    expect(await resolve("minimax-cli/MiniMax-M3", [bridge, gateway])).toEqual({
+      providerID: "minimax-cli",
+      modelID: "MiniMax-M3",
+    })
+  })
+
   test("parses advertised models and variants", () => {
     const providers = [
       {
