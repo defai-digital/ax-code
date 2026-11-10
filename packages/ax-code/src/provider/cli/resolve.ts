@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
+import { parse as parseToml } from "smol-toml"
 import { Filesystem } from "../../util/filesystem"
 import { parseCliJsonObject, type CliJsonObject } from "./json"
+import { codexHome } from "./home"
 
 export interface CliModelInfo {
   model: string
@@ -42,37 +44,33 @@ async function readText(path: string): Promise<string | null> {
   return text ?? null
 }
 
-/**
- * Codex's default `model` is a top-level key. TOML puts every top-level key
- * before the first table header, so a `model` under `[profiles.<name>]` (or
- * any other table) only applies to that profile and must not be read as the
- * default.
- */
+function resolveTomlModel(toml: string, key: string): string | undefined {
+  try {
+    // Parsing preserves table scope and ignores model-looking text in strings.
+    const value = parseToml(toml)[key]
+    return typeof value === "string" ? value.trim() || undefined : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function resolveCodexTomlModel(toml: string): string | undefined {
-  const header = toml.search(/^\s*\[/m)
-  const topLevel = header === -1 ? toml : toml.slice(0, header)
-  const match = topLevel.match(/^\s*model\s*=\s*(?:"([^"]+)"|'([^']+)')/m)
-  return match?.[1] ?? match?.[2]
+  return resolveTomlModel(toml, "model")
 }
 
 async function resolveCodexModel(): Promise<CliModelInfo> {
-  const toml = await readText(join(homeDir(), ".codex", "config.toml"))
+  const home = codexHome()
+  const toml = await readText(join(home.path, "config.toml"))
   const model = toml ? resolveCodexTomlModel(toml) : undefined
-  if (model) return { model, source: "~/.codex/config.toml" }
+  if (model) return { model, source: `${home.source}/config.toml` }
 
   return { model: DEFAULTS["codex-cli"]!, source: "default" }
-}
-
-function resolveTomlDefaultModel(toml: string): string | undefined {
-  // Allow optional indentation / single- or double-quoted TOML strings.
-  const match = toml.match(/^\s*default_model\s*=\s*(?:"([^"]+)"|'([^']+)')/m)
-  return match?.[1] ?? match?.[2]
 }
 
 async function resolveKimiModelFromConfig(configPath: string, source: string): Promise<CliModelInfo | undefined> {
   const toml = await readText(configPath)
   if (!toml) return
-  const model = resolveTomlDefaultModel(toml)
+  const model = resolveTomlModel(toml, "default_model")
   if (!model) return
   return { model: normalizeKimiCodeModelID(model), source }
 }
@@ -151,7 +149,7 @@ const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
 }
 
 export async function resolveCliModel(providerID: string): Promise<CliModelInfo> {
-  const resolver = RESOLVERS[providerID]
+  const resolver = Object.hasOwn(RESOLVERS, providerID) ? RESOLVERS[providerID] : undefined
   if (!resolver) return { model: "unknown", source: "none" }
   return resolver()
 }

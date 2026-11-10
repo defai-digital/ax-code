@@ -4,6 +4,7 @@ import { homedir } from "node:os"
 import { Filesystem } from "../../util/filesystem"
 import { isRecord } from "@/util/record"
 import { parseCliJsonObject, type CliJsonObject } from "./json"
+import { codexHome } from "./home"
 
 /**
  * A model the CLI itself currently offers, read from the model cache the CLI
@@ -61,11 +62,6 @@ function efforts(list: unknown, key: string): string[] | undefined {
   return [...values].sort((a, b) => rank(a) - rank(b))
 }
 
-function codexHome() {
-  if (process.env.AX_CODE_TEST_HOME) return join(process.env.AX_CODE_TEST_HOME, ".codex")
-  return process.env.CODEX_HOME?.trim() || join(homeDir(), ".codex")
-}
-
 // ~/.codex/models_cache.json: { models: [{ slug, display_name, visibility, priority, ... }] }.
 // Only `visibility: "list"` entries appear in Codex's own model picker.
 export function parseCodexModelsCache(data: CliJsonObject): NativeCliModel[] {
@@ -113,7 +109,7 @@ export function parseGrokModelsCache(data: CliJsonObject): NativeCliModel[] {
 
 const READERS: Record<string, () => Promise<NativeCliModel[]>> = {
   "codex-cli": async () => {
-    const data = await readJson(join(codexHome(), "models_cache.json"))
+    const data = await readJson(join(codexHome().path, "models_cache.json"))
     return data ? parseCodexModelsCache(data) : []
   },
   "grok-build-cli": async () => {
@@ -127,7 +123,7 @@ const READERS: Record<string, () => Promise<NativeCliModel[]>> = {
  * readable cache (callers then fall back to the bundled catalog).
  */
 export async function readNativeCliModels(providerID: string): Promise<NativeCliModel[]> {
-  const reader = READERS[providerID]
+  const reader = Object.hasOwn(READERS, providerID) ? READERS[providerID] : undefined
   if (!reader) return []
   return reader().catch(() => [])
 }

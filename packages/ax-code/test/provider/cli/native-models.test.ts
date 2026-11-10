@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import { tmpdir } from "../../fixture/fixture"
@@ -11,6 +11,7 @@ import {
 const originalTestHome = process.env.AX_CODE_TEST_HOME
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   if (originalTestHome === undefined) delete process.env.AX_CODE_TEST_HOME
   else process.env.AX_CODE_TEST_HOME = originalTestHome
 })
@@ -49,6 +50,13 @@ const grokCache = {
 }
 
 describe("native CLI model caches", () => {
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "returns no models for inherited provider name %s",
+    async (providerID) => {
+      expect(await readNativeCliModels(providerID)).toEqual([])
+    },
+  )
+
   test("codex priority zero sorts before positive priorities", () => {
     const models = parseCodexModelsCache({
       models: [
@@ -82,9 +90,12 @@ describe("native CLI model caches", () => {
   test("reads each CLI's cache from its home directory", async () => {
     await using tmp = await tmpdir()
     process.env.AX_CODE_TEST_HOME = tmp.path
+    vi.stubEnv("CODEX_HOME", path.join(tmp.path, "other-codex"))
     await mkdir(path.join(tmp.path, ".codex"), { recursive: true })
+    await mkdir(path.join(tmp.path, "other-codex"))
     await mkdir(path.join(tmp.path, ".grok"), { recursive: true })
     await writeFile(path.join(tmp.path, ".codex", "models_cache.json"), JSON.stringify(codexCache))
+    await writeFile(path.join(tmp.path, "other-codex", "models_cache.json"), JSON.stringify({ models: [] }))
     await writeFile(path.join(tmp.path, ".grok", "models_cache.json"), JSON.stringify(grokCache))
 
     expect((await readNativeCliModels("codex-cli")).map((model) => model.id)).toEqual(["gpt-6-astra", "gpt-5.6-sol"])
@@ -101,5 +112,14 @@ describe("native CLI model caches", () => {
     await mkdir(path.join(tmp.path, ".grok"), { recursive: true })
     await writeFile(path.join(tmp.path, ".grok", "models_cache.json"), "{not json")
     expect(await readNativeCliModels("grok-build-cli")).toEqual([])
+  })
+
+  test("reads the Codex cache from CODEX_HOME", async () => {
+    await using tmp = await tmpdir()
+    vi.stubEnv("AX_CODE_TEST_HOME", undefined)
+    vi.stubEnv("CODEX_HOME", tmp.path)
+    await writeFile(path.join(tmp.path, "models_cache.json"), JSON.stringify(codexCache))
+
+    expect((await readNativeCliModels("codex-cli")).map((model) => model.id)).toEqual(["gpt-6-astra", "gpt-5.6-sol"])
   })
 })

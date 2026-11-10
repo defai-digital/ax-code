@@ -133,6 +133,16 @@ describe("Env.redactInlineEnvAssignments", () => {
 })
 
 describe("Env.sanitize", () => {
+  test.each([undefined, "", "other-cli", "constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "does not forward CLI credentials for unknown provider %s",
+    (providerID) => {
+      const env = { PATH: "/bin" }
+      const result = Env.withCliProviderKeys(env, providerID)
+      expect(result).toEqual(env)
+      expect(result).not.toBe(env)
+    },
+  )
+
   test("redacts secret-like environment variable names even without separators", () => {
     const env = {
       OPENAI_APIKEY: "openai",

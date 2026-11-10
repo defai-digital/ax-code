@@ -65,7 +65,8 @@ export namespace Env {
     providerID: string | undefined,
   ): Record<string, string | undefined> {
     const out = { ...env }
-    for (const key of (providerID && CLI_PROVIDER_KEYS[providerID]) ?? []) {
+    const keys = providerID && Object.hasOwn(CLI_PROVIDER_KEYS, providerID) ? CLI_PROVIDER_KEYS[providerID] : []
+    for (const key of keys) {
       const value = process.env[key]
       if (value !== undefined) out[key] = value
     }

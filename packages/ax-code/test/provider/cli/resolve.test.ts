@@ -1,8 +1,10 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { test, expect, describe } from "vitest"
+import { afterEach, test, expect, describe, vi } from "vitest"
 import { parseCliSettingsJson, resolveCliModel, resolveCodexTomlModel } from "../../../src/provider/cli/resolve"
 import { tmpdir } from "../../fixture/fixture"
+
+afterEach(() => vi.unstubAllEnvs())
 
 describe("resolveCliModel", () => {
   test("parseCliSettingsJson decodes object settings", () => {
@@ -18,10 +20,9 @@ describe("resolveCliModel", () => {
   })
 
   test("returns default for codex-cli when no config", async () => {
-    const info = await resolveCliModel("codex-cli")
-    if (info.source === "default") {
-      expect(info.model).toBe("codex-cli")
-    }
+    await using tmp = await tmpdir()
+    vi.stubEnv("AX_CODE_TEST_HOME", tmp.path)
+    expect(await resolveCliModel("codex-cli")).toEqual({ model: "codex-cli", source: "default" })
   })
 
   test("reads only the top-level Codex model, not a profile's", () => {
@@ -35,18 +36,67 @@ describe("resolveCliModel", () => {
     expect(resolveCodexTomlModel('model_reasoning_effort = "high"\n')).toBeUndefined()
   })
 
-  test("codex-cli falls back to its default when only a profile names a model", async () => {
+  test.each([
+    [
+      "model-looking text in a multiline string",
+      `instructions = '''\nmodel = "example-model"\n'''\nmodel = "actual-model"`,
+    ],
+    ["table-looking text in a multiline string", `instructions = """\n[profiles.example]\n"""\nmodel = "actual-model"`],
+    ["quoted keys", '"model" = "actual-model"'],
+    ["escaped model strings", 'model = "actual\\u002dmodel"'],
+    ["multiline model strings", 'model = """actual-model"""'],
+    ["nested arrays before the model", 'examples = [\n["example-model"],\n]\nmodel = "actual-model"'],
+  ])("parses Codex TOML with %s", (_name, toml) => {
+    expect(resolveCodexTomlModel(toml)).toBe("actual-model")
+  })
+
+  test.each([
+    `instructions = '''\nmodel = "example-model"\n'''`,
+    'model = "actual-model"\ninvalid = [',
+    'model = "first"\nmodel = "second"',
+    'model.name = "example-model"',
+    'model = ["example-model"]',
+    "model = 42",
+    'model = "   "',
+  ])("does not resolve an invalid or missing top-level model from %s", (toml) => {
+    expect(resolveCodexTomlModel(toml)).toBeUndefined()
+  })
+
+  test("codex-cli reads config from CODEX_HOME", async () => {
+    await using tmp = await tmpdir()
+    vi.stubEnv("AX_CODE_TEST_HOME", undefined)
+    vi.stubEnv("CODEX_HOME", tmp.path)
+    await fs.writeFile(path.join(tmp.path, "config.toml"), 'model = "custom-codex-model"\n')
+
+    expect(await resolveCliModel("codex-cli")).toEqual({
+      model: "custom-codex-model",
+      source: "$CODEX_HOME/config.toml",
+    })
+  })
+
+  test("codex-cli test home takes precedence over CODEX_HOME", async () => {
+    await using tmp = await tmpdir()
+    vi.stubEnv("AX_CODE_TEST_HOME", tmp.path)
+    vi.stubEnv("CODEX_HOME", path.join(tmp.path, "other-codex"))
+    await fs.mkdir(path.join(tmp.path, ".codex"))
+    await fs.mkdir(path.join(tmp.path, "other-codex"))
+    await fs.writeFile(path.join(tmp.path, ".codex", "config.toml"), 'model = "isolated-model"\n')
+    await fs.writeFile(path.join(tmp.path, "other-codex", "config.toml"), 'model = "other-model"\n')
+
+    expect(await resolveCliModel("codex-cli")).toEqual({ model: "isolated-model", source: "~/.codex/config.toml" })
+  })
+
+  test.each([
+    '[profiles.fast]\nmodel = "gpt-5.5-mini"\n',
+    `instructions = '''\nmodel = "example-model"\n'''`,
+    'model = "example-model"\ninvalid = [',
+    'model = ""',
+  ])("codex-cli falls back to its default for config %s", async (toml) => {
     await using tmp = await tmpdir()
     await fs.mkdir(path.join(tmp.path, ".codex"), { recursive: true })
-    await fs.writeFile(path.join(tmp.path, ".codex", "config.toml"), '[profiles.fast]\nmodel = "gpt-5.5-mini"\n')
-    const previous = process.env.AX_CODE_TEST_HOME
-    process.env.AX_CODE_TEST_HOME = tmp.path
-    try {
-      expect(await resolveCliModel("codex-cli")).toEqual({ model: "codex-cli", source: "default" })
-    } finally {
-      if (previous === undefined) delete process.env.AX_CODE_TEST_HOME
-      else process.env.AX_CODE_TEST_HOME = previous
-    }
+    await fs.writeFile(path.join(tmp.path, ".codex", "config.toml"), toml)
+    vi.stubEnv("AX_CODE_TEST_HOME", tmp.path)
+    expect(await resolveCliModel("codex-cli")).toEqual({ model: "codex-cli", source: "default" })
   })
 
   test("returns default for grok-build-cli", async () => {
@@ -207,6 +257,47 @@ describe("resolveCliModel", () => {
     })
   })
 
+  test.each([
+    [
+      "prompt examples",
+      `prompt = '''\ndefault_model = "example-model"\n'''\ndefault_model = "kimi-code/k3"`,
+      "kimi-code/k3",
+    ],
+    ["nested defaults", '[models.example]\ndefault_model = "example-model"', "kimi-cli"],
+    ["quoted keys and escapes", '"default_model" = "kimi-code\\u002fk3"', "kimi-code/k3"],
+    ["invalid TOML", 'default_model = "example-model"\ninvalid = [', "kimi-cli"],
+  ])("kimi-cli resolves TOML with %s", async (_name, toml, model) => {
+    await using tmp = await tmpdir()
+    await withKimiEnv({ home: tmp.path, model: null, codeHome: null, shareDir: null }, async () => {
+      const configDir = path.join(tmp.path, ".kimi-code")
+      await fs.mkdir(configDir)
+      await fs.writeFile(path.join(configDir, "config.toml"), toml)
+
+      expect(await resolveCliModel("kimi-cli")).toEqual({
+        model,
+        source: model === "kimi-cli" ? "default" : "~/.kimi-code/config.toml",
+      })
+    })
+  })
+
+  test("kimi-cli tries the legacy config after a malformed current config", async () => {
+    await using tmp = await tmpdir()
+    await withKimiEnv({ home: tmp.path, model: null, codeHome: null, shareDir: null }, async () => {
+      await fs.mkdir(path.join(tmp.path, ".kimi-code"))
+      await fs.mkdir(path.join(tmp.path, ".kimi"))
+      await fs.writeFile(
+        path.join(tmp.path, ".kimi-code", "config.toml"),
+        'default_model = "broken-model"\ninvalid = [',
+      )
+      await fs.writeFile(path.join(tmp.path, ".kimi", "config.toml"), 'default_model = "k3"')
+
+      expect(await resolveCliModel("kimi-cli")).toEqual({
+        model: "kimi-code/k3",
+        source: "~/.kimi/config.toml",
+      })
+    })
+  })
+
   async function withMiniMaxEnv(
     values: { home?: string; model?: string | null; dataDir?: string | null },
     run: () => Promise<void>,
@@ -271,6 +362,13 @@ describe("resolveCliModel", () => {
     expect(info.model).toBe("unknown")
     expect(info.source).toBe("none")
   })
+
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "returns unknown for inherited provider name %s",
+    async (providerID) => {
+      expect(await resolveCliModel(providerID)).toEqual({ model: "unknown", source: "none" })
+    },
+  )
 
   test("returns unknown for retired closed-source CLI providers", async () => {
     for (const providerID of ["claude-code", "muse-cli", "qoder-cli"]) {

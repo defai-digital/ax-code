@@ -19,7 +19,7 @@ export function cliModelEfforts(options: unknown): readonly string[] | undefined
 }
 
 export function cliEffortLevels(providerID: string, modelEfforts?: readonly string[]): readonly string[] {
-  if (!CLI_EFFORT_LEVELS[providerID]) return []
+  if (!Object.hasOwn(CLI_EFFORT_LEVELS, providerID)) return []
   return modelEfforts ?? CLI_EFFORT_LEVELS[providerID]
 }
 

@@ -201,6 +201,11 @@ drives. See [Why some coding-agent CLIs are not supported](#why-some-coding-agen
 
 Run the vendor CLI login first when required, then run `ax-code providers login <provider-id>`. AX Code probes the CLI command and stores a local marker credential after the probe succeeds.
 
+For Codex, AX Code reads the top-level `model` from `$CODEX_HOME/config.toml` when `CODEX_HOME` is set, otherwise
+from `~/.codex/config.toml`. Its native model cache is read from the same directory. For Kimi config files, only the
+top-level `default_model` is used. Model-looking text in multiline strings and nested tables is ignored, as are
+malformed TOML files. When no model is resolved, AX Code leaves model selection to the CLI's default.
+
 For Kimi Code membership, install the local `kimi` binary, run `kimi login`, then `ax-code providers login kimi-cli`. AX Code reuses the Kimi Code CLI session (`~/.kimi-code`, with legacy fallback to `~/.kimi`) rather than storing a hosted Moonshot API key.
 
 For MiniMax Code, install the local `mcode` binary (`npm install -g @minimax-ai/code` or the official installer), run `mcode login`, then `ax-code providers login minimax-cli`. AX Code reuses the MiniMax Code CLI session (`~/.minimax`) rather than storing a hosted Token Plan key. The hosted `minimax-coding-plan` / `minimax-cn-coding-plan` API providers remain separate connections. Do not use `mmx-cli` for this provider.

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   cliEffortArgs,
   cliEffortFromProviderOptions,
+  cliEffortLevels,
   cliEffortVariants,
   cliModelEfforts,
 } from "../../../src/provider/cli/effort"
@@ -26,6 +27,17 @@ describe("CLI effort levels", () => {
   test("unknown providers publish no efforts even with cached ones", () => {
     expect(cliEffortVariants("other-cli", ["high"])).toEqual({})
   })
+
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "inherited provider name %s publishes and sends no efforts",
+    (providerID) => {
+      expect(cliEffortLevels(providerID)).toEqual([])
+      expect(cliEffortVariants(providerID)).toEqual({})
+      expect(cliEffortVariants(providerID, ["high"])).toEqual({})
+      expect(cliEffortArgs(providerID, "high")).toEqual([])
+      expect(cliEffortFromProviderOptions(providerID, { [providerID]: { effort: "high" } })).toBeUndefined()
+    },
+  )
 
   test("the subprocess receives an effort only the model accepts", () => {
     const grok = getCliProviderDefinition("grok-build-cli")!

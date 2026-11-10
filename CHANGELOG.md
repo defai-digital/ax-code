@@ -8,6 +8,11 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- CLI model resolution, native model-cache reads, reasoning effort selection, and credential forwarding reject
+  inherited provider names such as `constructor` and `toString` without invoking object prototype methods or throwing.
+- Codex and Kimi CLI model settings use TOML parsing, so examples inside multiline strings and nested table keys
+  cannot override the top-level model. Quoted keys and escaped strings work; malformed settings are ignored during
+  model discovery. Codex config and model-cache reads now consistently honor `CODEX_HOME`.
 - The Codex CLI bridge reads only the top-level `model` in `~/.codex/config.toml`. A `model` under a `[profiles.*]` or
   other table was taken as the Codex default, added to the `codex-cli` model list, and sent with `--model` by the
   login probe. Single-quoted and indented values are also accepted.
