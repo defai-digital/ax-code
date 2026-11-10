@@ -13,6 +13,8 @@ changes belong to AX Coder.
   to `low`.
 - `ax-code providers login` no longer treats an inherited object key such as `constructor` as a CLI provider, which
   failed with "Sign in with the undefined CLI"; it is handled as any other unknown provider.
+- MiniMax M3.1 spelled `minimax-m3-1-flash` or `minimax-m3p1-flash` by a gateway no longer offers a `none` variant
+  or sends `thinking: { type: "disabled" }`, which M3.1 rejects.
 
 ## [7.30.20] - 2026-11-10
 

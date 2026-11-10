@@ -50,10 +50,12 @@ export function isMiniMaxM3ModelSegment(segment: string): boolean {
 
 /**
  * M3.1 and later M3.x: thinking cannot be turned off. Matches inside the final
- * segment so deployment suffixes (`MiniMax-M3.1-Flash-FP8`) are covered.
+ * segment so deployment suffixes (`MiniMax-M3.1-Flash-FP8`) are covered, and
+ * accepts the gateway spellings `minimax-m3-1-flash` and `minimax-m3p1-flash`.
+ * The minor is at most two digits so a date-like tag (`-0601`) is not read as one.
  */
 export function isMiniMaxThinkingForcedOn(modelId: string): boolean {
-  const match = /(?:^|[^a-z0-9])minimax-m3\.(\d+)(?!\d)/.exec(modelIdFinalSegment(modelId).toLowerCase())
+  const match = /(?:^|[^a-z0-9])minimax-m3(?:[.-]|p)(\d{1,2})(?!\d)/.exec(modelIdFinalSegment(modelId).toLowerCase())
   return match !== null && Number(match[1]) >= 1
 }
 

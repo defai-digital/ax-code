@@ -54,9 +54,21 @@ describe("MiniMax M3 family", () => {
       "MiniMax-M3.2",
       "minimax/MiniMax-M3.1-Flash",
       "MiniMax-M3.1-Flash-FP8",
+      // Gateway spellings from the catalog (empiriolabs/venice, fireworks).
+      "minimax-m3-1-flash",
+      "accounts/fireworks/models/minimax-m3p1-flash",
+      "MiniMax-M3.1-Flash-Preview",
     ])
       expect(isMiniMaxThinkingForcedOn(id), id).toBe(true)
-    for (const id of ["MiniMax-M3", "MiniMax-M3-MXFP8", "MiniMax-M2.7", "MiniMax-M3.0"])
+    for (const id of [
+      "MiniMax-M3",
+      "MiniMax-M3-MXFP8",
+      "MiniMax-M2.7",
+      "MiniMax-M3.0",
+      "minimax-m3-free",
+      "minimax-m3-preview",
+      "MiniMax-M3-0601",
+    ])
       expect(isMiniMaxThinkingForcedOn(id), id).toBe(false)
   })
 
@@ -70,6 +82,16 @@ describe("MiniMax M3 family", () => {
     }
     expect(T.smallOptions(router("MiniMax-M3.1-Flash"))).toEqual({ reasoning_split: true })
     expect(T.options({ model: router("MiniMax-M3.1-Flash"), sessionID: "s" })).toEqual({ reasoning_split: true })
+  })
+
+  test("gateway M3.1 spellings get no disabled-thinking variant", () => {
+    // Regression: `minimax-m3-1-flash` and `minimax-m3p1-flash` were read as
+    // M3 and offered a `none` variant that M3.1 rejects.
+    for (const id of ["minimax-m3-1-flash", "accounts/fireworks/models/minimax-m3p1-flash"]) {
+      const m = model("empiriolabs", id, "https://api.example.com/v1", "@ai-sdk/openai-compatible")
+      expect(T.variants(m), id).toEqual({})
+      expect(T.sanitizeOptions(m, { thinking: { type: "disabled" } }), id).toEqual({})
+    }
   })
 
   test("M3 keeps its switchable thinking controls", () => {
