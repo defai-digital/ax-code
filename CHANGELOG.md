@@ -6,8 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.19] - 2026-11-10
+
 ### Changed
 
+- Publish the paired SDK 2.6.72 release, whose provider-connect catalog follows the provider changes below.
 - The Worker-hosted diff engine (`@ax-code/diff-wasm`) returns a coarser preview marked `approximate: true` instead of
   rejecting when a large rewrite exhausts the edit-distance work budget. The common prefix and suffix stay exact,
   unique-line anchors keep sparse edits as separate hunks, and the hunks still apply exactly. Previews within budget
@@ -53,6 +56,11 @@ changes belong to AX Coder.
   `AX_CODE_STREAM_FIRST_DATA_TIMEOUT_MS` overrides the new window.
 - A turn truncated after spending its budget on reasoning is retried at a lower effort (`max` → `high` → `low`)
   instead of re-sending the same request.
+- `ax-code run --model <cli-provider>/<model>` no longer moves the turn onto another connected provider that serves
+  the same model ID. The model was validated against the provider list taken before CLI discovery finished, so a
+  model pinned to a CLI such as `minimax-cli` was served, and billed, by a gateway with only a warning. A CLI provider
+  that is not connected, or that does not list the model, now fails with an error naming the fix. The ACP adapter
+  keeps a CLI provider pin as the default model in the same way. Other providers still follow the model ID.
 - Permanent Z.AI/Zhipu account errors (exhausted balance or plan quota) are no longer retried, the 1261
   "Prompt too long" rejection triggers compaction, and `glm-5.3-flashx` and gateway tier suffixes get the GLM 5.x
   request settings.
