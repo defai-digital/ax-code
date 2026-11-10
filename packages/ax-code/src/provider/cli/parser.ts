@@ -78,6 +78,15 @@ function codexEventError(event: CliJsonObject) {
   return message ? cliErrorText(message) : "Codex CLI reported an unknown error"
 }
 
+function codexItemText(event: CliJsonObject): string | undefined {
+  const item = recordField(event, "item")
+  if (!item || (item.type !== undefined && item.type !== "agent_message")) return undefined
+  const text = stringField(item, "text")
+  if (text) return text
+  if (typeof item.content === "string") return item.content
+  return textFromContentBlocks(item.content) || undefined
+}
+
 export const codexCliParser: CliOutputParser = {
   parseComplete(output: string) {
     const lines = output.split("\n")
@@ -100,20 +109,10 @@ export const codexCliParser: CliOutputParser = {
         errors.push(error)
         continue
       }
-      const item = recordField(event, "item")
-      const itemText = stringField(item, "text")
-      if (event.type === "item.completed" && itemText) {
-        parts.push(itemText)
-        continue
-      }
-      const itemContent = item?.content
-      if (event.type === "item.completed" && itemContent) {
-        const text = Array.isArray(itemContent)
-          ? textFromContentBlocks(itemContent)
-          : typeof itemContent === "string"
-            ? itemContent
-            : null
+      if (event.type === "item.completed") {
+        const text = codexItemText(event)
         if (text) parts.push(text)
+        continue
       }
       if (typeof event.content === "string") parts.push(event.content)
       if (typeof event.text === "string") parts.push(event.text)
@@ -129,10 +128,7 @@ export const codexCliParser: CliOutputParser = {
     const event = parseCliJsonEventLine(line)
     if (!event) return null
     if (event.type === "item.completed") {
-      const item = recordField(event, "item")
-      const itemText = stringField(item, "text")
-      if (itemText) return itemText
-      if (typeof item?.content === "string") return item.content
+      return codexItemText(event) ?? null
     }
     if (typeof event.content === "string") return event.content
     if (typeof event.text === "string") return event.text

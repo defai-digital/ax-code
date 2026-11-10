@@ -93,4 +93,12 @@ describe("dsh-cli command", () => {
     expect(DSH_PRIVACY_PATCH).toContain("- id: session-log-deepseek\n  disabled: true")
     expect(DSH_PRIVACY_PATCH).toContain("- id: session-telemetry-otel\n  disabled: true")
   })
+
+  test("parallel launches can repair the privacy patch without sharing a temporary file", async () => {
+    await ensureDshPrivacyPatch()
+    await writeFile(dshPrivacyPatchPath(), "outdated privacy patch\n")
+    const results = await Promise.allSettled(Array.from({ length: 16 }, () => ensureDshPrivacyPatch()))
+    expect(results.filter((result) => result.status === "rejected")).toEqual([])
+    expect(await readFile(dshPrivacyPatchPath(), "utf8")).toBe(DSH_PRIVACY_PATCH)
+  })
 })

@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { Global } from "@/global"
+import { Filesystem } from "@/util/filesystem"
 
 // DeepSeek Harness (`dsh`) uploads complete session logs with DeepSeek API
 // requests and sends OTel session telemetry by default. AX Code passes this
@@ -31,8 +32,5 @@ export async function ensureDshPrivacyPatch(): Promise<void> {
   const file = dshPrivacyPatchPath()
   const current = await fs.readFile(file, "utf8").catch(() => undefined)
   if (current === DSH_PRIVACY_PATCH) return
-  await fs.mkdir(path.dirname(file), { recursive: true })
-  const temp = `${file}.${process.pid}.tmp`
-  await fs.writeFile(temp, DSH_PRIVACY_PATCH, { mode: 0o600 })
-  await fs.rename(temp, file)
+  await Filesystem.write(file, DSH_PRIVACY_PATCH, 0o600)
 }

@@ -21,6 +21,30 @@ describe("parseCliJsonEventLine", () => {
 })
 
 describe("provider CLI parser nested content", () => {
+  test.each(["reasoning", "command_execution", "mcp_tool_call", "error"])(
+    "codex parser excludes %s items from complete and streamed answers",
+    (type) => {
+      const hidden = JSON.stringify({
+        type: "item.completed",
+        item: { type, text: "private detail", content: "noise" },
+      })
+      const answer = JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "Answer" } })
+      expect(codexCliParser.parseComplete([hidden, answer, '{"type":"turn.completed"}'].join("\n"))).toEqual({
+        text: "Answer",
+      })
+      expect(codexCliParser.parseComplete([hidden, '{"type":"turn.completed"}'].join("\n"))).toEqual({ text: "" })
+      expect(codexCliParser.parseStreamLine(hidden)).toBeNull()
+    },
+  )
+
+  test("codex streams assistant content blocks in the same way as complete answers", () => {
+    const line = JSON.stringify({
+      type: "item.completed",
+      item: { type: "agent_message", content: [{ type: "text", text: "Answer" }] },
+    })
+    expect(codexCliParser.parseStreamLine(line)).toBe(codexCliParser.parseComplete(line).text)
+  })
+
   test("codex parser decodes item content blocks without accepting malformed text", () => {
     expect(
       codexCliParser.parseComplete(
