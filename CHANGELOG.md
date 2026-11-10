@@ -11,6 +11,8 @@ changes belong to AX Coder.
 - A GLM 5.x turn truncated after spending its output budget on reasoning now lowers the effort one level below the
   effort that was sent. An explicit `high` effort previously re-sent the same truncated request once before dropping
   to `low`.
+- `ax-code providers login` no longer treats an inherited object key such as `constructor` as a CLI provider, which
+  failed with "Sign in with the undefined CLI"; it is handled as any other unknown provider.
 
 ## [7.30.20] - 2026-11-10
 

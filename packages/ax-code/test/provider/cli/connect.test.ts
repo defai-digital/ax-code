@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 import { PassThrough } from "node:stream"
-import { checkCliProviderAuth, probeCliLanguageModel } from "../../../src/provider/cli/connect"
+import { checkCliProviderAuth, probeCliLanguageModel, probeCliProvider } from "../../../src/provider/cli/connect"
+import { getCliProviderDefinition } from "../../../src/provider/cli/config"
 import { Process } from "../../../src/util/process"
 import { Instance } from "../../../src/project/instance"
 import { tmpdir } from "../../fixture/fixture"
@@ -107,5 +108,17 @@ describe("probeCliLanguageModel", () => {
     } finally {
       spawn.mockRestore()
     }
+  })
+})
+
+describe("getCliProviderDefinition", () => {
+  test("ignores inherited object keys", async () => {
+    // Regression: `providers login constructor` resolved Object.prototype's
+    // constructor as a CLI provider and failed with "Sign in with the undefined CLI".
+    for (const id of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      expect(getCliProviderDefinition(id), id).toBeUndefined()
+    }
+    expect(getCliProviderDefinition("codex-cli")?.binary).toBe("codex")
+    await expect(probeCliProvider("constructor")).rejects.toThrow("Unsupported CLI provider: constructor")
   })
 })

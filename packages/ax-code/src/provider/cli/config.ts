@@ -64,5 +64,6 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
 }
 
 export function getCliProviderDefinition(providerID: string): CliProviderDefinition | undefined {
-  return CLI_PROVIDER_DEFINITIONS[providerID]
+  // Own keys only: an inherited name such as "constructor" is not a CLI provider.
+  return Object.hasOwn(CLI_PROVIDER_DEFINITIONS, providerID) ? CLI_PROVIDER_DEFINITIONS[providerID] : undefined
 }
