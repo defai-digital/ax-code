@@ -78,7 +78,7 @@ function detect(text: string) {
 }
 
 describe("turn prompt provider qualification", () => {
-  test.each(["defai-01-ax-trust-com", "custom-private-gpu", "claude-cli", "dsh-cli", "local-llm"])(
+  test.each(["defai-01-ax-trust-com", "custom-private-gpu", "claude-cli", "muse-cli", "local-llm"])(
     "does not apply compact decisions to %s even with a matching task",
     (provider) => {
       const user = userMessage("Tell me a story.")

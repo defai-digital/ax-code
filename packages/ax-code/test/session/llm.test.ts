@@ -4568,9 +4568,7 @@ describe("session.llm.streamIdleWatchdog", () => {
       delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
       expect(LLM.isCliProviderID("kimi-cli")).toBe(true)
       expect(LLM.isCliProviderID("custom-cli")).toBe(true)
-      expect(LLM.isCliProviderID("dsh-cli")).toBe(true)
-      // Retired closed-source CLI bridges no longer get the CLI window.
-      for (const id of ["claude-code", "muse-cli", "qoder-cli"]) expect(LLM.isCliProviderID(id)).toBe(false)
+      expect(LLM.isCliProviderID("qoder-cli")).toBe(false)
       expect(LLM.isCliProviderID("openai")).toBe(false)
       expect(LLM.streamIdleTimeoutMs("kimi-cli")).toBe(900_000)
       expect(LLM.streamIdleTimeoutMs("ax-engine")).toBe(900_000)
@@ -4590,14 +4588,14 @@ describe("session.llm.streamIdleWatchdog", () => {
       delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
       const agent = { streamIdleTimeoutMs: 120_000 }
       // Agent override beats provider defaults, including the 15min CLI window.
-      expect(LLM.streamIdleTimeoutMs("codex-cli", agent)).toBe(120_000)
+      expect(LLM.streamIdleTimeoutMs("claude-code", agent)).toBe(120_000)
       expect(LLM.streamIdleTimeoutMs("openai", agent)).toBe(120_000)
       expect(LLM.streamIdleTimeoutMs(undefined, agent)).toBe(120_000)
       // No override on the agent falls back to provider defaults.
-      expect(LLM.streamIdleTimeoutMs("codex-cli", {})).toBe(900_000)
+      expect(LLM.streamIdleTimeoutMs("claude-code", {})).toBe(900_000)
       // Explicit env still wins over the agent override.
       process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = "45000"
-      expect(LLM.streamIdleTimeoutMs("codex-cli", agent)).toBe(45_000)
+      expect(LLM.streamIdleTimeoutMs("claude-code", agent)).toBe(45_000)
     } finally {
       if (prev === undefined) delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
       else process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = prev

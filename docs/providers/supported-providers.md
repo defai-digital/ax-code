@@ -196,16 +196,19 @@ User file and image attachments are written to temporary files for the CLI to re
 URLs preserve the original file bytes; remote HTTP(S) URLs remain references. Temporary files are removed when the
 CLI process exits, including cancellation and spawn failures.
 
-AX Code only bridges CLIs whose source code is public, so the bridge's behavior can be checked against the code it
-drives. See [Why some coding-agent CLIs are not supported](#why-some-coding-agent-clis-are-not-supported).
+| Provider id      | Display name            | Required local command | Fallback model id | Source                                                                                |
+| ---------------- | ----------------------- | ---------------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| `claude-code`    | Anthropic (Claude Code) | `claude`               | `claude-code`     | Proprietary; bridged through the vendor CLI                                           |
+| `codex-cli`      | OpenAI (Codex CLI)      | `codex`                | `codex-cli`       | [openai/codex](https://github.com/openai/codex) (Apache-2.0)                          |
+| `grok-build-cli` | Grok Build CLI          | `grok`                 | `grok-build-cli`  | [xai-org/grok-build](https://github.com/xai-org/grok-build) (Apache-2.0)              |
+| `kimi-cli`       | Kimi Code CLI           | `kimi`                 | `kimi-cli`        | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) (MIT)                 |
+| `muse-cli`       | Muse Code CLI           | `muse`                 | `muse-cli`        | Proprietary; bridged through the vendor CLI                                           |
+| `minimax-cli`    | MiniMax Code CLI        | `mcode`                | `minimax-cli`     | [MiniMax-AI/minimax-code](https://github.com/MiniMax-AI/minimax-code) (MIT)           |
+| `dsh-cli`        | DeepSeek Harness        | `dsh`                  | `dsh-cli`         | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (MIT) |
 
-| Provider id      | Display name       | Required local command | Supported model id | Source                                                                                |
-| ---------------- | ------------------ | ---------------------- | ------------------ | ------------------------------------------------------------------------------------- |
-| `codex-cli`      | OpenAI (Codex CLI) | `codex`                | `codex-cli`        | [openai/codex](https://github.com/openai/codex) (Apache-2.0)                          |
-| `grok-build-cli` | Grok Build CLI     | `grok`                 | `grok-build-cli`   | [xai-org/grok-build](https://github.com/xai-org/grok-build) (Apache-2.0)              |
-| `kimi-cli`       | Kimi Code CLI      | `kimi`                 | `kimi-cli`         | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) (MIT)                 |
-| `minimax-cli`    | MiniMax Code CLI   | `mcode`                | `minimax-cli`      | [MiniMax-AI/minimax-code](https://github.com/MiniMax-AI/minimax-code) (MIT)           |
-| `dsh-cli`        | DeepSeek Harness   | `dsh`                  | `dsh-cli`          | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (MIT) |
+The fallback model id is only listed when AX Code cannot read the CLI's own model cache or catalog. Once the CLI
+has populated it, AX Code lists the CLI's real models instead; run `ax-code models <provider-id>` for the ids you can
+pass to `--model`.
 
 Run the vendor CLI login first when required, then run `ax-code providers login <provider-id>`. AX Code probes the CLI command and stores a local marker credential after the probe succeeds.
 
@@ -220,6 +223,10 @@ PATH candidate remains selected.
 
 For Kimi Code membership, install the local `kimi` binary, run `kimi login`, then `ax-code providers login kimi-cli`. AX Code reuses the Kimi Code CLI session (`~/.kimi-code`, with legacy fallback to `~/.kimi`) rather than storing a hosted Moonshot API key.
 
+For Muse Code, install the local `muse` binary, run `muse login` (or set `META_API_KEY`), then `ax-code providers login muse-cli`. AX Code reuses the Muse CLI session (`~/.config/muse`, with the model catalog under `~/.local/share/muse`) rather than storing a hosted Meta API key. The hosted `meta` API provider remains a separate connection.
+
+For Claude Code, install the local `claude` binary, run `claude` once to sign in (or export `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`), then `ax-code providers login claude-code`. AX Code reuses the Claude Code CLI session (`$CLAUDE_CONFIG_DIR` when set, otherwise `~/.claude`) rather than storing a hosted Anthropic API key. The hosted `anthropic` API provider remains a separate connection.
+
 For MiniMax Code, install the local `mcode` binary (`npm install -g @minimax-ai/code` or the official installer), run `mcode login`, then `ax-code providers login minimax-cli`. AX Code reuses the MiniMax Code CLI session (`~/.minimax`) rather than storing a hosted Token Plan key. The hosted `minimax-coding-plan` / `minimax-cn-coding-plan` API providers remain separate connections. Do not use `mmx-cli` for this provider.
 
 MiniMax model discovery prefers `MCODE_MODEL`, then the top-level string `defaultModel` in
@@ -232,16 +239,14 @@ For DeepSeek Harness, install the local `dsh` binary (`npm install -g @deepseek-
 ### Why some coding-agent CLIs are not supported
 
 A CLI provider hands an entire turn to another agent: it reads and edits your files, runs commands, and talks to its
-vendor's service with your credentials. AX Code bridges only CLIs whose source is public, so that what the bridge
-drives can be inspected, its permission and telemetry behavior can be verified, and its output format can be tracked
-from source rather than reverse-engineered from a binary.
+vendor's service with your credentials. AX Code bridges a CLI when it offers a stable headless mode with structured
+output it can parse; the bridge runs the vendor's own binary, so closed-source CLIs (Claude Code, Muse Code) run under
+the vendor's own permission and telemetry behavior.
 
-| CLI agent   | Status in AX Code       | Reason                                                                            | Use instead                                                                                           |
-| ----------- | ----------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Claude Code | Retired (`claude-code`) | Proprietary; the public repository holds plugins and examples, not the CLI source | The `anthropic` API provider with an Anthropic API key (`ANTHROPIC_API_KEY`, or key it in `/connect`) |
-| Muse Code   | Retired (`muse-cli`)    | The CLI binary is closed source; only the Muse Code SDK is published (MIT)        | The `meta` API provider (Muse Spark) with a Meta Model API key (`META_MODEL_API_KEY`, or `/connect`)  |
-| Qoder CLI   | Retired (`qoder-cli`)   | Closed source                                                                     | No API-key route in AX Code                                                                           |
-| ZCode       | Not supported           | GUI application without a headless mode, so it cannot be driven as a CLI provider | The Z.AI API providers (`zai`, `zai-coding-plan`)                                                     |
+| CLI agent | Status in AX Code     | Reason                                                                            | Use instead                                       |
+| --------- | --------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Qoder CLI | Retired (`qoder-cli`) | No maintained bridge                                                              | No API-key route in AX Code                       |
+| ZCode     | Not supported         | GUI application without a headless mode, so it cannot be driven as a CLI provider | The Z.AI API providers (`zai`, `zai-coding-plan`) |
 
 Retired provider ids stay in AX Code's retired-provider table, so they are never loaded or listed and a model-catalog
 refresh cannot bring them back. If your configuration still names one of them, pick a replacement with `/connect` or

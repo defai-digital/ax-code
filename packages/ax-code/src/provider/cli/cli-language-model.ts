@@ -13,6 +13,7 @@ import { parseCliJsonEventLine, stdoutHasCliJsonEvents, type CliOutputParser } f
 import { StringDecoder } from "node:string_decoder"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
+import { ScopedFlag } from "@/flag/scoped"
 import { Token } from "@/util/token"
 import { withTimeout } from "@/util/timeout"
 import { markEstimatedUsage } from "../usage"
@@ -187,6 +188,13 @@ export function extractJsonPayload(text: string): string {
   return parseJsonResult(slice).ok ? slice : text
 }
 
+function autonomousCliArgs(providerID: string): string[] {
+  if (!ScopedFlag.autonomous()) return []
+  if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
+  // Kimi -p/--prompt mode already auto-approves tools; other providers need no override here.
+  return []
+}
+
 export function buildCliCommand(
   config: CliLanguageModelConfig,
   prompt: string,
@@ -197,6 +205,7 @@ export function buildCliCommand(
     config.binary,
     ...(config.providerID === "dsh-cli" ? dshLauncherArgs() : []),
     ...config.args,
+    ...autonomousCliArgs(config.providerID),
     ...cliEffortArgs(config.providerID, effort, config.efforts),
   ]
   if (config.workspaceArg && workspaceDirectory) cmd.push(config.workspaceArg, workspaceDirectory)
@@ -590,7 +599,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           onFail(error)
         }
         // Tolerate parser throws on malformed JSON lines. External CLI
-        // tools (codex-cli/kimi-cli) can emit anything, and
+        // tools (claude-code/codex-cli) can emit anything, and
         // a synchronous throw in this data callback used to escape the
         // stdout.on("data") handler and tear down the host process —
         // stdout.on("error") only catches transport errors, not synchronous

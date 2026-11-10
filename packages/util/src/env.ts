@@ -48,14 +48,17 @@ export namespace Env {
     "DBUS_SESSION_BUS_ADDRESS",
   ])
 
-  // Provider API keys CLI subprocesses (codex-cli, kimi-cli, etc.) need
+  // Provider API keys CLI subprocesses (claude-code, codex-cli, etc.) need
   // forwarded. Kept out of SAFE_ALLOWLIST so pty user env and untrusted
   // {env:} config substitution still strip them — only the CLI provider
   // spawn path opts into forwarding via `withCliProviderKeys`.
   const CLI_PROVIDER_KEYS: Record<string, readonly string[]> = {
     "codex-cli": ["OPENAI_API_KEY"],
+    // `claude setup-token` and gateway setups authenticate through tokens.
+    "claude-code": ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN"],
     "grok-build-cli": ["XAI_API_KEY"],
     "kimi-cli": ["KIMI_API_KEY"],
+    "muse-cli": ["META_API_KEY", "MODEL_API_KEY", "META_MODEL_API_KEY"],
     "minimax-cli": ["MINIMAX_API_KEY", "MINIMAX_TOKEN_PLAN_API_KEY", "MCODE_PROVIDER_API_KEY"],
     "dsh-cli": ["DEEPSEEK_API_KEY"],
   }

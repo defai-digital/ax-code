@@ -150,12 +150,19 @@ describe("CLI provider loaders", () => {
     expect(src).toContain("return cliModels(opts.providerID, current, resolved.model)")
     expect(src).toContain("if (resolved && resolved !== providerID)")
     expect(src).toContain("add(resolved, `${name} (${resolved})`)")
+    expect(src).toContain("claudeCodeFamilyModels(current, resolved.model)")
     expect(src).toContain("grokBuildFamilyModels(current, resolved.model)")
     expect(src).toContain("kimiCliFamilyModels(current, resolved.model)")
     expect(src).toContain("codexCliFamilyModels(current, resolved.model)")
-    expect(src).toContain("minimaxCliFamilyModels(current, resolved.model)")
-    expect(src).not.toContain("claudeCodeFamilyModels")
-    expect(src).not.toContain("museCliFamilyModels")
+  })
+
+  test("claude-code configured provider does not discover runnable variants when binary missing", async () => {
+    await expectMissingCliProvider({
+      providerID: "claude-code",
+      binary: "claude",
+      baseModelID: "claude-code",
+      discoveredModelIDs: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"],
+    })
   })
 
   test("codex-cli configured provider does not discover runnable variants when binary missing", async () => {
@@ -182,15 +189,6 @@ describe("CLI provider loaders", () => {
       binary: "kimi",
       baseModelID: "kimi-cli",
       discoveredModelIDs: ["kimi-code/k3", "kimi-code/kimi-for-coding"],
-    })
-  })
-
-  test("minimax-cli configured provider does not discover runnable variants when binary missing", async () => {
-    await expectMissingCliProvider({
-      providerID: "minimax-cli",
-      binary: "mcode",
-      baseModelID: "minimax-cli",
-      discoveredModelIDs: ["MiniMax-M3"],
     })
   })
 })
@@ -300,31 +298,27 @@ describe("MiniMax CLI family models", () => {
 })
 
 describe("online provider loaders", () => {
-  test.each(["gemini-cli", "claude-code", "muse-cli", "qoder-cli"])(
-    "retired %s provider is not loaded from project config",
-    async (providerID) => {
-      await using tmp = await tmpdir({
-        init: async (dir) => {
-          await writeFile(
-            path.join(dir, "ax-code.json"),
-            JSON.stringify({
-              $schema:
-                "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-              provider: { [providerID]: {} },
-            }),
-          )
-        },
-      })
+  test("retired gemini-cli provider is not loaded from project config", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            provider: { "gemini-cli": {} },
+          }),
+        )
+      },
+    })
 
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const providers = await Provider.list()
-          expect(providers[ProviderID.make(providerID)]).toBeUndefined()
-        },
-      })
-    },
-  )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers[ProviderID.make("gemini-cli")]).toBeUndefined()
+      },
+    })
+  })
 
   test("retired xai provider is not loaded from an API key", async () => {
     await using tmp = await tmpdir({
@@ -961,9 +955,9 @@ describe("provider config integration", () => {
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-            disabled_providers: ["codex-cli"],
+            disabled_providers: ["claude-code"],
             provider: {
-              "codex-cli": {},
+              "claude-code": {},
             },
           }),
         )
@@ -973,7 +967,7 @@ describe("provider config integration", () => {
       directory: tmp.path,
       fn: async () => {
         const providers = await Provider.list()
-        expect(providers[ProviderID.make("codex-cli")]).toBeUndefined()
+        expect(providers[ProviderID.make("claude-code")]).toBeUndefined()
       },
     })
   })

@@ -1,14 +1,16 @@
 import { describe, expect, test } from "vitest"
 import {
+  claudeCodeParser,
   CliOutputError,
   codexCliParser,
   grokBuildCliParser,
   kimiCliParser,
+  museCliParser,
   minimaxCliParser,
   parseCliJsonEventLine,
 } from "../../../src/provider/cli/parser"
 
-describe("parseCliJsonEventLine", () => {
+describe("claudeCodeParser", () => {
   test("decodes CLI JSON event lines with non-JSON fallback", () => {
     expect(parseCliJsonEventLine('  {"type":"result","result":"OK"}  ')).toEqual({
       type: "result",
@@ -17,6 +19,59 @@ describe("parseCliJsonEventLine", () => {
     expect(parseCliJsonEventLine("plain text")).toBeUndefined()
     expect(parseCliJsonEventLine("{not json")).toBeUndefined()
     expect(parseCliJsonEventLine("")).toBeUndefined()
+  })
+
+  test("streams delta events without duplicating final assistant output", () => {
+    expect(claudeCodeParser.parseStreamLine('{"type":"content_block_delta","delta":{"text":"OK"}}')).toBe("OK")
+    expect(
+      claudeCodeParser.parseStreamLine('{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}'),
+    ).toBeNull()
+    expect(claudeCodeParser.parseStreamLine('{"type":"result","result":"OK"}')).toBe("OK")
+  })
+
+  test("complete parsing still extracts the final response text", () => {
+    const output = [
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"Hello"}]}}',
+      '{"type":"result","result":"Hello"}',
+    ].join("\n")
+
+    expect(claudeCodeParser.parseComplete(output)).toEqual({ text: "Hello" })
+  })
+
+  test("ignores malformed nested assistant content blocks", () => {
+    const output = [
+      '{"type":"assistant","message":{"content":[{"type":"text","text":123},{"type":"image","text":"ignored"}]}}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}',
+    ].join("\n")
+
+    expect(claudeCodeParser.parseComplete(output)).toEqual({ text: "OK" })
+    expect(claudeCodeParser.parseStreamLine('{"type":"content_block_delta","delta":{"text":123}}')).toBeNull()
+  })
+
+  test("does not leak control JSON when no assistant text is present", () => {
+    expect(claudeCodeParser.parseComplete('{"type":"system","subtype":"init","session_id":"session_1"}')).toEqual({
+      text: "",
+    })
+  })
+
+  test("surfaces an error result instead of treating it as the answer", () => {
+    const output = [
+      '{"type":"system","subtype":"init"}',
+      '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"Claude Code CLI crashed"}',
+    ].join("\n")
+
+    expect(() => claudeCodeParser.parseComplete(output)).toThrow(CliOutputError)
+    expect(() => claudeCodeParser.parseComplete(output)).toThrow("Claude Code CLI crashed")
+    expect(claudeCodeParser.parseStreamLine(output.split("\n")[1]!)).toBeNull()
+  })
+
+  test("surfaces an error result without text using a fallback message", () => {
+    expect(() => claudeCodeParser.parseComplete('{"type":"result","subtype":"error_max_turns"}')).toThrow(
+      "Claude Code CLI reported an error",
+    )
+    expect(() =>
+      claudeCodeParser.parseComplete('{"type":"result","is_error":true,"result":"","error":"authentication failed"}'),
+    ).toThrow("authentication failed")
   })
 })
 
@@ -133,9 +188,11 @@ describe("provider CLI raw stream text", () => {
   })
 
   test("raw complete fallback preserves model whitespace", () => {
+    expect(claudeCodeParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(codexCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(grokBuildCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(kimiCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
+    expect(museCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(minimaxCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
   })
 })
@@ -197,6 +254,58 @@ const MCODE_076_OK = [
   '{"schemaVersion":1,"sequence":7,"timestampMs":1794293671323,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"turn.completed","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking","providerSource":"provider","providerKind":"minimax-managed"},"usage":{"inputTokens":13308,"outputTokens":5,"cacheReadTokens":618,"totalTokens":13931},"usageSource":"completed_responses","usageIncomplete":false,"durationMs":1084}',
   '{"schemaVersion":1,"sequence":8,"timestampMs":1794293671323,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"exec.completed","result":{"schemaVersion":1,"type":"exec.result","runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","status":"succeeded","output":"OK 👌","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking","providerSource":"provider","providerKind":"minimax-managed"},"usage":{"inputTokens":13308,"outputTokens":5,"cacheReadTokens":618,"totalTokens":13931},"usageSource":"completed_responses","usageIncomplete":false,"durationMs":1084}}',
 ].join("\n")
+
+describe("museCliParser", () => {
+  test("concatenates output deltas and ignores control events", () => {
+    const output = [
+      '{"payload_type":"runtime.command.accepted","payload":{"kind":"command_accepted"}}',
+      '{"payload_type":"run.output.delta","payload":{"kind":"run_output_delta","text":"Hello "}}',
+      '{"payload_type":"task.lifecycle.started","payload":{"kind":"task_lifecycle"}}',
+      '{"payload_type":"run.output.delta","payload":{"kind":"run_output_delta","text":"world"}}',
+      '{"payload_type":"run.terminal.completed","payload":{"kind":"run_terminal","terminal":"completed","text":"Hello world"}}',
+    ].join("\n")
+
+    expect(museCliParser.parseComplete(output)).toEqual({ text: "Hello world" })
+  })
+
+  test("streams only output deltas", () => {
+    expect(museCliParser.parseStreamLine('{"payload_type":"run.output.delta","payload":{"text":"OK"}}')).toBe("OK")
+    expect(
+      museCliParser.parseStreamLine(
+        '{"payload_type":"run.terminal.completed","payload":{"terminal":"completed","text":"OK"}}',
+      ),
+    ).toBeNull()
+    expect(museCliParser.parseStreamLine('{"payload_type":"task.lifecycle.started","payload":{}}')).toBeNull()
+    expect(museCliParser.parseStreamLine("muse: workspace root: /tmp")).toBeNull()
+  })
+
+  test("falls back to terminal text when no deltas were emitted", () => {
+    expect(
+      museCliParser.parseComplete(
+        '{"payload_type":"run.terminal.completed","payload":{"terminal":"completed","text":"OK\\n"}}',
+      ),
+    ).toEqual({ text: "OK\n" })
+  })
+
+  test("does not leak control JSON when no assistant text is present", () => {
+    expect(
+      museCliParser.parseComplete('{"payload_type":"runtime.command.accepted","payload":{"kind":"command_accepted"}}'),
+    ).toEqual({ text: "" })
+  })
+
+  test("surfaces a failed terminal as a CLI output error", () => {
+    const output = [
+      '{"payload_type":"run.output.delta","payload":{"text":"partial"}}',
+      '{"payload_type":"run.terminal.completed","payload":{"terminal":"failed","reason":"authentication required"}}',
+    ].join("\n")
+
+    expect(() => museCliParser.parseComplete(output)).toThrow(CliOutputError)
+    expect(() => museCliParser.parseComplete(output)).toThrow("authentication required")
+    expect(() =>
+      museCliParser.parseComplete('{"payload_type":"run.terminal.failed","payload":{"reason":"login required"}}'),
+    ).toThrow("login required")
+  })
+})
 
 describe("minimaxCliParser", () => {
   test("reads mcode 0.7.6 agent_message content and the nested exec.completed result", () => {

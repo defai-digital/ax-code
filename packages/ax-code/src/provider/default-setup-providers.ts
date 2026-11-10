@@ -6,8 +6,7 @@
 // stay here so /connect, providers login, and the Desktop setup dialog surface
 // them without requiring enabled_providers opt-in — same pattern OpenCode uses
 // for native deepseek + meta blocks. Anthropic (Claude) and Meta (Muse Spark)
-// are the API-key routes for users of the retired closed-source Claude Code
-// and Muse Code CLI providers.
+// are the API-key routes alongside the Claude Code and Muse Code CLI providers.
 import { CLI_PROVIDER_IDS } from "./cli/ids"
 import { LOCAL_LLM_PROVIDER_IDS, providerConnectCategory } from "@/mode/provider-category"
 import { isPrivateGpuProviderID } from "./private-gpu/presets"

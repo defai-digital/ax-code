@@ -1,9 +1,11 @@
 import { RETIRED_PROVIDER_IDS } from "../src/provider/retired-providers"
 
 export const LOCAL_PROVIDER_IDS = [
+  "claude-code",
   "codex-cli",
   "grok-build-cli",
   "kimi-cli",
+  "muse-cli",
   "minimax-cli",
   "dsh-cli",
   "ollama",
@@ -41,6 +43,34 @@ const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
         limit: {
           context: 256000,
           output: 10000,
+        },
+        options: {},
+        status: "active",
+      },
+    },
+  },
+  "muse-cli": {
+    id: "muse-cli",
+    name: "Muse Code CLI",
+    env: [],
+    npm: "cli",
+    models: {
+      "muse-cli": {
+        id: "muse-cli",
+        name: "Muse Code CLI",
+        family: "muse",
+        attachment: true,
+        reasoning: false,
+        tool_call: false,
+        temperature: false,
+        release_date: "2026-09-17",
+        modalities: {
+          input: ["text", "image"],
+          output: ["text"],
+        },
+        limit: {
+          context: 1048576,
+          output: 131072,
         },
         options: {},
         status: "active",
@@ -120,6 +150,14 @@ export function preserveLocalProviders(fetched: ModelsSnapshot, existing: Models
     grokBuildCli.models = {
       ...(grokBuildCli.models ?? {}),
       "grok-build-cli": grokBuildCliDefault.models["grok-build-cli"],
+    }
+  }
+  const museCli = next["muse-cli"] as { models?: Record<string, unknown> } | undefined
+  const museCliDefault = LOCAL_PROVIDER_DEFAULTS["muse-cli"] as { models: Record<string, unknown> }
+  if (museCli && !museCli.models?.["muse-cli"]) {
+    museCli.models = {
+      ...(museCli.models ?? {}),
+      "muse-cli": museCliDefault.models["muse-cli"],
     }
   }
   const minimaxCli = next["minimax-cli"] as { models?: Record<string, unknown> } | undefined

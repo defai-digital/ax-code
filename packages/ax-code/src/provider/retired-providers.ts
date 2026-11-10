@@ -6,9 +6,7 @@ export const RETIRED_PROVIDER_IDS = [
   "antigravity-cli",
   "xai",
   "kilo",
-  // Closed-source CLI agents: AX Code bridges only CLIs whose source is public.
-  "claude-code",
-  "muse-cli",
+  // Closed-source CLI agent with no maintained bridge.
   "qoder-cli",
 ] as const
 

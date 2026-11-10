@@ -933,7 +933,7 @@ export namespace Provider {
     // Run model discovery (CLI subprocess auth probes, local LLM /models and
     // /api/tags fetches) WITHOUT blocking state resolution. These were the
     // dominant startup cost: a `Promise.all` here waited on the slowest probe
-    // — e.g. a CLI provider's auth `ping` — gating the provider list the TUI
+    // — e.g. the claude-code auth `ping` — gating the provider list the TUI
     // blocks on before the prompt is usable. Cloud and CLI providers already
     // carry their snapshot models and are returned immediately; discovered
     // models stream in afterwards and the TUI refetches on `Event.Updated`.

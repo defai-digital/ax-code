@@ -87,6 +87,54 @@ function codexItemText(event: CliJsonObject): string | undefined {
   return textFromContentBlocks(item.content) || undefined
 }
 
+function claudeResultError(event: CliJsonObject): string | undefined {
+  if (event.type !== "result") return undefined
+  const subtype = stringField(event, "subtype")
+  const isError = event.is_error === true || (subtype !== undefined && subtype.startsWith("error"))
+  if (!isError) return undefined
+  const result = stringField(event, "result")
+  if (result?.trim()) return result
+  const error =
+    stringField(event, "error") ?? stringField(recordField(event, "error"), "message") ?? stringField(event, "message")
+  return error?.trim() ? error : "Claude Code CLI reported an error"
+}
+
+export const claudeCodeParser: CliOutputParser = {
+  parseComplete(output: string) {
+    const lines = output.split("\n")
+    const parts: string[] = []
+    let sawJsonEvent = false
+    for (const line of lines) {
+      const event = parseCliJsonEventLine(line)
+      if (!event) continue
+      sawJsonEvent = true
+      const error = claudeResultError(event)
+      if (error) throw new CliOutputError(error)
+      if (event.type === "result" && typeof event.result === "string") return { text: event.result }
+      const message = recordField(event, "message")
+      if (event.type === "assistant" && message?.content) {
+        const text = textFromContentBlocks(message.content)
+        if (text) parts.push(text)
+      }
+    }
+    // A structured transcript without assistant text (for example a system
+    // init event) must stay empty so callers report "no assistant output"
+    // instead of showing the JSONL transport as the model reply.
+    if (parts.length) return { text: parts.join("\n") }
+    if (sawJsonEvent) return { text: "" }
+    return { text: rawCompleteText(output) }
+  },
+  parseStreamLine(line: string) {
+    const event = parseCliJsonEventLine(line)
+    if (!event) return null
+    if (claudeResultError(event)) return null
+    const deltaText = stringField(recordField(event, "delta"), "text")
+    if (event.type === "content_block_delta" && deltaText) return deltaText
+    if (event.type === "result" && typeof event.result === "string") return event.result
+    return null
+  },
+}
+
 export const codexCliParser: CliOutputParser = {
   parseComplete(output: string) {
     const lines = output.split("\n")
@@ -212,6 +260,58 @@ export const kimiCliParser: CliOutputParser = {
     const event = parseCliJsonEventLine(line)
     if (!event) return rawTextLine(line)
     return kimiAssistantText(event) ?? null
+  },
+}
+
+function musePayloadText(event: CliJsonObject): string | undefined {
+  return stringField(recordField(event, "payload"), "text")
+}
+
+function museTerminalError(event: CliJsonObject): string | undefined {
+  const payload = recordField(event, "payload")
+  if (event.payload_type === "run.terminal.failed") {
+    return stringField(payload, "reason") ?? stringField(payload, "text") ?? "Muse CLI run failed"
+  }
+  if (event.payload_type !== "run.terminal.completed") return undefined
+  const terminal = stringField(payload, "terminal")
+  if (!terminal || terminal === "completed") return undefined
+  return stringField(payload, "reason") ?? stringField(payload, "text") ?? `Muse CLI run ${terminal}`
+}
+
+// Muse exec --json emits durable MSP JSONL. Assistant text streams as
+// run.output.delta payloads; run.terminal.completed repeats the consolidated
+// answer. Concatenate deltas only so complete parsing does not double-count.
+export const museCliParser: CliOutputParser = {
+  parseComplete(output: string) {
+    const lines = output.split("\n")
+    const deltas: string[] = []
+    let terminal: string | undefined
+    let sawJsonEvent = false
+    const errors: string[] = []
+    for (const line of lines) {
+      const event = parseCliJsonEventLine(line)
+      if (!event) continue
+      sawJsonEvent = true
+      const error = museTerminalError(event)
+      if (error) {
+        errors.push(error)
+        continue
+      }
+      const text = musePayloadText(event)
+      if (event.payload_type === "run.output.delta" && text) deltas.push(text)
+      else if (event.payload_type === "run.terminal.completed" && text) terminal = text
+    }
+    if (errors.length) throw new CliOutputError(errors.at(-1)!)
+    if (deltas.length) return { text: deltas.join("") }
+    if (terminal !== undefined) return { text: terminal }
+    if (sawJsonEvent) return { text: "" }
+    return { text: rawCompleteText(output) }
+  },
+  parseStreamLine(line: string) {
+    const event = parseCliJsonEventLine(line)
+    if (!event) return null
+    if (event.payload_type !== "run.output.delta") return null
+    return musePayloadText(event) ?? null
   },
 }
 

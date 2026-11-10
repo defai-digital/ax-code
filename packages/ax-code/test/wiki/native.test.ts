@@ -977,7 +977,7 @@ describe("wiki model resolution", () => {
 describe("Wiki concurrency policy", () => {
   test.each([
     "ax-engine",
-    "dsh-cli",
+    "muse-cli",
     "grok-cli",
     "local-llm",
     "ollama",

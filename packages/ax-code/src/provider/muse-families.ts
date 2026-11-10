@@ -1,0 +1,76 @@
+import { familyDisplayName, familyReleaseTime, latestFamilyModels } from "./family-shared"
+
+const FAMILY_ORDER = ["muse-spark"] as const
+
+export type MuseFamilySource = {
+  id: string
+  name?: string
+  family?: string
+  release_date?: string
+}
+
+export function museFamilyId(input: { id?: string; family?: string }): string | undefined {
+  const id = (input.id?.split("/").pop() ?? input.id ?? "").toLowerCase()
+  if (id === "muse-cli") return undefined
+  if (/^muse-spark-\d+[.-]\d+/.test(id)) return "muse-spark"
+  const family = input.family?.toLowerCase()
+  if (family === "muse-spark") return "muse-spark"
+  if (family === "muse" && id.includes("muse-spark")) return "muse-spark"
+  return undefined
+}
+
+export function museDisplayName(name: string | undefined, fallback: string): string {
+  return familyDisplayName(name, fallback, { stripOpenRouterPrefix: true })
+}
+
+export function latestMuseFamilyModels<T extends MuseFamilySource>(models: Record<string, T>): T[] {
+  return latestFamilyModels(models, FAMILY_ORDER, museFamilyId, compareMuseFamilyModels)
+}
+
+export function museFallbackLatest(): MuseFamilySource & {
+  attachment: boolean
+  reasoning: boolean
+  temperature: boolean
+  tool_call: boolean
+  modalities: { input: Array<"text" | "image">; output: Array<"text"> }
+  limit: { context: number; output: number }
+  status: "active"
+} {
+  return {
+    id: "muse-spark-1.3",
+    name: "Muse Spark 1.3",
+    family: "muse",
+    release_date: "2026-09-02",
+    attachment: true,
+    reasoning: true,
+    temperature: true,
+    tool_call: true,
+    modalities: { input: ["text", "image"], output: ["text"] },
+    limit: { context: 1_048_576, output: 131_072 },
+    status: "active",
+  }
+}
+
+function compareMuseFamilyModels(a: MuseFamilySource, b: MuseFamilySource, aKey: string): number {
+  const aId = (a.id ?? aKey).toLowerCase()
+  const bId = (b.id ?? "").toLowerCase()
+  const byVariant = Number(isMuseSecondaryVariant(bId)) - Number(isMuseSecondaryVariant(aId))
+  if (byVariant !== 0) return byVariant
+  const aVer = museSparkVersion(aId)
+  const bVer = museSparkVersion(bId)
+  if (aVer[0] !== bVer[0]) return aVer[0] - bVer[0]
+  if (aVer[1] !== bVer[1]) return aVer[1] - bVer[1]
+  return familyReleaseTime(a.release_date) - familyReleaseTime(b.release_date)
+}
+
+function isMuseSecondaryVariant(id: string): boolean {
+  const segment = id.split("/").pop() ?? id
+  return segment.includes("contributor") || segment.includes("free")
+}
+
+function museSparkVersion(id: string): [number, number] {
+  const segment = (id.split("/").pop() ?? id).toLowerCase()
+  const match = segment.match(/muse-spark-(\d+)[.-](\d+)/)
+  if (!match) return [0, 0]
+  return [Number(match[1]), Number(match[2])]
+}

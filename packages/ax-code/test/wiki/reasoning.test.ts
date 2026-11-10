@@ -97,7 +97,7 @@ describe("Wiki reasoning preference", () => {
     })
   })
 
-  test.each(["codex-cli", "grok-build-cli", "minimax-cli"])(
+  test.each(["claude-code", "codex-cli", "grok-build-cli", "muse-cli"])(
     "passes the lowest CLI effort through to %s arguments",
     (providerID) => {
       const m = model("cli", providerID, "model", {

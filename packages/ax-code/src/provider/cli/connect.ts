@@ -1,17 +1,81 @@
 import { toErrorMessage } from "../../util/error-message"
 import { which } from "../../util/which"
-import { CliLanguageModel } from "./cli-language-model"
+import { CliLanguageModel, cliEnv } from "./cli-language-model"
 import { getCliProviderDefinition, type CliProviderDefinition } from "./config"
 import { resolveCliModel, type CliModelInfo } from "./resolve"
+import { Process } from "../../util/process"
 import { Log } from "../../util/log"
+import { parseCliJsonEventLine } from "./parser"
 
 export const CLI_CONNECT_TIMEOUT_MS = 15_000
 const CLI_CONNECT_PROMPT = "Reply with exactly OK."
 const log = Log.create({ service: "provider.cli.connect" })
 
-// Pre-flight login probe hook. No bundled CLI needs one today: each surfaces
-// missing credentials through its own run output, which the connect probe sees.
+function isClaudeAuthFailure(event: unknown) {
+  if (!event || typeof event !== "object") return false
+  const record = event as Record<string, unknown>
+  if (record.type !== "error" && record.error === undefined) return false
+
+  const error = record.error
+  if (error === "authentication_failed") return true
+  if (typeof error === "string") return error.toLowerCase().includes("auth")
+  if (!error || typeof error !== "object") return false
+
+  const errorRecord = error as Record<string, unknown>
+  const type = typeof errorRecord.type === "string" ? errorRecord.type.toLowerCase() : ""
+  const code = typeof errorRecord.code === "string" ? errorRecord.code.toLowerCase() : ""
+  const message = typeof errorRecord.message === "string" ? errorRecord.message.toLowerCase() : ""
+  return [type, code, message].some((value) => value.includes("auth") || value.includes("login"))
+}
+
+async function checkClaudeAuth(binary: string): Promise<string | undefined> {
+  try {
+    const out = await Process.run([binary, "--print", "--verbose", "--output-format", "stream-json", "ping"], {
+      stdin: "ignore",
+      env: cliEnv([], "claude-code"),
+      abort: AbortSignal.timeout(5_000),
+      nothrow: true,
+      // Best-effort probe: the result is only an auth hint, so a short-lived
+      // CLI process (e.g. `ax-code context`) must not be kept alive until the
+      // child exits — discovery fires this in the background during shutdown.
+      unref: true,
+    })
+
+    for (const line of [out.stdout, out.stderr]
+      .map((chunk) => chunk.toString())
+      .join("\n")
+      .split("\n")) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed[0] !== "{") continue
+      const event = parseCliJsonEventLine(line)
+      if (!event) {
+        log.debug("claude auth probe ignored non-JSON event line", {
+          command: "provider.cli.auth_probe",
+          status: "ignored",
+          binary,
+          line: trimmed.slice(0, 200),
+        })
+        continue
+      }
+      if (isClaudeAuthFailure(event)) {
+        return "Claude CLI is not logged in. Run `claude login` first, then retry `ax-code providers login --provider claude-code`."
+      }
+    }
+
+    return
+  } catch (error) {
+    log.debug("claude auth probe failed", {
+      command: "provider.cli.auth_probe",
+      status: "error",
+      binary,
+      error,
+    })
+    return
+  }
+}
+
 export async function checkCliProviderAuth(providerID: string, binary: string): Promise<string | undefined> {
+  if (providerID === "claude-code") return checkClaudeAuth(binary)
   return
 }
 

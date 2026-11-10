@@ -8,9 +8,9 @@ describe("promptToText", () => {
     expect(promptToText(prompt)).toBe("You are a helpful assistant.")
   })
 
-  test("adds CLI web search guidance", () => {
+  test("adds Claude Code web search guidance", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "What changed today?" }] }]
-    const result = promptToText(prompt, { providerID: "codex-cli" })
+    const result = promptToText(prompt, { providerID: "claude-code" })
 
     expect(result).toContain("built-in web search or web fetch capability")
     expect(result).toContain("use your built-in web search or web fetch capability")
@@ -23,33 +23,29 @@ describe("promptToText", () => {
     expect(promptToText(prompt, { providerID: "codex-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "grok-build-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "kimi-cli" })).toContain("built-in web search")
+    expect(promptToText(prompt, { providerID: "muse-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "minimax-cli" })).toContain("built-in web search")
-    expect(promptToText(prompt, { providerID: "dsh-cli" })).toContain("built-in web search")
-    for (const providerID of ["gemini-cli", "claude-code", "muse-cli", "qoder-cli"]) {
-      expect(promptToText(prompt, { providerID })).not.toContain("built-in web search")
-    }
+    expect(promptToText(prompt, { providerID: "gemini-cli" })).not.toContain("built-in web search")
   })
 
   test("warns CLI providers that background tasks die with the per-turn process", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "scan the repo" }] }]
 
-    for (const providerID of ["codex-cli", "grok-build-cli", "kimi-cli", "minimax-cli", "dsh-cli"]) {
+    for (const providerID of ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli", "muse-cli", "minimax-cli"]) {
       const result = promptToText(prompt, { providerID })
       expect(result).toContain("<cli_background_tasks>")
       expect(result).toContain("background task you started")
       expect(result).toContain("never delivered across turns")
     }
     // Non-CLI and unknown providers get no process-model hint.
-    for (const providerID of ["gemini-cli", "claude-code", "muse-cli", "qoder-cli"]) {
-      expect(promptToText(prompt, { providerID })).not.toContain("<cli_background_tasks>")
-    }
+    expect(promptToText(prompt, { providerID: "gemini-cli" })).not.toContain("<cli_background_tasks>")
     expect(promptToText(prompt)).not.toContain("<cli_background_tasks>")
   })
 
   test("lists attachments so the CLI agent reads them", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "what is this?" }] }]
     const result = promptToText(prompt, {
-      providerID: "codex-cli",
+      providerID: "claude-code",
       attachments: [
         { path: "/tmp/ax-code-cli-attach-x/attachment-0.png", mediaType: "image/png" },
         { url: "https://example.com/cat.png", mediaType: "image/png" },
@@ -62,10 +58,10 @@ describe("promptToText", () => {
 
   test("omits the attachments block when there are none", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "hello" }] }]
-    expect(promptToText(prompt, { providerID: "codex-cli", attachments: [] })).not.toContain("<cli_attachments>")
+    expect(promptToText(prompt, { providerID: "claude-code", attachments: [] })).not.toContain("<cli_attachments>")
   })
 
-  test("does not add CLI web search guidance for other CLI providers", () => {
+  test("does not add Claude Code web search guidance for other CLI providers", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "What changed today?" }] }]
 
     expect(promptToText(prompt, { providerID: "test-cli" })).toBe("What changed today?")

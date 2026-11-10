@@ -651,9 +651,12 @@ describe("Env.sanitize", () => {
     const originalKimi = process.env.KIMI_API_KEY
     const originalMeta = process.env.META_API_KEY
     const originalMiniMax = process.env.MINIMAX_API_KEY
-    const originalDeepSeek = process.env.DEEPSEEK_API_KEY
+    const originalClaudeOAuth = process.env.CLAUDE_CODE_OAUTH_TOKEN
+    const originalAnthropicAuth = process.env.ANTHROPIC_AUTH_TOKEN
 
     try {
+      process.env.CLAUDE_CODE_OAUTH_TOKEN = "claude-oauth"
+      process.env.ANTHROPIC_AUTH_TOKEN = "anthropic-auth"
       process.env.GEMINI_API_KEY = "gemini-key"
       process.env.OPENAI_API_KEY = "openai-key"
       process.env.ANTHROPIC_API_KEY = "anthropic-key"
@@ -661,7 +664,6 @@ describe("Env.sanitize", () => {
       process.env.KIMI_API_KEY = "kimi-key"
       process.env.META_API_KEY = "meta-key"
       process.env.MINIMAX_API_KEY = "minimax-key"
-      process.env.DEEPSEEK_API_KEY = "deepseek-key"
 
       const env = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "codex-cli")
 
@@ -673,21 +675,29 @@ describe("Env.sanitize", () => {
       expect(env.KIMI_API_KEY).toBeUndefined()
       expect(env.META_API_KEY).toBeUndefined()
 
-      const dsh = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "dsh-cli")
-      expect(dsh.DEEPSEEK_API_KEY).toBe("deepseek-key")
-      expect(dsh.OPENAI_API_KEY).toBeUndefined()
+      expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+      expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined()
+      expect(Env.sanitize({ CLAUDE_CODE_OAUTH_TOKEN: "x", ANTHROPIC_AUTH_TOKEN: "y" })).toEqual({})
 
-      // Retired closed-source CLI bridges get no credential overlay.
-      for (const retired of ["claude-code", "muse-cli", "qoder-cli"]) {
-        const overlay = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), retired)
-        expect(overlay.ANTHROPIC_API_KEY).toBeUndefined()
-        expect(overlay.META_API_KEY).toBeUndefined()
-      }
+      const claude = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "claude-code")
+      expect(claude.ANTHROPIC_API_KEY).toBe("anthropic-key")
+      expect(claude.CLAUDE_CODE_OAUTH_TOKEN).toBe("claude-oauth")
+      expect(claude.ANTHROPIC_AUTH_TOKEN).toBe("anthropic-auth")
+      expect(claude.OPENAI_API_KEY).toBeUndefined()
+
+      const muse = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "muse-cli")
+      expect(muse.META_API_KEY).toBe("meta-key")
+      expect(muse.OPENAI_API_KEY).toBeUndefined()
+      expect(muse.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
 
       const minimax = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "minimax-cli")
       expect(minimax.MINIMAX_API_KEY).toBe("minimax-key")
       expect(minimax.OPENAI_API_KEY).toBeUndefined()
     } finally {
+      if (originalClaudeOAuth === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN
+      else process.env.CLAUDE_CODE_OAUTH_TOKEN = originalClaudeOAuth
+      if (originalAnthropicAuth === undefined) delete process.env.ANTHROPIC_AUTH_TOKEN
+      else process.env.ANTHROPIC_AUTH_TOKEN = originalAnthropicAuth
       if (originalGemini === undefined) delete process.env.GEMINI_API_KEY
       else process.env.GEMINI_API_KEY = originalGemini
       if (originalOpenAI === undefined) delete process.env.OPENAI_API_KEY
@@ -702,8 +712,6 @@ describe("Env.sanitize", () => {
       else process.env.META_API_KEY = originalMeta
       if (originalMiniMax === undefined) delete process.env.MINIMAX_API_KEY
       else process.env.MINIMAX_API_KEY = originalMiniMax
-      if (originalDeepSeek === undefined) delete process.env.DEEPSEEK_API_KEY
-      else process.env.DEEPSEEK_API_KEY = originalDeepSeek
     }
   })
 })

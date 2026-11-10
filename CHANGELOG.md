@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- Restore the Claude Code CLI and Muse CLI providers.
+
 ## [7.30.21] - 2026-11-10
 
 ### Changed

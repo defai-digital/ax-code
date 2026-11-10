@@ -97,7 +97,7 @@ describe("dedupeApiCloudVendorVariants", () => {
       meta: record("meta", "Meta"),
       llama: record("llama", "Llama"),
       ollama: record("ollama", "Ollama Cloud"),
-      "codex-cli": record("codex-cli", "Codex CLI", 0),
+      "claude-code": record("claude-code", "Claude Code", 0),
       nebius: record("nebius", "Nebius"),
       "ax-engine": record("ax-engine", "AX Engine"),
     }
@@ -110,7 +110,7 @@ describe("dedupeApiCloudVendorVariants", () => {
         "meta",
         "llama",
         "ollama",
-        "codex-cli",
+        "claude-code",
         "nebius",
         "ax-engine",
       ]),

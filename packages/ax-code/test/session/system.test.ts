@@ -29,7 +29,7 @@ describe("session.system", () => {
     ["anthropic", "claude-sonnet-5"],
     ["ax-engine", "qwen3.8-27b-axq-6bit"],
     ["grok-build-cli", "grok-4.6"],
-    ["meta", "muse-spark-1.3"],
+    ["muse-cli", "muse-spark"],
   ])("slim guidance preserves the selected family and required instructions for %s/%s", (providerID, id) => {
     const model = { id, providerID, api: { id } } as Provider.Model
     const input = { agent: {}, model, system: ["Required project instruction."], userSystem: "User constraint." }

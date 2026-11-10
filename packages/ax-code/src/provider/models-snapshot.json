@@ -144943,6 +144943,39 @@
     "doc": "https://github.com/defai-digital/ax-studio",
     "models": {}
   },
+  "claude-code": {
+    "id": "claude-code",
+    "name": "Anthropic (Claude Code)",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "claude-code": {
+        "id": "claude-code",
+        "name": "Claude Code",
+        "family": "claude",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2025-01-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 200000,
+          "output": 16384
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
   "codex-cli": {
     "id": "codex-cli",
     "name": "OpenAI (Codex CLI)",
@@ -145036,6 +145069,39 @@
         "limit": {
           "context": 262144,
           "output": 16384
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
+  "muse-cli": {
+    "id": "muse-cli",
+    "name": "Muse Code CLI",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "muse-cli": {
+        "id": "muse-cli",
+        "name": "Muse Code CLI",
+        "family": "muse",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-09-17",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131072
         },
         "options": {},
         "status": "active"

@@ -31,6 +31,7 @@
     "alibaba-coding-plan-cn": "qwen3-coder-plus",
     "minimax": "MiniMax-M3",
     "meta": "muse-spark-1.3",
+    "muse-cli": "muse-spark-1.3",
     "google": "gemini-3.8-flash",
     "google-vertex": "gemini-3.8-flash",
     "groq": "openai/gpt-oss-20b"

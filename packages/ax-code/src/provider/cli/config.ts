@@ -1,8 +1,10 @@
 import {
+  claudeCodeParser,
   codexCliParser,
   grokBuildCliParser,
   kimiCliParser,
   minimaxCliParser,
+  museCliParser,
   dshCliParser,
   type CliOutputParser,
 } from "./parser"
@@ -17,6 +19,12 @@ export interface CliProviderDefinition {
 }
 
 export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
+  "claude-code": {
+    binary: "claude",
+    args: ["--print", "--verbose", "--output-format", "stream-json"],
+    parser: claudeCodeParser,
+    promptMode: "stdin",
+  },
   "codex-cli": {
     binary: "codex",
     args: ["exec", "--json", "--skip-git-repo-check"],
@@ -38,6 +46,16 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     parser: kimiCliParser,
     promptMode: "arg",
     promptFlag: "-p",
+  },
+  // Muse Code CLI: headless exec with durable JSONL. Prompt file avoids argv
+  // limits. Approval is disabled because AX Code cannot show Muse's TUI.
+  "muse-cli": {
+    binary: "muse",
+    args: ["exec", "--json", "--approval-mode", "never", "--disable-approval", "--trust-workspace"],
+    parser: museCliParser,
+    promptMode: "file",
+    promptFlag: "--prompt-file",
+    workspaceArg: "--workspace",
   },
   // MiniMax Code CLI: headless exec with stream-json. Stdin via --input -
   // avoids argv limits. Permission is full because AX Code cannot show MCode's

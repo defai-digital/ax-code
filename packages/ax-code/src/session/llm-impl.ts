@@ -1035,7 +1035,7 @@ export namespace LLM {
   // slot occupied briefly while an automatic replay receives 429s. Keep a
   // watchdog, but give local inference enough time to produce its first chunk.
   const AX_ENGINE_STREAM_IDLE_TIMEOUT_MS = 900_000
-  // CLI providers (codex-cli, kimi-cli, …) often start long-running local
+  // CLI providers (claude-code, codex-cli, …) often start long-running local
   // commands (dev servers) and go quiet on the model stream while the child
   // is still healthy. Use a longer default idle window so live-runs are not
   // aborted as "stalled" mid-server-start (#382). Env override still wins.

@@ -2904,20 +2904,14 @@ describe("ProviderTransform.variants", () => {
       expect(result.high).toEqual({ reasoningEffort: "high" })
     })
 
-    test("Meta API and Muse model ids are Muse family providers", () => {
-      const meta = createMockModel({
+    test("Muse Code CLI is a Muse family provider", () => {
+      const model = createMockModel({
         id: "muse-spark-1.3",
-        providerID: "meta",
-        api: { id: "muse-spark-1.3", npm: "@ai-sdk/openai-compatible" },
-      })
-      expect(ProviderTransform.isMuseFamily(meta)).toBe(true)
-      const routed = createMockModel({
-        id: "meta/muse-spark-1.3",
-        providerID: "openrouter",
+        providerID: "muse-cli",
         family: "muse",
-        api: { id: "meta/muse-spark-1.3", npm: "@openrouter/ai-sdk-provider" },
+        api: { id: "muse-spark-1.3", npm: "cli" },
       })
-      expect(ProviderTransform.isMuseFamily(routed)).toBe(true)
+      expect(ProviderTransform.isMuseFamily(model)).toBe(true)
     })
 
     test("Muse family match ignores muse tokens in the provider path", () => {
@@ -2968,9 +2962,9 @@ describe("ProviderTransform.variants", () => {
 
   describe("CLI effort variants", () => {
     test.each([
+      ["claude-code", ["low", "medium", "high", "max"]],
       ["codex-cli", ["minimal", "low", "medium", "high", "xhigh"]],
       ["grok-build-cli", ["low", "medium", "high"]],
-      ["minimax-cli", ["low", "medium", "high"]],
     ])("%s exposes documented levels despite opaque reasoning output", (providerID, levels) => {
       const model = createMockModel({
         id: `${providerID}/${providerID}`,

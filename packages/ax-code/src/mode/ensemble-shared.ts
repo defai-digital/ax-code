@@ -20,9 +20,9 @@ import { isRetiredProviderID } from "../provider/retired-providers"
 
 const GROK_CLI_IDS = ["grok-build-cli"]
 const OPENAI_IDS = ["openai", "codex-cli"]
-const CLAUDE_IDS = ["anthropic"]
+const CLAUDE_IDS = ["anthropic", "claude-code"]
 const KIMI_IDS = ["kimi-cli", "kimi-cloud-plan"]
-const MUSE_IDS = ["meta"]
+const MUSE_IDS = ["muse-cli", "meta"]
 const ALIBABA_PLAN_IDS = [
   "alibaba-token-plan",
   "alibaba-coding-plan",
@@ -53,6 +53,7 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   kimi: KIMI_IDS,
   "kimi-code": KIMI_IDS,
   muse: MUSE_IDS,
+  "muse-cli": MUSE_IDS,
   "muse-code": MUSE_IDS,
   "muse-spark": MUSE_IDS,
   meta: MUSE_IDS,
@@ -126,6 +127,7 @@ const FAMILY_MODEL_PREFIXES: Record<string, string[]> = {
   kimi: ["kimi", "k3", "moonshot"],
   "kimi-cli": ["kimi", "k3", "moonshot"],
   muse: ["muse"],
+  "muse-cli": ["muse"],
   "muse-code": ["muse"],
   "muse-spark": ["muse"],
   meta: ["muse"],

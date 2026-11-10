@@ -4,7 +4,7 @@ import { homedir } from "node:os"
 import { Filesystem } from "../../util/filesystem"
 import { isRecord } from "@/util/record"
 import { parseCliJsonObject, type CliJsonObject } from "./json"
-import { codexHome } from "./home"
+import { claudeConfigDir, codexHome } from "./home"
 
 /**
  * A model the CLI itself currently offers, read from the model cache the CLI
@@ -107,7 +107,106 @@ export function parseGrokModelsCache(data: CliJsonObject): NativeCliModel[] {
   return rows
 }
 
+function museDataDir() {
+  const testHome = process.env.AX_CODE_TEST_HOME?.trim()
+  if (testHome) return join(testHome, ".local", "share", "muse")
+  const xdg = process.env.XDG_DATA_HOME?.trim()
+  if (xdg) return join(xdg, "muse")
+  return join(homeDir(), ".local", "share", "muse")
+}
+
+// <data>/muse/model-catalog/*.json: { rows: [{ model_id, display_label, visibility, is_default, ... }] }.
+export function parseMuseModelCatalog(data: CliJsonObject): NativeCliModel[] {
+  if (!Array.isArray(data.rows)) return []
+  const rows: Array<NativeCliModel & { isDefault: boolean }> = []
+  for (const item of data.rows) {
+    if (!isRecord(item) || item.visibility !== "visible") continue
+    const id = str(item.model_id)
+    if (!id) continue
+    // Rows without a context limit are non-chat models (image generation).
+    const context = positive(item.context_limit)
+    if (!context) continue
+    rows.push({
+      id,
+      name: str(item.display_label) ?? id,
+      context,
+      output: positive(item.output_limit),
+      efforts: efforts(item.reasoning_effort_variants, "tier"),
+      isDefault: item.is_default === true,
+    })
+  }
+  return rows.sort((a, b) => Number(b.isDefault) - Number(a.isDefault)).map(({ isDefault: _, ...model }) => model)
+}
+
+async function readMuseCatalogs(): Promise<NativeCliModel[]> {
+  const dir = join(museDataDir(), "model-catalog")
+  const files = await readdir(dir).catch((error) => {
+    if (Filesystem.isEnoent(error)) return [] as string[]
+    throw error
+  })
+  const seen = new Set<string>()
+  const models: NativeCliModel[] = []
+  for (const file of files.filter((name) => name.endsWith(".json")).sort()) {
+    const data = await readJson(join(dir, file))
+    for (const model of data ? parseMuseModelCatalog(data) : []) {
+      if (seen.has(model.id)) continue
+      seen.add(model.id)
+      models.push(model)
+    }
+  }
+  return models
+}
+
+// <claude config>/cache/model-catalog/<account>-cc.json:
+// { fetchedAt, catalog: { config: { models: [{ id, name, section, runtime: { ... } }] } } }.
+// The "main" section is Claude Code's own picker; "overflow" holds older models.
+export function parseClaudeModelCatalog(data: CliJsonObject): NativeCliModel[] {
+  const catalog = isRecord(data.catalog) ? data.catalog : undefined
+  const config = catalog && isRecord(catalog.config) ? catalog.config : undefined
+  if (!config || !Array.isArray(config.models)) return []
+  const rows: NativeCliModel[] = []
+  for (const item of config.models) {
+    if (!isRecord(item) || item.section !== "main" || item.hidden === true) continue
+    const id = str(item.id)
+    if (!id) continue
+    const runtime = isRecord(item.runtime) ? item.runtime : {}
+    const capabilities = Array.isArray(runtime.capabilities) ? runtime.capabilities : []
+    rows.push({
+      id,
+      name: str(item.name) ?? id,
+      context: positive(runtime.max_input_tokens),
+      output: positive(runtime.max_output_tokens),
+      image: capabilities.includes("mm_images"),
+      efforts: efforts(
+        Array.isArray(runtime.effort_levels) ? runtime.effort_levels.map((value) => ({ value })) : undefined,
+        "value",
+      ),
+    })
+  }
+  return rows
+}
+
+// One catalog file per signed-in account; the most recently fetched belongs to
+// the account Claude Code is using now.
+async function readClaudeCatalogs(): Promise<NativeCliModel[]> {
+  const dir = join(claudeConfigDir().path, "cache", "model-catalog")
+  const files = await readdir(dir).catch((error) => {
+    if (Filesystem.isEnoent(error)) return [] as string[]
+    throw error
+  })
+  let newest: { fetchedAt: number; models: NativeCliModel[] } | undefined
+  for (const file of files.filter((name) => name.endsWith("-cc.json"))) {
+    const data = await readJson(join(dir, file))
+    if (!data) continue
+    const models = parseClaudeModelCatalog(data)
+    const fetchedAt = positive(data.fetchedAt) ?? 0
+    if (models.length > 0 && (!newest || fetchedAt > newest.fetchedAt)) newest = { fetchedAt, models }
+  }
+  return newest?.models ?? []
+}
+
 const READERS: Record<string, () => Promise<NativeCliModel[]>> = {
+  "claude-code": readClaudeCatalogs,
   "codex-cli": async () => {
     const data = await readJson(join(codexHome().path, "models_cache.json"))
     return data ? parseCodexModelsCache(data) : []
@@ -116,6 +215,7 @@ const READERS: Record<string, () => Promise<NativeCliModel[]>> = {
     const data = await readJson(join(homeDir(), ".grok", "models_cache.json"))
     return data ? parseGrokModelsCache(data) : []
   },
+  "muse-cli": readMuseCatalogs,
 }
 
 /**
