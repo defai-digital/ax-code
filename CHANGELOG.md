@@ -32,6 +32,11 @@ changes belong to AX Coder.
   policy-selected `max` to `high`, and keeps an explicit effort as chosen. OpenRouter GLM 5.x gains
   `low`/`high`/`max` effort variants through `reasoning.effort`. A `protocolProfile: "glm5.3"` override keeps working
   as an alias of the new `glm5` family.
+- A hosted request that returns nothing at all is now treated as stuck after a window sized to the prompt (60s plus
+  0.5ms per prompt token, at most the 300s idle window) instead of always waiting 300s. A 120k-token request is
+  retried after about 2 minutes; normal first-response latency there is under 40s. Local engines, private GPUs, and
+  CLI providers keep their full windows, an explicit idle timeout applies to both phases, and
+  `AX_CODE_STREAM_FIRST_DATA_TIMEOUT_MS` overrides the new window.
 - A turn truncated after spending its budget on reasoning is retried at a lower effort (`max` → `high` → `low`)
   instead of re-sending the same request.
 - Permanent Z.AI/Zhipu account errors (exhausted balance or plan quota) are no longer retried, the 1261

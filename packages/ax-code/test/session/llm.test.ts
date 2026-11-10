@@ -4466,6 +4466,102 @@ describe("session.llm.streamIdleWatchdog", () => {
     }
   })
 
+  test("a stuck request fails on the first-data window while start events alone do not count", async () => {
+    let calls = 0
+    const never = new Promise<IteratorResult<unknown>>(() => {})
+    const iterator: AsyncIterator<unknown> = {
+      next: () => {
+        calls++
+        if (calls === 1) return Promise.resolve({ done: false, value: { type: "start" } })
+        if (calls === 2) return Promise.resolve({ done: false, value: { type: "start-step" } })
+        return never
+      },
+    }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
+      idleAbort,
+      idleTimeoutMs: 5_000,
+      firstDataTimeoutMs: 20,
+      providerID: "defai-01-ax-trust-com",
+      modelID: "glm-5.3",
+    })
+    const started = Date.now()
+    await expect(async () => {
+      for await (const _ of guarded.fullStream) {
+        // only the SDK start events arrive
+      }
+    }).rejects.toThrow(/no response from defai-01-ax-trust-com\/glm-5.3 within 0s of the request/)
+    expect(Date.now() - started).toBeLessThan(2_000)
+    expect(idleAbort.signal.aborted).toBe(true)
+  })
+
+  test("after the first model data the regular idle window applies", async () => {
+    let calls = 0
+    const iterator: AsyncIterator<unknown> = {
+      next: () => {
+        calls++
+        if (calls === 1) return Promise.resolve({ done: false, value: { type: "start" } })
+        if (calls === 2) return Promise.resolve({ done: false, value: { type: "reasoning-delta", text: "x" } })
+        // Slower than the first-data window, faster than the idle window.
+        if (calls === 3)
+          return new Promise((resolve) => setTimeout(() => resolve({ done: false, value: { type: "text-delta" } }), 60))
+        return Promise.resolve({ done: true, value: undefined })
+      },
+    }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
+      idleAbort,
+      idleTimeoutMs: 5_000,
+      firstDataTimeoutMs: 20,
+      providerID: "test",
+      modelID: "m",
+    })
+    const seen: unknown[] = []
+    for await (const chunk of guarded.fullStream) seen.push(chunk)
+    expect(seen).toHaveLength(3)
+    expect(idleAbort.signal.aborted).toBe(false)
+  })
+
+  test("streamFirstDataTimeoutMs scales with the prompt on hosted routes only", () => {
+    const keys = ["AX_CODE_STREAM_IDLE_TIMEOUT_MS", "AX_CODE_STREAM_FIRST_DATA_TIMEOUT_MS"] as const
+    const prev = keys.map((key) => process.env[key])
+    try {
+      for (const key of keys) delete process.env[key]
+      const hosted = (promptTokens?: number) =>
+        LLM.streamFirstDataTimeoutMs({ providerID: "defai-01-ax-trust-com", promptTokens })
+      expect(hosted(0)).toBe(60_000)
+      expect(hosted(120_000)).toBe(120_000)
+      // Large prompts keep the full idle window.
+      expect(hosted(1_000_000)).toBe(300_000)
+      expect(hosted(undefined)).toBe(300_000)
+      // Local, private-GPU, AX Engine and CLI routes keep their full windows.
+      expect(LLM.streamFirstDataTimeoutMs({ providerID: "lmstudio", localInference: true, promptTokens: 0 })).toBe(
+        300_000,
+      )
+      expect(LLM.streamFirstDataTimeoutMs({ providerID: "ax-engine", promptTokens: 0 })).toBe(900_000)
+      expect(LLM.streamFirstDataTimeoutMs({ providerID: "codex-cli", promptTokens: 0 })).toBe(900_000)
+      // An explicit idle window applies to both phases.
+      expect(
+        LLM.streamFirstDataTimeoutMs({ providerID: "zai", agent: { streamIdleTimeoutMs: 45_000 }, promptTokens: 0 }),
+      ).toBe(45_000)
+      process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = "400000"
+      expect(hosted(0)).toBe(400_000)
+      process.env["AX_CODE_STREAM_FIRST_DATA_TIMEOUT_MS"] = "7000"
+      expect(hosted(500_000)).toBe(7_000)
+    } finally {
+      keys.forEach((key, index) => {
+        if (prev[index] === undefined) delete process.env[key]
+        else process.env[key] = prev[index]
+      })
+    }
+  })
+
+  test("roughPromptTokens estimates from characters", () => {
+    expect(
+      LLM.roughPromptTokens(["abcd"], [{ role: "user", content: "x".repeat(400) }] as ModelMessage[]),
+    ).toBeGreaterThan(100)
+  })
+
   test("CLI providers use a longer default stream idle timeout (#382)", () => {
     const prev = process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
     try {

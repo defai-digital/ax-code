@@ -39,6 +39,9 @@ The supported runtime stack is:
 | Stream idle too long                          | Abort turn via stream idle watchdog (configurable) |
 
 Override stream idle timeout with `AX_CODE_STREAM_IDLE_TIMEOUT_MS` (`0` disables).
+Before the first model data, hosted routes use a shorter window sized to the prompt (60s plus 0.5ms per prompt token,
+at most the idle timeout), so a request stuck upstream is retried sooner. Override it with
+`AX_CODE_STREAM_FIRST_DATA_TIMEOUT_MS`; an explicit `AX_CODE_STREAM_IDLE_TIMEOUT_MS` applies to both phases.
 
 ## Permission prompts
 

@@ -15,6 +15,7 @@ import {
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
 import { ObservedWindow } from "@/provider/observed-window"
+import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
 import { observedCapabilitiesForModel } from "@/provider/resolved-model"
 import { TokenLedger } from "@/provider/token-ledger"
 import { FILE_TOUCHING_TOOLS } from "@/tool/mutation-tools"
@@ -583,6 +584,7 @@ export namespace LLM {
     // When the remaining window is at or below the output floor the clamp
     // stays off: the correct action is the existing preflight/compaction
     // path, not a tiny max_tokens.
+    let promptTokenEstimate: number | undefined
     if (input.model.limit.context > 0 && input.messageIDs?.length) {
       try {
         const routeKey = ObservedWindow.routeKeyFor(input.model)
@@ -610,6 +612,7 @@ export namespace LLM {
           tail: { system: input.system, messages: filteredMessages },
           tools,
         })
+        promptTokenEstimate = breakdown.total
         // ADR-139 D3/D4: a calibrated (possibly shrunken) window is the real
         // ceiling. Clamping against the catalog limit would let a shrunken
         // route send prompt + output past its window and re-enter the
@@ -778,6 +781,12 @@ export namespace LLM {
     // Bound both failure modes while allowing local tool execution to pause
     // the clocks below.
     const idleTimeoutMs = streamIdleTimeoutMs(input.model.providerID, input.agent)
+    const firstDataTimeoutMs = streamFirstDataTimeoutMs({
+      providerID: input.model.providerID,
+      agent: input.agent,
+      localInference,
+      promptTokens: promptTokenEstimate ?? roughPromptTokens(input.system, input.messages),
+    })
     const maxDurationMs = streamMaxDurationMs(input.model.providerID)
     const idleAbort = new AbortController()
     const streamAbort = input.abort ? AbortSignal.any([input.abort, idleAbort.signal]) : idleAbort.signal
@@ -881,6 +890,7 @@ export namespace LLM {
     const guarded = attachStreamIdleWatchdog(output, {
       idleAbort,
       idleTimeoutMs,
+      firstDataTimeoutMs,
       maxDurationMs,
       providerID: input.model.providerID,
       modelID: input.model.id,
@@ -1054,6 +1064,57 @@ export namespace LLM {
     return STREAM_IDLE_TIMEOUT_MS
   }
 
+  // A hosted route answers a 114k-token uncached GLM 5.3 Flash prompt in ~36s
+  // and GLM 5.3 in ~7s; a request that has produced nothing after minutes is a
+  // stuck upstream, not prefill. Scale the wait for the first model data with
+  // the prompt (2,000 tok/s prefill floor plus a fixed allowance, >3x the
+  // observed latency) instead of always waiting the full idle window, so a
+  // stuck request is retried minutes sooner. Large prompts keep the full window.
+  const FIRST_DATA_BASE_MS = 60_000
+  const FIRST_DATA_MS_PER_PROMPT_TOKEN = 0.5
+
+  /** Rough prompt size when the token ledger has no estimate; only sizes a timeout. */
+  export function roughPromptTokens(system: readonly string[], messages: readonly ModelMessage[]): number {
+    let chars = 0
+    for (const part of system) chars += part.length
+    try {
+      chars += JSON.stringify(messages).length
+    } catch {
+      return Number.POSITIVE_INFINITY
+    }
+    return Math.ceil(chars / 4)
+  }
+
+  export function streamFirstDataTimeoutMs(input: {
+    providerID?: string
+    agent?: { streamIdleTimeoutMs?: number }
+    localInference?: boolean
+    promptTokens?: number
+  }): number {
+    const idle = streamIdleTimeoutMs(input.providerID, input.agent)
+    const raw = process.env["AX_CODE_STREAM_FIRST_DATA_TIMEOUT_MS"]
+    if (raw !== undefined && raw !== "") {
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed
+    }
+    // An explicit idle window (env or agent) is the user's choice for both phases.
+    const idleEnv = process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+    if ((idleEnv !== undefined && idleEnv !== "") || input.agent?.streamIdleTimeoutMs !== undefined) return idle
+    if (idle <= 0) return idle
+    // Local engines, private GPUs and CLI bridges legitimately prefill or start
+    // up silently for minutes.
+    if (
+      input.localInference ||
+      input.providerID === AX_ENGINE_PROVIDER_ID ||
+      isCliProviderID(input.providerID) ||
+      (input.providerID !== undefined && isDedicatedPrivateGpuProviderID(input.providerID))
+    )
+      return idle
+    const tokens = input.promptTokens
+    if (tokens === undefined || !Number.isFinite(tokens) || tokens < 0) return idle
+    return Math.min(idle, FIRST_DATA_BASE_MS + Math.ceil(tokens * FIRST_DATA_MS_PER_PROMPT_TOKEN))
+  }
+
   export function streamMaxDurationMs(providerID?: string): number {
     const raw = process.env["AX_CODE_STREAM_MAX_DURATION_MS"]
     if (raw !== undefined && raw !== "") {
@@ -1070,12 +1131,20 @@ export namespace LLM {
     options: {
       idleAbort: AbortController
       idleTimeoutMs: number
+      /**
+       * Silence allowed before the first model data (anything after the SDK's
+       * own start / start-step events). Defaults to idleTimeoutMs.
+       */
+      firstDataTimeoutMs?: number
       maxDurationMs?: number
       providerID: string
       modelID: string
     },
   ): T {
     const maxDurationMs = options.maxDurationMs ?? 0
+    const firstDataTimeoutMs = options.firstDataTimeoutMs ?? options.idleTimeoutMs
+    let receivedModelData = false
+    const idleWindowMs = () => (receivedModelData ? options.idleTimeoutMs : firstDataTimeoutMs)
 
     // Manual race (see util/timeout.ts): once the watchdog fires, the still-
     // pending inner next() must not become an unhandled rejection when the
@@ -1110,7 +1179,8 @@ export namespace LLM {
       rejectPending?.(error)
     }
     const armIdle = () => {
-      if (options.idleTimeoutMs <= 0) return
+      const windowMs = idleWindowMs()
+      if (windowMs <= 0) return
       if (idleTimer) {
         // Re-base the existing handle instead of allocating a new timer per
         // chunk; refreshing an armed timer keeps one allocation per stream.
@@ -1129,10 +1199,12 @@ export namespace LLM {
         }
         fire(
           new Error(
-            `Model stream stalled — no data from ${options.providerID}/${options.modelID} for ${Math.round(options.idleTimeoutMs / 1000)}s; the request was aborted. This is usually a provider or network issue — retry, or raise AX_CODE_STREAM_IDLE_TIMEOUT_MS.`,
+            receivedModelData
+              ? `Model stream stalled — no data from ${options.providerID}/${options.modelID} for ${Math.round(windowMs / 1000)}s; the request was aborted. This is usually a provider or network issue — retry, or raise AX_CODE_STREAM_IDLE_TIMEOUT_MS.`
+              : `Model stream stalled — no response from ${options.providerID}/${options.modelID} within ${Math.round(windowMs / 1000)}s of the request; the request was aborted. This is usually a stuck provider or gateway — retry, or raise AX_CODE_STREAM_FIRST_DATA_TIMEOUT_MS.`,
           ),
         )
-      }, options.idleTimeoutMs)
+      }, windowMs)
       idleTimer.unref?.()
     }
     const armDuration = () => {
@@ -1177,6 +1249,12 @@ export namespace LLM {
     const trackChunk = (chunk: unknown) => {
       if (!chunk || typeof chunk !== "object") return
       const value = chunk as { type?: unknown; providerExecuted?: unknown }
+      if (!receivedModelData && value.type !== "start" && value.type !== "start-step") {
+        receivedModelData = true
+        // The armed timer carries the first-data window; the next race arms
+        // the regular idle window.
+        if (firstDataTimeoutMs !== options.idleTimeoutMs) clearIdle()
+      }
       if (value.providerExecuted === true) return
       if (value.type === "tool-call") {
         if (executingToolCalls === 0) {
