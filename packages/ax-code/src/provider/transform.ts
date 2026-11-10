@@ -1478,8 +1478,9 @@ export namespace ProviderTransform {
     return { ...rest, thinking: { type: "disabled" } }
   }
 
-  export type ReasoningEffortCap = "low" | "high"
   const GLM5_EFFORT_ORDER = ["low", "high", "max"] as const
+  /** Most reasoning-effort levels a prompt can step down (max -> high -> low). */
+  export const MAX_REASONING_EFFORT_STEP_DOWN = GLM5_EFFORT_ORDER.length - 1
 
   /**
    * GLM 5.x (5.3 and later) reasons at the server default `max` when no effort is sent, and
@@ -1491,13 +1492,16 @@ export namespace ProviderTransform {
    *
    * - Auto (no explicit choice): `low`; policy-selected `max` (deep) becomes `high`.
    * - An explicit user variant or configured effort is kept as chosen.
-   * - `cap` (set after a reasoning-dominated truncation) bounds every case,
-   *   treating an unset effort as the server default `max`.
+   * - `stepDown` (raised after each reasoning-dominated truncation) lowers the
+   *   effort that would be sent by that many levels, treating an unset effort
+   *   as the server default `max`. It is relative to the sent effort, so an
+   *   explicit `high` drops to `low` on the first truncation instead of
+   *   re-sending the request that was just truncated.
    */
   export function boundChatReasoningEffort(
     model: Provider.Model,
     options: Record<string, any>,
-    input: { explicit: boolean; cap?: ReasoningEffortCap },
+    input: { explicit: boolean; stepDown?: number },
   ): Record<string, any> {
     if (model.capabilities.reasoning === false) return options
     // Z.AI-style routes take top-level `reasoning_effort`; OpenRouter takes
@@ -1511,17 +1515,17 @@ export namespace ProviderTransform {
     if (nested && reasoning && current === undefined && Object.keys(reasoning).length > 0) return options
     let effort: (typeof GLM5_EFFORT_ORDER)[number] | undefined = current
     if (!input.explicit) effort = effort === undefined ? "low" : effort === "max" ? "high" : effort
-    if (input.cap) {
+    if (input.stepDown && input.stepDown > 0) {
       const rank = GLM5_EFFORT_ORDER.indexOf(effort ?? "max")
-      if (rank > GLM5_EFFORT_ORDER.indexOf(input.cap)) effort = input.cap
+      effort = GLM5_EFFORT_ORDER[Math.max(0, rank - input.stepDown)]
     }
     if (effort === current) return options
     return nested ? { ...options, reasoning: { ...reasoning, effort } } : { ...options, reasoningEffort: effort }
   }
 
-  /** Next lower cap after a turn spent its output budget on reasoning. */
-  export function lowerReasoningEffortCap(cap?: ReasoningEffortCap): ReasoningEffortCap {
-    return cap === undefined ? "high" : "low"
+  /** Next step-down after a turn spent its output budget on reasoning. */
+  export function lowerReasoningEffortStepDown(stepDown?: number): number {
+    return Math.min(MAX_REASONING_EFFORT_STEP_DOWN, (stepDown ?? 0) + 1)
   }
 
   export function smallOptions(model: Provider.Model, providerOptions?: Record<string, any>) {

@@ -138,11 +138,12 @@ export namespace LLM {
      */
     maxOutputTokens?: number
     /**
-     * Upper bound on chat reasoning effort for this request. The prompt loop
-     * lowers it after a turn spends its output budget on reasoning, so the
-     * recovery turn is not the same request that was just truncated.
+     * Levels to lower chat reasoning effort below what this request would
+     * send. The prompt loop raises it after a turn spends its output budget
+     * on reasoning, so the recovery turn is not the same request that was
+     * just truncated.
      */
-    reasoningEffortCap?: ProviderTransform.ReasoningEffortCap
+    reasoningEffortStepDown?: number
     /** Replay correlation for the final AX/AI-SDK pre-adapter request boundary. */
     replay?: {
       messageID?: string
@@ -428,7 +429,7 @@ export namespace LLM {
       ? merged
       : ProviderTransform.boundChatReasoningEffort(input.model, merged, {
           explicit: reasoningPolicyDecision.unappliedReason === "explicit_override",
-          cap: input.reasoningEffortCap,
+          stepDown: input.reasoningEffortStepDown,
         })
     const options: Record<string, any> = ProviderTransform.sanitizeOptions(
       input.model,

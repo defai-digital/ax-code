@@ -2577,7 +2577,7 @@ describe("session.prompt flow", () => {
     }
   })
 
-  test("lowers the reasoning effort cap after reasoning-dominated truncations", async () => {
+  test("lowers the reasoning effort after reasoning-dominated truncations", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -2634,8 +2634,8 @@ describe("session.prompt flow", () => {
             parts: [{ type: "text", text: "create a small website" }],
           })
 
-          const caps = streamSpy!.mock.calls.map(([input]) => (input as LLM.StreamInput).reasoningEffortCap)
-          expect(caps.slice(0, 3)).toEqual([undefined, "high", "low"])
+          const steps = streamSpy!.mock.calls.map(([input]) => (input as LLM.StreamInput).reasoningEffortStepDown)
+          expect(steps.slice(0, 3)).toEqual([undefined, 1, 2])
           await Session.remove(session.id)
         },
       })

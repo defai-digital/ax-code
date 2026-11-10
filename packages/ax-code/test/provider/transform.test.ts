@@ -4287,15 +4287,28 @@ describe("GLM 5.x reasoning effort bounds", () => {
     }
   })
 
-  test("keeps an explicit effort, but a truncation cap still bounds it", () => {
+  test("keeps an explicit effort, but a truncation step-down still lowers it", () => {
     expect(bound(zai, { reasoningEffort: "max" }, { explicit: true })).toEqual({ reasoningEffort: "max" })
     expect(bound(zai, {}, { explicit: true })).toEqual({})
-    expect(bound(zai, { reasoningEffort: "max" }, { explicit: true, cap: "high" })).toEqual({
+    expect(bound(zai, { reasoningEffort: "max" }, { explicit: true, stepDown: 1 })).toEqual({
       reasoningEffort: "high",
     })
-    // Unset explicit effort means the server default max, so the cap applies.
-    expect(bound(zai, {}, { explicit: true, cap: "low" })).toEqual({ reasoningEffort: "low" })
-    expect(bound(zai, { reasoningEffort: "low" }, { explicit: true, cap: "high" })).toEqual({ reasoningEffort: "low" })
+    // Unset explicit effort means the server default max.
+    expect(bound(zai, {}, { explicit: true, stepDown: 1 })).toEqual({ reasoningEffort: "high" })
+    expect(bound(zai, {}, { explicit: true, stepDown: 2 })).toEqual({ reasoningEffort: "low" })
+    expect(bound(zai, { reasoningEffort: "low" }, { explicit: true, stepDown: 1 })).toEqual({ reasoningEffort: "low" })
+  })
+
+  test("the first truncation step-down changes an explicit high effort", () => {
+    // Regression: an absolute "high" cap re-sent the explicit-high request
+    // that had just been truncated.
+    expect(bound(zai, { reasoningEffort: "high" }, { explicit: true, stepDown: 1 })).toEqual({
+      reasoningEffort: "low",
+    })
+    // Auto max is sent as high, so one step lowers it to low.
+    expect(bound(zai, { reasoningEffort: "max" }, { explicit: false, stepDown: 1 })).toEqual({
+      reasoningEffort: "low",
+    })
   })
 
   test("OpenRouter GLM 5.3 gets effort variants and bounds through reasoning.effort", () => {
@@ -4309,7 +4322,7 @@ describe("GLM 5.x reasoning effort bounds", () => {
     expect(bound(openrouter, { reasoning: { effort: "max" } }, { explicit: false })).toEqual({
       reasoning: { effort: "high" },
     })
-    expect(bound(openrouter, { reasoning: { effort: "max" } }, { explicit: true, cap: "low" })).toEqual({
+    expect(bound(openrouter, { reasoning: { effort: "max" } }, { explicit: true, stepDown: 2 })).toEqual({
       reasoning: { effort: "low" },
     })
     // A caller-supplied OpenRouter shape without an effort level is left alone.
@@ -4345,9 +4358,9 @@ describe("GLM 5.x reasoning effort bounds", () => {
     )
   })
 
-  test("each reasoning-dominated truncation lowers the cap one level", () => {
-    expect(ProviderTransform.lowerReasoningEffortCap(undefined)).toBe("high")
-    expect(ProviderTransform.lowerReasoningEffortCap("high")).toBe("low")
-    expect(ProviderTransform.lowerReasoningEffortCap("low")).toBe("low")
+  test("each reasoning-dominated truncation lowers the effort one more level", () => {
+    expect(ProviderTransform.lowerReasoningEffortStepDown(undefined)).toBe(1)
+    expect(ProviderTransform.lowerReasoningEffortStepDown(1)).toBe(2)
+    expect(ProviderTransform.lowerReasoningEffortStepDown(2)).toBe(2)
   })
 })

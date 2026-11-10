@@ -597,7 +597,7 @@ export namespace SessionPrompt {
     // Lowered after a turn ends `length` having spent its budget on hidden
     // reasoning; kept for the rest of this prompt so later turns do not hit
     // the same wall.
-    let reasoningEffortCap: ProviderTransform.ReasoningEffortCap | undefined
+    let reasoningEffortStepDown: number | undefined
     let activeTurnProfile: TurnExecutionProfile | undefined
     // The AX Engine read-only ladder's state, grouped as one object so the
     // loop's scope carries a single name for this guard instead of six loose
@@ -1508,7 +1508,7 @@ export namespace SessionPrompt {
             config: cfg,
             setup: providerSetup,
             maxOutputTokens: maxOutputTokensForRequest,
-            reasoningEffortCap,
+            reasoningEffortStepDown,
           },
           {
             synthesisOnly: guardedSynthesis,
@@ -1941,7 +1941,7 @@ export namespace SessionPrompt {
           // and includes it otherwise; reasoning above half of `output` holds
           // for a reasoning-dominated turn under either convention.
           if (truncatedUsage.reasoning * 2 > truncatedUsage.output) {
-            reasoningEffortCap = ProviderTransform.lowerReasoningEffortCap(reasoningEffortCap)
+            reasoningEffortStepDown = ProviderTransform.lowerReasoningEffortStepDown(reasoningEffortStepDown)
             log.info("reasoning-dominated truncation; lowering reasoning effort", {
               command: "session.prompt.loop",
               status: "retry",
@@ -1949,7 +1949,7 @@ export namespace SessionPrompt {
               sessionID,
               reasoningTokens: truncatedUsage.reasoning,
               outputTokens: truncatedUsage.output,
-              reasoningEffortCap,
+              reasoningEffortStepDown,
             })
           }
           const axEngineRecovery = model.providerID === AX_ENGINE_PROVIDER_ID
