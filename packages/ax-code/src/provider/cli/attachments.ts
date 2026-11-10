@@ -2,6 +2,7 @@ import type { LanguageModelV3Prompt } from "@ai-sdk/provider"
 import { mkdtemp, writeFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
+import { decodeBase64Bytes, decodeDataUrlBytes } from "../../util/data-url"
 
 // CLI providers (codex-cli, grok-build-cli, kimi-cli, …) take images
 // and other files as paths their own file/image tools read — not as inline text.
@@ -43,25 +44,6 @@ function extensionFor(mediaType: string, filename?: string): string {
   return map[mediaType.toLowerCase()] ?? ".bin"
 }
 
-function decodeBase64Bytes(value: string): Uint8Array | undefined {
-  const normalized = value.replace(/\s+/g, "")
-  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return undefined
-  return new Uint8Array(Buffer.from(normalized, "base64"))
-}
-
-function decodeDataUrl(value: string): { bytes?: Uint8Array } {
-  const comma = value.indexOf(",")
-  if (comma === -1) return {}
-  const meta = value.slice("data:".length, comma)
-  const payload = value.slice(comma + 1)
-  try {
-    if (/;base64/i.test(meta)) return { bytes: decodeBase64Bytes(payload) }
-    return { bytes: new Uint8Array(Buffer.from(decodeURIComponent(payload), "utf8")) }
-  } catch {
-    return {}
-  }
-}
-
 function isDataUrl(value: string) {
   return /^data:/i.test(value)
 }
@@ -72,10 +54,10 @@ function decodeFileData(data: unknown): { bytes?: Uint8Array; url?: string } {
   if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) return { bytes: new Uint8Array(data) }
   if (data instanceof URL) {
     const value = data.toString()
-    return isDataUrl(value) ? decodeDataUrl(value) : { url: value }
+    return isDataUrl(value) ? { bytes: decodeDataUrlBytes(value) } : { url: value }
   }
   if (typeof data === "string") {
-    if (isDataUrl(data)) return decodeDataUrl(data)
+    if (isDataUrl(data)) return { bytes: decodeDataUrlBytes(data) }
     if (/^https?:\/\//i.test(data)) return { url: data }
     // Bare string is assumed to be base64-encoded bytes.
     return { bytes: decodeBase64Bytes(data) }

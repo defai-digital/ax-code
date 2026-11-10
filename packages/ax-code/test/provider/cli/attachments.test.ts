@@ -1,5 +1,6 @@
 import { test, expect, describe } from "vitest"
 import { existsSync } from "node:fs"
+import { readFile } from "node:fs/promises"
 import type { LanguageModelV3Prompt } from "@ai-sdk/provider"
 import { materializeCliAttachments } from "../../../src/provider/cli/attachments"
 
@@ -38,6 +39,41 @@ describe("materializeCliAttachments", () => {
       expect(result.refs).toHaveLength(1)
       expect(result.refs[0]!.path!.endsWith(".jpg")).toBe(true)
       expect(existsSync(result.refs[0]!.path!)).toBe(true)
+    } finally {
+      await result.cleanup()
+    }
+  })
+
+  test.each([false, true])("preserves percent-encoded binary data URL bytes (URL object: %s)", async (asUrl) => {
+    const bytes = Buffer.from(Array.from({ length: 256 }, (_, index) => index))
+    const encoded = [...bytes].map((byte) => `%${byte.toString(16).padStart(2, "0")}`).join("")
+    const dataUrl = `data:application/octet-stream,${encoded}`
+    const prompt: LanguageModelV3Prompt = [
+      {
+        role: "user",
+        content: [{ type: "file", data: asUrl ? new URL(dataUrl) : dataUrl, mediaType: "application/octet-stream" }],
+      },
+    ]
+    const result = await materializeCliAttachments(prompt)
+    try {
+      expect(result.refs).toHaveLength(1)
+      expect(await readFile(result.refs[0]!.path!)).toEqual(bytes)
+    } finally {
+      await result.cleanup()
+    }
+    expect(existsSync(result.refs[0]!.path!)).toBe(false)
+  })
+
+  test.each([
+    ["data:text/plain;base64,SGVsbG8%3D", "Hello"],
+    ["data:text/plain;base64=disabled,SGVsbG8=", "SGVsbG8="],
+    ["data:text/plain;base64mode=off,SGVsbG8=", "SGVsbG8="],
+  ])("decodes attachment data URL %s without confusing MIME parameters with encoding", async (data, expected) => {
+    const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "file", data, mediaType: "text/plain" }] }]
+    const result = await materializeCliAttachments(prompt)
+    try {
+      expect(result.refs).toHaveLength(1)
+      expect(await readFile(result.refs[0]!.path!, "utf8")).toBe(expected)
     } finally {
       await result.cleanup()
     }

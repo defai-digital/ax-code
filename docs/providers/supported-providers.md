@@ -188,6 +188,10 @@ CLI providers reuse a local coding-agent CLI and its login/session instead of st
 AX Code runs the CLI headlessly for each turn and reads its structured output; the CLI runs its own agent loop and
 tools.
 
+User file and image attachments are written to temporary files for the CLI to read. Base64 and percent-encoded data
+URLs preserve the original file bytes; remote HTTP(S) URLs remain references. Temporary files are removed when the
+CLI process exits, including cancellation and spawn failures.
+
 AX Code only bridges CLIs whose source code is public, so the bridge's behavior can be checked against the code it
 drives. See [Why some coding-agent CLIs are not supported](#why-some-coding-agent-clis-are-not-supported).
 

@@ -154,6 +154,14 @@ describe("prompt file attachment", () => {
     ])
   })
 
+  test.each(["DATA:text/plain;BASE64,SGVsbG8=", "data:text/plain;base64,SGVsbG8%3D"])(
+    "decodes text data URL %s into prompt context",
+    async (url) => {
+      const parts = await resolveAttachment({ url })
+      expect(parts).toMatchObject([{ type: "text" }, { type: "text", text: "Hello" }, { type: "file" }])
+    },
+  )
+
   test("normalizes textual files and rejects binary files without reading them", async () => {
     await using tmp = await tmpdir()
     const markdownPath = path.join(tmp.path, "notes.md")

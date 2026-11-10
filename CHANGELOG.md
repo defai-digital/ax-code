@@ -8,6 +8,9 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- CLI attachments preserve arbitrary bytes in percent-encoded data URLs instead of silently dropping non-UTF-8
+  images and files. CLI and text attachments share decoding for escaped base64 payloads and case-insensitive
+  `;base64` markers, without mistaking MIME parameters such as `;base64=disabled` for an encoding flag.
 - MiniMax CLI model discovery parses the top-level YAML `defaultModel` instead of matching text in nested mappings
   or block strings. Empty, non-string, duplicate, and malformed settings fall back to the CLI default; quoted keys,
   escaped strings, and block scalars resolve correctly.
