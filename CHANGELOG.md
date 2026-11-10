@@ -32,6 +32,15 @@ changes belong to AX Coder.
   policy-selected `max` to `high`, and keeps an explicit effort as chosen. OpenRouter GLM 5.x gains
   `low`/`high`/`max` effort variants through `reasoning.effort`. A `protocolProfile: "glm5.3"` override keeps working
   as an alias of the new `glm5` family.
+- MiniMax Code CLI (`minimax-cli`) works with mcode 0.7.6, whose renamed stream-json fields left AX Code with no
+  assistant text, so login and every bridged run reported an empty answer.
+- MiniMax M3.1 and later M3.x models (including M3.1-Flash) no longer get a `none` reasoning variant or a
+  disabled-thinking request, which the API rejects because thinking is always on from M3.1. M3.1-Flash on
+  OpenAI-compatible routes such as AX Trust now gets the M3 family's chat settings (`reasoning_split`), not a generic
+  template switch. M3 keeps its switchable thinking.
+- MiniMax M3-family models default to the vendor's 512k context window on every route instead of the 1M catalog
+  window, matching MiniMax Code. Compaction now happens before sessions reach the higher-usage tier. A hand-written
+  `limit.context` in provider config still opts into 1M.
 - A hosted request that returns nothing at all is now treated as stuck after a window sized to the prompt (60s plus
   0.5ms per prompt token, at most the 300s idle window) instead of always waiting 300s. A 120k-token request is
   retried after about 2 minutes; normal first-response latency there is under 40s. Local engines, private GPUs, and

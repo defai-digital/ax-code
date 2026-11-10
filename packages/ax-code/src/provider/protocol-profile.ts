@@ -38,6 +38,25 @@ export function isGlm5ModelSegment(segment: string): boolean {
   return match !== null && Number(match[1]) >= GLM5_FIRST_MINOR
 }
 
+// MiniMax M3 family: M3, M3.1, M3.1-Flash, and later M3.x releases. M3 lets
+// thinking be disabled; from M3.1 on thinking is always on and the API
+// rejects `thinking: { type: "disabled" }` (verified on M3.1-Flash).
+const MINIMAX_M3_SEGMENT = /^minimax-m3(?:\.(\d+))?(?:-flash)?$/
+
+/** Final model-id segment names a MiniMax M3-family SKU. */
+export function isMiniMaxM3ModelSegment(segment: string): boolean {
+  return MINIMAX_M3_SEGMENT.test(segment.toLowerCase())
+}
+
+/**
+ * M3.1 and later M3.x: thinking cannot be turned off. Matches inside the final
+ * segment so deployment suffixes (`MiniMax-M3.1-Flash-FP8`) are covered.
+ */
+export function isMiniMaxThinkingForcedOn(modelId: string): boolean {
+  const match = /(?:^|[^a-z0-9])minimax-m3\.(\d+)(?!\d)/.exec(modelIdFinalSegment(modelId).toLowerCase())
+  return match !== null && Number(match[1]) >= 1
+}
+
 /**
  * OpenRouter serves GLM 5.x behind its own `reasoning: { effort }` object
  * instead of Z.AI's `reasoning_effort`, so it is not part of the glm5 chat
@@ -95,7 +114,10 @@ function reasoningFamily(model: ProtocolModel): ChatReasoningFamily | undefined 
     return undefined
   if (isGlm5ModelSegment(segment)) return "glm5"
   if (/^deepseek-(?:v4-(?:pro|flash)|flash)$/.test(id)) return "deepseek-v4"
-  if (id === "minimax-m3" || id === "minimax-m2.7") return id
+  // Exact upstream ids only: vendor-namespaced repository ids
+  // (`MiniMaxAI/MiniMax-M3`) are private deployments with <mm:think> tags.
+  if (isMiniMaxM3ModelSegment(id)) return "minimax-m3"
+  if (id === "minimax-m2.7") return id
   return undefined
 }
 

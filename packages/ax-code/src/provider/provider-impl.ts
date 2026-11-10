@@ -1,4 +1,5 @@
 import { isMiniMaxM3ChatRequest, normalizeMiniMaxReasoning } from "./minimax-reasoning"
+import { applyDefaultContextWindow } from "./context-defaults"
 import { RoutePolicy } from "./route-policy"
 import z from "zod"
 import fuzzysort from "fuzzysort"
@@ -610,6 +611,14 @@ export namespace Provider {
           delete provider.models[modelID]
           continue
         }
+
+        // Managed (AX Trust / custom API) entries store discovered card limits,
+        // so only a hand-written provider's limit.context is a user choice.
+        applyDefaultContextWindow(
+          model,
+          !CustomApiProvider.isManaged(configProvider) &&
+            typeof configProvider?.models?.[modelID]?.limit?.context === "number",
+        )
 
         try {
           model.variants = mapValues(ProviderTransform.variants(model), (v) => v)

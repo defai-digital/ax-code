@@ -14,7 +14,13 @@ import { AX_ENGINE_PROVIDER_ID, AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID } fr
 import { cliEffortVariants, cliModelEfforts } from "./cli/effort"
 import { wrapThinkTagText, type ThinkTagName } from "./think-tags"
 import { PromptCachePolicy } from "./prompt-cache-policy"
-import { isKimiProtocol, isOpenRouterGlm5, resolveProtocolProfile } from "./protocol-profile"
+import {
+  isKimiProtocol,
+  isMiniMaxM3ModelSegment,
+  isMiniMaxThinkingForcedOn,
+  isOpenRouterGlm5,
+  resolveProtocolProfile,
+} from "./protocol-profile"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -701,10 +707,17 @@ export namespace ProviderTransform {
     return segment.includes("minimax") || api.includes("minimax")
   }
 
+  // Broad on purpose: quantized private-GPU SKUs (`MiniMax-M3-MXFP8`) need
+  // the M3 think-tag handling too. Native Chat contracts use the exact
+  // protocol family instead.
   function isMinimaxM3(model: Provider.Model): boolean {
     const segment = modelIdFinalSegment(model.id).toLowerCase()
     const api = model.api.id.toLowerCase()
     return segment.includes("minimax-m3") || api.includes("minimax-m3")
+  }
+
+  function minimaxThinkingForcedOn(model: Provider.Model): boolean {
+    return isMiniMaxThinkingForcedOn(model.api.id) || isMiniMaxThinkingForcedOn(model.id)
   }
 
   // GLM 5.2 across every catalog spelling: `glm-5.2`, `glm-5-2`, `glm5.2`,
@@ -964,6 +977,9 @@ export namespace ProviderTransform {
   function minimaxM3ReasoningVariants(model: Provider.Model): Record<string, Record<string, any>> | undefined {
     if (!isMinimaxM3(model)) return undefined
     if (!["@ai-sdk/anthropic", "@ai-sdk/openai-compatible"].includes(model.api.npm)) return undefined
+    // M3.1+ always thinks: a `none` variant would send the rejected disabled
+    // shape, and `thinking` would only restate the default.
+    if (minimaxThinkingForcedOn(model)) return {}
     // PAI / vLLM MiniMax uses <mm:think> tags, not Anthropic thinking blocks.
     if (isPrivateGpuProvider(model.providerID)) return undefined
     if (["nvidia", "lilac"].includes(model.providerID)) {
@@ -1372,6 +1388,13 @@ export namespace ProviderTransform {
             }
     }
 
+    // M3.1+ rejects disabled thinking on every route; drop a configured or
+    // policy-supplied disable instead of sending a request that 400s.
+    if (isMinimaxM3(model) && minimaxThinkingForcedOn(model) && result.thinking?.type === "disabled") {
+      const { thinking: _thinking, ...rest } = result
+      result = rest
+    }
+
     if ((family === "deepseek-v4" || family === "minimax-m3") && result.thinking?.type === "disabled") {
       const { reasoningEffort: _effort, reasoning_effort: _snakeEffort, ...rest } = result
       result = rest
@@ -1508,7 +1531,10 @@ export namespace ProviderTransform {
     if (isOpenRouterGlm5(model) && model.capabilities.reasoning !== false) return { reasoning: { effort: "low" } }
     if (family === "deepseek-v4") return { thinking: { type: "disabled" } }
     if (family === "qwen3.8") return { enable_thinking: false }
-    if (family === "minimax-m3") return { thinking: { type: "disabled" }, reasoning_split: true }
+    if (family === "minimax-m3")
+      return minimaxThinkingForcedOn(model)
+        ? { reasoning_split: true }
+        : { thinking: { type: "disabled" }, reasoning_split: true }
     if (family === "minimax-m2.7") return { reasoning_split: true }
 
     if (isOrnithFamily(model) || model.providerID === AX_ENGINE_PROVIDER_ID) {

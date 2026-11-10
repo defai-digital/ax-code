@@ -1,4 +1,5 @@
 import { modelIdFinalSegment } from "./model-id"
+import { isMiniMaxM3ModelSegment } from "./protocol-profile"
 import { isRecord } from "../util/record"
 import { parseJsonResult } from "../util/json-value"
 
@@ -8,7 +9,7 @@ export function isMiniMaxM3ChatRequest(npm: string, body: unknown): boolean {
   if (npm !== "@ai-sdk/openai-compatible" || typeof body !== "string") return false
   const parsed = parseJsonResult(body)
   if (!parsed.ok || !isRecord(parsed.value) || typeof parsed.value.model !== "string") return false
-  return /^minimax-m3$/i.test(modelIdFinalSegment(parsed.value.model)) && parsed.value.stream === true
+  return isMiniMaxM3ModelSegment(modelIdFinalSegment(parsed.value.model)) && parsed.value.stream === true
 }
 
 function normalizeEvent(event: string): string {
