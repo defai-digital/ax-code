@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
 import { pathToFileURL } from "url"
-import { defaultModel, parseModelSelection, parseUri } from "../../src/acp/agent-adapter"
+import { defaultModel, modelVariantsFromProviders, parseModelSelection, parseUri } from "../../src/acp/agent-adapter"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 
 function configWithProviders(providers: Array<{ id: string; models: Record<string, unknown> }>) {
   return {
@@ -139,6 +140,56 @@ describe("ACP agent adapter", () => {
       model: { providerID: "openai", modelID: "gpt-5" },
       variant: "fast",
     })
+  })
+
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "rejects an unadvertised inherited model or variant named %s",
+    (name) => {
+      const providers = [{ id: "openai", models: { "gpt-5": { variants: { high: {} } } } }]
+      expect(() => parseModelSelection(`openai/${name}`, providers)).toThrow("Unknown model in ACP model selection")
+      expect(() => parseModelSelection(`openai/gpt-5/${name}`, providers)).toThrow(
+        "Unknown model in ACP model selection",
+      )
+    },
+  )
+
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "default model selection ignores an unadvertised pin named %s",
+    async (modelID) => {
+      const config = configWithProviders([{ id: "openai", models: { "gpt-5": { id: "gpt-5" } } }])
+      config.sdk.config.get = async () => ({ data: { model: `openai/${modelID}` } })
+      expect(await defaultModel(config)).toEqual({ providerID: "openai", modelID: "gpt-5" })
+    },
+  )
+
+  test("does not list variants of an inherited model", () => {
+    const providers = [{ id: "openai", models: Object.create({ phantom: { variants: { high: {} } } }) }]
+    expect(
+      modelVariantsFromProviders(providers, {
+        providerID: ProviderID.make("openai"),
+        modelID: ModelID.make("phantom"),
+      }),
+    ).toEqual([])
+    expect(() => parseModelSelection("openai/phantom/high", providers)).toThrow("Unknown model in ACP model selection")
+  })
+
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "accepts explicitly advertised models and variants named %s",
+    async (name) => {
+      const providers = [{ id: "openai", models: { [name]: { id: name, variants: { [name]: {} } } } }]
+      const model = { providerID: ProviderID.make("openai"), modelID: ModelID.make(name) }
+      expect(parseModelSelection(`openai/${name}`, providers)).toEqual({ model, variant: undefined })
+      expect(parseModelSelection(`openai/${name}/${name}`, providers)).toEqual({ model, variant: name })
+      expect(modelVariantsFromProviders(providers, model)).toEqual([name])
+      const config = configWithProviders(providers)
+      config.sdk.config.get = async () => ({ data: { model: `openai/${name}` } })
+      expect(await defaultModel(config)).toEqual(model)
+    },
+  )
+
+  test("rejects a variant inherited from a custom prototype", () => {
+    const providers = [{ id: "openai", models: { "gpt-5": { variants: Object.create({ phantom: {} }) } } }]
+    expect(() => parseModelSelection("openai/gpt-5/phantom", providers)).toThrow("Unknown model in ACP model selection")
   })
 
   test("rejects providers and models that were not advertised", () => {

@@ -26,6 +26,10 @@ Hosted model catalogs are bundled with each AX Code release and filtered for usa
 web lists can contain models AX Code hides because they lack text output or tool calling. A provider preset does not
 imply that every model is free or available on every account.
 
+TUI model choices, explicit headless model selections, and ACP model or variant selections must match listed catalog
+entries. Missing explicit models are rejected before a model request is submitted, and same-SKU provider fallback
+uses only listed models.
+
 ## Runtime choices
 
 ### Selecting a model without a version
@@ -209,6 +213,10 @@ For Codex, AX Code reads the top-level `model` from `$CODEX_HOME/config.toml` wh
 from `~/.codex/config.toml`. Its native model cache is read from the same directory. For Kimi config files, only the
 top-level `default_model` is used. Model-looking text in multiline strings and nested tables is ignored, as are
 malformed TOML files. When no model is resolved, AX Code leaves model selection to the CLI's default.
+
+When multiple Codex executables are found on PATH, AX Code prefers the highest parsed version. A failed or
+unrecognized version probe does not hide a successfully versioned executable; if no version can be read, the first
+PATH candidate remains selected.
 
 For Kimi Code membership, install the local `kimi` binary, run `kimi login`, then `ax-code providers login kimi-cli`. AX Code reuses the Kimi Code CLI session (`~/.kimi-code`, with legacy fallback to `~/.kimi`) rather than storing a hosted Moonshot API key.
 

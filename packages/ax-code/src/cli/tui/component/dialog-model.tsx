@@ -102,7 +102,7 @@ export function DialogModel(props: { providerID?: string }) {
       if (!showSections) return []
       return items.flatMap((item) => {
         const provider = sync.data.provider.find((x) => x.id === item.providerID)
-        if (!provider) return []
+        if (!provider || !Object.hasOwn(provider.models, item.modelID)) return []
         const model = provider.models[item.modelID]
         if (!model) return []
         const display = modelDisplayInfo(item.modelID, model)

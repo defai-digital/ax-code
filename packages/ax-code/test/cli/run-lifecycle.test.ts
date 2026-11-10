@@ -179,6 +179,16 @@ test("run accepts --quiet as a long-only boolean flag", async () => {
   expect(src).toContain('echo "Summarize README.md" | ax-code run --model qwen')
 })
 
+test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+  "run command rejects unadvertised inherited model %s",
+  (modelID) => {
+    const input = { providers: [{ id: "gateway", models: {} }], providerID: "gateway", modelID }
+    expect(findRunModelError(input)).toContain(`Model "${modelID}" not found for provider "gateway"`)
+    expect(resolveRunModel(input)).toBeUndefined()
+    expect(resolveRunModel({ ...input, providerID: "missing-provider" })).toBeUndefined()
+  },
+)
+
 test("run command model validation flags unknown provider or model (#405)", () => {
   const providers = [{ id: "anthropic", models: { "claude-sonnet-4": {} } }]
 
@@ -190,6 +200,16 @@ test("run command model validation flags unknown provider or model (#405)", () =
     'Model "nope" not found for provider "anthropic"',
   )
 })
+
+test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+  "run command accepts an explicitly listed model named %s",
+  (modelID) => {
+    const providers = [{ id: "gateway", models: { [modelID]: {} } }]
+    const input = { providers, providerID: "gateway", modelID }
+    expect(findRunModelError(input)).toBeUndefined()
+    expect(resolveRunModel(input)).toEqual({ providerID: "gateway", modelID })
+  },
+)
 
 test("run command follows an explicit model to the connected provider serving the same SKU", async () => {
   // The native provider is disabled, so it is absent from the list; the

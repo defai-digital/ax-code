@@ -104,7 +104,10 @@ export function sameSkuOnConnectedProvider(
     .filter((provider) => provider.id !== model.providerID)
     .sort((left, right) => left.id.localeCompare(right.id))
   for (const provider of candidates) {
-    if (modelSelectableForProvider(provider.id, provider.models[model.modelID]))
+    if (
+      Object.hasOwn(provider.models, model.modelID) &&
+      modelSelectableForProvider(provider.id, provider.models[model.modelID])
+    )
       return { providerID: provider.id, modelID: model.modelID }
   }
   const needle = skuKey(model.modelID)

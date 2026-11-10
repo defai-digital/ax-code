@@ -1,12 +1,13 @@
 import { afterEach, test, expect, describe, vi } from "vitest"
 import path from "path"
-import { chmod, writeFile, readFile } from "fs/promises"
+import { chmod, mkdir, writeFile, readFile } from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import { which } from "../../src/util/which"
+import { Process } from "../../src/util/process"
 import { selectPreferredCodexBinary } from "../../src/provider/cli/binary"
 import { CUSTOM_LOADERS, minimaxCliFamilyModels, resolveCliBinary } from "../../src/provider/loaders"
 import { Config } from "../../src/config/config"
@@ -81,6 +82,67 @@ describe("CLI provider loaders", () => {
         { path: "/Applications/ChatGPT.app/Contents/Resources/codex", version: "codex-cli 0.144.2" },
       ]),
     ).toBe("/Applications/ChatGPT.app/Contents/Resources/codex")
+  })
+
+  test.each([undefined, "unexpected version output"])(
+    "prefers a versioned Codex executable when the first version is %s",
+    (version) => {
+      expect(
+        selectPreferredCodexBinary([
+          { path: "/stale/codex", version },
+          { path: "/working/codex", version: "codex-cli 0.144.2" },
+          { path: "/older/codex", version: "codex-cli 0.142.5" },
+        ]),
+      ).toBe("/working/codex")
+    },
+  )
+
+  test("uses a working version probe after the first Codex executable fails its probe", async () => {
+    await using tmp = await tmpdir()
+    const binary = `ax-code-codex-probe-${process.pid}`
+    const suffix = process.platform === "win32" ? ".cmd" : ""
+    const firstDir = path.join(tmp.path, "stale")
+    const secondDir = path.join(tmp.path, "working")
+    await mkdir(firstDir)
+    await mkdir(secondDir)
+    const first = path.join(firstDir, binary + suffix)
+    const second = path.join(secondDir, binary + suffix)
+    await writeFile(first, process.platform === "win32" ? "@echo off\r\n" : "#!/bin/sh\n")
+    await writeFile(second, process.platform === "win32" ? "@echo off\r\n" : "#!/bin/sh\n")
+    await chmod(first, 0o755)
+    await chmod(second, 0o755)
+    vi.stubEnv("PATH", [firstDir, secondDir].join(path.delimiter))
+    if (process.platform === "win32") vi.stubEnv("PATHEXT", ".CMD")
+    const normalize = (value: string) => {
+      const normalized = path.normalize(value)
+      return process.platform === "win32" ? normalized.toLowerCase() : normalized
+    }
+    const run = vi.spyOn(Process, "run").mockImplementation(async (cmd) => {
+      if (normalize(cmd[0]) === normalize(first)) throw new Error("version probe failed")
+      return { code: 0, stdout: Buffer.from("codex-cli 0.144.2"), stderr: Buffer.alloc(0) } as any
+    })
+    try {
+      expect(normalize((await resolveCliBinary("codex-cli", binary)) ?? "")).toBe(normalize(second))
+    } finally {
+      run.mockRestore()
+    }
+  })
+
+  test("keeps the first Codex candidate when every version probe is unavailable", () => {
+    expect(selectPreferredCodexBinary([{ path: "/first/codex" }, { path: "/second/codex", version: "unknown" }])).toBe(
+      "/first/codex",
+    )
+    expect(selectPreferredCodexBinary([])).toBeUndefined()
+  })
+
+  test("does not replace a versioned Codex executable with an unversioned one", () => {
+    expect(
+      selectPreferredCodexBinary([
+        { path: "/working/codex", version: "codex-cli 0.144.2" },
+        { path: "/unknown/codex" },
+        { path: "/broken/codex", version: "unknown" },
+      ]),
+    ).toBe("/working/codex")
   })
 
   test("CLI provider discovery publishes resolved external model ids", async () => {

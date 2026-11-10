@@ -227,7 +227,7 @@ export function findRunModelError(input: {
       "Run `ax-code models` for usable IDs."
     )
   }
-  if (!provider.models[input.modelID]) {
+  if (!Object.hasOwn(provider.models, input.modelID) || !provider.models[input.modelID]) {
     return (
       `Model "${input.modelID}" not found for provider "${input.providerID}". ` + "Run `ax-code models` for usable IDs."
     )

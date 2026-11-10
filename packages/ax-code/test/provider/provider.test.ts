@@ -976,6 +976,44 @@ test("getModel returns model for valid provider/model", async () => {
   })
 })
 
+test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+  "runtime registry ignores an inherited provider named %s",
+  async (name) => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providerID = ProviderID.make(name)
+        const modelID = ModelID.make("missing-model")
+        await expect(Provider.getProvider(providerID)).resolves.toBeUndefined()
+        await expect(Provider.getModel(providerID, modelID)).rejects.toBeInstanceOf(Provider.ModelNotFoundError)
+        await expect(Provider.getLanguage({ id: modelID, providerID } as any)).rejects.toBeInstanceOf(
+          Provider.ModelNotFoundError,
+        )
+        await expect(Provider.closest(providerID, ["model"])).resolves.toBeUndefined()
+      },
+    })
+  },
+)
+
+test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+  "runtime registry reports an inherited model named %s as missing",
+  async (name) => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.set("GROQ_API_KEY", "test-api-key")
+      },
+      fn: async () => {
+        await expect(Provider.getModel(ProviderID.make("groq"), ModelID.make(name))).rejects.toBeInstanceOf(
+          Provider.ModelNotFoundError,
+        )
+      },
+    })
+  },
+)
+
 test("getModel throws ModelNotFoundError for invalid model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

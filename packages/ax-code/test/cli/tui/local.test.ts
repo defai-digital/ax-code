@@ -451,6 +451,26 @@ describe("pruneModelPreferences migration", () => {
 })
 
 describe("resolvePinnedModelPreference", () => {
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "does not select an unlisted inherited model named %s",
+    (modelID) => {
+      const model = { providerID: "gateway", modelID }
+      const providers = [{ id: "gateway", models: {} }]
+      expect(modelPreferenceStatus(providers, model)).toBe("unknown")
+      expect(resolvePinnedModelPreference(providers, model)).toBeUndefined()
+    },
+  )
+
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "keeps an explicitly listed model named %s selectable",
+    (modelID) => {
+      const model = { providerID: "gateway", modelID }
+      const providers = [{ id: "gateway", models: { [modelID]: { capabilities: { toolcall: true } } } }]
+      expect(modelPreferenceStatus(providers, model)).toBe("valid")
+      expect(resolvePinnedModelPreference(providers, model)).toEqual(model)
+    },
+  )
+
   test.each([
     ["deepseek", "deepseek-flash"],
     ["glm", "glm-5.3-flash"],

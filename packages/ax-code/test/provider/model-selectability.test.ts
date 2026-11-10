@@ -157,6 +157,35 @@ describe("isNonChatModelID", () => {
 })
 
 describe("sameSkuOnConnectedProvider", () => {
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "does not relocate to unadvertised inherited model %s",
+    (modelID) => {
+      expect(
+        sameSkuOnConnectedProvider([{ id: "gateway", models: {} }], { providerID: "missing-provider", modelID }),
+      ).toBeUndefined()
+    },
+  )
+
+  test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+    "allows an explicitly advertised model named %s",
+    (modelID) => {
+      const provider = { id: "gateway", models: { [modelID]: { tool_call: true } } }
+      expect(sameSkuOnConnectedProvider([provider], { providerID: "missing-provider", modelID })).toEqual({
+        providerID: "gateway",
+        modelID,
+      })
+    },
+  )
+
+  test("skips an inherited exact match and uses a listed same-SKU alias", () => {
+    const models = Object.assign(Object.create({ "gpt-5": { tool_call: true } }), {
+      "vendor/gpt-5": { tool_call: true },
+    })
+    expect(sameSkuOnConnectedProvider([{ id: "gateway", models }], { providerID: "openai", modelID: "gpt-5" })).toEqual(
+      { providerID: "gateway", modelID: "vendor/gpt-5" },
+    )
+  })
+
   const gateway = {
     id: "127-0-0-1",
     models: {

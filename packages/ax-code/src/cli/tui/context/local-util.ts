@@ -38,6 +38,7 @@ export function modelPreferenceStatus(
 ): ModelPreferenceStatus {
   const provider = providers.find((item) => item.id === model.providerID)
   if (!provider) return "invalid"
+  if (!Object.hasOwn(provider.models, model.modelID)) return "unknown"
   const info = provider.models[model.modelID]
   if (!info) return "unknown"
   return modelSelectableForProvider(model.providerID, info) ? "valid" : "invalid"

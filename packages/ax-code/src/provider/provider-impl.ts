@@ -1184,7 +1184,7 @@ export namespace Provider {
     // ModelNotFoundError-specific handler (server HTTP mapping, CLI
     // suggestions, session "model not found" event).
     const s = await state()
-    const provider = s.providers[model.providerID]
+    const provider = Object.hasOwn(s.providers, model.providerID) ? s.providers[model.providerID] : undefined
     if (!provider) {
       throw new ModelNotFoundError({
         providerID: model.providerID,
@@ -1494,9 +1494,10 @@ export namespace Provider {
   }
 
   export async function getProvider(providerID: ProviderID) {
-    return state().then((s) =>
-      s.providers[providerID] ? providerView(s.providers[providerID], s.varsLoaders[providerID]) : undefined,
-    )
+    return state().then((s) => {
+      const provider = Object.hasOwn(s.providers, providerID) ? s.providers[providerID] : undefined
+      return provider ? providerView(provider, s.varsLoaders[providerID]) : undefined
+    })
   }
 
   export async function getModel(
@@ -1505,7 +1506,8 @@ export namespace Provider {
     awaitedDiscovery?: Promise<void>,
   ): Promise<Model> {
     const s = await state()
-    const provider = s.providers[providerID]
+    const provider = Object.hasOwn(s.providers, providerID) ? s.providers[providerID] : undefined
+    const info = provider && Object.hasOwn(provider.models, modelID) ? provider.models[modelID] : undefined
     // Discovery (CLI/local model lists) runs in the background after `state()`
     // resolves, so a model can be legitimately missing only because discovery
     // hasn't finished. Await it and retry before reporting not-found — this
@@ -1515,7 +1517,7 @@ export namespace Provider {
     // distinct discovery exactly once: a genuinely-missing model terminates
     // immediately after the first wait, while a concurrent `invalidate()` that
     // swaps in a fresh, still-in-flight discovery is re-awaited correctly.
-    if ((!provider || !provider.models[modelID]) && awaitedDiscovery !== s.discovery) {
+    if (!info && awaitedDiscovery !== s.discovery) {
       await s.discovery
       return getModel(providerID, modelID, s.discovery)
     }
@@ -1535,7 +1537,6 @@ export namespace Provider {
       throw new ModelNotFoundError({ providerID, modelID, suggestions })
     }
 
-    const info = provider.models[modelID]
     if (!info) {
       const availableModels = Object.keys(provider.models)
       const matches = fuzzysort.go(modelID, availableModels, { limit: 3, threshold: -10000 })
@@ -1555,7 +1556,7 @@ export namespace Provider {
     context.signal?.throwIfAborted()
     const s = await waitForSharedModelWork(state(), context.signal)
     context.signal?.throwIfAborted()
-    const provider = s.providers[model.providerID]
+    const provider = Object.hasOwn(s.providers, model.providerID) ? s.providers[model.providerID] : undefined
     if (!provider) {
       throw new ModelNotFoundError({ providerID: model.providerID, modelID: model.id })
     }
@@ -1660,7 +1661,7 @@ export namespace Provider {
 
   export async function closest(providerID: ProviderID, query: string[]) {
     const s = await state()
-    const provider = s.providers[providerID]
+    const provider = Object.hasOwn(s.providers, providerID) ? s.providers[providerID] : undefined
     if (!provider) return undefined
     for (const item of query) {
       for (const modelID of Object.keys(provider.models)) {

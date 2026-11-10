@@ -8,6 +8,12 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Codex CLI discovery prefers a successfully versioned executable when an earlier PATH launcher fails its version
+  probe or prints an unrecognized version. If every probe is unavailable, PATH order remains the fallback.
+- TUI, headless, and ACP model selection no longer accept unadvertised inherited names such as `constructor` or
+  `toString`. Model relocation, stored TUI choices, ACP defaults, and variant selection use listed catalog entries,
+  so invalid names cannot bypass early validation or redirect a turn to a provider that does not serve the model.
+  Runtime registry lookups return the normal missing-provider/model result instead of throwing an unrelated `TypeError`.
 - ACP session replay preserves non-UTF-8 binary data URL attachments and normalizes declared or fallback media
   types, so uppercase image types replay as images. Filename parameters containing `/` no longer replace the media
   type with a parameter value.

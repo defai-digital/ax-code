@@ -96,7 +96,8 @@ export async function defaultModel(
 
   if (specified && providers.length) {
     const provider = providers.find((p) => p.id === specified.providerID)
-    if (provider && provider.models[specified.modelID]) return specified
+    if (provider && Object.hasOwn(provider.models, specified.modelID) && provider.models[specified.modelID])
+      return specified
     // A CLI bridge is the user's own subscription, and it joins this list only
     // after its discovery probe. Keep the pin: model resolution waits for
     // discovery and reports a missing model or signed-out bridge itself,
@@ -192,7 +193,7 @@ export function modelVariantsFromProviders(
   model: { providerID: ProviderID; modelID: ModelID },
 ): string[] {
   const provider = providers.find((entry) => entry.id === model.providerID)
-  if (!provider) return []
+  if (!provider || !Object.hasOwn(provider.models, model.modelID)) return []
   const modelInfo = provider.models[model.modelID]
   if (!modelInfo?.variants) return []
   return Object.keys(modelInfo.variants)
@@ -258,7 +259,7 @@ export function parseModelSelection(
     throw new Error(`Unknown provider in ACP model selection: ${parsed.providerID}`)
   }
 
-  if (provider.models[parsed.modelID]) {
+  if (Object.hasOwn(provider.models, parsed.modelID) && provider.models[parsed.modelID]) {
     return { model: parsed, variant: undefined }
   }
 
@@ -266,8 +267,8 @@ export function parseModelSelection(
   if (segments.length > 1) {
     const candidateVariant = segments[segments.length - 1]
     const baseModelId = segments.slice(0, -1).join("/")
-    const baseModelInfo = provider.models[baseModelId]
-    if (baseModelInfo?.variants && candidateVariant in baseModelInfo.variants) {
+    const baseModelInfo = Object.hasOwn(provider.models, baseModelId) ? provider.models[baseModelId] : undefined
+    if (baseModelInfo?.variants && Object.hasOwn(baseModelInfo.variants, candidateVariant)) {
       return {
         model: { providerID: parsed.providerID, modelID: ModelID.make(baseModelId) },
         variant: candidateVariant,

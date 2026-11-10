@@ -370,6 +370,27 @@ test("run --format json reports unknown provider as a structured error line and 
   expect(lines.some((line) => line.includes('"type":"result"'))).toBe(false)
 })
 
+test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(
+  "run rejects inherited model name %s before submitting a request",
+  async (modelID) => {
+    const { lines, exitCode, rejected, messageBody } = await runEventStream({
+      model: `gateway/${modelID}`,
+      providers: { all: [{ id: "gateway", models: { "real-model": {} } }], connected: ["gateway"] },
+      captureBody: true,
+      messageStatus: 400,
+    })
+
+    expect(rejected).toBeDefined()
+    expect(exitCode).toBe(1)
+    expect(lines).toHaveLength(1)
+    expect(JSON.parse(lines[0])).toMatchObject({
+      type: "error",
+      error: { code: "model", message: expect.stringContaining(`Model "${modelID}" not found`) },
+    })
+    expect(messageBody).toBeUndefined()
+  },
+)
+
 test("run whose only tool call was denied emits permission_denied and exits blocked", async () => {
   const sessionID = "ses_stream"
   const deniedBashPart = {

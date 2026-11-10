@@ -12,7 +12,8 @@ function parseCliVersion(value: string) {
 function compareCliVersions(left: string | undefined, right: string | undefined) {
   const leftParts = left ? parseCliVersion(left) : undefined
   const rightParts = right ? parseCliVersion(right) : undefined
-  if (!leftParts || !rightParts) return 0
+  if (!leftParts) return rightParts ? -1 : 0
+  if (!rightParts) return 1
   for (let index = 0; index < leftParts.length; index++) {
     if (leftParts[index] !== rightParts[index]) return leftParts[index] - rightParts[index]
   }
