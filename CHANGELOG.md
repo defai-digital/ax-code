@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.21] - 2026-11-10
+
+### Changed
+
+- Publish the paired SDK 2.6.75 maintenance release without changing the server API contract.
+
 ### Fixed
 
 - Empty base64 file attachments are preserved instead of silently omitted. Malformed base64 padding is rejected
