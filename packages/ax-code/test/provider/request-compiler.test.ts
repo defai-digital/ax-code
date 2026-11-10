@@ -52,6 +52,21 @@ describe("final request compiler", () => {
     },
   )
 
+  test.each([
+    "glm-5.3",
+    "glm-5.3-flash",
+    "glm-5.3-flashx",
+    "glm-5.3-flashx-legal",
+    "glm-5.3-free",
+    "z-ai/glm-5.3:free",
+  ])("resolves %s to the glm5.3 reasoning family", (id) => {
+    expect(resolveProtocolProfile(model(id)).reasoningFamily).toBe("glm5.3")
+  })
+
+  test.each(["glm-5.30", "glm-5.3-highspeed", "glm-5.2", "glm-5.3-flashy"])("does not treat %s as glm5.3", (id) => {
+    expect(resolveProtocolProfile(model(id)).reasoningFamily).toBeUndefined()
+  })
+
   test.each([{ type: "required" }, { type: "tool", toolName: "read" }] as const)(
     "forced tool %j cannot reintroduce thinking on DeepSeek",
     (toolChoice) => {

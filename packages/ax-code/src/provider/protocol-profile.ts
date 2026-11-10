@@ -61,7 +61,9 @@ function reasoningFamily(model: ProtocolModel): ChatReasoningFamily | undefined 
     (host.startsWith("dashscope-") && host.endsWith(".aliyuncs.com"))
   )
     return undefined
-  if (/^glm-5\.3(?:-flash)?$/.test(segment)) return "glm5.3"
+  // FlashX (and its -legal SKU) shares the Flash request settings; gateways
+  // may append a -free/-flex tier or a :tag / @version suffix.
+  if (/^glm-5\.3(?:-flash(?:x(?:-legal)?)?)?(?:-(?:free|flex))?(?:[:@].*)?$/.test(segment)) return "glm5.3"
   if (/^deepseek-(?:v4-(?:pro|flash)|flash)$/.test(id)) return "deepseek-v4"
   if (id === "minimax-m3" || id === "minimax-m2.7") return id
   return undefined

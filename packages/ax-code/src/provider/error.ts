@@ -13,6 +13,8 @@ export namespace ProviderError {
   // https://github.com/badlogic/pi-mono/blob/main/packages/ai/src/utils/overflow.ts
   const OVERFLOW_PATTERNS = [
     /prompt is too long/i, // Anthropic
+    /prompt too long/i, // Z.AI / Zhipu (code 1261)
+    /prompt\s*超长/i, // Z.AI / Zhipu (code 1261, Chinese message)
     /input is too long for requested model/i, // Amazon Bedrock
     /exceeds the context window/i, // OpenAI (Completions + Responses API message text)
     /input token count.*exceeds the maximum/i, // Google (Gemini)
@@ -37,7 +39,8 @@ export namespace ProviderError {
   ]
 
   // Providers not reliably handled in this function:
-  // - z.ai: can accept overflow silently (needs token-count/context-window checks)
+  // - z.ai: can accept overflow silently (needs token-count/context-window
+  //   checks); only an explicit 1261 "Prompt too long" rejection is matched.
   function isOverflow(message: string, providerID?: ProviderID) {
     if (OVERFLOW_PATTERNS.some((p) => p.test(message))) return true
 

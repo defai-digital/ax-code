@@ -54,6 +54,43 @@ export namespace SessionRetry {
     return nested?.code === "concurrency_limit_exceeded"
   }
 
+  // Z.AI / BigModel (Zhipu) business codes that a retry cannot clear: balance,
+  // plan, and quota-window exhaustion (the 5-hour/weekly windows reset hours or
+  // days later). BigModel localizes every message in Chinese, so classify by
+  // `error.code` instead of NON_RETRYABLE_PATTERNS. 1234 (network), 1302 (rate
+  // limit), and 1305 (overloaded) stay retryable.
+  // https://docs.z.ai/api-reference/api-code
+  // https://docs.bigmodel.cn/cn/faq/api-code
+  const ZHIPU_PERMANENT_CODES = new Set([
+    "1113",
+    "1308",
+    "1309",
+    "1310",
+    "1311",
+    "1313",
+    "1314",
+    "1315",
+    "1316",
+    "1317",
+    "1318",
+    "1319",
+    "1320",
+    "1321",
+  ])
+
+  export function isZhipuProviderID(providerID: string | undefined): boolean {
+    return !!providerID && /^(?:zai|zhipuai)(?:-|$)/.test(providerID)
+  }
+
+  function isZhipuPermanentError(error: MessageV2.APIError, providerID: string | undefined) {
+    if (!isZhipuProviderID(providerID)) return false
+    const record = parseJsonRecord(error.data.responseBody)
+    if (!record) return false
+    const nested = isRecord(record.error) ? record.error : record
+    const code = nested.code
+    return (typeof code === "string" || typeof code === "number") && ZHIPU_PERMANENT_CODES.has(String(code))
+  }
+
   function exponentialDelay(attempt: number, ceiling = RETRY_MAX_DELAY_NO_HEADERS) {
     return Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), ceiling)
   }
@@ -298,6 +335,7 @@ export namespace SessionRetry {
       // of exponential backoff. This overrides the AI SDK's blanket
       // `isRetryable: true` on all 429 responses.
       if (isPermanentError(message, error.data.responseBody)) return undefined
+      if (isZhipuPermanentError(error, providerID)) return undefined
 
       if (isNetworkFailure(message, error.data.responseBody)) {
         if (networkCircuitOpen(providerID)) return undefined

@@ -164,6 +164,12 @@ describe("provider error decoding", () => {
     expect(ProviderError.isContextOverflow({ message: "Request failed", responseBody: "bad request" })).toBe(false)
   })
 
+  test("classifies Z.AI 1261 prompt-too-long rejections as context overflow", () => {
+    expect(ProviderError.isContextOverflow({ error: { code: "1261", message: "Prompt too long" } })).toBe(true)
+    expect(ProviderError.isContextOverflow({ error: { code: "1261", message: "prompt 超长" } })).toBe(true)
+    expect(ProviderError.isContextOverflow({ error: { code: "1210", message: "Invalid API parameter" } })).toBe(false)
+  })
+
   test("only treats Alibaba quota URLs as Alibaba hosts", () => {
     const body = JSON.stringify({ error: { message: "allocated quota exceeded" } })
     const safe = ProviderError.parseAPICallError({

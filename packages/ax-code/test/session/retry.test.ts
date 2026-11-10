@@ -565,3 +565,52 @@ describe("session.message-v2.fromError", () => {
     expect(result.data.isRetryable).toBe(true)
   })
 })
+
+describe("session.retry.retryable Z.AI / BigModel business codes", () => {
+  function zhipuError(code: string | number, message: string): MessageV2.APIError {
+    return new MessageV2.APIError({
+      message,
+      isRetryable: true,
+      statusCode: 429,
+      responseBody: JSON.stringify({ error: { code, message } }),
+    }).toObject() as MessageV2.APIError
+  }
+
+  afterEach(() => SessionRetry.resetNetworkCircuit())
+
+  test("does not retry quota-window exhaustion on the coding plan", () => {
+    const error = zhipuError("1308", "Usage limit reached for 5 hour. Your limit will reset at 2026-11-10 18:00:00")
+    expect(SessionRetry.retryable(error, "zai-coding-plan")).toBeUndefined()
+  })
+
+  test("classifies localized BigModel messages by code", () => {
+    // Chinese text matches none of the English NON_RETRYABLE_PATTERNS.
+    expect(SessionRetry.retryable(zhipuError("1113", "您的账户已欠费，请充值后重试。"), "zhipuai")).toBeUndefined()
+    expect(SessionRetry.retryable(zhipuError(1310, "已达到每周/每月使用上限"), "zhipuai-coding-plan")).toBeUndefined()
+  })
+
+  test("does not retry plan, fair-use, and extra-usage exhaustion codes", () => {
+    for (const code of ["1309", "1311", "1313", "1314", "1315", "1316", "1317", "1318", "1319", "1320", "1321"]) {
+      expect(SessionRetry.retryable(zhipuError(code, `code ${code}`), "zai")).toBeUndefined()
+    }
+  })
+
+  test("keeps rate-limit, overload, and network codes retryable", () => {
+    expect(SessionRetry.retryable(zhipuError("1302", "Rate limit reached for requests"), "zai")).toBe(
+      "Rate limit reached for requests",
+    )
+    expect(SessionRetry.retryable(zhipuError("1305", "temporarily overloaded"), "zai-coding-plan")).toBe(
+      "temporarily overloaded",
+    )
+    expect(SessionRetry.retryable(zhipuError("1234", "Network error, please try again later"), "zhipuai")).toBe(
+      "Network error, please try again later",
+    )
+  })
+
+  test("leaves other providers' numeric codes alone", () => {
+    expect(SessionRetry.retryable(zhipuError("1308", "slow down"), "openrouter")).toBe("slow down")
+    expect(SessionRetry.isZhipuProviderID("zaigateway")).toBe(false)
+    expect(SessionRetry.isZhipuProviderID("zai")).toBe(true)
+    expect(SessionRetry.isZhipuProviderID("zhipuai-coding-plan")).toBe(true)
+  })
+})
