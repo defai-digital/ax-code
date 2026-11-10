@@ -232,20 +232,33 @@ function isMiniMaxAssistantItem(item: Record<string, unknown> | undefined): bool
   return type === "assistant_message" || type === "agent_message"
 }
 
+// mcode 0.7.6+ nests the consolidated result under `exec.completed.result`
+// (an `exec.result` object); older builds put status/output on the event.
+function minimaxResult(event: CliJsonObject): Record<string, unknown> | undefined {
+  if (event.type !== "exec.result" && event.type !== "exec.completed") return undefined
+  return recordField(event, "result") ?? event
+}
+
+function minimaxResultOutput(event: CliJsonObject): string | undefined {
+  const result = minimaxResult(event)
+  return typeof result?.output === "string" ? result.output : undefined
+}
+
+// Completed items carry `text` (0.7.2) or `content` (0.7.6+).
+function minimaxItemText(item: Record<string, unknown> | undefined): string | undefined {
+  return stringField(item, "text") ?? stringField(item, "content")
+}
+
 function minimaxAssistantText(event: CliJsonObject): string | undefined {
-  if (event.type === "exec.result" || event.type === "exec.completed") {
-    return typeof event.output === "string" ? event.output : undefined
-  }
+  const result = minimaxResult(event)
+  if (result) return minimaxResultOutput(event)
   const item = minimaxItem(event)
   if (!isMiniMaxAssistantItem(item)) return undefined
-  return stringField(item, "text")
+  return minimaxItemText(item)
 }
 
 function minimaxResultStatus(event: CliJsonObject): string | undefined {
-  if (event.type === "exec.result" || event.type === "exec.completed") {
-    return stringField(event, "status")
-  }
-  return undefined
+  return stringField(minimaxResult(event), "status")
 }
 
 function minimaxTerminalError(event: CliJsonObject): string | undefined {
@@ -255,8 +268,9 @@ function minimaxTerminalError(event: CliJsonObject): string | undefined {
   }
   const status = minimaxResultStatus(event)
   if (!status || status === "succeeded") return undefined
-  const error = recordField(event, "error")
-  return stringField(error, "message") ?? stringField(event, "output") ?? `MiniMax Code CLI run ${status}`
+  const result = minimaxResult(event)
+  const error = (result && recordField(result, "error")) ?? recordField(event, "error")
+  return stringField(error, "message") ?? minimaxResultOutput(event) ?? `MiniMax Code CLI run ${status}`
 }
 
 // MiniMax Code CLI exec --output-format stream-json emits versioned JSONL.
@@ -290,14 +304,12 @@ export const minimaxCliParser: CliOutputParser = {
       }
       const item = minimaxItem(event)
       if (isMiniMaxAssistantItem(item) && (event.type === "item.completed" || !event.type)) {
-        const text = stringField(item, "text")
+        const text = minimaxItemText(item)
         if (text) last = text
         continue
       }
-      if (event.type === "exec.result" || event.type === "exec.completed") {
-        const text = typeof event.output === "string" ? event.output : undefined
-        if (text) fallback = text
-      }
+      const resultText = minimaxResultOutput(event)
+      if (resultText) fallback = resultText
     }
     if (errors.length) throw new CliOutputError(errors.at(-1)!)
     if (last !== undefined) return { text: last }
@@ -311,9 +323,10 @@ export const minimaxCliParser: CliOutputParser = {
     const item = minimaxItem(event)
     if (!isMiniMaxAssistantItem(item)) return null
     // Stream only incremental deltas. item.completed repeats the consolidated
-    // text and is the complete-parse fallback, matching muse's delta/terminal split.
-    if (event.type !== "item.updated") return null
-    return stringField(item, "delta") ?? stringField(event, "delta") ?? null
+    // text and is the complete-parse fallback. mcode 0.7.6+ sends the first
+    // delta on item.started and names it `contentDelta`.
+    if (event.type !== "item.started" && event.type !== "item.updated") return null
+    return stringField(item, "delta") ?? stringField(item, "contentDelta") ?? stringField(event, "delta") ?? null
   },
 }
 

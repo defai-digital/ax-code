@@ -162,7 +162,36 @@ describe("kimiCliParser", () => {
   })
 })
 
+// Captured from `mcode exec --output-format stream-json` 0.7.6 (ids shortened).
+const MCODE_076_OK = [
+  '{"schemaVersion":1,"sequence":1,"timestampMs":1794293670020,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"exec.started"}',
+  '{"schemaVersion":1,"sequence":2,"timestampMs":1794293670020,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"session.started"}',
+  '{"schemaVersion":1,"sequence":3,"timestampMs":1794293670020,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"turn.started"}',
+  '{"schemaVersion":1,"sequence":4,"timestampMs":1794293671071,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"item.started","item":{"id":"item_1:message","type":"agent_message","contentDelta":"OK"}}',
+  '{"schemaVersion":1,"sequence":5,"timestampMs":1794293671071,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"item.updated","item":{"id":"item_1:message","type":"agent_message","contentDelta":" 👌"}}',
+  '{"schemaVersion":1,"sequence":6,"timestampMs":1794293671077,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"item.completed","item":{"id":"item_1:message","type":"agent_message","content":"OK 👌"}}',
+  '{"schemaVersion":1,"sequence":7,"timestampMs":1794293671323,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"turn.completed","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking","providerSource":"provider","providerKind":"minimax-managed"},"usage":{"inputTokens":13308,"outputTokens":5,"cacheReadTokens":618,"totalTokens":13931},"usageSource":"completed_responses","usageIncomplete":false,"durationMs":1084}',
+  '{"schemaVersion":1,"sequence":8,"timestampMs":1794293671323,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"exec.completed","result":{"schemaVersion":1,"type":"exec.result","runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","status":"succeeded","output":"OK 👌","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking","providerSource":"provider","providerKind":"minimax-managed"},"usage":{"inputTokens":13308,"outputTokens":5,"cacheReadTokens":618,"totalTokens":13931},"usageSource":"completed_responses","usageIncomplete":false,"durationMs":1084}}',
+].join("\n")
+
 describe("minimaxCliParser", () => {
+  test("reads mcode 0.7.6 agent_message content and the nested exec.completed result", () => {
+    expect(minimaxCliParser.parseComplete(MCODE_076_OK)).toEqual({ text: "OK 👌" })
+    const deltas = MCODE_076_OK.split("\n")
+      .map((line) => minimaxCliParser.parseStreamLine(line))
+      .filter((delta) => delta !== null)
+    // item.started carries the first contentDelta; item.completed is not replayed.
+    expect(deltas).toEqual(["OK", " 👌"])
+    // The nested result alone is a valid fallback.
+    expect(minimaxCliParser.parseComplete(MCODE_076_OK.split("\n").at(-1)!)).toEqual({ text: "OK 👌" })
+  })
+
+  test("surfaces a failed nested exec.completed result", () => {
+    const failed =
+      '{"schemaVersion":1,"type":"exec.completed","result":{"type":"exec.result","status":"failed","error":{"message":"not signed in"}}}'
+    expect(() => minimaxCliParser.parseComplete(failed)).toThrow("not signed in")
+  })
+
   test("keeps the last assistant message and ignores tool items", () => {
     const output = [
       '{"type":"exec.started","schemaVersion":1}',
