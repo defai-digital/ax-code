@@ -6,6 +6,13 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.20] - 2026-11-10
+
+### Changed
+
+- Publish the paired SDK 2.6.74 maintenance release without changing the server API contract.
+- Include the provider, model-catalog, and bounded Wasm diff improvements recorded for 7.30.19.
+
 ### Fixed
 
 - A GLM 5.x turn truncated after spending its output budget on reasoning now lowers the effort one level below the
@@ -18,15 +25,6 @@ changes belong to AX Coder.
 - MiniMax M3.1 spelled `minimax-m3-1-flash` or `minimax-m3p1-flash`, and `MiniMax-M3.1-Flash-Preview`, now default to
   the vendor 512k context window like other M3-family SKUs instead of the 1M catalog window, and a bare
   `minimax-m3-1-flash` gets the M3 request settings on OpenAI-compatible routes.
-
-## [7.30.20] - 2026-11-10
-
-### Changed
-
-- Publish the paired SDK 2.6.73 maintenance release without changing the server API contract.
-- Include the provider, model-catalog, and bounded Wasm diff improvements recorded for 7.30.19.
-
-### Fixed
 
 - Keep concurrent DeepSeek Harness launches reliable when they repair the privacy overlay, using independent atomic writes instead of a shared per-process temporary file.
 - Exclude Codex reasoning, tool, and warning items from assistant replies, and stream assistant text content blocks consistently with completed answers.
