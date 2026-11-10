@@ -6,6 +6,7 @@ import {
   cliFailureShowsFullHelp,
   commandTokenFromArgv,
   composeRunMessage,
+  findRunCliProviderError,
   findRunModelError,
   formatRunToolFallbackInput,
   isAbortError,
@@ -231,11 +232,24 @@ test("run command follows an explicit model to the connected provider serving th
     }),
   ).toBeUndefined()
 
-  // A same-SKU hit for a pinned CLI provider is provisional: the bridge joins
-  // the list only after discovery, so the complete list decides.
+  // A same-SKU hit is not a model miss: no discovery wait, no re-list.
   let refreshes = 0
-  const discovered = [{ id: "minimax-cli", models: { "MiniMax-M3.1-Flash": {} } }, ...providers]
+  const kept = await refreshRunProvidersOnModelMiss({
+    providers,
+    providerID: "deepseek",
+    modelID: "deepseek-v4-pro",
+    refresh: async () => {
+      refreshes++
+      return undefined
+    },
+  })
+  expect(kept).toBe(providers)
+  expect(refreshes).toBe(0)
+
+  // A pinned CLI provider never takes a same-SKU home, so a snapshot taken
+  // before its discovery probe is a miss and the complete list decides.
   const gateway = [{ id: "127.0.0.1", models: { "MiniMax-M3.1-Flash": {} } }]
+  const discovered = [{ id: "minimax-cli", models: { "MiniMax-M3.1-Flash": {} } }, ...gateway]
   const pinned = { providerID: "minimax-cli", modelID: "MiniMax-M3.1-Flash" }
   const refreshed = await refreshRunProvidersOnModelMiss({
     providers: gateway,
@@ -249,45 +263,9 @@ test("run command follows an explicit model to the connected provider serving th
   expect(refreshes).toBe(1)
   expect(refreshed).toBe(discovered)
   expect(resolveRunModel({ providers: discovered, connected: ["127.0.0.1", "minimax-cli"], ...pinned })).toEqual(pinned)
-
-  // The requested provider serving the model settles it without a re-list.
-  const kept = await refreshRunProvidersOnModelMiss({
-    providers: discovered,
-    connected: ["minimax-cli"],
-    ...pinned,
-    refresh: async () => {
-      refreshes++
-      return undefined
-    },
-  })
-  expect(kept).toBe(discovered)
-  expect(refreshes).toBe(1)
-
-  // A failed re-list skips validation, leaving the pin as requested.
-  expect(
-    await refreshRunProvidersOnModelMiss({
-      providers: gateway,
-      connected: ["127.0.0.1"],
-      ...pinned,
-      refresh: async () => undefined,
-    }),
-  ).toBeUndefined()
-
-  // For any other provider a same-SKU hit is not a miss: no discovery wait.
-  const fast = await refreshRunProvidersOnModelMiss({
-    providers,
-    providerID: "deepseek",
-    modelID: "deepseek-v4-pro",
-    refresh: async () => {
-      refreshes++
-      return undefined
-    },
-  })
-  expect(fast).toBe(providers)
-  expect(refreshes).toBe(1)
 })
 
-test("run command reports a model a connected CLI provider lacks instead of rerouting", () => {
+test("run command reports a CLI provider that cannot serve the model instead of rerouting", () => {
   const providers = [
     { id: "minimax-cli", models: { "MiniMax-M3.1-Flash": {} } },
     { id: "gateway", models: { "MiniMax-M3": {}, "MiniMax-M3.1-Flash": {} } },
@@ -298,12 +276,18 @@ test("run command reports a model a connected CLI provider lacks instead of rero
   expect(resolveRunModel(missing)).toBeUndefined()
   expect(findRunModelError(missing)).toContain('Model "MiniMax-M3" not found for provider "minimax-cli"')
 
-  // A CLI provider that is not connected still follows the SKU, as any
-  // disconnected provider does.
-  expect(resolveRunModel({ ...missing, connected: ["gateway"] })).toEqual({
-    providerID: "gateway",
-    modelID: "MiniMax-M3",
-  })
+  // Not connected: still no reroute, and the connection error outranks the
+  // model lookup whether or not the signed-out bridge is listed.
+  expect(resolveRunModel({ ...missing, connected: ["gateway"] })).toBeUndefined()
+  expect(
+    resolveRunModel({ ...missing, providers: [providers[1]], connected: ["gateway"], modelID: "MiniMax-M3.1-Flash" }),
+  ).toBeUndefined()
+  expect(findRunCliProviderError({ connected: ["gateway"], providerID: "minimax-cli" })).toContain(
+    'Provider "minimax-cli" is not connected',
+  )
+  expect(findRunCliProviderError({ connected: ["gateway", "minimax-cli"], providerID: "minimax-cli" })).toBeUndefined()
+  expect(findRunCliProviderError({ connected: ["gateway"], providerID: "deepseek" })).toBeUndefined()
+
   // A non-CLI provider lacking the model keeps following the SKU.
   expect(
     resolveRunModel({

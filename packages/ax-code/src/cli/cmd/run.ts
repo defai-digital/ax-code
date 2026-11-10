@@ -255,8 +255,8 @@ export function findRunModelErrorCode(input: {
  * provider (`deepseek/deepseek-v4-pro`) after that provider was disabled and
  * a custom gateway took over serving it. `connected` narrows the fallback to
  * providers that can actually serve a turn — the full list also carries
- * catalog-only providers. Undefined when neither exists, or when a connected
- * CLI provider lacks the model.
+ * catalog-only providers. Undefined when neither exists, and for a CLI
+ * provider that cannot serve the model itself.
  */
 export function resolveRunModel(input: {
   providers: RunProviderList
@@ -268,18 +268,33 @@ export function resolveRunModel(input: {
   if (!findRunModelError(input) && exactIsConnected) {
     return { providerID: input.providerID, modelID: input.modelID }
   }
-  // A connected CLI bridge is the user's own subscription: a model it does not
-  // list is an error to report, never a turn to move onto a gateway.
-  if (exactIsConnected && isListedCliProvider(input)) return undefined
+  // A CLI bridge is the user's own subscription: a model it does not list, or
+  // a bridge that is not connected, is an error to report, never a turn to
+  // move onto a gateway.
+  if (isRunCliProvider(input.providerID)) return undefined
   const connected = input.connected
   const candidates = connected ? input.providers.filter((provider) => connected.includes(provider.id)) : input.providers
   return sameSkuOnConnectedProvider(candidates, input)
 }
 
-function isListedCliProvider(input: { providers: RunProviderList; providerID: string }) {
+function isRunCliProvider(providerID: string) {
+  return Object.hasOwn(CLI_PROVIDER_DEFINITIONS, providerID)
+}
+
+/**
+ * The error for a model pinned to a CLI provider that is not connected. It
+ * outranks the model lookup: a signed-out bridge is absent from the list or
+ * lists nothing, so "unknown provider" or "model not found" would misdirect.
+ */
+export function findRunCliProviderError(input: {
+  connected?: readonly string[]
+  providerID: string
+}): string | undefined {
+  if (!isRunCliProvider(input.providerID)) return undefined
+  if (!input.connected || input.connected.includes(input.providerID)) return undefined
   return (
-    Object.hasOwn(CLI_PROVIDER_DEFINITIONS, input.providerID) &&
-    input.providers.some((provider) => provider.id === input.providerID)
+    `Provider "${input.providerID}" is not connected. Sign in with its CLI, then run ` +
+    `\`ax-code providers login ${input.providerID}\`, or pick an ID from \`ax-code models\`.`
   )
 }
 
@@ -290,15 +305,7 @@ export async function refreshRunProvidersOnModelMiss(input: {
   modelID: string
   refresh: () => Promise<RunProviderList | undefined>
 }) {
-  const resolved = resolveRunModel(input)
-  if (!resolved) return input.refresh()
-  // A same-SKU hit for a pinned CLI provider is provisional: CLI bridges join
-  // the list only after their discovery probe, and following the SKU early
-  // would send a turn the user pinned to their own CLI through a gateway.
-  // Other providers keep the fast path, so a family alias never waits.
-  if (resolved.providerID === input.providerID || !Object.hasOwn(CLI_PROVIDER_DEFINITIONS, input.providerID)) {
-    return input.providers
-  }
+  if (resolveRunModel(input)) return input.providers
   return input.refresh()
 }
 
@@ -1651,6 +1658,8 @@ export const RunCommand = cmd({
             } else {
               const resolved = resolveRunModel({ providers, connected, providerID: providerID!, modelID: modelID! })
               if (!resolved) {
+                const cliError = findRunCliProviderError({ connected, providerID: providerID! })
+                if (cliError) exitEarly(cliError, "provider")
                 const modelInput = { providers, providerID: providerID!, modelID: modelID! }
                 const modelError = findRunModelError(modelInput)
                 if (modelError) exitEarly(modelError, findRunModelErrorCode(modelInput))
