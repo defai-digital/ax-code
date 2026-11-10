@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- The Codex CLI bridge reads only the top-level `model` in `~/.codex/config.toml`. A `model` under a `[profiles.*]` or
+  other table was taken as the Codex default, added to the `codex-cli` model list, and sent with `--model` by the
+  login probe. Single-quoted and indented values are also accepted.
+
 ## [7.30.20] - 2026-11-10
 
 ### Changed

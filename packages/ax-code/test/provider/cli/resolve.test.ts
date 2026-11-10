@@ -1,7 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { test, expect, describe } from "vitest"
-import { parseCliSettingsJson, resolveCliModel } from "../../../src/provider/cli/resolve"
+import { parseCliSettingsJson, resolveCliModel, resolveCodexTomlModel } from "../../../src/provider/cli/resolve"
 import { tmpdir } from "../../fixture/fixture"
 
 describe("resolveCliModel", () => {
@@ -21,6 +21,31 @@ describe("resolveCliModel", () => {
     const info = await resolveCliModel("codex-cli")
     if (info.source === "default") {
       expect(info.model).toBe("codex-cli")
+    }
+  })
+
+  test("reads only the top-level Codex model, not a profile's", () => {
+    expect(resolveCodexTomlModel('model = "gpt-5.5"\n[profiles.fast]\nmodel = "gpt-5.5-mini"\n')).toBe("gpt-5.5")
+    // Regression: a profile-only model was read as the Codex default.
+    expect(resolveCodexTomlModel('approval_policy = "never"\n\n[profiles.fast]\nmodel = "gpt-5.5-mini"\n')).toBe(
+      undefined,
+    )
+    expect(resolveCodexTomlModel('[model_providers.local]\nname = "Local"\nmodel = "x"\n')).toBeUndefined()
+    expect(resolveCodexTomlModel("  model = 'gpt-5.5'\n")).toBe("gpt-5.5")
+    expect(resolveCodexTomlModel('model_reasoning_effort = "high"\n')).toBeUndefined()
+  })
+
+  test("codex-cli falls back to its default when only a profile names a model", async () => {
+    await using tmp = await tmpdir()
+    await fs.mkdir(path.join(tmp.path, ".codex"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, ".codex", "config.toml"), '[profiles.fast]\nmodel = "gpt-5.5-mini"\n')
+    const previous = process.env.AX_CODE_TEST_HOME
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    try {
+      expect(await resolveCliModel("codex-cli")).toEqual({ model: "codex-cli", source: "default" })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_TEST_HOME
+      else process.env.AX_CODE_TEST_HOME = previous
     }
   })
 

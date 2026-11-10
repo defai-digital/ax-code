@@ -42,12 +42,23 @@ async function readText(path: string): Promise<string | null> {
   return text ?? null
 }
 
+/**
+ * Codex's default `model` is a top-level key. TOML puts every top-level key
+ * before the first table header, so a `model` under `[profiles.<name>]` (or
+ * any other table) only applies to that profile and must not be read as the
+ * default.
+ */
+export function resolveCodexTomlModel(toml: string): string | undefined {
+  const header = toml.search(/^\s*\[/m)
+  const topLevel = header === -1 ? toml : toml.slice(0, header)
+  const match = topLevel.match(/^\s*model\s*=\s*(?:"([^"]+)"|'([^']+)')/m)
+  return match?.[1] ?? match?.[2]
+}
+
 async function resolveCodexModel(): Promise<CliModelInfo> {
   const toml = await readText(join(homeDir(), ".codex", "config.toml"))
-  if (toml) {
-    const match = toml.match(/^model\s*=\s*"([^"]+)"/m)
-    if (match?.[1]) return { model: match[1], source: "~/.codex/config.toml" }
-  }
+  const model = toml ? resolveCodexTomlModel(toml) : undefined
+  if (model) return { model, source: "~/.codex/config.toml" }
 
   return { model: DEFAULTS["codex-cli"]!, source: "default" }
 }
