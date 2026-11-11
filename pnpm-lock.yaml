@@ -138,9 +138,6 @@ catalogs:
     vitest:
       specifier: 4.1.12
       version: 4.1.12
-    yaml:
-      specifier: 2.9.1
-      version: 2.9.1
     zod:
       specifier: 4.6.6
       version: 4.6.6
@@ -516,9 +513,6 @@ importers:
       xdg-basedir:
         specifier: 5.1.0
         version: 5.1.0
-      yaml:
-        specifier: 'catalog:'
-        version: 2.9.1
       yargs:
         specifier: 18.2.0
         version: 18.2.0
