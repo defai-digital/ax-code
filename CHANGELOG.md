@@ -6,17 +6,6 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
-### Changed
-
-- CLI providers honor AX Code's isolation mode: read-only and workspace-write sessions pass the matching restriction to
-  Claude Code, Codex, Grok Build, and DeepSeek Harness, and fail before starting Kimi Code, MiniMax Code, or (read-only)
-  Muse Code, which cannot enforce them. full-access is unchanged.
-
-### Fixed
-
-- Qwen 4 Max Preview is recognised (1M context, reasoning, image input, effort levels) on AX Trust/custom gateways
-  and Alibaba plan routes.
-
 ## [7.30.22] - 2026-11-11
 
 ### Added
@@ -25,6 +14,9 @@ changes belong to AX Coder.
 
 ### Changed
 
+- CLI providers honor AX Code's isolation mode: read-only and workspace-write sessions pass the matching restriction to
+  Claude Code, Codex, Grok Build, and DeepSeek Harness, and fail before starting Kimi Code, MiniMax Code, or (read-only)
+  Muse Code, which cannot enforce them. full-access is unchanged.
 - Publish the paired SDK 2.6.76 maintenance release.
 - Update fast-xml-parser to 5.12.0 to address GHSA-474x-hrwr-fgx4.
 - Claude Code CLI responses stream incrementally (`--include-partial-messages`), and Grok Build CLI uses its
@@ -40,6 +32,8 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Qwen 4 Max Preview is recognised (1M context, reasoning, image input, effort levels) on AX Trust/custom gateways
+  and Alibaba plan routes.
 - The grep tool clamps out-of-range `context` and `limit` values instead of rejecting them, so models that ask for more
   context no longer loop on validation errors.
 - `run --add-dir` grants access to added directories again: prompt-time tool toggles no longer replace the session's
