@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.25] - 2026-11-11
+
+### Changed
+
+- Publish the paired SDK 2.6.79 maintenance release.
+
+### Fixed
+
+- Local and server slash commands accept tab-separated arguments while preserving multiline content and indentation.
+- Council and arena reject CLI-provider models with an actionable API-model warning before submission or execution.
+
 ## [7.30.24] - 2026-11-11
 
 ### Changed
