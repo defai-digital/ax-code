@@ -6,7 +6,6 @@ import {
   grokBuildCliParser,
   kimiCliParser,
   museCliParser,
-  minimaxCliParser,
   parseCliJsonEventLine,
 } from "../../../src/provider/cli/parser"
 
@@ -207,7 +206,6 @@ describe("provider CLI raw stream text", () => {
     expect(grokBuildCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(kimiCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(museCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
-    expect(minimaxCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
   })
 })
 
@@ -256,18 +254,6 @@ describe("kimiCliParser", () => {
     expect(kimiCliParser.parseComplete(toolOnly)).toEqual({ text: "" })
   })
 })
-
-// Captured from `mcode exec --output-format stream-json` 0.7.6 (ids shortened).
-const MCODE_076_OK = [
-  '{"schemaVersion":1,"sequence":1,"timestampMs":1794293670020,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"exec.started"}',
-  '{"schemaVersion":1,"sequence":2,"timestampMs":1794293670020,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"session.started"}',
-  '{"schemaVersion":1,"sequence":3,"timestampMs":1794293670020,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"turn.started"}',
-  '{"schemaVersion":1,"sequence":4,"timestampMs":1794293671071,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"item.started","item":{"id":"item_1:message","type":"agent_message","contentDelta":"OK"}}',
-  '{"schemaVersion":1,"sequence":5,"timestampMs":1794293671071,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"item.updated","item":{"id":"item_1:message","type":"agent_message","contentDelta":" 👌"}}',
-  '{"schemaVersion":1,"sequence":6,"timestampMs":1794293671077,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"item.completed","item":{"id":"item_1:message","type":"agent_message","content":"OK 👌"}}',
-  '{"schemaVersion":1,"sequence":7,"timestampMs":1794293671323,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"turn.completed","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking","providerSource":"provider","providerKind":"minimax-managed"},"usage":{"inputTokens":13308,"outputTokens":5,"cacheReadTokens":618,"totalTokens":13931},"usageSource":"completed_responses","usageIncomplete":false,"durationMs":1084}',
-  '{"schemaVersion":1,"sequence":8,"timestampMs":1794293671323,"runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","type":"exec.completed","result":{"schemaVersion":1,"type":"exec.result","runId":"exec_1","sessionId":"mvs_1","turnId":"turn_1","status":"succeeded","output":"OK 👌","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking","providerSource":"provider","providerKind":"minimax-managed"},"usage":{"inputTokens":13308,"outputTokens":5,"cacheReadTokens":618,"totalTokens":13931},"usageSource":"completed_responses","usageIncomplete":false,"durationMs":1084}}',
-].join("\n")
 
 describe("museCliParser", () => {
   test("concatenates output deltas and ignores control events", () => {
@@ -318,76 +304,6 @@ describe("museCliParser", () => {
     expect(() =>
       museCliParser.parseComplete('{"payload_type":"run.terminal.failed","payload":{"reason":"login required"}}'),
     ).toThrow("login required")
-  })
-})
-
-describe("minimaxCliParser", () => {
-  test("reads mcode 0.7.6 agent_message content and the nested exec.completed result", () => {
-    expect(minimaxCliParser.parseComplete(MCODE_076_OK)).toEqual({ text: "OK 👌" })
-    const deltas = MCODE_076_OK.split("\n")
-      .map((line) => minimaxCliParser.parseStreamLine(line))
-      .filter((delta) => delta !== null)
-    // item.started carries the first contentDelta; item.completed is not replayed.
-    expect(deltas).toEqual(["OK", " 👌"])
-    // The nested result alone is a valid fallback.
-    expect(minimaxCliParser.parseComplete(MCODE_076_OK.split("\n").at(-1)!)).toEqual({ text: "OK 👌" })
-  })
-
-  test("surfaces a failed nested exec.completed result", () => {
-    const failed =
-      '{"schemaVersion":1,"type":"exec.completed","result":{"type":"exec.result","status":"failed","error":{"message":"not signed in"}}}'
-    expect(() => minimaxCliParser.parseComplete(failed)).toThrow("not signed in")
-  })
-
-  test("keeps the last assistant message and ignores tool items", () => {
-    const output = [
-      '{"type":"exec.started","schemaVersion":1}',
-      '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"ls"}}',
-      '{"type":"item.completed","item":{"id":"item_2","type":"assistant_message","text":"Hello world"}}',
-      '{"type":"exec.completed","status":"succeeded","output":"Hello world"}',
-    ].join("\n")
-
-    expect(minimaxCliParser.parseComplete(output)).toEqual({ text: "Hello world" })
-  })
-
-  test("falls back to exec.result output when no assistant item is present", () => {
-    expect(
-      minimaxCliParser.parseComplete('{"schemaVersion":1,"type":"exec.result","status":"succeeded","output":"OK\\n"}'),
-    ).toEqual({ text: "OK\n" })
-  })
-
-  test("streams assistant item deltas and does not replay item.completed text", () => {
-    expect(
-      minimaxCliParser.parseStreamLine(
-        '{"type":"item.updated","item":{"id":"item_2","type":"assistant_message","delta":"OK"}}',
-      ),
-    ).toBe("OK")
-    expect(
-      minimaxCliParser.parseStreamLine(
-        '{"type":"item.completed","item":{"id":"item_2","type":"assistant_message","text":"OK"}}',
-      ),
-    ).toBeNull()
-    expect(minimaxCliParser.parseStreamLine('{"type":"exec.started","schemaVersion":1}')).toBeNull()
-    expect(
-      minimaxCliParser.parseStreamLine(
-        '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"ls"}}',
-      ),
-    ).toBeNull()
-  })
-
-  test("does not leak control JSON when no assistant text is present", () => {
-    expect(minimaxCliParser.parseComplete('{"type":"exec.started","schemaVersion":1}')).toEqual({ text: "" })
-  })
-
-  test("surfaces a failed exec result as a CLI output error", () => {
-    expect(() =>
-      minimaxCliParser.parseComplete(
-        '{"type":"exec.result","status":"failed","error":{"message":"authentication required"}}',
-      ),
-    ).toThrow(CliOutputError)
-    expect(() => minimaxCliParser.parseComplete('{"type":"turn.failed","error":{"message":"login required"}}')).toThrow(
-      "login required",
-    )
   })
 })
 
@@ -480,21 +396,6 @@ describe("CLI usage extraction", () => {
     })
   })
 
-  test("mcode usage from turn.completed", () => {
-    // Captured from `mcode exec --output-format stream-json` (ids removed).
-    const output = [
-      '{"schemaVersion":1,"type":"turn.completed","usage":{"inputTokens":13751,"outputTokens":4,"cacheReadTokens":187,"totalTokens":13942}}',
-      '{"schemaVersion":1,"type":"exec.completed","result":{"type":"exec.result","status":"succeeded","output":"PONG","usage":{"inputTokens":13751,"outputTokens":4,"cacheReadTokens":187,"totalTokens":13942}}}',
-    ].join("\n")
-    expect(minimaxCliParser.parseUsage?.(output)).toEqual({
-      inputTokens: 13751 + 187,
-      outputTokens: 4,
-      cacheReadTokens: 187,
-      cacheWriteTokens: 0,
-      reasoningTokens: 0,
-    })
-  })
-
   test("returns undefined when the CLI reports no usage", () => {
     expect(grokBuildCliParser.parseUsage?.("PONG\n")).toBeUndefined()
     expect(claudeCodeParser.parseUsage?.('{"type":"assistant","message":{"content":[]}}')).toBeUndefined()
@@ -516,30 +417,6 @@ describe("kimiCliParser multi-message streaming", () => {
       '{"role":"assistant","content":"There is one Python file."}',
     ].join("\n")
     expect(kimiCliParser.parseComplete(output)).toEqual({ text: "There is one Python file." })
-  })
-})
-
-describe("minimaxCliParser effective model", () => {
-  // Captured from `mcode exec --output-format stream-json --model no-such-model-xyz`
-  // (ids removed): mcode exits 0 and reports its own fallback model.
-  const substituted = [
-    '{"type":"turn.completed","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking"},"usage":{"inputTokens":13760,"outputTokens":4,"cacheReadTokens":176,"totalTokens":13940}}',
-    '{"type":"exec.completed","result":{"type":"exec.result","status":"succeeded","output":"PONG","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking"}}}',
-  ].join("\n")
-
-  test("reports a substitution when the effective model differs", () => {
-    expect(minimaxCliParser.parseModelMismatch?.(substituted, "no-such-model-xyz")).toBe(
-      "MiniMax Code used MiniMax-M3.1-Flash instead of the requested model no-such-model-xyz",
-    )
-  })
-
-  test("ignores the minimax/ prefix and #variant when comparing", () => {
-    expect(minimaxCliParser.parseModelMismatch?.(substituted, "minimax/minimax-m3.1-flash#thinking")).toBeUndefined()
-  })
-
-  test("skips the check for the sentinel and when no model is reported", () => {
-    expect(minimaxCliParser.parseModelMismatch?.(substituted, "minimax-cli")).toBeUndefined()
-    expect(minimaxCliParser.parseModelMismatch?.('{"type":"turn.completed"}', "no-such-model-xyz")).toBeUndefined()
   })
 })
 
@@ -568,6 +445,5 @@ describe("museCliParser terminal event", () => {
   test("providers without a terminal event do not opt in", () => {
     expect(claudeCodeParser.isTerminalEvent).toBeUndefined()
     expect(codexCliParser.isTerminalEvent).toBeUndefined()
-    expect(minimaxCliParser.isTerminalEvent).toBeUndefined()
   })
 })

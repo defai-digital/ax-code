@@ -13,7 +13,6 @@ const WEB_SEARCH_CLI_PROVIDERS = new Set([
   "grok-build-cli",
   "kimi-cli",
   "muse-cli",
-  "minimax-cli",
   "dsh-cli",
 ])
 

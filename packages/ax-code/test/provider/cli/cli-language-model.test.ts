@@ -7,7 +7,7 @@ import {
   resetRejectedOptionalCliFlags,
 } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
-import { claudeCodeParser, grokBuildCliParser, museCliParser, minimaxCliParser } from "../../../src/provider/cli/parser"
+import { claudeCodeParser, grokBuildCliParser, museCliParser } from "../../../src/provider/cli/parser"
 import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
@@ -353,10 +353,6 @@ describe("CliLanguageModel", () => {
       parseComplete: () => ({ text: "" }),
       parseStreamLine: (line: string) => line.trim() || null,
       parseUsage: (output: string) => {
-        seen.push(output)
-        return undefined
-      },
-      parseModelMismatch: (output: string) => {
         seen.push(output)
         return undefined
       },
@@ -1771,88 +1767,6 @@ describe("CliLanguageModel", () => {
     expect(cmd[cmd.indexOf("--reasoning-effort") + 1]).toBe("max")
   })
 
-  test("passes MiniMax Code CLI prompt through headless exec stdin", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["minimax-cli"]
-    expect(definition).toBeDefined()
-
-    const cmd = buildCliCommand(
-      {
-        providerID: "minimax-cli",
-        modelID: "minimax-cli",
-        binary: "mcode",
-        args: definition?.args ?? [],
-        parser: definition!.parser,
-        promptMode: definition?.promptMode ?? "stdin",
-        workspaceArg: definition?.workspaceArg,
-      },
-      "write file",
-      "/repo",
-    )
-
-    expect(cmd).toEqual([
-      "mcode",
-      "exec",
-      "--output-format",
-      "stream-json",
-      "--permission",
-      "full",
-      "--prompt-mode",
-      "coding",
-      "--input",
-      "-",
-      "--cwd",
-      "/repo",
-    ])
-    expect(cmd).not.toContain("write file")
-    expect(cmd).not.toContain("mmx")
-  })
-
-  test("passes MiniMax Code CLI model and effort flags", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["minimax-cli"]
-    const cmd = buildCliCommand(
-      {
-        providerID: "minimax-cli",
-        modelID: "MiniMax-M3",
-        binary: "mcode",
-        args: definition?.args ?? [],
-        parser: definition!.parser,
-        promptMode: definition?.promptMode ?? "stdin",
-      },
-      "write file",
-      undefined,
-      "high",
-    )
-
-    expect(cmd).toContain("--model")
-    expect(cmd[cmd.indexOf("--model") + 1]).toBe("minimax/MiniMax-M3")
-    expect(cmd).toContain("--effort")
-    expect(cmd[cmd.indexOf("--effort") + 1]).toBe("high")
-  })
-
-  test("sends MiniMax Code a provider-qualified model id", () => {
-    const definition = CLI_PROVIDER_DEFINITIONS["minimax-cli"]!
-    const modelArgFor = (modelID: string) => {
-      const cmd = buildCliCommand(
-        {
-          providerID: "minimax-cli",
-          modelID,
-          binary: "mcode",
-          args: definition.args,
-          parser: definition.parser,
-          promptMode: "stdin",
-        },
-        "write file",
-      )
-      return cmd[cmd.indexOf("--model") + 1]
-    }
-
-    // mcode rejects a bare id with "--model must use provider/model".
-    expect(modelArgFor("MiniMax-M3")).toBe("minimax/MiniMax-M3")
-    // An id that already names a provider is forwarded unchanged.
-    expect(modelArgFor("minimax/MiniMax-M3")).toBe("minimax/MiniMax-M3")
-    expect(modelArgFor("openrouter/foo")).toBe("openrouter/foo")
-  })
-
   test("leaves other CLI providers' bare model ids unchanged", () => {
     const cmd = buildCliCommand(
       {
@@ -2481,49 +2395,6 @@ describe("optional CLI flags", () => {
 })
 
 describe("CLI effective model and terminal events", () => {
-  const substitutedMiniMax = [
-    '{"type":"item.completed","item":{"type":"agent_message","content":"PONG"}}',
-    '{"type":"turn.completed","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking"},"usage":{"inputTokens":13760,"outputTokens":4,"cacheReadTokens":176,"totalTokens":13940}}',
-    '{"type":"exec.completed","result":{"type":"exec.result","status":"succeeded","output":"PONG","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking"}}}',
-  ].join("\n")
-
-  test("doGenerate fails when MiniMax Code substitutes a different model", async () => {
-    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(substitutedMiniMax + "\n"))
-    try {
-      await expect(
-        makeModel({
-          providerID: "minimax-cli",
-          modelID: "no-such-model-xyz",
-          binary: "mcode",
-          args: [],
-          parser: minimaxCliParser,
-          promptMode: "arg",
-          promptFlag: "-p",
-        }).doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }] }),
-      ).rejects.toThrow("MiniMax Code used MiniMax-M3.1-Flash instead of the requested model no-such-model-xyz")
-    } finally {
-      spawn.mockRestore()
-    }
-  })
-
-  test("doGenerate skips the model check for the delegating sentinel", async () => {
-    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(substitutedMiniMax + "\n"))
-    try {
-      const result = await makeModel({
-        providerID: "minimax-cli",
-        modelID: "minimax-cli",
-        binary: "mcode",
-        args: [],
-        parser: minimaxCliParser,
-        promptMode: "arg",
-        promptFlag: "-p",
-      }).doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }] })
-      expect(result.content).toEqual([{ type: "text", text: "PONG" }])
-    } finally {
-      spawn.mockRestore()
-    }
-  })
-
   test("doStream finishes on the muse terminal event without waiting for process exit", async () => {
     const stdout = new PassThrough()
     const stderr = new PassThrough()

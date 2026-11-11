@@ -18,15 +18,7 @@ import { Isolation } from "../../../src/isolation"
 import { Process } from "../../../src/util/process"
 import { claudeCodeParser, kimiCliParser } from "../../../src/provider/cli/parser"
 
-const PROVIDERS = [
-  "claude-code",
-  "codex-cli",
-  "grok-build-cli",
-  "kimi-cli",
-  "muse-cli",
-  "minimax-cli",
-  "dsh-cli",
-] as const
+const PROVIDERS = ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli", "muse-cli", "dsh-cli"] as const
 
 const originalIsolationMode = process.env.AX_CODE_ISOLATION_MODE
 const originalAutonomous = process.env.AX_CODE_AUTONOMOUS
@@ -107,10 +99,6 @@ describe("cliIsolationArgs", () => {
     expect(cliIsolationArgs("kimi-cli", "read-only", false)).toEqual({
       args: ["--agent-file", kimiReadOnlyAgentPath()],
     })
-    for (const providerID of ["minimax-cli"] as const) {
-      expectUnsupported(() => cliIsolationArgs(providerID, "read-only", false), "read-only")
-      expectUnsupported(() => cliIsolationArgs(providerID, "read-only", true), "read-only")
-    }
     // Anything not listed keeps its headless argv.
     expect(cliIsolationArgs("custom-cli", "read-only", false)).toEqual({ args: [] })
   })
@@ -128,7 +116,7 @@ describe("cliIsolationArgs", () => {
     expect(cliIsolationArgs("grok-build-cli", "workspace-write", false)).toEqual({ args: [] })
     expect(cliIsolationArgs("muse-cli", "workspace-write", false)).toEqual({ args: [] })
     expect(cliIsolationArgs("dsh-cli", "workspace-write", false)).toEqual({ args: [] })
-    for (const providerID of ["kimi-cli", "minimax-cli"] as const) {
+    for (const providerID of ["kimi-cli"] as const) {
       expectUnsupported(() => cliIsolationArgs(providerID, "workspace-write", false), "workspace-write")
       expectUnsupported(() => cliIsolationArgs(providerID, "workspace-write", true), "workspace-write")
     }

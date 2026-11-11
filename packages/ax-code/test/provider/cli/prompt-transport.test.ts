@@ -57,7 +57,7 @@ async function collect(stream: ReadableStream<LanguageModelV3StreamPart>) {
 }
 
 describe.each(["doGenerate", "doStream"] as const)("%s prompt transport", (method) => {
-  test.each(["claude-code", "codex-cli", "grok-build-cli", "muse-cli", "minimax-cli"])(
+  test.each(["claude-code", "codex-cli", "grok-build-cli", "muse-cli"])(
     "%s delivers the complete large prompt without putting it in argv",
     async (providerID) => {
       await using tmp = await tmpdir()
@@ -264,7 +264,7 @@ test("Windows argv guard accounts for shim escaping and returns no prompt conten
   } catch (error) {
     expect(error).toMatchObject({ isRetryable: false, requestBodyValues: undefined })
     expect(String(error)).not.toContain(secretPrompt)
-    expect(String(error)).toContain("minimax-cli")
+    expect(String(error)).toContain("kimi-cli")
     expect(String(error)).not.toContain("qoder-cli")
   }
 })

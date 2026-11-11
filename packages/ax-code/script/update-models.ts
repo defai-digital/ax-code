@@ -71,14 +71,7 @@ for (const id of RETIRED_PROVIDER_IDS) {
 }
 
 // Preserve local-only provider entries that models.dev doesn't include
-const cliImageProviderIDs = [
-  "claude-code",
-  "codex-cli",
-  "grok-build-cli",
-  "kimi-cli",
-  "muse-cli",
-  "minimax-cli",
-] as const
+const cliImageProviderIDs = ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli", "muse-cli"] as const
 const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
 for (const id of localProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = cloneJsonValue(existing[id])
@@ -261,61 +254,6 @@ if (!fetched["muse-cli"].models?.["muse-cli"]) {
       limit: {
         context: 1048576,
         output: 131072,
-      },
-      options: {},
-      status: "active",
-    },
-  }
-}
-if (!fetched["minimax-cli"]) {
-  fetched["minimax-cli"] = {
-    id: "minimax-cli",
-    name: "MiniMax Code CLI",
-    env: [],
-    npm: "cli",
-    models: {
-      "minimax-cli": {
-        id: "minimax-cli",
-        name: "MiniMax Code CLI",
-        family: "minimax",
-        attachment: true,
-        reasoning: false,
-        tool_call: false,
-        temperature: false,
-        release_date: "2026-09-17",
-        modalities: {
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 1048576,
-          output: 512000,
-        },
-        options: {},
-        status: "active",
-      },
-    },
-  }
-}
-if (!fetched["minimax-cli"].models?.["minimax-cli"]) {
-  fetched["minimax-cli"].models = {
-    ...(fetched["minimax-cli"].models ?? {}),
-    "minimax-cli": {
-      id: "minimax-cli",
-      name: "MiniMax Code CLI",
-      family: "minimax",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-09-17",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 1048576,
-        output: 512000,
       },
       options: {},
       status: "active",
@@ -833,31 +771,6 @@ if (!fetched["muse-cli"].models?.["muse-cli"]) {
       limit: {
         context: 1048576,
         output: 131072,
-      },
-      options: {},
-      status: "active",
-    },
-  }
-}
-if (!fetched["minimax-cli"].models?.["minimax-cli"]) {
-  fetched["minimax-cli"].models = {
-    ...(fetched["minimax-cli"].models ?? {}),
-    "minimax-cli": {
-      id: "minimax-cli",
-      name: "MiniMax Code CLI",
-      family: "minimax",
-      attachment: true,
-      reasoning: false,
-      tool_call: false,
-      temperature: false,
-      release_date: "2026-09-17",
-      modalities: {
-        input: ["text", "image"],
-        output: ["text"],
-      },
-      limit: {
-        context: 1048576,
-        output: 512000,
       },
       options: {},
       status: "active",

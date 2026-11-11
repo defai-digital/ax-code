@@ -21,7 +21,6 @@ describe("implicit default model selection", () => {
     expect(preferredDefaultSkuForProvider("minimax-cn-coding-plan")).toBe("MiniMax-M3")
     expect(preferredDefaultSkuForProvider("meta")).toBe("muse-spark-1.3")
     expect(preferredDefaultSkuForProvider("muse-cli")).toBe("muse-spark-1.3")
-    expect(preferredDefaultSkuForProvider("minimax-cli")).toBe("MiniMax-M3")
     expect(preferredDefaultSkuForProvider("google")).toBe("gemini-3.8-flash")
     expect(preferredDefaultSkuForProvider("groq")).toBe("openai/gpt-oss-20b")
     expect(preferredDefaultSkuForProvider("ax-engine")).toBeUndefined()

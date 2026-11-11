@@ -214,11 +214,6 @@ describe("provider dialog options", () => {
     expect(CLI_BINARIES["muse-cli"]).toBe("muse")
   })
 
-  test("includes MiniMax Code CLI as a CLI provider", () => {
-    expect(CLI_PROVIDERS.has("minimax-cli")).toBe(true)
-    expect(CLI_BINARIES["minimax-cli"]).toBe("mcode")
-  })
-
   test("hides suppressed providers from the connect dialog", () => {
     expect(
       providerDialogProviders({
@@ -360,7 +355,7 @@ describe("provider dialog options", () => {
         })),
       ).toEqual([
         { value: "api", description: "2 providers" },
-        { value: "cli", description: "7 providers" },
+        { value: "cli", description: "6 providers" },
         { value: "ax-engine", description: "1 provider" },
         { value: "local", description: "6 providers" },
         { value: "private-gpu", description: "14 providers" },
@@ -652,15 +647,6 @@ describe("provider dialog options", () => {
         },
       }),
     ).toBe("muse-cli")
-    expect(
-      selectableProviderDefaultModelID({
-        providerID: "minimax-cli",
-        models: {
-          "minimax-cli": { id: "minimax-cli", capabilities: { toolcall: true } },
-          "MiniMax-M3.1-Flash": { id: "MiniMax-M3.1-Flash", capabilities: { toolcall: true } },
-        },
-      }),
-    ).toBe("minimax-cli")
   })
 
   test("Use CLI default keeps the grok sentinel after discovery has no catalog default", () => {

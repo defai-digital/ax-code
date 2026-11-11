@@ -114,7 +114,8 @@ These providers call hosted APIs or hosted account-plan endpoints.
 MiniMax renamed Coding Plan to Token Plan. The provider IDs stay `minimax-coding-plan` /
 `minimax-cn-coding-plan` to match models.dev and OpenCode. Use a Token Plan key
 (`sk-cp-…`) from [platform.minimax.io](https://platform.minimax.io/user-center/payment/token-plan)
-(international) or [platform.minimaxi.com](https://platform.minimaxi.com) (China).
+(international) or [platform.minimaxi.com](https://platform.minimaxi.com) (China). MiniMax Code CLI support was retired
+in favor of these API providers: a Token Plan key works directly, and AX Code runs the agent loop itself.
 
 > `huggingface` is the **hosted Serverless Inference Providers router** (`https://router.huggingface.co/v1`).
 > It is unrelated to the local Hugging Face snapshot cache that AX Engine uses to store downloaded
@@ -205,7 +206,6 @@ CLI process exits, including cancellation and spawn failures.
 | `grok-build-cli` | Grok Build CLI          | `grok`                 | `grok-build-cli`  | [xai-org/grok-build](https://github.com/xai-org/grok-build) (Apache-2.0)              |
 | `kimi-cli`       | Kimi Code CLI           | `kimi`                 | `kimi-cli`        | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) (MIT)                 |
 | `muse-cli`       | Muse Code CLI           | `muse`                 | `muse-cli`        | Proprietary; bridged through the vendor CLI                                           |
-| `minimax-cli`    | MiniMax Code CLI        | `mcode`                | `minimax-cli`     | [MiniMax-AI/minimax-code](https://github.com/MiniMax-AI/minimax-code) (MIT)           |
 | `dsh-cli`        | DeepSeek Harness        | `dsh`                  | `dsh-cli`         | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (MIT) |
 
 The fallback model id is only listed when AX Code cannot read the CLI's own model cache or catalog. Once the CLI
@@ -229,13 +229,6 @@ For Muse Code, install the local `muse` binary, run `muse login` (or set `META_A
 
 For Claude Code, install the local `claude` binary, run `claude` once to sign in (or export `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`), then `ax-code providers login claude-code`. AX Code reuses the Claude Code CLI session (`$CLAUDE_CONFIG_DIR` when set, otherwise `~/.claude`) rather than storing a hosted Anthropic API key. The hosted `anthropic` API provider remains a separate connection.
 
-For MiniMax Code, install the local `mcode` binary (`npm install -g @minimax-ai/code` or the official installer), run `mcode login`, then `ax-code providers login minimax-cli`. AX Code reuses the MiniMax Code CLI session (`~/.minimax`) rather than storing a hosted Token Plan key. The hosted `minimax-coding-plan` / `minimax-cn-coding-plan` API providers remain separate connections. Do not use `mmx-cli` for this provider.
-
-MiniMax model discovery prefers `MCODE_MODEL`, then the top-level string `defaultModel` in
-`$MINIMAX_DATA_DIR/config.yaml`, `$MAVIS_DATA_DIR/config.yaml`, or `~/.minimax/config.yaml` (the first configured
-directory is used). Nested keys and examples inside block strings do not select a model. Missing, empty, non-string,
-or malformed settings leave model selection to the CLI's default.
-
 For DeepSeek Harness, install the local `dsh` binary (`npm install -g @deepseek-ai/dsh`), put `DEEPSEEK_API_KEY` in your environment or in `~/.dsh/.env`, then `ax-code providers login dsh-cli`. AX Code runs `dsh --profile headless --json` with the `workspace-write` permission preset and approval policy `never`, in the session's working directory. dsh picks the DeepSeek model from its own profile; headless mode has no model flag. dsh uploads session logs with DeepSeek API requests and sends OTel session telemetry by default, so every bridged run passes a launcher `--patch` overlay (written to AX Code's cache directory as `dsh-privacy.patch.yml`) that disables both, and sets `DSH_TELEMETRY_MODE=DISABLED`. The hosted `deepseek` API provider remains a separate connection in which AX Code runs the agent loop itself.
 
 ### Isolation modes and CLI providers
@@ -244,15 +237,15 @@ AX Code's isolation mode is a ceiling for the vendor CLI, not a hint: the CLI ru
 must never receive more access than the AX session has. The mapping lives in
 `packages/ax-code/src/provider/cli/isolation.ts`; `full-access` keeps each CLI's headless defaults.
 
-| Isolation mode    | Claude Code                                                         | Codex CLI                   | Grok Build               | DeepSeek Harness              | Kimi Code                                       | MiniMax Code       | Muse Code                         |
-| ----------------- | ------------------------------------------------------------------- | --------------------------- | ------------------------ | ----------------------------- | ----------------------------------------------- | ------------------ | --------------------------------- |
-| `read-only`       | `--permission-mode dontAsk --tools Read,Glob,Grep`                  | `--sandbox read-only`       | `--permission-mode plan` | `--permission-mode read-only` | `--agent-file` with a Read/Glob/Grep-only agent | error before start | `--disable-write --disable-shell` |
-| `workspace-write` | `--permission-mode acceptEdits`                                     | `--sandbox workspace-write` | unchanged                | unchanged                     | error before start                              | error before start | unchanged                         |
-| `full-access`     | headless default (autonomous adds `--dangerously-skip-permissions`) | headless default            | headless default         | headless default              | headless default                                | headless default   | headless default                  |
+| Isolation mode    | Claude Code                                                         | Codex CLI                   | Grok Build               | DeepSeek Harness              | Kimi Code                                       | Muse Code                         |
+| ----------------- | ------------------------------------------------------------------- | --------------------------- | ------------------------ | ----------------------------- | ----------------------------------------------- | --------------------------------- |
+| `read-only`       | `--permission-mode dontAsk --tools Read,Glob,Grep`                  | `--sandbox read-only`       | `--permission-mode plan` | `--permission-mode read-only` | `--agent-file` with a Read/Glob/Grep-only agent | `--disable-write --disable-shell` |
+| `workspace-write` | `--permission-mode acceptEdits`                                     | `--sandbox workspace-write` | unchanged                | unchanged                     | error before start                              | unchanged                         |
+| `full-access`     | headless default (autonomous adds `--dangerously-skip-permissions`) | headless default            | headless default         | headless default              | headless default                                | headless default                  |
 
 Kimi Code reads its read-only agent from `kimi-read-only-agent.md` in AX Code's cache directory (written once, before
-spawn). Kimi Code in `workspace-write` and MiniMax Code in both restricted modes fail before start because neither has a
-sandbox: live runs wrote files outside the workspace, including in the home directory.
+spawn). Kimi Code in `workspace-write` fails before start because it has no sandbox: live runs wrote files outside the
+workspace, including in the home directory.
 
 The autonomous flag never widens the mode. A provider/mode combination the CLI cannot enforce fails before the CLI
 process starts, with an error that names the provider and asks you to switch to `full-access` or use a different

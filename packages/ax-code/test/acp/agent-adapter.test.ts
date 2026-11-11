@@ -99,8 +99,8 @@ describe("ACP agent adapter", () => {
     const gateway = {
       id: "127-0-0-1",
       models: {
-        "MiniMax-M3": { id: "MiniMax-M3", tool_call: true },
-        "MiniMax-M3.1-Flash": { id: "MiniMax-M3.1-Flash", tool_call: true },
+        "kimi-k3-256k": { id: "kimi-k3-256k", tool_call: true },
+        "kimi-k3": { id: "kimi-k3", tool_call: true },
       },
     }
     const resolve = (model: string, providers: unknown[]) =>
@@ -110,15 +110,15 @@ describe("ACP agent adapter", () => {
 
     // Before the bridge's discovery probe, or while it is signed out, it is
     // absent from the connected list.
-    expect(await resolve("minimax-cli/MiniMax-M3.1-Flash", [gateway])).toEqual({
-      providerID: "minimax-cli",
-      modelID: "MiniMax-M3.1-Flash",
+    expect(await resolve("kimi-cli/kimi-k3", [gateway])).toEqual({
+      providerID: "kimi-cli",
+      modelID: "kimi-k3",
     })
     // Connected, but it does not list the model.
-    const bridge = { id: "minimax-cli", models: { "MiniMax-M3.1-Flash": { id: "MiniMax-M3.1-Flash" } } }
-    expect(await resolve("minimax-cli/MiniMax-M3", [bridge, gateway])).toEqual({
-      providerID: "minimax-cli",
-      modelID: "MiniMax-M3",
+    const bridge = { id: "kimi-cli", models: { "kimi-k3": { id: "kimi-k3" } } }
+    expect(await resolve("kimi-cli/kimi-k3-256k", [bridge, gateway])).toEqual({
+      providerID: "kimi-cli",
+      modelID: "kimi-k3-256k",
     })
   })
 

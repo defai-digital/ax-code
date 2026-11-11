@@ -20,12 +20,6 @@ import { claudeDisplayName, claudeFamilyId, latestAnthropicFamilyModels } from "
 import { grokDisplayName, grokFallbackLatest, grokFamilyId, latestGrokFamilyModels } from "./grok-families"
 import { kimiDisplayName, kimiFallbackModels, kimiFamilyId, latestKimiFamilyModels } from "./kimi-families"
 import { museDisplayName, museFallbackLatest, museFamilyId, latestMuseFamilyModels } from "./muse-families"
-import {
-  minimaxDisplayName,
-  minimaxFallbackLatest,
-  minimaxFamilyId,
-  latestMiniMaxFamilyModels,
-} from "./minimax-families"
 import { codexDisplayName, codexFallbackModels, codexFamilyId, latestCodexFamilyModels } from "./codex-families"
 import { LOCAL_LLM_RUNTIMES, normalizeLocalRuntimeBaseURL } from "./local-runtime"
 import { withCapabilityEvidence } from "./capability-evidence"
@@ -397,7 +391,6 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "grok-build-cli": "Grok Build CLI default",
   "kimi-cli": "Kimi Code CLI default",
   "muse-cli": "Muse Code CLI default",
-  "minimax-cli": "MiniMax Code CLI default",
   "dsh-cli": "DeepSeek Harness default",
 }
 
@@ -443,10 +436,6 @@ function cliBase(provider: Provider.Info): Provider.Model | undefined {
 
 /** Map a resolved CLI model id onto the id discovery publishes. */
 function normalizeCliModelID(providerID: string, modelID: string): string {
-  if (providerID === "minimax-cli" && modelID.startsWith("minimax/")) {
-    const bare = modelID.slice("minimax/".length)
-    return bare || modelID
-  }
   if (providerID === "kimi-cli") return normalizeKimiCodeModelID(modelID)
   return modelID
 }
@@ -805,65 +794,6 @@ async function museCliFamilyModels(
   return models
 }
 
-function collectMiniMaxCatalog(snapshot: Record<string, ModelsDev.Provider>): Record<string, ModelsDev.Model> {
-  const collected: Record<string, ModelsDev.Model> = {}
-  for (const id of ["minimax-coding-plan", "minimax-cn-coding-plan", "minimax"] as const) {
-    for (const [modelID, model] of Object.entries(snapshot[id]?.models ?? {})) {
-      if (!minimaxFamilyId({ id: model.id ?? modelID, family: model.family })) continue
-      const key = (model.id ?? modelID).split("/").pop() ?? modelID
-      if (!collected[key]) collected[key] = { ...model, id: key }
-    }
-  }
-  const fallback = minimaxFallbackLatest()
-  if (!collected[fallback.id]) collected[fallback.id] = fallback as ModelsDev.Model
-  return collected
-}
-
-export async function minimaxCliFamilyModels(
-  provider: Provider.Info,
-  resolved?: string,
-): Promise<Record<string, Provider.Model>> {
-  const base = cliBase(provider)
-  if (!base) return {}
-  const catalog = collectMiniMaxCatalog(await ModelsDev.get())
-  const models: Record<string, Provider.Model> = {}
-  for (const item of latestMiniMaxFamilyModels(catalog)) {
-    // MiniMax Code only serves the M3 family. Its own catalog silently
-    // substitutes the default model when asked for an M2 id, so offering one
-    // would run a different model than the picker shows.
-    if (minimaxFamilyId({ id: item.id, family: item.family }) !== "minimax-m3") continue
-    models[item.id] = overlayCliCatalogModel(
-      base,
-      item,
-      "minimax-cli",
-      minimaxDisplayName(item.name, item.id),
-      minimaxFamilyId({ id: item.id, family: item.family }),
-    )
-  }
-  // MiniMax Code's config.yaml stores its default as `<provider>/<model>`,
-  // while the catalog and family map use bare ids. Map only its own
-  // `minimax/` prefix onto the existing entry; other prefixes stay distinct.
-  let requested = resolved
-  if (resolved?.startsWith("minimax/")) {
-    const bare = resolved.slice("minimax/".length)
-    if (models[bare] || catalog[bare]) requested = bare
-  }
-  if (requested && requested !== "minimax-cli" && !models[requested] && catalog[requested]) {
-    const item = catalog[requested]!
-    models[requested] = overlayCliCatalogModel(
-      base,
-      item,
-      "minimax-cli",
-      minimaxDisplayName(item.name, requested),
-      minimaxFamilyId({ id: item.id, family: item.family }),
-    )
-  }
-  // Never publish a requested id the CLI's catalog does not serve. MiniMax Code
-  // silently substitutes its default model for an unknown `--model`, so a
-  // picker entry would run something other than the model the user selected.
-  return models
-}
-
 async function kimiCliFamilyModels(
   provider: Provider.Info,
   resolved?: string,
@@ -1001,7 +931,6 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         if (opts.providerID === "kimi-cli") return finish(await kimiCliFamilyModels(current, resolved.model))
         if (opts.providerID === "codex-cli") return finish(await codexCliFamilyModels(current, resolved.model))
         if (opts.providerID === "muse-cli") return finish(await museCliFamilyModels(current, resolved.model))
-        if (opts.providerID === "minimax-cli") return finish(await minimaxCliFamilyModels(current, resolved.model))
         return finish(cliModels(opts.providerID, current, resolved.model))
       },
     }
@@ -1013,7 +942,6 @@ const codexCli = getCliProviderDefinition("codex-cli")!
 const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
 const kimiCli = getCliProviderDefinition("kimi-cli")!
 const museCli = getCliProviderDefinition("muse-cli")!
-const minimaxCli = getCliProviderDefinition("minimax-cli")!
 const dshCli = getCliProviderDefinition("dsh-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
@@ -1095,15 +1023,6 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     promptMode: museCli.promptMode,
     promptFlag: museCli.promptFlag,
     workspaceArg: museCli.workspaceArg,
-  }),
-  "minimax-cli": cliLoader({
-    providerID: "minimax-cli",
-    binary: minimaxCli.binary,
-    args: minimaxCli.args,
-    parser: minimaxCli.parser,
-    promptMode: minimaxCli.promptMode,
-    promptFlag: minimaxCli.promptFlag,
-    workspaceArg: minimaxCli.workspaceArg,
   }),
   "dsh-cli": cliLoader({
     providerID: "dsh-cli",

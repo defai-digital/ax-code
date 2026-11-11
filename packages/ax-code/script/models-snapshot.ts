@@ -6,7 +6,6 @@ export const LOCAL_PROVIDER_IDS = [
   "grok-build-cli",
   "kimi-cli",
   "muse-cli",
-  "minimax-cli",
   "dsh-cli",
   "ollama",
   "ax-studio",
@@ -77,34 +76,6 @@ const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
       },
     },
   },
-  "minimax-cli": {
-    id: "minimax-cli",
-    name: "MiniMax Code CLI",
-    env: [],
-    npm: "cli",
-    models: {
-      "minimax-cli": {
-        id: "minimax-cli",
-        name: "MiniMax Code CLI",
-        family: "minimax",
-        attachment: true,
-        reasoning: false,
-        tool_call: false,
-        temperature: false,
-        release_date: "2026-09-17",
-        modalities: {
-          input: ["text", "image"],
-          output: ["text"],
-        },
-        limit: {
-          context: 1048576,
-          output: 512000,
-        },
-        options: {},
-        status: "active",
-      },
-    },
-  },
   "dsh-cli": {
     id: "dsh-cli",
     name: "DeepSeek Harness",
@@ -158,14 +129,6 @@ export function preserveLocalProviders(fetched: ModelsSnapshot, existing: Models
     museCli.models = {
       ...(museCli.models ?? {}),
       "muse-cli": museCliDefault.models["muse-cli"],
-    }
-  }
-  const minimaxCli = next["minimax-cli"] as { models?: Record<string, unknown> } | undefined
-  const minimaxCliDefault = LOCAL_PROVIDER_DEFAULTS["minimax-cli"] as { models: Record<string, unknown> }
-  if (minimaxCli && !minimaxCli.models?.["minimax-cli"]) {
-    minimaxCli.models = {
-      ...(minimaxCli.models ?? {}),
-      "minimax-cli": minimaxCliDefault.models["minimax-cli"],
     }
   }
   const dshCli = next["dsh-cli"] as { models?: Record<string, unknown> } | undefined

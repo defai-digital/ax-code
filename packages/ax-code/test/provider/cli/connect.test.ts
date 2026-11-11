@@ -274,36 +274,6 @@ describe("probeCliLanguageModel", () => {
     }
   })
 
-  test("probe passes MiniMax --cwd from the bundled definition", async () => {
-    await using tmp = await tmpdir()
-    const spawn = vi
-      .spyOn(Process, "spawn")
-      .mockImplementation(() =>
-        successfulChild('{"type":"item.completed","item":{"id":"item_1","type":"assistant_message","text":"OK"}}\n'),
-      )
-
-    try {
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          await probeCliLanguageModel({
-            providerID: "minimax-cli",
-            modelID: "minimax-cli",
-            binary: "mcode",
-          })
-        },
-      })
-
-      const cmd = spawn.mock.calls[0]?.[0] as string[]
-      expect(cmd).toContain("--cwd")
-      expect(cmd[cmd.indexOf("--cwd") + 1]).toBe(tmp.path)
-      expect(cmd).toContain("--input")
-      expect(cmd).toContain("-")
-    } finally {
-      spawn.mockRestore()
-    }
-  })
-
   test("probe retries the login check without a rejected optional flag", async () => {
     await using tmp = await tmpdir()
     const spawn = vi

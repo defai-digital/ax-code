@@ -16,9 +16,9 @@ describe("cloud API providers: DeepSeek + Meta Muse Spark", () => {
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("anthropic")
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("claude-code")
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("muse-cli")
-    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("minimax-cli")
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("dsh-cli")
     expect(DEFAULT_SETUP_PROVIDER_IDS).not.toContain("qoder-cli")
+    expect(DEFAULT_SETUP_PROVIDER_IDS).not.toContain("minimax-cli")
     expect(
       shouldShowProviderInList({
         key: "deepseek",

@@ -68,7 +68,7 @@ describe("providers command", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("antigravity-cli")).toBe(false)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("kimi-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("muse-cli")).toBe(true)
-    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("minimax-cli")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("minimax-cli")).toBe(false)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("dsh-cli")).toBe(true)
   })
 

@@ -6,11 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Removed
+
+- Retire the MiniMax Code CLI provider (`minimax-cli`). Use the `minimax-coding-plan` or `minimax-cn-coding-plan` API
+  provider with a Token Plan key instead: the CLI bridge added no access path, could not be sandboxed headlessly, and
+  could silently substitute its default model. The SDK's `CLI_PROVIDER_IDS` and `CliProviderID` no longer include
+  `minimax-cli`.
+
 ### Fixed
 
 - CLI providers in `read-only` isolation restrict Muse Code (writes and shell disabled) and Kimi Code (a
-  Read/Glob/Grep-only agent) instead of refusing to start them. Only Kimi Code in `workspace-write` and MiniMax Code in
-  either restricted mode still fail before starting, because they have no sandbox and write outside the workspace.
+  Read/Glob/Grep-only agent) instead of refusing to start them. Only Kimi Code in `workspace-write` still fails before
+  starting, because it has no sandbox and writes outside the workspace.
 
 ## [7.30.22] - 2026-11-11
 

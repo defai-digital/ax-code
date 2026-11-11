@@ -650,7 +650,6 @@ describe("Env.sanitize", () => {
     const originalXai = process.env.XAI_API_KEY
     const originalKimi = process.env.KIMI_API_KEY
     const originalMeta = process.env.META_API_KEY
-    const originalMiniMax = process.env.MINIMAX_API_KEY
     const originalClaudeOAuth = process.env.CLAUDE_CODE_OAUTH_TOKEN
     const originalAnthropicAuth = process.env.ANTHROPIC_AUTH_TOKEN
 
@@ -663,7 +662,6 @@ describe("Env.sanitize", () => {
       process.env.XAI_API_KEY = "xai-key"
       process.env.KIMI_API_KEY = "kimi-key"
       process.env.META_API_KEY = "meta-key"
-      process.env.MINIMAX_API_KEY = "minimax-key"
 
       const env = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "codex-cli")
 
@@ -689,10 +687,6 @@ describe("Env.sanitize", () => {
       expect(muse.META_API_KEY).toBe("meta-key")
       expect(muse.OPENAI_API_KEY).toBeUndefined()
       expect(muse.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
-
-      const minimax = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "minimax-cli")
-      expect(minimax.MINIMAX_API_KEY).toBe("minimax-key")
-      expect(minimax.OPENAI_API_KEY).toBeUndefined()
     } finally {
       if (originalClaudeOAuth === undefined) delete process.env.CLAUDE_CODE_OAUTH_TOKEN
       else process.env.CLAUDE_CODE_OAUTH_TOKEN = originalClaudeOAuth
@@ -710,8 +704,6 @@ describe("Env.sanitize", () => {
       else process.env.KIMI_API_KEY = originalKimi
       if (originalMeta === undefined) delete process.env.META_API_KEY
       else process.env.META_API_KEY = originalMeta
-      if (originalMiniMax === undefined) delete process.env.MINIMAX_API_KEY
-      else process.env.MINIMAX_API_KEY = originalMiniMax
     }
   })
 
@@ -722,7 +714,7 @@ describe("Env.sanitize", () => {
       const kimi = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "kimi-cli")
       expect(kimi.KIMI_MODEL_API_KEY).toBe("kimi-model-key")
 
-      for (const providerID of ["codex-cli", "claude-code", "grok-build-cli", "muse-cli", "minimax-cli", "dsh-cli"]) {
+      for (const providerID of ["codex-cli", "claude-code", "grok-build-cli", "muse-cli", "dsh-cli"]) {
         expect(Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), providerID).KIMI_MODEL_API_KEY, providerID).toBe(
           undefined,
         )

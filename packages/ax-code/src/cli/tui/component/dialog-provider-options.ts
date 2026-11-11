@@ -72,7 +72,6 @@ export const CLI_BINARIES: Record<string, string> = {
   "grok-build-cli": "grok",
   "kimi-cli": "kimi",
   "muse-cli": "muse",
-  "minimax-cli": "mcode",
   "dsh-cli": "dsh",
 }
 

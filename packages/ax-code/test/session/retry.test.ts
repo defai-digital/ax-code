@@ -450,11 +450,11 @@ describe("session.retry.retryable", () => {
 })
 
 describe("session.retry CLI isolation", () => {
-  const isolationError = () => new CliIsolationUnsupportedError("minimax-cli", "read-only")
+  const isolationError = () => new CliIsolationUnsupportedError("kimi-cli", "workspace-write")
 
   test("serializes the live error as a terminal APIError that keeps its message", () => {
     const live = isolationError()
-    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("minimax-cli") })
+    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("kimi-cli") })
     const parsed = MessageV2.APIError.Schema.parse(persisted)
     expect(parsed.data.isRetryable).toBe(false)
     expect(parsed.data.message).toBe(live.message)
@@ -463,7 +463,7 @@ describe("session.retry CLI isolation", () => {
 
   test("is not retryable for the live error or any serialized form", () => {
     const live = isolationError()
-    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("minimax-cli") })
+    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("kimi-cli") })
     const serializedForms = [
       // The live instance, should it ever reach the processor classification.
       live as unknown as ReturnType<NamedError["toObject"]>,

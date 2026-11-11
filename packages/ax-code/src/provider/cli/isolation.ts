@@ -27,7 +27,6 @@ export class CliIsolationUnsupportedError extends Error {
 const CLI_ISOLATION_LABELS: Record<string, string> = {
   "kimi-cli": "Kimi Code CLI",
   "muse-cli": "Muse Code CLI",
-  "minimax-cli": "MiniMax Code CLI",
 }
 
 /** How to shape the definition's argv for the effective isolation mode. */
@@ -91,11 +90,6 @@ export function cliIsolationArgs(providerID: string, mode: Isolation.Mode, auton
         // workspace writes) and --disable-shell (no shell execution). Together
         // they enforce read-only while Muse's own sandbox stays on.
         return { args: ["--disable-write", "--disable-shell"] }
-      case "minimax-cli":
-        // Verified live: `--permission smart` and `off` both still wrote files
-        // outside the workspace, and mcode exec cannot select the main agent,
-        // so agent.md tool selectors (subagents only) cannot restrict it.
-        throw new CliIsolationUnsupportedError(providerID, mode)
       default:
         return { args: [] }
     }
@@ -109,11 +103,6 @@ export function cliIsolationArgs(providerID: string, mode: Isolation.Mode, auton
     case "kimi-cli":
       // Verified live: `kimi -p` writes files outside the workspace (including
       // the home directory); Kimi has no sandbox to constrain them.
-      throw new CliIsolationUnsupportedError(providerID, mode)
-    case "minimax-cli":
-      // Verified live: both `--permission smart` and `off` wrote outside the
-      // workspace; agent.md tool selectors apply only to subagents and
-      // mcode exec cannot select the main agent, so there is no safe mapping.
       throw new CliIsolationUnsupportedError(providerID, mode)
     // grok-build-cli, muse-cli, and dsh-cli already run at workspace-write.
     default:

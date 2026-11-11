@@ -12,7 +12,6 @@ import { assertCliCommandSize, materializeCliPrompt } from "./prompt-transport"
 import {
   parseCliJsonEventLine,
   stdoutHasCliJsonEvents,
-  CliOutputError,
   type CliOutputParser,
   type CliStreamState,
   type CliUsage,
@@ -30,7 +29,6 @@ import { Instance } from "@/project/instance"
 import { cliEffortArgs, cliEffortFromProviderOptions } from "./effort"
 import { dshLauncherArgs, ensureDshPrivacyPatch } from "./dsh"
 import { ensureKimiReadOnlyAgentFile } from "./kimi-isolation"
-import { minimaxModelArg } from "./minimax"
 import { cliIsolationArgs, resolveCliIsolationMode, type CliIsolationArgs } from "./isolation"
 
 const log = Log.create({ service: "provider.cli-language-model" })
@@ -321,7 +319,7 @@ export function buildCliCommand(
   ]
   if (config.workspaceArg && workspaceDirectory) cmd.push(config.workspaceArg, workspaceDirectory)
   if (config.modelID !== config.providerID) {
-    cmd.push("--model", config.providerID === "minimax-cli" ? minimaxModelArg(config.modelID) : config.modelID)
+    cmd.push("--model", config.modelID)
   }
   if (config.promptMode === "arg") cmd.push(config.promptFlag ?? "-p", prompt)
   if (config.promptMode === "positional") cmd.push(prompt)
@@ -366,18 +364,6 @@ function mapCliUsage(usage: CliUsage | undefined): LanguageModelV3Usage | undefi
       reasoning,
     },
   }
-}
-
-// A CLI that reports a different effective model than the one requested (for
-// example MiniMax Code substituting its default) produced the wrong answer.
-function cliModelMismatch(
-  parser: CliOutputParser,
-  output: string,
-  providerID: string,
-  modelID: string,
-): string | undefined {
-  if (modelID === providerID) return undefined
-  return parser.parseModelMismatch?.(output, modelID)
 }
 
 function readAbortError(signal: AbortSignal): Error {
@@ -713,8 +699,6 @@ export class CliLanguageModel implements LanguageModelV3 {
     const rawStdout = stdout.toString()
     const parsed = this.config.parser.parseComplete(rawStdout)
     if (!parsed.text.trim()) throw new Error(formatCliNoOutput(stdout, stderr))
-    const mismatch = cliModelMismatch(this.config.parser, rawStdout, this.config.providerID, this.config.modelID)
-    if (mismatch) throw new CliOutputError(mismatch)
 
     const outputText = jsonInstruction ? extractJsonPayload(parsed.text) : parsed.text
     return {
@@ -1015,11 +999,6 @@ export class CliLanguageModel implements LanguageModelV3 {
           // The whole decoded chunk (including the unterminated tail) was
           // already pushed to `raw`, so appending `remainder` would double it.
           const rawOutput = raw.join("")
-          const mismatch = cliModelMismatch(parser, rawOutput, config.providerID, config.modelID)
-          if (mismatch) {
-            fail(new CliOutputError(mismatch))
-            return
-          }
           endText()
           controller.enqueue({
             type: "finish",
@@ -1047,11 +1026,6 @@ export class CliLanguageModel implements LanguageModelV3 {
           }
           if (!output.join("").trim()) {
             fail(new Error(formatCliNoOutput(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
-            return
-          }
-          const mismatch = cliModelMismatch(parser, raw.join(""), config.providerID, config.modelID)
-          if (mismatch) {
-            fail(new CliOutputError(mismatch))
             return
           }
           endText()

@@ -49,10 +49,13 @@ describe("resolveConnectedProviderID", () => {
     expect(resolveConnectedProviderID("deepseek", connected)).toBeUndefined()
   })
 
-  test("prefers bundled CLI ids when both CLI and hosted providers are connected", () => {
+  test("prefers a bundled CLI id over the hosted provider when both are connected", () => {
     expect(resolveConnectedProviderID("muse", ["meta", "muse-cli"])).toBe("muse-cli")
-    expect(resolveConnectedProviderID("mcode", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-cli")
-    expect(resolveConnectedProviderID("minimax", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-cli")
+  })
+
+  test("keeps minimax aliases on the connected API providers", () => {
+    expect(resolveConnectedProviderID("minimax", ["minimax-coding-plan"])).toBe("minimax-coding-plan")
+    expect(resolveConnectedProviderID("minimax-code", ["minimax-cn-coding-plan"])).toBe("minimax-cn-coding-plan")
   })
 
   test("maps plan-provider colloquial names to the connected first-party id", () => {

@@ -3,7 +3,6 @@ import {
   codexCliParser,
   grokBuildCliParser,
   kimiCliParser,
-  minimaxCliParser,
   museCliParser,
   dshCliParser,
   type CliOutputParser,
@@ -74,16 +73,6 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     promptMode: "file",
     promptFlag: "--prompt-file",
     workspaceArg: "--workspace",
-  },
-  // MiniMax Code CLI: headless exec with stream-json. Stdin via --input -
-  // avoids argv limits. Permission is full because AX Code cannot show MCode's
-  // interactive approval UI. Do not confuse with mmx-cli (platform CLI).
-  "minimax-cli": {
-    binary: "mcode",
-    args: ["exec", "--output-format", "stream-json", "--permission", "full", "--prompt-mode", "coding", "--input", "-"],
-    parser: minimaxCliParser,
-    promptMode: "stdin",
-    workspaceArg: "--cwd",
   },
   // DeepSeek Harness: one-shot headless profile with NDJSON events. The task
   // arrives on stdin (dsh reads stdin when the positional task is omitted).

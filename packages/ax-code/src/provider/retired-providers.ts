@@ -8,6 +8,9 @@ export const RETIRED_PROVIDER_IDS = [
   "kilo",
   // Closed-source CLI agent with no maintained bridge.
   "qoder-cli",
+  // Bridge added no access path over the MiniMax Token Plan API providers and
+  // could not be sandboxed headlessly.
+  "minimax-cli",
 ] as const
 
 const RETIRED_PROVIDER_ID_SET = new Set<string>(RETIRED_PROVIDER_IDS)

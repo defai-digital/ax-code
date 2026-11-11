@@ -24,7 +24,6 @@ describe("dialog model options", () => {
     expect(dialogModelOptionDisabled("grok-build-cli", "grok-build-cli", model(false))).toBe(false)
     expect(dialogModelOptionDisabled("kimi-cli", "kimi-cli", model(false))).toBe(false)
     expect(dialogModelOptionDisabled("muse-cli", "muse-cli", model(false))).toBe(false)
-    expect(dialogModelOptionDisabled("minimax-cli", "minimax-cli", model(false))).toBe(false)
   })
 
   test("does not exempt retired CLI providers from tool-call requirements", () => {

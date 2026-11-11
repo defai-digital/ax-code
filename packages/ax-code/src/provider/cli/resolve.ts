@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
 import { parse as parseToml } from "smol-toml"
-import { parse as parseYaml } from "yaml"
 import { Filesystem } from "../../util/filesystem"
 import { isRecord } from "../../util/record"
 import { parseCliJsonObject, type CliJsonObject } from "./json"
@@ -19,7 +18,6 @@ const DEFAULTS: Record<string, string> = {
   "grok-build-cli": "grok-build-cli",
   "kimi-cli": "kimi-cli",
   "muse-cli": "muse-cli",
-  "minimax-cli": "minimax-cli",
   "dsh-cli": "dsh-cli",
 }
 
@@ -244,54 +242,12 @@ async function resolveMuseModel(): Promise<CliModelInfo> {
   return { model: DEFAULTS["muse-cli"]!, source: "default" }
 }
 
-function minimaxDataDir() {
-  const testHome = process.env.AX_CODE_TEST_HOME?.trim()
-  if (testHome) return join(testHome, ".minimax")
-  const dataDir = process.env.MINIMAX_DATA_DIR?.trim() || process.env.MAVIS_DATA_DIR?.trim()
-  if (dataDir) return dataDir
-  return join(homeDir(), ".minimax")
-}
-
-function resolveYamlDefaultModel(yaml: string): string | undefined {
-  try {
-    const settings: unknown = parseYaml(yaml, { logLevel: "error" })
-    if (!isRecord(settings) || !Object.hasOwn(settings, "defaultModel")) return undefined
-    const value = settings.defaultModel
-    return typeof value === "string" ? value.trim() || undefined : undefined
-  } catch {
-    return undefined
-  }
-}
-
-async function resolveMiniMaxModel(): Promise<CliModelInfo> {
-  const envModel = process.env.MCODE_MODEL?.trim()
-  if (envModel) return { model: envModel, source: "MCODE_MODEL" }
-
-  const configPath = join(minimaxDataDir(), "config.yaml")
-  const yaml = await readText(configPath)
-  const model = yaml ? resolveYamlDefaultModel(yaml) : undefined
-  if (model) {
-    const testHome = process.env.AX_CODE_TEST_HOME?.trim()
-    const source = testHome
-      ? "test-home ~/.minimax/config.yaml"
-      : process.env.MINIMAX_DATA_DIR?.trim()
-        ? "$MINIMAX_DATA_DIR/config.yaml"
-        : process.env.MAVIS_DATA_DIR?.trim()
-          ? "$MAVIS_DATA_DIR/config.yaml"
-          : "~/.minimax/config.yaml"
-    return { model, source }
-  }
-
-  return { model: DEFAULTS["minimax-cli"]!, source: "default" }
-}
-
 const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "claude-code": resolveClaudeModel,
   "codex-cli": resolveCodexModel,
   "grok-build-cli": async () => ({ model: DEFAULTS["grok-build-cli"]!, source: "default" }),
   "kimi-cli": resolveKimiModel,
   "muse-cli": resolveMuseModel,
-  "minimax-cli": resolveMiniMaxModel,
   // dsh headless has no model flag; the profile's model route decides.
   "dsh-cli": async () => ({ model: DEFAULTS["dsh-cli"]!, source: "default" }),
 }

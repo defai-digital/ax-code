@@ -66,8 +66,8 @@ describe("prompt loop error transitions", () => {
   )
 
   test("stops on the first CLI isolation failure with the actionable message and no fallback", async () => {
-    const live = new CliIsolationUnsupportedError("minimax-cli", "read-only")
-    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("minimax-cli") })
+    const live = new CliIsolationUnsupportedError("kimi-cli", "workspace-write")
+    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("kimi-cli") })
     // The loop sees the serialized assistant error; keep covering the live
     // instance and a name-lost serialization too so the classification cannot
     // regress into a generic consecutive-error retry loop.
@@ -106,7 +106,7 @@ describe("prompt loop error transitions", () => {
       expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
       expect(fallbackLookups).toBe(0)
       expect(published).toEqual([live.message])
-      expect(published[0]).toContain("cannot enforce AX Code's read-only isolation mode")
+      expect(published[0]).toContain("cannot enforce AX Code's workspace-write isolation mode")
       expect(published[0]).toContain("switch to full-access")
     }
   })

@@ -133,10 +133,8 @@ describe("provider routes", () => {
     expect(ids).toContain("grok-build-cli")
     expect(ids).toEqual(expect.arrayContaining(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"]))
     expect(ids).toContain("anthropic")
-    expect(ids).toEqual(
-      expect.arrayContaining(["claude-code", "muse-cli", "codex-cli", "kimi-cli", "minimax-cli", "dsh-cli"]),
-    )
-    for (const retired of ["gemini-cli", "antigravity-cli", "qoder-cli"]) {
+    expect(ids).toEqual(expect.arrayContaining(["claude-code", "muse-cli", "codex-cli", "kimi-cli", "dsh-cli"]))
+    for (const retired of ["gemini-cli", "antigravity-cli", "qoder-cli", "minimax-cli"]) {
       expect(ids).not.toContain(retired)
     }
   })

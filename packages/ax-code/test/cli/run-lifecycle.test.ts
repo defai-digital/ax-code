@@ -268,9 +268,9 @@ test("run command follows an explicit model to the connected provider serving th
 
   // A pinned CLI provider never takes a same-SKU home, so a snapshot taken
   // before its discovery probe is a miss and the complete list decides.
-  const gateway = [{ id: "127.0.0.1", models: { "MiniMax-M3.1-Flash": {} } }]
-  const discovered = [{ id: "minimax-cli", models: { "MiniMax-M3.1-Flash": {} } }, ...gateway]
-  const pinned = { providerID: "minimax-cli", modelID: "MiniMax-M3.1-Flash" }
+  const gateway = [{ id: "127.0.0.1", models: { "kimi-k3": {} } }]
+  const discovered = [{ id: "kimi-cli", models: { "kimi-k3": {} } }, ...gateway]
+  const pinned = { providerID: "kimi-cli", modelID: "kimi-k3" }
   const refreshed = await refreshRunProvidersOnModelMiss({
     providers: gateway,
     connected: ["127.0.0.1"],
@@ -282,30 +282,30 @@ test("run command follows an explicit model to the connected provider serving th
   })
   expect(refreshes).toBe(1)
   expect(refreshed).toBe(discovered)
-  expect(resolveRunModel({ providers: discovered, connected: ["127.0.0.1", "minimax-cli"], ...pinned })).toEqual(pinned)
+  expect(resolveRunModel({ providers: discovered, connected: ["127.0.0.1", "kimi-cli"], ...pinned })).toEqual(pinned)
 })
 
 test("run command reports a CLI provider that cannot serve the model instead of rerouting", () => {
   const providers = [
-    { id: "minimax-cli", models: { "MiniMax-M3.1-Flash": {} } },
-    { id: "gateway", models: { "MiniMax-M3": {}, "MiniMax-M3.1-Flash": {} } },
+    { id: "kimi-cli", models: { "kimi-k3": {} } },
+    { id: "gateway", models: { "kimi-k3-256k": {}, "kimi-k3": {} } },
   ]
-  const missing = { providers, providerID: "minimax-cli", modelID: "MiniMax-M3" }
+  const missing = { providers, providerID: "kimi-cli", modelID: "kimi-k3-256k" }
 
-  expect(resolveRunModel({ ...missing, connected: ["gateway", "minimax-cli"] })).toBeUndefined()
+  expect(resolveRunModel({ ...missing, connected: ["gateway", "kimi-cli"] })).toBeUndefined()
   expect(resolveRunModel(missing)).toBeUndefined()
-  expect(findRunModelError(missing)).toContain('Model "MiniMax-M3" not found for provider "minimax-cli"')
+  expect(findRunModelError(missing)).toContain('Model "kimi-k3-256k" not found for provider "kimi-cli"')
 
   // Not connected: still no reroute, and the connection error outranks the
   // model lookup whether or not the signed-out bridge is listed.
   expect(resolveRunModel({ ...missing, connected: ["gateway"] })).toBeUndefined()
   expect(
-    resolveRunModel({ ...missing, providers: [providers[1]], connected: ["gateway"], modelID: "MiniMax-M3.1-Flash" }),
+    resolveRunModel({ ...missing, providers: [providers[1]], connected: ["gateway"], modelID: "kimi-k3" }),
   ).toBeUndefined()
-  expect(findRunCliProviderError({ connected: ["gateway"], providerID: "minimax-cli" })).toContain(
-    'Provider "minimax-cli" is not connected',
+  expect(findRunCliProviderError({ connected: ["gateway"], providerID: "kimi-cli" })).toContain(
+    'Provider "kimi-cli" is not connected',
   )
-  expect(findRunCliProviderError({ connected: ["gateway", "minimax-cli"], providerID: "minimax-cli" })).toBeUndefined()
+  expect(findRunCliProviderError({ connected: ["gateway", "kimi-cli"], providerID: "kimi-cli" })).toBeUndefined()
   expect(findRunCliProviderError({ connected: ["gateway"], providerID: "deepseek" })).toBeUndefined()
 
   // A non-CLI provider lacking the model keeps following the SKU.
@@ -314,9 +314,9 @@ test("run command reports a CLI provider that cannot serve the model instead of 
       providers: [{ id: "deepseek", models: {} }, providers[1]],
       connected: ["deepseek", "gateway"],
       providerID: "deepseek",
-      modelID: "MiniMax-M3",
+      modelID: "kimi-k3-256k",
     }),
-  ).toEqual({ providerID: "gateway", modelID: "MiniMax-M3" })
+  ).toEqual({ providerID: "gateway", modelID: "kimi-k3-256k" })
 })
 
 test.each([
