@@ -299,6 +299,35 @@ describe("prompt submission lifecycle", () => {
     expect(trySlashWithArguments).toHaveBeenCalledWith("btw", "first line\nsecond line")
   })
 
+  test("dispatches a tab-separated client slash command locally", async () => {
+    const { controller, host, requests } = setup({
+      mode: "normal",
+      workMode: "agent",
+      text: "/btw\tfirst line\nsecond line",
+    })
+    host.command.trySlashWithArguments = vi.fn(() => true)
+
+    await controller.submit()
+
+    expect(host.command.trySlashWithArguments).toHaveBeenCalledWith("btw", "first line\nsecond line")
+    expect(requests).toHaveLength(0)
+    expect(host.clearPromptDraft).toHaveBeenCalled()
+  })
+
+  test.each([
+    { text: "/council\treview\n  preserve indentation", arguments: "review\n  preserve indentation" },
+    { text: "/council  review\n  preserve indentation", arguments: " review\n  preserve indentation" },
+    { text: "/council\nreview\n  preserve indentation", arguments: "\nreview\n  preserve indentation" },
+  ])("dispatches a server slash command preserving its arguments: $text", async ({ text, arguments: args }) => {
+    const { controller, requests } = setup({ mode: "normal", workMode: "agent", text })
+
+    await controller.submit()
+
+    expect(requests).toHaveLength(1)
+    expect(new URL(requests[0].url).pathname).toBe("/session/ses_test/command_async")
+    expect(await requests[0].json()).toMatchObject({ command: "council", arguments: args })
+  })
+
   test("falls through to the server when the client does not take arguments", async () => {
     const { controller, host, requests } = setup({
       mode: "normal",

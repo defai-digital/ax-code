@@ -3,7 +3,6 @@ import { produce } from "solid-js/store"
 import type { Session } from "@ax-code/sdk/v2"
 import type { TextareaRenderable } from "ax-tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
-import { iife } from "@/util/iife"
 import { withTimeout } from "@/util/timeout"
 import { WorkMode } from "@/mode/work-mode"
 import {
@@ -443,7 +442,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     const routedText =
       workRouted.kind === "command" ? `/${workRouted.command} ${workRouted.arguments}`.trimEnd() : workRouted.text
     const firstLine = routedText.split("\n")[0]
-    const slashToken = routedText.startsWith("/") ? firstLine.split(" ")[0] : undefined
+    const slashToken = routedText.startsWith("/") ? firstLine.split(/\s/, 1)[0] : undefined
     const slashName = slashToken?.slice(1)
     const slashHasArguments = slashToken ? routedText.trim() !== slashToken : false
     if (
@@ -760,24 +759,14 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
           },
         })
         setStore("mode", "normal")
-      } else if (
-        workRouted.kind === "command" ||
-        (submitText.startsWith("/") &&
-          iife(() => {
-            const command = firstLine.split(" ")[0].slice(1)
-            return sync.data.command.some((x: { name: string }) => x.name === command)
-          }))
-      ) {
-        // Parse command from first line, preserve multi-line content in arguments
-        const firstLineEnd = submitText.indexOf("\n")
-        const commandLine = firstLineEnd === -1 ? submitText : submitText.slice(0, firstLineEnd)
-        const [commandName, ...firstLineArgs] = commandLine.split(" ")
-        const restOfInput = firstLineEnd === -1 ? "" : submitText.slice(firstLineEnd + 1)
+      } else if (workRouted.kind === "command" || (slashName && sync.data.command.some((x) => x.name === slashName))) {
+        // Remove only the command and its first horizontal separator; preserve
+        // additional spaces, newlines, and indentation in the argument body.
         const args =
           workRouted.kind === "command"
             ? workRouted.arguments
-            : firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
-        const commandId = workRouted.kind === "command" ? workRouted.command : commandName.slice(1)
+            : submitText.slice(slashToken?.length ?? 0).replace(/^[^\S\r\n]/, "")
+        const commandId = workRouted.kind === "command" ? workRouted.command : (slashName ?? "")
 
         submitAction = "Command submission"
         // A busy session leaves the command row waiting_for_idle with no user
