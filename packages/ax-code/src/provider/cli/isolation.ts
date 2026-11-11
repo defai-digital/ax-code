@@ -2,6 +2,7 @@ import { Config } from "@/config/config"
 import { Isolation } from "@/isolation"
 import { Context } from "@/util/context"
 import { CLI_ISOLATION_UNSUPPORTED_ERROR_NAME, cliIsolationUnsupportedMessage } from "./isolation-error"
+import { kimiReadOnlyAgentPath } from "./kimi-isolation"
 
 /**
  * AX Code's isolation mode is a ceiling for every vendor CLI provider: the
@@ -80,8 +81,20 @@ export function cliIsolationArgs(providerID: string, mode: Isolation.Mode, auton
         // exactly one --permission-mode reaches the CLI.
         return { args: [], replace: { flag: "--permission-mode", value: "read-only" } }
       case "kimi-cli":
+        // Verified live: `kimi -p` rejects --plan/--yolo/--auto, but
+        // `--agent-file` loads an agent definition whose exact, case-sensitive
+        // `tools:` allowlist limits the run to Read/Glob/Grep. startProcess
+        // writes the file before spawn; `--agent-file` precedes `-p`.
+        return { args: ["--agent-file", kimiReadOnlyAgentPath()] }
       case "muse-cli":
+        // Verified live: `muse exec` accepts --disable-write (no non-shell
+        // workspace writes) and --disable-shell (no shell execution). Together
+        // they enforce read-only while Muse's own sandbox stays on.
+        return { args: ["--disable-write", "--disable-shell"] }
       case "minimax-cli":
+        // Verified live: `--permission smart` and `off` both still wrote files
+        // outside the workspace, and mcode exec cannot select the main agent,
+        // so agent.md tool selectors (subagents only) cannot restrict it.
         throw new CliIsolationUnsupportedError(providerID, mode)
       default:
         return { args: [] }
@@ -94,7 +107,13 @@ export function cliIsolationArgs(providerID: string, mode: Isolation.Mode, auton
     case "codex-cli":
       return { args: ["--sandbox", "workspace-write"] }
     case "kimi-cli":
+      // Verified live: `kimi -p` writes files outside the workspace (including
+      // the home directory); Kimi has no sandbox to constrain them.
+      throw new CliIsolationUnsupportedError(providerID, mode)
     case "minimax-cli":
+      // Verified live: both `--permission smart` and `off` wrote outside the
+      // workspace; agent.md tool selectors apply only to subagents and
+      // mcode exec cannot select the main agent, so there is no safe mapping.
       throw new CliIsolationUnsupportedError(providerID, mode)
     // grok-build-cli, muse-cli, and dsh-cli already run at workspace-write.
     default:

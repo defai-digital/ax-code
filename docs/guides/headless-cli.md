@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-12
+Last reviewed: 2026-11-11
 Owner: AX Code runtime maintainers
 
 `ax-code run` is the one-shot, non-interactive entry point for AI coding agents and scripts. It submits a single
@@ -85,9 +85,11 @@ Grants the agent access to one additional directory (repeatable): an `external_d
 Each path must exist and be a directory (resolved against the caller cwd like `--file`). The rule is applied when the
 session is created, so under `--session`/`--continue` it cannot take effect — the CLI prints
 `--add-dir applies only to new sessions` on stderr and continues. It does not change `--file` containment: attachments
-must still live inside the project directory. It covers the file tools (read, glob, grep, list, edit, write); a shell
-command that reaches into the directory through a dynamic path still triggers the interactive-only path-access
-prompt, which a headless run auto-rejects, so prefer the file tools or pass the file content explicitly.
+must still live inside the project directory. It works under every `--sandbox` mode: the rule adds only
+`external_directory` access, so `read-only` still blocks writes and bash and `workspace-write` write limits still
+apply. It covers the file tools (read, glob, grep, list, edit, write); a shell command that reaches into the directory
+through a dynamic path still triggers the interactive-only path-access prompt, which a headless run auto-rejects, so
+prefer the file tools or pass the file content explicitly.
 
 ```bash
 ax-code run --model qwen --add-dir ../design-docs -- "Read ../design-docs/spec.md and summarize it"

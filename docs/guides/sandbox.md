@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-12
+Last reviewed: 2026-11-11
 Owner: ax-code runtime
 
 AX Code includes a built-in execution sandbox that can restrict what the AI agent does on your system. By default, AX Code starts in **full-access** with the sandbox off, so filesystem writes and network access are unrestricted. Enable `workspace-write` or `read-only` before working with untrusted repositories or running unattended tasks.
@@ -189,3 +189,12 @@ Sandbox enforcement is **always** application-layer, checked at each tool invoca
 | `codesearch`  | Network access must be enabled                                                                                                           |
 
 When a tool violates isolation, it throws an `IsolationDeniedError` with a clear message explaining what was blocked and why.
+
+### CLI providers
+
+Vendor CLI providers run their own agent loop and tools, so the isolation mode is also a ceiling for them. `read-only`
+and `workspace-write` are passed through as each CLI's own permission flags; `full-access` keeps the CLI's headless
+defaults. Only Kimi Code in `workspace-write` and MiniMax Code in `read-only`/`workspace-write` fail before the CLI
+starts and stop the turn with an actionable message — they have no sandbox and write outside the workspace, so there is
+no safe mapping. This is not retried or downgraded. Autonomous mode never widens the mode. See
+[Isolation modes and CLI providers](../providers/supported-providers.md#isolation-modes-and-cli-providers).

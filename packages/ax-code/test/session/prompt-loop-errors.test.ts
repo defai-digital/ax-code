@@ -66,8 +66,8 @@ describe("prompt loop error transitions", () => {
   )
 
   test("stops on the first CLI isolation failure with the actionable message and no fallback", async () => {
-    const live = new CliIsolationUnsupportedError("kimi-cli", "read-only")
-    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("kimi-cli") })
+    const live = new CliIsolationUnsupportedError("minimax-cli", "read-only")
+    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("minimax-cli") })
     // The loop sees the serialized assistant error; keep covering the live
     // instance and a name-lost serialization too so the classification cannot
     // regress into a generic consecutive-error retry loop.

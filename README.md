@@ -411,6 +411,7 @@ AX Code starts with autonomous mode on and the sandbox off (`full-access`) by de
 - Enable or change isolation with `/sandbox`, or `--sandbox read-only | workspace-write | full-access`.
 - Use `/autonomous` or `AX_CODE_AUTONOMOUS=false` to stop for each permission and question.
 - Control external tool surfaces with `ax-code mcp list --tools`, `ax-code mcp trust`, and permission rules.
+- The isolation mode also caps CLI providers (vendor CLIs): restricted modes are translated to each CLI's own permission flags, and only Kimi Code in `workspace-write` and MiniMax Code in `read-only`/`workspace-write` fail before starting (no sandbox: they write outside the workspace). See [Isolation modes and CLI providers](docs/providers/supported-providers.md#isolation-modes-and-cli-providers).
 - Provider and MCP credentials are encrypted at rest; server mode is localhost-only by default.
 
 Verification gates apply where they are enforceable: arena candidates and gated refactor application run your checks before a result is accepted. Ordinary interactive edits are not automatically verified — run `verify_project` or your own commands for those.
@@ -427,6 +428,9 @@ See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autono
 | **Local LLM runtimes**       | Ollama, LM Studio, MTPLX, oMLX, AX Studio, or any OpenAI-compatible endpoint                                                                                | Models discovered from the local runtime's endpoint              |
 | Private GPU cloud            | Catalog: Nebius, Fireworks AI, Together AI, Baseten, NVIDIA NIM, Deep Infra; dedicated: RunPod, SageMaker, Volcengine Ark, custom, and more                 | API-key catalogs or URL+token endpoints that expose `/v1/models` |
 | AX Trust                     | Managed gateway connections (base URL + client API key)                                                                                                     | Models discovered from the connected gateway                     |
+
+CLI providers run as a one-shot subprocess per turn and resend the full AX Code conversation each turn; AX Code
+deliberately does not reuse vendor conversation sessions, which would not follow AX Code compaction, edits, or forks.
 
 Tiel Coder 35B A3B MTP is the default AX Engine pack; MTPLX and oMLX presets ship ahead of the
 packaged binaries for users who prefer them. The two local rows are the headline option: managed

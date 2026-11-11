@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- CLI providers in `read-only` isolation restrict Muse Code (writes and shell disabled) and Kimi Code (a
+  Read/Glob/Grep-only agent) instead of refusing to start them. Only Kimi Code in `workspace-write` and MiniMax Code in
+  either restricted mode still fail before starting, because they have no sandbox and write outside the workspace.
+
 ## [7.30.22] - 2026-11-11
 
 ### Added

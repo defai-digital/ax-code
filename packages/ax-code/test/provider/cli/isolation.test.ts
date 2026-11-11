@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { existsSync } from "node:fs"
+import { PassThrough } from "node:stream"
 import {
   CliLanguageModel,
   buildCliCommand,
@@ -11,6 +13,7 @@ import {
   currentCliIsolationMode,
   provideCliIsolationMode,
 } from "../../../src/provider/cli/isolation"
+import { kimiReadOnlyAgentPath } from "../../../src/provider/cli/kimi-isolation"
 import { Isolation } from "../../../src/isolation"
 import { Process } from "../../../src/util/process"
 import { claudeCodeParser, kimiCliParser } from "../../../src/provider/cli/parser"
@@ -55,6 +58,28 @@ function expectUnsupported(run: () => unknown, mode: Isolation.Mode) {
   expect((error as Error).message).toContain(`cannot enforce AX Code's ${mode} isolation mode`)
 }
 
+function successfulChild(output = '{"role":"assistant","content":"ok"}\n') {
+  const stdout = new PassThrough()
+  const stderr = new PassThrough()
+  const exited = new Promise<number>((resolve) => {
+    setTimeout(() => {
+      stdout.end(output)
+      stderr.end()
+      resolve(0)
+    }, 0)
+  })
+  return {
+    stdout,
+    stderr,
+    exited,
+    exitCode: null,
+    signalCode: null,
+    kill: () => true,
+    pid: 123,
+    stdin: null,
+  } as any
+}
+
 describe("cliIsolationArgs", () => {
   test("full-access preserves each CLI's headless defaults", () => {
     for (const providerID of PROVIDERS) {
@@ -76,7 +101,13 @@ describe("cliIsolationArgs", () => {
       args: [],
       replace: { flag: "--permission-mode", value: "read-only" },
     })
-    for (const providerID of ["kimi-cli", "muse-cli", "minimax-cli"] as const) {
+    expect(cliIsolationArgs("muse-cli", "read-only", false)).toEqual({
+      args: ["--disable-write", "--disable-shell"],
+    })
+    expect(cliIsolationArgs("kimi-cli", "read-only", false)).toEqual({
+      args: ["--agent-file", kimiReadOnlyAgentPath()],
+    })
+    for (const providerID of ["minimax-cli"] as const) {
       expectUnsupported(() => cliIsolationArgs(providerID, "read-only", false), "read-only")
       expectUnsupported(() => cliIsolationArgs(providerID, "read-only", true), "read-only")
     }
@@ -220,7 +251,7 @@ describe("buildCliCommand isolation integration", () => {
   })
 
   test("unsupported combinations throw before spawning", async () => {
-    process.env.AX_CODE_ISOLATION_MODE = "read-only"
+    process.env.AX_CODE_ISOLATION_MODE = "workspace-write"
     const spawn = vi.spyOn(Process, "spawn")
     const model = new CliLanguageModel({
       providerID: "kimi-cli",
@@ -241,21 +272,48 @@ describe("buildCliCommand isolation integration", () => {
     }
   })
 
-  test("kimi read-only buildCliCommand throws the named error", () => {
+  test("kimi read-only buildCliCommand passes --agent-file before -p", () => {
     process.env.AX_CODE_ISOLATION_MODE = "read-only"
-    expect(() =>
-      buildCliCommand(
-        {
-          providerID: "kimi-cli",
-          modelID: "kimi-cli",
-          binary: "kimi",
-          args: CLI_PROVIDER_DEFINITIONS["kimi-cli"]!.args,
-          parser: claudeCodeParser,
-          promptMode: "arg",
-          promptFlag: "-p",
-        },
-        "hi",
-      ),
-    ).toThrow(CliIsolationUnsupportedError)
+    const cmd = buildCliCommand(
+      {
+        providerID: "kimi-cli",
+        modelID: "kimi-cli",
+        binary: "kimi",
+        args: CLI_PROVIDER_DEFINITIONS["kimi-cli"]!.args,
+        parser: claudeCodeParser,
+        promptMode: "arg",
+        promptFlag: "-p",
+      },
+      "hi",
+    )
+    expect(cmd[cmd.indexOf("--agent-file") + 1]).toBe(kimiReadOnlyAgentPath())
+    expect(cmd.indexOf("--agent-file")).toBeGreaterThan(-1)
+    expect(cmd.indexOf("--agent-file")).toBeLessThan(cmd.indexOf("-p"))
+  })
+
+  test("kimi read-only startProcess writes the agent file before the -p prompt", async () => {
+    process.env.AX_CODE_ISOLATION_MODE = "read-only"
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild())
+    const model = new CliLanguageModel({
+      providerID: "kimi-cli",
+      modelID: "kimi-cli",
+      binary: "kimi",
+      args: CLI_PROVIDER_DEFINITIONS["kimi-cli"]!.args,
+      parser: kimiCliParser,
+      promptMode: "arg",
+      promptFlag: "-p",
+    })
+    try {
+      await model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }] })
+      const cmd = spawn.mock.calls[0]?.[0] as string[]
+      expect(cmd[cmd.indexOf("--agent-file") + 1]).toBe(kimiReadOnlyAgentPath())
+      expect(cmd.indexOf("--agent-file")).toBeLessThan(cmd.indexOf("-p"))
+      // The prompt is delivered via -p (the last flag/value pair).
+      expect(cmd.at(-2)).toBe("-p")
+      expect(cmd.at(-1)).toContain("hi")
+      expect(existsSync(kimiReadOnlyAgentPath())).toBe(true)
+    } finally {
+      spawn.mockRestore()
+    }
   })
 })

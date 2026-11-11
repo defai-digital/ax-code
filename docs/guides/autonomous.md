@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-25
+Last reviewed: 2026-11-11
 Owner: ax-code runtime
 
 Autonomous mode lets ax-code complete tasks without waiting for human confirmation at each low-risk step. When enabled, permission prompts are auto-approved unless they are explicitly blocked, and question dialogs are auto-answered with a best-practice heuristic that favors recommended, default, common, simple, and minimal choices while avoiding risky or over-engineered options.
@@ -103,6 +103,9 @@ Autonomous mode and sandbox mode are **independent**. You can use both simultane
 | Autonomous OFF + Sandbox OFF | Agent asks for permission on each action, full system access.                                       |
 
 The default runtime posture is autonomous on plus sandbox off: `full-access` with network enabled. This provides the least-friction CLI behavior but no isolation boundary. Use `/sandbox`, `--sandbox workspace-write`, `AX_CODE_ISOLATION_MODE`, or project config to enable restrictions for untrusted or unattended work.
+
+For CLI providers, autonomous mode never widens the isolation mode: Claude Code's `--dangerously-skip-permissions`
+bypass is added only in `full-access`, never in a restricted mode.
 
 ## Configuration
 

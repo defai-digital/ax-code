@@ -29,6 +29,7 @@ import { Shell } from "@/shell/shell"
 import { Instance } from "@/project/instance"
 import { cliEffortArgs, cliEffortFromProviderOptions } from "./effort"
 import { dshLauncherArgs, ensureDshPrivacyPatch } from "./dsh"
+import { ensureKimiReadOnlyAgentFile } from "./kimi-isolation"
 import { minimaxModelArg } from "./minimax"
 import { cliIsolationArgs, resolveCliIsolationMode, type CliIsolationArgs } from "./isolation"
 
@@ -438,6 +439,12 @@ export class CliLanguageModel implements LanguageModelV3 {
       // Materializing attachments or the prompt yields to cancellation.
       if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
       if (this.config.providerID === "dsh-cli") await ensureDshPrivacyPatch()
+      // Read-only Kimi runs load an AX-written agent definition that allowlists
+      // only Read/Glob/Grep. Materialize it before spawn; a write failure fails
+      // the launch instead of falling back to an unrestricted run.
+      if (this.config.providerID === "kimi-cli" && isolation.args.includes("--agent-file")) {
+        await ensureKimiReadOnlyAgentFile()
+      }
       const cmd = this.buildCmd(promptFile?.file ?? text, options.providerOptions, isolation)
       assertCliCommandSize(cmd, this.config.providerID)
       const proc = Process.spawn(cmd, {

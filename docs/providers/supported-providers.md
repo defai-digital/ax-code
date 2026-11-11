@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-19
+Last reviewed: 2026-11-11
 Owner: ax-code runtime
 
 This page lists the provider presets AX Code exposes in the default setup flows. The source of truth is the runtime provider allowlist in
@@ -190,7 +190,9 @@ AX Code sends a session affinity header on these connections by default.
 
 CLI providers reuse a local coding-agent CLI and its login/session instead of storing a hosted API key in AX Code.
 AX Code runs the CLI headlessly for each turn and reads its structured output; the CLI runs its own agent loop and
-tools.
+tools. Each turn runs the CLI as a one-shot subprocess and resends the full AX Code conversation as the prompt. AX Code
+deliberately does not reuse the vendor's own conversation session, because that session would not follow AX Code
+compaction, context edits, or forks.
 
 User file and image attachments are written to temporary files for the CLI to read. Base64 and percent-encoded data
 URLs preserve the original file bytes; remote HTTP(S) URLs remain references. Temporary files are removed when the
@@ -242,11 +244,15 @@ AX Code's isolation mode is a ceiling for the vendor CLI, not a hint: the CLI ru
 must never receive more access than the AX session has. The mapping lives in
 `packages/ax-code/src/provider/cli/isolation.ts`; `full-access` keeps each CLI's headless defaults.
 
-| Isolation mode    | Claude Code                                                         | Codex CLI                   | Grok Build               | DeepSeek Harness              | Kimi Code / MiniMax Code | Muse Code          |
-| ----------------- | ------------------------------------------------------------------- | --------------------------- | ------------------------ | ----------------------------- | ------------------------ | ------------------ |
-| `read-only`       | `--permission-mode dontAsk --tools Read,Glob,Grep`                  | `--sandbox read-only`       | `--permission-mode plan` | `--permission-mode read-only` | error before start       | error before start |
-| `workspace-write` | `--permission-mode acceptEdits`                                     | `--sandbox workspace-write` | unchanged                | unchanged                     | error before start       | unchanged          |
-| `full-access`     | headless default (autonomous adds `--dangerously-skip-permissions`) | headless default            | headless default         | headless default              | headless default         | headless default   |
+| Isolation mode    | Claude Code                                                         | Codex CLI                   | Grok Build               | DeepSeek Harness              | Kimi Code                                       | MiniMax Code       | Muse Code                         |
+| ----------------- | ------------------------------------------------------------------- | --------------------------- | ------------------------ | ----------------------------- | ----------------------------------------------- | ------------------ | --------------------------------- |
+| `read-only`       | `--permission-mode dontAsk --tools Read,Glob,Grep`                  | `--sandbox read-only`       | `--permission-mode plan` | `--permission-mode read-only` | `--agent-file` with a Read/Glob/Grep-only agent | error before start | `--disable-write --disable-shell` |
+| `workspace-write` | `--permission-mode acceptEdits`                                     | `--sandbox workspace-write` | unchanged                | unchanged                     | error before start                              | error before start | unchanged                         |
+| `full-access`     | headless default (autonomous adds `--dangerously-skip-permissions`) | headless default            | headless default         | headless default              | headless default                                | headless default   | headless default                  |
+
+Kimi Code reads its read-only agent from `kimi-read-only-agent.md` in AX Code's cache directory (written once, before
+spawn). Kimi Code in `workspace-write` and MiniMax Code in both restricted modes fail before start because neither has a
+sandbox: live runs wrote files outside the workspace, including in the home directory.
 
 The autonomous flag never widens the mode. A provider/mode combination the CLI cannot enforce fails before the CLI
 process starts, with an error that names the provider and asks you to switch to `full-access` or use a different
