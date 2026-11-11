@@ -5,6 +5,7 @@ import {
   claudeFamilyId,
   claudeFamilySortKey,
   latestAnthropicFamilyModels,
+  resolveClaudeAlias,
 } from "../../src/provider/anthropic-families"
 
 function releaseTime(value?: string): number {
@@ -101,5 +102,40 @@ describe("anthropic families", () => {
     expect(claudeFamilySortKey("claude-sonnet")).toBeLessThan(claudeFamilySortKey("claude-haiku"))
     expect(claudeFamilySortKey("claude-haiku")).toBeLessThan(claudeFamilySortKey("claude-fable"))
     expect(claudeDisplayName("Claude Haiku 4.5 (latest)", "claude-haiku-4-5")).toBe("Claude Haiku 4.5")
+  })
+
+  test("maps Claude Code model aliases onto the newest listed model of the family", () => {
+    const models = {
+      "claude-opus-5": { id: "claude-opus-5", family: "claude-opus", release_date: "2026-07-24" },
+      "claude-opus-5-5": { id: "claude-opus-5-5", family: "claude-opus", release_date: "2026-09-22" },
+      "claude-sonnet-5": { id: "claude-sonnet-5", family: "claude-sonnet", release_date: "2026-06-29" },
+      "claude-sonnet-5-5": { id: "claude-sonnet-5-5", family: "claude-sonnet", release_date: "2026-09-28" },
+      "claude-haiku-5-5": { id: "claude-haiku-5-5", family: "claude-haiku", release_date: "2026-10-07" },
+      "claude-fable-5-1": { id: "claude-fable-5-1", family: "claude-fable", release_date: "2026-09-01" },
+      "claude-fable-5-2": { id: "claude-fable-5-2", family: "claude-fable", release_date: "2026-11-09" },
+    }
+
+    expect(resolveClaudeAlias("opus", models)).toBe("claude-opus-5-5")
+    expect(resolveClaudeAlias("Sonnet", models)).toBe("claude-sonnet-5-5")
+    expect(resolveClaudeAlias("HAIKU", models)).toBe("claude-haiku-5-5")
+    expect(resolveClaudeAlias("fable", models)).toBe("claude-fable-5-2")
+    // A variant suffix still selects the family, without inventing a row.
+    expect(resolveClaudeAlias("opus[1m]", models)).toBe("claude-opus-5-5")
+    expect(resolveClaudeAlias("  opus  ", models)).toBe("claude-opus-5-5")
+  })
+
+  test("aliases with no single model and full ids resolve predictably", () => {
+    const models = {
+      "claude-opus-5-5": { id: "claude-opus-5-5", family: "claude-opus", release_date: "2026-09-22" },
+    }
+
+    expect(resolveClaudeAlias("default", models)).toBeUndefined()
+    expect(resolveClaudeAlias("opusplan", models)).toBeUndefined()
+    expect(resolveClaudeAlias(undefined, models)).toBeUndefined()
+    // Full ids pass through unchanged, whether or not they are listed.
+    expect(resolveClaudeAlias("claude-opus-5-5", models)).toBe("claude-opus-5-5")
+    expect(resolveClaudeAlias("claude-zzz-9", models)).toBe("claude-zzz-9")
+    // A family alias with no listed model has no id to map to.
+    expect(resolveClaudeAlias("sonnet", models)).toBeUndefined()
   })
 })

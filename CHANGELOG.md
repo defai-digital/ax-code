@@ -15,6 +15,8 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Claude Code model aliases in `settings.json` or `ANTHROPIC_MODEL` (`opus`, `sonnet`, `haiku`, `fable`) select the
+  matching listed model as the CLI default instead of adding a duplicate alias entry to the model list.
 - CLI providers in `read-only` isolation restrict Muse Code (writes and shell disabled) and Kimi Code (a
   Read/Glob/Grep-only agent) instead of refusing to start them. Only Kimi Code in `workspace-write` still fails before
   starting, because it has no sandbox and writes outside the workspace.

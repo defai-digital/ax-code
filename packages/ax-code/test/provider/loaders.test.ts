@@ -446,6 +446,102 @@ describe("CLI default discovery", () => {
     expect(provider.models[ModelID.make("kimi-cli")]).toBeUndefined()
     expect(cliDefaultMarks(provider.models)).toEqual(["kimi-code/k3"])
   })
+
+  function catalogModel(id: string, name: string, family: string, releaseDate: string) {
+    return {
+      id,
+      name,
+      family,
+      release_date: releaseDate,
+      attachment: true,
+      reasoning: true,
+      tool_call: true,
+      limit: { context: 200_000, output: 32_000 },
+      modalities: { input: ["text", "image"], output: ["text"] },
+    }
+  }
+
+  const CLAUDE_CATALOG = {
+    anthropic: {
+      id: "anthropic",
+      name: "Anthropic",
+      env: ["ANTHROPIC_API_KEY"],
+      api: "",
+      models: {
+        "claude-fable-5-1": catalogModel("claude-fable-5-1", "Claude Fable 5.1", "claude-fable", "2026-09-01"),
+        "claude-fable-5-2": catalogModel("claude-fable-5-2", "Claude Fable 5.2", "claude-fable", "2026-11-09"),
+        "claude-haiku-5-5": catalogModel("claude-haiku-5-5", "Claude Haiku 5.5", "claude-haiku", "2026-10-07"),
+        "claude-opus-5": catalogModel("claude-opus-5", "Claude Opus 5", "claude-opus", "2026-07-24"),
+        "claude-opus-5-5": catalogModel("claude-opus-5-5", "Claude Opus 5.5", "claude-opus", "2026-09-22"),
+        "claude-sonnet-5": catalogModel("claude-sonnet-5", "Claude Sonnet 5", "claude-sonnet", "2026-06-29"),
+        "claude-sonnet-5-5": catalogModel("claude-sonnet-5-5", "Claude Sonnet 5.5", "claude-sonnet", "2026-09-28"),
+      },
+    },
+  } as unknown as Awaited<ReturnType<typeof ModelsDev.get>>
+
+  const CLAUDE_LATEST_IDS = ["claude-fable-5-2", "claude-haiku-5-5", "claude-opus-5-5", "claude-sonnet-5-5"]
+
+  async function writeClaudeModel(tmp: { path: string }, model: string) {
+    await mkdir(path.join(tmp.path, ".claude"), { recursive: true })
+    await writeFile(path.join(tmp.path, ".claude", "settings.json"), JSON.stringify({ model }))
+  }
+
+  test("claude-code maps the settings alias fable to the newest fable model", async () => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "claude-code", CLAUDE_CATALOG)
+    await writeClaudeModel(tmp, "fable")
+
+    const first = await discoverCli("claude-code")
+    expect(Object.keys(first.provider.models).sort()).toEqual(CLAUDE_LATEST_IDS)
+    expect(first.provider.models[ModelID.make("fable")]).toBeUndefined()
+    expect(cliDefaultMarks(first.provider.models)).toEqual(["claude-fable-5-2"])
+    expectCliDefaultInvariant(first.provider.models, "claude-code")
+
+    // Re-running discovery on its own output must not add the alias back.
+    const second = await discoverCli("claude-code", first.provider)
+    expect(Object.keys(second.provider.models).sort()).toEqual(CLAUDE_LATEST_IDS)
+    expect(second.provider.models[ModelID.make("fable")]).toBeUndefined()
+    expect(cliDefaultMarks(second.provider.models)).toEqual(["claude-fable-5-2"])
+  })
+
+  test.each([
+    ["opus", "claude-opus-5-5"],
+    ["Sonnet", "claude-sonnet-5-5"],
+    ["haiku", "claude-haiku-5-5"],
+    ["opus[1m]", "claude-opus-5-5"],
+  ])("claude-code maps the settings model %s to %s without an alias row", async (configured, expected) => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "claude-code", CLAUDE_CATALOG)
+    await writeClaudeModel(tmp, configured)
+
+    const { provider } = await discoverCli("claude-code")
+    expect(cliDefaultMarks(provider.models)).toEqual([expected])
+    expect(provider.models[ModelID.make(configured)]).toBeUndefined()
+    expect(Object.keys(provider.models).sort()).toEqual(CLAUDE_LATEST_IDS)
+  })
+
+  test("claude-code default alias keeps the sentinel and adds no row", async () => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "claude-code", CLAUDE_CATALOG)
+    await writeClaudeModel(tmp, "default")
+
+    const { provider } = await discoverCli("claude-code")
+    expect(cliDefaultMarks(provider.models)).toEqual([])
+    expect(provider.models[ModelID.make("default")]).toBeUndefined()
+    expect(provider.models[ModelID.make("claude-code")]).toBeDefined()
+    expect(Object.keys(provider.models).sort()).toEqual([...CLAUDE_LATEST_IDS, "claude-code"].sort())
+  })
+
+  test("claude-code keeps an unknown full model id as its own row", async () => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "claude-code", CLAUDE_CATALOG)
+    await writeClaudeModel(tmp, "claude-zzz-9")
+
+    const { provider } = await discoverCli("claude-code")
+    expect(provider.models[ModelID.make("claude-zzz-9")]?.options.cliDefault).toBe(true)
+    expect(cliDefaultMarks(provider.models)).toEqual(["claude-zzz-9"])
+    expect(provider.models[ModelID.make("claude-code")]).toBeUndefined()
+  })
 })
 
 describe("CLI default model marker", () => {

@@ -16,7 +16,12 @@ import { axEngineLoader } from "./ax-engine/provider-loader"
 import { PRIVATE_GPU_LOADERS } from "./private-gpu/loader"
 import { isRecord } from "@/util/record"
 import { ModelsDev } from "./models"
-import { claudeDisplayName, claudeFamilyId, latestAnthropicFamilyModels } from "./anthropic-families"
+import {
+  claudeDisplayName,
+  claudeFamilyId,
+  latestAnthropicFamilyModels,
+  resolveClaudeAlias,
+} from "./anthropic-families"
 import { grokDisplayName, grokFallbackLatest, grokFamilyId, latestGrokFamilyModels } from "./grok-families"
 import { kimiDisplayName, kimiFallbackModels, kimiFamilyId, latestKimiFamilyModels } from "./kimi-families"
 import { museDisplayName, museFallbackLatest, museFamilyId, latestMuseFamilyModels } from "./muse-families"
@@ -579,9 +584,9 @@ function nativeCliModels(
 async function claudeCodeFamilyModels(
   provider: Provider.Info,
   resolved?: string,
-): Promise<Record<string, Provider.Model>> {
+): Promise<{ models: Record<string, Provider.Model>; resolved?: string }> {
   const base = cliBase(provider)
-  if (!base) return {}
+  if (!base) return { models: {}, resolved }
   const catalog = (await ModelsDev.get()).anthropic?.models ?? {}
   const native = await readNativeCliModels("claude-code")
   const models: Record<string, Provider.Model> =
@@ -597,26 +602,31 @@ async function claudeCodeFamilyModels(
       )
     }
   }
-  if (resolved && resolved !== "claude-code" && !models[resolved] && catalog[resolved]) {
-    const item = catalog[resolved]!
-    models[resolved] = overlayCliCatalogModel(
+  // Claude Code's `model` setting accepts family aliases (`opus`, `fable`, ...).
+  // Map them onto the newest listed model so discovery marks the real model
+  // instead of publishing a duplicate alias entry; genuinely unknown full ids
+  // still get their own row below.
+  const mapped = resolveClaudeAlias(resolved, models)
+  if (mapped && mapped !== "claude-code" && !models[mapped] && catalog[mapped]) {
+    const item = catalog[mapped]!
+    models[mapped] = overlayCliCatalogModel(
       base,
       item,
       "claude-code",
-      claudeDisplayName(item.name, resolved),
+      claudeDisplayName(item.name, mapped),
       claudeFamilyId({ id: item.id, family: item.family }),
     )
-  } else if (resolved && resolved !== "claude-code" && !models[resolved]) {
-    const id = ModelID.make(resolved)
+  } else if (mapped && mapped !== "claude-code" && !models[mapped]) {
+    const id = ModelID.make(mapped)
     models[id] = {
       ...base,
       id,
       providerID: ProviderID.make("claude-code"),
-      api: { ...base.api, id: resolved },
-      name: claudeDisplayName(undefined, resolved),
+      api: { ...base.api, id: mapped },
+      name: claudeDisplayName(undefined, mapped),
     }
   }
-  return models
+  return { models, resolved: mapped }
 }
 
 function collectGrokCatalog(snapshot: Record<string, ModelsDev.Provider>): Record<string, ModelsDev.Model> {
@@ -924,14 +934,21 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         // Every CLI family ends here so exactly one of {sentinel kept, one
         // `cliDefault` model} survives discovery, regardless of how the family
         // builder produced its models.
-        const finish = (models: Record<string, Provider.Model>) =>
-          finalizeCliDiscovery({ current, providerID: opts.providerID, models, resolved: resolved.model })
-        if (opts.providerID === "claude-code") return finish(await claudeCodeFamilyModels(current, resolved.model))
-        if (opts.providerID === "grok-build-cli") return finish(await grokBuildFamilyModels(current, resolved.model))
-        if (opts.providerID === "kimi-cli") return finish(await kimiCliFamilyModels(current, resolved.model))
-        if (opts.providerID === "codex-cli") return finish(await codexCliFamilyModels(current, resolved.model))
-        if (opts.providerID === "muse-cli") return finish(await museCliFamilyModels(current, resolved.model))
-        return finish(cliModels(opts.providerID, current, resolved.model))
+        const finish = (models: Record<string, Provider.Model>, resolvedID?: string) =>
+          finalizeCliDiscovery({ current, providerID: opts.providerID, models, resolved: resolvedID })
+        if (opts.providerID === "claude-code") {
+          const found = await claudeCodeFamilyModels(current, resolved.model)
+          return finish(found.models, found.resolved)
+        }
+        if (opts.providerID === "grok-build-cli")
+          return finish(await grokBuildFamilyModels(current, resolved.model), resolved.model)
+        if (opts.providerID === "kimi-cli")
+          return finish(await kimiCliFamilyModels(current, resolved.model), resolved.model)
+        if (opts.providerID === "codex-cli")
+          return finish(await codexCliFamilyModels(current, resolved.model), resolved.model)
+        if (opts.providerID === "muse-cli")
+          return finish(await museCliFamilyModels(current, resolved.model), resolved.model)
+        return finish(cliModels(opts.providerID, current, resolved.model), resolved.model)
       },
     }
   }
