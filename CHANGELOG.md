@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.23] - 2026-11-11
+
+### Changed
+
+- Refresh the upstream model catalog and publish the paired SDK 2.6.77 maintenance release.
+
 ### Removed
 
 - Retire the MiniMax Code CLI provider (`minimax-cli`). Use the `minimax-coding-plan` or `minimax-cn-coding-plan` API
@@ -15,6 +21,8 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Kimi Code and DeepSeek Harness republish their cached control files atomically with owner-only permissions before
+  each launch, replacing matching symlinks and repairing permissive file modes without changing external targets.
 - Claude Code model aliases in `settings.json` or `ANTHROPIC_MODEL` (`opus`, `sonnet`, `haiku`, `fable`) select the
   matching listed model as the CLI default instead of adding a duplicate alias entry to the model list.
 - CLI providers in `read-only` isolation restrict Muse Code (writes and shell disabled) and Kimi Code (a
