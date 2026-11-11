@@ -6,11 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.22] - 2026-11-11
+
 ### Added
 
 - Restore the Claude Code CLI and Muse CLI providers.
 
 ### Changed
+
+- Publish the paired SDK 2.6.76 maintenance release.
+- Update fast-xml-parser to 5.12.0 to address GHSA-474x-hrwr-fgx4.
 
 - Claude Code CLI responses stream incrementally (`--include-partial-messages`), and Grok Build CLI uses its
   structured `streaming-json` output.
@@ -25,6 +30,8 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- A Muse completion event emitted during cancellation preserves the caller's abort instead of reporting a successful turn.
+- Custom gateway models with sparse capability cards retain tool-call support unless explicitly disabled.
 - Muse CLI turns end as soon as the answer is complete: AX Code disables Muse's background reminder agents
   (`--disable-reminders`), which held each turn open for several seconds after the reply. Older Muse CLIs that do not
   support the flag fall back to running without it.
