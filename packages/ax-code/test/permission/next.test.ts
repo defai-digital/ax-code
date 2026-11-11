@@ -351,7 +351,7 @@ test("ask - supervised full-access still requires interaction despite wildcard a
         () => "rejected",
       )
       try {
-        await sleep(30)
+        await waitForPending(1)
         expect((await Permission.list()).map((entry) => entry.id)).toContain(requestID)
       } finally {
         if ((await Permission.list()).some((entry) => entry.id === requestID)) {
