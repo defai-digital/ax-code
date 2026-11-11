@@ -1686,6 +1686,7 @@ describe("CliLanguageModel", () => {
       "never",
       "--disable-approval",
       "--trust-workspace",
+      "--disable-reminders",
       "--workspace",
       "/repo",
       "--prompt-file",
@@ -2076,8 +2077,8 @@ describe("CLI effective model and terminal events", () => {
       const { stream } = await model.doStream({
         prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
       })
-      // Answer + terminal event arrive, but the process stays alive like Muse's
-      // ~30s tail. The stream must not wait for `exited`.
+      // Answer + terminal event arrive, but the process stays alive after the
+      // terminal event (as Muse can). The stream must not wait for `exited`.
       stdout.write('{"payload_type":"run.output.delta","payload":{"text":"PONG"}}\n')
       stdout.write('{"payload_type":"run.terminal.completed","payload":{"terminal":"completed","text":"PONG"}}\n')
 

@@ -748,9 +748,9 @@ export class CliLanguageModel implements LanguageModelV3 {
           const delta = safeParse(tail)
           if (delta) emitDelta(delta)
         }
-        // Finish as soon as the CLI's reliable terminal event arrives. Muse, for
-        // example, keeps its process alive for ~30s after the answer; the
-        // stream must not wait for exit. The child is reaped/killed in the
+        // Finish as soon as the CLI's reliable terminal event arrives, because a
+        // CLI (Muse, for example) may keep its process alive after the answer.
+        // The stream must not wait for exit; the child is reaped/killed in the
         // background, and its exit still runs the temp-file cleanup attached to
         // `proc.exited`.
         const finishTerminal = () => {

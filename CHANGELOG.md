@@ -25,6 +25,8 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Muse CLI turns end as soon as the answer is complete: AX Code disables Muse's background reminder agents
+  (`--disable-reminders`), which held each turn open for several seconds after the reply. This needs a recent Muse CLI.
 - Grok Build replies containing a line of JSON are no longer dropped while streaming.
 - MiniMax Code fails clearly when it substitutes a different model for the requested one, and unknown MiniMax model ids
   are no longer offered.

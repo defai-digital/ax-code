@@ -240,6 +240,7 @@ describe("probeCliLanguageModel", () => {
 
       const cmd = spawn.mock.calls[0]?.[0] as string[]
       expect(cmd).toContain("--trust-workspace")
+      expect(cmd).toContain("--disable-reminders")
       expect(cmd).toContain("--workspace")
       expect(cmd[cmd.indexOf("--workspace") + 1]).toBe(tmp.path)
     } finally {

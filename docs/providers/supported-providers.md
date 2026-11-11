@@ -223,7 +223,7 @@ PATH candidate remains selected.
 
 For Kimi Code membership, install the local `kimi` binary, run `kimi login`, then `ax-code providers login kimi-cli`. AX Code reuses the Kimi Code CLI session (`~/.kimi-code`, with legacy fallback to `~/.kimi`) rather than storing a hosted Moonshot API key.
 
-For Muse Code, install the local `muse` binary, run `muse login` (or set `META_API_KEY`), then `ax-code providers login muse-cli`. AX Code reuses the Muse CLI session (`~/.config/muse`, with the model catalog under `~/.local/share/muse`) rather than storing a hosted Meta API key. The hosted `meta` API provider remains a separate connection.
+For Muse Code, install the local `muse` binary, run `muse login` (or set `META_API_KEY`), then `ax-code providers login muse-cli`. AX Code reuses the Muse CLI session (`~/.config/muse`, with the model catalog under `~/.local/share/muse`) rather than storing a hosted Meta API key. The hosted `meta` API provider remains a separate connection. AX Code runs `muse exec --json` with Muse's reminder agents disabled (`--disable-reminders`), so turns end as soon as the answer is complete. That flag needs a recent Muse CLI (tested with 1.4.15); if `ax-code providers login muse-cli` fails with `unexpected argument '--disable-reminders'`, upgrade `muse`.
 
 For Claude Code, install the local `claude` binary, run `claude` once to sign in (or export `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`), then `ax-code providers login claude-code`. AX Code reuses the Claude Code CLI session (`$CLAUDE_CONFIG_DIR` when set, otherwise `~/.claude`) rather than storing a hosted Anthropic API key. The hosted `anthropic` API provider remains a separate connection.
 

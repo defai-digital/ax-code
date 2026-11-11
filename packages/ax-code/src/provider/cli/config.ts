@@ -49,9 +49,19 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
   },
   // Muse Code CLI: headless exec with durable JSONL. Prompt file avoids argv
   // limits. Approval is disabled because AX Code cannot show Muse's TUI.
+  // Reminders are disabled because Muse's reminder child agents delay
+  // run.terminal.completed by several seconds; AX Code runs its own loop.
   "muse-cli": {
     binary: "muse",
-    args: ["exec", "--json", "--approval-mode", "never", "--disable-approval", "--trust-workspace"],
+    args: [
+      "exec",
+      "--json",
+      "--approval-mode",
+      "never",
+      "--disable-approval",
+      "--trust-workspace",
+      "--disable-reminders",
+    ],
     parser: museCliParser,
     promptMode: "file",
     promptFlag: "--prompt-file",
