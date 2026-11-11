@@ -12,6 +12,7 @@ import { RGBA } from "ax-tui"
 import { WorkMode } from "@/mode/work-mode"
 import { selectedForeground, useTheme } from "@tui/context/theme"
 import { useSync } from "@tui/context/sync"
+import { useLocal } from "@tui/context/local"
 import { useKV } from "@tui/context/kv"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { runMode, runModeLabel } from "./prompt/run-mode-view-model"
@@ -26,6 +27,7 @@ export function ModeChips() {
   const t = useLanguage().t
   const sync = useSync()
   const kv = useKV()
+  const local = useLocal()
   const { theme } = useTheme()
   const command = useCommandDialog()
 
@@ -42,6 +44,7 @@ export function ModeChips() {
         providers: sync.data.provider,
         providerLoaded: sync.data.provider_loaded,
         config: sync.data.config?.modes,
+        modelProviderID: local.model.current()?.providerID,
       }),
     ),
   )

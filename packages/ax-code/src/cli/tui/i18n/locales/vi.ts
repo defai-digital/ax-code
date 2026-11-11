@@ -1112,6 +1112,7 @@ export const messages = {
     "T\u1ed1i \u0111a {count} th\u00ed sinh \u00b7 l\u1eadp k\u1ebf ho\u1ea1ch ho\u1eb7c worktree c\u00e1ch ly",
   "mode.councilDisabled": "Council \u0111\u00e3 t\u1eaft (modes.council.enabled: false)",
   "mode.arenaDisabled": "Arena \u0111\u00e3 t\u1eaft (\u0111\u1eb7t modes.arena.enabled: true \u0111\u1ec3 b\u1eadt)",
+  "mode.needsApiModel": "{mode} cần một mô hình không phải CLI (API): nhà cung cấp CLI không thể gọi công cụ AX Code",
   "mode.cap": "{mode} c\u1ea7n {setting} \u2265 2 \u0111\u1ec3 so s\u00e1nh m\u00f4 h\u00ecnh",
   "mode.providers":
     "{mode} c\u1ea7n \u22652 nh\u00e0 cung c\u1ea5p c\u00f3 m\u00f4 h\u00ecnh ch\u1ecdn \u0111\u01b0\u1ee3c ({count} \u0111\u00e3 k\u1ebft n\u1ed1i)",

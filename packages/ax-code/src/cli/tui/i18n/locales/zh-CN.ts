@@ -1080,6 +1080,7 @@ export const messages = {
     "\u6700\u591a {count} \u4f4d\u53c2\u8d5b\u8005 \u00b7 \u89c4\u5212\u6216\u9694\u79bb\u5de5\u4f5c\u6811",
   "mode.councilDisabled": "Council \u5df2\u7981\u7528\uff08modes.council.enabled: false\uff09",
   "mode.arenaDisabled": "Arena \u672a\u5f00\u542f\uff08\u8bbe\u7f6e modes.arena.enabled: true \u542f\u7528\uff09",
+  "mode.needsApiModel": "{mode} 需要非 CLI（API）模型——CLI 提供商无法调用 AX Code 工具",
   "mode.cap": "{mode} \u9700\u8981 {setting} \u2265 2 \u624d\u80fd\u6bd4\u8f83\u6a21\u578b",
   "mode.providers":
     "{mode} \u9700\u8981 \u22652 \u4e2a\u6709\u53ef\u9009\u6a21\u578b\u7684\u63d0\u4f9b\u5546\uff08\u5df2\u8fde\u63a5 {count} \u4e2a\uff09",

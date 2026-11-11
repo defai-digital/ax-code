@@ -4,7 +4,11 @@ import { Plugin } from "../../plugin"
 import { Log } from "../../util/log"
 import type { MessageV2 } from "../message-v2"
 import { commandSetup } from "./prompt-command-setup"
-import { resolveCommandForExecution, validateCommandArguments } from "./prompt-command"
+import {
+  rejectAxToolOnlyCommandOnCliModel,
+  resolveCommandForExecution,
+  validateCommandArguments,
+} from "./prompt-command"
 import { createWorkflowCommandRun, workflowCommandPrompt } from "./prompt-command-workflow"
 import { executeGoalCommand } from "./prompt-goal-command"
 import { executeLimitsCommand } from "./prompt-limits-command"
@@ -68,6 +72,14 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
     agent: input.agent,
     model: input.model,
     parts: input.parts,
+  })
+
+  // CLI providers cannot call AX Code tools, so the tool-only ensemble
+  // commands cannot work on a CLI-model turn: reject before prompting.
+  rejectAxToolOnlyCommandOnCliModel({
+    sessionID: input.sessionID,
+    command,
+    modelProviderID: prepared.user.model.providerID,
   })
 
   await Plugin.trigger(

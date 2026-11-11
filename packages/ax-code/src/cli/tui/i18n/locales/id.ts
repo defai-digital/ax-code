@@ -1024,6 +1024,7 @@ export const messages = {
   "mode.arenaMembers": "Hingga {count} peserta \u00b7 rencana atau worktree terisolasi",
   "mode.councilDisabled": "Council dinonaktifkan (modes.council.enabled: false)",
   "mode.arenaDisabled": "Arena nonaktif (atur modes.arena.enabled: true)",
+  "mode.needsApiModel": "{mode} memerlukan model non-CLI (API): penyedia CLI tidak dapat memanggil alat AX Code",
   "mode.cap": "{mode} memerlukan {setting} \u2265 2 untuk membandingkan model",
   "mode.providers": "{mode} memerlukan \u22652 penyedia dengan model yang dapat dipilih ({count} terhubung)",
   "mode.checking": "Memeriksa penyedia\u2026",

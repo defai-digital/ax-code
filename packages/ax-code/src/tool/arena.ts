@@ -22,6 +22,7 @@ import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import type { ModePolicy } from "../mode/policy"
 import { Instance } from "../project/instance"
+import { provideCliIsolationMode } from "../provider/cli/isolation"
 import { Provider } from "../provider/provider"
 import { ProviderTransform } from "../provider/transform"
 import { Agent } from "../agent/agent"
@@ -180,38 +181,42 @@ Return a json object with this shape: {"approach": string, "steps": string[], "r
     : undefined
 
   const attemptProposal = async (): Promise<FanOut.MemberResult<z.infer<typeof ProposalSchema>>> => {
-    const [result] = await FanOut.run({
-      members: [input.member],
-      timeoutMs: memberTimeoutMs,
-      abort: input.abort,
-      telemetry,
-      onMemberComplete: (completed, total, m) => {
-        log.info("arena fan-out member done", {
-          toolName: "arena",
-          memberId: m.memberId,
-          completed,
-          total,
-        })
-      },
-      execute: async (_m, signal) => {
-        const result = streamObject({
-          model: language,
-          maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
-          schema: ProposalSchema,
-          maxRetries: 0,
-          abortSignal: signal,
-          temperature: 0.3,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user },
-          ],
-        })
-        for await (const part of result.fullStream) {
-          if (part.type === "error") throw part.error
-        }
-        return await result.object
-      },
-    })
+    // Plan contestants are advisory: force read-only CLI isolation so a
+    // vendor CLI contestant can never write during plan mode.
+    const [result] = await provideCliIsolationMode("read-only", () =>
+      FanOut.run({
+        members: [input.member],
+        timeoutMs: memberTimeoutMs,
+        abort: input.abort,
+        telemetry,
+        onMemberComplete: (completed, total, m) => {
+          log.info("arena fan-out member done", {
+            toolName: "arena",
+            memberId: m.memberId,
+            completed,
+            total,
+          })
+        },
+        execute: async (_m, signal) => {
+          const result = streamObject({
+            model: language,
+            maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
+            schema: ProposalSchema,
+            maxRetries: 0,
+            abortSignal: signal,
+            temperature: 0.3,
+            messages: [
+              { role: "system", content: system },
+              { role: "user", content: user },
+            ],
+          })
+          for await (const part of result.fullStream) {
+            if (part.type === "error") throw part.error
+          }
+          return await result.object
+        },
+      }),
+    )
     return result!
   }
 
@@ -369,30 +374,33 @@ Return a json object with this shape: {"scores": [{"candidate": "A", "requiremen
     : undefined
 
   const attempt = async (): Promise<z.infer<typeof JudgeOutputSchema>> => {
-    const [result] = await FanOut.run({
-      members: [input.member],
-      timeoutMs: memberTimeoutMs,
-      abort: input.abort,
-      telemetry,
-      execute: async (_m, signal) => {
-        const result = streamObject({
-          model: language,
-          maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
-          schema: JudgeOutputSchema,
-          maxRetries: 0,
-          abortSignal: signal,
-          temperature: 0.1,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user },
-          ],
-        })
-        for await (const part of result.fullStream) {
-          if (part.type === "error") throw part.error
-        }
-        return await result.object
-      },
-    })
+    // The rubric judge only scores plans: force read-only CLI isolation.
+    const [result] = await provideCliIsolationMode("read-only", () =>
+      FanOut.run({
+        members: [input.member],
+        timeoutMs: memberTimeoutMs,
+        abort: input.abort,
+        telemetry,
+        execute: async (_m, signal) => {
+          const result = streamObject({
+            model: language,
+            maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
+            schema: JudgeOutputSchema,
+            maxRetries: 0,
+            abortSignal: signal,
+            temperature: 0.1,
+            messages: [
+              { role: "system", content: system },
+              { role: "user", content: user },
+            ],
+          })
+          for await (const part of result.fullStream) {
+            if (part.type === "error") throw part.error
+          }
+          return await result.object
+        },
+      }),
+    )
     if (result.error) throw new Error(result.error)
     return result.result!
   }

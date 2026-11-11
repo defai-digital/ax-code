@@ -1068,6 +1068,7 @@ export const messages = {
     "En \u00e7ok {count} yar\u0131\u015fmac\u0131 \u00b7 plan veya yal\u0131t\u0131lm\u0131\u015f \u00e7al\u0131\u015fma a\u011fa\u00e7lar\u0131",
   "mode.councilDisabled": "Council kapal\u0131 (modes.council.enabled: false)",
   "mode.arenaDisabled": "Arena kapal\u0131 (a\u00e7mak i\u00e7in modes.arena.enabled: true)",
+  "mode.needsApiModel": "{mode} CLI olmayan (API) bir model gerektirir: CLI sağlayıcıları AX Code araçlarını çağıramaz",
   "mode.cap": "Model kar\u015f\u0131la\u015ft\u0131rmas\u0131 i\u00e7in {mode}, {setting} \u2265 2 gerektirir",
   "mode.providers":
     "{mode}, se\u00e7ilebilir modelli \u22652 sa\u011flay\u0131c\u0131 gerektirir ({count} ba\u011fl\u0131)",

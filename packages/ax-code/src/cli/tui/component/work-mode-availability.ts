@@ -1,5 +1,6 @@
 import { english, type Translate } from "../i18n"
 import { WorkMode } from "@/mode/work-mode"
+import { isKnownCliProviderID } from "@/provider/cli/ids"
 import { isNonChatModelID, modelSelectableForProvider } from "@/provider/model-selectability"
 
 // Shared work-mode availability view-model. Pure and Solid-free so chip, hint,
@@ -15,8 +16,8 @@ export type WorkModeAvailability = {
   /** Effective auto-selected member cap: config maximum clamped by the number
    *  of counting providers. Zero unless available. */
   members: number
-  /** Short reason token for compact UI ("off" | "needs 2" | "max 1"). */
-  reason?: "off" | "needs 2" | "max 1"
+  /** Short reason token for compact UI ("off" | "needs 2" | "max 1" | "needs API model"). */
+  reason?: "off" | "needs 2" | "max 1" | "needs API model"
   /** One-sentence explanation for toasts and hints. */
   detail?: string
 }
@@ -56,12 +57,26 @@ export function workModeAvailability(input: {
   providers: readonly AvailabilityProvider[]
   providerLoaded: boolean
   config?: WorkModeConfig
+  /** Provider of the currently selected model, when one is selected. */
+  modelProviderID?: string
 }): WorkModeAvailability {
   const t = input.t ?? english
   if (input.mode === "agent") return { state: "available", members: 1 }
   if (!input.providerLoaded) return { state: "checking", members: 0 }
 
   const label = WorkMode.label(input.mode)
+  // CLI providers run the vendor's own agent loop and never receive AX Code
+  // tools, so council/arena cannot run on a CLI-model session: no config fixes
+  // it, only switching to an API model does.
+  if (input.modelProviderID && isKnownCliProviderID(input.modelProviderID)) {
+    return {
+      state: "unavailable",
+      members: 0,
+      reason: "needs API model",
+      detail: t("mode.needsApiModel", { mode: label }),
+    }
+  }
+
   const enabled =
     input.mode === "council" ? input.config?.council?.enabled !== false : input.config?.arena?.enabled === true
   if (!enabled) {
@@ -113,6 +128,8 @@ export function workModePickerOptions(input: {
   providers: readonly AvailabilityProvider[]
   providerLoaded: boolean
   config?: WorkModeConfig
+  /** Provider of the currently selected model, when one is selected. */
+  modelProviderID?: string
 }): WorkModePickerOption[] {
   const t = input.t ?? english
   return WorkMode.ALL.map((mode) => {
@@ -122,6 +139,7 @@ export function workModePickerOptions(input: {
       providers: input.providers,
       providerLoaded: input.providerLoaded,
       config: input.config,
+      modelProviderID: input.modelProviderID,
     })
     if (mode === "agent") {
       return {

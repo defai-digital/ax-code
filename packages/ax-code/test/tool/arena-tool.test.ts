@@ -75,6 +75,7 @@ vi.mock("@/project/instance", () => {
 import { ArenaTool, arenaTimeoutPolicy } from "../../src/tool/arena"
 import { Config } from "../../src/config/config"
 import { EnsembleShared } from "../../src/mode/ensemble-shared"
+import { currentCliIsolationMode } from "../../src/provider/cli/isolation"
 import { ProviderID, ModelID } from "../../src/provider/schema"
 
 const mkMembers = (ids: string[]) =>
@@ -466,5 +467,39 @@ describe("arena rubric judge (ADR-101)", () => {
     expect(result.metadata.judgeError).toContain("500")
     expect(result.output).toContain("Rubric judge unavailable")
     expect(result.metadata.rankedIds).toHaveLength(2)
+  })
+})
+
+describe("arena plan CLI isolation", () => {
+  test("plan contestants and the rubric judge run with read-only isolation", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { arena: { enabled: true } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
+    const observed: Array<string | undefined> = []
+    generateObject.mockImplementation(async (request: any) => {
+      observed.push(currentCliIsolationMode())
+      const system = request.messages[0].content as string
+      if (system.includes('"scores"')) {
+        return {
+          object: {
+            scores: ["A", "B"].map((candidate) => ({
+              candidate,
+              requirementCoverage: 5,
+              feasibility: 5,
+              verificationPlan: 5,
+              riskEvidence: 5,
+            })),
+          },
+        }
+      }
+      return { object: mkProposal(3) }
+    })
+
+    const tool = await ArenaTool.init()
+    await tool.execute({ task: "Add rate limiting" }, ctx)
+
+    // Two plan contestants plus the blinded rubric judge.
+    expect(observed).toHaveLength(3)
+    expect(observed.every((mode) => mode === "read-only")).toBe(true)
+    expect(currentCliIsolationMode()).toBeUndefined()
   })
 })

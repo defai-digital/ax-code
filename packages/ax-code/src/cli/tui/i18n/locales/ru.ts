@@ -1565,6 +1565,7 @@ export const messages = {
   "mode.councilDisabled": "Council \u043e\u0442\u043a\u043b\u044e\u0447\u0451\u043d (modes.council.enabled: false)",
   "mode.arenaDisabled":
     "Arena \u0432\u044b\u043a\u043b\u044e\u0447\u0435\u043d\u0430 (\u0432\u043a\u043b\u044e\u0447\u0438\u0442\u0435 modes.arena.enabled: true)",
+  "mode.needsApiModel": "{mode} требует модель не-CLI (API): CLI-провайдеры не могут вызывать инструменты AX Code",
   "mode.cap":
     "\u0414\u043b\u044f \u0441\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u044f \u043c\u043e\u0434\u0435\u043b\u0435\u0439 {mode} \u043d\u0443\u0436\u043d\u043e {setting} \u2265 2",
   "mode.providers":

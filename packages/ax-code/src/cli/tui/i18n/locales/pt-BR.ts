@@ -1040,6 +1040,8 @@ export const messages = {
   "mode.arenaMembers": "At\u00e9 {count} participantes \u00b7 plano ou worktrees isolados",
   "mode.councilDisabled": "Council desativado (modes.council.enabled: false)",
   "mode.arenaDisabled": "Arena desativada (ative modes.arena.enabled: true)",
+  "mode.needsApiModel":
+    "{mode} requer um modelo não CLI (API): provedores CLI não podem chamar as ferramentas do AX Code",
   "mode.cap": "{mode} requer {setting} \u2265 2 para comparar modelos",
   "mode.providers": "{mode} requer \u22652 provedores com modelos selecion\u00e1veis ({count} conectados)",
   "mode.checking": "Verificando provedores\u2026",

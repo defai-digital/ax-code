@@ -69,6 +69,7 @@ import { CouncilTool, chairmanBrief, DEFAULT_REASONING_TIMEOUT_SCALE, DEFAULT_TI
 import { Config } from "../../src/config/config"
 import { EnsembleShared } from "../../src/mode/ensemble-shared"
 import { Provider } from "../../src/provider/provider"
+import { currentCliIsolationMode } from "../../src/provider/cli/isolation"
 import { ProviderID, ModelID } from "../../src/provider/schema"
 
 const mkMembers = (ids: string[]) =>
@@ -762,5 +763,26 @@ describe("council adaptive fan-out (ADR-102)", () => {
     expect(generateObject).toHaveBeenCalledTimes(3)
     expect(result.metadata.adaptiveExpanded).toBeUndefined()
     expect(result.output).not.toContain("Adaptive fan-out")
+  })
+})
+
+describe("council auxiliary CLI isolation", () => {
+  test("review members run with read-only isolation and restore the caller's context", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({
+      modes: { council: { enabled: true, maxMembers: 2, debateRounds: 0 } },
+    } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
+    const observed: Array<string | undefined> = []
+    vi.mocked(generateObject).mockImplementation(async () => {
+      observed.push(currentCliIsolationMode())
+      return { object: { overall: "ok", issues: [] } } as any
+    })
+
+    const tool = await CouncilTool.init()
+    await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(observed).toHaveLength(2)
+    expect(observed.every((mode) => mode === "read-only")).toBe(true)
+    expect(currentCliIsolationMode()).toBeUndefined()
   })
 })
