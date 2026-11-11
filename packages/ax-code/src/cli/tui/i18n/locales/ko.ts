@@ -1139,6 +1139,7 @@ export const messages = {
     "\ucd5c\ub300 {count}\uac1c \ud6c4\ubcf4 \u00b7 \uacc4\ud68d \ub610\ub294 \uaca9\ub9ac \uc791\uc5c5 \ud2b8\ub9ac",
   "mode.councilDisabled": "Council \ube44\ud65c\uc131\ud654\ub428 (modes.council.enabled: false)",
   "mode.arenaDisabled": "Arena \uaebc\uc9d0 (modes.arena.enabled: true\ub85c \ud65c\uc131\ud654)",
+  "mode.needsApiModel": "{mode}에는 비CLI(API) 모델이 필요합니다 — CLI 공급자는 AX Code 도구를 호출할 수 없습니다",
   "mode.cap": "{mode} \ubaa8\ub378 \ube44\uad50\uc5d0\ub294 {setting} \u2265 2 \ud544\uc694",
   "mode.providers":
     "{mode}\uc5d0\ub294 \uc120\ud0dd \uac00\ub2a5\ud55c \ubaa8\ub378\uc758 \uacf5\uae09\uc790 \u22652 \ud544\uc694 ({count}\uac1c \uc5f0\uacb0\ub428)",

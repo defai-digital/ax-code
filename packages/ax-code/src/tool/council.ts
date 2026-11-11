@@ -18,6 +18,7 @@ import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import { ModePolicy } from "../mode/policy"
 import { ProviderError } from "../provider/error"
+import { provideCliIsolationMode } from "../provider/cli/isolation"
 import { Provider } from "../provider/provider"
 import { stripThinkTags } from "../provider/think-tags"
 import { ProviderTransform } from "../provider/transform"
@@ -238,94 +239,99 @@ async function runMember(input: {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (abort.aborted) break
 
-    const [fanOutResult] = await FanOut.run({
-      members: [member],
-      timeoutMs: memberTimeoutMs,
-      abort,
-      telemetry,
-      onMemberComplete: (completed, total, m) => {
-        log.info("council fan-out member done", {
-          toolName: "council",
-          memberId: m.memberId,
-          completed,
-          total,
-        })
-      },
-      execute: async (_m, signal) => {
-        try {
-          const r = streamObject({
-            model: language,
-            maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
-            schema: MemberOutputSchema,
-            maxRetries: 0,
-            abortSignal: signal,
-            temperature: 0.2,
-            messages: [
-              { role: "system", content: system },
-              { role: "user", content: userParts },
-            ],
-          })
-          for await (const part of r.fullStream) {
-            if (part.type === "error") throw part.error
-          }
-          return await r.object
-        } catch (error) {
-          if (ProviderError.isUnsupportedSpecVersionError(error)) {
-            const detail = error instanceof Error ? error.message : String(error)
-            throw new Error(
-              `provider package for "${member.providerID}" is incompatible with this ax-code build: ${detail} ` +
-                "The runtime-installed provider SDK declares an AI SDK specification version the bundled AI SDK does not support; a compatible version must be installed for this provider.",
-            )
-          }
-          if (signal.aborted || !ProviderError.isSchemaConformanceError(error)) throw error
-          // streamText fallback: some models return review JSON that
-          // streamObject's strict structured-output path rejects
-          // ("No object generated"). Retry in plain json mode and validate
-          // the parsed text ourselves before declaring the member failed.
-          log.info("council member streamObject failed schema, falling back to streamText", {
+    // Review-only auxiliary call: force the strictest CLI isolation so a
+    // vendor CLI reviewer can never write, even when the session's own mode
+    // (or the instance config it falls back to) is looser.
+    const [fanOutResult] = await provideCliIsolationMode("read-only", () =>
+      FanOut.run({
+        members: [member],
+        timeoutMs: memberTimeoutMs,
+        abort,
+        telemetry,
+        onMemberComplete: (completed, total, m) => {
+          log.info("council fan-out member done", {
             toolName: "council",
-            memberId: member.memberId,
-            error: FanOut.describeError(error),
+            memberId: m.memberId,
+            completed,
+            total,
           })
-          const fallback = streamText({
-            model: language,
-            maxRetries: 0,
-            maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
-            abortSignal: signal,
-            temperature: 0.2,
-            messages: [
-              { role: "system", content: system },
-              { role: "user", content: `${userParts}\n\n${JSON_OUTPUT_INSTRUCTION}` },
-            ],
-          })
-          for await (const part of fallback.fullStream) {
-            if (part.type === "error") throw part.error
+        },
+        execute: async (_m, signal) => {
+          try {
+            const r = streamObject({
+              model: language,
+              maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
+              schema: MemberOutputSchema,
+              maxRetries: 0,
+              abortSignal: signal,
+              temperature: 0.2,
+              messages: [
+                { role: "system", content: system },
+                { role: "user", content: userParts },
+              ],
+            })
+            for await (const part of r.fullStream) {
+              if (part.type === "error") throw part.error
+            }
+            return await r.object
+          } catch (error) {
+            if (ProviderError.isUnsupportedSpecVersionError(error)) {
+              const detail = error instanceof Error ? error.message : String(error)
+              throw new Error(
+                `provider package for "${member.providerID}" is incompatible with this ax-code build: ${detail} ` +
+                  "The runtime-installed provider SDK declares an AI SDK specification version the bundled AI SDK does not support; a compatible version must be installed for this provider.",
+              )
+            }
+            if (signal.aborted || !ProviderError.isSchemaConformanceError(error)) throw error
+            // streamText fallback: some models return review JSON that
+            // streamObject's strict structured-output path rejects
+            // ("No object generated"). Retry in plain json mode and validate
+            // the parsed text ourselves before declaring the member failed.
+            log.info("council member streamObject failed schema, falling back to streamText", {
+              toolName: "council",
+              memberId: member.memberId,
+              error: FanOut.describeError(error),
+            })
+            const fallback = streamText({
+              model: language,
+              maxRetries: 0,
+              maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
+              abortSignal: signal,
+              temperature: 0.2,
+              messages: [
+                { role: "system", content: system },
+                { role: "user", content: `${userParts}\n\n${JSON_OUTPUT_INSTRUCTION}` },
+              ],
+            })
+            for await (const part of fallback.fullStream) {
+              if (part.type === "error") throw part.error
+            }
+            // MiniMax-M3 on vLLM/PAI writes `<mm:think>` reasoning into the text
+            // stream. The main prompt path splits those blocks out
+            // (attachThinkTagStream in session/llm-impl.ts), but these direct
+            // structured calls do not, so the JSON arrives behind a reasoning
+            // block whose own braces defeat the outermost-{...} extraction.
+            // Strip complete think-tag blocks before parsing.
+            const fallbackText = stripThinkTags((await fallback.text) ?? "")
+            const validated = MemberOutputSchema.safeParse(parseJsonFromText(fallbackText))
+            if (!validated.success) {
+              // Surface both stages plus a bounded tail instead of re-throwing
+              // the bare primary error: "could not parse the response" alone
+              // hides whether the member returned nothing, truncated, or a
+              // schema miss, and operators cannot diagnose it from the report.
+              const finishReason = await fallback.finishReason
+              throw new Error(
+                `council member produced neither a schema-valid object nor parseable json ` +
+                  `(primary streamObject: ${FanOut.describeError(error)}; ` +
+                  `fallback finishReason=${finishReason ?? "unknown"}, length=${fallbackText.length}, ` +
+                  `snippet=${JSON.stringify(fallbackText.trim().slice(0, 500))})`,
+              )
+            }
+            return validated.data
           }
-          // MiniMax-M3 on vLLM/PAI writes `<mm:think>` reasoning into the text
-          // stream. The main prompt path splits those blocks out
-          // (attachThinkTagStream in session/llm-impl.ts), but these direct
-          // structured calls do not, so the JSON arrives behind a reasoning
-          // block whose own braces defeat the outermost-{...} extraction.
-          // Strip complete think-tag blocks before parsing.
-          const fallbackText = stripThinkTags((await fallback.text) ?? "")
-          const validated = MemberOutputSchema.safeParse(parseJsonFromText(fallbackText))
-          if (!validated.success) {
-            // Surface both stages plus a bounded tail instead of re-throwing
-            // the bare primary error: "could not parse the response" alone
-            // hides whether the member returned nothing, truncated, or a
-            // schema miss, and operators cannot diagnose it from the report.
-            const finishReason = await fallback.finishReason
-            throw new Error(
-              `council member produced neither a schema-valid object nor parseable json ` +
-                `(primary streamObject: ${FanOut.describeError(error)}; ` +
-                `fallback finishReason=${finishReason ?? "unknown"}, length=${fallbackText.length}, ` +
-                `snippet=${JSON.stringify(fallbackText.trim().slice(0, 500))})`,
-            )
-          }
-          return validated.data
-        }
-      },
-    })
+        },
+      }),
+    )
 
     if (fanOutResult?.result) {
       const raw = fanOutResult.result
@@ -481,30 +487,33 @@ async function runChairman(input: {
     : undefined
 
   const attempt = async (): Promise<z.infer<typeof ChairmanOutputSchema>> => {
-    const [result] = await FanOut.run({
-      members: [member],
-      timeoutMs: memberTimeoutMs,
-      abort: input.abort,
-      telemetry,
-      execute: async (_m, signal) => {
-        const r = streamObject({
-          model: language,
-          maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
-          schema: ChairmanOutputSchema,
-          maxRetries: 0,
-          abortSignal: signal,
-          temperature: 0.2,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: input.user },
-          ],
-        })
-        for await (const part of r.fullStream) {
-          if (part.type === "error") throw part.error
-        }
-        return await r.object
-      },
-    })
+    // Chairman synthesis is also review-only: never let a CLI chairman write.
+    const [result] = await provideCliIsolationMode("read-only", () =>
+      FanOut.run({
+        members: [member],
+        timeoutMs: memberTimeoutMs,
+        abort: input.abort,
+        telemetry,
+        execute: async (_m, signal) => {
+          const r = streamObject({
+            model: language,
+            maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
+            schema: ChairmanOutputSchema,
+            maxRetries: 0,
+            abortSignal: signal,
+            temperature: 0.2,
+            messages: [
+              { role: "system", content: system },
+              { role: "user", content: input.user },
+            ],
+          })
+          for await (const part of r.fullStream) {
+            if (part.type === "error") throw part.error
+          }
+          return await r.object
+        },
+      }),
+    )
     if (result.error) throw new Error(result.error)
     return result.result!
   }

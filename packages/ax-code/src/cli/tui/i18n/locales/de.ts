@@ -1036,6 +1036,7 @@ export const messages = {
   "mode.arenaMembers": "Bis zu {count} Teilnehmer \u00b7 Plan oder isolierte Worktrees",
   "mode.councilDisabled": "Council deaktiviert (modes.council.enabled: false)",
   "mode.arenaDisabled": "Arena aus (mit modes.arena.enabled: true aktivieren)",
+  "mode.needsApiModel": "{mode} benötigt ein Nicht-CLI-Modell (API): CLI-Anbieter können keine AX-Code-Tools aufrufen",
   "mode.cap": "{mode} ben\u00f6tigt {setting} \u2265 2 zum Modellvergleich",
   "mode.providers": "{mode} ben\u00f6tigt \u22652 Anbieter mit w\u00e4hlbaren Modellen ({count} verbunden)",
   "mode.checking": "Anbieter werden gepr\u00fcft\u2026",

@@ -118,6 +118,32 @@ describe("workModeAvailability", () => {
       }),
     ).toMatchObject({ state: "available", members: 2 })
   })
+
+  test("council and arena are unavailable when the selected model is a CLI provider", () => {
+    for (const mode of ["council", "arena"] as const) {
+      const state = workModeAvailability({
+        mode,
+        providers: twoProviders,
+        providerLoaded: true,
+        config: { arena: { enabled: true } },
+        modelProviderID: "claude-code",
+      })
+      expect(state).toMatchObject({ state: "unavailable", reason: "needs API model" })
+      expect(state.detail).toContain("non-CLI (API) model")
+      expect(state.detail).toContain("CLI providers cannot call AX Code tools")
+    }
+  })
+
+  test("an API-provider model keeps council and arena available", () => {
+    expect(
+      workModeAvailability({
+        mode: "council",
+        providers: twoProviders,
+        providerLoaded: true,
+        modelProviderID: "anthropic",
+      }),
+    ).toMatchObject({ state: "available", members: 2 })
+  })
 })
 
 describe("workModeChipVisible", () => {
@@ -154,6 +180,20 @@ describe("workModePickerOptions", () => {
     const options = workModePickerOptions({ providers: [provider("p1")], providerLoaded: true })
     expect(options[1]).toMatchObject({ value: "council", disabled: true })
     expect(options[1].description).toContain("1 connected")
+  })
+
+  test("disables council and arena rows for a CLI-provider model", () => {
+    const options = workModePickerOptions({
+      providers: twoProviders,
+      providerLoaded: true,
+      config: { arena: { enabled: true } },
+      modelProviderID: "codex-cli",
+    })
+    expect(options[0]).toMatchObject({ value: "agent", disabled: false })
+    expect(options[1]).toMatchObject({ value: "council", disabled: true })
+    expect(options[1].description).toContain("non-CLI (API) model")
+    expect(options[2]).toMatchObject({ value: "arena", disabled: true })
+    expect(options[2].description).toContain("non-CLI (API) model")
   })
 })
 

@@ -1203,6 +1203,7 @@ export const messages = {
   "mode.councilDisabled": "Council \u306f\u7121\u52b9\u3067\u3059\uff08modes.council.enabled: false\uff09",
   "mode.arenaDisabled":
     "Arena \u306f\u30aa\u30d5\u3067\u3059\uff08modes.arena.enabled: true \u3067\u6709\u52b9\u5316\uff09",
+  "mode.needsApiModel": "{mode} には非CLI（API）モデルが必要です — CLIプロバイダーはAX Codeツールを呼び出せません",
   "mode.cap": "{mode} \u306e\u30e2\u30c7\u30eb\u6bd4\u8f03\u306b\u306f {setting} \u2265 2 \u304c\u5fc5\u8981",
   "mode.providers":
     "{mode} \u306b\u306f\u9078\u629e\u53ef\u80fd\u306a\u30e2\u30c7\u30eb\u3092\u6301\u3064 \u22652 \u30d7\u30ed\u30d0\u30a4\u30c0\u30fc\u304c\u5fc5\u8981\uff08{count} \u63a5\u7d9a\u6e08\u307f\uff09",

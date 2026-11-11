@@ -1058,6 +1058,8 @@ export const messages = {
   "mode.arenaMembers": "Jusqu\u2019\u00e0 {count} concurrents \u00b7 plan ou worktrees isol\u00e9s",
   "mode.councilDisabled": "Council d\u00e9sactiv\u00e9 (modes.council.enabled: false)",
   "mode.arenaDisabled": "Arena d\u00e9sactiv\u00e9e (activer modes.arena.enabled: true)",
+  "mode.needsApiModel":
+    "{mode} nécessite un modèle non-CLI (API) : les fournisseurs CLI ne peuvent pas appeler les outils AX Code",
   "mode.cap": "{mode} n\u00e9cessite {setting} \u2265 2 pour comparer les mod\u00e8les",
   "mode.providers":
     "{mode} n\u00e9cessite \u22652 fournisseurs avec mod\u00e8les s\u00e9lectionnables ({count} connect\u00e9s)",

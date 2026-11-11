@@ -1023,6 +1023,7 @@ export const messages = {
   "mode.arenaMembers": "Up to {count} contestants \u00b7 plan or isolated worktrees",
   "mode.councilDisabled": "Council is disabled (modes.council.enabled: false)",
   "mode.arenaDisabled": "Arena is off (set modes.arena.enabled: true to enable)",
+  "mode.needsApiModel": "{mode} needs a non-CLI (API) model \u2014 CLI providers cannot call AX Code tools",
   "mode.cap": "{mode} needs {setting} \u2265 2 to compare models",
   "mode.providers": "{mode} needs \u22652 providers with selectable models ({count} connected)",
   "mode.checking": "Checking providers\u2026",

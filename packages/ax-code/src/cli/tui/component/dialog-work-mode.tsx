@@ -2,6 +2,7 @@ import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { useKV } from "@tui/context/kv"
 import { useSync } from "@tui/context/sync"
+import { useLocal } from "@tui/context/local"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useToast } from "@tui/ui/toast"
@@ -13,6 +14,7 @@ export function DialogWorkMode() {
 
   const kv = useKV()
   const sync = useSync()
+  const local = useLocal()
   const dialog = useDialog()
   const toast = useToast()
   onMount(() => dialog.setSize("medium"))
@@ -23,6 +25,7 @@ export function DialogWorkMode() {
       providers: sync.data.provider,
       providerLoaded: sync.data.provider_loaded,
       config: sync.data.config?.modes,
+      modelProviderID: local.model.current()?.providerID,
     }),
   )
   return (
@@ -49,6 +52,7 @@ export function DialogWorkMode() {
               providers: sync.data.provider,
               providerLoaded: sync.data.provider_loaded,
               config: sync.data.config?.modes,
+              modelProviderID: local.model.current()?.providerID,
             }),
             [],
             uiText,

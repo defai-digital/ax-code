@@ -2,6 +2,7 @@ import { useLanguage } from "../context/language"
 import { createMemo, Show } from "solid-js"
 import { WorkMode } from "@/mode/work-mode"
 import { useSync } from "@tui/context/sync"
+import { useLocal } from "@tui/context/local"
 import { useKV } from "@tui/context/kv"
 import { useTheme } from "@tui/context/theme"
 import {
@@ -18,6 +19,7 @@ export function WorkModeNotice() {
   const t = useLanguage().t
   const sync = useSync()
   const kv = useKV()
+  const local = useLocal()
   const { theme } = useTheme()
   const view = createMemo(() => {
     const mode = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
@@ -27,6 +29,7 @@ export function WorkModeNotice() {
       providers: sync.data.provider,
       providerLoaded: sync.data.provider_loaded,
       config: sync.data.config?.modes,
+      modelProviderID: local.model.current()?.providerID,
     })
     return {
       hint: workModeHint(mode, availability, {

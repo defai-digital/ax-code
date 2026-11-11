@@ -35,6 +35,12 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
+const cliModel: Provider.Model = {
+  ...model,
+  id: "claude-code" as any,
+  providerID: "claude-code" as any,
+}
+
 let modelSpy: MockInstance | undefined
 
 afterEach(async () => {
@@ -124,4 +130,89 @@ test("allows optional-argument /debug with an empty argument list", async () => 
 
   expect(calls).toHaveLength(1)
   expect(calls[0].agent).toBe("debug")
+})
+
+test("rejects built-in council and arena commands on a CLI-provider model", async () => {
+  await using tmp = await tmpdir({ git: true })
+  modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(cliModel)
+  const calls: PromptInput[] = []
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+
+      for (const command of ["council", "arena"]) {
+        await expect(
+          executePromptCommand(
+            {
+              sessionID: session.id,
+              command,
+              arguments: "review auth",
+              model: "claude-code/claude-code",
+            },
+            async (input) => {
+              calls.push(input)
+              return {
+                info: {
+                  id: `msg_${command}_cli` as any,
+                  sessionID: session.id,
+                  role: "assistant",
+                  time: { created: Date.now() },
+                  agent: input.agent ?? "build",
+                  model: input.model,
+                },
+                parts: [],
+              } as any
+            },
+          ),
+        ).rejects.toThrow(/needs a non-CLI \(API\) model/)
+      }
+    },
+  })
+
+  expect(calls).toHaveLength(0)
+})
+
+test("keeps other built-ins and custom commands working on a CLI-provider model", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: { command: { "team-review": { template: "Review $ARGUMENTS" } } },
+  })
+  modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(cliModel)
+  const calls: PromptInput[] = []
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+
+      for (const command of ["debug", "team-review"]) {
+        await executePromptCommand(
+          {
+            sessionID: session.id,
+            command,
+            arguments: "auth",
+            model: "claude-code/claude-code",
+          },
+          async (input) => {
+            calls.push(input)
+            return {
+              info: {
+                id: `msg_${command}_cli` as any,
+                sessionID: session.id,
+                role: "assistant",
+                time: { created: Date.now() },
+                agent: input.agent ?? "build",
+                model: input.model,
+              },
+              parts: [],
+            } as any
+          },
+        )
+      }
+    },
+  })
+
+  expect(calls).toHaveLength(2)
 })

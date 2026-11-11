@@ -386,6 +386,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
         providers: sync.data.provider as readonly AvailabilityProvider[],
         providerLoaded: sync.data.provider_loaded,
         config: sync.data.config?.modes,
+        modelProviderID: local.model.current()?.providerID,
       })
       if (availability.state !== "available") {
         toast.show({
