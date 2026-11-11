@@ -4,6 +4,7 @@ import { parseJsonRecord } from "@/util/json-record"
 import { GITHUB_REPO_URL } from "@/constants/project"
 import { isRecord } from "@/util/record"
 import { sleep as timeoutSleep } from "@/util/timeout"
+import { isCliIsolationUnsupportedError } from "@/provider/cli/isolation-error"
 
 export namespace SessionRetry {
   const RETRY_INITIAL_DELAY = 2000
@@ -309,6 +310,11 @@ export namespace SessionRetry {
   }
 
   export function retryable(error: ReturnType<NamedError["toObject"]>, providerID?: string) {
+    // A CLI that cannot enforce the session's isolation mode fails identically
+    // on every attempt: the same provider/mode pair is rejected before spawn.
+    // Recognize the live error and its serialized forms (name, metadata code,
+    // or stable message marker) so the processor never burns a retry budget.
+    if (isCliIsolationUnsupportedError(error)) return undefined
     // context overflow errors should not be retried
     if (MessageV2.ContextOverflowError.isInstance(error)) return undefined
     if (MessageV2.APIError.isInstance(error)) {

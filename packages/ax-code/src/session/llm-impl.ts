@@ -50,6 +50,7 @@ import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { resolveAxEngineSetup } from "@/provider/ax-engine/setup"
 import { attachThinkTagStream } from "@/provider/think-tags"
 import { isKnownCliProviderID } from "@/provider/cli/ids"
+import { provideCliIsolationMode } from "@/provider/cli/isolation"
 import { isRetiredProviderID } from "@/provider/retired-providers"
 import { applyAxTrustPromptCacheHeader, shouldSendAxTrustPromptCacheKey } from "@/provider/ax-trust-cache"
 import { isLocalInferenceConnection } from "@/provider/local-runtime"
@@ -792,8 +793,19 @@ export namespace LLM {
     const idleAbort = new AbortController()
     const streamAbort = input.abort ? AbortSignal.any([input.abort, idleAbort.signal]) : idleAbort.signal
     let output: StreamOutput
-    try {
-      output = streamText({
+    // CLI providers run the vendor's own agent loop. Give them the session's
+    // effective isolation mode so a request-level policy still bounds the
+    // child when an attached server's config is less restrictive.
+    const cliIsolationMode = isKnownCliProviderID(input.model.providerID)
+      ? resolvePromptIsolationPolicy({
+          config: cfg.isolation,
+          policy: input.user.isolation,
+          directory: Instance.directory,
+          worktree: Instance.worktree,
+        }).mode
+      : undefined
+    const runStreamText = () =>
+      streamText({
         onError(error) {
           streamErrorHolder.error = error
           l.error("stream error", {
@@ -873,6 +885,8 @@ export namespace LLM {
           },
         },
       })
+    try {
+      output = cliIsolationMode ? provideCliIsolationMode(cliIsolationMode, runStreamText) : runStreamText()
     } catch (error) {
       if (pacingReservation) await releaseSuperLongPacingReservation(pacingReservation)
       throw error

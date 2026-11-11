@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
+import type { NamedError } from "@ax-code/util/error"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../src/session/prompt/prompt-loop-errors"
+import { providerFailureIsPermanent } from "../../src/session/prompt/prompt-loop-decisions"
 import { isLoopbackBaseURL } from "../../src/session/prompt/prompt-provider-fallback"
 import { SessionID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
@@ -11,6 +13,7 @@ import { AxEngineStartupError } from "../../src/provider/ax-engine/errors"
 import { AxEngineMtpLaunchError } from "../../src/provider/ax-engine/mtp"
 import { AX_ENGINE_ERROR } from "../../src/provider/ax-engine/constants"
 import { SessionRetry } from "../../src/session/retry"
+import { CliIsolationUnsupportedError } from "../../src/provider/cli/isolation"
 
 const primaryModel = {
   providerID: "primary" as ProviderID,
@@ -61,6 +64,52 @@ describe("prompt loop error transitions", () => {
       }
     },
   )
+
+  test("stops on the first CLI isolation failure with the actionable message and no fallback", async () => {
+    const live = new CliIsolationUnsupportedError("kimi-cli", "read-only")
+    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("kimi-cli") })
+    // The loop sees the serialized assistant error; keep covering the live
+    // instance and a name-lost serialization too so the classification cannot
+    // regress into a generic consecutive-error retry loop.
+    const shapes = [
+      live,
+      persisted,
+      { name: "CliIsolationUnsupportedError", data: { message: live.message } },
+      { name: "UnknownError", data: { message: live.message } },
+    ]
+
+    for (const error of shapes) {
+      expect(providerFailureIsPermanent(error)).toBe(true)
+      // The processor consults this before deciding to retry.
+      expect(SessionRetry.retryable(error as ReturnType<NamedError["toObject"]>)).toBeUndefined()
+
+      const published: string[] = []
+      let fallbackLookups = 0
+      const result = await handlePromptLoopError(
+        { sessionID: SessionID.descending(), currentModel: primaryModel, error, consecutiveErrors: 1, step: 1 },
+        {
+          async findFallback() {
+            fallbackLookups += 1
+            return fallbackModel
+          },
+          async isLocal() {
+            return false
+          },
+          warn() {},
+          publishError(input) {
+            published.push(input.message)
+          },
+        },
+      )
+
+      // First occurrence, not the third: the budget must not be consumed.
+      expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+      expect(fallbackLookups).toBe(0)
+      expect(published).toEqual([live.message])
+      expect(published[0]).toContain("cannot enforce AX Code's read-only isolation mode")
+      expect(published[0]).toContain("switch to full-access")
+    }
+  })
 
   test.each(["grok-4.6", "kimi-k3", "openai/gpt-oss-20b"])(
     "upstream permission denial identifies model %s and request ID",

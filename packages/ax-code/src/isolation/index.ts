@@ -179,8 +179,17 @@ export namespace Isolation {
     }
   }
 
+  /**
+   * Effective isolation mode from the process flag, then config, then the
+   * product default. This is the single resolver used by runtime isolation
+   * and by CLI providers that must not exceed the session's ceiling.
+   */
+  export function resolveMode(config: IsolationConfig | undefined): Mode {
+    return Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? DEFAULT_MODE
+  }
+
   export function resolve(config: IsolationConfig | undefined, directory: string, worktree = directory): State {
-    const mode = Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? DEFAULT_MODE
+    const mode = resolveMode(config)
     const policy = networkPolicy(config?.network)
     const envNetwork = Flag.AX_CODE_ISOLATION_NETWORK
     const backend = OsSandboxModule.resolveBackend({

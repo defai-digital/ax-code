@@ -30,6 +30,7 @@ import { Instance } from "@/project/instance"
 import { cliEffortArgs, cliEffortFromProviderOptions } from "./effort"
 import { dshLauncherArgs, ensureDshPrivacyPatch } from "./dsh"
 import { minimaxModelArg } from "./minimax"
+import { cliIsolationArgs, resolveCliIsolationMode, type CliIsolationArgs } from "./isolation"
 
 const log = Log.create({ service: "provider.cli-language-model" })
 
@@ -280,11 +281,15 @@ export function extractJsonPayload(text: string): string {
   return parseJsonResult(slice).ok ? slice : text
 }
 
-function autonomousCliArgs(providerID: string): string[] {
-  if (!ScopedFlag.autonomous()) return []
-  if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
-  // Kimi -p/--prompt mode already auto-approves tools; other providers need no override here.
-  return []
+function replaceArgValue(args: string[], flag: string, value: string): string[] {
+  const next = [...args]
+  const index = next.indexOf(flag)
+  if (index === -1) {
+    next.push(flag, value)
+    return next
+  }
+  next[index + 1] = value
+  return next
 }
 
 export function buildCliCommand(
@@ -292,18 +297,25 @@ export function buildCliCommand(
   prompt: string,
   workspaceDirectory?: string,
   effort?: string,
+  isolation?: CliIsolationArgs,
 ) {
   // Skip optional flags this binary has already rejected in this process so a
   // retry (and every later call) omits them without paying for another failed
   // spawn. Recorded at the front so commander options still see them early.
   const rejected = rejectedOptionalArgsFor(config.providerID, config.binary)
   const optionalArgs = (config.optionalArgs ?? []).filter((arg) => !rejected.has(arg))
+  // Isolation is a ceiling: the vendor CLI must never run with more access
+  // than the AX session has. Resolve here so every caller (generate, stream,
+  // probe) gets the same mapping; startProcess passes a prevalidated plan so
+  // unsupported combinations fail before any temp file is created.
+  const plan = isolation ?? cliIsolationArgs(config.providerID, resolveCliIsolationMode(), ScopedFlag.autonomous())
+  const baseArgs = plan.replace ? replaceArgValue(config.args, plan.replace.flag, plan.replace.value) : config.args
   const cmd = [
     config.binary,
     ...(config.providerID === "dsh-cli" ? dshLauncherArgs() : []),
-    ...config.args,
+    ...baseArgs,
     ...optionalArgs,
-    ...autonomousCliArgs(config.providerID),
+    ...plan.args,
     ...cliEffortArgs(config.providerID, effort, config.efforts),
   ]
   if (config.workspaceArg && workspaceDirectory) cmd.push(config.workspaceArg, workspaceDirectory)
@@ -393,9 +405,13 @@ export class CliLanguageModel implements LanguageModelV3 {
     this.modelId = config.modelID
   }
 
-  private buildCmd(prompt: string, providerOptions?: LanguageModelV3CallOptions["providerOptions"]) {
+  private buildCmd(
+    prompt: string,
+    providerOptions?: LanguageModelV3CallOptions["providerOptions"],
+    isolation?: CliIsolationArgs,
+  ) {
     const effort = cliEffortFromProviderOptions(this.config.providerID, providerOptions, this.config.efforts)
-    return buildCliCommand(this.config, prompt, currentInstanceDirectory(), effort)
+    return buildCliCommand(this.config, prompt, currentInstanceDirectory(), effort, isolation)
   }
 
   private useStdin() {
@@ -403,6 +419,10 @@ export class CliLanguageModel implements LanguageModelV3 {
   }
 
   private async startProcess(options: LanguageModelV3CallOptions, jsonInstruction?: string) {
+    // Resolve the isolation ceiling before creating any temp files: a CLI that
+    // cannot enforce the session's mode must fail before spawn, not after
+    // attachments or the prompt file have been materialized.
+    const isolation = cliIsolationArgs(this.config.providerID, resolveCliIsolationMode(), ScopedFlag.autonomous())
     const attachments = await materializeCliAttachments(options.prompt)
     let promptFile: Awaited<ReturnType<typeof materializeCliPrompt>> | undefined
     const cleanup = async () => {
@@ -418,7 +438,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       // Materializing attachments or the prompt yields to cancellation.
       if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
       if (this.config.providerID === "dsh-cli") await ensureDshPrivacyPatch()
-      const cmd = this.buildCmd(promptFile?.file ?? text, options.providerOptions)
+      const cmd = this.buildCmd(promptFile?.file ?? text, options.providerOptions, isolation)
       assertCliCommandSize(cmd, this.config.providerID)
       const proc = Process.spawn(cmd, {
         cwd: currentInstanceDirectory(),

@@ -29,6 +29,11 @@ import { MediaProjection } from "./media-projection"
 import { evidenceCacheMode } from "../evidence/mode"
 import { projectToolEvidence } from "./evidence-projection"
 import { isNetworkInterruption, networkInterruptionCause } from "../util/network-interruption"
+import {
+  CLI_ISOLATION_UNSUPPORTED_ERROR_CODE,
+  cliIsolationUnsupportedMessageOf,
+  isCliIsolationUnsupportedError,
+} from "@/provider/cli/isolation-error"
 
 export namespace MessageV2 {
   const log = Log.create({ service: "session.message" })
@@ -1435,6 +1440,20 @@ export namespace MessageV2 {
             cause: e,
           },
         ).toObject()
+      // A CLI provider that cannot enforce the session's isolation mode is a
+      // permanent configuration failure, not a transient provider error. The
+      // generic Error fallthrough turned it into `UnknownError`, which lost
+      // both the name and the non-retryable classification, so the prompt
+      // loop retried it and ended with a generic "N consecutive errors" stop.
+      // Persist it as a terminal APIError carrying the actionable message.
+      case isCliIsolationUnsupportedError(e):
+        return new MessageV2.APIError({
+          message:
+            cliIsolationUnsupportedMessageOf(e) ??
+            "The selected CLI provider cannot enforce this session's isolation mode.",
+          isRetryable: false,
+          metadata: { errorCode: CLI_ISOLATION_UNSUPPORTED_ERROR_CODE },
+        }).toObject()
       // Pass through already-shaped MessageV2 error objects (e.g. when a
       // caller throws `new MessageV2.APIError(...).toObject()` directly,
       // or re-throws an error that has already been processed). Without

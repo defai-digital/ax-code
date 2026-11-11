@@ -236,6 +236,22 @@ or malformed settings leave model selection to the CLI's default.
 
 For DeepSeek Harness, install the local `dsh` binary (`npm install -g @deepseek-ai/dsh`), put `DEEPSEEK_API_KEY` in your environment or in `~/.dsh/.env`, then `ax-code providers login dsh-cli`. AX Code runs `dsh --profile headless --json` with the `workspace-write` permission preset and approval policy `never`, in the session's working directory. dsh picks the DeepSeek model from its own profile; headless mode has no model flag. dsh uploads session logs with DeepSeek API requests and sends OTel session telemetry by default, so every bridged run passes a launcher `--patch` overlay (written to AX Code's cache directory as `dsh-privacy.patch.yml`) that disables both, and sets `DSH_TELEMETRY_MODE=DISABLED`. The hosted `deepseek` API provider remains a separate connection in which AX Code runs the agent loop itself.
 
+### Isolation modes and CLI providers
+
+AX Code's isolation mode is a ceiling for the vendor CLI, not a hint: the CLI runs its own agent loop and tools, so it
+must never receive more access than the AX session has. The mapping lives in
+`packages/ax-code/src/provider/cli/isolation.ts`; `full-access` keeps each CLI's headless defaults.
+
+| Isolation mode    | Claude Code                                                         | Codex CLI                   | Grok Build               | DeepSeek Harness              | Kimi Code / MiniMax Code | Muse Code          |
+| ----------------- | ------------------------------------------------------------------- | --------------------------- | ------------------------ | ----------------------------- | ------------------------ | ------------------ |
+| `read-only`       | `--permission-mode dontAsk --tools Read,Glob,Grep`                  | `--sandbox read-only`       | `--permission-mode plan` | `--permission-mode read-only` | error before start       | error before start |
+| `workspace-write` | `--permission-mode acceptEdits`                                     | `--sandbox workspace-write` | unchanged                | unchanged                     | error before start       | unchanged          |
+| `full-access`     | headless default (autonomous adds `--dangerously-skip-permissions`) | headless default            | headless default         | headless default              | headless default         | headless default   |
+
+The autonomous flag never widens the mode. A provider/mode combination the CLI cannot enforce fails before the CLI
+process starts, with an error that names the provider and asks you to switch to `full-access` or use a different
+provider. Claude Code's `--dangerously-skip-permissions` is never combined with a restricted mode.
+
 ### Why some coding-agent CLIs are not supported
 
 A CLI provider hands an entire turn to another agent: it reads and edits your files, runs commands, and talks to its

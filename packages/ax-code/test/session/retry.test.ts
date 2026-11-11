@@ -4,6 +4,7 @@ import { APICallError } from "ai"
 import { SessionRetry } from "../../src/session/retry"
 import { MessageV2 } from "../../src/session/message-v2"
 import { ProviderID } from "../../src/provider/schema"
+import { CliIsolationUnsupportedError } from "../../src/provider/cli/isolation"
 
 const providerID = ProviderID.make("test")
 const MAX_RETRY_HEADER_DELAY_MS = 30_000
@@ -445,6 +446,42 @@ describe("session.retry.retryable", () => {
     SessionRetry.recordNetworkSuccess()
     expect(SessionRetry.networkCircuitOpen()).toBe(false)
     expect(SessionRetry.retryable(mk())).toBe("fetch failed")
+  })
+})
+
+describe("session.retry CLI isolation", () => {
+  const isolationError = () => new CliIsolationUnsupportedError("kimi-cli", "read-only")
+
+  test("serializes the live error as a terminal APIError that keeps its message", () => {
+    const live = isolationError()
+    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("kimi-cli") })
+    const parsed = MessageV2.APIError.Schema.parse(persisted)
+    expect(parsed.data.isRetryable).toBe(false)
+    expect(parsed.data.message).toBe(live.message)
+    expect(parsed.data.metadata?.errorCode).toBe("cli_isolation_unsupported")
+  })
+
+  test("is not retryable for the live error or any serialized form", () => {
+    const live = isolationError()
+    const persisted = MessageV2.fromError(live, { providerID: ProviderID.make("kimi-cli") })
+    const serializedForms = [
+      // The live instance, should it ever reach the processor classification.
+      live as unknown as ReturnType<NamedError["toObject"]>,
+      // Normalized terminal APIError.
+      persisted as ReturnType<NamedError["toObject"]>,
+      // Named shape preserved by a serializer.
+      { name: "CliIsolationUnsupportedError", data: { message: live.message } } as ReturnType<NamedError["toObject"]>,
+      // Generic serializer collapsed the name: the stable message marker must
+      // still classify it as permanent.
+      { name: "UnknownError", data: { message: live.message } } as ReturnType<NamedError["toObject"]>,
+    ]
+    for (const error of serializedForms) {
+      expect(SessionRetry.retryable(error)).toBeUndefined()
+    }
+  })
+
+  test("leaves retryability of ordinary provider errors unchanged", () => {
+    expect(SessionRetry.retryable(apiError())).toBe("boom")
   })
 })
 

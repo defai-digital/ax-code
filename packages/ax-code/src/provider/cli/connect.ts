@@ -6,6 +6,7 @@ import { resolveCliModel, type CliModelInfo } from "./resolve"
 import { Process } from "../../util/process"
 import { Log } from "../../util/log"
 import { parseCliJsonObject, type CliJsonObject } from "./json"
+import { CliIsolationUnsupportedError } from "./isolation"
 
 export const CLI_CONNECT_TIMEOUT_MS = 15_000
 const CLI_STATUS_TIMEOUT_MS = 5_000
@@ -190,6 +191,10 @@ export async function probeCliLanguageModel(config: CliLanguageModelProbeConfig)
       abortSignal,
     })
   } catch (error) {
+    // The isolation ceiling is a configuration/eligibility failure, not a
+    // transient probe failure; preserve the named error so users see the
+    // actionable "switch to full-access or use a different provider" message.
+    if (error instanceof CliIsolationUnsupportedError) throw error
     // A raw stream error ("Premature close") or timeout gives the user nothing
     // to act on. Those shapes almost always mean the CLI sat waiting for an
     // interactive login/consent prompt it could not show in headless mode.

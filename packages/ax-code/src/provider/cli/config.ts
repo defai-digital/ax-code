@@ -24,6 +24,12 @@ export interface CliProviderDefinition {
   workspaceArg?: string
 }
 
+/**
+ * Vendor CLI argument definitions. Isolation-vs-argv mapping (including the
+ * dsh `--permission-mode` replacement and unsupported provider/mode errors)
+ * lives in `./isolation.ts`; these entries describe each CLI's headless
+ * (full-access) defaults.
+ */
 export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
   "claude-code": {
     binary: "claude",
@@ -84,7 +90,8 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
   // workspace-write keeps edits inside the session workspace; approval never
   // rejects calls that would need dsh's interactive prompt. dsh uses the
   // invoking directory as its workspace, so no workspace flag exists. The
-  // privacy `--patch` launcher flag is prepended in buildCliCommand.
+  // privacy `--patch` launcher flag is prepended in buildCliCommand. A
+  // read-only AX session replaces the --permission-mode value (see isolation.ts).
   "dsh-cli": {
     binary: "dsh",
     args: ["--profile", "headless", "--json", "--permission-mode", "workspace-write", "--approval-policy", "never"],

@@ -15,6 +15,7 @@ import type { SessionID, SessionStop } from "../schema"
 import { Todo } from "../todo"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { BlastRadius } from "../blast-radius"
+import { cliIsolationUnsupportedMessageOf, isCliIsolationUnsupportedError } from "@/provider/cli/isolation-error"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -197,6 +198,30 @@ export async function handlePromptLoopError(
     })
     return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
   }
+
+  // A CLI provider that cannot enforce the session's isolation mode is
+  // permanent for this provider/mode pair: retrying spawns nothing new and
+  // falling back would silently move the user's request to another provider.
+  // Stop on the FIRST occurrence with the error's own actionable message —
+  // before the consecutive-error budget and before the generic
+  // fallback-unavailable wrapper, which would hide the "switch to
+  // full-access or use a different provider" instruction.
+  if (isCliIsolationUnsupportedError(input.error)) {
+    const message =
+      cliIsolationUnsupportedMessageOf(input.error) ??
+      "The selected CLI provider cannot enforce this session's isolation mode."
+    ;(deps.warn ?? log.warn)("cli isolation unsupported, stopping without retry", {
+      command: "session.prompt.loop",
+      status: "error",
+      errorCode: "CLI_ISOLATION_UNSUPPORTED",
+      consecutiveErrors: input.consecutiveErrors,
+      step: input.step,
+      sessionID: input.sessionID,
+    })
+    ;(deps.publishError ?? Session.publishError)({ sessionID: input.sessionID, message })
+    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+  }
+
   const cap = terminalAutonomousCap(input.error)
   if (cap) {
     ;(deps.warn ?? log.warn)("autonomous cap exceeded, stopping without retry", {

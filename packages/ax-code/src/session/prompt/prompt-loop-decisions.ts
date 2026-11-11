@@ -1,6 +1,7 @@
 import { providerModelKey } from "../../provider/model-key"
 import { ModelID, ProviderID } from "../../provider/schema"
 import { parseJsonRecord } from "../../util/json-record"
+import { isCliIsolationUnsupportedError } from "../../provider/cli/isolation-error"
 import type { SessionCompaction } from "../compaction"
 import type { MessageV2 } from "../message-v2"
 import { formatDecisionCount, modelTurnFinished } from "./prompt-autonomous-decisions"
@@ -230,6 +231,11 @@ function fallbackSwitchMessage(input: { providerID: ProviderID; reason: string; 
 }
 
 export function providerFailureIsPermanent(error: unknown): boolean {
+  // An unsupported CLI isolation mode is a configuration failure, not a
+  // provider/transport condition: the same spawn is rejected every time, so
+  // no status code or account heuristic applies. Match the live error and its
+  // serialized forms before the APIError-only guard below.
+  if (isCliIsolationUnsupportedError(error)) return true
   if (!error || typeof error !== "object" || !providerErrorName(error)) return false
   const data = "data" in error ? (error.data as { metadata?: Record<string, unknown> }) : undefined
   if (data?.metadata?.errorCode === "alibaba_token_plan_short_window_quota") return false

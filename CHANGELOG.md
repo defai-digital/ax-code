@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- CLI providers honor AX Code's isolation mode: read-only and workspace-write sessions pass the matching restriction to
+  Claude Code, Codex, Grok Build, and DeepSeek Harness, and fail before starting Kimi Code, MiniMax Code, or (read-only)
+  Muse Code, which cannot enforce them. full-access is unchanged.
+
 ### Fixed
 
 - Qwen 4 Max Preview is recognised (1M context, reasoning, image input, effort levels) on AX Trust/custom gateways
