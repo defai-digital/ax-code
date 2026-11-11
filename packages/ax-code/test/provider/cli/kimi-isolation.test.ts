@@ -1,6 +1,7 @@
-import { readFile, writeFile } from "fs/promises"
-import path from "path"
+import { chmod, lstat, readFile, rm, symlink, writeFile } from "node:fs/promises"
+import path from "node:path"
 import { describe, expect, test } from "vitest"
+import { tmpdir } from "../../fixture/fixture"
 import { Global } from "../../../src/global"
 import {
   KIMI_READ_ONLY_AGENT,
@@ -38,5 +39,38 @@ describe("kimi read-only agent", () => {
     const results = await Promise.allSettled(Array.from({ length: 16 }, () => ensureKimiReadOnlyAgentFile()))
     expect(results.filter((result) => result.status === "rejected")).toEqual([])
     expect(await readFile(kimiReadOnlyAgentPath(), "utf8")).toBe(KIMI_READ_ONLY_AGENT)
+  })
+})
+
+// Control files must remain local regular files with restrictive permissions.
+describe("control file integrity", () => {
+  test.skipIf(process.platform === "win32")("replaces a matching symlink without changing its target", async () => {
+    await using tmp = await tmpdir()
+    const target = path.join(tmp.path, "outside-control-file")
+    await writeFile(target, KIMI_READ_ONLY_AGENT)
+    await chmod(target, 0o640)
+    await ensureKimiReadOnlyAgentFile()
+    const file = kimiReadOnlyAgentPath()
+    await rm(file)
+    await symlink(target, file)
+    try {
+      await ensureKimiReadOnlyAgentFile()
+      expect((await lstat(file)).isSymbolicLink()).toBe(false)
+      expect((await lstat(file)).mode & 0o777).toBe(0o600)
+      expect(await readFile(file, "utf8")).toBe(KIMI_READ_ONLY_AGENT)
+      expect(await readFile(target, "utf8")).toBe(KIMI_READ_ONLY_AGENT)
+      expect((await lstat(target)).mode & 0o777).toBe(0o640)
+    } finally {
+      await rm(file, { force: true })
+    }
+  })
+
+  test.skipIf(process.platform === "win32")("repairs permissions even when the content already matches", async () => {
+    await ensureKimiReadOnlyAgentFile()
+    const file = kimiReadOnlyAgentPath()
+    await chmod(file, 0o666)
+    await ensureKimiReadOnlyAgentFile()
+    expect((await lstat(file)).mode & 0o777).toBe(0o600)
+    expect(await readFile(file, "utf8")).toBe(KIMI_READ_ONLY_AGENT)
   })
 })

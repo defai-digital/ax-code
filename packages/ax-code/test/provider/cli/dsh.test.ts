@@ -1,5 +1,7 @@
-import { readFile, writeFile } from "fs/promises"
+import path from "node:path"
+import { chmod, lstat, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { describe, expect, test } from "vitest"
+import { tmpdir } from "../../fixture/fixture"
 import { buildCliCommand, cliEnv } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import { DSH_PRIVACY_PATCH, dshPrivacyPatchPath, ensureDshPrivacyPatch } from "../../../src/provider/cli/dsh"
@@ -100,5 +102,38 @@ describe("dsh-cli command", () => {
     const results = await Promise.allSettled(Array.from({ length: 16 }, () => ensureDshPrivacyPatch()))
     expect(results.filter((result) => result.status === "rejected")).toEqual([])
     expect(await readFile(dshPrivacyPatchPath(), "utf8")).toBe(DSH_PRIVACY_PATCH)
+  })
+})
+
+// Control files must remain local regular files with restrictive permissions.
+describe("control file integrity", () => {
+  test.skipIf(process.platform === "win32")("replaces a matching symlink without changing its target", async () => {
+    await using tmp = await tmpdir()
+    const target = path.join(tmp.path, "outside-control-file")
+    await writeFile(target, DSH_PRIVACY_PATCH)
+    await chmod(target, 0o640)
+    await ensureDshPrivacyPatch()
+    const file = dshPrivacyPatchPath()
+    await rm(file)
+    await symlink(target, file)
+    try {
+      await ensureDshPrivacyPatch()
+      expect((await lstat(file)).isSymbolicLink()).toBe(false)
+      expect((await lstat(file)).mode & 0o777).toBe(0o600)
+      expect(await readFile(file, "utf8")).toBe(DSH_PRIVACY_PATCH)
+      expect(await readFile(target, "utf8")).toBe(DSH_PRIVACY_PATCH)
+      expect((await lstat(target)).mode & 0o777).toBe(0o640)
+    } finally {
+      await rm(file, { force: true })
+    }
+  })
+
+  test.skipIf(process.platform === "win32")("repairs permissions even when the content already matches", async () => {
+    await ensureDshPrivacyPatch()
+    const file = dshPrivacyPatchPath()
+    await chmod(file, 0o666)
+    await ensureDshPrivacyPatch()
+    expect((await lstat(file)).mode & 0o777).toBe(0o600)
+    expect(await readFile(file, "utf8")).toBe(DSH_PRIVACY_PATCH)
   })
 })

@@ -1,7 +1,8 @@
-import fs from "fs/promises"
-import path from "path"
+import path from "node:path"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
+
+const CONTROL_FILE_MODE = 0o600
 
 // DeepSeek Harness (`dsh`) uploads complete session logs with DeepSeek API
 // requests and sends OTel session telemetry by default. AX Code passes this
@@ -19,7 +20,10 @@ export const DSH_PRIVACY_PATCH = [
 ].join("\n")
 
 export function dshPrivacyPatchPath(): string {
-  return path.join(Global.Path.cache, "dsh-privacy.patch.yml")
+  const file = path.join(Global.Path.cache, "dsh-privacy.patch.yml")
+  if (!Filesystem.contains(Global.Path.cache, file))
+    throw new Error("CLI control file must stay inside its cache directory")
+  return file
 }
 
 /** Launcher flags that must precede `--profile`; dsh rejects them after it. */
@@ -30,7 +34,7 @@ export function dshLauncherArgs(): string[] {
 /** Write the privacy overlay before spawning dsh; a missing patch file fails the launch. */
 export async function ensureDshPrivacyPatch(): Promise<void> {
   const file = dshPrivacyPatchPath()
-  const current = await fs.readFile(file, "utf8").catch(() => undefined)
-  if (current === DSH_PRIVACY_PATCH) return
-  await Filesystem.write(file, DSH_PRIVACY_PATCH, 0o600)
+  // Always publish atomically: matching content must not preserve a symlink or
+  // permissions that let another process modify the isolation/privacy policy.
+  await Filesystem.write(file, DSH_PRIVACY_PATCH, CONTROL_FILE_MODE)
 }
