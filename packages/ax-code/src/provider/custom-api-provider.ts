@@ -375,6 +375,12 @@ export namespace CustomApiProvider {
     })
     const capabilities = isRecord(raw?.capabilities) ? raw.capabilities : undefined
     const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
+    const declaredToolCall = [
+      capabilities?.toolcall,
+      capabilities?.tool_call,
+      abilities?.tool_call,
+      raw?.tool_call,
+    ].find((value): value is boolean => typeof value === "boolean")
     const declaredImage =
       typeof capabilities?.vision === "boolean" ||
       typeof abilities?.vision === "boolean" ||
@@ -390,6 +396,11 @@ export namespace CustomApiProvider {
           : undefined,
       },
       "catalog",
+      // Standard /models responses often contain only IDs. Like OpenCode's
+      // custom-provider default, allow chat tool requests unless the gateway
+      // or exact catalog row explicitly opts out. Mark this as a heuristic,
+      // not a deployment declaration; other capabilities stay unknown.
+      resolveCapabilityEvidence({ toolCalling: true }, "heuristic"),
     )
     return withCapabilityEvidence(
       {
@@ -397,7 +408,7 @@ export namespace CustomApiProvider {
         name: name && name !== id ? name : fallback?.name || name || id,
         contextWindow: inherited.context,
         outputLimit: inherited.output,
-        toolCall: typeof capabilities?.toolcall === "boolean" ? capabilities.toolcall : (fallback?.tool_call ?? false),
+        toolCall: declaredToolCall ?? fallback?.tool_call ?? true,
         reasoning:
           typeof capabilities?.reasoning === "boolean" ? capabilities.reasoning : (fallback?.reasoning ?? false),
         attachment: imageCapable(capabilities, raw, fallback),
@@ -407,7 +418,7 @@ export namespace CustomApiProvider {
         pdf: pdfCapable(capabilities, raw),
       },
       {
-        toolCalling: capabilities?.toolcall,
+        toolCalling: declaredToolCall,
         thinking: capabilities?.reasoning,
         temperature: capabilities?.temperature,
         attachment: declaredImage ? imageCapable(capabilities, raw, undefined) : undefined,
@@ -442,6 +453,17 @@ export namespace CustomApiProvider {
       // Gateways list embedding / rerank / speech models on the same
       // endpoint; they cannot drive a coding turn.
       if (isNonChatModelID(id)) continue
+      // Sparse chat cards get a tool compatibility default, but an explicit
+      // non-text output declaration must never turn into an agent model.
+      const output = [
+        isRecord(raw.modalities) ? raw.modalities.output : undefined,
+        raw.output_modalities,
+        fallbackModels?.[id]?.modalities?.output,
+      ].find(
+        (value): value is string[] =>
+          Array.isArray(value) && value.length > 0 && value.every((x) => typeof x === "string"),
+      )
+      if (output && !output.includes("text")) continue
       seen.add(id)
       const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim().slice(0, 120) : id
       const model = discoveredModel(id, name, raw, fallbackModels?.[id])

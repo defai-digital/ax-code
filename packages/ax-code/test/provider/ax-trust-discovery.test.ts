@@ -1,4 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest"
+import type { LanguageModelV3CallOptions } from "@ai-sdk/provider"
 import http from "node:http"
 import fs from "node:fs/promises"
 import path from "node:path"
@@ -13,6 +14,9 @@ import { exactCatalogFallbackModels, FIRST_PARTY_CATALOG_IDS } from "../../src/p
 import { modelDisplayInfo } from "../../src/cli/tui/component/model-vision-label"
 import { modelCapabilityEvidence } from "../../src/provider/capability-evidence"
 import { ModelsDev } from "../../src/provider/models"
+import { buildModelsDocument } from "../../src/cli/cmd/models"
+import { modelSelectableForProvider } from "../../src/provider/model-selectability"
+import { compileModelRequest } from "../../src/provider/request-compiler"
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -118,8 +122,8 @@ test.each([
           expect(refreshed.models["text-only"].capabilities.input.image).toBe(false)
           expect(refreshed.models["text-only"].capabilities.input.pdf).toBe(false)
           expect(modelCapabilityEvidence(refreshed.models["text-only"].capabilities).toolCalling).toEqual({
-            state: "unknown",
-            source: "unknown",
+            state: "supported",
+            source: "heuristic",
           })
           expect(modelCapabilityEvidence(refreshed.models["text-only"].capabilities).attachment).toEqual({
             state: "unsupported",
@@ -141,6 +145,56 @@ test.each([
           release()
           unsubscribe()
         }
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})
+
+test("new sparse AX Trust models reach the picker, CLI listing and tool request compiler", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  const modelID = "qwen4-max-preview"
+  await using api = await endpoint((_req, res) => {
+    res.setHeader("Content-Type", "application/json")
+    res.end(
+      JSON.stringify({
+        data: [
+          { id: modelID, object: "model", owned_by: "ax-trust", name: modelID },
+          { id: "no-tools", capabilities: { tool_call: false } },
+          { id: "text-embedding-fixture" },
+        ],
+      }),
+    )
+  })
+  const id = "ax-trust-sparse-model"
+  await using tmp = await tmpdir({ config: config(id, api.url, "ax-trust") })
+  await Auth.set(id, { type: "api", key: "sparse-test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const providers = await Provider.list()
+        const model = await Provider.getModel(ProviderID.make(id), ModelID.make(modelID))
+        expect(modelSelectableForProvider(id, model)).toBe(true)
+        expect(modelCapabilityEvidence(model.capabilities).toolCalling).toEqual({
+          state: "supported",
+          source: "heuristic",
+        })
+        expect(model.capabilities).toMatchObject({ reasoning: false, attachment: false, temperature: false })
+        expect(model.limit).toEqual({ context: 128_000, output: 16_384 })
+        expect(buildModelsDocument({ providers, connected: [id], provider: id })).toEqual({
+          document: { models: [{ id: `${id}/${modelID}`, provider: id, model: modelID, connected: true }] },
+        })
+        const request: LanguageModelV3CallOptions = {
+          prompt: [],
+          tools: [{ type: "function", name: "read", inputSchema: { type: "object" } }],
+          toolChoice: { type: "required" },
+        }
+        expect(compileModelRequest(model, request).params.tools).toEqual(request.tools)
+        const restricted = await Provider.getModel(ProviderID.make(id), ModelID.make("no-tools"))
+        expect(() => compileModelRequest(restricted, request)).toThrow("no declared tool-calling support")
       },
     })
   } finally {

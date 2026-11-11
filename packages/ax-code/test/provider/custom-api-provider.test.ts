@@ -22,13 +22,42 @@ describe("custom API provider identity", () => {
 })
 
 describe("custom API provider model discovery", () => {
-  test("sparse custom cards never grant tools, reasoning or temperature from defaults or family hints", () => {
-    for (const id of ["unregistered-model", "glm-5.3"]) {
+  test("sparse chat cards allow tools by compatibility default without inventing other capabilities", () => {
+    for (const id of ["unregistered-model", "glm-5.3", "qwen4-max-preview"]) {
       const [model] = CustomApiProvider.parseDiscoveredModels({ data: [{ id }] })
-      expect(model).toMatchObject({ toolCall: false, reasoning: false, temperature: false })
-      for (const feature of ["toolCalling", "thinking", "temperature"] as const)
+      expect(model).toMatchObject({ toolCall: true, reasoning: false, temperature: false, attachment: false })
+      expect(declaredCapabilityEvidence(model)?.toolCalling).toEqual({ state: "supported", source: "heuristic" })
+      for (const feature of ["thinking", "temperature", "attachment", "webSearch"] as const)
         expect(declaredCapabilityEvidence(model)?.[feature]).toEqual({ state: "unknown", source: "unknown" })
     }
+  })
+
+  test.each([
+    { capabilities: { toolcall: false } },
+    { capabilities: { tool_call: false } },
+    { abilities: { tool_call: false } },
+    { tool_call: false },
+  ])("honors explicit tool restrictions in %j", (raw) => {
+    const model = CustomApiProvider.discoveredModel("qwen4-max-preview", undefined, raw)
+    expect(model.toolCall).toBe(false)
+    expect(declaredCapabilityEvidence(model)?.toolCalling).toEqual({ state: "unsupported", source: "deployment" })
+  })
+
+  test("catalog tool restrictions override the compatibility default", () => {
+    const model = CustomApiProvider.discoveredModel("no-tools", undefined, {}, { tool_call: false } as any)
+    expect(model.toolCall).toBe(false)
+    expect(declaredCapabilityEvidence(model)?.toolCalling).toEqual({ state: "unsupported", source: "catalog" })
+  })
+
+  test.each([
+    { capabilities: { toolcall: true, tool_call: false }, abilities: { tool_call: false }, tool_call: false },
+    { capabilities: { toolcall: "false", tool_call: true }, abilities: { tool_call: false }, tool_call: false },
+    { capabilities: { tool_call: null }, abilities: { tool_call: true }, tool_call: false },
+    { abilities: { tool_call: "false" }, tool_call: true },
+  ])("resolves tool declarations by boolean precedence before catalog fallback: %j", (raw) => {
+    const model = CustomApiProvider.discoveredModel("coding", undefined, raw, { tool_call: false } as any)
+    expect(model.toolCall).toBe(true)
+    expect(declaredCapabilityEvidence(model)?.toolCalling).toEqual({ state: "supported", source: "deployment" })
   })
 
   test("catalog evidence is preserved and explicit deployment restrictions take precedence", () => {
@@ -349,6 +378,25 @@ describe("custom API provider catalog limits", () => {
 })
 
 describe("custom API provider discovery filtering", () => {
+  test.each([false, true])("excludes declared non-text output with requireComplete=%s", (requireComplete) => {
+    const models = CustomApiProvider.parseDiscoveredModels(
+      {
+        data: [
+          { id: "picture-generator", modalities: { output: ["image"] } },
+          { id: "voice-generator", output_modalities: ["audio"] },
+          { id: "catalog-picture" },
+          { id: "chat", modalities: { output: ["text", "image"] } },
+          { id: "sparse", modalities: { output: [] } },
+        ],
+      },
+      requireComplete,
+      {
+        "catalog-picture": { modalities: { output: ["image"] } } as any,
+      },
+    )
+    expect(models.map((model) => model.id)).toEqual(["chat", "sparse"])
+  })
+
   test("skips embedding, rerank, and speech rows from GET /models", () => {
     expect(
       CustomApiProvider.parseDiscoveredModels({

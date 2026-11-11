@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-06
+Last reviewed: 2026-11-10
 Owner: ax-code runtime
 
 AX Code talks to models through standard provider protocols. Any endpoint that speaks an **OpenAI-compatible** (`/v1/chat/completions`) or **Anthropic-compatible** (`/v1/messages`) API can be added as a custom provider by pointing `baseURL` at it — no code changes and no waiting for a built-in preset.
@@ -31,9 +31,25 @@ credential and updates model names, context/output limits, reasoning, tool
 calling, temperature support, and image support. Image-capable models display
 the vision marker in `/models`, including gateway aliases when AX Trust
 advertises their image support. The TUI updates when discovery completes.
-For exact first-party DeepSeek model IDs, missing metadata is filled from the
+For exact first-party model IDs, missing metadata is filled from the
 bundled models.dev catalog. Explicit gateway capability flags and limits take
 precedence; unknown aliases do not inherit capabilities by name similarity.
+
+Standard OpenAI-compatible model lists may contain only an ID and name. For
+discovered custom API and AX Trust chat models, AX Code defaults to allowing
+tool calls when neither the gateway nor the exact catalog entry declares tool
+support. This matches [OpenCode's custom-model compatibility default](https://github.com/anomalyco/opencode/blob/36f559b0c6cb61ebd3431d69d287809bf66acbc5/packages/schema/src/model.ts#L78-L93) and lets
+new models such as `qwen4-max-preview` appear without a client catalog update.
+It is a compatibility assumption, not a verified capability. Explicit boolean
+declarations take precedence in this order: `capabilities.toolcall`,
+`capabilities.tool_call`, `abilities.tool_call`, then top-level `tool_call`.
+A `false` declaration disables tools and excludes the model from the agent
+picker. Exact catalog restrictions also override the default. Embedding,
+reranking, speech, and other recognized non-chat model IDs remain excluded,
+as do models whose output modalities explicitly exclude text.
+This default does not infer reasoning, image input, or web search support, or
+increase the existing fallback token limits. It applies during discovery;
+manually configured models still need their explicit capability settings.
 
 A successful refresh replaces the runtime list, removing models no longer
 advertised by the gateway, and still applies configured allow/block lists.
@@ -166,7 +182,7 @@ Set capability flags to match what the upstream model actually supports; AX Code
 
 After saving config:
 
-- `ax-code models` lists every model your provider exposes.
+- `ax-code models` lists selectable chat models your provider exposes.
 - `/connect` inside the TUI shows the provider and lets you authenticate if you used an `env` key instead of `options.apiKey`.
 
 If a model is missing, confirm the provider id, the model key, and that the gateway is reachable at `baseURL`.

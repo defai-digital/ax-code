@@ -365,13 +365,14 @@ describe("managed custom API provider model refresh", () => {
         body: JSON.stringify(providerBody({ baseURL, models: undefined })),
       })
       expect(plain.status).toBe(200)
-      // An arbitrary gateway must not inherit a vendor's catalog row.
+      // An arbitrary gateway must not inherit a vendor's catalog row. Tools
+      // use the generic compatibility default even without vendor metadata.
       expect(modelsByID(await plain.json())["xiaomi/mimo-v2.6-pro"]).toMatchObject({
         name: "xiaomi/mimo-v2.6-pro",
         contextWindow: 128_000,
         outputLimit: 16_384,
         reasoning: false,
-        toolCall: false,
+        toolCall: true,
         temperature: false,
       })
 
