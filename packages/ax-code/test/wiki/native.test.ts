@@ -2,7 +2,7 @@ import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 
-const { generateObject } = vi.hoisted(() => ({ generateObject: vi.fn() }))
+const { generateObject, generateText } = vi.hoisted(() => ({ generateObject: vi.fn(), generateText: vi.fn() }))
 vi.mock("ai", async (load) => ({
   ...(await load<typeof import("ai")>()),
   streamObject: (request: unknown) => {
@@ -14,6 +14,23 @@ vi.mock("ai", async (load) => ({
       })(),
       get object() {
         return Promise.resolve(result.object)
+      },
+    }
+  },
+  streamText: (request: unknown) => {
+    let result: any
+    return {
+      fullStream: (async function* () {
+        result = await generateText(request)
+        if (result.streamError) yield { type: "error", error: result.streamError }
+      })(),
+      get text() {
+        return Promise.resolve(result.text)
+      },
+      usage: Promise.resolve({ inputTokens: 1, outputTokens: 1, totalTokens: 2 }),
+      response: Promise.resolve({ id: "resp", timestamp: new Date(), modelId: "test" }),
+      get finishReason() {
+        return Promise.resolve(result.finishReason ?? "stop")
       },
     }
   },
@@ -46,6 +63,7 @@ import { Installation } from "../../src/installation"
 import { Instance } from "../../src/project/instance"
 import { readWikiBuildReport, type WikiBuildReport } from "../../src/wiki/build-report"
 import {
+  parseWikiPageText,
   repairWikiPageText,
   resolveWikiModelRef,
   runNativeWiki,
@@ -56,6 +74,7 @@ import {
   wikiPageOutputTokens,
   wikiPageProviderOptions,
   wikiPageGenerationConcurrency,
+  wikiJsonModeRejected,
   WIKI_PAGE_OUTPUT_TOKEN_MAX,
 } from "../../src/wiki/native"
 import { parseJsonStrict } from "../../src/util/json-value"
@@ -219,6 +238,59 @@ async function runNativeSequence(
   })
 }
 
+type TextAttempt = { text?: string; streamError?: unknown; finishReason?: string }
+
+/**
+ * Drive `pages` page generations with separate queues for JSON-mode and
+ * plain-text attempts, so the response format of each request is observable.
+ */
+async function runNativeFormats(
+  tmpPath: string,
+  input: { json?: Array<{ streamError?: unknown }>; text?: TextAttempt[]; pages?: number },
+): Promise<void> {
+  const json = [...(input.json ?? [])]
+  const text = [...(input.text ?? [])]
+  vi.mocked(generateObject).mockImplementation(async () => ({ ...generatedPage(), ...(json.shift() ?? {}) }))
+  vi.mocked(generateText).mockImplementation(async () => ({
+    text: JSON.stringify(generatedPage().object),
+    ...(text.shift() ?? {}),
+  }))
+  vi.mocked(buildAxWiki).mockImplementation(async (build) => {
+    const request: WikiPageGenerationRequest = {
+      action: "update",
+      root: tmpPath,
+      wikiDir: "openwiki",
+      page: PAGE,
+      plan: { schemaVersion: 1, pages: [], modules: [], sourceCount: 0 },
+      sources: [{ ...SOURCE, content: "export {}", truncated: false }],
+      sourceInventory: [SOURCE],
+    }
+    for (let page = 0; page < (input.pages ?? 1); page++) await build.generator(request)
+    return wikiResult(tmpPath, request)
+  })
+
+  await Instance.provide({
+    directory: tmpPath,
+    init: async () => {
+      const { Env } = await import("../../src/env")
+      Env.set("GROQ_API_KEY", "test-api-key")
+    },
+    fn: async () => {
+      await runNativeWiki({ root: tmpPath, action: "update", model: "groq/openai/gpt-oss-20b" })
+    },
+  })
+}
+
+function apiError(statusCode: number, isRetryable: boolean, message = `upstream ${statusCode}`): APICallError {
+  return new APICallError({
+    message,
+    url: "https://defai-01.ax-trust.com/v1/chat/completions",
+    requestBodyValues: {},
+    statusCode,
+    isRetryable,
+  })
+}
+
 async function readBuildReport(root: string): Promise<WikiBuildReport | undefined> {
   // The driver writes into the resolved wiki dir; tests exercise the default.
   for (const dir of [".ax-wiki", "openwiki"]) {
@@ -275,20 +347,118 @@ describe("wiki native generator", () => {
     expect(retry.messages[0].content).toContain("at most 20 symbolSummaries")
   })
 
-  test("backs off and retries a retryable provider error with the same request", async () => {
+  test("retries a page the provider refused in JSON mode as a plain-text request", async () => {
     await using tmp = await tmpdir({ git: true })
-    const transient = new APICallError({
-      message: "upstream 503",
-      url: "https://defai-01.ax-trust.com/v1/chat/completions",
-      requestBodyValues: {},
-      statusCode: 503,
-      isRetryable: true,
-    })
-    await runNativeSequence(tmp.path, [{ streamError: transient }, {}])
+    // The AX Trust auto router answers a JSON response format it cannot route
+    // with a retryable 503, which is indistinguishable from an outage.
+    await runNativeFormats(tmp.path, { json: [{ streamError: apiError(503, true, "no eligible route candidate") }] })
+
+    expect(generateObject).toHaveBeenCalledTimes(1)
+    expect(generateText).toHaveBeenCalledTimes(1)
+    const retry = vi.mocked(generateText).mock.calls[0]?.[0] as {
+      schema?: unknown
+      messages: Array<{ content: string }>
+    }
+    expect(retry.schema).toBeUndefined()
+    expect(retry.messages[0].content).toContain("no JSON response format")
+    expect(retry.messages[0].content).not.toContain("did not produce a valid page object")
+    const report = await readBuildReport(tmp.path)
+    expect(report?.outcome).toBe("completed")
+    expect(report?.pages?.[0]).toMatchObject({ status: "generated", attempts: 2 })
+  })
+
+  test("falls back to plain text when the JSON-mode rejection is not retryable", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await runNativeFormats(tmp.path, { json: [{ streamError: apiError(400, false, "response_format unsupported") }] })
+
+    expect(generateObject).toHaveBeenCalledTimes(1)
+    expect(generateText).toHaveBeenCalledTimes(1)
+  })
+
+  test("generates later pages as plain text once the fallback succeeded", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await runNativeFormats(tmp.path, { json: [{ streamError: apiError(503, true) }], pages: 3 })
+
+    // Only the first page pays for the request that is known to fail.
+    expect(generateObject).toHaveBeenCalledTimes(1)
+    expect(generateText).toHaveBeenCalledTimes(3)
+  })
+
+  test("keeps JSON mode for later pages when the plain-text retry also fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await expect(
+      runNativeFormats(tmp.path, {
+        json: [{ streamError: apiError(503, true) }],
+        text: [{ streamError: apiError(503, true) }],
+      }),
+    ).rejects.toThrow("upstream 503")
+
+    expect(generateObject).toHaveBeenCalledTimes(1)
+    expect(generateText).toHaveBeenCalledTimes(1)
+    const report = await readBuildReport(tmp.path)
+    expect(report?.outcome).toBe("failed")
+    expect(report?.failed).toMatchObject({ failureClass: "transient", attempts: 2 })
+  })
+
+  test("backs off and retries a rate-limited request in the same response format", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await runNativeFormats(tmp.path, { json: [{ streamError: apiError(429, true) }] })
 
     expect(generateObject).toHaveBeenCalledTimes(2)
+    expect(generateText).not.toHaveBeenCalled()
     const retry = vi.mocked(generateObject).mock.calls[1]?.[0] as { messages: Array<{ content: string }> }
     expect(retry.messages[0].content).not.toContain("did not produce a valid page object")
+  })
+
+  test("does not retry a rejected credential in another response format", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await expect(runNativeFormats(tmp.path, { json: [{ streamError: apiError(401, false) }] })).rejects.toThrow(
+      "upstream 401",
+    )
+
+    expect(generateObject).toHaveBeenCalledTimes(1)
+    expect(generateText).not.toHaveBeenCalled()
+  })
+
+  test("accepts a fenced plain-text page and rejects one that is not a page object", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const fenced = "```json\n" + JSON.stringify(generatedPage().object) + "\n```"
+    await runNativeFormats(tmp.path, { json: [{ streamError: apiError(503, true) }], text: [{ text: fenced }] })
+    expect(generateText).toHaveBeenCalledTimes(1)
+
+    vi.clearAllMocks()
+    await expect(
+      runNativeFormats(tmp.path, {
+        json: [{ streamError: apiError(503, true) }],
+        text: [{ text: "Here is the page you asked for." }],
+      }),
+    ).rejects.toThrow(/No object generated/)
+    const report = await readBuildReport(tmp.path)
+    expect(report?.failed).toMatchObject({ failureClass: "format", attempts: 2 })
+  })
+
+  test("classifies which API errors a plain-text request may avoid", () => {
+    expect(wikiJsonModeRejected(apiError(503, true))).toBe(true)
+    expect(wikiJsonModeRejected(apiError(400, false))).toBe(true)
+    expect(wikiJsonModeRejected(apiError(401, false))).toBe(false)
+    expect(wikiJsonModeRejected(apiError(403, false))).toBe(false)
+    expect(wikiJsonModeRejected(apiError(429, true))).toBe(false)
+    expect(wikiJsonModeRejected(new TypeError("terminated"))).toBe(false)
+  })
+
+  test("reports a truncated plain-text page as a length failure", () => {
+    const meta = {
+      response: { id: "resp", timestamp: new Date(), modelId: "test" },
+      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 } as never,
+      finishReason: "length" as const,
+    }
+    expect(parseWikiPageText(JSON.stringify(generatedPage().object), meta).symbols).toEqual([])
+    try {
+      parseWikiPageText('{"summary":"truncated', meta)
+      expect.unreachable("a truncated page must not parse")
+    } catch (error) {
+      expect(NoObjectGeneratedError.isInstance(error) && error.finishReason).toBe("length")
+    }
   })
 
   test("retries a stream the provider cut off mid-response", async () => {
