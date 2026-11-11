@@ -1,7 +1,7 @@
 import { test, expect, describe, vi } from "vitest"
 import { buildCliCommand, CliLanguageModel, extractJsonPayload } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
-import { claudeCodeParser, grokBuildCliParser } from "../../../src/provider/cli/parser"
+import { claudeCodeParser, grokBuildCliParser, museCliParser, minimaxCliParser } from "../../../src/provider/cli/parser"
 import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
@@ -213,6 +213,285 @@ describe("CliLanguageModel", () => {
       })
     } finally {
       spawn.mockRestore()
+    }
+  })
+
+  test("doStream concatenates grok streaming-json deltas and keeps a JSON-looking reply", async () => {
+    await using tmp = await tmpdir()
+    const jsonl =
+      [
+        '{"type":"available_commands","tools":["read_file"],"commands":["compact"]}',
+        '{"type":"text","data":"ALPHA"}',
+        '{"type":"text","data":"\\n"}',
+        '{"type":"text","data":"{\\""}',
+        '{"type":"text","data":"k"}',
+        '{"type":"text","data":"\\":"}',
+        '{"type":"text","data":"1"}',
+        '{"type":"text","data":"}"}',
+        '{"type":"usage","usage":{"input_tokens":10,"output_tokens":2,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"reasoning_tokens":0}}',
+        '{"type":"end","stopReason":"end_turn"}',
+      ].join("\n") + "\n"
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(jsonl))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({ parser: grokBuildCliParser })
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+          let text = ""
+          let finish: any
+          const reader = stream.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value.type === "text-delta") text += value.delta
+            if (value.type === "finish") finish = value
+          }
+          expect(text).toBe('ALPHA\n{"k":1}')
+          expect(finish.usage).toEqual({
+            inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 2, text: 2, reasoning: 0 },
+          })
+          expect(usageSource(finish.usage)).toBe("exact")
+        },
+      })
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream keeps the newline on a plain-text reply line that looks like JSON", async () => {
+    await using tmp = await tmpdir()
+    const stdout = 'ALPHA\n{"k":1}\ndone\n'
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(stdout))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({ parser: grokBuildCliParser })
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+          let text = ""
+          const reader = stream.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value.type === "text-delta") text += value.delta
+          }
+          expect(grokBuildCliParser.parseComplete(stdout).text).toBe('ALPHA\n{"k":1}\ndone')
+          expect(text).toBe('ALPHA\n{"k":1}\ndone\n')
+        },
+      })
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream does not duplicate the unterminated tail when a terminal event arrives", async () => {
+    await using tmp = await tmpdir()
+    // The terminal event and the unterminated fragment arrive in one chunk, so
+    // the fragment is already part of the raw stdout buffer.
+    const raw = '{"type":"terminal"}\nTAIL'
+    const seen: string[] = []
+    const parser = {
+      parseComplete: () => ({ text: "" }),
+      parseStreamLine: (line: string) => line.trim() || null,
+      parseUsage: (output: string) => {
+        seen.push(output)
+        return undefined
+      },
+      parseModelMismatch: (output: string) => {
+        seen.push(output)
+        return undefined
+      },
+      isTerminalEvent: (line: string) => line.includes('"terminal"'),
+    }
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(raw))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({ parser })
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+          const reader = stream.getReader()
+          for (;;) {
+            const { done } = await reader.read()
+            if (done) break
+          }
+          expect(seen.length).toBeGreaterThan(0)
+          for (const output of seen) expect(output).toBe(raw)
+        },
+      })
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("claude partial-message stream does not duplicate text and ignores sub-agent output", async () => {
+    await using tmp = await tmpdir()
+    const jsonl =
+      [
+        '{"type":"system","subtype":"init","session_id":"ses_test"}',
+        '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ALPHA\\n{\\""}},"parent_tool_use_id":null,"session_id":"ses_test"}',
+        '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"k\\":1}"}},"parent_tool_use_id":null,"session_id":"ses_test"}',
+        '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"SUBAGENT"}},"parent_tool_use_id":"toolu_test","session_id":"ses_test"}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"ALPHA\\n{\\"k\\":1}"}]},"parent_tool_use_id":null,"session_id":"ses_test"}',
+        '{"type":"result","subtype":"success","is_error":false,"result":"ALPHA\\n{\\"k\\":1}","usage":{"input_tokens":2,"cache_creation_input_tokens":6379,"cache_read_input_tokens":13368,"output_tokens":14,"output_tokens_details":{"thinking_tokens":0}},"session_id":"ses_test"}',
+      ].join("\n") + "\n"
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(jsonl))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({ parser: claudeCodeParser })
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+          let text = ""
+          let finish: any
+          const reader = stream.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value.type === "text-delta") text += value.delta
+            if (value.type === "finish") finish = value
+          }
+          // Exactly once: not again from the whole assistant message or result.
+          expect(text).toBe('ALPHA\n{"k":1}')
+          expect(text).not.toContain("SUBAGENT")
+          expect(finish.usage).toEqual({
+            inputTokens: { total: 2 + 6379 + 13368, noCache: 2, cacheRead: 13368, cacheWrite: 6379 },
+            outputTokens: { total: 14, text: 14, reasoning: 0 },
+          })
+          expect(usageSource(finish.usage)).toBe("exact")
+        },
+      })
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("claude legacy stream without partial events falls back to the final text once", async () => {
+    await using tmp = await tmpdir()
+    const jsonl =
+      [
+        '{"type":"system","subtype":"init","session_id":"ses_test"}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"ALPHA\\n{\\"k\\":1}"}]},"parent_tool_use_id":null,"session_id":"ses_test"}',
+        '{"type":"result","subtype":"success","is_error":false,"result":"ALPHA\\n{\\"k\\":1}","session_id":"ses_test"}',
+      ].join("\n") + "\n"
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(jsonl))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({ parser: claudeCodeParser })
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+          let text = ""
+          const reader = stream.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value.type === "text-delta") text += value.delta
+          }
+          expect(text).toBe('ALPHA\n{"k":1}')
+        },
+      })
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doGenerate uses real parser usage and falls back to an estimate", async () => {
+    const real = makeModel({
+      binary: "echo",
+      parser: {
+        parseComplete: () => ({ text: "hello" }),
+        parseStreamLine: () => null,
+        parseUsage: () => ({
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 30,
+          cacheWriteTokens: 10,
+          reasoningTokens: 5,
+        }),
+      },
+      promptMode: "arg",
+    })
+    const exact = await real.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }] })
+    expect(exact.usage).toEqual({
+      inputTokens: { total: 100, noCache: 60, cacheRead: 30, cacheWrite: 10 },
+      outputTokens: { total: 20, text: 15, reasoning: 5 },
+    })
+    expect(usageSource(exact.usage)).toBe("exact")
+
+    const estimated = await makeModel({
+      binary: "echo",
+      parser: { parseComplete: () => ({ text: "hello" }), parseStreamLine: () => null },
+      promptMode: "arg",
+    }).doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }] })
+    expect(usageSource(estimated.usage)).toBe("estimated")
+  })
+
+  test("doGenerate resets its idle timeout on stdout activity", async () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const setTimeoutSpy = (
+      handler: (...args: any[]) => void,
+      timeout?: number,
+      ...args: any[]
+    ): ReturnType<typeof setTimeout> => originalSetTimeout(handler, timeout === 300_000 ? 25 : timeout, ...args)
+    globalThis.setTimeout = setTimeoutSpy as typeof globalThis.setTimeout
+
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const exited = (async () => {
+      for (let i = 0; i < 6; i++) {
+        await new Promise<void>((resolve) => originalSetTimeout(resolve, 6))
+        stdout.write("chunk\n")
+      }
+      stdout.end()
+      stderr.end()
+      return 0
+    })()
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
+      stdout,
+      stderr,
+      exited,
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 4242,
+      stdin: null,
+    } as any)
+    const shellKill = vi.spyOn(Shell, "killTree").mockResolvedValue()
+
+    try {
+      const model = makeModel({
+        binary: "slow-but-active",
+        parser: { parseComplete: () => ({ text: "ok" }), parseStreamLine: () => null },
+        promptMode: "arg",
+      })
+      const result = await model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+      })
+      expect(result.content).toEqual([{ type: "text", text: "ok" }])
+      // The run outlived the shortened idle ceiling because output kept arriving.
+      expect(shellKill).not.toHaveBeenCalled()
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      spawn.mockRestore()
+      shellKill.mockRestore()
     }
   })
 
@@ -1298,6 +1577,8 @@ describe("CliLanguageModel", () => {
 
     expect(cmd).not.toContain("-p")
     expect(cmd).toContain("--print")
+    expect(cmd).toContain("--include-partial-messages")
+    expect(cmd[cmd.indexOf("--output-format") + 1]).toBe("stream-json")
     expect(cmd).not.toContain("write file")
   })
 
@@ -1375,7 +1656,7 @@ describe("CliLanguageModel", () => {
       "/tmp/prompt.txt",
     )
 
-    expect(cmd).toEqual(["grok", "--prompt-file", "/tmp/prompt.txt"])
+    expect(cmd).toEqual(["grok", "--output-format", "streaming-json", "--prompt-file", "/tmp/prompt.txt"])
   })
 
   test("passes Muse CLI prompt file through headless exec", () => {
@@ -1716,5 +1997,171 @@ describe("CliLanguageModel", () => {
     )
 
     expect(cmd).toEqual(["customcli", "--add-dir", "/workspace/ax-code", "-p", "what's this project"])
+  })
+})
+
+describe("CLI effective model and terminal events", () => {
+  const substitutedMiniMax = [
+    '{"type":"item.completed","item":{"type":"agent_message","content":"PONG"}}',
+    '{"type":"turn.completed","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking"},"usage":{"inputTokens":13760,"outputTokens":4,"cacheReadTokens":176,"totalTokens":13940}}',
+    '{"type":"exec.completed","result":{"type":"exec.result","status":"succeeded","output":"PONG","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking"}}}',
+  ].join("\n")
+
+  test("doGenerate fails when MiniMax Code substitutes a different model", async () => {
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(substitutedMiniMax + "\n"))
+    try {
+      await expect(
+        makeModel({
+          providerID: "minimax-cli",
+          modelID: "no-such-model-xyz",
+          binary: "mcode",
+          args: [],
+          parser: minimaxCliParser,
+          promptMode: "arg",
+          promptFlag: "-p",
+        }).doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }] }),
+      ).rejects.toThrow("MiniMax Code used MiniMax-M3.1-Flash instead of the requested model no-such-model-xyz")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doGenerate skips the model check for the delegating sentinel", async () => {
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(substitutedMiniMax + "\n"))
+    try {
+      const result = await makeModel({
+        providerID: "minimax-cli",
+        modelID: "minimax-cli",
+        binary: "mcode",
+        args: [],
+        parser: minimaxCliParser,
+        promptMode: "arg",
+        promptFlag: "-p",
+      }).doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }] })
+      expect(result.content).toEqual([{ type: "text", text: "PONG" }])
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream finishes on the muse terminal event without waiting for process exit", async () => {
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    let resolveExit: (code: number) => void = () => {}
+    const exited = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const kill = vi.fn(() => true)
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
+      stdout,
+      stderr,
+      exited,
+      exitCode: null,
+      signalCode: null,
+      kill,
+      pid: 321,
+      stdin: null,
+    } as any)
+
+    try {
+      const model = makeModel({
+        providerID: "muse-cli",
+        modelID: "muse-cli",
+        binary: "muse",
+        args: [],
+        parser: museCliParser,
+        promptMode: "arg",
+        promptFlag: "-p",
+      })
+      const { stream } = await model.doStream({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+      })
+      // Answer + terminal event arrive, but the process stays alive like Muse's
+      // ~30s tail. The stream must not wait for `exited`.
+      stdout.write('{"payload_type":"run.output.delta","payload":{"text":"PONG"}}\n')
+      stdout.write('{"payload_type":"run.terminal.completed","payload":{"terminal":"completed","text":"PONG"}}\n')
+
+      const parts: any[] = []
+      const reader = stream.getReader()
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+      }
+
+      expect(
+        parts
+          .filter((part) => part.type === "text-delta")
+          .map((part) => part.delta)
+          .join(""),
+      ).toBe("PONG")
+      expect(parts.find((part) => part.type === "finish")).toBeDefined()
+      expect(parts.find((part) => part.type === "error")).toBeUndefined()
+      // The grace period has not elapsed yet, so the child has not been killed.
+      expect(kill).not.toHaveBeenCalled()
+    } finally {
+      resolveExit(0)
+      stdout.end()
+      stderr.end()
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream still fails when the process exits non-zero before a terminal event", async () => {
+    await using tmp = await tmpdir()
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    let resolveExit: (code: number) => void = () => {}
+    const exited = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
+      stdout,
+      stderr,
+      exited,
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 322,
+      stdin: null,
+    } as any)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({
+            providerID: "muse-cli",
+            modelID: "muse-cli",
+            binary: "muse",
+            args: [],
+            parser: museCliParser,
+            promptMode: "arg",
+            promptFlag: "-p",
+          })
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+          stdout.write('{"payload_type":"run.output.delta","payload":{"text":"PART"}}\n')
+          stdout.end()
+          stderr.end()
+          resolveExit(1)
+
+          const parts: any[] = []
+          const reader = stream.getReader()
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            parts.push(value)
+          }
+          const error = parts.find((part) => part.type === "error")
+          expect(error).toBeDefined()
+          expect(String(error.error)).toContain("CLI exited with code 1")
+        },
+      })
+    } finally {
+      resolveExit(1)
+      spawn.mockRestore()
+    }
   })
 })

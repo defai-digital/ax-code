@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises"
+import { readdir, readFile, stat } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
 import { Filesystem } from "../../util/filesystem"
@@ -19,6 +19,8 @@ export interface NativeCliModel {
   image?: boolean
   /** Reasoning efforts the CLI accepts for this model, in ascending order. */
   efforts?: string[]
+  /** True when the CLI's own catalog marks this as its default model. */
+  isDefault?: boolean
 }
 
 function homeDir() {
@@ -135,22 +137,46 @@ export function parseMuseModelCatalog(data: CliJsonObject): NativeCliModel[] {
       isDefault: item.is_default === true,
     })
   }
-  return rows.sort((a, b) => Number(b.isDefault) - Number(a.isDefault)).map(({ isDefault: _, ...model }) => model)
+  return rows
+    .sort((a, b) => Number(b.isDefault) - Number(a.isDefault))
+    .map(({ isDefault, ...model }) => (isDefault ? { ...model, isDefault: true } : model))
 }
 
 async function readMuseCatalogs(): Promise<NativeCliModel[]> {
   const dir = join(museDataDir(), "model-catalog")
-  const files = await readdir(dir).catch((error) => {
-    if (Filesystem.isEnoent(error)) return [] as string[]
-    throw error
-  })
+  const files = (
+    await readdir(dir).catch((error) => {
+      if (Filesystem.isEnoent(error)) return [] as string[]
+      throw error
+    })
+  ).filter((name) => name.endsWith(".json"))
+  // The newest catalog belongs to the profile Muse is using now. Read
+  // newest-first so an older file cannot contribute a second default when the
+  // user has switched profiles.
+  const stamped = await Promise.all(
+    files.map(async (file) => {
+      const info = await stat(join(dir, file)).catch(() => undefined)
+      return { file, modified: info?.mtimeMs ?? 0 }
+    }),
+  )
+  stamped.sort((a, b) => b.modified - a.modified || a.file.localeCompare(b.file))
   const seen = new Set<string>()
   const models: NativeCliModel[] = []
-  for (const file of files.filter((name) => name.endsWith(".json")).sort()) {
+  let defaultSeen = false
+  for (const { file } of stamped) {
     const data = await readJson(join(dir, file))
     for (const model of data ? parseMuseModelCatalog(data) : []) {
       if (seen.has(model.id)) continue
       seen.add(model.id)
+      if (model.isDefault) {
+        if (defaultSeen) {
+          const rest = { ...model }
+          delete rest.isDefault
+          models.push(rest)
+          continue
+        }
+        defaultSeen = true
+      }
       models.push(model)
     }
   }

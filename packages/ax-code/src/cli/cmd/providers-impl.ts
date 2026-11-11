@@ -690,6 +690,11 @@ export const ProvidersLoginCommand = cmd({
         return
       }
       await setProviderAuth(provider, { type: "api", key: "cli" })
+      if (result.verified === false) {
+        prompts.log.info(
+          `Could not verify the ${definition.binary} login status; run the CLI once in a terminal if requests fail.`,
+        )
+      }
       prompts.log.success("Login successful")
       prompts.outro("Done")
     }

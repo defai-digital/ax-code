@@ -10,6 +10,28 @@ changes belong to AX Coder.
 
 - Restore the Claude Code CLI and Muse CLI providers.
 
+### Changed
+
+- Claude Code CLI responses stream incrementally (`--include-partial-messages`), and Grok Build CLI uses its
+  structured `streaming-json` output.
+- CLI providers report the token usage their CLI returns (Claude Code, Codex, Grok Build, MiniMax Code) instead of an
+  estimate.
+- Claude Code and Codex sign-in checks use their free status commands (`claude auth status`, `codex login status`);
+  model discovery never sends a paid request, and the TUI no longer shows a CLI provider as connected before sign-in
+  is verified.
+- Kimi Code lists the models configured in its `config.toml`, honors only the explicit Kimi home when one is set, and
+  forwards `KIMI_MODEL_API_KEY`.
+- "Use CLI default" keeps the CLI's own default model instead of an AX Code recommendation.
+
+### Fixed
+
+- Grok Build replies containing a line of JSON are no longer dropped while streaming.
+- MiniMax Code fails clearly when it substitutes a different model for the requested one, and unknown MiniMax model ids
+  are no longer offered.
+- Kimi Code streams separate assistant messages with a blank line between them.
+- Long-running CLI generations are no longer cut off by a fixed five-minute limit; an idle timeout applies instead.
+- Muse Code streams finish when Muse reports completion instead of waiting for the process to exit.
+
 ## [7.30.21] - 2026-11-10
 
 ### Changed

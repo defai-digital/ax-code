@@ -57,7 +57,7 @@ export namespace Env {
     // `claude setup-token` and gateway setups authenticate through tokens.
     "claude-code": ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN"],
     "grok-build-cli": ["XAI_API_KEY"],
-    "kimi-cli": ["KIMI_API_KEY"],
+    "kimi-cli": ["KIMI_API_KEY", "KIMI_MODEL_API_KEY"],
     "muse-cli": ["META_API_KEY", "MODEL_API_KEY", "META_MODEL_API_KEY"],
     "minimax-cli": ["MINIMAX_API_KEY", "MINIMAX_TOKEN_PLAN_API_KEY", "MCODE_PROVIDER_API_KEY"],
     "dsh-cli": ["DEEPSEEK_API_KEY"],

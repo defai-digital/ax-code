@@ -1,12 +1,10 @@
 import type { Provider } from "./provider"
 import { ProviderID, ModelID } from "./schema"
-import { which, whichAll } from "../util/which"
-import { Process } from "../util/process"
 import { Ssrf } from "../util/ssrf"
 import { CliLanguageModel } from "./cli/cli-language-model"
 import type { CliOutputParser } from "./cli/parser"
-import { selectPreferredCodexBinary } from "./cli/binary"
-import { resolveCliModel } from "./cli/resolve"
+import { resolveCliBinary } from "./cli/resolve-binary"
+import { normalizeKimiCodeModelID, resolveCliModel, resolveKimiConfigModels } from "./cli/resolve"
 import { getCliProviderDefinition } from "./cli/config"
 import { checkCliProviderAuth } from "./cli/connect"
 import { readNativeCliModels, type NativeCliModel } from "./cli/native-models"
@@ -403,61 +401,10 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "dsh-cli": "DeepSeek Harness default",
 }
 
-// A stale standalone `codex` launcher can shadow the newer executable bundled
-// with the ChatGPT app. Codex CLI models are version-coupled, so prefer the
-// newest executable found on the real PATH rather than failing a selected
-// model solely because an older duplicate appears first.
-type PendingCliBinary = { promise: Promise<string | null> }
-const cliBinaryPending = new Map<string, PendingCliBinary>()
-
-export async function resolveCliBinary(providerID: string, binary: string) {
-  const cacheKey = `${providerID}:${binary}`
-  // JavaScript does not yield between this lookup and registering `resolving`;
-  // after the await, the identity guard below prevents stale cleanup.
-  // @scan-suppress race_scan
-  const pending = cliBinaryPending.get(cacheKey)
-  if (pending) return pending.promise
-
-  const resolving: PendingCliBinary = {
-    promise: (async () => {
-      const primary = which(binary)
-      if (!primary || providerID !== "codex-cli") return primary
-
-      const candidates = [...new Set(whichAll(binary, undefined, { extraDirs: false }))]
-      if (candidates.length < 2) return primary
-
-      const inspected = await Promise.all(
-        candidates.map(async (candidate) => {
-          const result = await Process.run([candidate, "--version"], { timeout: 2_000, nothrow: true }).catch(
-            () => undefined,
-          )
-          return {
-            path: candidate,
-            version: result?.code === 0 ? `${result.stdout}\n${result.stderr}` : undefined,
-          }
-        }),
-      )
-      const selected = selectPreferredCodexBinary(inspected) ?? primary
-      if (selected !== primary) {
-        log.info("selected newer Codex CLI executable", { primary, selected })
-      }
-      return selected
-    })(),
-  }
-
-  cliBinaryPending.set(cacheKey, resolving)
-  try {
-    return await resolving.promise
-  } finally {
-    // Deduplicate only concurrent lookups. A permanent cache would retain both
-    // misses and stale paths after a provider CLI is installed or upgraded
-    // while AX Code is still running.
-    if (cliBinaryPending.get(cacheKey) === resolving) cliBinaryPending.delete(cacheKey)
-  }
-}
+export { resolveCliBinary } from "./cli/resolve-binary"
 
 function cliModels(providerID: string, provider: Provider.Info, resolved?: string): Record<string, Provider.Model> {
-  const base = Object.values(provider.models)[0]
+  const base = cliBase(provider)
   if (!base) return {}
   const name = CLI_DEFAULT_MODEL_NAMES[providerID] ?? "CLI default"
   const models: Record<string, Provider.Model> = {}
@@ -474,6 +421,84 @@ function cliModels(providerID: string, provider: Provider.Info, resolved?: strin
   add(providerID, name)
   if (resolved && resolved !== providerID) {
     add(resolved, `${name} (${resolved})`)
+  }
+  return models
+}
+
+/**
+ * Discovery derives `cliDefault` from the CLI's own configuration or native
+ * catalog. Clear any mark a previous discovery left on the base model before a
+ * builder spreads it into every result.
+ */
+function withoutCliDefault(model: Provider.Model): Provider.Model {
+  if (model.options?.cliDefault === undefined) return model
+  const options = Object.fromEntries(Object.entries(model.options).filter(([key]) => key !== "cliDefault"))
+  return { ...model, options }
+}
+
+function cliBase(provider: Provider.Info): Provider.Model | undefined {
+  const base = Object.values(provider.models)[0]
+  return base ? withoutCliDefault(base) : undefined
+}
+
+/** Map a resolved CLI model id onto the id discovery publishes. */
+function normalizeCliModelID(providerID: string, modelID: string): string {
+  if (providerID === "minimax-cli" && modelID.startsWith("minimax/")) {
+    const bare = modelID.slice("minimax/".length)
+    return bare || modelID
+  }
+  if (providerID === "kimi-cli") return normalizeKimiCodeModelID(modelID)
+  return modelID
+}
+
+function catalogCliDefaultID(models: Record<string, Provider.Model>): string | undefined {
+  for (const [id, model] of Object.entries(models)) {
+    if (model.options?.cliDefault === true) return id
+  }
+  return undefined
+}
+
+/**
+ * One rule for every CLI provider. Resolve at most one CLI default in priority
+ * order: the model the CLI resolves from the user's own config/env (after the
+ * provider's id normalization), then the CLI's native catalog default. Always
+ * clear stale marks first. When a default exists, publish it and drop the
+ * delegating sentinel; otherwise keep the sentinel so "Use CLI default" passes
+ * no `--model` flag and the CLI keeps its own choice.
+ */
+function finalizeCliDiscovery(input: {
+  current: Provider.Info
+  providerID: string
+  models: Record<string, Provider.Model>
+  resolved?: string
+}): Record<string, Provider.Model> {
+  const { current, providerID, models } = input
+  // Builders strip the base mark, so any remaining flag came from the CLI's own
+  // catalog. Capture it before clearing the rest.
+  const catalogDefault = catalogCliDefaultID(models)
+  const resolved = input.resolved === undefined ? undefined : normalizeCliModelID(providerID, input.resolved)
+  const resolvedDefault = resolved && resolved !== providerID && models[resolved] ? resolved : undefined
+  const defaultID = resolvedDefault ?? catalogDefault
+
+  for (const [id, model] of Object.entries(models)) {
+    if (id !== defaultID) models[id] = withoutCliDefault(model)
+  }
+  if (defaultID) {
+    const model = models[defaultID]!
+    if (model.options?.cliDefault !== true) {
+      models[defaultID] = { ...model, options: { ...model.options, cliDefault: true } }
+    }
+    // The CLI already chose this model, so selecting "Use CLI default" must
+    // pass it explicitly instead of silently letting the CLI pick again.
+    delete current.models[providerID]
+    delete models[providerID]
+    return models
+  }
+  // No CLI default is knowable. Keep (or restore) the sentinel so selecting
+  // "Use CLI default" defers to the CLI without an explicit `--model`.
+  if (!current.models[providerID]) {
+    const sentinel = cliModel(providerID, current, providerID)
+    if (sentinel) current.models[providerID] = sentinel
   }
   return models
 }
@@ -552,7 +577,11 @@ function nativeCliModels(
         ...model.capabilities,
         input: { ...model.capabilities.input, image: model.capabilities.input.image || item.image === true },
       },
-      ...(item.efforts ? { options: { ...model.options, cliEfforts: item.efforts } } : {}),
+      options: {
+        ...model.options,
+        ...(item.efforts ? { cliEfforts: item.efforts } : {}),
+        ...(item.isDefault ? { cliDefault: true } : {}),
+      },
     }
   }
   return models
@@ -562,7 +591,7 @@ async function claudeCodeFamilyModels(
   provider: Provider.Info,
   resolved?: string,
 ): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
+  const base = cliBase(provider)
   if (!base) return {}
   const catalog = (await ModelsDev.get()).anthropic?.models ?? {}
   const native = await readNativeCliModels("claude-code")
@@ -621,7 +650,7 @@ async function grokBuildFamilyModels(
   provider: Provider.Info,
   resolved?: string,
 ): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
+  const base = cliBase(provider)
   if (!base) return {}
   const catalog = collectGrokCatalog(await ModelsDev.get())
   const native = await readNativeCliModels("grok-build-cli")
@@ -678,7 +707,7 @@ async function codexCliFamilyModels(
   provider: Provider.Info,
   resolved?: string,
 ): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
+  const base = cliBase(provider)
   if (!base) return {}
   const snapshot = await ModelsDev.get()
   const catalog = collectCodexCatalog(snapshot)
@@ -737,7 +766,7 @@ async function museCliFamilyModels(
   provider: Provider.Info,
   resolved?: string,
 ): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
+  const base = cliBase(provider)
   if (!base) return {}
   const catalog = collectMuseCatalog(await ModelsDev.get())
   const native = await readNativeCliModels("muse-cli")
@@ -794,7 +823,7 @@ export async function minimaxCliFamilyModels(
   provider: Provider.Info,
   resolved?: string,
 ): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
+  const base = cliBase(provider)
   if (!base) return {}
   const catalog = collectMiniMaxCatalog(await ModelsDev.get())
   const models: Record<string, Provider.Model> = {}
@@ -828,16 +857,10 @@ export async function minimaxCliFamilyModels(
       minimaxDisplayName(item.name, requested),
       minimaxFamilyId({ id: item.id, family: item.family }),
     )
-  } else if (requested && requested !== "minimax-cli" && !models[requested]) {
-    const id = ModelID.make(requested)
-    models[id] = {
-      ...base,
-      id,
-      providerID: ProviderID.make("minimax-cli"),
-      api: { ...base.api, id: requested },
-      name: minimaxDisplayName(undefined, requested),
-    }
   }
+  // Never publish a requested id the CLI's catalog does not serve. MiniMax Code
+  // silently substitutes its default model for an unknown `--model`, so a
+  // picker entry would run something other than the model the user selected.
   return models
 }
 
@@ -845,22 +868,51 @@ async function kimiCliFamilyModels(
   provider: Provider.Info,
   resolved?: string,
 ): Promise<Record<string, Provider.Model>> {
-  const base = Object.values(provider.models)[0]
+  const base = cliBase(provider)
   if (!base) return {}
   const catalog: Record<string, ModelsDev.Model> = {}
   for (const item of kimiFallbackModels()) {
     catalog[item.id] = item as ModelsDev.Model
   }
   const models: Record<string, Provider.Model> = {}
-  for (const item of latestKimiFamilyModels(catalog)) {
-    models[item.id] = overlayCliCatalogModel(
-      base,
-      item,
-      "kimi-cli",
-      kimiDisplayName(item.name, item.id),
-      kimiFamilyId({ id: item.id, family: item.family }),
-      item.id,
-    )
+  // Kimi's config.toml owns the model list: `[models."<alias>"]` tables plus
+  // `default_model`. Only fall back to the bundled SKUs when the user has not
+  // configured any aliases.
+  const configured = await resolveKimiConfigModels()
+  const aliases = configured?.aliases ?? []
+  if (aliases.length > 0) {
+    for (const id of aliases) {
+      const item = catalog[id]
+      if (item) {
+        models[id] = overlayCliCatalogModel(
+          base,
+          item,
+          "kimi-cli",
+          kimiDisplayName(item.name, id),
+          kimiFamilyId({ id: item.id, family: item.family }),
+          id,
+        )
+        continue
+      }
+      models[id] = {
+        ...base,
+        id: ModelID.make(id),
+        providerID: ProviderID.make("kimi-cli"),
+        api: { ...base.api, id },
+        name: kimiDisplayName(undefined, id),
+      }
+    }
+  } else {
+    for (const item of latestKimiFamilyModels(catalog)) {
+      models[item.id] = overlayCliCatalogModel(
+        base,
+        item,
+        "kimi-cli",
+        kimiDisplayName(item.name, item.id),
+        kimiFamilyId({ id: item.id, family: item.family }),
+        item.id,
+      )
+    }
   }
   if (resolved && resolved !== "kimi-cli" && !models[resolved] && catalog[resolved]) {
     const item = catalog[resolved]!
@@ -886,7 +938,7 @@ async function kimiCliFamilyModels(
 }
 
 function cliModel(providerID: string, provider: Provider.Info, modelID: string): Provider.Model | undefined {
-  const base = Object.values(provider.models)[0]
+  const base = cliBase(provider)
   if (!base) return
   return {
     ...base,
@@ -937,37 +989,18 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         const authError = await checkCliProviderAuth(opts.providerID, path)
         if (authError) return {}
         const resolved = await resolveCliModel(opts.providerID)
-        if (opts.providerID === "claude-code") {
-          const models = await claudeCodeFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
-        if (opts.providerID === "grok-build-cli") {
-          const models = await grokBuildFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
-        if (opts.providerID === "kimi-cli") {
-          const models = await kimiCliFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
-        if (opts.providerID === "codex-cli") {
-          const models = await codexCliFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
-        if (opts.providerID === "muse-cli") {
-          const models = await museCliFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
-        if (opts.providerID === "minimax-cli") {
-          const models = await minimaxCliFamilyModels(current, resolved.model)
-          if (Object.keys(models).length > 0) delete current.models[opts.providerID]
-          return models
-        }
-        return cliModels(opts.providerID, current, resolved.model)
+        // Every CLI family ends here so exactly one of {sentinel kept, one
+        // `cliDefault` model} survives discovery, regardless of how the family
+        // builder produced its models.
+        const finish = (models: Record<string, Provider.Model>) =>
+          finalizeCliDiscovery({ current, providerID: opts.providerID, models, resolved: resolved.model })
+        if (opts.providerID === "claude-code") return finish(await claudeCodeFamilyModels(current, resolved.model))
+        if (opts.providerID === "grok-build-cli") return finish(await grokBuildFamilyModels(current, resolved.model))
+        if (opts.providerID === "kimi-cli") return finish(await kimiCliFamilyModels(current, resolved.model))
+        if (opts.providerID === "codex-cli") return finish(await codexCliFamilyModels(current, resolved.model))
+        if (opts.providerID === "muse-cli") return finish(await museCliFamilyModels(current, resolved.model))
+        if (opts.providerID === "minimax-cli") return finish(await minimaxCliFamilyModels(current, resolved.model))
+        return finish(cliModels(opts.providerID, current, resolved.model))
       },
     }
   }

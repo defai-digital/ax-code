@@ -714,6 +714,25 @@ describe("Env.sanitize", () => {
       else process.env.MINIMAX_API_KEY = originalMiniMax
     }
   })
+
+  test("forwards KIMI_MODEL_API_KEY only to kimi-cli", () => {
+    const original = process.env.KIMI_MODEL_API_KEY
+    try {
+      process.env.KIMI_MODEL_API_KEY = "kimi-model-key"
+      const kimi = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "kimi-cli")
+      expect(kimi.KIMI_MODEL_API_KEY).toBe("kimi-model-key")
+
+      for (const providerID of ["codex-cli", "claude-code", "grok-build-cli", "muse-cli", "minimax-cli", "dsh-cli"]) {
+        expect(Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), providerID).KIMI_MODEL_API_KEY, providerID).toBe(
+          undefined,
+        )
+      }
+      expect(Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), undefined).KIMI_MODEL_API_KEY).toBeUndefined()
+    } finally {
+      if (original === undefined) delete process.env.KIMI_MODEL_API_KEY
+      else process.env.KIMI_MODEL_API_KEY = original
+    }
+  })
 })
 
 describe("record credential coverage", () => {

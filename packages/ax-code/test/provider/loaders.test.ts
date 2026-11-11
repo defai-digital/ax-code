@@ -1,6 +1,6 @@
 import { afterEach, test, expect, describe, vi } from "vitest"
 import path from "path"
-import { chmod, mkdir, writeFile, readFile } from "fs/promises"
+import { chmod, mkdir, utimes, writeFile } from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
@@ -145,17 +145,6 @@ describe("CLI provider loaders", () => {
     ).toBe("/working/codex")
   })
 
-  test("CLI provider discovery publishes resolved external model ids", async () => {
-    const src = await readFile(path.join(import.meta.dirname, "../../src/provider/loaders.ts"), "utf-8")
-    expect(src).toContain("return cliModels(opts.providerID, current, resolved.model)")
-    expect(src).toContain("if (resolved && resolved !== providerID)")
-    expect(src).toContain("add(resolved, `${name} (${resolved})`)")
-    expect(src).toContain("claudeCodeFamilyModels(current, resolved.model)")
-    expect(src).toContain("grokBuildFamilyModels(current, resolved.model)")
-    expect(src).toContain("kimiCliFamilyModels(current, resolved.model)")
-    expect(src).toContain("codexCliFamilyModels(current, resolved.model)")
-  })
-
   test("claude-code configured provider does not discover runnable variants when binary missing", async () => {
     await expectMissingCliProvider({
       providerID: "claude-code",
@@ -190,6 +179,296 @@ describe("CLI provider loaders", () => {
       baseModelID: "kimi-cli",
       discoveredModelIDs: ["kimi-code/k3", "kimi-code/kimi-for-coding"],
     })
+  })
+})
+
+describe("CLI default discovery", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const CLI_TEST_BINARIES: Record<string, string> = {
+    "claude-code": "claude",
+    "codex-cli": "codex",
+    "grok-build-cli": "grok",
+    "kimi-cli": "kimi",
+    "muse-cli": "muse",
+    "minimax-cli": "mcode",
+    "dsh-cli": "dsh",
+  }
+
+  const CLI_ENV_KEYS = [
+    "ANTHROPIC_MODEL",
+    "CLAUDE_CONFIG_DIR",
+    "CODEX_HOME",
+    "KIMI_CODE_HOME",
+    "KIMI_MODEL",
+    "KIMI_SHARE_DIR",
+    "MAVIS_DATA_DIR",
+    "MCODE_MODEL",
+    "MINIMAX_DATA_DIR",
+    "MUSE_MODEL",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+  ]
+
+  function cliProviderInfo(providerID: string): Provider.Info {
+    return {
+      id: ProviderID.make(providerID),
+      name: providerID,
+      source: "config",
+      env: [],
+      options: {},
+      models: {
+        [ModelID.make(providerID)]: {
+          id: ModelID.make(providerID),
+          providerID: ProviderID.make(providerID),
+          name: "CLI default",
+          api: { id: providerID, npm: "cli", url: "" },
+          family: providerID,
+          release_date: "",
+          limit: { context: 200_000, output: 32_000 },
+          capabilities: {
+            temperature: true,
+            reasoning: true,
+            attachment: false,
+            toolcall: true,
+            interleaved: false,
+            input: { text: true, image: false, audio: false, video: false, pdf: false },
+            output: { text: true, image: false, audio: false, video: false, pdf: false },
+          },
+          options: {},
+          headers: {},
+          status: "active",
+          variants: {},
+        },
+      },
+    } as unknown as Provider.Info
+  }
+
+  async function prepareCli(
+    tmp: { path: string },
+    providerID: string,
+    modelsDev: Awaited<ReturnType<typeof ModelsDev.get>> = {} as Awaited<ReturnType<typeof ModelsDev.get>>,
+  ) {
+    vi.spyOn(ModelsDev, "get").mockResolvedValue(modelsDev)
+    vi.stubEnv("AX_CODE_TEST_HOME", tmp.path)
+    vi.stubEnv("PATH", tmp.path)
+    for (const key of CLI_ENV_KEYS) vi.stubEnv(key, undefined)
+    if (process.platform === "win32") vi.stubEnv("PATHEXT", ".CMD")
+    const binary = CLI_TEST_BINARIES[providerID]!
+    const executable = path.join(tmp.path, process.platform === "win32" ? `${binary}.cmd` : binary)
+    await writeFile(executable, process.platform === "win32" ? "@echo off\r\n" : "#!/bin/sh\nexit 0\n")
+    await chmod(executable, 0o755)
+  }
+
+  async function discoverCli(providerID: string, provider = cliProviderInfo(providerID)) {
+    const loader = await CUSTOM_LOADERS[providerID]!(provider)
+    const discovered = await loader.discoverModels!(provider)
+    // provider-impl merges discovered models over the provider's live models.
+    provider.models = { ...provider.models, ...discovered }
+    return { loader, provider, discovered }
+  }
+
+  function cliDefaultMarks(models: Record<string, Provider.Model>) {
+    return Object.entries(models)
+      .filter(([, model]) => model.options?.cliDefault === true)
+      .map(([id]) => id)
+      .sort()
+  }
+
+  function expectCliDefaultInvariant(models: Record<string, Provider.Model>, providerID: string) {
+    const marks = cliDefaultMarks(models)
+    const sentinel = Boolean(models[ModelID.make(providerID)])
+    if (sentinel) expect(marks).toEqual([])
+    else expect(marks).toHaveLength(1)
+  }
+
+  const configuredCases: Array<{
+    providerID: string
+    setup: (tmp: { path: string }) => Promise<void>
+    expected: string
+  }> = [
+    {
+      providerID: "claude-code",
+      setup: async (tmp) => {
+        await mkdir(path.join(tmp.path, ".claude"), { recursive: true })
+        await writeFile(path.join(tmp.path, ".claude", "settings.json"), JSON.stringify({ model: "claude-sonnet-5" }))
+      },
+      expected: "claude-sonnet-5",
+    },
+    {
+      providerID: "codex-cli",
+      setup: async (tmp) => {
+        await mkdir(path.join(tmp.path, ".codex"), { recursive: true })
+        await writeFile(path.join(tmp.path, ".codex", "config.toml"), 'model = "gpt-5.6"\n')
+      },
+      expected: "gpt-5.6",
+    },
+    {
+      providerID: "kimi-cli",
+      setup: async (tmp) => {
+        await mkdir(path.join(tmp.path, ".kimi-code"), { recursive: true })
+        await writeFile(
+          path.join(tmp.path, ".kimi-code", "config.toml"),
+          ['default_model = "kimi-code/k3"', "", '[models."kimi-code/k3"]', 'label = "K3"', ""].join("\n"),
+        )
+      },
+      expected: "kimi-code/k3",
+    },
+    {
+      providerID: "muse-cli",
+      setup: async (tmp) => {
+        await mkdir(path.join(tmp.path, ".config", "muse"), { recursive: true })
+        await writeFile(
+          path.join(tmp.path, ".config", "muse", "settings.json"),
+          JSON.stringify({ model: "muse-spark-1.3" }),
+        )
+      },
+      expected: "muse-spark-1.3",
+    },
+    {
+      providerID: "minimax-cli",
+      setup: async (tmp) => {
+        await mkdir(path.join(tmp.path, ".minimax"), { recursive: true })
+        await writeFile(path.join(tmp.path, ".minimax", "config.yaml"), "defaultModel: minimax/MiniMax-M3\n")
+      },
+      expected: "MiniMax-M3",
+    },
+  ]
+
+  test.each(configuredCases)("$providerID marks its resolved default and drops the sentinel", async (item) => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, item.providerID)
+    await item.setup(tmp)
+
+    const first = await discoverCli(item.providerID)
+    expect(cliDefaultMarks(first.provider.models)).toEqual([item.expected])
+    expect(first.provider.models[ModelID.make(item.providerID)]).toBeUndefined()
+    expectCliDefaultInvariant(first.provider.models, item.providerID)
+
+    // Re-running discovery on its own output must not spread the mark through
+    // the base model or leave a duplicate.
+    const second = await discoverCli(item.providerID, first.provider)
+    expect(cliDefaultMarks(second.provider.models)).toEqual([item.expected])
+    expect(second.provider.models[ModelID.make(item.providerID)]).toBeUndefined()
+  })
+
+  test.each(Object.keys(CLI_TEST_BINARIES))(
+    "%s keeps the sentinel when no CLI default is configured",
+    async (providerID) => {
+      await using tmp = await tmpdir()
+      await prepareCli(tmp, providerID)
+
+      const first = await discoverCli(providerID)
+      expect(cliDefaultMarks(first.provider.models)).toEqual([])
+      expect(first.provider.models[ModelID.make(providerID)]).toBeDefined()
+      expectCliDefaultInvariant(first.provider.models, providerID)
+
+      const second = await discoverCli(providerID, first.provider)
+      expect(cliDefaultMarks(second.provider.models)).toEqual([])
+      expect(second.provider.models[ModelID.make(providerID)]).toBeDefined()
+    },
+  )
+
+  test("muse uses the catalog default when settings configure no model", async () => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "muse-cli")
+    const catalogDir = path.join(tmp.path, ".local", "share", "muse", "model-catalog")
+    await mkdir(catalogDir, { recursive: true })
+    await writeFile(
+      path.join(catalogDir, "meta.json"),
+      JSON.stringify({
+        rows: [
+          { model_id: "muse-spark-1.3", visibility: "visible", context_limit: 1_000_000 },
+          { model_id: "muse-wonder-1.0", visibility: "visible", is_default: true, context_limit: 1_000_000 },
+        ],
+      }),
+    )
+
+    const { provider } = await discoverCli("muse-cli")
+    expect(cliDefaultMarks(provider.models)).toEqual(["muse-wonder-1.0"])
+    expect(provider.models[ModelID.make("muse-cli")]).toBeUndefined()
+  })
+
+  test("muse settings model wins over the catalog default", async () => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "muse-cli")
+    const catalogDir = path.join(tmp.path, ".local", "share", "muse", "model-catalog")
+    await mkdir(catalogDir, { recursive: true })
+    await writeFile(
+      path.join(catalogDir, "meta.json"),
+      JSON.stringify({
+        rows: [
+          { model_id: "muse-spark-1.3", visibility: "visible", context_limit: 1_000_000 },
+          { model_id: "muse-wonder-1.0", visibility: "visible", is_default: true, context_limit: 1_000_000 },
+        ],
+      }),
+    )
+    await mkdir(path.join(tmp.path, ".config", "muse"), { recursive: true })
+    await writeFile(
+      path.join(tmp.path, ".config", "muse", "settings.json"),
+      JSON.stringify({ model: "muse-spark-1.3" }),
+    )
+
+    const { provider } = await discoverCli("muse-cli")
+    expect(cliDefaultMarks(provider.models)).toEqual(["muse-spark-1.3"])
+    expect(provider.models[ModelID.make("muse-cli")]).toBeUndefined()
+  })
+
+  test("muse keeps only the most recently modified catalog file's default", async () => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "muse-cli")
+    const catalogDir = path.join(tmp.path, ".local", "share", "muse", "model-catalog")
+    await mkdir(catalogDir, { recursive: true })
+    const oldCatalog = path.join(catalogDir, "old.json")
+    const newCatalog = path.join(catalogDir, "new.json")
+    await writeFile(
+      oldCatalog,
+      JSON.stringify({
+        rows: [{ model_id: "muse-wonder-1.0", visibility: "visible", is_default: true, context_limit: 1_000_000 }],
+      }),
+    )
+    await writeFile(
+      newCatalog,
+      JSON.stringify({
+        rows: [{ model_id: "muse-spark-1.3", visibility: "visible", is_default: true, context_limit: 1_000_000 }],
+      }),
+    )
+    const now = Date.now()
+    await utimes(oldCatalog, new Date(now - 60_000), new Date(now - 60_000))
+    await utimes(newCatalog, new Date(now), new Date(now))
+
+    const { provider } = await discoverCli("muse-cli")
+    expect(cliDefaultMarks(provider.models)).toEqual(["muse-spark-1.3"])
+    expect(provider.models[ModelID.make("muse-cli")]).toBeUndefined()
+  })
+
+  test("minimax keeps the sentinel when the configured id is absent from its catalog", async () => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "minimax-cli")
+    await mkdir(path.join(tmp.path, ".minimax"), { recursive: true })
+    await writeFile(path.join(tmp.path, ".minimax", "config.yaml"), "defaultModel: MiniMax-Unknown\n")
+
+    const { provider } = await discoverCli("minimax-cli")
+    expect(cliDefaultMarks(provider.models)).toEqual([])
+    expect(provider.models[ModelID.make("minimax-cli")]).toBeDefined()
+    expectCliDefaultInvariant(provider.models, "minimax-cli")
+  })
+
+  test("kimi marks a configured kimi-code/k3 alias", async () => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "kimi-cli")
+    await mkdir(path.join(tmp.path, ".kimi-code"), { recursive: true })
+    await writeFile(
+      path.join(tmp.path, ".kimi-code", "config.toml"),
+      ['default_model = "kimi-code/k3"', "", '[models."kimi-code/k3"]', 'label = "K3"', ""].join("\n"),
+    )
+
+    const { provider } = await discoverCli("kimi-cli")
+    expect(provider.models[ModelID.make("kimi-code/k3")]?.options.cliDefault).toBe(true)
+    expect(provider.models[ModelID.make("kimi-cli")]).toBeUndefined()
+    expect(cliDefaultMarks(provider.models)).toEqual(["kimi-code/k3"])
   })
 })
 
@@ -262,6 +541,7 @@ describe("MiniMax CLI family models", () => {
     vi.spyOn(ModelsDev, "get").mockResolvedValue(minimaxSnapshot())
     const models = await minimaxCliFamilyModels(minimaxCliProvider(), "minimax/MiniMax-M3.1-Flash")
     expect(Object.keys(models).sort()).toEqual(["MiniMax-M3.1-Flash"])
+    expect(models["MiniMax-M3.1-Flash"]?.api.id).toBe("MiniMax-M3.1-Flash")
   })
 
   test("still adds an M2 model the MiniMax Code config resolves to", async () => {
@@ -271,17 +551,25 @@ describe("MiniMax CLI family models", () => {
     expect(models["MiniMax-M2.7"]?.api.id).toBe("MiniMax-M2.7")
   })
 
-  test("keeps other provider prefixes as their own entries", async () => {
+  test("does not publish a requested id the CLI catalog does not serve", async () => {
     vi.spyOn(ModelsDev, "get").mockResolvedValue(minimaxSnapshot())
     const models = await minimaxCliFamilyModels(minimaxCliProvider(), "openrouter/foo")
-    expect(models["openrouter/foo"]?.api.id).toBe("openrouter/foo")
-    expect(models["foo"]).toBeUndefined()
+    expect(models["openrouter/foo"]).toBeUndefined()
+    expect(Object.keys(models)).toEqual(["MiniMax-M3.1-Flash"])
   })
 
-  test("adds an unknown bare id unchanged", async () => {
+  test("does not publish an unknown bare id", async () => {
     vi.spyOn(ModelsDev, "get").mockResolvedValue(minimaxSnapshot())
     const models = await minimaxCliFamilyModels(minimaxCliProvider(), "MiniMax-Unknown")
-    expect(models["MiniMax-Unknown"]?.api.id).toBe("MiniMax-Unknown")
+    expect(models["MiniMax-Unknown"]).toBeUndefined()
+    expect(Object.keys(models)).toEqual(["MiniMax-M3.1-Flash"])
+  })
+
+  test("does not publish no-such-model-xyz even when the config requests it", async () => {
+    vi.spyOn(ModelsDev, "get").mockResolvedValue(minimaxSnapshot())
+    const models = await minimaxCliFamilyModels(minimaxCliProvider(), "no-such-model-xyz")
+    expect(models["no-such-model-xyz"]).toBeUndefined()
+    expect(Object.keys(models)).toEqual(["MiniMax-M3.1-Flash"])
   })
 
   test("maps a prefixed catalog id that is not the latest SKU", async () => {
@@ -294,6 +582,69 @@ describe("MiniMax CLI family models", () => {
     expect(Object.keys(models).sort()).toEqual(["MiniMax-M2.5", "MiniMax-M3.1-Flash"])
     expect(models["MiniMax-M2.7"]).toBeUndefined()
     expect(models["minimax/MiniMax-M2.5"]).toBeUndefined()
+  })
+})
+
+describe("CLI default model marker", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test("muse discovery marks the CLI's native catalog default model", async () => {
+    vi.spyOn(ModelsDev, "get").mockResolvedValue({} as Awaited<ReturnType<typeof ModelsDev.get>>)
+    await using tmp = await tmpdir()
+    vi.stubEnv("AX_CODE_TEST_HOME", tmp.path)
+    vi.stubEnv("PATH", tmp.path)
+    vi.stubEnv("MUSE_MODEL", undefined)
+    if (process.platform === "win32") vi.stubEnv("PATHEXT", ".CMD")
+    const binary = path.join(tmp.path, process.platform === "win32" ? "muse.cmd" : "muse")
+    await writeFile(binary, process.platform === "win32" ? "@echo off\r\n" : "#!/bin/sh\n")
+    await chmod(binary, 0o755)
+    const catalogDir = path.join(tmp.path, ".local", "share", "muse", "model-catalog")
+    await mkdir(catalogDir, { recursive: true })
+    await writeFile(
+      path.join(catalogDir, "meta.json"),
+      JSON.stringify({
+        rows: [
+          { model_id: "muse-spark-1.3", visibility: "visible", context_limit: 1_000_000 },
+          { model_id: "muse-wonder-1.0", visibility: "visible", is_default: true, context_limit: 1_000_000 },
+        ],
+      }),
+    )
+    const provider = {
+      id: ProviderID.make("muse-cli"),
+      models: {
+        [ModelID.make("muse-cli")]: {
+          id: ModelID.make("muse-cli"),
+          providerID: ProviderID.make("muse-cli"),
+          name: "Muse Code CLI default",
+          api: { id: "muse-cli", npm: "cli", url: "" },
+          family: "muse",
+          release_date: "",
+          limit: { context: 1_000_000, output: 128_000 },
+          capabilities: {
+            temperature: true,
+            reasoning: true,
+            attachment: false,
+            toolcall: true,
+            interleaved: false,
+            input: { text: true, image: false, audio: false, video: false, pdf: false },
+            output: { text: true, image: false, audio: false, video: false, pdf: false },
+          },
+          options: {},
+          headers: {},
+          status: "active",
+          variants: {},
+        },
+      },
+    } as unknown as Provider.Info
+
+    const loader = await CUSTOM_LOADERS["muse-cli"]!(provider)
+    const models = await loader.discoverModels!(provider)
+
+    expect(Object.keys(models).sort()).toEqual(["muse-spark-1.3", "muse-wonder-1.0"])
+    expect(models[ModelID.make("muse-wonder-1.0")]?.options.cliDefault).toBe(true)
+    expect(models[ModelID.make("muse-spark-1.3")]?.options.cliDefault).toBeUndefined()
   })
 })
 

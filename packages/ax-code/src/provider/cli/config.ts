@@ -21,7 +21,7 @@ export interface CliProviderDefinition {
 export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
   "claude-code": {
     binary: "claude",
-    args: ["--print", "--verbose", "--output-format", "stream-json"],
+    args: ["--print", "--verbose", "--output-format", "stream-json", "--include-partial-messages"],
     parser: claudeCodeParser,
     promptMode: "stdin",
   },
@@ -33,7 +33,7 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
   },
   "grok-build-cli": {
     binary: "grok",
-    args: [],
+    args: ["--output-format", "streaming-json"],
     parser: grokBuildCliParser,
     promptMode: "file",
     promptFlag: "--prompt-file",

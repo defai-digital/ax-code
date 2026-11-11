@@ -126,37 +126,92 @@ async function resolveCodexModel(): Promise<CliModelInfo> {
   return { model: DEFAULTS["codex-cli"]!, source: "default" }
 }
 
-async function resolveKimiModelFromConfig(configPath: string, source: string): Promise<CliModelInfo | undefined> {
-  const toml = await readText(configPath)
-  if (!toml) return
-  const model = resolveTomlModel(toml, "default_model")
-  if (!model) return
-  return { model: normalizeKimiCodeModelID(model), source }
+function kimiHomeOverride(): { path: string; source: string } | undefined {
+  const codeHome = process.env.KIMI_CODE_HOME?.trim()
+  if (codeHome) return { path: codeHome, source: "$KIMI_CODE_HOME" }
+  const shareDir = process.env.KIMI_SHARE_DIR?.trim()
+  if (shareDir) return { path: shareDir, source: "$KIMI_SHARE_DIR" }
+  return undefined
+}
+
+function kimiDefaultHomes(): Array<{ path: string; source: string }> {
+  // Prefer the current Kimi Code CLI data dir, then the legacy ~/.kimi. This
+  // fallback only applies when no explicit home override is set.
+  return [
+    { path: join(homeDir(), ".kimi-code"), source: "~/.kimi-code" },
+    { path: join(homeDir(), ".kimi"), source: "~/.kimi" },
+  ]
+}
+
+interface KimiConfig {
+  defaultModel?: string
+  aliases: string[]
+}
+
+function parseKimiModelAliases(toml: string): string[] {
+  try {
+    // `[models."<alias>"]` tables; the table keys are the models Kimi offers.
+    const models = parseToml(toml).models
+    if (!isRecord(models)) return []
+    return Object.keys(models)
+      .map((alias) => alias.trim())
+      .filter((alias) => alias.length > 0)
+      .map(normalizeKimiCodeModelID)
+  } catch {
+    return []
+  }
+}
+
+async function readKimiConfig(path: string): Promise<KimiConfig | undefined> {
+  const toml = await readText(path)
+  if (!toml) return undefined
+  const defaultModel = resolveTomlModel(toml, "default_model")
+  const aliases = parseKimiModelAliases(toml)
+  if (!defaultModel && aliases.length === 0) return undefined
+  return { defaultModel, aliases }
+}
+
+// Kimi uses exactly one home: the explicit override when set, otherwise the
+// current data dir with the legacy dir as a fallback. It never mixes an
+// override with the default homes.
+async function resolveKimiConfig(): Promise<{ config: KimiConfig; source: string } | undefined> {
+  const override = kimiHomeOverride()
+  if (override) {
+    const config = await readKimiConfig(join(override.path, "config.toml"))
+    return config ? { config, source: `${override.source}/config.toml` } : undefined
+  }
+  for (const candidate of kimiDefaultHomes()) {
+    const config = await readKimiConfig(join(candidate.path, "config.toml"))
+    if (config) return { config, source: `${candidate.source}/config.toml` }
+  }
+  return undefined
+}
+
+export interface KimiCliConfiguredModels {
+  source: string
+  defaultModel?: string
+  /** Model aliases declared as `[models."<alias>"]` tables, normalized. */
+  aliases: string[]
+}
+
+/** Model ids from the effective Kimi home's config.toml, for discovery. */
+export async function resolveKimiConfigModels(): Promise<KimiCliConfiguredModels | undefined> {
+  const resolved = await resolveKimiConfig()
+  if (!resolved) return undefined
+  const aliases = new Set(resolved.config.aliases)
+  const defaultModel = resolved.config.defaultModel ? normalizeKimiCodeModelID(resolved.config.defaultModel) : undefined
+  if (defaultModel) aliases.add(defaultModel)
+  return { source: resolved.source, defaultModel, aliases: [...aliases] }
 }
 
 async function resolveKimiModel(): Promise<CliModelInfo> {
   const envModel = process.env.KIMI_MODEL?.trim()
   if (envModel) return { model: normalizeKimiCodeModelID(envModel), source: "KIMI_MODEL" }
 
-  // Official Kimi Code CLI home override (current), then legacy share-dir override.
-  const codeHome = process.env.KIMI_CODE_HOME?.trim()
-  if (codeHome) {
-    const fromCodeHome = await resolveKimiModelFromConfig(join(codeHome, "config.toml"), "$KIMI_CODE_HOME/config.toml")
-    if (fromCodeHome) return fromCodeHome
-  }
-  const shareDir = process.env.KIMI_SHARE_DIR?.trim()
-  if (shareDir) {
-    const fromShareDir = await resolveKimiModelFromConfig(join(shareDir, "config.toml"), "$KIMI_SHARE_DIR/config.toml")
-    if (fromShareDir) return fromShareDir
-  }
-
-  // Prefer current Kimi Code CLI data dir (~/.kimi-code), fall back to legacy ~/.kimi.
-  for (const [relativePath, sourceLabel] of [
-    [".kimi-code/config.toml", "~/.kimi-code/config.toml"],
-    [".kimi/config.toml", "~/.kimi/config.toml"],
-  ] as const) {
-    const resolved = await resolveKimiModelFromConfig(join(homeDir(), relativePath), sourceLabel)
-    if (resolved) return resolved
+  const resolved = await resolveKimiConfig()
+  const model = resolved?.config.defaultModel
+  if (resolved && model) {
+    return { model: normalizeKimiCodeModelID(model), source: resolved.source }
   }
 
   return { model: DEFAULTS["kimi-cli"]!, source: "default" }

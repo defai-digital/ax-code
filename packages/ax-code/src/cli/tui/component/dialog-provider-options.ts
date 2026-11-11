@@ -282,7 +282,7 @@ type SelectableProviderModel = {
   id: string
   tool_call?: boolean
   capabilities?: { toolcall?: boolean }
-  options?: { minMemoryBytes?: unknown; axEngineCandidate?: unknown }
+  options?: { minMemoryBytes?: unknown; axEngineCandidate?: unknown; cliDefault?: unknown }
 }
 
 export function selectableProviderDefaultModelID(input: {
@@ -294,6 +294,21 @@ export function selectableProviderDefaultModelID(input: {
     const defaultInfo = input.defaultModel ? input.models[input.defaultModel] : undefined
     if (input.defaultModel && modelSelectableForProvider(input.providerID, defaultInfo)) return input.defaultModel
     return defaultModelIDForProvider(input.providerID, input.models)
+  }
+  // "Use CLI default" must select the delegating sentinel (model id == provider
+  // id) so AX Code passes no `--model` flag and the CLI keeps its own default.
+  // Provider SKU recommendations (for example Muse Spark) are for API
+  // catalogs, not for a CLI that already has a configured default model.
+  if (CLI_PROVIDERS.has(input.providerID)) {
+    if (modelSelectableForProvider(input.providerID, input.models[input.providerID])) return input.providerID
+    // Discovery drops the sentinel once the CLI reports its own model list.
+    // In that case "Use CLI default" must follow the model the CLI itself
+    // resolves, not an AX Code recommended SKU, which would pass `--model` and
+    // override the CLI's configured default.
+    const cliDefault = Object.values(input.models).find(
+      (model) => model.options?.cliDefault === true && modelSelectableForProvider(input.providerID, model),
+    )
+    if (cliDefault) return cliDefault.id
   }
   const preferred = defaultModelIDForProvider(input.providerID, input.models)
   if (preferred) return preferred

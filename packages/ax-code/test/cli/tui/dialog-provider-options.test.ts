@@ -641,4 +641,64 @@ describe("provider dialog options", () => {
       description: "Install AX Engine first",
     })
   })
+
+  test("Use CLI default selects the delegating sentinel instead of a recommended SKU", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "muse-cli",
+        models: {
+          "muse-cli": { id: "muse-cli", capabilities: { toolcall: true } },
+          "muse-spark-1.3": { id: "muse-spark-1.3", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("muse-cli")
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "minimax-cli",
+        models: {
+          "minimax-cli": { id: "minimax-cli", capabilities: { toolcall: true } },
+          "MiniMax-M3.1-Flash": { id: "MiniMax-M3.1-Flash", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("minimax-cli")
+  })
+
+  test("Use CLI default keeps the grok sentinel after discovery has no catalog default", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "grok-build-cli",
+        models: {
+          "grok-build-cli": { id: "grok-build-cli", capabilities: { toolcall: true } },
+          "grok-4.7": { id: "grok-4.7", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("grok-build-cli")
+  })
+
+  test("Use CLI default follows the CLI's own resolved model after discovery drops the sentinel", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "muse-cli",
+        models: {
+          "muse-spark-1.3": { id: "muse-spark-1.3", capabilities: { toolcall: true } },
+          "muse-wonder-1.0": {
+            id: "muse-wonder-1.0",
+            capabilities: { toolcall: true },
+            options: { cliDefault: true },
+          },
+        },
+      }),
+    ).toBe("muse-wonder-1.0")
+  })
+
+  test("falls back to a selectable model when the CLI sentinel is missing", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "muse-cli",
+        models: {
+          "muse-spark-1.3": { id: "muse-spark-1.3", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("muse-spark-1.3")
+  })
 })

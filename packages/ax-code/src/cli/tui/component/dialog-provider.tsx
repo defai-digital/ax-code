@@ -20,6 +20,7 @@ import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { urlAllowlistServerRoute } from "@tui/util/server-url"
 import { useToast } from "../ui/toast"
 import { which } from "@/util/which"
+import { probeCliProvider } from "@/provider/cli/connect"
 import { Log } from "@/util/log"
 import {
   AX_TRUST_PROVIDER_OPTION_ID,
@@ -821,6 +822,48 @@ export function createDialogProviderOptions() {
                       dialog.clear()
                     }
                   } else {
+                    // Verify the CLI is actually signed in before marking the
+                    // provider connected. This reuses the same probe/status
+                    // check as `providers login`: free status commands when the
+                    // CLI has one, otherwise a single live probe.
+                    const probe = await probeCliProvider(provider.id).catch((error: unknown) => error as Error)
+                    const notSignedInHint = `Run \`${binary ?? provider.id} login\` in a terminal first, then try again.`
+                    if (probe instanceof Error) {
+                      dialog.replace(() => (
+                        <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+                          <box flexDirection="row" justifyContent="space-between">
+                            <text attributes={TextAttributes.BOLD} fg={theme.text}>
+                              {provider.name} — CLI installed but not signed in
+                            </text>
+                            <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+                              esc
+                            </text>
+                          </box>
+                          <text fg={theme.textMuted}>{probe.message}</text>
+                          <text fg={theme.textMuted}>{notSignedInHint}</text>
+                        </box>
+                      ))
+                      return
+                    }
+                    if (probe.verified === false) {
+                      dialog.replace(() => (
+                        <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+                          <box flexDirection="row" justifyContent="space-between">
+                            <text attributes={TextAttributes.BOLD} fg={theme.text}>
+                              {provider.name} — sign-in could not be verified
+                            </text>
+                            <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+                              esc
+                            </text>
+                          </box>
+                          <text fg={theme.textMuted}>
+                            The CLI is installed but AX Code could not confirm it is signed in.
+                          </text>
+                          <text fg={theme.textMuted}>{notSignedInHint}</text>
+                        </box>
+                      ))
+                      return
+                    }
                     // Connect: store a marker in auth.json so provider persists as connected
                     const stored = await sdk.client.auth.set({
                       providerID: provider.id,

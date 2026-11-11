@@ -26,7 +26,21 @@ describe("claudeCodeParser", () => {
     expect(
       claudeCodeParser.parseStreamLine('{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}'),
     ).toBeNull()
-    expect(claudeCodeParser.parseStreamLine('{"type":"result","result":"OK"}')).toBe("OK")
+    // The final `result` repeats the streamed deltas; returning it would
+    // duplicate the answer. Legacy CLIs without partial events are covered by
+    // the model's complete-parse fallback when nothing streamed.
+    expect(claudeCodeParser.parseStreamLine('{"type":"result","result":"OK"}')).toBeNull()
+  })
+
+  test("streams wrapped partial-message text deltas for the top-level conversation only", () => {
+    const wrap = (parent: string | null, event: unknown) =>
+      JSON.stringify({ type: "stream_event", event, parent_tool_use_id: parent, session_id: "ses_test" })
+    const delta = (value: unknown) => ({ type: "content_block_delta", index: 0, delta: value })
+
+    expect(claudeCodeParser.parseStreamLine(wrap(null, delta({ type: "text_delta", text: "ALPHA" })))).toBe("ALPHA")
+    expect(claudeCodeParser.parseStreamLine(wrap("toolu_test", delta({ type: "text_delta", text: "SUB" })))).toBeNull()
+    // Non-text deltas (for example thinking) are not answer text.
+    expect(claudeCodeParser.parseStreamLine(wrap(null, delta({ type: "thinking_delta", thinking: "hmm" })))).toBeNull()
   })
 
   test("complete parsing still extracts the final response text", () => {
@@ -374,5 +388,186 @@ describe("minimaxCliParser", () => {
     expect(() => minimaxCliParser.parseComplete('{"type":"turn.failed","error":{"message":"login required"}}')).toThrow(
       "login required",
     )
+  })
+})
+
+// Captured from `grok --output-format streaming-json` 1.0.77 (ids/paths removed).
+const GROK_STREAMING_JSON_OK = [
+  '{"type":"available_commands","tools":["read_file"],"commands":["compact"]}',
+  '{"type":"text","data":"ALPHA"}',
+  '{"type":"text","data":"\\n"}',
+  '{"type":"text","data":"{\\""}',
+  '{"type":"text","data":"k"}',
+  '{"type":"text","data":"\\":"}',
+  '{"type":"text","data":"1"}',
+  '{"type":"text","data":"}"}',
+  '{"type":"usage","usage":{"input_tokens":7065,"output_tokens":53,"cache_read_input_tokens":10112,"cache_creation_input_tokens":0,"reasoning_tokens":46}}',
+  '{"type":"end","stopReason":"end_turn","sessionId":"ses_test","requestId":"req_test"}',
+].join("\n")
+
+describe("grokBuildCliParser streaming-json", () => {
+  test("concatenates text deltas exactly, including a JSON-looking reply", () => {
+    expect(grokBuildCliParser.parseComplete(GROK_STREAMING_JSON_OK)).toEqual({ text: 'ALPHA\n{"k":1}' })
+
+    const streamed = GROK_STREAMING_JSON_OK.split("\n")
+      .map((line) => grokBuildCliParser.parseStreamLine(line))
+      .filter((delta): delta is string => delta !== null)
+      .join("")
+    expect(streamed).toBe('ALPHA\n{"k":1}')
+  })
+
+  test("an error event throws CliOutputError", () => {
+    const output = '{"type":"error","message":"unknown model id","cwd":"/workspace"}'
+    expect(() => grokBuildCliParser.parseComplete(output)).toThrow(CliOutputError)
+    expect(() => grokBuildCliParser.parseComplete(output)).toThrow("unknown model id")
+    expect(() => grokBuildCliParser.parseStreamLine(output)).toThrow("unknown model id")
+  })
+
+  test("a structured transcript with no text is empty, not the JSON transport", () => {
+    expect(
+      grokBuildCliParser.parseComplete(
+        '{"type":"available_commands","tools":[],"commands":[]}\n{"type":"end","stopReason":"end_turn"}',
+      ),
+    ).toEqual({ text: "" })
+  })
+
+  test("older plain-text stdout still falls back to raw text", () => {
+    expect(grokBuildCliParser.parseComplete("PONG\n")).toEqual({ text: "PONG" })
+    expect(grokBuildCliParser.parseComplete('ALPHA\n{"k":1}')).toEqual({ text: 'ALPHA\n{"k":1}' })
+    expect(grokBuildCliParser.parseStreamLine("PONG")).toBe("PONG")
+    expect(grokBuildCliParser.parseStreamLine('{"k":1}')).toBe('{"k":1}')
+  })
+})
+
+describe("CLI usage extraction", () => {
+  test("grok usage event and end event", () => {
+    expect(grokBuildCliParser.parseUsage?.(GROK_STREAMING_JSON_OK)).toEqual({
+      inputTokens: 7065 + 10112,
+      outputTokens: 53,
+      cacheReadTokens: 10112,
+      cacheWriteTokens: 0,
+      reasoningTokens: 46,
+    })
+  })
+
+  test("claude final result usage", () => {
+    const output = [
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}',
+      '{"type":"result","subtype":"success","is_error":false,"result":"OK","usage":{"input_tokens":2,"cache_creation_input_tokens":6379,"cache_read_input_tokens":13368,"output_tokens":14,"output_tokens_details":{"thinking_tokens":0}}}',
+    ].join("\n")
+    expect(claudeCodeParser.parseUsage?.(output)).toEqual({
+      inputTokens: 2 + 6379 + 13368,
+      outputTokens: 14,
+      cacheReadTokens: 13368,
+      cacheWriteTokens: 6379,
+      reasoningTokens: 0,
+    })
+  })
+
+  test("codex turn.completed usage (input already includes cache)", () => {
+    // Captured from `codex exec --json` (thread id removed).
+    const output = [
+      '{"type":"thread.started","thread_id":"thread_test"}',
+      '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"PONG"}}',
+      '{"type":"turn.completed","usage":{"input_tokens":21089,"cached_input_tokens":12288,"cache_write_input_tokens":0,"output_tokens":6,"reasoning_output_tokens":0}}',
+    ].join("\n")
+    expect(codexCliParser.parseUsage?.(output)).toEqual({
+      inputTokens: 21089,
+      outputTokens: 6,
+      cacheReadTokens: 12288,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+    })
+  })
+
+  test("mcode usage from turn.completed", () => {
+    // Captured from `mcode exec --output-format stream-json` (ids removed).
+    const output = [
+      '{"schemaVersion":1,"type":"turn.completed","usage":{"inputTokens":13751,"outputTokens":4,"cacheReadTokens":187,"totalTokens":13942}}',
+      '{"schemaVersion":1,"type":"exec.completed","result":{"type":"exec.result","status":"succeeded","output":"PONG","usage":{"inputTokens":13751,"outputTokens":4,"cacheReadTokens":187,"totalTokens":13942}}}',
+    ].join("\n")
+    expect(minimaxCliParser.parseUsage?.(output)).toEqual({
+      inputTokens: 13751 + 187,
+      outputTokens: 4,
+      cacheReadTokens: 187,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+    })
+  })
+
+  test("returns undefined when the CLI reports no usage", () => {
+    expect(grokBuildCliParser.parseUsage?.("PONG\n")).toBeUndefined()
+    expect(claudeCodeParser.parseUsage?.('{"type":"assistant","message":{"content":[]}}')).toBeUndefined()
+  })
+})
+
+describe("kimiCliParser multi-message streaming", () => {
+  test("separates distinct assistant messages but not within one message", () => {
+    const state = {}
+    expect(kimiCliParser.parseStreamLine('{"role":"assistant","content":"Let me check."}', state)).toBe("Let me check.")
+    expect(kimiCliParser.parseStreamLine('{"role":"tool","content":"file1.py"}', state)).toBeNull()
+    expect(kimiCliParser.parseStreamLine('{"role":"assistant","content":"There is one Python file."}', state)).toBe(
+      "\n\nThere is one Python file.",
+    )
+    // parseComplete intentionally keeps only the final answer.
+    const output = [
+      '{"role":"assistant","content":"Let me check."}',
+      '{"role":"tool","tool_call_id":"tc_1","content":"file1.py"}',
+      '{"role":"assistant","content":"There is one Python file."}',
+    ].join("\n")
+    expect(kimiCliParser.parseComplete(output)).toEqual({ text: "There is one Python file." })
+  })
+})
+
+describe("minimaxCliParser effective model", () => {
+  // Captured from `mcode exec --output-format stream-json --model no-such-model-xyz`
+  // (ids removed): mcode exits 0 and reports its own fallback model.
+  const substituted = [
+    '{"type":"turn.completed","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking"},"usage":{"inputTokens":13760,"outputTokens":4,"cacheReadTokens":176,"totalTokens":13940}}',
+    '{"type":"exec.completed","result":{"type":"exec.result","status":"succeeded","output":"PONG","model":{"providerId":"minimax","modelId":"MiniMax-M3.1-Flash","variant":"thinking"}}}',
+  ].join("\n")
+
+  test("reports a substitution when the effective model differs", () => {
+    expect(minimaxCliParser.parseModelMismatch?.(substituted, "no-such-model-xyz")).toBe(
+      "MiniMax Code used MiniMax-M3.1-Flash instead of the requested model no-such-model-xyz",
+    )
+  })
+
+  test("ignores the minimax/ prefix and #variant when comparing", () => {
+    expect(minimaxCliParser.parseModelMismatch?.(substituted, "minimax/minimax-m3.1-flash#thinking")).toBeUndefined()
+  })
+
+  test("skips the check for the sentinel and when no model is reported", () => {
+    expect(minimaxCliParser.parseModelMismatch?.(substituted, "minimax-cli")).toBeUndefined()
+    expect(minimaxCliParser.parseModelMismatch?.('{"type":"turn.completed"}', "no-such-model-xyz")).toBeUndefined()
+  })
+})
+
+describe("museCliParser terminal event", () => {
+  test("recognizes run.terminal.completed as terminal", () => {
+    expect(
+      museCliParser.isTerminalEvent?.(
+        '{"payload_type":"run.terminal.completed","payload":{"terminal":"completed","text":"PONG"}}',
+      ),
+    ).toBe(true)
+    expect(museCliParser.isTerminalEvent?.('{"payload_type":"run.output.delta","payload":{"text":"PONG"}}')).toBe(false)
+    expect(museCliParser.isTerminalEvent?.("plain text")).toBe(false)
+  })
+
+  test("does not treat a failed terminal as a clean terminal event", () => {
+    expect(
+      museCliParser.isTerminalEvent?.(
+        '{"payload_type":"run.terminal.completed","payload":{"terminal":"failed","reason":"boom"}}',
+      ),
+    ).toBe(false)
+    expect(museCliParser.isTerminalEvent?.('{"payload_type":"run.terminal.failed","payload":{"reason":"boom"}}')).toBe(
+      false,
+    )
+  })
+
+  test("providers without a terminal event do not opt in", () => {
+    expect(claudeCodeParser.isTerminalEvent).toBeUndefined()
+    expect(codexCliParser.isTerminalEvent).toBeUndefined()
+    expect(minimaxCliParser.isTerminalEvent).toBeUndefined()
   })
 })

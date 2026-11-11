@@ -1,6 +1,13 @@
 import { describe, expect, test, vi } from "vitest"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { PassThrough } from "node:stream"
-import { checkCliProviderAuth, probeCliLanguageModel, probeCliProvider } from "../../../src/provider/cli/connect"
+import {
+  checkCliProviderAuth,
+  checkCliProviderStatus,
+  probeCliLanguageModel,
+  probeCliProvider,
+} from "../../../src/provider/cli/connect"
 import { getCliProviderDefinition } from "../../../src/provider/cli/config"
 import { Process } from "../../../src/util/process"
 import { Instance } from "../../../src/project/instance"
@@ -62,48 +69,31 @@ describe("probeCliLanguageModel", () => {
     ).rejects.toThrow(/CLI exited with code 7: broken probe/)
   })
 
-  test("Claude auth probe includes --verbose for stream-json compatibility", async () => {
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(""),
-      stderr: Buffer.from(""),
-      code: 0,
-      exitCode: 0,
+  function runResult(code: number, stdout = "", stderr = "") {
+    return {
+      stdout: Buffer.from(stdout),
+      stderr: Buffer.from(stderr),
+      code,
+      exitCode: code,
       text() {
-        return ""
+        return `${stdout}${stderr}`
       },
-    } as any)
+    } as any
+  }
 
-    try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toBeUndefined()
-      expect(runSpy).toHaveBeenCalledTimes(1)
-      expect(runSpy.mock.calls[0]?.[0]).toEqual([
-        "claude",
-        "--print",
-        "--verbose",
-        "--output-format",
-        "stream-json",
-        "ping",
-      ])
-    } finally {
-      runSpy.mockRestore()
-    }
-  })
-
-  test("Claude auth probe forwards Anthropic API key env", async () => {
+  test("Claude status check uses the free auth status command", async () => {
     const original = process.env.ANTHROPIC_API_KEY
     process.env.ANTHROPIC_API_KEY = "anthropic-key"
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(""),
-      stderr: Buffer.from(""),
-      code: 0,
-      exitCode: 0,
-      text() {
-        return ""
-      },
-    } as any)
+    const runSpy = vi
+      .spyOn(Process, "run")
+      .mockResolvedValue(runResult(0, JSON.stringify({ loggedIn: true, authMethod: "claude.ai" })))
 
     try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toBeUndefined()
+      await expect(checkCliProviderStatus("claude-code", "claude")).resolves.toMatchObject({
+        state: "authenticated",
+      })
+      expect(runSpy).toHaveBeenCalledTimes(1)
+      expect(runSpy.mock.calls[0]?.[0]).toEqual(["claude", "auth", "status", "--json"])
       expect(runSpy.mock.calls[0]?.[1]?.env?.ANTHROPIC_API_KEY).toBe("anthropic-key")
     } finally {
       runSpy.mockRestore()
@@ -112,67 +102,121 @@ describe("probeCliLanguageModel", () => {
     }
   })
 
-  test("Claude auth probe does not reject apiKeySource none without an auth error", async () => {
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(
-        [
-          JSON.stringify({ type: "system", subtype: "init", apiKeySource: "none" }),
-          JSON.stringify({ type: "result", subtype: "success", result: "OK" }),
-        ].join("\n"),
-      ),
-      stderr: Buffer.from(""),
-      code: 0,
-      exitCode: 0,
-      text() {
-        return ""
-      },
-    } as any)
-
+  test("Claude status check reports a logged-out JSON response", async () => {
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue(runResult(0, JSON.stringify({ loggedIn: false })))
     try {
+      const status = await checkCliProviderStatus("claude-code", "claude")
+      expect(status.state).toBe("unauthenticated")
+      expect(status.message).toContain("Claude CLI is not logged in")
+      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("Claude CLI is not logged in")
+    } finally {
+      runSpy.mockRestore()
+    }
+  })
+
+  test("Claude status check treats a non-zero exit as signed out", async () => {
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue(runResult(1, "", "not signed in"))
+    try {
+      const status = await checkCliProviderStatus("claude-code", "claude")
+      expect(status.state).toBe("unauthenticated")
+      expect(status.message).toContain("Claude CLI is not logged in")
+    } finally {
+      runSpy.mockRestore()
+    }
+  })
+
+  test("Claude status check leaves unknown output unverified instead of failing", async () => {
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue(runResult(0, "unexpected status text"))
+    try {
+      await expect(checkCliProviderStatus("claude-code", "claude")).resolves.toMatchObject({ state: "unverified" })
       await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toBeUndefined()
     } finally {
       runSpy.mockRestore()
     }
   })
 
-  test("Claude auth probe reports explicit authentication failures", async () => {
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(
-        [
-          JSON.stringify({ type: "system", subtype: "init", apiKeySource: "none" }),
-          JSON.stringify({ type: "assistant", error: "authentication_failed" }),
-        ].join("\n"),
-      ),
-      stderr: Buffer.from(""),
-      code: 1,
-      exitCode: 1,
-      text() {
-        return ""
-      },
-    } as any)
-
+  test("Codex status check uses the free login status command", async () => {
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue(runResult(0, "Logged in using ChatGPT\n"))
     try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("Claude CLI is not logged in")
+      await expect(checkCliProviderStatus("codex-cli", "codex")).resolves.toMatchObject({
+        state: "authenticated",
+      })
+      expect(runSpy.mock.calls[0]?.[0]).toEqual(["codex", "login", "status"])
     } finally {
       runSpy.mockRestore()
     }
   })
 
-  test("Claude auth probe reports authentication failures written to stderr", async () => {
-    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
-      stdout: Buffer.from(""),
-      stderr: Buffer.from(JSON.stringify({ type: "error", error: { message: "Please login first" } }) + "\n"),
-      code: 1,
-      exitCode: 1,
-      text() {
-        return ""
-      },
-    } as any)
-
+  test("Codex status check reports a non-zero exit as signed out", async () => {
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue(runResult(1, "Not logged in\n"))
     try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("Claude CLI is not logged in")
+      const status = await checkCliProviderStatus("codex-cli", "codex")
+      expect(status.state).toBe("unauthenticated")
+      expect(status.message).toContain("Codex CLI is not logged in")
     } finally {
       runSpy.mockRestore()
+    }
+  })
+
+  test("Codex status check leaves unknown output unverified instead of failing", async () => {
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue(runResult(0, "unexpected status text"))
+    try {
+      await expect(checkCliProviderStatus("codex-cli", "codex")).resolves.toMatchObject({ state: "unverified" })
+      await expect(checkCliProviderAuth("codex-cli", "codex")).resolves.toBeUndefined()
+    } finally {
+      runSpy.mockRestore()
+    }
+  })
+
+  test("discovery never invokes inference for providers without a status command", async () => {
+    const runSpy = vi.spyOn(Process, "run")
+    const spawnSpy = vi.spyOn(Process, "spawn")
+    try {
+      await expect(checkCliProviderAuth("grok-build-cli", "grok")).resolves.toBeUndefined()
+      await expect(checkCliProviderAuth("muse-cli", "muse")).resolves.toBeUndefined()
+      expect(runSpy).not.toHaveBeenCalled()
+      expect(spawnSpy).not.toHaveBeenCalled()
+    } finally {
+      runSpy.mockRestore()
+      spawnSpy.mockRestore()
+    }
+  })
+
+  test("Claude discovery uses only the free status command", async () => {
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue(runResult(0, JSON.stringify({ loggedIn: true })))
+    const spawnSpy = vi.spyOn(Process, "spawn")
+    try {
+      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toBeUndefined()
+      expect(runSpy.mock.calls[0]?.[0]).toEqual(["claude", "auth", "status", "--json"])
+      expect(spawnSpy).not.toHaveBeenCalled()
+    } finally {
+      runSpy.mockRestore()
+      spawnSpy.mockRestore()
+    }
+  })
+
+  test.skipIf(process.platform === "win32")("probe resolves the binary with the runtime resolver", async () => {
+    await using tmp = await tmpdir()
+    const binDir = path.join(tmp.path, "bin")
+    await fs.mkdir(binDir)
+    const binary = path.join(binDir, "codex")
+    await fs.writeFile(binary, "#!/bin/sh\n")
+    await fs.chmod(binary, 0o755)
+    vi.stubEnv("PATH", binDir)
+    vi.stubEnv("AX_CODE_TEST_HOME", tmp.path)
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue(runResult(0, "Logged in using ChatGPT\n"))
+    const spawnSpy = vi.spyOn(Process, "spawn")
+
+    try {
+      const result = await probeCliProvider("codex-cli")
+      expect(path.normalize(result.binary)).toBe(path.normalize(binary))
+      expect(runSpy.mock.calls[0]?.[0]).toEqual([binary, "login", "status"])
+      // Status check alone is enough for Codex: no inference probe.
+      expect(spawnSpy).not.toHaveBeenCalled()
+    } finally {
+      runSpy.mockRestore()
+      spawnSpy.mockRestore()
+      vi.unstubAllEnvs()
     }
   })
 

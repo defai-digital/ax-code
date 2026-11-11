@@ -9,7 +9,14 @@ import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
 import { materializeCliAttachments } from "./attachments"
 import { assertCliCommandSize, materializeCliPrompt } from "./prompt-transport"
-import { parseCliJsonEventLine, stdoutHasCliJsonEvents, type CliOutputParser } from "./parser"
+import {
+  parseCliJsonEventLine,
+  stdoutHasCliJsonEvents,
+  CliOutputError,
+  type CliOutputParser,
+  type CliStreamState,
+  type CliUsage,
+} from "./parser"
 import { StringDecoder } from "node:string_decoder"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
@@ -71,6 +78,9 @@ function rawFallbackText(output: string) {
 }
 
 const CLI_TIMEOUT_MS = 300_000 // 5 minutes
+// After a reliable terminal event, give the CLI a moment to exit before killing
+// it. The stream has already finished, so this only cleans up the child.
+const CLI_TERMINAL_GRACE_MS = 2_000
 
 export function cliEnv(providerEnvKeys: readonly string[] = [], providerID?: string) {
   const env: Record<string, string> = {
@@ -235,6 +245,40 @@ function estimatedUsage(input: string, output: string): LanguageModelV3Usage {
   return usage
 }
 
+// Map normalized CLI usage to the V3 shape. Real usage is intentionally not
+// marked estimated, so the token ledger can anchor on it.
+function mapCliUsage(usage: CliUsage | undefined): LanguageModelV3Usage | undefined {
+  if (!usage) return undefined
+  const cacheRead = usage.cacheReadTokens ?? 0
+  const cacheWrite = usage.cacheWriteTokens ?? 0
+  const reasoning = usage.reasoningTokens ?? 0
+  return {
+    inputTokens: {
+      total: usage.inputTokens,
+      noCache: Math.max(0, usage.inputTokens - cacheRead - cacheWrite),
+      cacheRead,
+      cacheWrite,
+    },
+    outputTokens: {
+      total: usage.outputTokens,
+      text: Math.max(0, usage.outputTokens - reasoning),
+      reasoning,
+    },
+  }
+}
+
+// A CLI that reports a different effective model than the one requested (for
+// example MiniMax Code substituting its default) produced the wrong answer.
+function cliModelMismatch(
+  parser: CliOutputParser,
+  output: string,
+  providerID: string,
+  modelID: string,
+): string | undefined {
+  if (modelID === providerID) return undefined
+  return parser.parseModelMismatch?.(output, modelID)
+}
+
 function readAbortError(signal: AbortSignal): Error {
   const reason = signal.reason
   if (reason instanceof Error) return reason
@@ -389,6 +433,16 @@ export class CliLanguageModel implements LanguageModelV3 {
       }
     }
     let timeoutTimer: ReturnType<typeof setTimeout> | undefined
+    let resolveTimeout: (() => void) | undefined
+    // Reset the idle ceiling on any stdout/stderr activity, exactly like
+    // doStream. The previous fixed 5-minute wall clock killed long but healthy
+    // CLI runs (generateObject / council members) that kept producing output.
+    const armIdleTimer = () => {
+      if (timeoutTimer) clearTimeout(timeoutTimer)
+      // Keep the idle timer ref'd — it is the intentional ceiling for a hung
+      // provider process and must keep the event loop alive until it fires.
+      timeoutTimer = setTimeout(() => resolveTimeout?.(), CLI_TIMEOUT_MS)
+    }
     proc.exited.catch((err) => {
       log.debug("cli process exited with error", {
         error: toErrorMessage(err),
@@ -406,10 +460,12 @@ export class CliLanguageModel implements LanguageModelV3 {
     })
     type GenerateOutcome = { kind: "result"; value: [number, Buffer, Buffer] } | { kind: "timeout" }
     const timeout = new Promise<GenerateOutcome>((resolve) => {
-      // Keep the main CLI timeout ref'd — it is the intentional ceiling for a
-      // hung provider process and must keep the event loop alive until it fires.
-      timeoutTimer = setTimeout(() => resolve({ kind: "timeout" }), CLI_TIMEOUT_MS)
+      resolveTimeout = () => resolve({ kind: "timeout" })
     })
+    const onActivity = () => armIdleTimer()
+    proc.stdout.on("data", onActivity)
+    proc.stderr.on("data", onActivity)
+    armIdleTimer()
     let code: number
     let stdout: Buffer
     let stderr: Buffer
@@ -443,6 +499,8 @@ export class CliLanguageModel implements LanguageModelV3 {
       ;[code, stdout, stderr] = outcome.value
     } finally {
       if (timeoutTimer) clearTimeout(timeoutTimer)
+      proc.stdout.off("data", onActivity)
+      proc.stderr.off("data", onActivity)
       await abort.killPromise
     }
     if (abort.isAborted) throw abort.abortError
@@ -450,14 +508,17 @@ export class CliLanguageModel implements LanguageModelV3 {
       throw new Error(formatCliFailure(code, stdout, stderr))
     }
 
-    const parsed = this.config.parser.parseComplete(stdout.toString())
+    const rawStdout = stdout.toString()
+    const parsed = this.config.parser.parseComplete(rawStdout)
     if (!parsed.text.trim()) throw new Error(formatCliNoOutput(stdout, stderr))
+    const mismatch = cliModelMismatch(this.config.parser, rawStdout, this.config.providerID, this.config.modelID)
+    if (mismatch) throw new CliOutputError(mismatch)
 
     const outputText = jsonInstruction ? extractJsonPayload(parsed.text) : parsed.text
     return {
       content: [{ type: "text" as const, text: outputText }],
       finishReason: { unified: "stop" as const, raw: undefined },
-      usage: estimatedUsage(text, outputText),
+      usage: mapCliUsage(this.config.parser.parseUsage?.(rawStdout)) ?? estimatedUsage(text, outputText),
       warnings: [],
     }
   }
@@ -498,8 +559,12 @@ export class CliLanguageModel implements LanguageModelV3 {
         throw error
       }
     }
-    const parser = this.config.parser
+    const config = this.config
+    const parser = config.parser
     const textId = "cli-0"
+    // Parsers that need to distinguish separate messages on one stream (for
+    // example Kimi) keep their cursor here, scoped to this stream.
+    const streamState: CliStreamState = {}
 
     let done = false
     let timer: ReturnType<typeof setTimeout>
@@ -606,7 +671,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         // throws.
         const safeParse = (line: string): ReturnType<typeof parser.parseStreamLine> | null => {
           try {
-            return parser.parseStreamLine(line)
+            return parser.parseStreamLine(line, streamState)
           } catch (err) {
             log.warn("CLI provider parseStreamLine failed", {
               error: toErrorMessage(err),
@@ -634,10 +699,18 @@ export class CliLanguageModel implements LanguageModelV3 {
               if (!sawStructuredEvent && emitted) emitDelta("\n")
               continue
             }
-            const structured = parseCliJsonEventLine(line) !== undefined
+            // Let the parser decide raw-vs-event. A plain reply line that happens
+            // to parse as JSON (grok without --output-format) is still raw text
+            // and must keep the newline the split consumed.
+            const rawLine = parser.streamLineIsRaw?.(line, streamState)
+            const structured = rawLine === undefined ? parseCliJsonEventLine(line) !== undefined : !rawLine
             if (structured) sawStructuredEvent = true
             const delta = safeParse(line)
             if (delta) emitDelta(structured ? delta : delta + "\n")
+            if (parser.isTerminalEvent?.(line)) {
+              finishTerminal()
+              return
+            }
           }
         }
         armCliActivityTimer()
@@ -668,6 +741,51 @@ export class CliLanguageModel implements LanguageModelV3 {
             controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
           }
         }
+        const flushTerminalRemainder = () => {
+          const tail = remainder
+          remainder = ""
+          if (!tail.trim()) return
+          const delta = safeParse(tail)
+          if (delta) emitDelta(delta)
+        }
+        // Finish as soon as the CLI's reliable terminal event arrives. Muse, for
+        // example, keeps its process alive for ~30s after the answer; the
+        // stream must not wait for exit. The child is reaped/killed in the
+        // background, and its exit still runs the temp-file cleanup attached to
+        // `proc.exited`.
+        const finishTerminal = () => {
+          if (closed()) return
+          try {
+            flushTerminalRemainder()
+          } catch (error) {
+            fail(error)
+            return
+          }
+          if (!output.join("").trim()) return
+          // The whole decoded chunk (including the unterminated tail) was
+          // already pushed to `raw`, so appending `remainder` would double it.
+          const rawOutput = raw.join("")
+          const mismatch = cliModelMismatch(parser, rawOutput, config.providerID, config.modelID)
+          if (mismatch) {
+            fail(new CliOutputError(mismatch))
+            return
+          }
+          endText()
+          controller.enqueue({
+            type: "finish",
+            usage: mapCliUsage(parser.parseUsage?.(rawOutput)) ?? estimatedUsage(text, output.join("")),
+            finishReason: { unified: "stop", raw: undefined },
+          })
+          safeClose()
+          const reaper = setTimeout(() => {
+            void abort.kill()
+          }, CLI_TERMINAL_GRACE_MS)
+          reaper.unref?.()
+          void proc.exited.then(
+            () => clearTimeout(reaper),
+            () => clearTimeout(reaper),
+          )
+        }
         const finishSuccess = () => {
           // Wait for stderr too so empty-output failures can include stderr detail.
           if (!stdoutEnded || !stderrEnded || exitCode === undefined || exitCode !== 0 || closed()) return
@@ -681,10 +799,16 @@ export class CliLanguageModel implements LanguageModelV3 {
             fail(new Error(formatCliNoOutput(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
             return
           }
+          const mismatch = cliModelMismatch(parser, raw.join(""), config.providerID, config.modelID)
+          if (mismatch) {
+            fail(new CliOutputError(mismatch))
+            return
+          }
           endText()
+          const rawOutput = raw.join("")
           controller.enqueue({
             type: "finish",
-            usage: estimatedUsage(text, output.join("")),
+            usage: mapCliUsage(parser.parseUsage?.(rawOutput)) ?? estimatedUsage(text, output.join("")),
             finishReason: { unified: "stop", raw: undefined },
           })
           safeClose()

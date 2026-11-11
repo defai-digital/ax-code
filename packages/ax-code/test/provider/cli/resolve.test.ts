@@ -1,7 +1,12 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { afterEach, beforeEach, test, expect, describe, vi } from "vitest"
-import { parseCliSettingsJson, resolveCliModel, resolveCodexTomlModel } from "../../../src/provider/cli/resolve"
+import {
+  parseCliSettingsJson,
+  resolveCliModel,
+  resolveCodexTomlModel,
+  resolveKimiConfigModels,
+} from "../../../src/provider/cli/resolve"
 import { tmpdir } from "../../fixture/fixture"
 
 afterEach(() => vi.unstubAllEnvs())
@@ -448,6 +453,72 @@ describe("resolveCliModel", () => {
         model,
         source: model === "kimi-cli" ? "default" : "~/.kimi-code/config.toml",
       })
+    })
+  })
+
+  test("kimi-cli offers the model aliases declared in config.toml", async () => {
+    await using tmp = await tmpdir()
+    await withKimiEnv({ home: tmp.path, model: null, codeHome: null, shareDir: null }, async () => {
+      const configDir = path.join(tmp.path, ".kimi-code")
+      await fs.mkdir(configDir, { recursive: true })
+      await fs.writeFile(
+        path.join(configDir, "config.toml"),
+        [
+          'default_model = "kimi-code/k3.1-pro"',
+          "",
+          '[models."kimi-code/kimi-for-coding"]',
+          'label = "K2.7 Coding"',
+          "",
+          '[models."kimi-code/k3.1-pro"]',
+          'label = "K3.1 Pro"',
+          "",
+        ].join("\n"),
+      )
+
+      expect(await resolveKimiConfigModels()).toEqual({
+        source: "~/.kimi-code/config.toml",
+        defaultModel: "kimi-code/k3.1-pro",
+        aliases: ["kimi-code/kimi-for-coding", "kimi-code/k3.1-pro"],
+      })
+      // The default model still resolves to the alias.
+      expect(await resolveCliModel("kimi-cli")).toEqual({
+        model: "kimi-code/k3.1-pro",
+        source: "~/.kimi-code/config.toml",
+      })
+    })
+  })
+
+  test("kimi-cli reads aliases only from an explicit home override", async () => {
+    await using tmp = await tmpdir()
+    await using other = await tmpdir()
+    const override = path.join(tmp.path, "override")
+    await fs.mkdir(override, { recursive: true })
+    await fs.writeFile(path.join(override, "config.toml"), ['[models."kimi-code/k3"]', 'label = "K3"', ""].join("\n"))
+    // A default-home config must not be merged when an override is set.
+    await fs.mkdir(path.join(other.path, ".kimi-code"), { recursive: true })
+    await fs.writeFile(path.join(other.path, ".kimi-code", "config.toml"), 'default_model = "home-model"\n')
+
+    await withKimiEnv({ home: other.path, model: null, codeHome: override, shareDir: null }, async () => {
+      expect(await resolveKimiConfigModels()).toEqual({
+        source: "$KIMI_CODE_HOME/config.toml",
+        defaultModel: undefined,
+        aliases: ["kimi-code/k3"],
+      })
+    })
+  })
+
+  test("kimi-cli does not fall through to the default home when an override has no model", async () => {
+    await using tmp = await tmpdir()
+    await using other = await tmpdir()
+    const override = path.join(tmp.path, "override")
+    await fs.mkdir(override, { recursive: true })
+    await fs.writeFile(path.join(override, "config.toml"), 'theme = "dark"\n')
+    await fs.mkdir(path.join(other.path, ".kimi-code"), { recursive: true })
+    await fs.writeFile(path.join(other.path, ".kimi-code", "config.toml"), 'default_model = "home-model"\n')
+
+    await withKimiEnv({ home: other.path, model: null, codeHome: override, shareDir: null }, async () => {
+      expect(await resolveKimiConfigModels()).toBeUndefined()
+      expect(await resolveCliModel("kimi-cli")).toEqual({ model: "kimi-cli", source: "default" })
     })
   })
 
