@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.24] - 2026-11-11
+
+### Changed
+
+- Publish the paired SDK 2.6.78 maintenance release.
+
+### Fixed
+
+- Open TUI sessions follow turns written by another CLI or AX Code Desktop without requiring the session to be reopened.
+- External-session polls recheck local turn ownership after a lookup, refresh completed text and reasoning parts,
+  and stop queued work after navigation. Poll timers use the shared TUI lifecycle scheduler.
+
 ## [7.30.23] - 2026-11-11
 
 ### Changed
