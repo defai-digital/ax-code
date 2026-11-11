@@ -7,7 +7,12 @@ import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useToast } from "@tui/ui/toast"
 import { WorkMode } from "@/mode/work-mode"
-import { workModeAvailability, workModeCycleToast, workModePickerOptions } from "./work-mode-availability"
+import {
+  ensembleModelProviderID,
+  workModeAvailability,
+  workModeCycleToast,
+  workModePickerOptions,
+} from "./work-mode-availability"
 
 export function DialogWorkMode() {
   const uiText = useLanguage().t
@@ -25,7 +30,7 @@ export function DialogWorkMode() {
       providers: sync.data.provider,
       providerLoaded: sync.data.provider_loaded,
       config: sync.data.config?.modes,
-      modelProviderID: local.model.current()?.providerID,
+      modelProviderID: ensembleModelProviderID({ agents: sync.data.agent, current: local.model.current() }),
     }),
   )
   return (
@@ -52,7 +57,7 @@ export function DialogWorkMode() {
               providers: sync.data.provider,
               providerLoaded: sync.data.provider_loaded,
               config: sync.data.config?.modes,
-              modelProviderID: local.model.current()?.providerID,
+              modelProviderID: ensembleModelProviderID({ agents: sync.data.agent, current: local.model.current() }),
             }),
             [],
             uiText,

@@ -7,6 +7,8 @@ import { iife } from "@/util/iife"
 import { withTimeout } from "@/util/timeout"
 import { WorkMode } from "@/mode/work-mode"
 import {
+  ensembleModelProviderID,
+  typedEnsembleCommandBlock,
   WORK_MODE_HINT_SEEN_KEY,
   workModeAvailability,
   withWorkModeHintSeen,
@@ -95,10 +97,11 @@ export type PromptSubmitHost = {
   }
   sync: {
     data: {
-      command: readonly { name: string }[]
+      command: readonly { name: string; scope?: string }[]
       provider: readonly unknown[]
       provider_loaded: boolean
       provider_failed: boolean
+      agent: readonly { name: string; model?: { providerID: string } | undefined }[]
       task_queue: readonly unknown[]
       config?: { modes?: WorkModeConfig; mcp?: unknown } | undefined
       mcp?: Record<string, { status?: string } | undefined>
@@ -386,7 +389,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
         providers: sync.data.provider as readonly AvailabilityProvider[],
         providerLoaded: sync.data.provider_loaded,
         config: sync.data.config?.modes,
-        modelProviderID: local.model.current()?.providerID,
+        modelProviderID: ensembleModelProviderID({ agents: sync.data.agent, current: local.model.current() }),
       })
       if (availability.state !== "available") {
         toast.show({
@@ -403,6 +406,39 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
         return
       }
       kv.set?.(WORK_MODE_HINT_SEEN_KEY, withWorkModeHintSeen(kv.get(WORK_MODE_HINT_SEEN_KEY), activeWorkMode))
+    }
+    // A typed `/council` or `/arena` reaches the server as a normal prompt:
+    // WorkMode.routeInput keeps slash-prefixed text as a prompt in every work
+    // mode, so an armed council/arena mode never reaches the guard above for
+    // typed text. On a CLI model the server rejects it, but only after the
+    // draft is settled, so block it here in every mode with the same warning.
+    // Other reasons (off / needs 2 / max 1) keep their existing server-side
+    // behaviour.
+    if (currentMode !== "shell") {
+      const typedBlock = typedEnsembleCommandBlock({
+        text: inputText,
+        commands: sync.data.command,
+        availability: (mode) =>
+          workModeAvailability({
+            t,
+            mode,
+            providers: sync.data.provider as readonly AvailabilityProvider[],
+            providerLoaded: sync.data.provider_loaded,
+            config: sync.data.config?.modes,
+            modelProviderID: ensembleModelProviderID({ agents: sync.data.agent, current: local.model.current() }),
+          }),
+      })
+      if (typedBlock) {
+        toast.show({
+          message: t("mode.notSent", { detail: typedBlock.availability.detail ?? t("mode.unavailable") }),
+          variant: "warning",
+        })
+        log.info("tui.prompt.submit: typed ensemble command blocked on CLI model", {
+          command: typedBlock.mode,
+          reason: typedBlock.availability.reason ?? "CLI model",
+        })
+        return
+      }
     }
     const routedText =
       workRouted.kind === "command" ? `/${workRouted.command} ${workRouted.arguments}`.trimEnd() : workRouted.text

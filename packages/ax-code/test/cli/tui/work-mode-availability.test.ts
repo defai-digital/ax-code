@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest"
 import {
   countingProviders,
+  ensembleModelProviderID,
+  ensembleSlashCommand,
   isWorkModeHintSeen,
   nextAvailableWorkMode,
+  typedEnsembleCommandBlock,
   workModeAvailability,
   workModeChipView,
   workModeChipVisible,
@@ -39,7 +42,9 @@ describe("countingProviders", () => {
 
 describe("workModeAvailability", () => {
   test("agent is always available", () => {
-    expect(workModeAvailability({ mode: "agent", providers: [], providerLoaded: false })).toEqual({
+    expect(
+      workModeAvailability({ mode: "agent", providers: [], providerLoaded: false, modelProviderID: undefined }),
+    ).toEqual({
       state: "available",
       members: 1,
     })
@@ -47,20 +52,37 @@ describe("workModeAvailability", () => {
 
   test("council and arena report checking until providers finish loading", () => {
     for (const mode of ["council", "arena"] as const) {
-      const state = workModeAvailability({ mode, providers: twoProviders, providerLoaded: false })
+      const state = workModeAvailability({
+        mode,
+        providers: twoProviders,
+        providerLoaded: false,
+        modelProviderID: undefined,
+      })
       expect(state.state).toBe("checking")
       expect(state.members).toBe(0)
     }
   })
 
   test("council needs two counting providers and reports the connected count", () => {
-    const state = workModeAvailability({ mode: "council", providers: [provider("p1")], providerLoaded: true })
+    const state = workModeAvailability({
+      mode: "council",
+      providers: [provider("p1")],
+      providerLoaded: true,
+      modelProviderID: undefined,
+    })
     expect(state).toMatchObject({ state: "unavailable", reason: "needs 2" })
     expect(state.detail).toContain("1 connected")
   })
 
   test("council is available by default with two providers, capped by config", () => {
-    expect(workModeAvailability({ mode: "council", providers: twoProviders, providerLoaded: true })).toMatchObject({
+    expect(
+      workModeAvailability({
+        mode: "council",
+        providers: twoProviders,
+        providerLoaded: true,
+        modelProviderID: undefined,
+      }),
+    ).toMatchObject({
       state: "available",
       members: 2,
     })
@@ -69,6 +91,7 @@ describe("workModeAvailability", () => {
         mode: "council",
         providers: [provider("p1"), provider("p2"), provider("p3"), provider("p4")],
         providerLoaded: true,
+        modelProviderID: undefined,
         config: { council: { maxMembers: 6 } },
       }),
     ).toMatchObject({ state: "available", members: 4 })
@@ -80,6 +103,7 @@ describe("workModeAvailability", () => {
         mode: "council",
         providers: twoProviders,
         providerLoaded: true,
+        modelProviderID: undefined,
         config: { council: { enabled: false } },
       }),
     ).toMatchObject({ state: "unavailable", reason: "off" })
@@ -88,13 +112,21 @@ describe("workModeAvailability", () => {
         mode: "council",
         providers: twoProviders,
         providerLoaded: true,
+        modelProviderID: undefined,
         config: { council: { maxMembers: 1 } },
       }),
     ).toMatchObject({ state: "unavailable", reason: "max 1" })
   })
 
   test("arena is off unless explicitly enabled", () => {
-    expect(workModeAvailability({ mode: "arena", providers: twoProviders, providerLoaded: true })).toMatchObject({
+    expect(
+      workModeAvailability({
+        mode: "arena",
+        providers: twoProviders,
+        providerLoaded: true,
+        modelProviderID: undefined,
+      }),
+    ).toMatchObject({
       state: "unavailable",
       reason: "off",
     })
@@ -103,6 +135,7 @@ describe("workModeAvailability", () => {
         mode: "arena",
         providers: twoProviders,
         providerLoaded: true,
+        modelProviderID: undefined,
         config: { arena: { enabled: true, maxContestants: 1 } },
       }),
     ).toMatchObject({ state: "unavailable", reason: "max 1" })
@@ -114,6 +147,7 @@ describe("workModeAvailability", () => {
         mode: "arena",
         providers: twoProviders,
         providerLoaded: true,
+        modelProviderID: undefined,
         config: { arena: { enabled: true } },
       }),
     ).toMatchObject({ state: "available", members: 2 })
@@ -128,7 +162,7 @@ describe("workModeAvailability", () => {
         config: { arena: { enabled: true } },
         modelProviderID: "claude-code",
       })
-      expect(state).toMatchObject({ state: "unavailable", reason: "needs API model" })
+      expect(state).toMatchObject({ state: "unavailable", reason: "CLI model" })
       expect(state.detail).toContain("non-CLI (API) model")
       expect(state.detail).toContain("CLI providers cannot call AX Code tools")
     }
@@ -144,6 +178,104 @@ describe("workModeAvailability", () => {
       }),
     ).toMatchObject({ state: "available", members: 2 })
   })
+
+  test("a custom *-cli provider is treated as a CLI provider", () => {
+    for (const mode of ["council", "arena"] as const) {
+      const state = workModeAvailability({
+        mode,
+        providers: twoProviders,
+        providerLoaded: true,
+        config: { arena: { enabled: true } },
+        modelProviderID: "acme-cli",
+      })
+      expect(state).toMatchObject({ state: "unavailable", reason: "CLI model" })
+    }
+  })
+
+  test("a retired CLI provider is not treated as a CLI provider", () => {
+    expect(
+      workModeAvailability({
+        mode: "council",
+        providers: twoProviders,
+        providerLoaded: true,
+        modelProviderID: "minimax-cli",
+      }),
+    ).toMatchObject({ state: "available", members: 2 })
+  })
+})
+
+describe("ensembleModelProviderID", () => {
+  test("prefers the build agent's config-pinned model over the current model", () => {
+    expect(
+      ensembleModelProviderID({
+        agents: [{ name: "build", model: { providerID: "anthropic" } }],
+        current: { providerID: "claude-code" },
+      }),
+    ).toBe("anthropic")
+  })
+
+  test("falls back to the current model when build has no pinned model", () => {
+    expect(
+      ensembleModelProviderID({
+        agents: [{ name: "build" }],
+        current: { providerID: "openai" },
+      }),
+    ).toBe("openai")
+  })
+
+  test("returns undefined when there is no build agent and no current model", () => {
+    expect(ensembleModelProviderID({ agents: [{ name: "architect" }], current: undefined })).toBeUndefined()
+  })
+})
+
+describe("ensembleSlashCommand + typedEnsembleCommandBlock", () => {
+  const builtinCommands = [
+    { name: "council", scope: "builtin" },
+    { name: "arena", scope: "builtin" },
+  ]
+
+  test("recognizes only `/council` and `/arena` as the first token", () => {
+    expect(ensembleSlashCommand("/council review auth", builtinCommands)).toBe("council")
+    expect(ensembleSlashCommand("  /arena plan", builtinCommands)).toBe("arena")
+    expect(ensembleSlashCommand("/debug auth", builtinCommands)).toBeUndefined()
+    expect(ensembleSlashCommand("council review", builtinCommands)).toBeUndefined()
+  })
+
+  test("ignores a same-named custom command", () => {
+    expect(ensembleSlashCommand("/council", [{ name: "council", scope: "user" }])).toBeUndefined()
+    expect(ensembleSlashCommand("/council", [])).toBeUndefined()
+  })
+
+  test("blocks a typed command only for the CLI reason, in every work mode", () => {
+    const availability = (reason: "CLI model" | "off" | "needs 2" | "max 1") => () => ({
+      state: "unavailable" as const,
+      members: 0,
+      reason,
+    })
+    // Work-mode independence is exercised end-to-end in the submit controller
+    // test: routeInput keeps slash text a prompt, so armed modes land here too.
+    expect(
+      typedEnsembleCommandBlock({
+        text: "/council review",
+        commands: builtinCommands,
+        availability: availability("CLI model"),
+      })?.mode,
+    ).toBe("council")
+    expect(
+      typedEnsembleCommandBlock({
+        text: "/arena plan",
+        commands: builtinCommands,
+        availability: availability("CLI model"),
+      })?.mode,
+    ).toBe("arena")
+    expect(
+      typedEnsembleCommandBlock({
+        text: "/council review",
+        commands: builtinCommands,
+        availability: availability("off"),
+      }),
+    ).toBeUndefined()
+  })
 })
 
 describe("workModeChipVisible", () => {
@@ -156,7 +288,11 @@ describe("workModeChipVisible", () => {
 
 describe("workModePickerOptions", () => {
   test("agent is always selectable; arena is disabled until enabled", () => {
-    const options = workModePickerOptions({ providers: twoProviders, providerLoaded: true })
+    const options = workModePickerOptions({
+      providers: twoProviders,
+      providerLoaded: true,
+      modelProviderID: undefined,
+    })
     expect(options.map((option) => option.value)).toEqual(["agent", "council", "arena"])
     expect(options[0]).toMatchObject({ value: "agent", disabled: false })
     expect(options[1]).toMatchObject({ value: "council", disabled: false })
@@ -170,6 +306,7 @@ describe("workModePickerOptions", () => {
     const options = workModePickerOptions({
       providers: twoProviders,
       providerLoaded: true,
+      modelProviderID: undefined,
       config: { arena: { enabled: true } },
     })
     expect(options[2]).toMatchObject({ value: "arena", disabled: false })
@@ -177,7 +314,11 @@ describe("workModePickerOptions", () => {
   })
 
   test("disables council when fewer than two providers are connected", () => {
-    const options = workModePickerOptions({ providers: [provider("p1")], providerLoaded: true })
+    const options = workModePickerOptions({
+      providers: [provider("p1")],
+      providerLoaded: true,
+      modelProviderID: undefined,
+    })
     expect(options[1]).toMatchObject({ value: "council", disabled: true })
     expect(options[1].description).toContain("1 connected")
   })

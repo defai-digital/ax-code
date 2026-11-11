@@ -5,10 +5,12 @@ import { Log } from "../../util/log"
 import type { MessageV2 } from "../message-v2"
 import { commandSetup } from "./prompt-command-setup"
 import {
+  isAxToolOnlyBuiltinCommand,
   rejectAxToolOnlyCommandOnCliModel,
   resolveCommandForExecution,
   validateCommandArguments,
 } from "./prompt-command"
+import { commandModel } from "./prompt-command-selection"
 import { createWorkflowCommandRun, workflowCommandPrompt } from "./prompt-command-workflow"
 import { executeGoalCommand } from "./prompt-goal-command"
 import { executeLimitsCommand } from "./prompt-limits-command"
@@ -43,6 +45,19 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
     workflow: command.workflow,
     warnings: command.warnings,
   }
+  // CLI providers cannot call AX Code tools, so the tool-only ensemble commands
+  // cannot work on a CLI-model turn. Resolve the model the server will actually
+  // use only for those commands and reject before commandSetup (agent lookup,
+  // model validation, template expansion) or a workflow run can mask the
+  // actionable error. Other commands never pay this resolution cost.
+  if (isAxToolOnlyBuiltinCommand(command)) {
+    const model = await commandModel({ command, model: input.model, sessionID: input.sessionID })
+    rejectAxToolOnlyCommandOnCliModel({
+      sessionID: input.sessionID,
+      command,
+      modelProviderID: model.providerID,
+    })
+  }
   let workflowRunID: string | undefined
   if (command.workflow) {
     const run = await createWorkflowCommandRun({
@@ -72,14 +87,6 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
     agent: input.agent,
     model: input.model,
     parts: input.parts,
-  })
-
-  // CLI providers cannot call AX Code tools, so the tool-only ensemble
-  // commands cannot work on a CLI-model turn: reject before prompting.
-  rejectAxToolOnlyCommandOnCliModel({
-    sessionID: input.sessionID,
-    command,
-    modelProviderID: prepared.user.model.providerID,
   })
 
   await Plugin.trigger(

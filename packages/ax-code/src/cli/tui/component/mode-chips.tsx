@@ -17,7 +17,12 @@ import { useKV } from "@tui/context/kv"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { runMode, runModeLabel } from "./prompt/run-mode-view-model"
 import { footerToggleLabel } from "./prompt/footer-toggle"
-import { workModeAvailability, workModeChipView, workModeChipVisible } from "./work-mode-availability"
+import {
+  ensembleModelProviderID,
+  workModeAvailability,
+  workModeChipView,
+  workModeChipVisible,
+} from "./work-mode-availability"
 
 // Chrome fills come from the active theme so chips follow the palette
 // instead of a hardcoded green/blue/purple/pink set. Labels distinguish
@@ -44,7 +49,7 @@ export function ModeChips() {
         providers: sync.data.provider,
         providerLoaded: sync.data.provider_loaded,
         config: sync.data.config?.modes,
-        modelProviderID: local.model.current()?.providerID,
+        modelProviderID: ensembleModelProviderID({ agents: sync.data.agent, current: local.model.current() }),
       }),
     ),
   )
