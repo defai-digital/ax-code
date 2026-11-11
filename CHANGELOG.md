@@ -6,14 +6,6 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
-### Fixed
-
-- The grep tool clamps out-of-range `context` and `limit` values instead of rejecting them, so models that ask for more
-  context no longer loop on validation errors.
-- `run --add-dir` grants access to added directories again: prompt-time tool toggles no longer replace the session's
-  path-scoped permission rules, so the `external_directory` allow survives the first turn. A new tool-toggle map still
-  replaces the previous one, and the read-only sandbox still denies writes and bash.
-
 ## [7.30.22] - 2026-11-11
 
 ### Added
@@ -24,7 +16,6 @@ changes belong to AX Coder.
 
 - Publish the paired SDK 2.6.76 maintenance release.
 - Update fast-xml-parser to 5.12.0 to address GHSA-474x-hrwr-fgx4.
-
 - Claude Code CLI responses stream incrementally (`--include-partial-messages`), and Grok Build CLI uses its
   structured `streaming-json` output.
 - CLI providers report the token usage their CLI returns (Claude Code, Codex, Grok Build, MiniMax Code) instead of an
@@ -38,6 +29,12 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- The grep tool clamps out-of-range `context` and `limit` values instead of rejecting them, so models that ask for more
+  context no longer loop on validation errors.
+- `run --add-dir` grants access to added directories again: prompt-time tool toggles no longer replace the session's
+  path-scoped permission rules, so the `external_directory` allow survives the first turn. A new tool-toggle map still
+  replaces the previous one, and the read-only sandbox still denies writes and bash.
+- Optional CLI flags retry after early stdin closure and recognize argparse and Go flag errors.
 - A Muse completion event emitted during cancellation preserves the caller's abort instead of reporting a successful turn.
 - Custom gateway models with sparse capability cards retain tool-call support unless explicitly disabled.
 - Muse CLI turns end as soon as the answer is complete: AX Code disables Muse's background reminder agents
