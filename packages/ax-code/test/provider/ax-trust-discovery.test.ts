@@ -154,7 +154,7 @@ test.each([
 
 test("new sparse AX Trust models reach the picker, CLI listing and tool request compiler", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
-  const modelID = "qwen4-max-preview"
+  const modelID = "frontier-chat-1"
   await using api = await endpoint((_req, res) => {
     res.setHeader("Content-Type", "application/json")
     res.end(
@@ -510,6 +510,43 @@ test("exact catalog fallbacks keep first-party IDs and ignore prefixes", () => {
   expect(fallbacks["nano-gpt/mimo-v2.6-pro"]).toBeUndefined()
 })
 
+test("supplemental first-party rows fill documented ids without overriding the snapshot", () => {
+  const snapshotRow = {
+    id: "qwen4-max-preview",
+    name: "Qwen4 Max Preview (snapshot)",
+    family: "qwen",
+    reasoning: false,
+  } as any
+  const published = exactCatalogFallbackModels({
+    "alibaba-token-plan": { models: { "qwen4-max-preview": snapshotRow } },
+  })
+  // A real snapshot row wins over the supplemental table, under every key.
+  expect(published["qwen4-max-preview"]).toBe(snapshotRow)
+  expect(published["qwen/qwen4-max-preview"]).toBe(snapshotRow)
+
+  const unpublished = exactCatalogFallbackModels({})
+  expect(unpublished["qwen4-max-preview"]).toMatchObject({
+    name: "Qwen4 Max Preview",
+    family: "qwen",
+    reasoning: true,
+  })
+  expect(unpublished["qwen/qwen4-max-preview"]).toBe(unpublished["qwen4-max-preview"])
+})
+
+test("the supplemental Qwen 4 row fills a sparse card's capabilities and limits", () => {
+  const fallback = exactCatalogFallbackModels({})["qwen4-max-preview"]
+  expect(fallback).toBeDefined()
+  const model = CustomApiProvider.discoveredModel("qwen4-max-preview", undefined, { id: "qwen4-max-preview" }, fallback)
+  expect(model).toMatchObject({
+    reasoning: true,
+    attachment: true,
+    temperature: true,
+    toolCall: true,
+    contextWindow: 1_000_000,
+    outputLimit: 393_216,
+  })
+})
+
 test("fills a namespaced Xiaomi card from the vendor catalog", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using api = await endpoint((_req, res) => {
@@ -587,6 +624,72 @@ test("fills a namespaced Qwen card from the vendor catalog", async () => {
           high: { reasoningEffort: "xhigh" },
           xhigh: { reasoningEffort: "xhigh" },
         })
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})
+
+test("fills a sparse Qwen 4 Max Preview card from the supplemental first-party row", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.end(JSON.stringify({ data: [{ id: "qwen4-max-preview" }] }))
+  })
+  const id = "ax-trust-qwen4-fallback"
+  await using tmp = await tmpdir({ config: config(id, api.url) })
+  await Auth.set(id, { type: "api", key: "test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const model = await Provider.getModel(ProviderID.make(id), ModelID.make("qwen4-max-preview"))
+        expect(model.family).toBe("qwen")
+        expect(model.limit).toEqual({ context: 1_000_000, output: 393_216 })
+        expect(model.capabilities).toMatchObject({ reasoning: true, toolcall: true, input: { image: true } })
+        expect(model.variants).toMatchObject({
+          low: { reasoningEffort: "low" },
+          medium: { reasoningEffort: "medium" },
+          high: { reasoningEffort: "xhigh" },
+          xhigh: { reasoningEffort: "xhigh" },
+        })
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})
+
+test("keeps the gateway's own declarations over the supplemental Qwen 4 row", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.end(
+      JSON.stringify({
+        data: [
+          {
+            id: "qwen4-max-preview",
+            name: "Restricted Qwen 4",
+            capabilities: { reasoning: false, toolcall: false, attachment: false },
+            limit: { context: 32000, output: 2000 },
+          },
+        ],
+      }),
+    )
+  })
+  const id = "ax-trust-qwen4-declared"
+  await using tmp = await tmpdir({ config: config(id, api.url) })
+  await Auth.set(id, { type: "api", key: "test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const model = await Provider.getModel(ProviderID.make(id), ModelID.make("qwen4-max-preview"))
+        expect(model.name).toBe("Restricted Qwen 4")
+        expect(model.limit).toEqual({ context: 32000, output: 2000 })
+        expect(model.capabilities).toMatchObject({ reasoning: false, toolcall: false })
+        expect(model.variants).toEqual({})
       },
     })
   } finally {

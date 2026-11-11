@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Qwen 4 Max Preview is recognised (1M context, reasoning, image input, effort levels) on AX Trust/custom gateways
+  and Alibaba plan routes.
+
 ## [7.30.22] - 2026-11-11
 
 ### Added

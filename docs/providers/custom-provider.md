@@ -39,7 +39,7 @@ Standard OpenAI-compatible model lists may contain only an ID and name. For
 discovered custom API and AX Trust chat models, AX Code defaults to allowing
 tool calls when neither the gateway nor the exact catalog entry declares tool
 support. This matches [OpenCode's custom-model compatibility default](https://github.com/anomalyco/opencode/blob/36f559b0c6cb61ebd3431d69d287809bf66acbc5/packages/schema/src/model.ts#L78-L93) and lets
-new models such as `qwen4-max-preview` appear without a client catalog update.
+newly released models appear without a client catalog update.
 It is a compatibility assumption, not a verified capability. Explicit boolean
 declarations take precedence in this order: `capabilities.toolcall`,
 `capabilities.tool_call`, `abilities.tool_call`, then top-level `tool_call`.

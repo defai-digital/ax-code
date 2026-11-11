@@ -33,6 +33,30 @@ export const FIRST_PARTY_CATALOG_IDS = [
   "xiaomi-token-plan-ams",
 ] as const
 
+// First-party rows for vendor-documented models the bundled models.dev
+// snapshot does not carry yet (the snapshot ships generated and lags vendor
+// launches). A published snapshot row always wins; see the merge below.
+export const SUPPLEMENTAL_FIRST_PARTY_MODELS: Record<string, ModelsDev.Model> = {
+  "qwen4-max-preview": {
+    id: "qwen4-max-preview",
+    name: "Qwen4 Max Preview",
+    family: "qwen",
+    release_date: "",
+    attachment: true,
+    reasoning: true,
+    temperature: true,
+    tool_call: true,
+    modalities: {
+      input: ["text", "image", "video"],
+      output: ["text"],
+    },
+    limit: {
+      context: 1_000_000,
+      output: 393_216,
+    },
+  },
+}
+
 export function exactCatalogFallbackModels(
   catalog: Record<string, { models?: Record<string, ModelsDev.Model> }>,
 ): Record<string, ModelsDev.Model> {
@@ -57,6 +81,18 @@ export function exactCatalogFallbackModels(
         if (out[key]) continue
         out[key] = model
       }
+    }
+  }
+  // Snapshot rows are merged first so a real, published row outranks this
+  // table; supplemental rows only fill ids and vendor-namespace spellings the
+  // snapshot does not carry.
+  for (const [id, model] of Object.entries(SUPPLEMENTAL_FIRST_PARTY_MODELS)) {
+    const keys = [id]
+    const family = model.family?.toLowerCase()
+    if (family) keys.push(`${family}/${id}`)
+    for (const key of keys) {
+      if (out[key]) continue
+      out[key] = model
     }
   }
   return out

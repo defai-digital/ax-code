@@ -179,6 +179,20 @@ describe("isQwen37MaxModel", () => {
     expect(isQwen37MaxModel("qwen3.6-max")).toBe(false)
     expect(isQwen37MaxModel("qwen3.6-max-preview")).toBe(false)
   })
+
+  // Qwen 4 Max (major 4, no minor) joins the same Max window on Alibaba plan
+  // routes so it inherits the elevated output/thinking ceilings.
+  test("recognizes qwen4 max spellings", () => {
+    expect(isQwen37MaxModel("qwen4-max-preview")).toBe(true)
+    expect(isQwen37MaxModel("qwen4-max")).toBe(true)
+    expect(isQwen37MaxModel("Qwen/Qwen4-Max-Preview")).toBe(true)
+    expect(isQwen37MaxModel("qwen-4-max")).toBe(true)
+  })
+
+  test("does not read a minor or longer number as the qwen4 major", () => {
+    expect(isQwen37MaxModel("qwen4.5-max")).toBe(false)
+    expect(isQwen37MaxModel("qwen-40-max")).toBe(false)
+  })
 })
 
 describe("isQwen37PlusModel", () => {

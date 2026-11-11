@@ -211,17 +211,19 @@ const MODEL_REGISTRY: ModelRegistration[] = [
   // The registry value must reflect the true context window so that
   // long-agent profiles and context-packing budgets activate correctly.
   //
-  // The pattern matches 3.7–3.9 on Alibaba's first-party routes so a new
-  // flagship minor (3.8 Max) inherits the family capabilities instead of
-  // silently collapsing to DEFAULT_CAPABILITIES (32k, non-reasoning) —
-  // which would disable Super-Long's model-default and the long-agent
-  // profile for the exact models they exist for. This mirrors the GLM
-  // family-wide `/glm[.\-_]?5/` pattern (ADR-040). Deliberately NOT
-  // family-wide below 3.7: qwen 3.6-max-preview ships different
-  // capabilities. Gateway/aggregator entries stay 3.7-pinned because
-  // their support genuinely varies per model.
+  // The pattern matches 3.7–3.9 and Qwen 4 Max on Alibaba's first-party
+  // routes so a new flagship minor (3.8 Max) or major (4 Max Preview)
+  // inherits the family capabilities instead of silently collapsing to
+  // DEFAULT_CAPABILITIES (32k, non-reasoning) — which would disable
+  // Super-Long's model-default and the long-agent profile for the exact
+  // models they exist for. This mirrors the GLM family-wide
+  // `/glm[.\-_]?5/` pattern (ADR-040). Deliberately NOT family-wide below
+  // 3.7: qwen 3.6-max-preview ships different capabilities. Gateway/
+  // aggregator entries stay 3.7-pinned because their support genuinely varies
+  // per model. Qwen 4 is major-only: a minor (`qwen4.5-max`) or a longer
+  // number (`qwen-40-max`) must not be read as `qwen4max`.
   qwen37Registration({
-    pattern: /qwen[\.\-_]?3[\.\-_]?[789][\.\-_]?max/i,
+    pattern: /qwen[\.\-_]?(?:3[\.\-_]?[789]|4)[\.\-_]?max/i,
     providerIds: [...QWEN37_ALIBABA_PROVIDER_IDS],
     routeProviderId: "alibaba-coding-plan",
     tier: "max",

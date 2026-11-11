@@ -9,7 +9,8 @@ type ProtocolModel = {
 }
 
 // `glm5` is GLM 5.3 and every later 5.x release (5.4, 5.5, ...): one request
-// contract (`reasoning_effort` low/high/max, server default max).
+// contract (`reasoning_effort` low/high/max, server default max). The `qwen3.8`
+// family also covers Qwen 4 Max Preview, which shares the same request contract.
 export type ChatReasoningFamily = "qwen3.8" | "glm5" | "deepseek-v4" | "minimax-m3" | "minimax-m2.7"
 const families: readonly string[] = ["qwen3.8", "glm5", "deepseek-v4", "minimax-m3", "minimax-m2.7"]
 // Config written before the family covered all of GLM 5.x.
@@ -107,7 +108,10 @@ function reasoningFamily(model: ProtocolModel): ChatReasoningFamily | undefined 
   } catch {}
   const id = model.api.id.toLowerCase()
   const segment = modelIdFinalSegment(id)
-  if (/^qwen3\.8-(?:max|flash)$/.test(segment)) return "qwen3.8"
+  // Qwen 4 Max Preview uses the same Chat Completions reasoning controls as
+  // the 3.8 Max/Flash SKUs; the id must match the final segment exactly so a
+  // dated suffix or the unverified `qwen4-max` GA id stays out.
+  if (/^qwen3\.8-(?:max|flash)$/.test(segment) || segment === "qwen4-max-preview") return "qwen3.8"
   if (
     model.providerID.startsWith("alibaba-coding-plan") ||
     model.providerID.startsWith("alibaba-token-plan") ||

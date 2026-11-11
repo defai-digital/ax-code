@@ -2430,6 +2430,20 @@ describe("ProviderTransform.variants", () => {
     })
   })
 
+  test("Qwen 4 Max Preview inherits the qwen3.8 effort variants", () => {
+    const model = createMockModel({
+      id: "gateway/qwen4-max-preview",
+      providerID: "gateway",
+      api: { id: "qwen4-max-preview", url: "https://gateway.example/v1", npm: "@ai-sdk/openai-compatible" },
+    })
+    expect(ProviderTransform.variants(model)).toEqual({
+      low: { reasoningEffort: "low" },
+      medium: { reasoningEffort: "medium" },
+      high: { reasoningEffort: "xhigh" },
+      xhigh: { reasoningEffort: "xhigh" },
+    })
+  })
+
   test("GLM 5.2 effort variants apply across every catalog spelling", () => {
     // Dotted, dashed, dashless, underscore, p-form, and suffixed SKUs all
     // denote GLM 5.2; none of them may silently lose the documented
@@ -3326,6 +3340,18 @@ describe("ProviderTransform.maxOutputTokens", () => {
       } as any
       expect(ProviderTransform.maxOutputTokens(model), providerID).toBe(16_384)
     }
+  })
+
+  // Qwen 4 Max Preview relies on the same elevated Alibaba ceiling as
+  // qwen3.8-max; the identity predicate must cover it too.
+  test("gives qwen4-max-preview the same Alibaba cap as qwen3.8-max", () => {
+    const valueFor = (id: string) =>
+      ProviderTransform.maxOutputTokens({
+        id,
+        providerID: ProviderID.make("alibaba-token-plan"),
+        limit: { output: 393_216 },
+      } as any)
+    expect(valueFor("qwen4-max-preview")).toBe(valueFor("qwen3.8-max"))
   })
 
   test("raises output cap to 65 536 for qwen3.8-max on non-Alibaba routes", () => {

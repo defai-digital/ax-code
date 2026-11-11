@@ -120,10 +120,11 @@ export function isQwen37MaxModel(modelId: string): boolean {
   // model-capabilities.ts matches the same window, and transform.ts keys its
   // elevated output/thinking ceilings on this predicate. A newer flagship
   // minor (3.8-max on alibaba-token-plan) must inherit them instead of
-  // falling back to the generic 4k Alibaba cap. 3.6 is deliberately
-  // excluded: it ships a different capability set.
+  // falling back to the generic 4k Alibaba cap. Qwen 4 Max (major version 4,
+  // no minor) joins the same window. 3.6 is deliberately excluded: it ships
+  // a different capability set.
   const normalized = normalizeProviderModelId(modelId)
-  return /qwen3[789]max/.test(normalized)
+  return /qwen(?:3[789]|4)max/.test(normalized)
 }
 
 export function isQwen37PlusModel(modelId: string): boolean {

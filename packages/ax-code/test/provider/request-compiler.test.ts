@@ -98,6 +98,16 @@ describe("final request compiler", () => {
     expect(resolveProtocolProfile(current).reasoningFamily).toBe("glm5")
   })
 
+  // Qwen 4 Max Preview shares the qwen3.8 Max/Flash request contract; its GA
+  // sibling and dated snapshots are not verified and stay out.
+  test.each(["qwen4-max-preview", "qwen/qwen4-max-preview"])("resolves %s to the qwen3.8 reasoning family", (id) => {
+    expect(resolveProtocolProfile(model(id)).reasoningFamily).toBe("qwen3.8")
+  })
+
+  test.each(["qwen4-max", "qwen4-flash", "qwen4-max-preview-0101"])("does not treat %s as qwen3.8", (id) => {
+    expect(resolveProtocolProfile(model(id)).reasoningFamily).toBeUndefined()
+  })
+
   test.each([{ type: "required" }, { type: "tool", toolName: "read" }] as const)(
     "forced tool %j cannot reintroduce thinking on DeepSeek",
     (toolChoice) => {
