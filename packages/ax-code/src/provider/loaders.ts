@@ -953,6 +953,7 @@ interface CliLoaderOpts {
   providerID: string
   binary: string
   args: string[]
+  optionalArgs?: string[]
   parser: CliOutputParser
   promptMode: "stdin" | "arg" | "positional" | "file"
   promptFlag?: string
@@ -975,6 +976,7 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
           modelID,
           binary: path,
           args: opts.args,
+          optionalArgs: opts.optionalArgs,
           parser: opts.parser,
           providerEnvKeys: provider.env,
           promptMode: opts.promptMode,
@@ -1088,6 +1090,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     providerID: "muse-cli",
     binary: museCli.binary,
     args: museCli.args,
+    optionalArgs: museCli.optionalArgs,
     parser: museCli.parser,
     promptMode: museCli.promptMode,
     promptFlag: museCli.promptFlag,

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest"
+import { describe, expect, test, vi, beforeEach } from "vitest"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { PassThrough } from "node:stream"
@@ -9,9 +9,35 @@ import {
   probeCliProvider,
 } from "../../../src/provider/cli/connect"
 import { getCliProviderDefinition } from "../../../src/provider/cli/config"
+import { resetRejectedOptionalCliFlags } from "../../../src/provider/cli/cli-language-model"
 import { Process } from "../../../src/util/process"
 import { Instance } from "../../../src/project/instance"
 import { tmpdir } from "../../fixture/fixture"
+
+beforeEach(() => resetRejectedOptionalCliFlags())
+
+function failedChild(stderr: string, code = 2) {
+  const stdout = new PassThrough()
+  const stderrStream = new PassThrough()
+  const stdin = new PassThrough()
+  const exited = new Promise<number>((resolve) => {
+    setTimeout(() => {
+      stdout.end()
+      stderrStream.end(stderr)
+      resolve(code)
+    }, 0)
+  })
+  return {
+    stdout,
+    stderr: stderrStream,
+    stdin,
+    exited,
+    exitCode: null,
+    signalCode: null,
+    kill: () => true,
+    pid: 124,
+  } as any
+}
 
 function successfulChild(output: string) {
   const stdout = new PassThrough()
@@ -273,6 +299,35 @@ describe("probeCliLanguageModel", () => {
       expect(cmd[cmd.indexOf("--cwd") + 1]).toBe(tmp.path)
       expect(cmd).toContain("--input")
       expect(cmd).toContain("-")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("probe retries the login check without a rejected optional flag", async () => {
+    await using tmp = await tmpdir()
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce(() => failedChild("error: unexpected argument '--disable-reminders' found\n"))
+      .mockImplementation(() => successfulChild('{"payload_type":"run.output.delta","payload":{"text":"OK"}}\n'))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await probeCliLanguageModel({
+            providerID: "muse-cli",
+            modelID: "muse-cli",
+            binary: "muse",
+          })
+        },
+      })
+
+      expect(spawn).toHaveBeenCalledTimes(2)
+      const first = spawn.mock.calls[0]?.[0] as string[]
+      const second = spawn.mock.calls[1]?.[0] as string[]
+      expect(first).toContain("--disable-reminders")
+      expect(second).not.toContain("--disable-reminders")
     } finally {
       spawn.mockRestore()
     }

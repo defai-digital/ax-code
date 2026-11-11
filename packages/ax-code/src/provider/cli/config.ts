@@ -12,6 +12,12 @@ import {
 export interface CliProviderDefinition {
   binary: string
   args: string[]
+  /**
+   * Boolean flags that newer CLI versions accept but older versions reject
+   * with an unknown-argument error. They are emitted after `args`, and a run
+   * that rejects one is retried once without it.
+   */
+  optionalArgs?: string[]
   parser: CliOutputParser
   promptMode: "stdin" | "arg" | "positional" | "file"
   promptFlag?: string
@@ -51,17 +57,13 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
   // limits. Approval is disabled because AX Code cannot show Muse's TUI.
   // Reminders are disabled because Muse's reminder child agents delay
   // run.terminal.completed by several seconds; AX Code runs its own loop.
+  // `--disable-reminders` is optional: Muse 1.4.15+ accepts it, while older
+  // CLIs reject it with an unknown-argument error. The provider retries once
+  // without it and remembers the rejection for later calls in the process.
   "muse-cli": {
     binary: "muse",
-    args: [
-      "exec",
-      "--json",
-      "--approval-mode",
-      "never",
-      "--disable-approval",
-      "--trust-workspace",
-      "--disable-reminders",
-    ],
+    args: ["exec", "--json", "--approval-mode", "never", "--disable-approval", "--trust-workspace"],
+    optionalArgs: ["--disable-reminders"],
     parser: museCliParser,
     promptMode: "file",
     promptFlag: "--prompt-file",

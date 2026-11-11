@@ -33,11 +33,78 @@ import { minimaxModelArg } from "./minimax"
 
 const log = Log.create({ service: "provider.cli-language-model" })
 
+const REJECTED_OPTIONAL_ARGS = new Map<string, Set<string>>()
+const NO_REJECTED_OPTIONAL_ARGS: ReadonlySet<string> = new Set()
+
+function rejectedOptionalArgsKey(providerID: string, binary: string): string {
+  return `${providerID}\0${binary}`
+}
+
+function rememberRejectedOptionalArg(providerID: string, binary: string, flag: string): void {
+  const key = rejectedOptionalArgsKey(providerID, binary)
+  const rejected = REJECTED_OPTIONAL_ARGS.get(key)
+  if (rejected) {
+    rejected.add(flag)
+    return
+  }
+  REJECTED_OPTIONAL_ARGS.set(key, new Set([flag]))
+}
+
+/** Optional flags already rejected by this provider binary in this process. */
+export function rejectedOptionalArgsFor(providerID: string, binary: string): ReadonlySet<string> {
+  return REJECTED_OPTIONAL_ARGS.get(rejectedOptionalArgsKey(providerID, binary)) ?? NO_REJECTED_OPTIONAL_ARGS
+}
+
+/** Test-only: forget which optional flags the CLIs rejected. */
+export function resetRejectedOptionalCliFlags(): void {
+  REJECTED_OPTIONAL_ARGS.clear()
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/**
+ * Return the optional flag a CLI rejected, if its stderr reports an unknown
+ * argument naming that flag. Covers the common clap/yargs/argparse shapes:
+ * "unexpected argument '--flag'", "unknown option '--flag'",
+ * "unknown option: --flag", "unrecognized option '--flag'", and
+ * "unknown argument --flag". The flag is matched case-insensitively and
+ * whole, so `--disable-reminders` does not match `--disable-reminders-x`.
+ */
+export function rejectedOptionalCliFlag(stderr: string, optionalArgs: readonly string[]): string | undefined {
+  if (!stderr) return undefined
+  for (const flag of optionalArgs) {
+    const pattern = new RegExp(
+      `(?:unexpected argument|unknown (?:option|argument)|unrecognized option)\\s*[:=]?\\s*['"]?${escapeRegExp(flag)}(?![\\w-])`,
+      "i",
+    )
+    if (pattern.test(stderr)) return flag
+  }
+  return undefined
+}
+
+/**
+ * Internal signal that a run failed only because the installed CLI rejected an
+ * optional flag. `doGenerate` catches it, records the flag, and retries once.
+ */
+class OptionalCliFlagRejectedError extends Error {
+  constructor(
+    readonly flag: string,
+    message: string,
+  ) {
+    super(message)
+    this.name = "OptionalCliFlagRejectedError"
+  }
+}
+
 export interface CliLanguageModelConfig {
   providerID: string
   modelID: string
   binary: string
   args: string[]
+  /** Boolean flags that may be dropped if the installed CLI does not know them. */
+  optionalArgs?: string[]
   parser: CliOutputParser
   promptMode: "stdin" | "arg" | "positional" | "file"
   promptFlag?: string
@@ -211,10 +278,16 @@ export function buildCliCommand(
   workspaceDirectory?: string,
   effort?: string,
 ) {
+  // Skip optional flags this binary has already rejected in this process so a
+  // retry (and every later call) omits them without paying for another failed
+  // spawn. Recorded at the front so commander options still see them early.
+  const rejected = rejectedOptionalArgsFor(config.providerID, config.binary)
+  const optionalArgs = (config.optionalArgs ?? []).filter((arg) => !rejected.has(arg))
   const cmd = [
     config.binary,
     ...(config.providerID === "dsh-cli" ? dshLauncherArgs() : []),
     ...config.args,
+    ...optionalArgs,
     ...autonomousCliArgs(config.providerID),
     ...cliEffortArgs(config.providerID, effort, config.efforts),
   ]
@@ -399,6 +472,33 @@ export class CliLanguageModel implements LanguageModelV3 {
     if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
 
     const jsonInstruction = jsonResponseInstruction(options.responseFormat)
+    try {
+      return await this.generateOnce(options, jsonInstruction)
+    } catch (error) {
+      if (!(error instanceof OptionalCliFlagRejectedError)) throw error
+      // Remember the rejection even when the caller aborted during this
+      // attempt, so later calls still omit the flag.
+      rememberRejectedOptionalArg(this.config.providerID, this.config.binary, error.flag)
+      // The internal retry signal must never escape doGenerate: an aborted call
+      // reports the abort, not the flag rejection.
+      if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
+      log.warn(`${this.config.providerID} rejected ${error.flag}; retrying without it`)
+      try {
+        return await this.generateOnce(options, jsonInstruction)
+      } catch (retryError) {
+        // Surface the second attempt's failure exactly like a normal run; the
+        // internal retry signal is an implementation detail.
+        if (retryError instanceof OptionalCliFlagRejectedError) {
+          rememberRejectedOptionalArg(this.config.providerID, this.config.binary, retryError.flag)
+          if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
+          throw new Error(retryError.message)
+        }
+        throw retryError
+      }
+    }
+  }
+
+  private async generateOnce(options: LanguageModelV3CallOptions, jsonInstruction: string | undefined) {
     const { proc, text } = await this.startProcess(options, jsonInstruction)
     const abort = this.setupProcessAbort(proc, options.abortSignal, "cli generate")
 
@@ -503,10 +603,22 @@ export class CliLanguageModel implements LanguageModelV3 {
       proc.stderr.off("data", onActivity)
       await abort.killPromise
     }
-    if (abort.isAborted) throw abort.abortError
-    if (code !== 0) {
-      throw new Error(formatCliFailure(code, stdout, stderr))
+    const stdoutText = stdout.toString()
+    // Detect an optional-flag rejection before the abort throw: a run that
+    // produced nothing and failed only because of a flag is still evidence the
+    // flag is unsupported, so remember it for later calls even when the caller
+    // aborted as the attempt exited.
+    if (code !== 0 && !stdoutText.trim()) {
+      const rejected = rejectedOptionalCliFlag(stderr.toString(), this.config.optionalArgs ?? [])
+      if (rejected) {
+        const failure = formatCliFailure(code, stdout, stderr)
+        rememberRejectedOptionalArg(this.config.providerID, this.config.binary, rejected)
+        // Aborts never retry; they surface the caller's abort error.
+        if (!abort.isAborted) throw new OptionalCliFlagRejectedError(rejected, failure)
+      }
     }
+    if (abort.isAborted) throw abort.abortError
+    if (code !== 0) throw new Error(formatCliFailure(code, stdout, stderr))
 
     const rawStdout = stdout.toString()
     const parsed = this.config.parser.parseComplete(rawStdout)
@@ -526,8 +638,8 @@ export class CliLanguageModel implements LanguageModelV3 {
   async doStream(options: LanguageModelV3CallOptions) {
     if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
 
-    const { proc, text } = await this.startProcess(options)
-    const abort = this.setupProcessAbort(proc, options.abortSignal, "cli stream")
+    let { proc, text } = await this.startProcess(options)
+    let abort = this.setupProcessAbort(proc, options.abortSignal, "cli stream")
 
     if (!proc.stdout || !proc.stderr) {
       await abort.kill()
@@ -561,6 +673,9 @@ export class CliLanguageModel implements LanguageModelV3 {
     }
     const config = this.config
     const parser = config.parser
+    // `start()` is a method on the stream source object, so its `this` is not
+    // the model. Keep a bound reference for the retry path.
+    const model = this
     const textId = "cli-0"
     // Parsers that need to distinguish separate messages on one stream (for
     // example Kimi) keep their cursor here, scoped to this stream.
@@ -569,6 +684,12 @@ export class CliLanguageModel implements LanguageModelV3 {
     let done = false
     let timer: ReturnType<typeof setTimeout>
     let cancelStreaming: (() => void) | undefined
+    // Incremented for every process attached to this stream. Stale handlers from
+    // a rejected attempt become no-ops once a retry attaches.
+    let attempt = 0
+    let retrying = false
+    // At most one optional-flag retry per stream, matching doGenerate.
+    let retried = false
 
     const stream = new ReadableStream<LanguageModelV3StreamPart>({
       start(controller) {
@@ -650,10 +771,10 @@ export class CliLanguageModel implements LanguageModelV3 {
         let stdoutEnded = false
         let stderrEnded = false
         let exitCode: number | undefined
-        const raw: string[] = []
-        const output: string[] = []
-        const stderrRaw: Buffer[] = []
-        const stdoutDecoder = new StringDecoder("utf8")
+        let raw: string[] = []
+        let output: string[] = []
+        let stderrRaw: Buffer[] = []
+        let stdoutDecoder = new StringDecoder("utf8")
         const endText = () => {
           if (!textOpen || closed()) return
           controller.enqueue({ type: "text-end", id: textId })
@@ -788,7 +909,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         }
         const finishSuccess = () => {
           // Wait for stderr too so empty-output failures can include stderr detail.
-          if (!stdoutEnded || !stderrEnded || exitCode === undefined || exitCode !== 0 || closed()) return
+          if (retrying || !stdoutEnded || !stderrEnded || exitCode === undefined || exitCode !== 0 || closed()) return
           // The caller cancelled: a CLI that traps the signal and exits 0 must
           // not be reported as a completed model turn.
           if (abort.isAborted) {
@@ -814,89 +935,181 @@ export class CliLanguageModel implements LanguageModelV3 {
           safeClose()
         }
         const finishFailure = () => {
-          if (!stdoutEnded || !stderrEnded || exitCode === undefined || exitCode === 0 || closed()) return
-          fail(
-            abort.isAborted
-              ? abort.abortError
-              : new Error(formatCliFailure(exitCode, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))),
-          )
-        }
-        if (!proc.stdout || !proc.stderr) {
-          controller.enqueue({ type: "error", error: new Error("CLI process output not available") })
-          safeClose()
-          return
-        }
-        const stdout = proc.stdout
-        const stderr = proc.stderr
-        onStderrData = (chunk: Buffer) => {
-          stderrRaw.push(chunk)
-          if (!closed()) armCliActivityTimer()
-        }
-        onStderrError = (err: Error) => {
-          clearTimeout(timer)
-          abort.kill()
-          if (closed()) return
-          fail(abort.isAborted ? abort.abortError : err)
-        }
-        onStderrEnd = () => {
-          if (closed() || stderrEnded) return
-          stderrEnded = true
-          finishSuccess()
-          finishFailure()
-        }
-        onStdoutData = (chunk: Buffer) => {
-          if (closed()) return
-          armCliActivityTimer()
-          processStdoutText(stdoutDecoder.write(chunk))
-        }
-        onStdoutEnd = () => {
-          if (closed() || stdoutEnded) return
-          stdoutEnded = true
-          try {
-            flushOutput()
-          } catch (error) {
-            fail(error)
+          if (retrying || !stdoutEnded || !stderrEnded || exitCode === undefined || exitCode === 0 || closed()) return
+          if (abort.isAborted) {
+            fail(abort.abortError)
             return
           }
-          finishSuccess()
-          finishFailure()
-        }
-        onStdoutError = (err: Error) => {
-          clearTimeout(timer)
-          abort.kill()
-          if (closed()) return
-          fail(abort.isAborted ? abort.abortError : err)
+          const stdoutText = raw.join("")
+          // Retry only when the process produced no stdout at all, the failure
+          // names an optional flag, and this stream has not retried yet.
+          // Nothing has reached the consumer beyond stream-start/text-start, so
+          // the retry can continue this same stream without a second
+          // stream-start.
+          if (!emitted && !stdoutText.trim()) {
+            const rejected = rejectedOptionalCliFlag(Buffer.concat(stderrRaw).toString(), config.optionalArgs ?? [])
+            if (rejected) {
+              // Remember the flag even on a second rejection so later calls
+              // omit it without needing their own retry.
+              rememberRejectedOptionalArg(config.providerID, config.binary, rejected)
+              if (!retried) {
+                retried = true
+                retrying = true
+                log.warn(`${config.providerID} rejected ${rejected}; retrying without it`)
+                startRetry()
+                return
+              }
+            }
+          }
+          fail(new Error(formatCliFailure(exitCode, Buffer.from(stdoutText), Buffer.concat(stderrRaw))))
         }
 
-        stderr.on("data", onStderrData)
-        stderr.on("error", onStderrError)
-        // process.ts destroys the pipe after exit (for grandchild-held FDs),
-        // which emits 'close' but not 'end'. Treat both as end so a successfully
-        // finished CLI that spawned a background child is not reported as a
-        // fake timeout once the destroy fires.
-        stderr.on("end", onStderrEnd)
-        stderr.on("close", onStderrEnd)
-        stdout.on("data", onStdoutData)
-        stdout.on("end", onStdoutEnd)
-        stdout.on("close", onStdoutEnd)
-        stdout.on("error", onStdoutError)
+        // Spawn the same call once more without the rejected flag. Fresh
+        // process, fresh prompt file/attachments, fresh idle timer; the first
+        // process's temp files clean up from its own `exited`.
+        const startRetry = () => {
+          void (async () => {
+            cleanupListeners()
+            cleanedUp = false
+            clearTimeout(timer)
+            remainder = ""
+            emitted = false
+            sawStructuredEvent = false
+            stdoutEnded = false
+            stderrEnded = false
+            exitCode = undefined
+            raw = []
+            output = []
+            stderrRaw = []
+            stdoutDecoder = new StringDecoder("utf8")
+            try {
+              const next = await model.startProcess(options)
+              proc = next.proc
+              text = next.text
+              abort = model.setupProcessAbort(proc, options.abortSignal, "cli stream")
+              if (closed()) {
+                await abort.kill()
+                return
+              }
+              if (!proc.stdout || !proc.stderr) {
+                retrying = false
+                fail(new Error("CLI process output not available"))
+                return
+              }
+              if (model.useStdin()) {
+                if (!proc.stdin) {
+                  retrying = false
+                  fail(new Error("CLI process stdin not available"))
+                  return
+                }
+                await withTimeout(
+                  writeCliPrompt(proc.stdin, text),
+                  CLI_TIMEOUT_MS,
+                  "CLI provider stdin write timed out",
+                )
+                if (closed()) {
+                  await abort.kill()
+                  return
+                }
+              }
+              armCliActivityTimer()
+              attach()
+            } catch (error) {
+              await abort.kill()
+              if (closed()) return
+              retrying = false
+              fail(error)
+            }
+          })()
+        }
 
-        cancelStreaming = safeAbort
-        proc.exited
-          .then((code) => {
+        const attach = () => {
+          if (!proc.stdout || !proc.stderr) {
+            controller.enqueue({ type: "error", error: new Error("CLI process output not available") })
+            safeClose()
+            return
+          }
+          const generation = ++attempt
+          const isCurrent = () => generation === attempt
+          retrying = false
+          const stdout = proc.stdout
+          const stderr = proc.stderr
+          onStderrData = (chunk: Buffer) => {
+            if (!isCurrent()) return
+            stderrRaw.push(chunk)
+            if (!closed()) armCliActivityTimer()
+          }
+          onStderrError = (err: Error) => {
+            if (!isCurrent()) return
+            clearTimeout(timer)
+            abort.kill()
             if (closed()) return
-            exitCode = code
-            if (code !== 0) {
-              finishFailure()
+            fail(abort.isAborted ? abort.abortError : err)
+          }
+          onStderrEnd = () => {
+            if (!isCurrent() || closed() || stderrEnded) return
+            stderrEnded = true
+            finishSuccess()
+            finishFailure()
+          }
+          onStdoutData = (chunk: Buffer) => {
+            if (!isCurrent() || closed()) return
+            armCliActivityTimer()
+            processStdoutText(stdoutDecoder.write(chunk))
+          }
+          onStdoutEnd = () => {
+            if (!isCurrent() || closed() || stdoutEnded) return
+            stdoutEnded = true
+            try {
+              flushOutput()
+            } catch (error) {
+              fail(error)
               return
             }
             finishSuccess()
-          })
-          .catch((err) => {
+            finishFailure()
+          }
+          onStdoutError = (err: Error) => {
+            if (!isCurrent()) return
             clearTimeout(timer)
+            abort.kill()
             if (closed()) return
-            fail(abort.isAborted ? abort.abortError : (err ?? new Error("CLI process killed by signal")))
-          })
+            fail(abort.isAborted ? abort.abortError : err)
+          }
+
+          stderr.on("data", onStderrData)
+          stderr.on("error", onStderrError)
+          // process.ts destroys the pipe after exit (for grandchild-held FDs),
+          // which emits 'close' but not 'end'. Treat both as end so a successfully
+          // finished CLI that spawned a background child is not reported as a
+          // fake timeout once the destroy fires.
+          stderr.on("end", onStderrEnd)
+          stderr.on("close", onStderrEnd)
+          stdout.on("data", onStdoutData)
+          stdout.on("end", onStdoutEnd)
+          stdout.on("close", onStdoutEnd)
+          stdout.on("error", onStdoutError)
+
+          cancelStreaming = safeAbort
+          proc.exited
+            .then((code) => {
+              if (!isCurrent() || closed()) return
+              exitCode = code
+              if (code !== 0) {
+                finishFailure()
+                return
+              }
+              finishSuccess()
+            })
+            .catch((err) => {
+              if (!isCurrent()) return
+              clearTimeout(timer)
+              if (closed()) return
+              fail(abort.isAborted ? abort.abortError : (err ?? new Error("CLI process killed by signal")))
+            })
+        }
+
+        attach()
       },
       cancel() {
         done = true

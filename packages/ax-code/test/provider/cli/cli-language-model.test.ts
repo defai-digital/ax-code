@@ -1,14 +1,65 @@
-import { test, expect, describe, vi } from "vitest"
-import { buildCliCommand, CliLanguageModel, extractJsonPayload } from "../../../src/provider/cli/cli-language-model"
+import { test, expect, describe, vi, beforeEach } from "vitest"
+import {
+  buildCliCommand,
+  CliLanguageModel,
+  extractJsonPayload,
+  rejectedOptionalCliFlag,
+  resetRejectedOptionalCliFlags,
+} from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import { claudeCodeParser, grokBuildCliParser, museCliParser, minimaxCliParser } from "../../../src/provider/cli/parser"
 import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
+import { existsSync } from "node:fs"
 import { PassThrough } from "node:stream"
 import { EventEmitter } from "node:events"
 import { Instance } from "../../../src/project/instance"
 import { tmpdir } from "../../fixture/fixture"
+
+beforeEach(() => resetRejectedOptionalCliFlags())
+
+function failedChild(stderr: string, code = 2, stdout = "") {
+  const stdoutStream = new PassThrough()
+  const stderrStream = new PassThrough()
+  const exited = new Promise<number>((resolve) => {
+    setTimeout(() => {
+      if (stdout) stdoutStream.write(stdout)
+      stdoutStream.end()
+      stderrStream.end(stderr)
+      resolve(code)
+    }, 0)
+  })
+  return {
+    stdout: stdoutStream,
+    stderr: stderrStream,
+    exited,
+    exitCode: null,
+    signalCode: null,
+    kill: () => true,
+    pid: 124,
+    stdin: null,
+  } as any
+}
+
+function museModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageModel>[0]>) {
+  return makeModel({
+    providerID: "muse-cli",
+    modelID: "muse-cli",
+    binary: "muse",
+    args: ["exec", "--json"],
+    optionalArgs: ["--disable-reminders"],
+    parser: museCliParser,
+    promptMode: "arg",
+    promptFlag: "-p",
+    ...overrides,
+  })
+}
+
+const MUSE_OK = '{"payload_type":"run.output.delta","payload":{"text":"PONG"}}\n'
+const MUSE_OK_TERMINAL =
+  MUSE_OK + '{"payload_type":"run.terminal.completed","payload":{"terminal":"completed","text":"PONG"}}\n'
+const MUSE_REJECTED = "error: unexpected argument '--disable-reminders' found\n"
 
 function makeModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageModel>[0]>) {
   return new CliLanguageModel({
@@ -1669,6 +1720,7 @@ describe("CliLanguageModel", () => {
         modelID: "muse-cli",
         binary: "muse",
         args: definition?.args ?? [],
+        optionalArgs: definition?.optionalArgs,
         parser: definition!.parser,
         promptMode: definition?.promptMode ?? "file",
         promptFlag: definition?.promptFlag,
@@ -1998,6 +2050,328 @@ describe("CliLanguageModel", () => {
     )
 
     expect(cmd).toEqual(["customcli", "--add-dir", "/workspace/ax-code", "-p", "what's this project"])
+  })
+})
+
+describe("optional CLI flags", () => {
+  const prompt = [{ role: "user" as const, content: [{ type: "text" as const, text: "hi" }] }]
+  const flags = ["--disable-reminders"]
+
+  async function readParts(stream: ReadableStream<any>) {
+    const parts: any[] = []
+    const reader = stream.getReader()
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+    }
+    return parts
+  }
+
+  test("matches clap-style unknown-argument messages", () => {
+    expect(rejectedOptionalCliFlag("error: unexpected argument '--disable-reminders' found\n", flags)).toBe(
+      "--disable-reminders",
+    )
+    expect(rejectedOptionalCliFlag("unknown option '--disable-reminders'", flags)).toBe("--disable-reminders")
+    expect(rejectedOptionalCliFlag("unknown option: --disable-reminders", flags)).toBe("--disable-reminders")
+    expect(rejectedOptionalCliFlag("UNRECOGNIZED OPTION '--DISABLE-REMINDERS'", flags)).toBe("--disable-reminders")
+    expect(rejectedOptionalCliFlag("unknown argument --disable-reminders", flags)).toBe("--disable-reminders")
+  })
+
+  test("ignores unrelated stderr, a different flag, and a flag prefix", () => {
+    expect(rejectedOptionalCliFlag("error: something else failed", flags)).toBeUndefined()
+    expect(rejectedOptionalCliFlag("unexpected argument '--other-flag' found", flags)).toBeUndefined()
+    expect(rejectedOptionalCliFlag("unexpected argument '--disable-reminders-x' found", flags)).toBeUndefined()
+  })
+
+  test("doGenerate retries once without the rejected flag and remembers it", async () => {
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce(() => failedChild(MUSE_REJECTED))
+      .mockImplementation(() => successfulChild(MUSE_OK))
+    try {
+      const model = museModel()
+      const first = await model.doGenerate({ prompt })
+      expect(first.content).toEqual([{ type: "text", text: "PONG" }])
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(spawn.mock.calls[0]?.[0]).toContain("--disable-reminders")
+      expect(spawn.mock.calls[1]?.[0]).not.toContain("--disable-reminders")
+
+      // The rejection is remembered: a later call omits the flag up front.
+      const second = await model.doGenerate({ prompt })
+      expect(second.content).toEqual([{ type: "text", text: "PONG" }])
+      expect(spawn).toHaveBeenCalledTimes(3)
+      expect(spawn.mock.calls[2]?.[0]).not.toContain("--disable-reminders")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream retries without the flag on the same stream", async () => {
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce(() => failedChild(MUSE_REJECTED))
+      .mockImplementation(() => successfulChild(MUSE_OK_TERMINAL))
+    try {
+      const { stream } = await museModel().doStream({ prompt })
+      const parts: any[] = []
+      const reader = stream.getReader()
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+      }
+      const text = parts
+        .filter((part) => part.type === "text-delta")
+        .map((part) => part.delta)
+        .join("")
+      expect(text).toBe("PONG")
+      expect(parts.filter((part) => part.type === "stream-start")).toHaveLength(1)
+      expect(parts.find((part) => part.type === "error")).toBeUndefined()
+      expect(parts.find((part) => part.type === "finish")).toBeDefined()
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(spawn.mock.calls[0]?.[0]).toContain("--disable-reminders")
+      expect(spawn.mock.calls[1]?.[0]).not.toContain("--disable-reminders")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doGenerate does not retry when the failure stderr is unrelated", async () => {
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => failedChild("error: upstream exploded\n", 1))
+    try {
+      await expect(museModel().doGenerate({ prompt })).rejects.toThrow(/CLI exited with code 1/)
+      expect(spawn).toHaveBeenCalledTimes(1)
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doGenerate does not retry when the failed run produced stdout", async () => {
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => failedChild(MUSE_REJECTED, 2, MUSE_OK))
+    try {
+      await expect(museModel().doGenerate({ prompt })).rejects.toThrow(/CLI exited with code 2/)
+      expect(spawn).toHaveBeenCalledTimes(1)
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream does not retry once it has emitted output", async () => {
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => failedChild(MUSE_REJECTED, 2, MUSE_OK))
+    try {
+      const { stream } = await museModel().doStream({ prompt })
+      const parts: any[] = []
+      const reader = stream.getReader()
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+      }
+      expect(parts.find((part) => part.type === "error")).toBeDefined()
+      expect(spawn).toHaveBeenCalledTimes(1)
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream retries at most once and reports the second attempt's failure", async () => {
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce(() => failedChild(MUSE_REJECTED))
+      .mockImplementation(() => failedChild(MUSE_REJECTED + "second attempt stderr\n"))
+    try {
+      const { stream } = await museModel().doStream({ prompt })
+      const parts = await readParts(stream)
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(parts.filter((part) => part.type === "stream-start")).toHaveLength(1)
+      const errors = parts.filter((part) => part.type === "error")
+      expect(errors).toHaveLength(1)
+      expect(String(errors[0].error)).toContain("CLI exited with code 2")
+      expect(String(errors[0].error)).toContain("second attempt stderr")
+      expect(parts.find((part) => part.type === "finish")).toBeUndefined()
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream retries only once when the retry is rejected for another optional flag", async () => {
+    // A CLI that only reports the first unknown flag it sees: --alpha-flag on
+    // the first run, --beta-flag once the retry drops --alpha-flag.
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation((cmd) => {
+      const rejected = cmd.find((arg) => arg === "--alpha-flag" || arg === "--beta-flag")
+      return failedChild(`error: unexpected argument '${rejected}' found\n`)
+    })
+    try {
+      const model = makeModel({ optionalArgs: ["--alpha-flag", "--beta-flag"] })
+      const { stream } = await model.doStream({ prompt })
+      const parts = await readParts(stream)
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(spawn.mock.calls[0]?.[0]).toEqual(expect.arrayContaining(["--alpha-flag", "--beta-flag"]))
+      expect(spawn.mock.calls[1]?.[0]).not.toContain("--alpha-flag")
+      expect(spawn.mock.calls[1]?.[0]).toContain("--beta-flag")
+      const errors = parts.filter((part) => part.type === "error")
+      expect(errors).toHaveLength(1)
+      expect(String(errors[0].error)).toContain("--beta-flag")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream omits a flag remembered from an earlier stream", async () => {
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce(() => failedChild(MUSE_REJECTED))
+      .mockImplementation(() => successfulChild(MUSE_OK_TERMINAL))
+    try {
+      const model = museModel()
+      const first = await readParts((await model.doStream({ prompt })).stream)
+      expect(first.find((part) => part.type === "error")).toBeUndefined()
+      expect(spawn).toHaveBeenCalledTimes(2)
+
+      // The rejection is remembered: the next stream omits the flag up front.
+      const second = await readParts((await model.doStream({ prompt })).stream)
+      expect(spawn).toHaveBeenCalledTimes(3)
+      expect(spawn.mock.calls[1]?.[0]).not.toContain("--disable-reminders")
+      expect(spawn.mock.calls[2]?.[0]).not.toContain("--disable-reminders")
+      expect(second.find((part) => part.type === "error")).toBeUndefined()
+      expect(second.find((part) => part.type === "finish")).toBeDefined()
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream kills the retry process when the consumer cancels", async () => {
+    const retryStdout = new PassThrough()
+    const retryStderr = new PassThrough()
+    const retryChild = {
+      stdout: retryStdout,
+      stderr: retryStderr,
+      exited: new Promise<number>(() => {}),
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 555,
+      stdin: null,
+    }
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce(() => failedChild(MUSE_REJECTED))
+      .mockImplementation(() => {
+        // The retry process keeps running; its output proves it owns the stream.
+        setTimeout(() => retryStdout.write(MUSE_OK), 0)
+        return retryChild as any
+      })
+    const shellKill = vi.spyOn(Shell, "killTree").mockResolvedValue(undefined as never)
+    try {
+      const { stream } = await museModel().doStream({ prompt })
+      const reader = stream.getReader()
+      const parts: any[] = []
+      while (!parts.some((part) => part.type === "text-delta")) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+      }
+      expect(parts.find((part) => part.type === "error")).toBeUndefined()
+
+      await reader.cancel()
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(shellKill.mock.calls.map((call) => call[0])).toContain(retryChild)
+      await expect(reader.read()).resolves.toEqual({ done: true, value: undefined })
+      // Give a stray rejection a turn to surface as a test failure.
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    } finally {
+      spawn.mockRestore()
+      shellKill.mockRestore()
+      retryStdout.destroy()
+      retryStderr.destroy()
+    }
+  })
+
+  test("doGenerate reports the abort instead of the flag rejection and remembers the flag", async () => {
+    const controller = new AbortController()
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const abortOnExit = () => {
+      const exited = new Promise<number>((resolve) => {
+        setTimeout(() => {
+          stdout.end()
+          stderr.end(MUSE_REJECTED)
+          resolve(2)
+          // The signal fires as the rejected attempt settles.
+          queueMicrotask(() => controller.abort())
+        }, 0)
+      })
+      return {
+        stdout,
+        stderr,
+        exited,
+        exitCode: null,
+        signalCode: null,
+        kill: () => true,
+        pid: 556,
+        stdin: null,
+      } as any
+    }
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce(abortOnExit)
+      .mockImplementation(() => successfulChild(MUSE_OK))
+    try {
+      const model = museModel()
+      const error = await model.doGenerate({ prompt, abortSignal: controller.signal }).then(
+        () => undefined,
+        (err) => err,
+      )
+      expect(error).toBeInstanceOf(Error)
+      expect(error.name).toBe("AbortError")
+      expect(error.name).not.toBe("OptionalCliFlagRejectedError")
+      expect(spawn).toHaveBeenCalledTimes(1)
+
+      // The rejected flag was recorded before the abort surfaced.
+      const later = await model.doGenerate({ prompt })
+      expect(later.content).toEqual([{ type: "text", text: "PONG" }])
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(spawn.mock.calls[1]?.[0]).not.toContain("--disable-reminders")
+    } finally {
+      spawn.mockRestore()
+      stdout.destroy()
+      stderr.destroy()
+    }
+  })
+
+  test("doGenerate keeps --prompt-file on a file-mode retry and drops the flag", async () => {
+    const promptFiles: { file: string; existed: boolean }[] = []
+    const recordPromptFile = (cmd: string[]) => {
+      const index = cmd.indexOf("--prompt-file")
+      const file = index === -1 ? "" : cmd[index + 1]
+      promptFiles.push({ file, existed: existsSync(file) })
+    }
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce((cmd) => {
+        recordPromptFile(cmd)
+        return failedChild(MUSE_REJECTED)
+      })
+      .mockImplementation((cmd) => {
+        recordPromptFile(cmd)
+        return successfulChild(MUSE_OK)
+      })
+    try {
+      const model = museModel({ promptMode: "file", promptFlag: "--prompt-file" })
+      const result = await model.doGenerate({ prompt })
+      expect(result.content).toEqual([{ type: "text", text: "PONG" }])
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(promptFiles).toHaveLength(2)
+      expect(promptFiles[0]?.existed).toBe(true)
+      expect(promptFiles[1]?.existed).toBe(true)
+      expect(promptFiles[1]?.file).toContain("prompt.txt")
+      expect(promptFiles[1]?.file).not.toBe(promptFiles[0]?.file)
+      expect(spawn.mock.calls[1]?.[0]).toContain("--prompt-file")
+      expect(spawn.mock.calls[1]?.[0]).not.toContain("--disable-reminders")
+    } finally {
+      spawn.mockRestore()
+    }
   })
 })
 
