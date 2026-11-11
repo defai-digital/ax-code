@@ -876,6 +876,12 @@ export class CliLanguageModel implements LanguageModelV3 {
         // `proc.exited`.
         const finishTerminal = () => {
           if (closed()) return
+          // A CLI may flush its terminal event while handling cancellation.
+          // Preserve the caller's abort just as the process-exit path does.
+          if (abort.isAborted) {
+            fail(abort.abortError)
+            return
+          }
           try {
             flushTerminalRemainder()
           } catch (error) {

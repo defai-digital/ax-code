@@ -2482,6 +2482,53 @@ describe("CLI effective model and terminal events", () => {
     }
   })
 
+  test("doStream preserves cancellation when Muse emits a terminal event during shutdown", async () => {
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const controller = new AbortController()
+    const reason = new DOMException("Turn cancelled by caller", "AbortError")
+    let resolveExit!: (code: number) => void
+    const exited = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
+      stdout,
+      stderr,
+      exited,
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 323,
+      stdin: null,
+    } as unknown as Process.Child)
+    const kill = vi.spyOn(Shell, "killTree").mockResolvedValue(undefined)
+
+    try {
+      const { stream } = await museModel().doStream({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        abortSignal: controller.signal,
+      })
+      stdout.write(MUSE_OK)
+      controller.abort(reason)
+      // A CLI can flush its completed event while handling the kill signal.
+      stdout.write(MUSE_OK_TERMINAL)
+      stdout.end()
+      stderr.end()
+      resolveExit(0)
+
+      const parts = await Array.fromAsync(stream)
+      expect(kill).toHaveBeenCalledOnce()
+      expect(parts.find((part) => part.type === "finish")).toBeUndefined()
+      expect(parts.find((part) => part.type === "error")).toEqual({ type: "error", error: reason })
+    } finally {
+      resolveExit(0)
+      stdout.destroy()
+      stderr.destroy()
+      spawn.mockRestore()
+      kill.mockRestore()
+    }
+  })
+
   test("doStream still fails when the process exits non-zero before a terminal event", async () => {
     await using tmp = await tmpdir()
     const stdout = new PassThrough()
