@@ -605,6 +605,17 @@ export function Session() {
     sessionSyncRetryTimers.clear()
   })
 
+  // Follow turns another process (Desktop, a second CLI) runs on this session (#52).
+  createEffect(
+    on(
+      () => route.sessionID,
+      (sessionID) => {
+        const stop = sync.session.watchExternal(sessionID)
+        onCleanup(stop)
+      },
+    ),
+  )
+
   const reconnectSession = createReconnectRecoveryGate({
     recover: () =>
       sync.session.sync(route.sessionID, { force: true, missing: "throw" }).catch((error) => {

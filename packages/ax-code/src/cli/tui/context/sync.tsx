@@ -33,6 +33,7 @@ import { createInitialSyncState, type SyncStoreState } from "./sync-state"
 import { createSyncStartupCoordinator } from "./sync-startup"
 import { createSyncBootstrapFlow } from "./sync-bootstrap-flow"
 import { createSyncContextValue } from "./sync-result"
+import { createExternalSessionWatch, latestMessageFingerprint } from "./sync-external-session-watch"
 import { subscribeStoreBackedSyncEvents } from "./sync-subscription"
 import { registerSyncLifecycle } from "./sync-lifecycle"
 import { parseSyncedSessionRisk } from "./sync-session-risk"
@@ -150,6 +151,25 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         )
       },
     })
+    // Turns another runtime (Desktop, a second CLI) runs on an open session reach the shared store
+    // but never this TUI's event stream; follow them by polling the newest message (#52).
+    const externalSessionWatch = createExternalSessionWatch({
+      async fetchLatest(sessionID) {
+        const result = await sdk.client.session.messages({ sessionID, limit: 1 }, { throwOnError: true })
+        return result.data?.at(-1)
+      },
+      localFingerprint(sessionID) {
+        const info = store.message[sessionID]?.at(-1)
+        return latestMessageFingerprint(info, info ? store.part[info.id] : undefined)
+      },
+      isLocallyCovered: (sessionID) =>
+        !sdk.sseConnected || (store.session_status[sessionID]?.type ?? "idle") !== "idle",
+      resync: (sessionID) => sessionSync.sync(sessionID, { force: true }),
+      onError(sessionID, error) {
+        Log.Default.warn("external session poll failed", { sessionID, error })
+      },
+    })
+
     const clearSession = (sessionID: string) => {
       earlierMessages.clear(sessionID)
       sessionSync.clear(sessionID)
@@ -329,6 +349,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       setStore,
       sessionSync: sessionSync.sync,
       sessionClear: clearSession,
+      sessionWatchExternal: externalSessionWatch.watch,
       async sessionLoadEarlier(sessionID) {
         const result = await earlierMessages.loadEarlier(sessionID)
         const loaded = store.message[sessionID]?.length ?? 0

@@ -29,6 +29,8 @@ export function createSyncContextValue<
   sessionClear?: (sessionID: string) => void
   sessionLoadEarlier?: (sessionID: string) => Promise<LoadEarlierResult>
   sessionAdoptHistoryCursor?: (sessionID: string, cursor: string | undefined) => void
+  /** Follow turns another process runs on an open session; returns the function that stops it. */
+  sessionWatchExternal?: (sessionID: string) => () => void
   workspaceSync: TWorkspaceSync
   bootstrap: TBootstrap
   runtime: TRuntime
@@ -72,6 +74,9 @@ export function createSyncContextValue<
       },
       clear(sessionID: string) {
         input.sessionClear?.(sessionID)
+      },
+      watchExternal(sessionID: string): () => void {
+        return input.sessionWatchExternal?.(sessionID) ?? (() => {})
       },
     },
     workspace: {
