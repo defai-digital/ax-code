@@ -49,9 +49,8 @@ import { resolvePromptIsolationPolicy } from "./prompt/prompt-runtime-policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { resolveAxEngineSetup } from "@/provider/ax-engine/setup"
 import { attachThinkTagStream } from "@/provider/think-tags"
-import { isKnownCliProviderID } from "@/provider/cli/ids"
+import { isCliProviderID as sharedIsCliProviderID, isKnownCliProviderID } from "@/provider/cli/ids"
 import { provideCliIsolationMode } from "@/provider/cli/isolation"
-import { isRetiredProviderID } from "@/provider/retired-providers"
 import { applyAxTrustPromptCacheHeader, shouldSendAxTrustPromptCacheKey } from "@/provider/ax-trust-cache"
 import { isLocalInferenceConnection } from "@/provider/local-runtime"
 
@@ -1063,8 +1062,7 @@ export namespace LLM {
   const CLI_STREAM_MAX_DURATION_MS = 3_600_000
 
   export function isCliProviderID(providerID: string | undefined): boolean {
-    if (!providerID || isRetiredProviderID(providerID)) return false
-    return providerID.endsWith("-cli") || isKnownCliProviderID(providerID)
+    return sharedIsCliProviderID(providerID)
   }
 
   export function streamIdleTimeoutMs(providerID?: string, agent?: { streamIdleTimeoutMs?: number }): number {

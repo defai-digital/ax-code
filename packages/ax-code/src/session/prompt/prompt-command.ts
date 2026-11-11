@@ -1,6 +1,6 @@
 import { NamedError } from "@ax-code/util/error"
 import { Command } from "../../command"
-import { isKnownCliProviderID } from "../../provider/cli/ids"
+import { isCliProviderID } from "../../provider/cli/ids"
 import { Session } from ".."
 import type { SessionID } from "../schema"
 
@@ -12,14 +12,18 @@ import type { SessionID } from "../schema"
  */
 const AX_TOOL_ONLY_BUILTINS = new Set<string>([Command.Default.COUNCIL, Command.Default.ARENA])
 
+/** Whether a command is a built-in that can only work through an AX Code tool. */
+export function isAxToolOnlyBuiltinCommand(command: { scope?: string; name: string }): boolean {
+  return command.scope === "builtin" && AX_TOOL_ONLY_BUILTINS.has(command.name)
+}
+
 export function rejectAxToolOnlyCommandOnCliModel(input: {
   sessionID: SessionID
   command: NonNullable<Awaited<ReturnType<typeof Command.get>>>
   modelProviderID: string
 }) {
-  if (input.command.scope !== "builtin") return
-  if (!AX_TOOL_ONLY_BUILTINS.has(input.command.name)) return
-  if (!isKnownCliProviderID(input.modelProviderID)) return
+  if (!isAxToolOnlyBuiltinCommand(input.command)) return
+  if (!isCliProviderID(input.modelProviderID)) return
   const error = new NamedError.Unknown({
     message:
       `Command "/${input.command.name}" needs a non-CLI (API) model. ` +

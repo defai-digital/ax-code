@@ -70,6 +70,7 @@ function setup(input: {
         ],
         provider_loaded: input.providerLoaded ?? true,
         provider_failed: false,
+        agent: [],
         task_queue: [],
         config: input.config ?? { modes: { arena: { enabled: true } } },
       },
@@ -243,6 +244,28 @@ describe("prompt submission lifecycle", () => {
     expect(host.clearPromptDraft).toHaveBeenCalled()
     expect(requests).toHaveLength(0)
     expect(host.toast.show).not.toHaveBeenCalled()
+  })
+
+  test("blocks a typed ensemble command on a CLI model even when its mode is armed", async () => {
+    const { controller, host, requests, model } = setup({
+      mode: "normal",
+      workMode: "council",
+      text: "/council note",
+    })
+    model.providerID = "claude-code"
+    host.sync.data.command = [
+      { name: "council", scope: "builtin" },
+      { name: "arena", scope: "builtin" },
+    ]
+
+    await controller.submit()
+
+    expect(requests).toHaveLength(0)
+    expect(host.toast.show).toHaveBeenCalledWith(expect.objectContaining({ variant: "warning" }))
+    expect(host.clearPromptDraft).not.toHaveBeenCalled()
+    expect(host.input.clear).not.toHaveBeenCalled()
+    expect(host.history.append).not.toHaveBeenCalled()
+    expect(controller.submitInFlight).toBe(false)
   })
 
   test("dispatches argument-taking client slash commands locally with their inline text", async () => {

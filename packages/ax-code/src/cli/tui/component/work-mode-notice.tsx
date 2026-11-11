@@ -6,6 +6,7 @@ import { useLocal } from "@tui/context/local"
 import { useKV } from "@tui/context/kv"
 import { useTheme } from "@tui/context/theme"
 import {
+  ensembleModelProviderID,
   isWorkModeHintSeen,
   WORK_MODE_HINT_SEEN_KEY,
   workModeAvailability,
@@ -29,7 +30,7 @@ export function WorkModeNotice() {
       providers: sync.data.provider,
       providerLoaded: sync.data.provider_loaded,
       config: sync.data.config?.modes,
-      modelProviderID: local.model.current()?.providerID,
+      modelProviderID: ensembleModelProviderID({ agents: sync.data.agent, current: local.model.current() }),
     })
     return {
       hint: workModeHint(mode, availability, {

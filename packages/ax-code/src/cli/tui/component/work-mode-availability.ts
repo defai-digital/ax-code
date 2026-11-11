@@ -1,6 +1,6 @@
 import { english, type Translate } from "../i18n"
 import { WorkMode } from "@/mode/work-mode"
-import { isKnownCliProviderID } from "@/provider/cli/ids"
+import { isCliProviderID } from "@/provider/cli/ids"
 import { isNonChatModelID, modelSelectableForProvider } from "@/provider/model-selectability"
 
 // Shared work-mode availability view-model. Pure and Solid-free so chip, hint,
@@ -16,8 +16,8 @@ export type WorkModeAvailability = {
   /** Effective auto-selected member cap: config maximum clamped by the number
    *  of counting providers. Zero unless available. */
   members: number
-  /** Short reason token for compact UI ("off" | "needs 2" | "max 1" | "needs API model"). */
-  reason?: "off" | "needs 2" | "max 1" | "needs API model"
+  /** Short reason token for compact UI ("off" | "needs 2" | "max 1" | "CLI model"). */
+  reason?: "off" | "needs 2" | "max 1" | "CLI model"
   /** One-sentence explanation for toasts and hints. */
   detail?: string
 }
@@ -57,8 +57,9 @@ export function workModeAvailability(input: {
   providers: readonly AvailabilityProvider[]
   providerLoaded: boolean
   config?: WorkModeConfig
-  /** Provider of the currently selected model, when one is selected. */
-  modelProviderID?: string
+  /** Provider of the model the command will actually run on. Required so no
+   *  caller can forget it; may be `undefined` when no model is selected. */
+  modelProviderID: string | undefined
 }): WorkModeAvailability {
   const t = input.t ?? english
   if (input.mode === "agent") return { state: "available", members: 1 }
@@ -68,11 +69,11 @@ export function workModeAvailability(input: {
   // CLI providers run the vendor's own agent loop and never receive AX Code
   // tools, so council/arena cannot run on a CLI-model session: no config fixes
   // it, only switching to an API model does.
-  if (input.modelProviderID && isKnownCliProviderID(input.modelProviderID)) {
+  if (isCliProviderID(input.modelProviderID)) {
     return {
       state: "unavailable",
       members: 0,
-      reason: "needs API model",
+      reason: "CLI model",
       detail: t("mode.needsApiModel", { mode: label }),
     }
   }
@@ -128,8 +129,9 @@ export function workModePickerOptions(input: {
   providers: readonly AvailabilityProvider[]
   providerLoaded: boolean
   config?: WorkModeConfig
-  /** Provider of the currently selected model, when one is selected. */
-  modelProviderID?: string
+  /** Provider of the model the command will actually run on (see
+   *  workModeAvailability); required so no caller can forget it. */
+  modelProviderID: string | undefined
 }): WorkModePickerOption[] {
   const t = input.t ?? english
   return WorkMode.ALL.map((mode) => {
@@ -167,6 +169,70 @@ export function workModePickerOptions(input: {
       disabled: true,
     }
   })
+}
+
+/** Minimal synced-agent shape: a name and, when config pins one, a model. */
+export type EnsembleAgentModel = {
+  name: string
+  model?: { providerID: string } | undefined
+}
+
+/**
+ * Provider of the model the built-in council/arena commands will actually run
+ * on. Those commands pin `agent: "build"`, and the server's commandModel prefers
+ * that agent's config-pinned model over the model the TUI sends, so the guard
+ * must read the same source or it disagrees with the server.
+ */
+export function ensembleModelProviderID(input: {
+  agents: readonly EnsembleAgentModel[]
+  current: { providerID: string } | undefined
+}): string | undefined {
+  const build = input.agents.find((agent) => agent.name === "build")
+  return build?.model?.providerID ?? input.current?.providerID
+}
+
+/** Built-in ensemble slash commands that map to an ensemble work mode. */
+export type EnsembleSlashCommand = "council" | "arena"
+
+/**
+ * The built-in ensemble slash command that typed text starts with, if any. The
+ * synced command list carries scope, so a same-named custom command is not
+ * mistaken for the built-in and never intercepted.
+ */
+export function ensembleSlashCommand(
+  text: string,
+  commands: readonly { name: string; scope?: string }[] = [],
+): EnsembleSlashCommand | undefined {
+  const trimmed = text.trimStart()
+  if (!trimmed.startsWith("/")) return undefined
+  const token = trimmed.slice(1).split(/\s+/, 1)[0]
+  if (token !== "council" && token !== "arena") return undefined
+  return commands.some((item) => item.name === token && item.scope === "builtin") ? token : undefined
+}
+
+/** The compact token that marks an unavailable mode as blocked on a CLI model. */
+const CLI_MODEL_REASON = "CLI model" satisfies NonNullable<WorkModeAvailability["reason"]>
+
+/**
+ * Decide whether a typed `/council` or `/arena` must be stopped in the TUI
+ * before it reaches the server. `WorkMode.routeInput` keeps any slash-prefixed
+ * text as a prompt in every work mode, so an armed council/arena mode never
+ * reaches its explicit submit guard for typed text: this check applies in every
+ * mode. Only the CLI-model reason blocks here; "off", "needs 2" and "max 1"
+ * still surface through the existing server path.
+ */
+export function typedEnsembleCommandBlock(input: {
+  text: string
+  commands?: readonly { name: string; scope?: string }[]
+  availability: (mode: WorkMode.Id) => WorkModeAvailability
+}): { mode: EnsembleSlashCommand; availability: WorkModeAvailability } | undefined {
+  const mode = ensembleSlashCommand(input.text, input.commands)
+  if (!mode) return undefined
+  const availability = input.availability(mode)
+  if (availability.state === "unavailable" && availability.reason === CLI_MODEL_REASON) {
+    return { mode, availability }
+  }
+  return undefined
 }
 
 /** Chip presentation: label text plus whether the filled (active) style applies. */

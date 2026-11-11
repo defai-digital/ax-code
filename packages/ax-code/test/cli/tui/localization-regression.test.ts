@@ -19,11 +19,17 @@ describe("complete locale presentation", () => {
     expect(runModeLabel("auto", t)).toBe(t("ui.auto"))
     expect(runModeLabel("super-long", t)).toBe(t("mode.longRun"))
     expect(t("ui.widthWidth", { width: 36 })).toContain("36")
-    const availability = workModeAvailability({ t, mode: "council", providers: [], providerLoaded: true })
+    const availability = workModeAvailability({
+      t,
+      mode: "council",
+      providers: [],
+      providerLoaded: true,
+      modelProviderID: undefined,
+    })
     expect(availability.state).toBe("unavailable")
     expect(availability.reason).toBe("needs 2")
     expect(availability.detail).toBe(t("mode.providers", { mode: "Council", count: 0 }))
-    const modes = workModePickerOptions({ t, providers: [], providerLoaded: true })
+    const modes = workModePickerOptions({ t, providers: [], providerLoaded: true, modelProviderID: undefined })
     expect(modes[0].title).toBe(t("category.agent"))
     expect(modes[0].disabled).toBe(false)
     expect(modes[1].disabled).toBe(true)
