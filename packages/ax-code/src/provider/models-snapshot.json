@@ -10540,30 +10540,6 @@
         },
         "canonical_model_id": "upstage/solar-pro4"
       },
-      "arcee-ai/trinity-large-thinking": {
-        "id": "arcee-ai/trinity-large-thinking",
-        "name": "Trinity Large Thinking",
-        "family": "trinity",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 80000
-        },
-        "canonical_model_id": "arcee-ai/trinity-large-thinking"
-      },
       "tencent/hy3": {
         "id": "tencent/hy3",
         "name": "Tencent Hy3",
@@ -10674,8 +10650,8 @@
           ]
         },
         "limit": {
-          "context": 131072,
-          "input": 131072,
+          "context": 65536,
+          "input": 65536,
           "output": 32768
         }
       },
@@ -10737,8 +10713,8 @@
           ]
         },
         "limit": {
-          "context": 32000,
-          "input": 32000,
+          "context": 32768,
+          "input": 32768,
           "output": 16384
         }
       },
@@ -14849,52 +14825,6 @@
         "temperature": true,
         "tool_call": true
       },
-      "deepseek/deepseek-v4.1-flash-0910-uncensored": {
-        "attachment": true,
-        "family": "deepseek",
-        "id": "deepseek/deepseek-v4.1-flash-0910-uncensored",
-        "limit": {
-          "context": 524288,
-          "input": 524288,
-          "output": 32768
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4.1 Flash 0910 Uncensored",
-        "reasoning": true,
-        "release_date": "2026-10-27",
-        "tool_call": true
-      },
-      "deepseek/deepseek-v4.1-flash-0910-uncensored:thinking": {
-        "attachment": true,
-        "family": "deepseek",
-        "id": "deepseek/deepseek-v4.1-flash-0910-uncensored:thinking",
-        "limit": {
-          "context": 524288,
-          "input": 524288,
-          "output": 32768
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4.1 Flash 0910 Uncensored Thinking",
-        "reasoning": true,
-        "release_date": "2026-10-27",
-        "tool_call": true
-      },
       "gemma-4-12b-it-starry-ocean": {
         "attachment": true,
         "family": "gemma",
@@ -16099,6 +16029,103 @@
         "name": "OrcaCyber MiMo V2.6 Flash",
         "reasoning": true,
         "release_date": "2026-11-09",
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-1017-uncensored": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "deepseek/deepseek-v4.1-flash-1017-uncensored",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 Uncensored",
+        "reasoning": true,
+        "release_date": "2026-10-27",
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-1017-uncensored:thinking": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "deepseek/deepseek-v4.1-flash-1017-uncensored:thinking",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 Uncensored Thinking",
+        "reasoning": true,
+        "release_date": "2026-10-27",
+        "tool_call": true
+      },
+      "google/gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "google/gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "nex-agi/nex-n2.6": {
+        "attachment": true,
+        "family": "agi",
+        "id": "nex-agi/nex-n2.6",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Nex N2.6",
+        "reasoning": true,
+        "release_date": "2026-11-10",
         "tool_call": true
       }
     }
@@ -31530,6 +31557,221 @@
         "release_date": "2026-11-09",
         "temperature": true,
         "tool_call": true
+      },
+      "alibaba/deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "alibaba/deepseek-v4-flash-0731",
+        "limit": {
+          "context": 1000000,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731 (Alibaba Cloud)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "baidu/deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "baidu/deepseek-v4-flash-0731",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731 (Baidu)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "bytedance/deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "bytedance/deepseek-v4-flash-0731",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731 (ByteDance)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "cloudflare/deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "cloudflare/deepseek-v4-flash-0731",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731 (Cloudflare)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepinfra/deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "deepinfra/deepseek-v4-flash-0731",
+        "limit": {
+          "context": 1000000,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731 (DeepInfra)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "google-ai-studio/gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "google-ai-studio/gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon (Google AI Studio)",
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "google-vertex/gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "google-vertex/gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon (Google Vertex AI)",
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "novita/deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "novita/deepseek-v4-flash-0731",
+        "limit": {
+          "context": 1050000,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731 (NovitaAI)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "tencent/deepseek-v4-flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "tencent/deepseek-v4-flash-0731",
+        "limit": {
+          "context": 1000000,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731 (Tencent Cloud)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -43229,6 +43471,33 @@
         },
         "reasoning": true,
         "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
         "temperature": false,
         "tool_call": true
       }
@@ -60629,6 +60898,30 @@
         "release_date": "2026-11-04",
         "temperature": true,
         "tool_call": true
+      },
+      "anthropic/claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -64377,7 +64670,8 @@
         "limit": {
           "context": 200000,
           "output": 64000
-        }
+        },
+        "status": "deprecated"
       },
       "claude-opus-4-7": {
         "id": "claude-opus-4-7",
@@ -64505,7 +64799,8 @@
           "context": 200000,
           "output": 64000
         },
-        "canonical_model_id": "anthropic/claude-sonnet-4-5"
+        "canonical_model_id": "anthropic/claude-sonnet-4-5",
+        "status": "deprecated"
       },
       "claude-opus-4-8": {
         "id": "claude-opus-4-8",
@@ -64896,6 +65191,33 @@
         "name": "Gemini 4 Argon",
         "reasoning": true,
         "release_date": "2026-10-13",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
         "temperature": true,
         "tool_call": true
       }
@@ -68269,33 +68591,6 @@
         },
         "type": "video"
       },
-      "bytedance/seedance-v1.5-pro": {
-        "id": "bytedance/seedance-v1.5-pro",
-        "name": "Seedance v1.5 Pro",
-        "family": "seed",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": false,
-        "release_date": "2025-12-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "video"
-          ]
-        },
-        "limit": {
-          "context": 0,
-          "output": 0
-        },
-        "provider": {
-          "api": "https://ai-gateway.vercel.sh/v4/ai"
-        },
-        "type": "video"
-      },
       "bytedance/seedream-4.5": {
         "id": "bytedance/seedream-4.5",
         "name": "Seedream 4.5",
@@ -68323,54 +68618,6 @@
           "npm": "@ai-sdk/openai"
         },
         "type": "image"
-      },
-      "bytedance/seed-1.8": {
-        "id": "bytedance/seed-1.8",
-        "name": "Seed 1.8",
-        "family": "seed",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-12-28",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "output": 32768
-        },
-        "canonical_model_id": "bytedance-seed/seed-1-8"
-      },
-      "bytedance/seed-1.6": {
-        "id": "bytedance/seed-1.6",
-        "name": "Seed 1.6",
-        "family": "seed",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-10-15",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "output": 32000
-        },
-        "canonical_model_id": "bytedance-seed/seed-1-6"
       },
       "bytedance/seedance-2.0-fast": {
         "id": "bytedance/seedance-2.0-fast",
@@ -73920,6 +74167,55 @@
         "name": "Muse Ember",
         "reasoning": true,
         "release_date": "2026-11-09",
+        "tool_call": true
+      },
+      "alibaba/qwen3.6-35b-a3b": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.6-35b-a3b",
+        "family": "qwen",
+        "id": "alibaba/qwen3.6-35b-a3b",
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.6 35B A3B",
+        "reasoning": true,
+        "release_date": "2026-04-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "google/gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "google/gemini-4-carbon",
+        "limit": {
+          "context": 1000000,
+          "output": 1000000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -83958,7 +84254,7 @@
         "family": "deepseek-flash",
         "id": "deepseek-v4-flash-0731",
         "limit": {
-          "context": 1000000,
+          "context": 1050000,
           "output": 384000
         },
         "modalities": {
@@ -84023,6 +84319,33 @@
         "reasoning": true,
         "release_date": "2026-11-09",
         "temperature": true,
+        "tool_call": true
+      },
+      "gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -86584,6 +86907,62 @@
         "release_date": "2026-10-26",
         "temperature": false,
         "tool_call": true
+      },
+      "anthropic/claude-fable-5.2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5.2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "provider": {
+          "api": "https://gateway.ai.cloudflare.com/v1/${CLOUDFLARE_ACCOUNT_ID}/${CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "meta/muse-ember-1.0": {
+        "attachment": true,
+        "canonical_model_id": "meta/muse-ember-1.0",
+        "family": "muse",
+        "id": "meta/muse-ember-1.0",
+        "limit": {
+          "context": 1048576,
+          "output": 524288
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Muse Ember",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -87483,6 +87862,60 @@
         },
         "reasoning": true,
         "release_date": "2026-10-26",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-fable-5.2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "claude-fable-5.2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "provider": {
+          "api": "https://api.githubcopilot.com/v1",
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
         "temperature": false,
         "tool_call": true
       }
@@ -103441,7 +103874,7 @@
           ]
         },
         "limit": {
-          "context": 1048576,
+          "context": 1000000,
           "output": 384000
         },
         "canonical_model_id": "deepseek/deepseek-v4-flash-0731"
@@ -105659,6 +106092,33 @@
         "name": "Claude Fable 5.2",
         "reasoning": true,
         "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "google/gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "google/gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
         "temperature": false,
         "tool_call": true
       }
@@ -109760,12 +110220,12 @@
             "text"
           ]
         },
-        "name": "DeepSeek V4.1 Flash",
+        "name": "DeepSeek V4.1 Flash 1017",
         "reasoning": true,
-        "release_date": "2026-09-10",
+        "release_date": "2026-10-17",
         "temperature": true,
         "tool_call": true,
-        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
         "provider": {
           "api": "https://opencode.ai/inference/openai/v1"
         }
@@ -110265,7 +110725,7 @@
       },
       "deepseek-v4.1-flash-free": {
         "attachment": true,
-        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
         "family": "deepseek-flash",
         "id": "deepseek-v4.1-flash-free",
         "interleaved": {
@@ -110286,7 +110746,7 @@
         },
         "name": "DeepSeek V4.1 Flash Free",
         "reasoning": true,
-        "release_date": "2026-09-10",
+        "release_date": "2026-10-17",
         "temperature": true,
         "tool_call": true,
         "provider": {
@@ -110729,6 +111189,37 @@
         "reasoning": true,
         "release_date": "2026-11-09",
         "temperature": true,
+        "tool_call": true
+      },
+      "gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "provider": {
+          "api": "https://opencode.ai/inference/google/v1beta",
+          "npm": "@ai-sdk/google"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -111748,33 +112239,6 @@
         "reasoning": true,
         "release_date": "2026-09-29",
         "temperature": false,
-        "tool_call": true
-      },
-      "qwen/qwen3.5-397b-a17b": {
-        "attachment": true,
-        "canonical_model_id": "alibaba/qwen3.5-397b-a17b",
-        "family": "qwen",
-        "id": "qwen/qwen3.5-397b-a17b",
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "limit": {
-          "context": 262144,
-          "output": 65536
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Qwen3.5 397B-A17B",
-        "reasoning": true,
-        "release_date": "2026-02-15",
-        "temperature": true,
         "tool_call": true
       },
       "qwen/qwen3.7-max": {
@@ -116105,6 +116569,35 @@
         },
         "reasoning": true,
         "release_date": "2026-10-26",
+        "temperature": false,
+        "tool_call": true
+      },
+      "anthropic/claude-fable-5.2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5.2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "provider": {
+          "api": "https://api.ofox.ai/anthropic/v1",
+          "npm": "@ai-sdk/anthropic"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-09",
         "temperature": false,
         "tool_call": true
       }
@@ -135984,12 +136477,12 @@
             "text"
           ]
         },
-        "name": "DeepSeek V4.1 Flash",
+        "name": "DeepSeek V4.1 Flash 1017",
         "reasoning": true,
-        "release_date": "2026-09-10",
+        "release_date": "2026-10-17",
         "temperature": true,
         "tool_call": true,
-        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
         "provider": {
           "api": "https://opencode.ai/inference/go/openai/v1"
         }
@@ -138388,13 +138881,13 @@
       },
       "anthropic/claude-fable-latest": {
         "id": "anthropic/claude-fable-latest",
-        "name": "Claude Fable Latest (Claude Fable 5.1)",
+        "name": "Claude Fable Latest (Claude Fable 5.2)",
         "family": "claude-fable",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
         "temperature": false,
-        "release_date": "2026-09-01",
+        "release_date": "2026-11-09",
         "modalities": {
           "input": [
             "text",
@@ -138409,7 +138902,7 @@
           "context": 1000000,
           "output": 128000
         },
-        "canonical_model_id": "anthropic/claude-fable-5-1"
+        "canonical_model_id": "anthropic/claude-fable-5-2"
       },
       "anthropic/claude-opus-5": {
         "id": "anthropic/claude-opus-5",
@@ -144893,6 +145386,114 @@
         "name": "Claude Fable 5.2",
         "reasoning": true,
         "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "google/gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "google/gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "vertex/gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "vertex/gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon (Vertex AI)",
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "vertex/gemini-4-carbon@eu": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "vertex/gemini-4-carbon@eu",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon (Vertex AI, EU)",
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "vertex/gemini-4-carbon@us": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "vertex/gemini-4-carbon@us",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon (Vertex AI, US)",
+        "reasoning": true,
+        "release_date": "2026-11-10",
         "temperature": false,
         "tool_call": true
       }
@@ -153359,7 +153960,7 @@
         "id": "meta/muse-spark-open",
         "limit": {
           "context": 1048576,
-          "output": 131072
+          "output": 262144
         },
         "modalities": {
           "input": [
@@ -153447,6 +154048,56 @@
         "name": "Qwen3 30B A3B Instruct 2507",
         "reasoning": false,
         "release_date": "2025-07-28",
+        "temperature": true,
+        "tool_call": true
+      },
+      "anthropic/claude-fable-5.2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5.2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "google/gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "google/gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 943718
+        },
+        "modalities": {
+          "input": [
+            "audio",
+            "image",
+            "text",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
         "temperature": true,
         "tool_call": true
       }
