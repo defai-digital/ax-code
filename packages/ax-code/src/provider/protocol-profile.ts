@@ -28,8 +28,9 @@ export function isKimiProtocol(model: ProtocolModel): boolean {
 
 // GLM 5.3 is the first 5.x release with the current contract; 5.2 and older
 // keep their own handling. FlashX (and its -legal SKU) shares the Flash
-// settings; gateways may append a -free/-flex tier or a :tag / @version suffix.
-const GLM5_SEGMENT = /^glm-5\.(\d+)(?:-flash(?:x(?:-legal)?)?)?(?:-(?:free|flex))?(?:[:@].*)?$/
+// settings; gateways may append a -free/-flex tier or a :tag / @version suffix,
+// and may spell the minor with a hyphen or `p` (`glm-5-3`, `glm-5p3`).
+const GLM5_SEGMENT = /^glm-5(?:[.-]|p)(\d{1,2})(?!\d)(?:-flash(?:x(?:-legal)?)?)?(?:-(?:free|flex))?(?:[:@].*)?$/
 const GLM5_FIRST_MINOR = 3
 
 /** Final model-id segment names a GLM 5.x SKU (5.3 or later) with the current reasoning contract. */

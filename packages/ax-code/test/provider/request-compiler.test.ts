@@ -65,16 +65,32 @@ describe("final request compiler", () => {
     "z-ai/glm-5.4-flash",
     "glm-5.10",
     "GLM-5.4",
+    // Gateways also spell the minor with a hyphen or `p`.
+    "glm-5-3",
+    "glm-5-3-flash",
+    "glm-5p3",
+    "z-ai/glm-5-4-flash:free",
   ])("resolves %s to the glm5 reasoning family", (id) => {
     expect(resolveProtocolProfile(model(id)).reasoningFamily).toBe("glm5")
   })
 
-  test.each(["glm-5.2", "glm-5.1", "glm-5", "glm-5.3-highspeed", "glm-5.3-flashy", "glm-6.0", "glm-4.7-flash"])(
-    "does not treat %s as glm5",
-    (id) => {
-      expect(resolveProtocolProfile(model(id)).reasoningFamily).toBeUndefined()
-    },
-  )
+  test.each([
+    "glm-5.2",
+    "glm-5.1",
+    "glm-5",
+    "glm-5.3-highspeed",
+    "glm-5.3-flashy",
+    "glm-6.0",
+    "glm-4.7-flash",
+    // Hyphen / `p` spellings still need the 5.3 floor; a date tag is not a minor.
+    "glm-5-2",
+    "glm-5p2",
+    "glm-5-260617",
+    "glm-5-3-highspeed",
+    "glm-5.345",
+  ])("does not treat %s as glm5", (id) => {
+    expect(resolveProtocolProfile(model(id)).reasoningFamily).toBeUndefined()
+  })
 
   test("accepts the legacy glm5.3 protocolProfile override", () => {
     const current = model("my-deployment")
