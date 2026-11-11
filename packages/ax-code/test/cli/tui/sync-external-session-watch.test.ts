@@ -16,11 +16,13 @@ function harness(initial: { remote?: Latest; local?: Latest } = {}) {
     covered: false,
     failFetch: false,
     failResync: false,
+    fetches: 0,
   }
   const resyncs: string[] = []
   const errors: unknown[] = []
   const watch = createExternalSessionWatch({
     async fetchLatest() {
+      state.fetches++
       if (state.failFetch) throw new Error("backend unreachable")
       return state.remote
     },
@@ -133,6 +135,57 @@ describe("external session watch", () => {
     expect(h.resyncs).toEqual([])
   })
 
+  test("does not resync when local coverage changes during a poll", async () => {
+    const timers: Array<() => void> = []
+    let resolveLatest!: (latest: Latest) => void
+    const pending = new Promise<Latest>((resolve) => {
+      resolveLatest = resolve
+    })
+    let covered = false
+    const resyncs: string[] = []
+    const watch = createExternalSessionWatch({
+      fetchLatest: () => pending,
+      localFingerprint: () => "none",
+      isLocallyCovered: () => covered,
+      resync: async (sessionID) => {
+        resyncs.push(sessionID)
+      },
+      setTimer: (run) => {
+        timers.push(run)
+        return timers.length
+      },
+      clearTimer: () => {},
+    })
+    const stop = watch.watch("ses_1")
+    timers.shift()!()
+    // A local turn starts (or SSE disconnects) while the shared-store lookup is pending.
+    covered = true
+    resolveLatest(user("m1"))
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    expect(resyncs).toEqual([])
+
+    // The unchanged remote message must still be reconsidered once the TUI is idle again.
+    covered = false
+    timers.shift()!()
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    expect(resyncs).toEqual(["ses_1"])
+    stop()
+  })
+
+  test.each(["text", "reasoning"])("resyncs when the latest %s part completes", async (type) => {
+    const running = { id: "p1", type, text: "partial", time: { start: 1 } }
+    const completed = { id: "p1", type, text: "complete", time: { start: 1, end: 2 } }
+    const h = harness({ remote: assistant("m1", undefined, [running]), local: assistant("m1", undefined, [running]) })
+    const stop = h.watch.watch("ses_1")
+    await h.tick()
+    expect(h.resyncs).toEqual([])
+    h.state.remote = assistant("m1", undefined, [completed])
+    await h.tick()
+    expect(h.resyncs).toEqual(["ses_1"])
+    expect(h.state.local).toEqual(h.state.remote)
+    stop()
+  })
+
   test("a failed resync is retried, and repeated failures are reported once", async () => {
     const h = harness({ remote: assistant("m1", 1), local: assistant("m1", 1) })
     h.watch.watch("ses_1")
@@ -160,6 +213,7 @@ describe("external session watch", () => {
     h.state.remote = user("m2")
     await h.tick()
     expect(h.resyncs).toEqual([])
+    expect(h.state.fetches).toBe(0)
     expect(h.timers).toHaveLength(0)
   })
 })

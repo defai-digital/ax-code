@@ -1,3 +1,5 @@
+import { scheduleTuiTimeout } from "../util/timer"
+
 // Another process (AX Code Desktop, a second CLI) can run a turn on a session this TUI has open.
 // Its runtime writes the turn to the shared store, but publishes it only on its own event stream,
 // so the TUI keeps rendering the old transcript until the session is reopened (issue #52).
@@ -17,6 +19,8 @@ export interface LatestMessageInfo {
 export interface LatestMessagePart {
   id: string
   state?: { status?: string } | undefined
+  // Other part kinds carry different timestamps (for example, retry parts use `created`).
+  time?: { end?: number; [key: string]: unknown } | undefined
 }
 
 /**
@@ -30,9 +34,14 @@ export function latestMessageFingerprint(
 ): string {
   if (!info) return "none"
   const last = parts?.at(-1)
-  return [info.id, info.time?.completed ?? "-", parts?.length ?? 0, last?.id ?? "-", last?.state?.status ?? "-"].join(
-    ":",
-  )
+  return [
+    info.id,
+    info.time?.completed ?? "-",
+    parts?.length ?? 0,
+    last?.id ?? "-",
+    last?.state?.status ?? "-",
+    last?.time?.end ?? "-",
+  ].join(":")
 }
 
 export interface ExternalSessionWatchInput {
@@ -50,10 +59,21 @@ export interface ExternalSessionWatchInput {
   clearTimer?: (handle: unknown) => void
 }
 
-export function createExternalSessionWatch(input: ExternalSessionWatchInput) {
+export interface ExternalSessionWatch {
+  watch: (sessionID: string) => () => void
+}
+
+export function createExternalSessionWatch(input: ExternalSessionWatchInput): ExternalSessionWatch {
   const intervalMs = input.intervalMs ?? EXTERNAL_SESSION_POLL_INTERVAL_MS
-  const setTimer = input.setTimer ?? ((run: () => void, ms: number) => setTimeout(run, ms))
-  const clearTimer = input.clearTimer ?? ((handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>))
+  const setTimer =
+    input.setTimer ??
+    ((run: () => void, ms: number) => scheduleTuiTimeout(run, { name: "sync.external-session-poll", delayMs: ms }))
+  const clearTimer =
+    input.clearTimer ??
+    ((handle: unknown) => {
+      if (typeof handle === "function") handle()
+      else clearTimeout(handle as ReturnType<typeof setTimeout>)
+    })
 
   /** Starts watching one session. Returns the function that stops it. */
   function watch(sessionID: string): () => void {
@@ -64,7 +84,8 @@ export function createExternalSessionWatch(input: ExternalSessionWatchInput) {
     let lastSeen: string | undefined
     let failing = false
 
-    async function tick() {
+    async function tick(): Promise<void> {
+      if (stopped) return
       if (input.isLocallyCovered(sessionID)) {
         // Local events are authoritative now; compare afresh once the runtime goes idle.
         lastSeen = undefined
@@ -72,6 +93,11 @@ export function createExternalSessionWatch(input: ExternalSessionWatchInput) {
       }
       const latest = await input.fetchLatest(sessionID)
       if (stopped) return
+      // A local turn or disconnection may have taken over while the lookup was pending.
+      if (input.isLocallyCovered(sessionID)) {
+        lastSeen = undefined
+        return
+      }
       const remote = latestMessageFingerprint(latest?.info, latest?.parts)
       if (remote === lastSeen) return
       lastSeen = remote
@@ -79,22 +105,25 @@ export function createExternalSessionWatch(input: ExternalSessionWatchInput) {
       await input.resync(sessionID)
     }
 
-    function schedule() {
+    function schedule(): void {
       if (stopped) return
-      timer = setTimer(() => {
-        tick()
-          .then(() => {
-            failing = false
-          })
-          .catch((error) => {
-            // A failed resync must be retried on the next change, not skipped as already seen.
-            lastSeen = undefined
-            if (failing) return
-            failing = true
-            input.onError?.(sessionID, error)
-          })
-          .finally(schedule)
-      }, intervalMs)
+      timer = setTimer(
+        () =>
+          tick()
+            .then(() => {
+              failing = false
+            })
+            .catch((error) => {
+              if (stopped) return
+              // A failed resync must be retried on the next change, not skipped as already seen.
+              lastSeen = undefined
+              if (failing) return
+              failing = true
+              input.onError?.(sessionID, error)
+            })
+            .finally(schedule),
+        intervalMs,
+      )
     }
 
     schedule()
