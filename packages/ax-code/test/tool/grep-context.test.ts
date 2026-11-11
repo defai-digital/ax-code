@@ -338,8 +338,12 @@ describe("bounded grep context", () => {
         await expect(
           tool.execute({ pattern: "needle", context: 2 }, { ...ctx, abort: controller.signal }),
         ).rejects.toThrow("Cancelled search")
-        await expect(tool.execute({ pattern: "needle", context: 11 }, ctx)).rejects.toThrow()
-        await expect(tool.execute({ pattern: "needle", limit: 0 }, ctx)).rejects.toThrow()
+        // Out-of-range values clamp and still run instead of rejecting.
+        const clampedContext = await tool.execute({ pattern: "needle", context: 11 }, ctx)
+        expect((clampedContext.metadata as { context?: number }).context).toBe(10)
+        expect(clampedContext.output).toContain("(context clamped to 10)")
+        const clampedLimit = await tool.execute({ pattern: "needle", limit: 0 }, ctx)
+        expect(clampedLimit.output).toContain("(limit clamped to 1)")
       },
     })
   })

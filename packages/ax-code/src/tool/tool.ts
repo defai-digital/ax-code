@@ -95,6 +95,12 @@ export namespace Tool {
       execute(
         args: z.infer<Parameters>,
         ctx: Context,
+        /**
+         * The model's original arguments before validation. Tools whose schema
+         * degrades out-of-range values (see `clampIntParam`) use it to tell the
+         * model what changed; everything else can ignore it.
+         */
+        rawInput?: unknown,
       ): Promise<{
         title: string
         metadata: M
@@ -164,7 +170,7 @@ export namespace Tool {
           const toolStart = Date.now()
           let result: Awaited<ReturnType<typeof execute>>
           try {
-            result = await execute(validated, ctx)
+            result = await execute(validated, ctx, args)
             if (coercedPaths && result.metadata) (result.metadata as Metadata).coerced = true
             if (toolInfo.outputSchema) result.data = toolInfo.outputSchema.parse(result.data)
           } catch (err) {

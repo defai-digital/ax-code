@@ -6,6 +6,14 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- The grep tool clamps out-of-range `context` and `limit` values instead of rejecting them, so models that ask for more
+  context no longer loop on validation errors.
+- `run --add-dir` grants access to added directories again: prompt-time tool toggles no longer replace the session's
+  path-scoped permission rules, so the `external_directory` allow survives the first turn. A new tool-toggle map still
+  replaces the previous one, and the read-only sandbox still denies writes and bash.
+
 ## [7.30.22] - 2026-11-11
 
 ### Added

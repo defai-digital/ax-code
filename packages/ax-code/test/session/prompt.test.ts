@@ -8,6 +8,8 @@ import { Flag } from "../../src/flag/flag"
 import { NamedError } from "@ax-code/util/error"
 import { fileURLToPath, pathToFileURL } from "url"
 import { Instance } from "../../src/project/instance"
+import { Permission } from "../../src/permission"
+import { buildAddDirRules } from "../../src/cli/cmd/run-output"
 import { Plugin } from "../../src/plugin"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
@@ -534,6 +536,94 @@ describe("session.prompt legacy tools compatibility", () => {
             { permission: "question", action: "allow", pattern: "*" },
             { permission: "bash", action: "deny", pattern: "*" },
           ])
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  // `run` creates its session with the `--add-dir` external_directory allows
+  // and then always sends the legacy `tools` map (question/plan_exit gates) on
+  // the prompt. Persisting that map by replacing the session ruleset silently
+  // revoked the added-directory grant, so every read under the added dir asked
+  // and the headless run auto-rejected it.
+  test("merges prompt-time tool toggles without dropping create-time rules", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using added = await tmpdir()
+    const addedRule = buildAddDirRules([added.path])
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ permission: addedRule })
+        const readGlob = path.join(added.path, "*").replaceAll("\\", "/")
+
+        try {
+          const prompt = () =>
+            SessionPrompt.prompt({
+              sessionID: session.id,
+              agent: "build",
+              model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
+              noReply: true,
+              // The same per-turn tool gates `run` submits for every prompt.
+              tools: { question: false, plan_exit: false },
+              parts: [{ type: "text", text: "read the added directory" }],
+            })
+
+          await prompt()
+
+          const updated = await Session.get(session.id)
+          expect(updated.permission).toContainEqual(addedRule[0])
+          expect(Permission.evaluate("external_directory", readGlob, updated.permission ?? []).action).toBe("allow")
+          // The legacy toggles still apply.
+          expect(Permission.evaluate("question", "*", updated.permission ?? []).action).toBe("deny")
+
+          // Re-prompting updates the toggles in place instead of accumulating
+          // duplicate rules or dropping the create-time grant again.
+          await prompt()
+          const repro = await Session.get(session.id)
+          expect(repro.permission?.filter((rule) => rule.permission === "external_directory")).toEqual(addedRule)
+          expect(repro.permission?.filter((rule) => rule.permission === "question")).toHaveLength(1)
+          expect(Permission.evaluate("external_directory", readGlob, repro.permission ?? []).action).toBe("allow")
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  // A persistent legacy map must replace the previous legacy map rather than
+  // accumulate. Otherwise an SDK client that sends `tools: { a: false }` and
+  // later `tools: { b: false }` would leave both a and b denied.
+  test("replaces previous prompt-time tool toggles instead of accumulating", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using added = await tmpdir()
+    const addedRule = buildAddDirRules([added.path])
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ permission: addedRule })
+
+        try {
+          const prompt = (tools: Record<string, boolean>) =>
+            SessionPrompt.prompt({
+              sessionID: session.id,
+              agent: "build",
+              model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
+              noReply: true,
+              tools,
+              parts: [{ type: "text", text: "legacy tool toggles" }],
+            })
+
+          await prompt({ question: false })
+          await prompt({ plan_exit: false })
+
+          const updated = await Session.get(session.id)
+          expect(updated.permission).toContainEqual({ permission: "plan_exit", action: "deny", pattern: "*" })
+          expect(updated.permission?.filter((rule) => rule.permission === "question")).toEqual([])
+          expect(updated.permission).toContainEqual(addedRule[0])
         } finally {
           await Session.remove(session.id)
         }

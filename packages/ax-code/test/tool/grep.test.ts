@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
+import z from "zod"
 import path from "path"
 import { mkdir, writeFile } from "fs/promises"
 import { GrepTool } from "../../src/tool/grep"
@@ -713,6 +714,95 @@ describe("tool.grep", () => {
     expect(() =>
       CanonicalOutput.Grep.parse({ matches: [{ path: "a.ts", line: 0, text: "x" }], truncated: false }),
     ).toThrow()
+  })
+})
+
+describe("grep numeric clamping", () => {
+  test.each([
+    [15, 10],
+    [-2, 0],
+    [2.7, 2],
+  ])("context %s clamps to %i", async (context, expected) => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "source.ts")
+    await writeFile(file, "before\nneedle\nafter\n")
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file, context }, ctx)
+        expect(result.output).toContain(`(context clamped to ${expected})`)
+        expect(CanonicalOutput.Grep.parse(result.data).matches).toHaveLength(1)
+      },
+    })
+  })
+
+  test("a numeric context string is coerced and then clamped", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "source.ts")
+    await writeFile(file, "before\nneedle\nafter\n")
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (
+          await GrepTool.init()
+        ).execute({ pattern: "needle", path: file, context: "15" as unknown as number }, ctx)
+        expect((result.metadata as { context?: number }).context).toBe(10)
+        expect(result.output).toContain("(context clamped to 10)")
+      },
+    })
+  })
+
+  test("limit 500 clamps to 100", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "many.txt")
+    await writeFile(file, "needle\n".repeat(150))
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file, limit: 500 }, ctx)
+        expect(result.metadata.matches).toBe(150)
+        expect(result.metadata.truncated).toBe(true)
+        expect(result.output).toContain("(showing first 100)")
+        expect(result.output).toContain("(limit clamped to 100)")
+      },
+    })
+  })
+
+  test("limit 0 clamps to 1", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "many.txt")
+    await writeFile(file, "needle\nneedle\nneedle\n")
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file, limit: 0 }, ctx)
+        expect(result.metadata.matches).toBe(3)
+        expect(result.metadata.truncated).toBe(true)
+        expect(result.output).toContain("(showing first 1)")
+        expect(result.output).toContain("(limit clamped to 1)")
+      },
+    })
+  })
+
+  test("a non-numeric context is still rejected", async () => {
+    await expect(
+      (await GrepTool.init()).execute({ pattern: "needle", context: "abc" as unknown as number }, ctx),
+    ).rejects.toThrow(/invalid arguments/)
+  })
+
+  test("the provider JSON schema keeps both ranges and the clamp description", async () => {
+    const tool = await GrepTool.init()
+    const schema = z.toJSONSchema(tool.parameters as any) as unknown as {
+      properties: Record<string, Record<string, unknown>>
+    }
+    expect(schema.properties.context).toMatchObject({ type: "integer", minimum: 0, maximum: 10 })
+    expect(schema.properties.context.description).toContain("clamped")
+    expect(schema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: 100 })
+    expect(schema.properties.limit.description).toContain("clamped")
   })
 })
 

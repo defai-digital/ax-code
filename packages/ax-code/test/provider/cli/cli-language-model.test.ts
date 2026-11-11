@@ -2068,6 +2068,51 @@ describe("optional CLI flags", () => {
     return parts
   }
 
+  // A CLI that rejects an optional flag and exits before draining stdin: the
+  // write surfaces as EPIPE, then the process exits with stderr naming the flag.
+  function stdinRejectedChild(stderr: string, code = 2) {
+    const stdin = Object.assign(new EventEmitter(), {
+      write() {
+        queueMicrotask(() => {
+          stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }))
+          stdin.emit("close")
+        })
+        return false
+      },
+      end() {},
+    })
+    const stdout = new PassThrough()
+    const stderrStream = new PassThrough()
+    const exited = new Promise<number>((resolve) => {
+      setTimeout(() => {
+        stdout.end()
+        stderrStream.end(stderr)
+        resolve(code)
+      }, 0)
+    })
+    return {
+      stdin,
+      stdout,
+      stderr: stderrStream,
+      exited,
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 900,
+    } as any
+  }
+
+  function successfulStdinChild(output = MUSE_OK) {
+    const child = successfulChild(output)
+    child.stdin = Object.assign(new EventEmitter(), {
+      write() {
+        return true
+      },
+      end() {},
+    })
+    return child
+  }
+
   test("matches clap-style unknown-argument messages", () => {
     expect(rejectedOptionalCliFlag("error: unexpected argument '--disable-reminders' found\n", flags)).toBe(
       "--disable-reminders",
@@ -2076,6 +2121,27 @@ describe("optional CLI flags", () => {
     expect(rejectedOptionalCliFlag("unknown option: --disable-reminders", flags)).toBe("--disable-reminders")
     expect(rejectedOptionalCliFlag("UNRECOGNIZED OPTION '--DISABLE-REMINDERS'", flags)).toBe("--disable-reminders")
     expect(rejectedOptionalCliFlag("unknown argument --disable-reminders", flags)).toBe("--disable-reminders")
+  })
+
+  test("matches Python argparse unrecognized-arguments messages", () => {
+    expect(rejectedOptionalCliFlag("prog: error: unrecognized arguments: --disable-reminders\n", flags)).toBe(
+      "--disable-reminders",
+    )
+    // argparse lists every leftover token, so the flag may follow others.
+    expect(rejectedOptionalCliFlag("unrecognized arguments: --verbose --disable-reminders", flags)).toBe(
+      "--disable-reminders",
+    )
+    expect(rejectedOptionalCliFlag("unrecognized arguments: --disable-reminders-x", flags)).toBeUndefined()
+  })
+
+  test("matches Go flag-package messages with one or two dashes", () => {
+    expect(rejectedOptionalCliFlag("flag provided but not defined: -disable-reminders\n", flags)).toBe(
+      "--disable-reminders",
+    )
+    expect(rejectedOptionalCliFlag("flag provided but not defined: --disable-reminders", flags)).toBe(
+      "--disable-reminders",
+    )
+    expect(rejectedOptionalCliFlag("flag provided but not defined: -disable-reminders-x", flags)).toBeUndefined()
   })
 
   test("ignores unrelated stderr, a different flag, and a flag prefix", () => {
@@ -2127,6 +2193,45 @@ describe("optional CLI flags", () => {
         .join("")
       expect(text).toBe("PONG")
       expect(parts.filter((part) => part.type === "stream-start")).toHaveLength(1)
+      expect(parts.find((part) => part.type === "error")).toBeUndefined()
+      expect(parts.find((part) => part.type === "finish")).toBeDefined()
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(spawn.mock.calls[0]?.[0]).toContain("--disable-reminders")
+      expect(spawn.mock.calls[1]?.[0]).not.toContain("--disable-reminders")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doGenerate retries without the flag when stdin fails after a rejection", async () => {
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce(() => stdinRejectedChild(MUSE_REJECTED))
+      .mockImplementation(() => successfulStdinChild(MUSE_OK))
+    try {
+      const result = await museModel({ promptMode: "stdin" }).doGenerate({ prompt })
+      expect(result.content).toEqual([{ type: "text", text: "PONG" }])
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(spawn.mock.calls[0]?.[0]).toContain("--disable-reminders")
+      expect(spawn.mock.calls[1]?.[0]).not.toContain("--disable-reminders")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("doStream retries without the flag when stdin fails after a rejection", async () => {
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementationOnce(() => stdinRejectedChild(MUSE_REJECTED))
+      .mockImplementation(() => successfulStdinChild(MUSE_OK_TERMINAL))
+    try {
+      const { stream } = await museModel({ promptMode: "stdin" }).doStream({ prompt })
+      const parts = await readParts(stream)
+      const text = parts
+        .filter((part) => part.type === "text-delta")
+        .map((part) => part.delta)
+        .join("")
+      expect(text).toBe("PONG")
       expect(parts.find((part) => part.type === "error")).toBeUndefined()
       expect(parts.find((part) => part.type === "finish")).toBeDefined()
       expect(spawn).toHaveBeenCalledTimes(2)

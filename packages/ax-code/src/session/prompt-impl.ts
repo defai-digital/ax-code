@@ -253,11 +253,23 @@ export namespace SessionPrompt {
     const message = await createUserMessage(input)
     await Session.touch(input.sessionID)
 
-    // Backwards compatibility for legacy prompt-time `tools` toggles.
+    // Backwards compatibility for legacy prompt-time `tools` toggles. A new
+    // legacy map replaces the rules a previous legacy map produced, but
+    // create-time rules that are not legacy-shaped survive (e.g. `run
+    // --add-dir` external_directory allows). Legacy rules are always
+    // `{ pattern: "*", action: "allow" | "deny" }`, so dropping every `*`
+    // allow/deny rule and appending the new map preserves path-scoped grants
+    // without accumulating toggles across prompts. `run` resends its `*` gates
+    // on every prompt, so any create-time `*` rules it relies on are
+    // re-supplied.
     const permissions = permissionRulesetFromLegacyTools(input.tools)
     if (permissions.length > 0 && input.toolsScope !== "turn") {
-      session.permission = permissions
-      await Session.setPermission({ sessionID: session.id, permission: permissions })
+      const preserved = (session.permission ?? []).filter(
+        (rule) => !(rule.pattern === "*" && (rule.action === "allow" || rule.action === "deny")),
+      )
+      const merged = [...preserved, ...permissions]
+      session.permission = merged
+      await Session.setPermission({ sessionID: session.id, permission: merged })
     }
 
     if (input.noReply === true) {

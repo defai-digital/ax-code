@@ -4,7 +4,9 @@ import path from "path"
 import type { Tool } from "../../src/tool/tool"
 import { Instance } from "../../src/project/instance"
 import { assertExternalDirectory, assertSymlinkInsideProject, fileToolGuard } from "../../src/tool/external-directory"
-import type { Permission } from "../../src/permission"
+import { Permission } from "../../src/permission"
+import { Agent } from "../../src/agent/agent"
+import { buildAddDirRules } from "../../src/cli/cmd/run-output"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 import { Filesystem } from "../../src/util/filesystem"
@@ -406,6 +408,58 @@ describe("tool.fileToolGuard", () => {
         await fileToolGuard(ctx, project.path, { kind: "directory" })
         // Internal path should not trigger external_directory permission
         expect(requests.filter((r) => r.permission === "external_directory")).toHaveLength(0)
+      },
+    })
+  })
+})
+
+describe("add-dir permission rules", () => {
+  test.skipIf(process.platform === "win32")(
+    "allow the canonical external_directory ask under an added dir whose realpath differs",
+    async () => {
+      await using project = await tmpdir()
+      await using outside = await tmpdir()
+      await using aliasRoot = await tmpdir()
+      const realDir = path.join(outside.path, "added")
+      await fs.mkdir(realDir)
+      await fs.writeFile(path.join(realDir, "note.txt"), "MAGIC")
+      const linkDir = path.join(aliasRoot.path, "added-link")
+      await fs.symlink(realDir, linkDir)
+
+      // `run --add-dir` emits both the given and the real spelling; a read asks
+      // with the canonical real-spelled `<parentDir>/*` glob.
+      const rules = buildAddDirRules([linkDir, await fs.realpath(linkDir)])
+
+      await Instance.provide({
+        directory: project.path,
+        fn: async () => {
+          const agent = await Agent.get("build")
+          expect(agent).toBeDefined()
+          const ruleset = Permission.merge(agent!.permission, rules)
+          const readGlob = path.join(await fs.realpath(realDir), "*").replaceAll("\\", "/")
+          expect(Permission.evaluate("external_directory", readGlob, ruleset).action).toBe("allow")
+          // The given (symlinked) spelling is allowed too.
+          expect(
+            Permission.evaluate("external_directory", path.join(linkDir, "*").replaceAll("\\", "/"), ruleset).action,
+          ).toBe("allow")
+        },
+      })
+    },
+  )
+
+  test("still ask for a path outside every added dir", async () => {
+    await using project = await tmpdir()
+    await using added = await tmpdir()
+    await using outside = await tmpdir()
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const agent = await Agent.get("build")
+        expect(agent).toBeDefined()
+        const ruleset = Permission.merge(agent!.permission, buildAddDirRules([added.path]))
+        const outsideGlob = path.join(await fs.realpath(outside.path), "*").replaceAll("\\", "/")
+        expect(Permission.evaluate("external_directory", outsideGlob, ruleset).action).toBe("ask")
       },
     })
   })

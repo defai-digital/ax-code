@@ -21,6 +21,12 @@ import { parseJsonResult } from "@/util/json-value"
 /** Upper bound for accepting a JSON-encoded string repair. */
 const MAX_JSON_STRING_BYTES = 64 * 1024
 
+/** Inclusive bounds for a numeric tool parameter that degrades out-of-range values. */
+export interface ClampRange {
+  min: number
+  max: number
+}
+
 /**
  * Numeric strings accepted for a number repair: a full-string decimal match
  * only (no whitespace, exponent, hex, or trailing characters) so the string
@@ -210,4 +216,54 @@ export function coerceToolArguments(
 
   if (!repaired || paths.length === 0) return undefined
   return { value: repaired, paths }
+}
+
+function clampIntValue(value: unknown, range: ClampRange): unknown {
+  if (typeof value !== "number" || !Number.isFinite(value)) return value
+  return Math.min(range.max, Math.max(range.min, Math.floor(value)))
+}
+
+/**
+ * ADR-207 companion: an optional integer parameter that clamps an out-of-range
+ * number before validation instead of rejecting the whole tool call. A model
+ * that asks for more context than the tool supports degrades to the cap
+ * instead of repeating the same failing call.
+ *
+ * Non-integers round down before clamping. Non-numbers are left for the normal
+ * parse path, so the ADR-207 repair can still turn a numeric string such as
+ * `"15"` into 15 on the retry parse and that value is then clamped too.
+ *
+ * `z.toJSONSchema` reflects the inner schema, so the provider-facing schema
+ * keeps `type: "integer"` with `minimum`/`maximum` and the description.
+ */
+export function clampIntParam(range: ClampRange, description: string) {
+  return z
+    .preprocess((value) => clampIntValue(value, range), z.number().int().min(range.min).max(range.max))
+    .optional()
+    .describe(description)
+}
+
+/**
+ * Model-facing notes for parameters the clamp repaired. Each raw argument is
+ * compared with its validated value, so a genuine in-range value never claims
+ * to have been clamped. Returns an empty list when nothing changed.
+ */
+export function clampedParamNotes(rawInput: unknown, fields: Record<string, number | undefined>): string[] {
+  if (typeof rawInput !== "object" || rawInput === null || Array.isArray(rawInput)) return []
+  const record = rawInput as Record<string, unknown>
+  const notes: string[] = []
+  for (const [key, clamped] of Object.entries(fields)) {
+    if (clamped === undefined) continue
+    const raw = record[key]
+    const original =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && NUMERIC_STRING_PATTERN.test(raw)
+          ? Number(raw)
+          : undefined
+    if (original !== undefined && Number.isFinite(original) && original !== clamped) {
+      notes.push(`${key} clamped to ${clamped}`)
+    }
+  }
+  return notes
 }

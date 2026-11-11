@@ -19,6 +19,7 @@ import { CanonicalOutput } from "./canonical-output"
 import { searchWithContext } from "./grep-context"
 import { readGrepOutput } from "./grep-output"
 import { createGrepCollector } from "./grep-collector"
+import { clampIntParam, clampedParamNotes } from "./arg-coercion"
 
 const NativeSearchMatch = z.object({
   path: z.string(),
@@ -50,32 +51,30 @@ export const GrepTool = Tool.define("grep", {
       .optional()
       .describe("The file or directory to search in. Defaults to the current working directory."),
     include: z.string().optional().describe('File pattern to include in the search (e.g. "*.js", "*.{ts,tsx}")'),
-    context: z
-      .number()
-      .int()
-      .min(0)
-      .max(10)
-      .optional()
-      .describe(
-        "Lines before and after matches (0-10). Use for definitions or callers to avoid a separate read. Defaults to 0.",
-      ),
-    limit: z
-      .number()
-      .int()
-      .min(1)
-      .max(100)
-      .optional()
-      .describe("Maximum matching lines (1-100). Defaults to 20 with context, otherwise 100."),
+    context: clampIntParam(
+      { min: 0, max: 10 },
+      "Lines before and after matches (0-10). Values above 10 are clamped to 10. Use for definitions or callers to avoid a separate read. Defaults to 0.",
+    ),
+    limit: clampIntParam(
+      { min: 1, max: 100 },
+      "Maximum matching lines (1-100). Values above 100 are clamped to 100. Defaults to 20 with context, otherwise 100.",
+    ),
   }),
   concurrencySafe: () => true,
   outputSchema: CanonicalOutput.Grep,
-  async execute(params, ctx) {
+  async execute(params, ctx, rawInput) {
     if (!params.pattern) {
       throw new Error("pattern is required")
     }
     if (params.path !== undefined) resolveToolFilePath(params.path, Instance.directory)
     if (params.pattern.includes("\x00")) throw new Error("Pattern contains null byte")
     if (params.include?.includes("\x00")) throw new Error("Include pattern contains null byte")
+
+    const clampNotes = clampedParamNotes(rawInput, { context: params.context, limit: params.limit })
+    // A clamped call still runs; tell the model the effective value so it can
+    // adjust the next call instead of repeating the same out-of-range one.
+    const finish = <T extends { output: string }>(result: T): T =>
+      clampNotes.length ? { ...result, output: `${result.output}\n\n(${clampNotes.join("; ")})` } : result
 
     let searchPath = params.path ?? Instance.directory
     const searchStat = Filesystem.stat(resolveToolFilePath(searchPath, Instance.directory))
@@ -101,7 +100,9 @@ export const GrepTool = Tool.define("grep", {
 
     const limit = params.limit ?? (params.context ? 20 : RESULT_LIMIT)
     if (params.context)
-      return searchWithContext({ ...params, path: searchPath, limit, context: params.context, isFile }, ctx.abort)
+      return finish(
+        await searchWithContext({ ...params, path: searchPath, limit, context: params.context, isFile }, ctx.abort),
+      )
     const scanLimit = limit + 1
 
     // Older addons use the cancellable subprocess path, never a synchronous scan.
@@ -147,14 +148,14 @@ export const GrepTool = Tool.define("grep", {
         const visibleMatches = truncated ? matches.slice(0, limit) : matches
 
         if (visibleMatches.length === 0) {
-          return {
+          return finish({
             title: params.pattern,
             metadata: { matches: 0, truncated },
             data: { matches: [], truncated },
             output: truncated
               ? "No visible matches found before the search limit; narrow the path or pattern."
               : "No files found",
-          }
+          })
         }
 
         // Report the pre-truncation count like the ripgrep path below —
@@ -180,7 +181,7 @@ export const GrepTool = Tool.define("grep", {
           outputLines.push(`  Line ${match.line}: ${truncatedLineText}`)
         }
 
-        return {
+        return finish({
           title: params.pattern,
           data: {
             matches: visibleMatches.map((match) => ({
@@ -195,7 +196,7 @@ export const GrepTool = Tool.define("grep", {
             truncated,
           },
           output: outputLines.join("\n"),
-        }
+        })
       } catch (e: unknown) {
         const code = errorCode(e)
         if (code === "MODULE_NOT_FOUND" || code === "ERR_MODULE_NOT_FOUND" || e instanceof SyntaxError) {
@@ -252,12 +253,12 @@ export const GrepTool = Tool.define("grep", {
     // With --no-messages, we suppress error output but still get exit code 2 for broken symlinks etc.
     // An error with no results is not evidence that no matches exist.
     if (!outputCapped && exitCode === 1) {
-      return {
+      return finish({
         title: params.pattern,
         metadata: { matches: 0, truncated: false },
         data: { matches: [], truncated: false },
         output: "No files found",
-      }
+      })
     }
 
     if (!outputCapped && ((exitCode !== 0 && exitCode !== 2) || (exitCode === 2 && !bytes))) {
@@ -280,12 +281,12 @@ export const GrepTool = Tool.define("grep", {
     const finalMatches = matches
 
     if (finalMatches.length === 0) {
-      return {
+      return finish({
         title: params.pattern,
         metadata: { matches: 0, truncated },
         data: { matches: [], truncated },
         output: truncated ? "No visible matches found; some search results were unavailable." : "No files found",
-      }
+      })
     }
 
     const outputLines = [
@@ -327,7 +328,7 @@ export const GrepTool = Tool.define("grep", {
         "(Search capture limit reached; ordering covers captured results only. Narrow the path or pattern.)",
       )
 
-    return {
+    return finish({
       title: params.pattern,
       data: {
         matches: finalMatches.map((match) => ({
@@ -342,6 +343,6 @@ export const GrepTool = Tool.define("grep", {
         truncated,
       },
       output: outputLines.join("\n"),
-    }
+    })
   },
 })

@@ -68,18 +68,33 @@ function escapeRegExp(value: string): string {
  * Return the optional flag a CLI rejected, if its stderr reports an unknown
  * argument naming that flag. Covers the common clap/yargs/argparse shapes:
  * "unexpected argument '--flag'", "unknown option '--flag'",
- * "unknown option: --flag", "unrecognized option '--flag'", and
- * "unknown argument --flag". The flag is matched case-insensitively and
- * whole, so `--disable-reminders` does not match `--disable-reminders-x`.
+ * "unknown option: --flag", "unrecognized option '--flag'",
+ * "unknown argument --flag", and Python argparse's
+ * "unrecognized arguments: ... --flag" list, where the flag may follow other
+ * tokens on the same line. Also covers Go's flag package, which reports
+ * "flag provided but not defined: -flag" and prints the name with a single dash
+ * even when the flag was given as `--flag`, so either leading dash form matches.
+ * The flag is matched case-insensitively and whole, so `--disable-reminders`
+ * does not match `--disable-reminders-x`.
  */
 export function rejectedOptionalCliFlag(stderr: string, optionalArgs: readonly string[]): string | undefined {
   if (!stderr) return undefined
   for (const flag of optionalArgs) {
-    const pattern = new RegExp(
-      `(?:unexpected argument|unknown (?:option|argument)|unrecognized option)\\s*[:=]?\\s*['"]?${escapeRegExp(flag)}(?![\\w-])`,
+    const wholeFlag = `(?![\\w-])`
+    // clap/yargs/argparse single-argument messages, plus argparse's
+    // "unrecognized arguments:" list where the flag may follow other tokens.
+    const direct = new RegExp(
+      `(?:unexpected argument|unknown (?:option|argument)|unrecognized option|unrecognized arguments[^\\n]*?)` +
+        `\\s*[:=]?\\s*['"]?${escapeRegExp(flag)}${wholeFlag}`,
       "i",
     )
-    if (pattern.test(stderr)) return flag
+    if (direct.test(stderr)) return flag
+    // Go's flag package: "flag provided but not defined: -flag" (one dash).
+    const go = new RegExp(
+      `flag provided but not defined:\\s*-{1,2}${escapeRegExp(flag.replace(/^-+/, ""))}${wholeFlag}`,
+      "i",
+    )
+    if (go.test(stderr)) return flag
   }
   return undefined
 }
@@ -468,6 +483,43 @@ export class CliLanguageModel implements LanguageModelV3 {
     }
   }
 
+  /**
+   * A stdin write can fail (EPIPE, or "stdin closed before buffered prompt data
+   * drained") when the CLI rejected an optional flag and exited before reading
+   * the prompt. Wait briefly for that exit and, when it failed with no stdout
+   * while stderr names an optional flag, report the flag so the caller can take
+   * the normal optional-flag retry path instead of surfacing the stdin error.
+   */
+  private async optionalFlagFromStdinFailure(
+    proc: Process.Child,
+    abort: { readonly isAborted: boolean; readonly abortError: Error },
+  ): Promise<{ flag: string; failure: string } | undefined> {
+    const optionalArgs = this.config.optionalArgs ?? []
+    if (optionalArgs.length === 0 || abort.isAborted) return undefined
+    let code: number
+    try {
+      // Bound the wait: a CLI that is still running (or never exits) must not
+      // hold the stdin error behind an unbounded await.
+      code = await withTimeout(proc.exited, CLI_TERMINAL_GRACE_MS, "CLI provider stdin failure exit timed out")
+    } catch {
+      return undefined
+    }
+    // An abort during the wait wins over any flag inference.
+    if (abort.isAborted) return undefined
+    if (code === 0 || !proc.stdout || !proc.stderr) return undefined
+    let stdout: Buffer
+    let stderr: Buffer
+    try {
+      ;[stdout, stderr] = await Promise.all([Process.drain(proc.stdout), Process.drain(proc.stderr)])
+    } catch {
+      return undefined
+    }
+    if (stdout.toString().trim()) return undefined
+    const flag = rejectedOptionalCliFlag(stderr.toString(), optionalArgs)
+    if (!flag) return undefined
+    return { flag, failure: formatCliFailure(code, stdout, stderr) }
+  }
+
   async doGenerate(options: LanguageModelV3CallOptions) {
     if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
 
@@ -528,7 +580,18 @@ export class CliLanguageModel implements LanguageModelV3 {
         // timeout is armed only after the write completes).
         await withTimeout(writeCliPrompt(proc.stdin, text), CLI_TIMEOUT_MS, "CLI provider stdin write timed out")
       } catch (error) {
+        // A rejected optional flag can make the CLI exit before reading stdin,
+        // so the write surfaces as EPIPE / a closed stdin. Treat that as the
+        // flag rejection so the normal retry (without the flag) can run.
+        const rejected = await this.optionalFlagFromStdinFailure(proc, abort)
+        if (rejected) {
+          rememberRejectedOptionalArg(this.config.providerID, this.config.binary, rejected.flag)
+          await abort.kill()
+          if (abort.isAborted) throw abort.abortError
+          throw new OptionalCliFlagRejectedError(rejected.flag, rejected.failure)
+        }
         await abort.kill()
+        if (abort.isAborted) throw abort.abortError
         throw error
       }
     }
@@ -640,6 +703,8 @@ export class CliLanguageModel implements LanguageModelV3 {
 
     let { proc, text } = await this.startProcess(options)
     let abort = this.setupProcessAbort(proc, options.abortSignal, "cli stream")
+    // At most one optional-flag retry per stream, matching doGenerate.
+    let retried = false
 
     if (!proc.stdout || !proc.stderr) {
       await abort.kill()
@@ -661,14 +726,47 @@ export class CliLanguageModel implements LanguageModelV3 {
       // A write failure (e.g. EPIPE) does not mean the child has exited —
       // without an explicit kill here the process was left running with no
       // one attached to its stdout/stderr or awaiting its exit, orphaning it.
+      let stdinError: unknown
       try {
         // Bound the stdin drain: a child that never reads stdin and never exits
         // would otherwise leave this await unsettled forever (the overall CLI
         // timeout is armed only after the write completes).
         await withTimeout(writeCliPrompt(proc.stdin, text), CLI_TIMEOUT_MS, "CLI provider stdin write timed out")
       } catch (error) {
+        stdinError = error
+      }
+      if (stdinError !== undefined) {
+        // A rejected optional flag can make the CLI exit before reading stdin,
+        // so the write surfaces as EPIPE / a closed stdin. Retry once without
+        // the flag before reporting the stdin error.
+        const rejected = await this.optionalFlagFromStdinFailure(proc, abort)
+        if (!rejected) {
+          await abort.kill()
+          if (abort.isAborted) throw abort.abortError
+          throw stdinError
+        }
+        rememberRejectedOptionalArg(this.config.providerID, this.config.binary, rejected.flag)
         await abort.kill()
-        throw error
+        if (abort.isAborted) throw abort.abortError
+        log.warn(`${this.config.providerID} rejected ${rejected.flag}; retrying without it`)
+        retried = true
+        ;({ proc, text } = await this.startProcess(options))
+        abort = this.setupProcessAbort(proc, options.abortSignal, "cli stream")
+        if (!proc.stdout || !proc.stderr) {
+          await abort.kill()
+          throw new Error("CLI process output not available")
+        }
+        if (!proc.stdin) {
+          await abort.kill()
+          throw new Error("CLI process stdin not available")
+        }
+        try {
+          await withTimeout(writeCliPrompt(proc.stdin, text), CLI_TIMEOUT_MS, "CLI provider stdin write timed out")
+        } catch (retryError) {
+          await abort.kill()
+          if (abort.isAborted) throw abort.abortError
+          throw retryError
+        }
       }
     }
     const config = this.config
@@ -688,8 +786,6 @@ export class CliLanguageModel implements LanguageModelV3 {
     // a rejected attempt become no-ops once a retry attaches.
     let attempt = 0
     let retrying = false
-    // At most one optional-flag retry per stream, matching doGenerate.
-    let retried = false
 
     const stream = new ReadableStream<LanguageModelV3StreamPart>({
       start(controller) {
@@ -1008,11 +1104,25 @@ export class CliLanguageModel implements LanguageModelV3 {
                   fail(new Error("CLI process stdin not available"))
                   return
                 }
-                await withTimeout(
-                  writeCliPrompt(proc.stdin, text),
-                  CLI_TIMEOUT_MS,
-                  "CLI provider stdin write timed out",
-                )
+                try {
+                  await withTimeout(
+                    writeCliPrompt(proc.stdin, text),
+                    CLI_TIMEOUT_MS,
+                    "CLI provider stdin write timed out",
+                  )
+                } catch (error) {
+                  // The retried CLI may reject another optional flag before
+                  // reading stdin. Surface that rejection (and remember the
+                  // flag) instead of the misleading stdin error.
+                  const rejected = await model.optionalFlagFromStdinFailure(proc, abort)
+                  if (!rejected) throw error
+                  rememberRejectedOptionalArg(config.providerID, config.binary, rejected.flag)
+                  await abort.kill()
+                  if (closed()) return
+                  retrying = false
+                  fail(new Error(rejected.failure))
+                  return
+                }
                 if (closed()) {
                   await abort.kill()
                   return
@@ -1024,7 +1134,7 @@ export class CliLanguageModel implements LanguageModelV3 {
               await abort.kill()
               if (closed()) return
               retrying = false
-              fail(error)
+              fail(abort.isAborted ? abort.abortError : error)
             }
           })()
         }
