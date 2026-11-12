@@ -175,7 +175,9 @@ export namespace WikiAutomatic {
               dir: cfg.dir,
               reason: decision.reason,
             })
-            return
+            // The Wiki is still unhealthy or stale; report the recorded
+            // failure instead of a completed maintenance pass.
+            return { failed: "suppressed" as const, retryAt: decision.retryAt }
           }
           let built: Awaited<ReturnType<typeof runNativeWiki>> | undefined
           try {
@@ -223,7 +225,7 @@ export namespace WikiAutomatic {
               planHash: built.manifest.planHash,
               error: `page generation failed: ${built.failedPages.map((page) => page.path).join(", ")}`,
             })
-            return
+            return { failed: "partial" as const }
           }
           await clearWikiFailureMemory(root, cfg.dir)
         },

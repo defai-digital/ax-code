@@ -31,7 +31,7 @@ import {
   type WikiPlan,
   type WikiSource,
 } from "@ax-code/ax-wiki/node"
-import { APICallError, NoObjectGeneratedError, streamObject } from "ai"
+import { APICallError, NoObjectGeneratedError, streamObject, streamText } from "ai"
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { CLI_PLAN_PROVIDER_IDS, LOCAL_RUNTIME_PROVIDER_IDS } from "../mode/provider-category"
@@ -134,6 +134,11 @@ Rules:
 - If evidence is incomplete, say what is uncertain and how to verify it.
 - Do not include a Sources section; AX Wiki adds the authoritative source list.
 Return a json object with summary (20-600 characters), body (at least 80 characters of Markdown), symbols (an array of at most 80 exact symbol strings), and symbolSummaries (an array of at most 20 {name, summary} objects for symbols from the symbols array).`
+
+// Sent instead of a JSON response format when the deployment rejects one, so
+// the page object has to be requested in the prompt alone.
+const PAGE_TEXT_MODE_SYSTEM =
+  "\nThis deployment has no JSON response format. Return only the single json object itself: no code fences, no commentary before or after it."
 
 const WIKI_PROMPT_VERSION = "native-page-v4-low-reasoning"
 
@@ -374,6 +379,51 @@ type WikiPageRetry = {
   tight?: boolean
   /** Wait before retrying, for transient provider errors. */
   delayMs?: number
+  /** Retry without a JSON response format, parsing the page from plain text. */
+  textMode?: boolean
+}
+
+// Statuses that describe the caller or its quota, not the request shape, so a
+// different response format cannot change the outcome.
+const WIKI_JSON_MODE_UNRELATED_STATUS = new Set([401, 403, 429])
+
+/**
+ * True when the provider answered a JSON-mode page request with an API error
+ * that a plain-text request may avoid. Routers and gateways refuse an
+ * unsupported `response_format` in provider-specific ways (the AX Trust auto
+ * router answers 503 "no eligible route candidate"), so the status alone
+ * cannot tell a rejected format from an outage. The retry is spent either
+ * way; spending it on the other request shape is what can make it succeed.
+ */
+export function wikiJsonModeRejected(error: unknown): boolean {
+  if (!APICallError.isInstance(error) || error.statusCode === undefined) return false
+  return !WIKI_JSON_MODE_UNRELATED_STATUS.has(error.statusCode)
+}
+
+/**
+ * Parse a plain-text page response into the page object. Failures surface as
+ * `NoObjectGeneratedError`, so the length and format retries classify them
+ * exactly as they classify a JSON-mode response.
+ */
+export function parseWikiPageText(
+  text: string,
+  meta: {
+    response: NonNullable<NoObjectGeneratedError["response"]>
+    usage: NonNullable<NoObjectGeneratedError["usage"]>
+    finishReason: NonNullable<NoObjectGeneratedError["finishReason"]>
+  },
+): z.infer<typeof PAGE_SCHEMA> {
+  const json = parseJsonResult(repairWikiPageText(text) ?? text)
+  const parsed = json.ok ? PAGE_SCHEMA.safeParse(json.value) : undefined
+  if (parsed?.success) return parsed.data
+  throw new NoObjectGeneratedError({
+    message: "No object generated: response did not match schema.",
+    cause: parsed?.error,
+    text,
+    response: meta.response,
+    usage: meta.usage,
+    finishReason: meta.finishReason,
+  })
 }
 
 const WIKI_PAGE_FORMAT_RETRY_FEEDBACK = `\nThe previous attempt did not produce a valid page object. Return only one complete JSON object, without code fences or surrounding prose, respecting the field limits: summary at most ${PAGE_SUMMARY_MAX} characters, at most ${PAGE_SYMBOLS_MAX} symbols, at most ${SYMBOL_SUMMARIES_MAX} symbolSummaries, each symbol name at most ${PAGE_SYMBOL_NAME_MAX} characters and each symbolSummary.summary at most ${SYMBOL_SUMMARY_MAX} characters. Escape newlines and quotes inside JSON strings and close every string, array, and object.`
@@ -516,6 +566,7 @@ async function resolveModel(model?: string, sessionID?: SessionID) {
     reference,
     label: `${reference.providerID}/${reference.modelID}`,
     language: await Provider.getLanguage(resolved),
+    jsonMode: resolved.options?.structuredOutput !== false,
     maxOutputTokens: wikiPageOutputTokens(resolved),
     pageDeadlineMs: wikiPageDeadlineMs(resolved),
     providerOptions: reasoning.providerOptions,
@@ -835,6 +886,9 @@ export async function runNativeWiki(input: {
       allowWrite: input.allowWrite,
       onError: (error) => log.warn("wiki page cache unavailable", { error: NamedError.message(error) }),
     })
+    // Build-scoped: once a plain-text request succeeds where JSON mode was
+    // rejected, later pages skip the request that is known to fail.
+    let textMode = !model.jsonMode
     const generator = async (request: WikiPageGenerationRequest): Promise<WikiPageGenerationResult> => {
       const pageStartedMs = Date.now()
       const abort = new AbortController()
@@ -852,35 +906,56 @@ export async function runNativeWiki(input: {
       try {
         let retry: WikiPageRetry | undefined
         for (let attempt = 0; attempt < WIKI_PAGE_MAX_ATTEMPTS; attempt++) {
+          const pageTextMode = textMode || retry?.textMode === true
           try {
             signal.throwIfAborted()
             if (retry?.delayMs) await wikiPageRetryDelay(retry.delayMs, signal)
             signal.throwIfAborted()
             const prompt = pagePrompt(request, retry?.tight === true)
-            promptBytes = Buffer.byteLength(prompt) + Buffer.byteLength(PAGE_SYSTEM + (retry?.feedback ?? ""))
-            const result = streamObject({
+            const system = PAGE_SYSTEM + (pageTextMode ? PAGE_TEXT_MODE_SYSTEM : "") + (retry?.feedback ?? "")
+            promptBytes = Buffer.byteLength(prompt) + Buffer.byteLength(system)
+            const call = {
               // Native owns the two-attempt budget; SDK retries would hide
               // requests and wrap exhausted errors outside our classifier.
               maxRetries: 0,
               model: model.language,
               headers: { "User-Agent": `ax-code/${Installation.VERSION} ax-wiki` },
               maxOutputTokens: model.maxOutputTokens,
-              schema: PAGE_SCHEMA,
-              experimental_repairText: async ({ text }) => repairWikiPageText(text),
               abortSignal: signal,
               ...(model.providerOptions ? { providerOptions: model.providerOptions } : {}),
               messages: [
-                { role: "system", content: PAGE_SYSTEM + (retry?.feedback ?? "") },
-                { role: "user", content: prompt },
+                { role: "system" as const, content: system },
+                { role: "user" as const, content: prompt },
               ],
-            })
+            }
+            const result = pageTextMode
+              ? streamText(call)
+              : streamObject({
+                  ...call,
+                  schema: PAGE_SCHEMA,
+                  experimental_repairText: async ({ text }) => repairWikiPageText(text),
+                })
             for await (const part of result.fullStream) {
               if (part.type === "error") throw part.error
               if (timeToFirstChunkMs === undefined && part.type === "text-delta")
                 timeToFirstChunkMs = Date.now() - pageStartedMs
             }
-            const object = await result.object
-            recordUsage(await result.usage)
+            const usage = await result.usage
+            const object =
+              "object" in result
+                ? await result.object
+                : parseWikiPageText(await result.text, {
+                    response: await result.response,
+                    usage,
+                    finishReason: await result.finishReason,
+                  })
+            recordUsage(usage)
+            if (pageTextMode && !textMode) {
+              textMode = true
+              log.info("wiki model rejected the JSON response format; generating pages from plain text", {
+                model: model.label,
+              })
+            }
             const issues = validateWikiPageLinks(
               request.page.path,
               object.body,
@@ -942,14 +1017,22 @@ export async function runNativeWiki(input: {
               model: model.label,
               attempt: attempt + 1,
               failure: failure ?? "unclassified",
-              retry: failure !== undefined && attempt + 1 < WIKI_PAGE_MAX_ATTEMPTS,
+              retry:
+                attempt + 1 < WIKI_PAGE_MAX_ATTEMPTS &&
+                (failure !== undefined || (!pageTextMode && wikiJsonModeRejected(error))),
+              responseFormat: pageTextMode ? "text" : "json",
               finishReason: structured ? error.finishReason : undefined,
               responseCharacters: structured ? (error.text?.length ?? 0) : 0,
             })
             // One class-appropriate retry, then fail the build: replaying an
             // identical request after a deterministic failure only burns the
             // page deadline again.
-            const next = failure && attempt + 1 < WIKI_PAGE_MAX_ATTEMPTS ? wikiPageRetry(failure) : undefined
+            const retryable = attempt + 1 < WIKI_PAGE_MAX_ATTEMPTS
+            // A JSON-mode request the provider refused is retried as plain
+            // text even when the error is not otherwise retryable.
+            const fallback = retryable && !pageTextMode && wikiJsonModeRejected(error)
+            const classified = failure && retryable ? wikiPageRetry(failure) : undefined
+            const next = fallback ? { ...(classified ?? { feedback: "" }), textMode: true } : classified
             if (!next) {
               outcomes.set(request.page.path, {
                 path: request.page.path,

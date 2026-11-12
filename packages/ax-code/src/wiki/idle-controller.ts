@@ -8,6 +8,14 @@ export type WikiMaintenanceStatus = {
   revision: number
 }
 
+/**
+ * A build that returned without throwing but left the Wiki short of complete:
+ * `suppressed` skipped the model run because of a recorded failure cooldown,
+ * `partial` published some pages while others failed. Both are failed
+ * maintenance; only `partial` changed what is on disk.
+ */
+export type WikiBuildShortfall = { failed: "suppressed" | "partial"; retryAt?: number }
+
 /** Runtime-independent scheduling port; no timers or tasks survive disposal. */
 export function createWikiIdleController(input: {
   idle(): Promise<boolean>
@@ -17,15 +25,17 @@ export function createWikiIdleController(input: {
     signal: AbortSignal,
     progress: (event: WikiBuildProgress) => void,
     options: { explicit: boolean },
-  ): Promise<void>
+  ): Promise<void | WikiBuildShortfall>
   idleMs?: number
   pollMs?: number
   retryMs?: number
   deadlineMs?: number
+  shortfallMs?: number
 }) {
   const idleMs = input.idleMs ?? 30_000
   const pollMs = input.pollMs ?? 5_000
   const retryMs = input.retryMs ?? 60_000
+  const shortfallMs = input.shortfallMs ?? 300_000
   let status: WikiMaintenanceStatus = { phase: "queued", reason: "idle", completed: 0, total: 0, revision: 0 }
   let timer: ReturnType<typeof setTimeout> | undefined
   let flight: Promise<void> | undefined
@@ -121,8 +131,22 @@ export function createWikiIdleController(input: {
             { explicit: runExplicit },
           ),
         )
-        .then(() => {
+        .then((shortfall) => {
           signal.throwIfAborted()
+          if (shortfall) {
+            // Not a new failure: the build already recorded the one it is
+            // reporting. Stay dirty so the next check cannot publish "ready"
+            // over a Wiki that is missing or incomplete, and wait out the
+            // cooldown instead of re-reading it on every poll.
+            dirty = true
+            retryAt = explicit ? 0 : (shortfall.retryAt ?? Date.now() + shortfallMs)
+            publish({
+              phase: "failed",
+              reason: "failed",
+              ...(shortfall.failed === "partial" ? { revision: status.revision + 1 } : {}),
+            })
+            return
+          }
           failures = 0
           retryAt = 0
           publish({ phase: "ready", reason: "complete", completed: status.total, revision: status.revision + 1 })
