@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.26] - 2026-11-12
+
+### Changed
+
+- Publish the paired SDK 2.6.80 maintenance release and refresh the upstream model catalog.
+
+### Fixed
+
+- Explicit Wiki refreshes resume after foreground work, including projects outside Git or with automatic maintenance disabled.
+- Paused explicit Wiki refreshes report denied write access accurately and continue to respect disabled or read-only policy.
+- Wiki generation falls back to plain-text JSON when a provider rejects structured output and reports incomplete maintenance accurately.
+
 ## [7.30.25] - 2026-11-11
 
 ### Changed
