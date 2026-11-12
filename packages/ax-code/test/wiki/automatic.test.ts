@@ -358,7 +358,9 @@ test("a maintenance deadline records durable backoff that survives instance rest
     fn: async () => {
       await WikiAutomatic.enable("build")
       elapsed = 30_001
-      await waitForStatus({ phase: "ready" })
+      // The cooldown skips the model run, but the Wiki is still missing: the
+      // pass must not be reported as completed maintenance.
+      await waitForStatus({ phase: "failed", reason: "failed", revision: 0 })
       expect(state.build).toHaveBeenCalledTimes(1)
       expect((await readWikiFailureMemory(tmp.path, ".ax-wiki"))?.consecutiveFailures).toBe(1)
       // Explicit refresh still bypasses the saved timeout cooldown.
@@ -366,6 +368,34 @@ test("a maintenance deadline records durable backoff that survives instance rest
       await waitForBuildCalls(2)
       await waitForStatus({ phase: "ready" })
       expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toBeUndefined()
+    },
+  })
+})
+
+test("a build that published some pages but failed others reports failed maintenance", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.spyOn(Agent, "get").mockImplementation(async (name) => ({
+    name,
+    mode: "primary",
+    native: true,
+    options: {},
+    permission: Permission.fromConfig({ "*": "allow" }),
+  }))
+  state.build.mockResolvedValueOnce({
+    failedPages: [{ path: "modules/core.md", error: "page deadline exceeded" }],
+    manifest: { planHash: "plan" },
+  } as never)
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await WikiAutomatic.refresh("build")
+      await waitForBuildCalls(1)
+      // The published pages are a new revision, but the pass is not complete.
+      await waitForStatus({ phase: "failed", reason: "failed", revision: 1 })
+      expect(await readWikiFailureMemory(tmp.path, ".ax-wiki")).toMatchObject({
+        consecutiveFailures: 1,
+        error: expect.stringContaining("modules/core.md"),
+      })
     },
   })
 })

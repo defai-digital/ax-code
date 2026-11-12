@@ -1,12 +1,18 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { createWikiIdleController } from "../../src/wiki/idle-controller"
+import { createWikiIdleController, type WikiBuildShortfall } from "../../src/wiki/idle-controller"
 
 afterEach(() => vi.useRealTimers())
 function setup(overrides: Partial<Parameters<typeof createWikiIdleController>[0]> = {}) {
   vi.useFakeTimers()
   const idle = vi.fn(async () => true)
   const policy = vi.fn(async () => ({ enabled: true, automatic: true, writable: true, git: true }))
-  const build = vi.fn(async (_signal: AbortSignal) => {})
+  const build = vi.fn(
+    async (
+      _signal: AbortSignal,
+      _progress?: unknown,
+      _options?: { explicit: boolean },
+    ): Promise<void | WikiBuildShortfall> => {},
+  )
   return { idle, policy, build, controller: createWikiIdleController({ idle, policy, build, ...overrides }) }
 }
 describe("default idle Wiki maintenance", () => {
@@ -143,6 +149,57 @@ describe("default idle Wiki maintenance", () => {
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(100)
     expect(s.build).toHaveBeenCalledTimes(2)
+    await s.controller.dispose()
+  })
+  test("a build suppressed by a failure cooldown reports failed, not ready", async () => {
+    const onError = vi.fn()
+    const s = setup({ idleMs: 0, pollMs: 100, onError })
+    s.build.mockImplementation(async () => ({ failed: "suppressed", retryAt: Date.now() + 10_000 }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(s.controller.status()).toMatchObject({ phase: "failed", reason: "failed", revision: 0 })
+    // Later polls must not repaint the status as ready or re-run the build
+    // before the recorded cooldown ends.
+    await vi.advanceTimersByTimeAsync(9_900)
+    expect(s.controller.status()).toMatchObject({ phase: "failed", reason: "failed", revision: 0 })
+    expect(s.build).toHaveBeenCalledTimes(1)
+    s.build.mockImplementation(async () => {})
+    await vi.advanceTimersByTimeAsync(200)
+    expect(s.build).toHaveBeenCalledTimes(2)
+    expect(s.controller.status()).toMatchObject({ phase: "ready", reason: "complete", revision: 1 })
+    // The suppressed pass already has a recorded failure; it is not a new one.
+    expect(onError).not.toHaveBeenCalled()
+    await s.controller.dispose()
+  })
+  test("a suppressed build without a cooldown end waits the shortfall interval", async () => {
+    const s = setup({ idleMs: 0, pollMs: 100, shortfallMs: 1_000 })
+    s.build.mockImplementation(async () => ({ failed: "suppressed" }))
+    await vi.advanceTimersByTimeAsync(900)
+    expect(s.build).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(s.build).toHaveBeenCalledTimes(2)
+    expect(s.controller.status().phase).toBe("failed")
+    await s.controller.dispose()
+  })
+  test("a partial build reports failed with a new revision for the pages it published", async () => {
+    const s = setup({ idleMs: 0, pollMs: 100 })
+    s.build.mockImplementation(async () => ({ failed: "partial" }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(s.controller.status()).toMatchObject({ phase: "failed", reason: "failed", revision: 1 })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(s.controller.status()).toMatchObject({ phase: "failed", reason: "failed", revision: 1 })
+    expect(s.build).toHaveBeenCalledTimes(1)
+    await s.controller.dispose()
+  })
+  test("an explicit request reruns a suppressed build without waiting out the cooldown", async () => {
+    const s = setup({ idleMs: 0, pollMs: 100 })
+    s.build.mockImplementationOnce(async () => ({ failed: "suppressed", retryAt: Date.now() + 600_000 }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(s.controller.status().phase).toBe("failed")
+    s.controller.request()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(s.build).toHaveBeenCalledTimes(2)
+    expect(s.build.mock.calls[1]?.[2]).toEqual({ explicit: true })
+    expect(s.controller.status()).toMatchObject({ phase: "ready", reason: "complete" })
     await s.controller.dispose()
   })
   test("a stuck job ends at the configured deadline", async () => {
