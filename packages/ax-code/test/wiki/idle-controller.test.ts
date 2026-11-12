@@ -113,6 +113,57 @@ describe("default idle Wiki maintenance", () => {
     await vi.advanceTimersByTimeAsync(600_000)
     expect(s.build).toHaveBeenCalledTimes(1)
   })
+  test.each(["non-git", "auto-off"])("foreground work preserves an explicit refresh for %s projects", async (mode) => {
+    const s = setup({
+      idleMs: 1000,
+      pollMs: 100,
+      policy: async () => ({ enabled: true, writable: true, automatic: mode !== "auto-off", git: mode !== "non-git" }),
+    })
+    s.build.mockImplementationOnce(
+      async (signal) =>
+        new Promise<void>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true })),
+    )
+    s.controller.request()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(s.build).toHaveBeenCalledTimes(1)
+    s.idle.mockResolvedValue(false)
+    s.controller.activity()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(s.build).toHaveBeenCalledTimes(1)
+    expect(s.controller.status().reason).toBe("busy")
+    s.idle.mockResolvedValue(true)
+    s.controller.activity()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(s.build).toHaveBeenCalledTimes(2)
+    expect(s.build.mock.calls[1]?.[2]).toEqual({ explicit: true })
+    expect(s.controller.status().phase).toBe("ready")
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(s.build).toHaveBeenCalledTimes(2)
+    await s.controller.dispose()
+  })
+  test.each(["disabled", "readonly"])("a paused explicit refresh still respects %s policy", async (mode) => {
+    const s = setup({ pollMs: 100 })
+    s.build.mockImplementationOnce(
+      async (signal) =>
+        new Promise<void>((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true })),
+    )
+    s.controller.request()
+    await vi.advanceTimersByTimeAsync(0)
+    s.policy.mockResolvedValue({
+      enabled: mode !== "disabled",
+      writable: mode !== "readonly",
+      automatic: false,
+      git: false,
+    })
+    s.controller.activity()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(s.build).toHaveBeenCalledTimes(1)
+    expect(s.controller.status()).toMatchObject({
+      phase: "disabled",
+      reason: mode === "disabled" ? "disabled" : "permissions",
+    })
+    await s.controller.dispose()
+  })
   test("failure retries back off and stop after three automatic attempts", async () => {
     const s = setup({ retryMs: 1000, idleMs: 0, pollMs: 100 })
     s.build.mockRejectedValue(new Error("Fixture provider unavailable"))

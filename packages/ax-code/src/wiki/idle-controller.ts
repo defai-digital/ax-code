@@ -74,7 +74,12 @@ export function createWikiIdleController(input: {
       if (!policy.enabled || !policy.writable || (!explicit && (!policy.automatic || !policy.git))) {
         publish({
           phase: "disabled",
-          reason: !policy.enabled || !policy.automatic ? "disabled" : !policy.writable ? "permissions" : "non_git",
+          reason:
+            !policy.enabled || (!explicit && !policy.automatic)
+              ? "disabled"
+              : !policy.writable
+                ? "permissions"
+                : "non_git",
         })
         schedule(pollMs)
         return
@@ -154,6 +159,10 @@ export function createWikiIdleController(input: {
         .catch((error) => {
           dirty = true
           if (signal.aborted && signal.reason?.name === "AbortError") {
+            // Foreground work pauses an explicit refresh. Keep its intent so
+            // the resumed check can still run with automatic maintenance off
+            // or outside Git, while rechecking enablement and write access.
+            if (!stopped && runExplicit) explicit = true
             publish({ phase: "queued", reason: "busy" })
           } else {
             input.onError?.(error)
