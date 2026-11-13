@@ -3,7 +3,7 @@ import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
 import { FileLock } from "@/util/filelock"
 import { onCleanup, onMount } from "solid-js"
-import { createStore } from "solid-js/store"
+import { createStore, reconcile } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
 import { appendFile, rename, writeFile } from "fs/promises"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
@@ -119,7 +119,9 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
       const sorted = Object.entries(entries)
         .sort(([, a], [, b]) => b.lastOpen - a.lastOpen)
         .slice(0, MAX_FRECENCY_ENTRIES)
-      setStore("data", Object.fromEntries(sorted))
+      // reconcile replaces the record: a plain setStore merges objects and
+      // would keep the trimmed keys, growing the store past the cap forever.
+      setStore("data", reconcile(Object.fromEntries(sorted)))
       writesSinceCompact = 0
       // Enqueue the rewrite now: the write chain runs it after every pending
       // append, and any later append lands after it instead of being clobbered.
@@ -155,8 +157,10 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
 
           setStore(
             "data",
-            Object.fromEntries(
-              trimmed.map((entry) => [entry.path, { frequency: entry.frequency, lastOpen: entry.lastOpen }]),
+            reconcile(
+              Object.fromEntries(
+                trimmed.map((entry) => [entry.path, { frequency: entry.frequency, lastOpen: entry.lastOpen }]),
+              ),
             ),
           )
           writesSinceCompact = 0
@@ -186,7 +190,14 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
       setStore("data", absolutePath, newEntry)
       writesSinceCompact += 1
       // The write chain keeps this append ordered against compact rewrites.
-      void locked(() => appendFile(frecencyPath, JSON.stringify({ path: absolutePath, ...newEntry }) + "\n"))
+      void locked(async () => {
+        // A crash mid-append can leave a partial last line; terminate it so
+        // the new record never glues onto unparseable bytes and get dropped
+        // together with the stale tail at the next normalization.
+        const text = await Filesystem.readText(frecencyPath).catch(() => "")
+        const separator = text.length > 0 && !text.endsWith("\n") ? "\n" : ""
+        await appendFile(frecencyPath, separator + JSON.stringify({ path: absolutePath, ...newEntry }) + "\n")
+      })
         .then(() => {
           writeWarningShown = false
         })

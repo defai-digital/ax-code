@@ -104,7 +104,13 @@ function persistedPaths(): string[] {
   return fs.file
     .split("\n")
     .filter(Boolean)
-    .map((line) => (JSON.parse(line) as { path: string }).path)
+    .flatMap((line) => {
+      try {
+        return [(JSON.parse(line) as { path: string }).path]
+      } catch {
+        return []
+      }
+    })
 }
 
 describe("frecency compact write ordering", () => {
@@ -159,5 +165,36 @@ describe("frecency compact write ordering", () => {
     await flushReversed()
     expect(fs.file).toBe("")
     expect(Object.keys(frecency.data())).toHaveLength(0)
+  })
+
+  test("an append after a partial last line does not glue records", async () => {
+    fs.file = '{"path":"/repo/partial.ts","frequency":'
+    const frecency = setup()
+    frecency.updateFrecency("/repo/fresh.ts")
+    await flushReversed()
+    expect(persistedPaths()).toContain("/repo/fresh.ts")
+  })
+
+  test("compact evicts trimmed entries from the in-memory store", async () => {
+    const frecency = setup()
+    for (let index = 0; index < 1001; index += 1) frecency.updateFrecency(`/repo/file-${index}.ts`)
+    await flushReversed()
+    expect(Object.keys(frecency.data()).length).toBeLessThanOrEqual(1000)
+  })
+
+  test("load replaces the store with the trimmed merge", async () => {
+    fs.file =
+      Array.from({ length: 1000 }, (_, index) =>
+        JSON.stringify({ path: `/repo/old-${index}.ts`, frequency: 1, lastOpen: 1000 + index }),
+      ).join("\n") + "\n"
+    const frecency = setup()
+    // A pre-load update must survive the trim; the oldest loaded entry must not.
+    frecency.updateFrecency("/repo/new.ts")
+    await flushReversed()
+    await mocked.startup!()
+    await flushReversed()
+    expect(Object.keys(frecency.data()).length).toBeLessThanOrEqual(1000)
+    expect(frecency.data()["/repo/new.ts"]).toBeDefined()
+    expect(frecency.data()["/repo/old-0.ts"]).toBeUndefined()
   })
 })

@@ -166,7 +166,14 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
           return
         }
 
-        void locked(() => appendFile(stashPath, JSON.stringify(stash) + "\n"))
+        void locked(async () => {
+          // A crash mid-append can leave a partial last line; terminate it so
+          // the new record never glues onto unparseable bytes and get dropped
+          // together with the stale tail at the next normalization.
+          const text = await Filesystem.readText(stashPath).catch(() => "")
+          const separator = text.length > 0 && !text.endsWith("\n") ? "\n" : ""
+          await appendFile(stashPath, separator + JSON.stringify(stash) + "\n")
+        })
           .then(() => {
             writeWarningShown = false
           })

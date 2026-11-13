@@ -310,4 +310,23 @@ describe("prompt stash write ordering", () => {
     expect(fs.file).toBe("")
     expect(stash.list()).toHaveLength(0)
   })
+
+  test("an append after a partial last line does not glue records", async () => {
+    // A crash mid-append can leave a non-newline-terminated partial line.
+    fs.file = '{"id":"partial","input":"trunc'
+    const stash = setup()
+    stash.push({ input: "fresh", parts: [] })
+    await flushReversed()
+    const parsed = fs.file
+      .split("\n")
+      .filter(Boolean)
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line) as { input: string }]
+        } catch {
+          return []
+        }
+      })
+    expect(parsed.some((line) => line.input === "fresh")).toBe(true)
+  })
 })
