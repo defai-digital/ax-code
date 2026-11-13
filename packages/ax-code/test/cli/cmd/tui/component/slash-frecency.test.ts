@@ -72,6 +72,27 @@ describe("recordSlashUse", () => {
     expect(result["/cmd0"]).toBeDefined()
     expect(Object.keys(result).length).toBe(SLASH_FRECENCY_CAP)
   })
+
+  test("evicts an empty-string key when it is the weakest", () => {
+    const map: Record<string, { count: number; lastUsed: number }> = {}
+    for (let i = 0; i < SLASH_FRECENCY_CAP; i++) {
+      map[`/cmd${i}`] = { count: 10, lastUsed: NOW }
+    }
+    map[""] = { count: 1, lastUsed: NOW - 24 * HOUR }
+    const result = recordSlashUse(map, "/fresh", NOW)
+    expect(Object.keys(result).length).toBe(SLASH_FRECENCY_CAP)
+    expect(result[""]).toBeUndefined()
+  })
+
+  test("an over-cap map converges back to the cap", () => {
+    const map: Record<string, { count: number; lastUsed: number }> = {}
+    for (let i = 0; i < SLASH_FRECENCY_CAP + 5; i++) {
+      map[`/cmd${i}`] = { count: 10, lastUsed: NOW - i * HOUR }
+    }
+    const result = recordSlashUse(map, "/fresh", NOW)
+    expect(Object.keys(result).length).toBe(SLASH_FRECENCY_CAP)
+    expect(result["/fresh"]).toEqual({ count: 1, lastUsed: NOW })
+  })
 })
 
 describe("topSlashRecents", () => {

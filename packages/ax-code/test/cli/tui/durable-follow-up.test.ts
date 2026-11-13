@@ -173,7 +173,13 @@ describe("follow-up edit hold", () => {
       directory: "/test/workspace",
       fetch: async (input: RequestInfo | URL) => {
         requests.push(String(input))
-        return Response.json(responses.shift() ?? row("a"))
+        const next = responses.shift() ?? row("a")
+        // A numeric `status` marks an HTTP error response; queue rows carry string statuses.
+        if (next && typeof next === "object" && typeof (next as { status?: unknown }).status === "number") {
+          const { status, body } = next as { status: number; body?: unknown }
+          return Response.json(body ?? { message: "conflict" }, { status })
+        }
+        return Response.json(next)
       },
     } as unknown as FollowUpSdk
     return { fake, requests }
@@ -229,5 +235,37 @@ describe("follow-up edit hold", () => {
       "http://localhost:4096/task-queue/a/pause",
       "http://localhost:4096/task-queue/a/resume",
     ])
+  })
+
+  test("a pause raced by the interrupt sweep adopts the existing pause without ownership", async () => {
+    const pending = projected("queued")
+    const paused = row("a", "paused")
+    // GET sees the row pending; the interrupt sweep pauses it before our POST
+    // lands, so the guarded pause 409s; the re-read finds the existing pause.
+    const { fake, requests } = sdk([
+      pending,
+      { status: 409, body: { message: "Cannot pause task queue item a while it is paused." } },
+      paused,
+    ])
+    const hold = await pauseFollowUpForEdit(fake, pending)
+    expect(hold.changed).toBe(false)
+    expect(hold.paused.status).toBe("paused")
+    expect(await cancelFollowUpEdit(fake, hold)).toBeUndefined()
+    expect(requests).toEqual([
+      "http://localhost:4096/task-queue/a",
+      "http://localhost:4096/task-queue/a/pause",
+      "http://localhost:4096/task-queue/a",
+    ])
+  })
+
+  test("a pause failure on a row that moved on still surfaces the error", async () => {
+    const { fake } = sdk([
+      projected("queued"),
+      { status: 409, body: { message: "Cannot pause task queue item a while it is running." } },
+      row("a", "running"),
+    ])
+    await expect(pauseFollowUpForEdit(fake, projected("queued"))).rejects.toThrow(
+      "Cannot pause task queue item a while it is running.",
+    )
   })
 })

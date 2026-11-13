@@ -45,19 +45,25 @@ export function recordSlashUse(
   }
   const keys = Object.keys(next)
   if (keys.length <= SLASH_FRECENCY_CAP) return next
-  // Evict the single weakest entry by score. Always preserves the entry
+  // Evict weakest entries until back under the cap: a hand-edited or
+  // older-build map can start over-cap, and one eviction per call would
+  // never restore the invariant. Compare with undefined so an empty-string
+  // key (valid JSON, falsy) is evictable too. Always preserves the entry
   // we just touched (highest possible recency for its count).
-  let weakest: string | undefined
-  let weakestScore = Infinity
-  for (const key of keys) {
-    if (key === value) continue
-    const score = slashScore(next[key], now)
-    if (score < weakestScore) {
-      weakestScore = score
-      weakest = key
+  while (Object.keys(next).length > SLASH_FRECENCY_CAP) {
+    let weakest: string | undefined
+    let weakestScore = Infinity
+    for (const key of Object.keys(next)) {
+      if (key === value) continue
+      const score = slashScore(next[key], now)
+      if (score < weakestScore) {
+        weakestScore = score
+        weakest = key
+      }
     }
+    if (weakest === undefined) break
+    delete next[weakest]
   }
-  if (weakest) delete next[weakest]
   return next
 }
 

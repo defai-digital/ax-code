@@ -23,7 +23,7 @@
 import z from "zod"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { responseErrorMessage } from "@tui/util/error-message"
-import { followUpBody, followUpAction, type DurableFollowUp, type FollowUpSdk } from "./durable-follow-up"
+import { followUpBody, followUpAction, getFollowUp, type DurableFollowUp, type FollowUpSdk } from "./durable-follow-up"
 
 export const STEER_MAX_TEXT_LENGTH = 16_000
 
@@ -40,6 +40,9 @@ const SteerResponseItemStatus = z.object({ status: z.string() }).passthrough()
 
 /** Statuses `send-now` accepts; anything else means the server already moved the row on. */
 const SEND_NOW_STATUSES = new Set(["queued", "waiting_for_idle", "paused"])
+
+/** Terminal rows never run again; reporting them as queued_next would claim a future execution. */
+const TERMINAL_STATUSES = new Set(["completed", "cancelled", "failed"])
 
 export type SteerFollowUpOutcome =
   | { kind: "delivered"; item: DurableFollowUp }
@@ -126,6 +129,9 @@ export async function steerFollowUp(sdk: FollowUpSdk, item: DurableFollowUp): Pr
     // left pending.
     const status = SteerResponseItemStatus.safeParse(parsed.item)
     if (status.success && !SEND_NOW_STATUSES.has(status.data.status)) {
+      if (TERMINAL_STATUSES.has(status.data.status)) {
+        return { kind: "failed", message: `Follow-up already ${status.data.status}` }
+      }
       return { kind: "queued_next", item: parsed.item as DurableFollowUp }
     }
     // The turn already ended (or never started): move the row to the front so
@@ -134,6 +140,17 @@ export async function steerFollowUp(sdk: FollowUpSdk, item: DurableFollowUp): Pr
       const prioritized = await followUpAction(sdk, item.id, "send-now")
       return { kind: "queued_next", item: prioritized }
     } catch (error) {
+      // The status guard above reads the steer response, one RTT before this
+      // write: the executor can still claim the row inside that window and
+      // the guarded send-now then 409s. Re-read the row so a follow-up the
+      // server already moved on is not reported as a failure.
+      const fresh = await getFollowUp(sdk, item.id).catch(() => undefined)
+      if (fresh && !SEND_NOW_STATUSES.has(fresh.status)) {
+        if (TERMINAL_STATUSES.has(fresh.status)) {
+          return { kind: "failed", message: `Follow-up already ${fresh.status}` }
+        }
+        return { kind: "queued_next", item: fresh }
+      }
       return { kind: "failed", message: error instanceof Error ? error.message : "Follow-up action failed" }
     }
   }

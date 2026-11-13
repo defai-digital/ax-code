@@ -96,7 +96,15 @@ export function promptHistoryNavigationAllowed(input: {
 }
 
 export function isPastedImagePart(part: PromptInfo["parts"][number]) {
-  return part.type === "file" && part.mime.startsWith("image/") && part.url.startsWith("data:")
+  // Persisted parts are validated loosely (type only); a legacy or hand-edited
+  // file part may lack mime/url, which must not throw while rendering.
+  return (
+    part.type === "file" &&
+    typeof part.mime === "string" &&
+    part.mime.startsWith("image/") &&
+    typeof part.url === "string" &&
+    part.url.startsWith("data:")
+  )
 }
 
 export function promptPartVirtualText(part: PromptPart) {
