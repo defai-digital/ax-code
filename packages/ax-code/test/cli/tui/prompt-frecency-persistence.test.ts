@@ -26,6 +26,7 @@ vi.mock("../../../src/cli/tui/context/helper", () => ({
 
 const fs = vi.hoisted(() => ({
   file: "",
+  temp: "",
   pending: [] as Array<() => void>,
 }))
 vi.mock("fs/promises", () => ({
@@ -36,10 +37,19 @@ vi.mock("fs/promises", () => ({
         resolve()
       })
     }),
-  writeFile: (_path: unknown, data: string) =>
+  writeFile: (path: unknown, data: string) =>
+    new Promise<void>((resolve) => {
+      const target = String(path)
+      fs.pending.push(() => {
+        if (target.endsWith(".tmp")) fs.temp = data
+        else fs.file = data
+        resolve()
+      })
+    }),
+  rename: (_from: unknown, _to: unknown) =>
     new Promise<void>((resolve) => {
       fs.pending.push(() => {
-        fs.file = data
+        fs.file = fs.temp
         resolve()
       })
     }),
@@ -65,6 +75,7 @@ const disposals: (() => void)[] = []
 afterEach(async () => {
   for (const dispose of disposals.splice(0)) dispose()
   fs.file = ""
+  fs.temp = ""
   fs.pending.length = 0
   mocked.startup = undefined
   await new Promise<void>((resolve) => setImmediate(resolve))
@@ -139,5 +150,14 @@ describe("frecency compact write ordering", () => {
     for (let index = 0; index < 100; index += 1) frecency.updateFrecency(`/repo/file-${index}.ts`)
     await flushReversed()
     expect(persistedPaths()).toContain("/repo/external.ts")
+  })
+
+  test("the load rewrite clears a fully corrupt file", async () => {
+    fs.file = "garbage\n{broken\n"
+    const frecency = setup()
+    await mocked.startup!()
+    await flushReversed()
+    expect(fs.file).toBe("")
+    expect(Object.keys(frecency.data())).toHaveLength(0)
   })
 })

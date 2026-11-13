@@ -26,6 +26,7 @@ vi.mock("../../../src/cli/tui/context/helper", () => ({
 
 const fs = vi.hoisted(() => ({
   file: "",
+  temp: "",
   pending: [] as Array<() => void>,
   truncateOnWrite: false,
   readGated: false,
@@ -39,12 +40,22 @@ vi.mock("fs/promises", () => ({
         resolve()
       })
     }),
-  writeFile: (_path: unknown, data: string) =>
+  writeFile: (path: unknown, data: string) =>
     new Promise<void>((resolve) => {
-      // fs.writeFile truncates before writing; model the mid-write empty file.
-      if (fs.truncateOnWrite) fs.file = ""
+      const target = String(path)
+      // A non-atomic direct write truncates the main file before writing;
+      // atomic temp-file writes never touch it.
+      if (fs.truncateOnWrite && !target.endsWith(".tmp")) fs.file = ""
       fs.pending.push(() => {
-        fs.file = data
+        if (target.endsWith(".tmp")) fs.temp = data
+        else fs.file = data
+        resolve()
+      })
+    }),
+  rename: (_from: unknown, _to: unknown) =>
+    new Promise<void>((resolve) => {
+      fs.pending.push(() => {
+        fs.file = fs.temp
         resolve()
       })
     }),
@@ -95,6 +106,7 @@ const disposals: (() => void)[] = []
 afterEach(async () => {
   for (const dispose of disposals.splice(0)) dispose()
   fs.file = ""
+  fs.temp = ""
   fs.pending.length = 0
   fs.truncateOnWrite = false
   fs.readGated = false
@@ -245,24 +257,57 @@ describe("prompt stash write ordering", () => {
     expect(stash.list().map((entry) => entry.id)).toEqual(["x", "y"])
   })
 
-  test("a load does not observe a truncated concurrent rewrite", async () => {
+  test("a load waits for an in-flight rewrite from another window", async () => {
     const lineX = JSON.stringify({ id: "x", input: "X", parts: [], timestamp: 1 })
     const lineY = JSON.stringify({ id: "y", input: "Y", parts: [], timestamp: 2 })
     fs.file = lineX + "\n" + lineY + "\n"
     const first = setup()
     await mocked.startup!()
     await flushReversed()
-    // A rewrite from the first window is in flight (file truncated mid-write)
-    // while a second window mounts and loads; the lock must hold the load
-    // until the rewrite settles.
-    fs.truncateOnWrite = true
+    // A rewrite from the first window is in flight while a second window
+    // mounts and loads; the lock must hold the load until the rewrite settles.
     first.remove("y")
     await new Promise<void>((resolve) => setImmediate(resolve))
-    expect(fs.file).toBe("")
     const second = setup()
     const load = mocked.startup!()
     await flushReversed()
     await load
     expect(second.list().map((entry) => entry.id)).toEqual(["x"])
+  })
+
+  test("a crash during a rewrite leaves the previous file intact", async () => {
+    fs.file = JSON.stringify({ id: "x", input: "X", parts: [], timestamp: 1 }) + "\n"
+    const stash = setup()
+    await mocked.startup!()
+    await flushReversed()
+    fs.truncateOnWrite = true
+    stash.pop()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    // The rewrite never settles (process killed mid-write); the main file
+    // must still hold the pre-pop content.
+    expect(fs.file).toContain('"x"')
+  })
+
+  test("the load rewrite bounds the disk file to the stash cap", async () => {
+    const a = setup()
+    const b = setup()
+    for (let index = 0; index < 30; index += 1) a.push({ input: `a${index}`, parts: [] })
+    for (let index = 0; index < 30; index += 1) b.push({ input: `b${index}`, parts: [] })
+    await flushReversed()
+    expect(fs.file.split("\n").filter(Boolean)).toHaveLength(60)
+    const c = setup()
+    await mocked.startup!()
+    await flushReversed()
+    expect(fs.file.split("\n").filter(Boolean).length).toBeLessThanOrEqual(50)
+    expect(c.list()).toHaveLength(50)
+  })
+
+  test("the load rewrite clears a fully corrupt file", async () => {
+    fs.file = "not json\n{broken\n"
+    const stash = setup()
+    await mocked.startup!()
+    await flushReversed()
+    expect(fs.file).toBe("")
+    expect(stash.list()).toHaveLength(0)
   })
 })

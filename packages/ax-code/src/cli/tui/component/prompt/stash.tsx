@@ -6,7 +6,7 @@ import { FileLock } from "@/util/filelock"
 import { onCleanup, onMount } from "solid-js"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
-import { appendFile, writeFile } from "fs/promises"
+import { appendFile, rename, writeFile } from "fs/promises"
 import { parseStashLine, type StashEntry } from "./stash-util"
 import { Log } from "@/util/log"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
@@ -88,7 +88,11 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
     const persistStash = (mutate: (entries: StashEntry[]) => StashEntry[], operation: string) =>
       locked(async () => {
         const fresh = await readStashEntries()
-        await writeFile(stashPath, serialize(mutate(fresh)))
+        // Atomic replace: a crash mid-write must not truncate the live file.
+        // The cross-process lock makes the fixed temp name safe.
+        const tempPath = `${stashPath}.tmp`
+        await writeFile(tempPath, serialize(mutate(fresh)))
+        await rename(tempPath, stashPath)
       })
         .then(() => {
           writeWarningShown = false
@@ -113,12 +117,11 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
           const merged = mergeStashEntries(lines, store.entries)
           setStore("entries", merged)
 
-          // Normalize the freshest disk state (drop invalid lines, heal ids).
-          // Never union the load-time snapshot back in: it would resurrect
-          // entries another window removed after our read.
-          if (merged.length > 0) {
-            void persistStash((fresh) => fresh, "rewrite")
-          }
+          // Normalize the freshest disk state (drop invalid lines, heal ids,
+          // enforce the cap). Never union the load-time snapshot back in: it
+          // would resurrect entries another window removed after our read.
+          // Run even when nothing parsed so a fully corrupt file is cleared.
+          void persistStash((fresh) => mergeStashEntries(fresh, []), "rewrite")
         },
         {
           name: "prompt-stash-load",

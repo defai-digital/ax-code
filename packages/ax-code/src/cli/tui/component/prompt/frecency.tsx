@@ -5,7 +5,7 @@ import { FileLock } from "@/util/filelock"
 import { onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
-import { appendFile, writeFile } from "fs/promises"
+import { appendFile, rename, writeFile } from "fs/promises"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { useToast } from "../../ui/toast"
@@ -93,7 +93,12 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
           )
         }
         const sorted = [...merged.values()].sort((a, b) => b.lastOpen - a.lastOpen).slice(0, MAX_FRECENCY_ENTRIES)
-        await writeFile(frecencyPath, sorted.map((entry) => JSON.stringify(entry)).join("\n") + "\n")
+        // Atomic replace: a crash mid-write must not truncate the live file.
+        // The cross-process lock makes the fixed temp name safe.
+        const tempPath = `${frecencyPath}.tmp`
+        const content = sorted.length > 0 ? sorted.map((entry) => JSON.stringify(entry)).join("\n") + "\n" : ""
+        await writeFile(tempPath, content)
+        await rename(tempPath, frecencyPath)
       })
         .then(() => {
           writeWarningShown = false
@@ -156,13 +161,13 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
           )
           writesSinceCompact = 0
 
-          if (trimmed.length > 0) {
-            void persistFrecency(
-              Object.fromEntries(
-                trimmed.map((entry) => [entry.path, { frequency: entry.frequency, lastOpen: entry.lastOpen }]),
-              ),
-            )
-          }
+          // Merge back under the lock even when nothing parsed so a fully
+          // corrupt file is cleared and concurrent appends are preserved.
+          void persistFrecency(
+            Object.fromEntries(
+              trimmed.map((entry) => [entry.path, { frequency: entry.frequency, lastOpen: entry.lastOpen }]),
+            ),
+          )
         },
         {
           name: "file-frecency-load",
