@@ -22,6 +22,11 @@ describe("parsePastedFilePath", () => {
     )
   })
 
+  test("decodes shell-escaped spaces in Windows drive paths", () => {
+    expect(parsePastedFilePath("C:\\Program\\ Files\\App\\app.exe")).toBe("C:\\Program Files\\App\\app.exe")
+    expect(parsePastedFilePath("C:\\My\\ Docs\\a.txt")).toBe("C:\\My Docs\\a.txt")
+  })
+
   test("preserves raw Windows UNC paths", () => {
     expect(parsePastedFilePath("\\\\server\\share\\Screenshot 1.png")).toBe("\\\\server\\share\\Screenshot 1.png")
   })
