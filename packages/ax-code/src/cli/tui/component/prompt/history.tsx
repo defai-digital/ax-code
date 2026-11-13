@@ -88,6 +88,12 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
 
     async function refreshProjectHistory(directory: string | undefined) {
       const generation = ++loadGeneration
+      // A workspace switch clears the local store and reloads while a save may
+      // still be in flight. If the GET is answered before the POST commits, the
+      // refreshed history drops the just-submitted prompt. Let pending saves
+      // settle first so the reload reads the committed rows; a failed save must
+      // not block the reload.
+      await Promise.all([...pendingWrites.values()].map((write) => write.catch(() => undefined)))
       const lines = await loadProjectHistory(directory).catch((error) => {
         log.warn("failed to load prompt history", { directory, error })
         if (shouldSurfaceOptionalStateError(error)) {

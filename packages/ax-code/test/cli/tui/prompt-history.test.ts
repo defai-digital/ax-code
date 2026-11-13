@@ -256,4 +256,29 @@ describe("prompt history recall", () => {
     }
     expect(history.move(-1, recalled.input)?.input).toBe("prompt 1")
   })
+
+  test("keeps the just-submitted prompt when a workspace reload races the pending save", async () => {
+    const { history, setDirectory } = setup()
+    // One project store behind both directory strings: pinning the session
+    // workspace changes sdk.directory without changing the underlying project.
+    const committed: PromptInfo[] = []
+    const post = Promise.withResolvers<Response>()
+    mocked.fetch.mockImplementation(async (_url, init) => {
+      if (init?.method === "POST") {
+        const entry = JSON.parse(String(init.body)) as PromptInfo
+        await post.promise
+        committed.push(entry)
+        return Response.json(entry)
+      }
+      return Response.json([...committed])
+    })
+    history.append(entry("just submitted"))
+    // The session route pins the workspace right after submit, clearing the
+    // local store and reloading while the POST is still in flight.
+    setDirectory("/project-b")
+    // Let the reload GET run before the POST commits (the observed race).
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    post.resolve(Response.json(true))
+    await vi.waitFor(() => expect(history.move(-1, "")?.input).toBe("just submitted"))
+  })
 })
