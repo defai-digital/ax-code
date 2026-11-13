@@ -575,7 +575,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-luna"
       },
@@ -3161,7 +3161,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -3976,29 +3976,6 @@
           "output": 32768
         }
       },
-      "deepseek-chat-cheaper": {
-        "id": "deepseek-chat-cheaper",
-        "name": "DeepSeek V3/Chat Cheaper",
-        "family": "deepseek",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "release_date": "2025-04-15",
-        "modalities": {
-          "input": [
-            "text",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 128000,
-          "input": 128000,
-          "output": 8192
-        }
-      },
       "gemma-4-26b-a4b-it-darksoul": {
         "id": "gemma-4-26b-a4b-it-darksoul",
         "name": "Dark Soul",
@@ -4383,28 +4360,6 @@
           "context": 1000000,
           "input": 1000000,
           "output": 1000000
-        }
-      },
-      "MiniMax-M1": {
-        "id": "MiniMax-M1",
-        "name": "MiniMax M1",
-        "family": "minimax",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2025-01-08",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1000000,
-          "input": 1000000,
-          "output": 131072
         }
       },
       "Gemma-4-31B-DarkIdol": {
@@ -4796,9 +4751,9 @@
           ]
         },
         "limit": {
-          "context": 128000,
-          "input": 128000,
-          "output": 16384
+          "context": 8192,
+          "input": 8192,
+          "output": 4096
         },
         "canonical_model_id": "microsoft/phi-4-mini",
         "temperature": true
@@ -5245,31 +5200,6 @@
           "output": 8192
         }
       },
-      "qwen/qwen3-235b-a22b": {
-        "id": "qwen/qwen3-235b-a22b",
-        "name": "Qwen 3 235b A22B",
-        "family": "qwen",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-04-28",
-        "modalities": {
-          "input": [
-            "text",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 16384
-        },
-        "canonical_model_id": "alibaba/qwen3-235b-a22b"
-      },
       "qwen/qwen3.8-27b-uncensored:thinking": {
         "id": "qwen/qwen3.8-27b-uncensored:thinking",
         "name": "Qwen 3.8 27B Uncensored Thinking",
@@ -5318,28 +5248,6 @@
           "output": 65536
         },
         "canonical_model_id": "alibaba/qwen3.5-plus"
-      },
-      "MarinaraSpaghetti/NemoMix-Unleashed-12B": {
-        "id": "MarinaraSpaghetti/NemoMix-Unleashed-12B",
-        "name": "NemoMix 12B Unleashed",
-        "family": "mistral-nemo",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2024-01-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 32768,
-          "input": 32768,
-          "output": 8192
-        }
       },
       "aion-labs/aion-2.0": {
         "id": "aion-labs/aion-2.0",
@@ -8825,30 +8733,6 @@
         },
         "canonical_model_id": "deepseek/deepseek-v4-pro-0813"
       },
-      "deepseek/deepseek-v4-pro:thinking": {
-        "id": "deepseek/deepseek-v4-pro:thinking",
-        "name": "DeepSeek V4 Pro (Thinking)",
-        "family": "deepseek-thinking",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-24",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1048576,
-          "input": 1048576,
-          "output": 384000
-        },
-        "canonical_model_id": "deepseek/deepseek-v4-pro"
-      },
       "deepseek/deepseek-v3.2": {
         "id": "deepseek/deepseek-v3.2",
         "name": "DeepSeek V3.2",
@@ -8895,30 +8779,6 @@
           "input": 1048576,
           "output": 384000
         }
-      },
-      "deepseek/deepseek-v4-pro": {
-        "id": "deepseek/deepseek-v4-pro",
-        "name": "DeepSeek V4 Pro",
-        "family": "deepseek-thinking",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-24",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1048576,
-          "input": 1048576,
-          "output": 384000
-        },
-        "canonical_model_id": "deepseek/deepseek-v4-pro"
       },
       "deepseek/deepseek-v3.2:thinking": {
         "id": "deepseek/deepseek-v3.2:thinking",
@@ -9151,30 +9011,6 @@
           "output": 32768
         },
         "canonical_model_id": "inclusionai/ling-3.0-flash",
-        "temperature": true
-      },
-      "MiniMaxAI/MiniMax-M1-80k": {
-        "id": "MiniMaxAI/MiniMax-M1-80k",
-        "name": "MiniMax M1 80K",
-        "family": "minimax",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2025-06-17",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1000000,
-          "input": 1000000,
-          "output": 131072
-        },
-        "canonical_model_id": "minimax/minimax-m1-80k",
         "temperature": true
       },
       "anthracite-org/magnum-v4-72b": {
@@ -9488,30 +9324,6 @@
         },
         "canonical_model_id": "openai/gpt-5-nano"
       },
-      "openai/o3-mini-low": {
-        "id": "openai/o3-mini-low",
-        "name": "OpenAI o3-mini (Low)",
-        "family": "o-mini",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "release_date": "2024-12-20",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 200000,
-          "input": 200000,
-          "output": 100000
-        },
-        "canonical_model_id": "openai/o3-mini",
-        "temperature": false
-      },
       "openai/o3-pro-2025-06-10": {
         "id": "openai/o3-pro-2025-06-10",
         "name": "OpenAI o3-pro (2025-06-10)",
@@ -9668,7 +9480,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -9793,7 +9605,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -9894,7 +9706,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -10045,7 +9857,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -10115,32 +9927,6 @@
         },
         "canonical_model_id": "openai/gpt-4o-mini"
       },
-      "openai/o1-pro": {
-        "id": "openai/o1-pro",
-        "name": "OpenAI o1 Pro",
-        "family": "o-pro",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": false,
-        "release_date": "2025-03-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 200000,
-          "input": 200000,
-          "output": 100000
-        },
-        "canonical_model_id": "openai/o1-pro"
-      },
       "openai/gpt-4.1": {
         "id": "openai/gpt-4.1",
         "name": "GPT 4.1",
@@ -10200,7 +9986,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -10325,7 +10111,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -10811,28 +10597,6 @@
         "reasoning": false,
         "tool_call": false,
         "release_date": "2025-04-13",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 32768,
-          "input": 32768,
-          "output": 8192
-        }
-      },
-      "soob3123/amoral-gemma3-27B-v2": {
-        "id": "soob3123/amoral-gemma3-27B-v2",
-        "name": "Amoral Gemma3 27B v2",
-        "family": "gemma",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "release_date": "2025-05-23",
         "modalities": {
           "input": [
             "text"
@@ -13406,7 +13170,7 @@
         "name": "GPT 6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -13456,7 +13220,7 @@
         "name": "GPT 6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -15267,7 +15031,7 @@
         "name": "GPT 6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6.1-terra-pro": {
@@ -16267,6 +16031,78 @@
         "reasoning": true,
         "release_date": "2026-11-11",
         "tool_call": true
+      },
+      "deepseek/deepseek-v4-pro-20260423": {
+        "attachment": false,
+        "family": "deepseek",
+        "id": "deepseek/deepseek-v4-pro-20260423",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Pro (April preview)",
+        "reasoning": true,
+        "release_date": "2026-04-24",
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4-pro-20260423:thinking": {
+        "attachment": false,
+        "family": "deepseek",
+        "id": "deepseek/deepseek-v4-pro-20260423:thinking",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Pro (April preview, Thinking)",
+        "reasoning": true,
+        "release_date": "2026-04-24",
+        "tool_call": true
+      },
+      "google/gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "google/gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -16583,7 +16419,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -16830,7 +16666,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -17098,7 +16934,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -17982,7 +17818,7 @@
         "name": "OpenAI GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -18007,7 +17843,7 @@
         "name": "OpenAI GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -18247,7 +18083,7 @@
         "name": "OpenAI GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "reflection-beam": {
@@ -18976,7 +18812,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -19002,7 +18838,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -19134,7 +18970,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -22051,7 +21887,7 @@
         },
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-sol": {
@@ -22082,7 +21918,7 @@
         },
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-terra": {
@@ -22113,7 +21949,7 @@
         },
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-astra": {
@@ -22175,7 +22011,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-sol": {
@@ -22206,7 +22042,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6.1-sol": {
@@ -23019,7 +22855,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -23195,7 +23031,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -23420,7 +23256,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -23747,7 +23583,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -23772,7 +23608,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -23797,7 +23633,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -26588,7 +26424,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -26741,7 +26577,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -26941,7 +26777,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -27090,7 +26926,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -27291,7 +27127,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -27493,7 +27329,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -28750,7 +28586,7 @@
         "name": "GPT-6 Luna (Azure)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -28776,7 +28612,7 @@
         "name": "GPT-6 Sol (Azure)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -28897,7 +28733,7 @@
         "name": "GPT-6 Luna (OpenAI)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -28923,7 +28759,7 @@
         "name": "GPT-6 Sol (OpenAI)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -30329,7 +30165,7 @@
         "name": "GPT-6.1 Terra (Azure)",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "baidu/deepseek-v4.1-flash-1017": {
@@ -30719,7 +30555,7 @@
         "name": "GPT-6.1 Terra (OpenAI)",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "reka-ai/deepseek-v4.1-flash": {
@@ -31796,6 +31632,399 @@
         "name": "Qwen3.8 27B (consensusprotocol)",
         "reasoning": true,
         "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "alibaba/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "alibaba/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1000000,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (Alibaba Cloud)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "baidu/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "baidu/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (Baidu)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "cloudflare/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "cloudflare/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (Cloudflare)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepinfra/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "deepinfra/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (DeepInfra)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "deepseek/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1050000,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (DeepSeek)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "entrim/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "entrim/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (entrim)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "flexai/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "flexai/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (flexai)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "flexai/mimo-v2.6-flash": {
+        "attachment": true,
+        "canonical_model_id": "xiaomi/mimo-v2.6-flash",
+        "family": "mimo",
+        "id": "flexai/mimo-v2.6-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiMo V2.6 Flash (flexai)",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": true,
+        "tool_call": true
+      },
+      "flexai/minimax-m3.1-flash": {
+        "attachment": true,
+        "canonical_model_id": "minimax/MiniMax-M3.1-Flash",
+        "family": "minimax",
+        "id": "flexai/minimax-m3.1-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 512000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiniMax M3.1 Flash (flexai)",
+        "reasoning": true,
+        "release_date": "2026-10-19",
+        "temperature": true,
+        "tool_call": true
+      },
+      "inference.net/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "inference.net/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (Inference.net)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "novita/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "novita/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (NovitaAI)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "reka-ai/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "reka-ai/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (reka-ai)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "runware/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "runware/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (runware)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "sciforium/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "sciforium/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (sciforium)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "scx-ai-gp/deepseek-v4.1-flash-latest": {
+        "attachment": false,
+        "family": "deepseek",
+        "id": "scx-ai-gp/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1050000,
+          "output": 1050000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (scx-ai-gp)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "tencent/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "tencent/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1000000,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (Tencent Cloud)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "together-ai/deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "together-ai/deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest (Together AI)",
+        "reasoning": true,
+        "release_date": "2026-10-17",
         "temperature": true,
         "tool_call": true
       }
@@ -33312,7 +33541,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -33753,7 +33982,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -34327,7 +34556,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -34686,7 +34915,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -34712,7 +34941,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -36273,8 +36502,8 @@
         "family": "deepseek",
         "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
         "limit": {
-          "context": 0,
-          "output": 0
+          "context": 1000000,
+          "output": 393216
         },
         "modalities": {
           "input": [
@@ -36285,62 +36514,65 @@
           ]
         },
         "name": "DeepSeek V4 Pro 0813",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-20",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "deepseek-ai/DeepSeek-V4.1-Flash-1017": {
-        "attachment": false,
+        "attachment": true,
         "family": "deepseek",
         "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
         "limit": {
-          "context": 0,
-          "output": 0
+          "context": 1000000,
+          "output": 393216
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "name": "DeepSeek V4.1 Flash 1017",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-26",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "moonshotai/Kimi-K2.7-Code": {
-        "attachment": false,
+        "attachment": true,
         "family": "kimi-k2",
         "id": "moonshotai/Kimi-K2.7-Code",
         "limit": {
-          "context": 0,
-          "output": 0
+          "context": 262144,
+          "output": 16384
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image",
+            "video"
           ],
           "output": [
             "text"
           ]
         },
         "name": "Kimi K2.7 Code",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-26",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "Qwen/Qwen3.8-2.4T-A95B": {
         "attachment": false,
         "family": "qwen",
         "id": "Qwen/Qwen3.8-2.4T-A95B",
         "limit": {
-          "context": 0,
-          "output": 0
+          "context": 1000000,
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -36351,40 +36583,42 @@
           ]
         },
         "name": "Qwen3.8 2.4T A95B",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-26",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "Qwen/Qwen3.8-Max-0902": {
-        "attachment": false,
+        "attachment": true,
         "family": "qwen3.8-max",
         "id": "Qwen/Qwen3.8-Max-0902",
         "limit": {
-          "context": 0,
-          "output": 0
+          "context": 1000000,
+          "output": 131072
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image",
+            "video"
           ],
           "output": [
             "text"
           ]
         },
         "name": "Qwen3.8 Max 0902",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-20",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "zai-org/GLM-5.2-Fast": {
         "attachment": false,
         "family": "glm",
         "id": "zai-org/GLM-5.2-Fast",
         "limit": {
-          "context": 0,
-          "output": 0
+          "context": 1048576,
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -36395,18 +36629,18 @@
           ]
         },
         "name": "GLM 5.2 Fast",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-26",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "zai-org/GLM-5.3": {
         "attachment": false,
         "family": "glm",
         "id": "zai-org/GLM-5.3",
         "limit": {
-          "context": 0,
-          "output": 0
+          "context": 1048576,
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -36417,31 +36651,32 @@
           ]
         },
         "name": "GLM 5.3",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-10-26",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "tencent/Hy4": {
-        "attachment": false,
+        "attachment": true,
         "id": "tencent/Hy4",
         "limit": {
-          "context": 0,
-          "output": 0
+          "context": 1048576,
+          "output": 65536
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "name": "Hy4",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-11-04",
         "temperature": true,
-        "tool_call": false
+        "tool_call": true
       },
       "Qwen/Qwen3.5-27B-TEE": {
         "attachment": true,
@@ -38519,7 +38754,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -38779,7 +39014,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -39039,7 +39274,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -39418,7 +39653,7 @@
         "interleaved": {
           "field": "reasoning_content"
         },
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -39527,7 +39762,7 @@
         "interleaved": {
           "field": "reasoning_content"
         },
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -39610,7 +39845,7 @@
         "interleaved": {
           "field": "reasoning_content"
         },
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -39782,7 +40017,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -39934,7 +40169,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -40374,7 +40609,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -40545,7 +40780,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6.1-sol": {
@@ -41138,7 +41373,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -41237,7 +41472,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -41262,7 +41497,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -43524,6 +43759,33 @@
         "name": "Gemini 4 Carbon",
         "reasoning": true,
         "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen",
+        "reasoning": true,
+        "release_date": "2026-11-12",
         "temperature": false,
         "tool_call": true
       }
@@ -49983,7 +50245,7 @@
         "interleaved": {
           "field": "reasoning_content"
         },
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -50042,7 +50304,7 @@
         "interleaved": {
           "field": "reasoning_content"
         },
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -50130,7 +50392,7 @@
         "interleaved": {
           "field": "reasoning_content"
         },
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -53277,6 +53539,27 @@
         "reasoning": false,
         "release_date": "1970-01-01",
         "tool_call": true
+      },
+      "deepseek-v4.1-flash-1017-basic": {
+        "attachment": true,
+        "id": "deepseek-v4.1-flash-1017-basic",
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017 (Basic)",
+        "reasoning": true,
+        "release_date": "1970-01-01",
+        "tool_call": true
       }
     }
   },
@@ -53789,7 +54072,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -54008,7 +54291,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -54619,7 +54902,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -54740,7 +55023,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -55786,7 +56069,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -55906,7 +56189,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -56315,7 +56598,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -56341,7 +56624,7 @@
         "name": "GPT-6 Luna (EU)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -56367,7 +56650,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -56393,7 +56676,7 @@
         "name": "GPT-6 Sol (EU)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -56903,7 +57186,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6.1-terra@eu": {
@@ -56929,7 +57212,7 @@
         "name": "GPT-6.1 Terra (EU)",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "minimax-m3.1-flash@eu": {
@@ -60161,7 +60444,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -60236,7 +60519,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -60335,7 +60618,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -60540,7 +60823,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -60565,7 +60848,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -60768,7 +61051,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "tencent/hy4": {
@@ -60817,6 +61100,32 @@
         "name": "Claude Fable 5.2",
         "reasoning": true,
         "release_date": "2026-11-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gemini/gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "gemini/gemini-4-carbon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
         "temperature": false,
         "tool_call": true
       }
@@ -63840,6 +64149,572 @@
         },
         "canonical_model_id": "minimax/MiniMax-M2.7",
         "status": "deprecated"
+      },
+      "claude-fable-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5",
+        "family": "claude-fable",
+        "id": "claude-fable-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5",
+        "reasoning": true,
+        "release_date": "2026-06-09",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-fable-5-1": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-1",
+        "family": "claude-fable",
+        "id": "claude-fable-5-1",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.1",
+        "reasoning": true,
+        "release_date": "2026-09-01",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-haiku-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-haiku-5-5",
+        "family": "claude-haiku",
+        "id": "claude-haiku-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Haiku 5.5",
+        "reasoning": true,
+        "release_date": "2026-10-07",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-opus-4-8": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-4-8",
+        "family": "claude-opus",
+        "id": "claude-opus-4-8",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 4.8",
+        "reasoning": true,
+        "release_date": "2026-05-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-opus-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5",
+        "family": "claude-opus",
+        "id": "claude-opus-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5",
+        "reasoning": true,
+        "release_date": "2026-07-24",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-opus-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-opus-5-5",
+        "family": "claude-opus",
+        "id": "claude-opus-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Opus 5.5",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-sonnet-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5",
+        "family": "claude-sonnet",
+        "id": "claude-sonnet-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5",
+        "reasoning": true,
+        "release_date": "2026-06-30",
+        "temperature": false,
+        "tool_call": true
+      },
+      "claude-sonnet-5-5": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-sonnet-5-5",
+        "family": "claude-sonnet",
+        "id": "claude-sonnet-5-5",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 5.5",
+        "reasoning": true,
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
+      "deepseek-v4-1-flash": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4-1-flash",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gemini-3-8-flash": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-3.8-flash",
+        "family": "gemini-flash",
+        "id": "gemini-3-8-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 3.8 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gemini-4-argon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-argon",
+        "family": "gemini",
+        "id": "gemini-4-argon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Argon",
+        "reasoning": true,
+        "release_date": "2026-10-13",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-5-6-luna": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.6-luna",
+        "family": "gpt-luna",
+        "id": "gpt-5-6-luna",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.6 Luna",
+        "reasoning": true,
+        "release_date": "2026-07-09",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gpt-5-6-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.6-sol",
+        "family": "gpt-sol",
+        "id": "gpt-5-6-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.6 Sol",
+        "reasoning": true,
+        "release_date": "2026-07-09",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gpt-5-6-terra": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-5.6-terra",
+        "family": "gpt-terra",
+        "id": "gpt-5-6-terra",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-5.6 Terra",
+        "reasoning": true,
+        "release_date": "2026-07-09",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gpt-6-1-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.1-sol",
+        "family": "gpt-sol",
+        "id": "gpt-6-1-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.1 Sol",
+        "reasoning": true,
+        "release_date": "2026-09-29",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-6-astra": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6-astra",
+        "family": "gpt-astra",
+        "id": "gpt-6-astra",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6 Astra",
+        "reasoning": true,
+        "release_date": "2026-09-04",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-6-luna": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6-luna",
+        "family": "gpt-luna",
+        "id": "gpt-6-luna",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6 Luna",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gpt-6-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6-sol",
+        "family": "gpt-sol",
+        "id": "gpt-6-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6 Sol",
+        "reasoning": true,
+        "release_date": "2026-09-22",
+        "temperature": true,
+        "tool_call": true
+      },
+      "grok-4-5": {
+        "attachment": true,
+        "canonical_model_id": "xai/grok-4.5",
+        "family": "grok",
+        "id": "grok-4-5",
+        "limit": {
+          "context": 500000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Grok 4.5",
+        "reasoning": true,
+        "release_date": "2026-07-08",
+        "temperature": true,
+        "tool_call": true
+      },
+      "minimax-m3": {
+        "attachment": false,
+        "canonical_model_id": "minimax/MiniMax-M3",
+        "family": "minimax",
+        "id": "minimax-m3",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 512000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiniMax M3",
+        "reasoning": true,
+        "release_date": "2026-06-01",
+        "temperature": true,
+        "tool_call": true
+      },
+      "zai-glm-5-3": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "zai-glm-5-3",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1040000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM 5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "zai-glm-5-3-flash": {
+        "attachment": true,
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "family": "glm-flash",
+        "id": "zai-glm-5-3-flash",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1040000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM 5.3 Flash",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -64157,7 +65032,7 @@
         "interleaved": {
           "field": "reasoning_content"
         },
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -64341,7 +65216,7 @@
         "interleaved": {
           "field": "reasoning_content"
         },
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -64368,7 +65243,7 @@
         "interleaved": {
           "field": "reasoning_content"
         },
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -65117,6 +65992,33 @@
         "release_date": "2026-11-10",
         "temperature": true,
         "tool_call": true
+      },
+      "gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -65832,29 +66734,6 @@
           "output": 131072
         },
         "canonical_model_id": "morph/morph-v3-large"
-      },
-      "poolside/laguna-s-2.1": {
-        "id": "poolside/laguna-s-2.1",
-        "name": "Laguna S 2.1",
-        "family": "laguna",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-07-21",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1000000,
-          "output": 131072
-        },
-        "canonical_model_id": "poolside/laguna-s-2.1"
       },
       "klingai/kling-v2.5-turbo-i2v": {
         "id": "klingai/kling-v2.5-turbo-i2v",
@@ -67705,7 +68584,7 @@
         "reasoning": false,
         "tool_call": false,
         "temperature": false,
-        "release_date": "2025-10-15",
+        "release_date": "2025-11-17",
         "modalities": {
           "input": [
             "text",
@@ -67717,13 +68596,14 @@
           ]
         },
         "limit": {
-          "context": 0,
+          "context": 1024,
           "output": 0
         },
         "provider": {
           "api": "https://ai-gateway.vercel.sh/v4/ai"
         },
-        "type": "video"
+        "type": "video",
+        "canonical_model_id": "google/veo-3.1-fast-generate-001"
       },
       "google/veo-3.1-generate-001": {
         "id": "google/veo-3.1-generate-001",
@@ -67733,7 +68613,7 @@
         "reasoning": false,
         "tool_call": false,
         "temperature": false,
-        "release_date": "2025-10-15",
+        "release_date": "2025-11-17",
         "modalities": {
           "input": [
             "text",
@@ -67745,13 +68625,14 @@
           ]
         },
         "limit": {
-          "context": 0,
+          "context": 1024,
           "output": 0
         },
         "provider": {
           "api": "https://ai-gateway.vercel.sh/v4/ai"
         },
-        "type": "video"
+        "type": "video",
+        "canonical_model_id": "google/veo-3.1-generate-001"
       },
       "google/gemma-4-31b-it": {
         "id": "google/gemma-4-31b-it",
@@ -67822,14 +68703,15 @@
           ]
         },
         "limit": {
-          "context": 0,
+          "context": 1024,
           "output": 0
         },
         "provider": {
           "api": "https://ai-gateway.vercel.sh/v4/ai"
         },
         "temperature": false,
-        "type": "video"
+        "type": "video",
+        "canonical_model_id": "google/veo-3.1-lite-generate-001"
       },
       "bfl/flux-kontext-max": {
         "id": "bfl/flux-kontext-max",
@@ -69843,7 +70725,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -70106,7 +70988,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -70396,7 +71278,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -72438,7 +73320,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -72464,7 +73346,7 @@
         "name": "GPT-6 Luna (Fast)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -72490,7 +73372,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -72516,7 +73398,7 @@
         "name": "GPT-6 Sol (Fast)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -73537,7 +74419,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -73814,7 +74697,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6.1-terra-fast": {
@@ -73840,7 +74723,7 @@
         "name": "GPT-6.1 Terra (Fast)",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "particle/particle-1": {
@@ -74113,6 +74996,76 @@
         "reasoning": true,
         "release_date": "2026-11-10",
         "temperature": false,
+        "tool_call": true
+      },
+      "google/gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "google/gemini-4-hydrogen",
+        "limit": {
+          "context": 1000000,
+          "output": 1000000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
+        "tool_call": true
+      },
+      "paperinstruments/ultramarine-1-flash": {
+        "attachment": true,
+        "id": "paperinstruments/ultramarine-1-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 131000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Ultramarine 1 Flash",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "tool_call": true
+      },
+      "thinkingmachines/inkling-2-small": {
+        "attachment": true,
+        "canonical_model_id": "thinkingmachines/inkling-2-small",
+        "family": "ling",
+        "id": "thinkingmachines/inkling-2-small",
+        "limit": {
+          "context": 1048576,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Inkling 2 Small",
+        "reasoning": true,
+        "release_date": "2026-11-05",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -76372,7 +77325,7 @@
         },
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-sol": {
@@ -76404,7 +77357,7 @@
         },
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-terra": {
@@ -76436,7 +77389,7 @@
         },
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-astra": {
@@ -76500,7 +77453,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "qwen/qwen3.7-flash": {
@@ -77955,7 +78908,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -78460,7 +79413,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -78534,7 +79487,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -78623,31 +79576,6 @@
         },
         "canonical_model_id": "openai/gpt-5.2"
       },
-      "claude-opus-4-8-fast": {
-        "id": "claude-opus-4-8-fast",
-        "name": "Claude Opus 4.8 Fast",
-        "family": "claude-opus",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": false,
-        "release_date": "2026-05-28",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 1000000,
-          "output": 128000
-        },
-        "canonical_model_id": "anthropic/claude-opus-4-8",
-        "status": "deprecated"
-      },
       "openai-gpt-56-luna-pro": {
         "id": "openai-gpt-56-luna-pro",
         "name": "GPT-5.6 Luna Pro",
@@ -78655,7 +79583,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -79036,7 +79964,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -79178,7 +80106,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -79330,7 +80258,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -79355,7 +80283,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -79785,7 +80713,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "deepseek-v4-1-flash-1017-ultrafast": {
@@ -79832,6 +80760,55 @@
         "reasoning": true,
         "release_date": "2026-11-09",
         "temperature": false,
+        "tool_call": true
+      },
+      "gemini-4-carbon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-carbon",
+        "family": "gemini",
+        "id": "gemini-4-carbon",
+        "limit": {
+          "context": 1000000,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Carbon",
+        "reasoning": true,
+        "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "pareto": {
+        "attachment": true,
+        "canonical_model_id": "unbiased/pareto",
+        "id": "pareto",
+        "limit": {
+          "context": 1000000,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Pareto",
+        "reasoning": false,
+        "release_date": "2026-09-17",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -81092,7 +82069,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -81698,7 +82675,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -82728,7 +83705,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -83101,7 +84078,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -83127,7 +84104,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -83882,7 +84859,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "qwen3-14b": {
@@ -84152,6 +85129,29 @@
         "name": "Qwen3.8 27B",
         "reasoning": true,
         "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4.1-flash-latest": {
+        "attachment": true,
+        "family": "deepseek",
+        "id": "deepseek-v4.1-flash-latest",
+        "limit": {
+          "context": 1050000,
+          "output": 1050000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "deepseek-v4.1-flash-latest",
+        "reasoning": true,
+        "release_date": "2026-10-17",
         "temperature": true,
         "tool_call": true
       }
@@ -85709,7 +86709,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -85856,7 +86856,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -86060,7 +87060,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -86352,7 +87352,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -86382,7 +87382,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -86712,7 +87712,7 @@
         },
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "anthropic/claude-fable-5.2": {
@@ -86861,7 +87861,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -87167,7 +88167,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -87391,7 +88391,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -87522,7 +88522,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna",
         "provider": {
@@ -87551,7 +88551,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol",
         "provider": {
@@ -87696,7 +88696,7 @@
         },
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "claude-fable-5.2": {
@@ -88796,7 +89796,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-sol": {
@@ -88822,7 +89822,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-terra": {
@@ -88848,7 +89848,7 @@
         "name": "GPT-5.6 Terra",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-astra": {
@@ -88900,7 +89900,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-sol": {
@@ -88926,7 +89926,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6.1-sol": {
@@ -90397,7 +91397,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-luna"
       },
@@ -90426,7 +91426,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-sol"
       },
@@ -90455,7 +91455,7 @@
         "name": "GPT-5.6 Terra",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-terra"
       },
@@ -93578,7 +94578,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -93763,7 +94763,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -94030,7 +95030,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -97126,7 +98126,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -98191,7 +99191,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -98497,7 +99497,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -98522,7 +99522,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -99198,7 +100198,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -99277,7 +100277,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -100377,7 +101377,7 @@
         "name": "GPT-5.6 Luna (India)",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-luna"
       },
@@ -100403,7 +101403,7 @@
         "name": "GPT-5.6 Terra (India)",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-terra"
       },
@@ -100766,7 +101766,7 @@
         "name": "GPT-5.6 Luna (US)",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-luna"
       },
@@ -100791,7 +101791,7 @@
         "name": "GPT-5.6 Sol (US)",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-sol"
       },
@@ -100816,7 +101816,7 @@
         "name": "GPT-5.6 Terra (US)",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-terra"
       },
@@ -101132,7 +102132,7 @@
         "name": "GPT-6 Luna (Global)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -101157,7 +102157,7 @@
         "name": "GPT-6 Sol (Global)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -101213,7 +102213,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -101244,7 +102244,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -101294,7 +102294,7 @@
         "name": "GPT-6 Luna (US)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -101319,7 +102319,7 @@
         "name": "GPT-6 Sol (US)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -101861,7 +102861,7 @@
         "name": "GPT-6.1 Terra (Global)",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai.gpt-6.1-terra": {
@@ -101892,7 +102892,7 @@
         },
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "us.openai.gpt-6.1-terra": {
@@ -101917,7 +102917,7 @@
         "name": "GPT-6.1 Terra (US)",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "anthropic.claude-fable-5-2": {
@@ -103937,7 +104937,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -104272,7 +105272,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -104483,7 +105483,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -105361,7 +106361,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -105386,7 +106386,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -105853,7 +106853,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "qwen/qwen3.5-4b": {
@@ -105953,6 +106953,33 @@
         "name": "Gemini 4 Carbon",
         "reasoning": true,
         "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "google/gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "google/gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen",
+        "reasoning": true,
+        "release_date": "2026-11-12",
         "temperature": false,
         "tool_call": true
       }
@@ -106212,7 +107239,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -106534,7 +107561,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -106972,7 +107999,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -108281,7 +109308,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -108866,7 +109893,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -109688,7 +110715,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -110148,7 +111175,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -110178,7 +111205,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -111053,6 +112080,37 @@
         },
         "reasoning": true,
         "release_date": "2026-11-10",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen",
+        "provider": {
+          "api": "https://opencode.ai/inference/google/v1beta",
+          "npm": "@ai-sdk/google"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-12",
         "temperature": false,
         "tool_call": true
       }
@@ -111947,7 +113005,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-sol": {
@@ -111972,7 +113030,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-astra": {
@@ -112022,7 +113080,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-sol": {
@@ -112047,7 +113105,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6.1-sol": {
@@ -112374,6 +113432,30 @@
         "reasoning": true,
         "release_date": "2026-08-14",
         "temperature": true,
+        "tool_call": true
+      },
+      "anthropic/claude-fable-5-2": {
+        "attachment": true,
+        "canonical_model_id": "anthropic/claude-fable-5-2",
+        "family": "claude-fable",
+        "id": "anthropic/claude-fable-5-2",
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Fable 5.2",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -114827,7 +115909,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -115002,7 +116084,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -115235,7 +116317,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -116173,7 +117255,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -116203,7 +117285,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -116403,7 +117485,7 @@
         },
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "anthropic/claude-fable-5.2": {
@@ -117325,7 +118407,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -117487,7 +118569,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -117572,7 +118654,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -118433,7 +119515,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6-sol": {
@@ -118464,7 +119546,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gemini-4-argon": {
@@ -119285,7 +120367,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -119600,7 +120682,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -119853,7 +120935,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -119965,7 +121047,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -120318,7 +121400,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -120364,7 +121446,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       }
@@ -122041,7 +123123,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -122186,7 +123268,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -122307,7 +123389,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -124435,7 +125517,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-luna"
       },
@@ -124461,7 +125543,7 @@
         "name": "gpt-5.6-luna-pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-luna"
       },
@@ -124487,7 +125569,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-sol"
       },
@@ -124513,7 +125595,7 @@
         "name": "gpt-5.6-sol-pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-sol"
       },
@@ -124539,7 +125621,7 @@
         "name": "GPT-5.6 Terra",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-terra"
       },
@@ -124565,7 +125647,7 @@
         "name": "gpt-5.6-terra-pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-terra"
       },
@@ -125049,7 +126131,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6-sol": {
@@ -125075,7 +126157,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "claude-sonnet-5-5": {
@@ -126303,7 +127385,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -126355,7 +127437,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -126381,7 +127463,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -126888,10 +127970,10 @@
         "name": "Mistral Large (latest)",
         "family": "mistral-large",
         "attachment": true,
-        "reasoning": false,
+        "reasoning": true,
         "tool_call": true,
         "temperature": true,
-        "release_date": "2024-11-01",
+        "release_date": "2026-10-06",
         "modalities": {
           "input": [
             "text",
@@ -126903,9 +127985,11 @@
           ]
         },
         "limit": {
-          "context": 262144,
+          "context": 1048576,
           "output": 262144
-        }
+        },
+        "canonical_model_id": "mistral/mistral-large-4",
+        "status": "beta"
       },
       "voxtral-mini-latest": {
         "id": "voxtral-mini-latest",
@@ -127293,7 +128377,7 @@
         "tool_call": true
       },
       "deepseek-v4-1-flash-1017": {
-        "attachment": false,
+        "attachment": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
         "family": "deepseek-flash",
         "id": "deepseek-v4-1-flash-1017",
@@ -127303,7 +128387,8 @@
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -129184,6 +130269,28 @@
         "temperature": true,
         "tool_call": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017"
+      },
+      "@cf/thinkingmachines/inkling-2-small": {
+        "attachment": true,
+        "id": "@cf/thinkingmachines/inkling-2-small",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Inkling 2 Small",
+        "reasoning": true,
+        "release_date": "2026-11-09",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -130465,7 +131572,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -130578,7 +131685,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -130720,7 +131827,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -131086,7 +132193,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -132075,7 +133182,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -132530,30 +133637,6 @@
         },
         "canonical_model_id": "openai/gpt-oss-safeguard-120b"
       },
-      "mistral-large-2512": {
-        "id": "mistral-large-2512",
-        "name": "Mistral Large 3",
-        "family": "mistral-large",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-12-02",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        },
-        "canonical_model_id": "mistral/mistral-large-2512"
-      },
       "qwen3.6-27b": {
         "id": "qwen3.6-27b",
         "name": "Qwen3.6 27B",
@@ -132610,7 +133693,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -133284,7 +134367,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -133617,7 +134700,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -133643,7 +134726,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -133846,7 +134929,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "kolibri-1": {
@@ -135982,7 +137065,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -136329,7 +137412,7 @@
         },
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -136945,7 +138028,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -137148,7 +138231,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -137402,7 +138485,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -137574,7 +138657,7 @@
         "name": "Agentic Chat (GPT-6 Luna)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -137600,7 +138683,7 @@
         "name": "Agentic Chat (GPT-6 Sol)",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -139950,7 +141033,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -140181,7 +141264,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -140387,7 +141470,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -140439,7 +141522,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2026-07-09",
         "modalities": {
           "input": [
@@ -141053,7 +142136,7 @@
           ]
         },
         "limit": {
-          "context": 262144,
+          "context": 1048576,
           "output": 262144
         },
         "canonical_model_id": "mistral/mistral-large-latest"
@@ -142213,7 +143296,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-luna"
       },
@@ -142239,7 +143322,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-6-sol"
       },
@@ -143648,7 +144731,7 @@
         "name": "GPT Pro Latest (GPT-5.6 Sol)",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017": {
@@ -144726,7 +145809,7 @@
         "family": "mistral-large",
         "id": "mistral/mistral-large-latest@eu",
         "limit": {
-          "context": 262144,
+          "context": 1048576,
           "output": 262144
         },
         "modalities": {
@@ -145009,7 +146092,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "scaleway/deepseek-v4.1-flash-1017": {
@@ -145311,6 +146394,209 @@
         "reasoning": true,
         "release_date": "2025-08-05",
         "temperature": true,
+        "tool_call": true
+      },
+      "cloudflare/@cf/thinkingmachines/inkling-2-small": {
+        "attachment": true,
+        "canonical_model_id": "thinkingmachines/inkling-2-small",
+        "family": "ling",
+        "id": "cloudflare/@cf/thinkingmachines/inkling-2-small",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Inkling 2 Small (Cloudflare)",
+        "reasoning": true,
+        "release_date": "2026-11-05",
+        "temperature": true,
+        "tool_call": true
+      },
+      "google/gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "google/gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
+        "tool_call": true
+      },
+      "nebius/deepseek-ai/DeepSeek-V4-Flash-0731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "nebius/deepseek-ai/DeepSeek-V4-Flash-0731",
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731 (Nebius)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "nebius/thinkingmachines/Inkling-2-Small": {
+        "attachment": true,
+        "canonical_model_id": "thinkingmachines/inkling-2-small",
+        "family": "ling",
+        "id": "nebius/thinkingmachines/Inkling-2-Small",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Inkling 2 Small (Nebius)",
+        "reasoning": true,
+        "release_date": "2026-11-05",
+        "temperature": true,
+        "tool_call": true
+      },
+      "together_ai/thinkingmachines/Inkling-2-Small": {
+        "attachment": true,
+        "canonical_model_id": "thinkingmachines/inkling-2-small",
+        "family": "ling",
+        "id": "together_ai/thinkingmachines/Inkling-2-Small",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Inkling 2 Small (Together AI)",
+        "reasoning": true,
+        "release_date": "2026-11-05",
+        "temperature": true,
+        "tool_call": true
+      },
+      "vertex/gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "vertex/gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen (Vertex AI)",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
+        "tool_call": true
+      },
+      "vertex/gemini-4-hydrogen@eu": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "vertex/gemini-4-hydrogen@eu",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen (Vertex AI, EU)",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
+        "tool_call": true
+      },
+      "vertex/gemini-4-hydrogen@us": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "vertex/gemini-4-hydrogen@us",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen (Vertex AI, US)",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -145823,7 +147109,7 @@
         },
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "canonical_model_id": "openai/gpt-5.6-sol"
       },
@@ -148685,7 +149971,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "auto/openai/gpt-5.6-sol": {
@@ -148711,7 +149997,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "auto/openai/gpt-5.6-terra": {
@@ -148737,7 +150023,7 @@
         "name": "GPT-5.6 Terra",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "auto/openai/gpt-6-astra": {
@@ -148789,7 +150075,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "auto/openai/gpt-6-sol": {
@@ -148815,7 +150101,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "auto/openai/gpt-6.1-sol": {
@@ -148891,7 +150177,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       }
     },
@@ -151382,7 +152668,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-luna-pro": {
@@ -151411,7 +152697,7 @@
         "name": "GPT-5.6 Luna Pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-sol": {
@@ -151437,7 +152723,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-sol-pro": {
@@ -151466,7 +152752,7 @@
         "name": "GPT-5.6 Sol Pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-terra": {
@@ -151492,7 +152778,7 @@
         "name": "GPT-5.6 Terra",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-terra-pro": {
@@ -151521,7 +152807,7 @@
         "name": "GPT-5.6 Terra Pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-astra": {
@@ -151573,7 +152859,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-sol": {
@@ -151599,7 +152885,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6.1-sol": {
@@ -152432,7 +153718,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "perceptron/perceptron-mk1.5": {
@@ -153259,7 +154545,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-sol": {
@@ -153283,7 +154569,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-terra": {
@@ -153307,7 +154593,7 @@
         "name": "GPT-5.6 Terra",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-astra": {
@@ -153355,7 +154641,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6-sol": {
@@ -153379,7 +154665,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-6.1-sol": {
@@ -153665,7 +154951,7 @@
         "name": "GPT-5.6 Luna Pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-sol-pro": {
@@ -153689,7 +154975,7 @@
         "name": "GPT-5.6 Sol Pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "openai/gpt-5.6-terra-pro": {
@@ -153713,7 +154999,7 @@
         "name": "GPT-5.6 Terra Pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "anthropic/claude-sonnet-5.5": {
@@ -154109,7 +155395,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "status": "deprecated"
       },
@@ -154133,7 +155419,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true,
         "status": "deprecated"
       },
@@ -154159,7 +155445,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6-sol": {
@@ -154184,7 +155470,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "mimo-v2.6-flash": {
@@ -155054,7 +156340,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-5.6-sol": {
@@ -155080,7 +156366,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-5.6-terra": {
@@ -155106,7 +156392,7 @@
         "name": "GPT-5.6 Terra",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6-astra": {
@@ -155158,7 +156444,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6-sol": {
@@ -155184,7 +156470,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       },
       "gpt-6.1-sol": {
@@ -155930,7 +157216,7 @@
         "name": "GPT-6.1 Terra",
         "reasoning": true,
         "release_date": "2026-10-26",
-        "temperature": false,
+        "temperature": true,
         "tool_call": true
       }
     },
@@ -156635,5 +157921,397 @@
         "status": "active"
       }
     }
+  },
+  "byteplus": {
+    "api": "https://ark.ap-southeast.bytepluses.com/api/v3",
+    "doc": "https://docs.byteplus.com/en/docs/ModelArk/1529329",
+    "env": [
+      "BYTEPLUS_API_KEY"
+    ],
+    "id": "byteplus",
+    "models": {
+      "deepseek-v4-1-flash-260910": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4-1-flash-260910",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4-1-flash-261017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4-1-flash-261017",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4-1-flash-economy-261017": {
+        "attachment": true,
+        "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4-1-flash-economy-261017",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash 1017",
+        "reasoning": true,
+        "release_date": "2026-10-17",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4-flash-260425": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4-flash-260425",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash",
+        "reasoning": true,
+        "release_date": "2026-04-24",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4-flash-ga-260731": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
+        "family": "deepseek-flash",
+        "id": "deepseek-v4-flash-ga-260731",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Flash 0731",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4-pro-260425": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-pro",
+        "family": "deepseek-thinking",
+        "id": "deepseek-v4-pro-260425",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Pro",
+        "reasoning": true,
+        "release_date": "2026-04-24",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4-pro-ga-260813": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v4-pro-0813",
+        "family": "deepseek-thinking",
+        "id": "deepseek-v4-pro-ga-260813",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Pro 0813",
+        "reasoning": true,
+        "release_date": "2026-08-13",
+        "temperature": true,
+        "tool_call": true
+      },
+      "dola-seed-2-1-turbo-260628": {
+        "attachment": true,
+        "canonical_model_id": "bytedance-seed/seed-2.1-turbo",
+        "family": "seed",
+        "id": "dola-seed-2-1-turbo-260628",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Seed 2.1 Turbo",
+        "reasoning": true,
+        "release_date": "2026-06-23",
+        "temperature": true,
+        "tool_call": true
+      },
+      "glm-5-2-260617": {
+        "attachment": false,
+        "canonical_model_id": "zhipuai/glm-5.2",
+        "family": "glm",
+        "id": "glm-5-2-260617",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.2",
+        "reasoning": true,
+        "release_date": "2026-06-13",
+        "temperature": true,
+        "tool_call": true
+      },
+      "glm-5-3-flash-260828": {
+        "attachment": true,
+        "canonical_model_id": "zhipuai/glm-5.3-flash",
+        "family": "glm-flash",
+        "id": "glm-5-3-flash-260828",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3-Flash",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "temperature": true,
+        "tool_call": true
+      },
+      "seed-2-0-code-preview-260328": {
+        "attachment": true,
+        "canonical_model_id": "bytedance-seed/seed-2.0-code",
+        "family": "seed",
+        "id": "seed-2-0-code-preview-260328",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Seed 2.0 Code",
+        "reasoning": true,
+        "release_date": "2026-02-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "seed-2-0-lite-260428": {
+        "attachment": true,
+        "canonical_model_id": "bytedance-seed/seed-2.0-lite",
+        "family": "seed",
+        "id": "seed-2-0-lite-260428",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 256000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Seed 2.0 Lite",
+        "reasoning": true,
+        "release_date": "2026-02-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "seed-2-0-mini-260428": {
+        "attachment": true,
+        "canonical_model_id": "bytedance-seed/seed-2.0-mini",
+        "family": "seed",
+        "id": "seed-2-0-mini-260428",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 256000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Seed 2.0 Mini",
+        "reasoning": true,
+        "release_date": "2026-02-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "seed-2-0-pro-260328": {
+        "attachment": true,
+        "canonical_model_id": "bytedance-seed/seed-2.0-pro",
+        "family": "seed",
+        "id": "seed-2-0-pro-260328",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 256000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Seed 2.0 Pro",
+        "reasoning": true,
+        "release_date": "2026-02-14",
+        "temperature": false,
+        "tool_call": true
+      }
+    },
+    "name": "BytePlus ModelArk",
+    "npm": "@ai-sdk/openai-compatible"
   }
 }
