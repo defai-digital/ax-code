@@ -83,10 +83,16 @@ function openRegularFile(file: string): number {
 }
 
 function readArtifact(file: string, maxSize: number): Buffer {
+  // Windows has no O_NOFOLLOW. Reject links and non-regular entries before
+  // opening, then bind that inspection to the descriptor's file identity.
+  const before = lstatSync(file, { bigint: true })
+  if (!before.isFile()) throw new Error(`Invalid ax-tui native artifact: ${file}`)
   const fd = openRegularFile(file)
   try {
-    const stat = fstatSync(fd)
-    if (!stat.isFile() || stat.size > maxSize) throw new Error(`Invalid ax-tui native artifact: ${file}`)
+    const stat = fstatSync(fd, { bigint: true })
+    if (!stat.isFile() || stat.dev !== before.dev || stat.ino !== before.ino || stat.size > BigInt(maxSize)) {
+      throw new Error(`Invalid ax-tui native artifact: ${file}`)
+    }
     return readFileSync(fd)
   } finally {
     closeSync(fd)
