@@ -20,6 +20,7 @@ changes belong to AX Coder.
 - Validate grammar download URLs before cache access and logging, including previously cached HTTP or credential-bearing URLs.
 - Reject unexpected browser-worker message origins and verify native artifact reads through a single file descriptor.
 - Reject substituted native-artifact symlinks on Windows and detect file replacement between inspection and opening.
+- Preserve workspace dependency patches in standalone runtime archives, including Windows PTY build compatibility.
 
 ## [7.30.26] - 2026-11-12
 

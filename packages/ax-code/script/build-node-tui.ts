@@ -16,6 +16,7 @@ import { inspectNativeAddonPayload, nativeAddonIncompleteMessage, NATIVE_ADDON_P
 import pkg from "../package.json"
 import { resolveNativeTypescript } from "@ax-code/ax-code-intel/typescript-native"
 import { pruneParserDistribution } from "./parser-dist"
+import { overlayDistributionPatches } from "./dist-patches"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
 // src/index-node-tui.ts (boot.ts) with esbuild + the AX Code TUI Solid JSX plugin.
@@ -405,34 +406,13 @@ if (arch === process.arch) {
 // above pulls deps clean from the registry, which drops the
 // pnpm patches that `pnpm dev` runs with — so without this step the shipped
 // binary silently differs from source.
-const rootPkg = JSON.parse(await readText(path.join(dir, "..", "..", "package.json"))) as {
-  pnpm?: { patchedDependencies?: Record<string, string> }
-}
-for (const [spec, patchRel] of Object.entries(rootPkg.pnpm?.patchedDependencies ?? {})) {
-  const name = spec.replace(/@[^@/]+$/, "") // strip the trailing @version
-  if (!(name in distDeps)) continue // only deps shipped beside the bundle need overlaying
-  // Resolve the workspace copy via its node_modules path rather than
-  // require.resolve(`${name}/package.json`): packages restrict that subpath in
-  // their exports map, which throws ERR_PACKAGE_PATH_NOT_EXPORTED.
-  const pkgRoot = path.join(dir, "node_modules", ...name.split("/"))
-  if (!fs.existsSync(pkgRoot)) {
-    console.warn(`Cannot resolve patched dep ${name} to overlay into the distribution`)
-    continue
-  }
-  const patchText = await readText(path.join(dir, "..", "..", patchRel))
-  const files = [...patchText.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((m) => m[1].trim())
-  for (const rel of files) {
-    const src = path.join(pkgRoot, rel)
-    const dest = path.join(outRoot, "node_modules", name, rel)
-    if (!fs.existsSync(src)) {
-      console.warn(`Patched file missing in workspace copy: ${name}/${rel}`)
-      continue
-    }
-    fs.mkdirSync(path.dirname(dest), { recursive: true })
-    fs.copyFileSync(src, dest)
-  }
-  console.log(`Re-applied pnpm patch for ${name} (${files.length} file(s)) into the distribution`)
-}
+const patchedPackages = overlayDistributionPatches({
+  repoRoot: path.join(dir, "..", ".."),
+  workspaceNodeModules: path.join(dir, "node_modules"),
+  distributionRoot: outRoot,
+  dependencies: distDeps,
+})
+for (const name of patchedPackages) console.log(`Re-applied pnpm patch for ${name} into the distribution`)
 
 // Copy the already installed framework under the same ax-tui alias used by
 // the bundle and Homebrew. Keep framework-only tooling out of the archive.
