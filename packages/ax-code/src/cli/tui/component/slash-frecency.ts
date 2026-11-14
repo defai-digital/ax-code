@@ -17,6 +17,9 @@ export const SLASH_FRECENCY_CAP = 20
 // (missing/NaN fields from a hand-edited or partial-write kv.json) so a
 // single bad row can't poison sort ordering across the whole list.
 export function slashScore(entry: SlashFrecencyEntry, now: number = Date.now()): number {
+  // A hand-edited kv.json can leave a whole row null/non-object; score it 0
+  // instead of throwing so one bad row can't break the entire recents list.
+  if (!entry || typeof entry !== "object") return 0
   const count = Number.isFinite(entry.count) ? entry.count : 0
   const lastUsed = Number.isFinite(entry.lastUsed) ? entry.lastUsed : 0
   const hoursSinceUse = Math.max(0, (now - lastUsed) / 3_600_000)
@@ -33,25 +36,34 @@ export function recordSlashUse(
 ): SlashFrecencyMap {
   const next: SlashFrecencyMap = { ...(map ?? {}) }
   const prev = next[value]
+  // Coerce a corrupted (e.g. string-typed) count before arithmetic; otherwise
+  // "3" + 1 concatenates to "31" and the entry is permanently de-ranked.
+  const prevCount = prev && Number.isFinite(prev.count) ? prev.count : 0
   next[value] = {
-    count: (prev?.count ?? 0) + 1,
+    count: prevCount + 1,
     lastUsed: now,
   }
   const keys = Object.keys(next)
   if (keys.length <= SLASH_FRECENCY_CAP) return next
-  // Evict the single weakest entry by score. Always preserves the entry
+  // Evict weakest entries until back under the cap: a hand-edited or
+  // older-build map can start over-cap, and one eviction per call would
+  // never restore the invariant. Compare with undefined so an empty-string
+  // key (valid JSON, falsy) is evictable too. Always preserves the entry
   // we just touched (highest possible recency for its count).
-  let weakest: string | undefined
-  let weakestScore = Infinity
-  for (const key of keys) {
-    if (key === value) continue
-    const score = slashScore(next[key], now)
-    if (score < weakestScore) {
-      weakestScore = score
-      weakest = key
+  while (Object.keys(next).length > SLASH_FRECENCY_CAP) {
+    let weakest: string | undefined
+    let weakestScore = Infinity
+    for (const key of Object.keys(next)) {
+      if (key === value) continue
+      const score = slashScore(next[key], now)
+      if (score < weakestScore) {
+        weakestScore = score
+        weakest = key
+      }
     }
+    if (weakest === undefined) break
+    delete next[weakest]
   }
-  if (weakest) delete next[weakest]
   return next
 }
 

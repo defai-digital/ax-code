@@ -142,6 +142,8 @@ describe("recover undo history", () => {
       "submitSafely",
       "steerSafely",
       "props",
+      "lastDraftEscapeAt",
+      "lastIdleEscapeAt",
       body,
     )(
       (fn: typeof handler) => {
@@ -157,6 +159,8 @@ describe("recover undo history", () => {
       () => submitted++,
       () => steered++,
       props,
+      undefined,
+      undefined,
     )
     const key = { name: "return", preventDefault: () => consumed++, stopPropagation: () => consumed++ }
     handler(key)

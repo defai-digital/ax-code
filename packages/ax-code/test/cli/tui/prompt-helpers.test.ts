@@ -122,6 +122,13 @@ describe("prompt helpers", () => {
     ).toBe(false)
   })
 
+  test("a file part missing mime or url is not a pasted image and does not throw", () => {
+    type Part = Parameters<typeof isPastedImagePart>[0]
+    expect(isPastedImagePart({ type: "file" } as unknown as Part)).toBe(false)
+    expect(isPastedImagePart({ type: "file", mime: "image/png" } as unknown as Part)).toBe(false)
+    expect(isPastedImagePart({ type: "file", url: "data:image/png;base64,abc" } as unknown as Part)).toBe(false)
+  })
+
   test("checks the latest completed todowrite result for active todos", () => {
     const messages = [{ id: "m1" }, { id: "m2" }]
     const partsByMessage = {

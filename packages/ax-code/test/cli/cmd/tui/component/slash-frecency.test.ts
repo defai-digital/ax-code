@@ -72,6 +72,27 @@ describe("recordSlashUse", () => {
     expect(result["/cmd0"]).toBeDefined()
     expect(Object.keys(result).length).toBe(SLASH_FRECENCY_CAP)
   })
+
+  test("evicts an empty-string key when it is the weakest", () => {
+    const map: Record<string, { count: number; lastUsed: number }> = {}
+    for (let i = 0; i < SLASH_FRECENCY_CAP; i++) {
+      map[`/cmd${i}`] = { count: 10, lastUsed: NOW }
+    }
+    map[""] = { count: 1, lastUsed: NOW - 24 * HOUR }
+    const result = recordSlashUse(map, "/fresh", NOW)
+    expect(Object.keys(result).length).toBe(SLASH_FRECENCY_CAP)
+    expect(result[""]).toBeUndefined()
+  })
+
+  test("an over-cap map converges back to the cap", () => {
+    const map: Record<string, { count: number; lastUsed: number }> = {}
+    for (let i = 0; i < SLASH_FRECENCY_CAP + 5; i++) {
+      map[`/cmd${i}`] = { count: 10, lastUsed: NOW - i * HOUR }
+    }
+    const result = recordSlashUse(map, "/fresh", NOW)
+    expect(Object.keys(result).length).toBe(SLASH_FRECENCY_CAP)
+    expect(result["/fresh"]).toEqual({ count: 1, lastUsed: NOW })
+  })
 })
 
 describe("topSlashRecents", () => {
@@ -98,5 +119,49 @@ describe("topSlashRecents", () => {
       "/removed": { count: 100, lastUsed: NOW },
     }
     expect(topSlashRecents(map, available, 3, NOW)).toEqual(["/status"])
+  })
+})
+
+describe("corrupted kv.json rows (null row / string count)", () => {
+  // Regression: kv.get returns the raw persisted map without per-entry
+  // validation, so a hand-edited row can be null or carry a string count.
+  // The module's corruption guard must keep these harmless — not crash the
+  // recents list and not concatenate the count on the next use.
+  test("slashScore scores a null or non-object row as 0 instead of throwing", () => {
+    expect(slashScore(null as any, NOW)).toBe(0)
+    expect(slashScore(undefined as any, NOW)).toBe(0)
+    expect(slashScore("3" as any, NOW)).toBe(0)
+    expect(slashScore(5 as any, NOW)).toBe(0)
+  })
+
+  test("topSlashRecents survives a null row and ranks it last without throwing", () => {
+    const available = new Set(["/status", "/clear"])
+    const map = {
+      "/status": { count: 5, lastUsed: NOW },
+      "/clear": null,
+    } as any
+    expect(topSlashRecents(map, available, 3, NOW)).toEqual(["/status", "/clear"])
+  })
+
+  test("recordSlashUse coerces a string-typed count instead of concatenating", () => {
+    const map = { "/status": { count: "3" as any, lastUsed: NOW - HOUR } }
+    const next = recordSlashUse(map, "/status", NOW)
+    expect(next["/status"]).toEqual({ count: 1, lastUsed: NOW })
+  })
+
+  test("recordSlashUse self-heals a null row for the touched command", () => {
+    const map = { "/status": null } as any
+    const next = recordSlashUse(map, "/status", NOW)
+    expect(next["/status"]).toEqual({ count: 1, lastUsed: NOW })
+  })
+
+  test("recordSlashUse eviction does not throw on a null non-touched row", () => {
+    const map: Record<string, any> = {}
+    for (let i = 0; i < SLASH_FRECENCY_CAP; i++) map[`/cmd${i}`] = { count: 10, lastUsed: NOW }
+    map["/broken"] = null
+    const next = recordSlashUse(map, "/fresh", NOW)
+    expect(next["/fresh"]).toEqual({ count: 1, lastUsed: NOW })
+    // The null row scores 0, so it is the weakest and the one evicted.
+    expect(next["/broken"]).toBeUndefined()
   })
 })

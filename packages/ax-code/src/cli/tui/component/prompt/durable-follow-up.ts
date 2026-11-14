@@ -185,16 +185,32 @@ export async function followUpAction(
   return FollowUpRow.parse(await response.json())
 }
 
-async function pauseFollowUp(sdk: FollowUpSdk, id: string) {
-  if (!sdk.sseConnected) throw new Error("Reconnect before editing saved follow-ups")
+/** Read one queue row; shared by the edit hold and the steer fallback re-read. */
+export async function getFollowUp(sdk: FollowUpSdk, id: string): Promise<DurableFollowUp> {
+  if (!sdk.sseConnected) throw new Error("Reconnect before reading saved follow-ups")
   const response = await sdk.fetch(`${sdk.url.replace(/\/$/, "")}/task-queue/${encodeURIComponent(id)}`, {
     headers: directoryRequestHeaders({ directory: sdk.directory }),
     signal: AbortSignal.timeout(10_000),
   })
   if (!response.ok) throw new Error(await responseErrorMessage(response))
-  const current = FollowUpRow.parse(await response.json())
+  return FollowUpRow.parse(await response.json())
+}
+
+async function pauseFollowUp(sdk: FollowUpSdk, id: string) {
+  if (!sdk.sseConnected) throw new Error("Reconnect before editing saved follow-ups")
+  const current = await getFollowUp(sdk, id)
   if (current.status === "paused") return { paused: current, changed: false }
-  return { paused: await followUpAction(sdk, id, "pause"), changed: true }
+  try {
+    return { paused: await followUpAction(sdk, id, "pause"), changed: true }
+  } catch (error) {
+    // An interrupt sweep (or another editor) can pause the row between the
+    // read above and the guarded pause write, which then 409s. The hold state
+    // already exists: adopt it without ownership so an abandoned edit never
+    // resumes a pause the interrupt contract owns.
+    const fresh = await getFollowUp(sdk, id).catch(() => undefined)
+    if (fresh?.status === "paused") return { paused: fresh, changed: false }
+    throw error
+  }
 }
 
 /**

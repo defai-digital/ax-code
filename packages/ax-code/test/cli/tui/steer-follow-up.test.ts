@@ -114,6 +114,7 @@ describe("steerablePrefix", () => {
 function sdk(handlers: {
   steer?: (id: string) => { status?: number; body?: unknown }
   sendNow?: (id: string) => { status?: number; body?: unknown }
+  get?: (id: string) => { status?: number; body?: unknown }
   connected?: boolean
 }) {
   const calls: Array<{ url: string; method?: string }> = []
@@ -132,6 +133,11 @@ function sdk(handlers: {
       if (url.endsWith("/send-now")) {
         const id = decodeURIComponent(url.split("/task-queue/")[1]!.split("/send-now")[0]!)
         const result = handlers.sendNow?.(id) ?? {}
+        return Response.json(result.body ?? {}, { status: result.status ?? 200 })
+      }
+      const read = /\/task-queue\/([^/]+)$/.exec(url)
+      if (read && (!init?.method || init.method === "GET")) {
+        const result = handlers.get?.(decodeURIComponent(read[1]!)) ?? {}
         return Response.json(result.body ?? {}, { status: result.status ?? 200 })
       }
       return Response.json({ message: "unexpected request" }, { status: 500 })
@@ -234,6 +240,66 @@ describe("steerFollowUp", () => {
     const outcome = await steerFollowUp(fake, row({ id: "tas_1" }))
     expect(outcome.kind).toBe("failed")
     expect(calls).toHaveLength(0)
+  })
+
+  test("a send-now raced by the executor claim reports the running row instead of a failure", async () => {
+    const item = row({ id: "tas_1" })
+    const { fake, calls } = sdk({
+      steer: () => ({ body: { item, receipt: null, reason: "generation_not_active" } }),
+      sendNow: () => ({ status: 409, body: { message: "Cannot send now task queue item tas_1 while it is running." } }),
+      get: () => ({ body: { ...item, status: "running" } }),
+    })
+    const outcome = await steerFollowUp(fake, item)
+    expect(outcome.kind).toBe("queued_next")
+    if (outcome.kind === "queued_next") expect(outcome.item.status).toBe("running")
+    expect(calls.map((call) => call.url)).toEqual([
+      "http://localhost:4096/task-queue/tas_1/steer",
+      "http://localhost:4096/task-queue/tas_1/send-now",
+      "http://localhost:4096/task-queue/tas_1",
+    ])
+  })
+
+  test("a send-now failure on a row the server left pending still reports the failure", async () => {
+    const item = row({ id: "tas_1" })
+    const { fake } = sdk({
+      steer: () => ({ body: { item, receipt: null, reason: "generation_not_active" } }),
+      sendNow: () => ({ status: 500, body: { message: "queue write failed" } }),
+      get: () => ({ body: item }),
+    })
+    expect(await steerFollowUp(fake, item)).toEqual({ kind: "failed", message: "queue write failed" })
+  })
+
+  test("a terminal row in the fallback response is not reported as queued next", async () => {
+    const item = row({ id: "tas_1" })
+    for (const status of ["cancelled", "completed", "failed"] as const) {
+      const { fake, calls } = sdk({
+        steer: () => ({
+          body: {
+            item: { ...item, status },
+            receipt: { status: "rejected", reason: "generation_ended_before_application" },
+          },
+        }),
+      })
+      const outcome = await steerFollowUp(fake, item)
+      expect(outcome.kind).toBe("failed")
+      if (outcome.kind === "failed") expect(outcome.message).toContain(status)
+      expect(calls.map((call) => call.url)).toEqual(["http://localhost:4096/task-queue/tas_1/steer"])
+    }
+  })
+
+  test("a send-now raced into a terminal state reports the terminal state, not queued next", async () => {
+    const item = row({ id: "tas_1" })
+    const { fake } = sdk({
+      steer: () => ({ body: { item, receipt: null, reason: "generation_not_active" } }),
+      sendNow: () => ({
+        status: 409,
+        body: { message: "Cannot send now task queue item tas_1 while it is cancelled." },
+      }),
+      get: () => ({ body: { ...item, status: "cancelled" } }),
+    })
+    const outcome = await steerFollowUp(fake, item)
+    expect(outcome.kind).toBe("failed")
+    if (outcome.kind === "failed") expect(outcome.message).toContain("cancelled")
   })
 })
 

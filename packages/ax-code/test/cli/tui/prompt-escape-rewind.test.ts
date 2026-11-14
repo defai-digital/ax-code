@@ -120,3 +120,40 @@ describe("escapeRewindDisarmKey", () => {
     expect(disarm).toBeLessThan(prompt.indexOf("promptEscapeRewindIntent({"))
   })
 })
+
+describe("double-Esc draft-clear disarm", () => {
+  // Regression: the draft-clear arm (lastDraftEscapeAt) was only written by the
+  // escape-intent chain, so keys consumed before it (submit/cancel/block/paste)
+  // left a stale arm: Esc -> Enter(submit) -> Esc(cancel) -> Esc within the
+  // window cleared the whole draft even though the escapes were not
+  // consecutive. Both escape arms must be disarmed by any non-escape key,
+  // including submit keys the global handler consumes with stopPropagation
+  // (which skips the textarea's own onKeyDown disarm).
+  test("onKeyDown disarms the draft-clear arm alongside the rewind arm before early returns", async () => {
+    const prompt = await fs.readFile(
+      path.resolve(import.meta.dirname, "../../../src/cli/tui/component/prompt/index.tsx"),
+      "utf8",
+    )
+    const disarm = prompt.indexOf("if (escapeRewindDisarmKey(e.name)) {")
+    expect(disarm).toBeGreaterThan(-1)
+    const block = prompt.slice(disarm, prompt.indexOf("}", disarm))
+    expect(block).toContain("lastIdleEscapeAt = undefined")
+    expect(block).toContain("lastDraftEscapeAt = undefined")
+    expect(disarm).toBeLessThan(prompt.indexOf("const pendingIntent = pendingSubmitKeyIntent({"))
+    expect(disarm).toBeLessThan(prompt.indexOf("promptEscapeClearIntent({"))
+  })
+
+  test("global submit handler disarms the draft-clear arm it would otherwise skip", async () => {
+    const prompt = await fs.readFile(
+      path.resolve(import.meta.dirname, "../../../src/cli/tui/component/prompt/index.tsx"),
+      "utf8",
+    )
+    const start = prompt.indexOf("  useKeyboard((evt) => {")
+    const end = prompt.indexOf("  const fileStyleId", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const handler = prompt.slice(start, end)
+    expect(handler).toContain("lastDraftEscapeAt = undefined")
+    expect(handler).toContain("lastIdleEscapeAt = undefined")
+  })
+})

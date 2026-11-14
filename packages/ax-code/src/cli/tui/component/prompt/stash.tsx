@@ -1,10 +1,12 @@
 import path from "path"
+import { createHash } from "crypto"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
+import { FileLock } from "@/util/filelock"
 import { onCleanup, onMount } from "solid-js"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
-import { appendFile, writeFile } from "fs/promises"
+import { appendFile, rename, writeFile } from "fs/promises"
 import { parseStashLine, type StashEntry } from "./stash-util"
 import { Log } from "@/util/log"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
@@ -21,12 +23,53 @@ function serialize(entries: StashEntry[]) {
   return entries.length > 0 ? entries.map((line) => JSON.stringify(line)).join("\n") + "\n" : ""
 }
 
+/** Merge by id (later wins), oldest first, bounded to the stash limit. */
+function mergeStashEntries(base: StashEntry[], extra: StashEntry[]): StashEntry[] {
+  const byID = new Map<string, StashEntry>()
+  for (const entry of [...base, ...extra]) byID.set(entry.id, entry)
+  return [...byID.values()].sort((a, b) => a.timestamp - b.timestamp).slice(-MAX_STASH_ENTRIES)
+}
+
 export const { use: usePromptStash, provider: PromptStashProvider } = createSimpleContext({
   name: "PromptStash",
   init: () => {
     const stashPath = path.join(Global.Path.state, "prompt-stash.jsonl")
     const toast = useToast()
     let writeWarningShown = false
+    // Reads and writes share one queue: fs operations may complete out of
+    // issuance order, and a pop/remove rewrite landing before an earlier push
+    // append would resurrect the removed entry on the next load.
+    let writeChain: Promise<unknown> = Promise.resolve()
+    function nextWrite<T>(write: () => Promise<T>): Promise<T> {
+      const run = writeChain.then(write, write)
+      writeChain = run.catch(() => undefined)
+      return run
+    }
+    // Every read and write takes the cross-process lock: another TUI window
+    // shares this file, rewrites merge into the freshest disk state, and a
+    // load must not observe a truncated mid-rewrite file.
+    function locked<T>(fn: () => Promise<T>): Promise<T> {
+      return nextWrite(async () => {
+        using _guard = await FileLock.acquire(stashPath)
+        return await fn()
+      })
+    }
+
+    async function readStashEntries(): Promise<StashEntry[]> {
+      const text = await Filesystem.readText(stashPath).catch((error) => {
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return ""
+        throw error
+      })
+      return (
+        text
+          .split("\n")
+          .filter(Boolean)
+          // Id-less legacy lines get a stable content-derived id so repeated
+          // reads (load + rewrite) merge them as one entry instead of doubling.
+          .map((line) => parseStashLine(line, () => createHash("sha1").update(line).digest("hex")))
+          .filter((line): line is StashEntry => line !== undefined)
+      )
+    }
 
     const handleWriteFailure = (operation: string) => (error: unknown) => {
       if (writeWarningShown) return
@@ -40,8 +83,17 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
       })
     }
 
-    const persistStash = (content: string, operation: string) =>
-      writeFile(stashPath, content)
+    // Rewrites apply their mutation to the freshest disk state under the lock
+    // instead of overwriting the file with this window's in-memory snapshot.
+    const persistStash = (mutate: (entries: StashEntry[]) => StashEntry[], operation: string) =>
+      locked(async () => {
+        const fresh = await readStashEntries()
+        // Atomic replace: a crash mid-write must not truncate the live file.
+        // The cross-process lock makes the fixed temp name safe.
+        const tempPath = `${stashPath}.tmp`
+        await writeFile(tempPath, serialize(mutate(fresh)))
+        await rename(tempPath, stashPath)
+      })
         .then(() => {
           writeWarningShown = false
         })
@@ -50,8 +102,7 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
     onMount(() => {
       const cancel = scheduleDeferredStartupTask(
         async () => {
-          const text = await Filesystem.readText(stashPath).catch((error) => {
-            if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return ""
+          const lines = await locked(() => readStashEntries()).catch((error) => {
             log.warn("failed to load prompt stash", { stashPath, error })
             if (shouldSurfaceOptionalStateError(error)) {
               toast.show({
@@ -60,25 +111,17 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
                 duration: 3000,
               })
             }
-            return ""
+            return [] as StashEntry[]
           })
-          const lines = text
-            .split("\n")
-            .filter(Boolean)
-            .map((line) => parseStashLine(line, () => crypto.randomUUID()))
-            .filter((line): line is StashEntry => line !== undefined)
-            .slice(-MAX_STASH_ENTRIES)
 
-          const merged = [...lines, ...store.entries]
-            .sort((a, b) => a.timestamp - b.timestamp)
-            .slice(-MAX_STASH_ENTRIES)
+          const merged = mergeStashEntries(lines, store.entries)
           setStore("entries", merged)
 
-          // Rewrite file with only valid entries to self-heal corruption
-          if (merged.length > 0) {
-            const content = merged.map((line) => JSON.stringify(line)).join("\n") + "\n"
-            void persistStash(content, "rewrite")
-          }
+          // Normalize the freshest disk state (drop invalid lines, heal ids,
+          // enforce the cap). Never union the load-time snapshot back in: it
+          // would resurrect entries another window removed after our read.
+          // Run even when nothing parsed so a fully corrupt file is cleared.
+          void persistStash((fresh) => mergeStashEntries(fresh, []), "rewrite")
         },
         {
           name: "prompt-stash-load",
@@ -105,7 +148,6 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
           }),
         )
         let trimmed = false
-        let nextEntries: StashEntry[] = []
         setStore(
           produce((draft) => {
             draft.entries.push(stash)
@@ -113,16 +155,25 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
               draft.entries = draft.entries.slice(-MAX_STASH_ENTRIES)
               trimmed = true
             }
-            nextEntries = draft.entries.map((item) => structuredClone(unwrap(item)))
           }),
         )
 
         if (trimmed) {
-          void persistStash(serialize(nextEntries), "trim")
+          // The trim rewrite must carry the new entry: the append below is
+          // skipped on this path, so mutating only the disk state would lose
+          // every push made while the list is full.
+          void persistStash((fresh) => mergeStashEntries(fresh, [stash]), "trim")
           return
         }
 
-        void appendFile(stashPath, JSON.stringify(stash) + "\n")
+        void locked(async () => {
+          // A crash mid-append can leave a partial last line; terminate it so
+          // the new record never glues onto unparseable bytes and get dropped
+          // together with the stale tail at the next normalization.
+          const text = await Filesystem.readText(stashPath).catch(() => "")
+          const separator = text.length > 0 && !text.endsWith("\n") ? "\n" : ""
+          await appendFile(stashPath, separator + JSON.stringify(stash) + "\n")
+        })
           .then(() => {
             writeWarningShown = false
           })
@@ -131,31 +182,27 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
       pop() {
         if (store.entries.length === 0) return undefined
         const entry = store.entries[store.entries.length - 1]
-        let nextEntries: StashEntry[] = []
         setStore(
           produce((draft) => {
             draft.entries.pop()
-            nextEntries = draft.entries.map((item) => structuredClone(unwrap(item)))
           }),
         )
-        void persistStash(serialize(nextEntries), "pop")
+        void persistStash((entries) => entries.filter((item) => item.id !== entry.id), "pop")
         return entry
       },
       remove(id: string) {
         if (!id) return
         let removed = false
-        let nextEntries: StashEntry[] = []
         setStore(
           produce((draft) => {
             const index = draft.entries.findIndex((entry) => entry.id === id)
             if (index < 0) return
             removed = true
             draft.entries.splice(index, 1)
-            nextEntries = draft.entries.map((item) => structuredClone(unwrap(item)))
           }),
         )
         if (!removed) return
-        void persistStash(serialize(nextEntries), "remove")
+        void persistStash((entries) => entries.filter((item) => item.id !== id), "remove")
       },
     }
   },

@@ -22,6 +22,11 @@ describe("parsePastedFilePath", () => {
     )
   })
 
+  test("decodes shell-escaped spaces in Windows drive paths", () => {
+    expect(parsePastedFilePath("C:\\Program\\ Files\\App\\app.exe")).toBe("C:\\Program Files\\App\\app.exe")
+    expect(parsePastedFilePath("C:\\My\\ Docs\\a.txt")).toBe("C:\\My Docs\\a.txt")
+  })
+
   test("preserves raw Windows UNC paths", () => {
     expect(parsePastedFilePath("\\\\server\\share\\Screenshot 1.png")).toBe("\\\\server\\share\\Screenshot 1.png")
   })
@@ -30,5 +35,20 @@ describe("parsePastedFilePath", () => {
     expect(parsePastedFilePath("'Screenshot\\ 1.png'")).toBe("Screenshot 1.png")
     expect(parsePastedFilePath("'Screenshot\\ 1.png")).toBe("'Screenshot 1.png")
     expect(parsePastedFilePath('Screenshot\\ 1.png"')).toBe('Screenshot 1.png"')
+  })
+
+  test("preserves Windows relative paths and literal backslash names", () => {
+    expect(parsePastedFilePath("..\\src\\index.ts")).toBe("..\\src\\index.ts")
+    expect(parsePastedFilePath("bin\\run.exe")).toBe("bin\\run.exe")
+    expect(parsePastedFilePath("foo\\bar.txt")).toBe("foo\\bar.txt")
+  })
+
+  test("decodes an escaped backslash", () => {
+    expect(parsePastedFilePath("foo\\\\bar.txt")).toBe("foo\\bar.txt")
+  })
+
+  test("a lone quote character is not unwrapped to an empty path", () => {
+    expect(parsePastedFilePath("'")).toBe("'")
+    expect(parsePastedFilePath('"')).toBe('"')
   })
 })

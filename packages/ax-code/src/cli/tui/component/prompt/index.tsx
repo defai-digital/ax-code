@@ -447,6 +447,11 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     if (!isRenderableAlive(input) || !input.focused) return
     const submitKind = isPromptSubmitKey(evt)
     if (!submitKind) return
+    // A submit key is a non-escape key: disarm both double-Esc windows. This
+    // global handler consumes the key with stopPropagation, so the textarea's
+    // own onKeyDown disarm never runs for it.
+    lastDraftEscapeAt = undefined
+    lastIdleEscapeAt = undefined
     log.info("tui.prompt.useKeyboard: submit key detected", { keyName: evt.name, kind: submitKind })
     if (pasteSubmitGate.deferSubmitUntilPasteHandled()) {
       evt.preventDefault()
@@ -1156,11 +1161,15 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e: KeyEvent) => {
-                // Disarm the double-Esc rewind window on any non-escape key up
-                // front — keys consumed by early returns below (submit, paste,
-                // mode switches, autocomplete) never reach the escape-intent
-                // chain and would otherwise leave a stale arm behind.
-                if (escapeRewindDisarmKey(e.name)) lastIdleEscapeAt = undefined
+                // Disarm both double-Esc windows (draft-clear and rewind) on any
+                // non-escape key up front — keys consumed by early returns below
+                // (submit, paste, mode switches, autocomplete) never reach the
+                // escape-intent chain and would otherwise leave a stale arm that
+                // a later lone Esc completes.
+                if (escapeRewindDisarmKey(e.name)) {
+                  lastIdleEscapeAt = undefined
+                  lastDraftEscapeAt = undefined
+                }
                 // A pending Ctrl+C exit confirmation must not survive an
                 // unrelated keypress, mirroring the rewind-window disarm above.
                 if (!isPlainCtrlC(e)) exitConfirm.reset()
