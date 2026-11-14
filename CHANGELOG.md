@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.27] - 2026-11-14
+
+### Changed
+
+- Group CLI command implementations by concern and enforce boundaries across every workspace package.
+- Centralize pnpm dependency policy without changing resolved dependency versions.
+- Publish the paired SDK 2.6.81 maintenance release and include runtime artifact verification improvements.
+
+### Fixed
+
+- Bound URL credential fingerprint retention and surface credential hashing failures without downgrading the identity hash.
+- Validate grammar download URLs before cache access and logging, including previously cached HTTP or credential-bearing URLs.
+- Reject unexpected browser-worker message origins and verify native artifact reads through a single file descriptor.
+
 ## [7.30.26] - 2026-11-12
 
 ### Changed

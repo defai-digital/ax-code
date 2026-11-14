@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "7.30.26",
+  "version": "7.30.27",
   "name": "ax-code",
   "type": "module",
   "license": "Apache-2.0",
