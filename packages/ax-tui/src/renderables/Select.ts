@@ -65,8 +65,6 @@ export enum SelectRenderableEvents {
 }
 
 export class SelectRenderable extends Renderable {
-  protected _focusable: boolean = true
-
   private _options: SelectOption[] = []
   private _selectedIndex: number = 0
   private scrollOffset: number = 0
@@ -111,7 +109,7 @@ export class SelectRenderable extends Renderable {
 
   constructor(ctx: RenderContext, options: SelectRenderableOptions) {
     super(ctx, { ...options, buffered: true })
-    // Subclass field initializers default this to true; honor an explicit false.
+    // The parent field starts false. Selects are focusable unless told otherwise.
     this._focusable = options.focusable ?? true
     this._options = options.options || []
     const requestedIndex = options.selectedIndex ?? this._defaultOptions.selectedIndex

@@ -6,7 +6,7 @@ export interface NativeManifestEntry {
 }
 
 import { createHash } from "node:crypto"
-import { existsSync, lstatSync, readFileSync } from "node:fs"
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync } from "node:fs"
 import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -72,10 +72,25 @@ function verifyBytes(
   if (digest(bytes) !== expectedHash) throw new Error(`ax-tui native artifact SHA-256 mismatch: ${label}`)
 }
 
+function openRegularFile(file: string): number {
+  try {
+    return openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === "ELOOP" || code === "EINVAL") throw new Error(`Invalid ax-tui native artifact: ${file}`)
+    throw error
+  }
+}
+
 function readArtifact(file: string, maxSize: number): Buffer {
-  const stat = lstatSync(file)
-  if (!stat.isFile() || stat.size > maxSize) throw new Error(`Invalid ax-tui native artifact: ${file}`)
-  return readFileSync(file)
+  const fd = openRegularFile(file)
+  try {
+    const stat = fstatSync(fd)
+    if (!stat.isFile() || stat.size > maxSize) throw new Error(`Invalid ax-tui native artifact: ${file}`)
+    return readFileSync(fd)
+  } finally {
+    closeSync(fd)
+  }
 }
 
 export function verifyNativeArtifacts(directory: string, entry: NativeManifestEntry): NativeLibraryPaths {

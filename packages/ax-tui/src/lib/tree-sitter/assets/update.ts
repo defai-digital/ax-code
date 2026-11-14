@@ -2,7 +2,7 @@
 
 import { readFile, writeFile, mkdir } from "fs/promises"
 import * as path from "path"
-import { DownloadUtils } from "../download-utils.js"
+import { DownloadUtils, grammarDownloadUrl } from "../download-utils.js"
 import { parseArgs } from "util"
 import type { FiletypeParserOptions } from "../types.js"
 import { readdir } from "fs/promises"
@@ -123,7 +123,9 @@ async function downloadAndCombineQueries(
       console.log(`    Downloading query ${i + 1}/${queryUrls.length}: ${queryUrl}`)
 
       try {
-        const response = await fetch(queryUrl)
+        // The URL comes from parsers-config. Local query files are read on the other branch.
+        // codeql[js/file-access-to-http]
+        const response = await fetch(grammarDownloadUrl(queryUrl))
         if (!response.ok) {
           console.warn(`Failed to download query from ${queryUrl}: ${response.statusText}`)
           continue
@@ -142,6 +144,8 @@ async function downloadAndCombineQueries(
   }
 
   const combinedContent = queryContents.join("\n\n")
+  // Combined highlight queries are the downloaded grammar assets for this updater.
+  // codeql[js/http-to-file-access]
   await writeFile(queryPath, combinedContent, "utf-8")
 
   console.log(`  Combined ${queryContents.length} queries into ${queryPath}`)

@@ -73,8 +73,6 @@ function calculateDynamicHeight(showUnderline: boolean, showDescription: boolean
 }
 
 export class TabSelectRenderable extends Renderable {
-  protected _focusable: boolean = true
-
   private _options: TabSelectOption[] = []
   private selectedIndex: number = 0
   private scrollOffset: number = 0
@@ -100,7 +98,7 @@ export class TabSelectRenderable extends Renderable {
     const calculatedHeight = calculateDynamicHeight(options.showUnderline ?? true, options.showDescription ?? true)
 
     super(ctx, { ...options, height: calculatedHeight, buffered: true })
-    // Subclass field initializers default this to true; honor an explicit false.
+    // The parent field starts false. Tab selects are focusable unless told otherwise.
     this._focusable = options.focusable ?? true
 
     this._backgroundColor = parseColor(options.backgroundColor || "transparent")

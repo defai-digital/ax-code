@@ -553,7 +553,7 @@ export namespace Provider {
         }
       }
       if (providerID === "deepseek") {
-        for (const [modelID, model] of Object.entries(provider.models)) {
+        for (const modelID of Object.keys(provider.models)) {
           if (isHiddenDeepseekLegacySku(modelID)) {
             exclude(providerID, modelID, "retired-catalog-sku")
             delete provider.models[modelID]

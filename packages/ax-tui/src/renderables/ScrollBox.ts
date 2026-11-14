@@ -1,6 +1,6 @@
 import { type KeyEvent } from "../lib/index.js"
 import { getObjectsInViewport } from "../lib/objects-in-viewport.js"
-import { LinearScrollAccel, MacOSScrollAccel, type ScrollAcceleration } from "../lib/scroll-acceleration.js"
+import { LinearScrollAccel, type ScrollAcceleration } from "../lib/scroll-acceleration.js"
 import type { Renderable, RenderableOptions } from "../core/renderable.js"
 import type { MouseEvent } from "../core/renderer.js"
 import type { RenderContext } from "../core/types.js"
@@ -115,7 +115,6 @@ export class ScrollBoxRenderable extends BoxRenderable {
   public readonly horizontalScrollBar: ScrollBarRenderable
   public readonly verticalScrollBar: ScrollBarRenderable
 
-  protected _focusable: boolean = true
   private selectionListener?: () => void
 
   private autoScrollMouseX: number = 0
@@ -309,7 +308,7 @@ export class ScrollBoxRenderable extends BoxRenderable {
       ...(sanitizedRootBoxOptions as BoxOptions),
       ...(sanitizedRootOptions as BoxOptions),
     })
-    // Subclass field initializers default this to true; honor an explicit false.
+    // The parent field starts false. Scroll boxes are focusable unless told otherwise.
     this._focusable = sanitizedRootOptions?.focusable ?? sanitizedRootBoxOptions.focusable ?? true
 
     this.internalId = ScrollBoxRenderable.idCounter++

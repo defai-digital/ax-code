@@ -45,7 +45,6 @@ export interface EditBufferOptions extends RenderableOptions<EditBufferRenderabl
 }
 export declare abstract class EditBufferRenderable extends Renderable implements LineInfoProvider {
     [BrandedEditBufferRenderable]: boolean;
-    protected _focusable: boolean;
     selectable: boolean;
     private _traits;
     protected _textColor: RGBA;

@@ -1,5 +1,5 @@
 import type { OptimizedBuffer } from "../core/buffer.js"
-import { channel, setRgb, toU8 } from "./color-bytes.js"
+import { channel, setRgb } from "./color-bytes.js"
 
 interface ActiveGlitch {
   y: number

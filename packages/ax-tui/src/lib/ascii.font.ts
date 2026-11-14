@@ -52,7 +52,6 @@ const parsedFonts: Record<string, ParsedFontDefinition> = {}
 
 function parseColorTags(text: string): FontSegment[] {
   const segments: FontSegment[] = []
-  let currentIndex = 0
 
   const colorTagRegex = /<c(\d+)>(.*?)<\/c\d+>/g
   let lastIndex = 0

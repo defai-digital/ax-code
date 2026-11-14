@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, expect, test, vi } from "vitest"
@@ -8,6 +9,31 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
+
+test.each(["http://example.test/parser", "https://user:private-password@example.test/parser"])(
+  "rejects an invalid grammar URL before using cached bytes: %s",
+  async (source) => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "ax-tui-download-"))
+    const fetcher = vi.fn()
+    vi.stubGlobal("fetch", fetcher)
+    vi.spyOn(console, "log").mockImplementation(() => {})
+    try {
+      await mkdir(path.join(directory, "queries"))
+      const filename = createHash("sha256").update(source).digest("hex") + ".scm"
+      await writeFile(path.join(directory, "queries", filename), "cached parser")
+      const cached = await DownloadUtils.downloadOrLoad(source, directory, "queries", ".scm")
+      expect(cached.error).toMatch(/https|credentials/i)
+      expect(cached.content).toBeUndefined()
+      const direct = await DownloadUtils.downloadToPath(source, path.join(directory, "parser.wasm"))
+      expect(direct.error).toMatch(/https|credentials/i)
+      expect(JSON.stringify([cached, direct])).not.toContain("private-password")
+      expect(fetcher).not.toHaveBeenCalled()
+      expect(console.log).not.toHaveBeenCalled()
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  },
+)
 
 test("different URLs with the same legacy hash never reuse each other's parser bytes", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "ax-tui-download-"))

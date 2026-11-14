@@ -3946,7 +3946,6 @@ var fonts = {
 var parsedFonts = {};
 function parseColorTags(text) {
   const segments = [];
-  let currentIndex = 0;
   const colorTagRegex = /<c(\d+)>(.*?)<\/c\d+>/g;
   let lastIndex = 0;
   let match;
@@ -9371,9 +9370,9 @@ var ProcessQueue = class {
     this.autoProcess = autoProcess;
   }
   processor;
+  autoProcess;
   queue = [];
   processing = false;
-  autoProcess = true;
   enqueue(item) {
     this.queue.push(item);
     if (!this.processing && this.autoProcess) {
@@ -11239,7 +11238,6 @@ var ExtmarksController = class {
         this.originalMoveUpVisual();
         return;
       }
-      const currentOffset = this.editorView.getVisualCursor().offset;
       this.originalMoveUpVisual();
       const newOffset = this.editorView.getVisualCursor().offset;
       const virtualExtmark = this.findVirtualExtmarkContaining(newOffset);
@@ -11581,7 +11579,6 @@ var ExtmarksController = class {
       } else if (extmark.start < deleteOffset && extmark.end > deleteOffset) {
         extmark.end -= Math.min(extmark.end, deleteOffset + length) - deleteOffset;
       } else if (extmark.start < deleteOffset + length && extmark.end > deleteOffset + length) {
-        const overlap = deleteOffset + length - extmark.start;
         extmark.start = deleteOffset;
         extmark.end -= length;
       }
@@ -14500,7 +14497,6 @@ function convertToDebugSymbols(symbols) {
     globalFFILogPath = `ffi_otui_debug_${timestamp}.log`;
   }
   const debugSymbols = {};
-  let hasTracing = false;
   Object.entries(symbols).forEach(([key, value]) => {
     debugSymbols[key] = value;
   });
@@ -14521,7 +14517,6 @@ function convertToDebugSymbols(symbols) {
     });
   }
   if (env.AX_CODE_TUI_TRACE_FFI) {
-    hasTracing = true;
     Object.entries(symbols).forEach(([key, value]) => {
       if (typeof value === "function") {
         if (!globalTraceSymbols[key]) {

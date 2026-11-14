@@ -4,14 +4,11 @@
 export class ProcessQueue<T> {
   private queue: T[] = []
   private processing: boolean = false
-  private autoProcess: boolean = true
 
   constructor(
     private processor: (item: T) => Promise<void> | void,
-    autoProcess: boolean = true,
-  ) {
-    this.autoProcess = autoProcess
-  }
+    private autoProcess: boolean = true,
+  ) {}
 
   enqueue(item: T): void {
     this.queue.push(item)

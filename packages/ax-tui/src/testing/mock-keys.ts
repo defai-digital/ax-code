@@ -232,7 +232,7 @@ export function createMockKeys(renderer: CliRenderer, options?: MockKeysOptions)
     // Used by xterm, iTerm2, Ghostty with modifyOtherKeys enabled
     if (effectiveOtherModifiersMode && modifiers) {
       // Resolve the key to its string representation or keycode value
-      let { keyValue, keyName } = resolveKeyInput(key)
+      const { keyValue } = resolveKeyInput(key)
 
       // Map control characters and escape sequences to their char codes
       const valueToCharCodeMap: Record<string, number> = {

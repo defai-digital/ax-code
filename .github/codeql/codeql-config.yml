@@ -9,6 +9,24 @@ paths-ignore:
   # Maintainer scripts persist fetched catalogs/snapshots by design.
   - "packages/ax-code/script/fs-compat.ts"
   - "packages/ax-code/script/update-models.ts"
+  # esbuild bundles of packages/ax-tui. CodeQL scans the TypeScript sources.
+  # These copies repeat that source and add compiler artifacts: TypeScript enum
+  # seeds (`Name || {}`), unused bindings kept from bundled modules, and
+  # import-time throws emitted before `export { ... }`.
+  - "packages/ax-tui/index.js"
+  - "packages/ax-tui/index-*.js"
+  - "packages/ax-tui/parser.worker.js"
+  - "packages/ax-tui/testing.js"
+  - "packages/ax-tui/runtime-plugin.js"
+  - "packages/ax-tui/runtime-plugin.node.js"
+  - "packages/ax-tui/runtime-plugin-support.js"
+  - "packages/ax-tui/runtime-plugin-support.node.js"
+  - "packages/ax-tui/runtime-plugin-support-configure.js"
+  - "packages/ax-tui/runtime-plugin-support-configure.node.js"
+  - "packages/ax-tui/lib/tree-sitter/update-assets.js"
+  - "packages/ax-tui/solid/scripts/solid-plugin.node.js"
+  - "packages/ax-tui/solid/scripts/runtime-plugin-support.node.js"
+  - "packages/ax-tui/solid/scripts/runtime-plugin-support-configure.node.js"
 
 query-filters:
   # napi-rs `#[napi] pub struct` FFI wrappers trip this query with no

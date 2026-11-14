@@ -36,7 +36,6 @@ export declare enum TabSelectRenderableEvents {
     ITEM_SELECTED = "itemSelected"
 }
 export declare class TabSelectRenderable extends Renderable {
-    protected _focusable: boolean;
     private _options;
     private selectedIndex;
     private scrollOffset;

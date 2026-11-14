@@ -6,17 +6,22 @@
  * active SDK and adds an `arm64-macos` target beside `arm64e-macos`, then
  * points both `AX_CODE_TUI_MACOS_SDK` and `xcrun --show-sdk-path` at the copy.
  */
-import { createHash } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import { spawnSync } from "node:child_process"
 import {
   chmodSync,
+  closeSync,
+  constants,
   existsSync,
+  fstatSync,
   mkdirSync,
+  mkdtempSync,
+  openSync,
   readFileSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -112,15 +117,40 @@ export function prepareMacosSdk(source: string, destination: string): string {
     if (fallback.status !== 0) throw new Error(`Failed to copy macOS SDK from ${source}`)
   }
   if (!existsSync(join(destination, "usr/lib"))) throw new Error(`Failed to copy macOS SDK from ${source}`)
-  for (const file of walkTbd(destination)) {
-    const original = readFileSync(file, "utf8")
-    const patched = patchTbdTargets(original)
-    if (patched === original) continue
-    chmodSync(file, statSync(file).mode | 0o200)
-    writeFileSync(file, patched)
-  }
+  for (const file of walkTbd(destination)) patchSdkStub(file)
   if (!sdkIsCompatible(destination)) throw new Error(`Patched macOS SDK still has no arm64-macos stub: ${destination}`)
   return destination
+}
+
+const READ_NOFOLLOW = constants.O_RDONLY | constants.O_NOFOLLOW
+const NEW_FILE_NOFOLLOW = constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW
+
+/** Replace a stub through one descriptor so a symlink cannot be swapped in after a stat. */
+function patchSdkStub(file: string): void {
+  const fd = openSync(file, READ_NOFOLLOW, 0o600)
+  try {
+    const stat = fstatSync(fd)
+    if (!stat.isFile()) throw new Error(`macOS SDK stub is not a regular file: ${file}`)
+    const original = readFileSync(fd, "utf8")
+    const patched = patchTbdTargets(original)
+    if (patched === original) return
+    const temporary = `${file}.${randomBytes(8).toString("hex")}.tmp`
+    const out = openSync(temporary, NEW_FILE_NOFOLLOW, 0o600)
+    try {
+      writeFileSync(out, patched)
+    } finally {
+      closeSync(out)
+    }
+    try {
+      renameSync(temporary, file)
+    } catch (error) {
+      rmSync(temporary, { force: true })
+      throw error
+    }
+    chmodSync(file, 0o644)
+  } finally {
+    closeSync(fd)
+  }
 }
 
 export const MACOS_XCRUN_WRAPPER = [
@@ -146,7 +176,7 @@ export function extractZigArchive(archivePath: string, destination: string): voi
 function installZig(version: string): string {
   const archive = zigArchive(process.platform, process.arch)
   if (!archive.name.includes(version)) throw new Error(`${archive.name} is not Zig ${version}`)
-  const root = join(process.env.RUNNER_TEMP ?? tmpdir(), "ax-tui-zig")
+  const root = mkdtempSync(join(process.env.RUNNER_TEMP ?? tmpdir(), "ax-tui-zig-"))
   const archivePath = join(root, archive.name)
   mkdirSync(root, { recursive: true })
   const download = spawnSync(
@@ -189,13 +219,16 @@ function main(): void {
   }
 
   if (process.platform === "darwin") {
-    const destination = join(process.env.RUNNER_TEMP ?? tmpdir(), "ax-tui-macos-sdk", "MacOSX.sdk")
+    const destination = join(mkdtempSync(join(process.env.RUNNER_TEMP ?? tmpdir(), "ax-tui-macos-sdk-")), "MacOSX.sdk")
     const sdk = prepareMacosSdk(process.env.AX_CODE_TUI_MACOS_SDK || activeMacosSdk(), destination)
-    const wrapper = join(process.env.RUNNER_TEMP ?? tmpdir(), "ax-tui-xcrun")
-    mkdirSync(wrapper, { recursive: true })
+    const wrapper = mkdtempSync(join(process.env.RUNNER_TEMP ?? tmpdir(), "ax-tui-xcrun-"))
     const xcrun = join(wrapper, "xcrun")
-    writeFileSync(xcrun, MACOS_XCRUN_WRAPPER)
-    chmodSync(xcrun, 0o755)
+    const wrapperFd = openSync(xcrun, NEW_FILE_NOFOLLOW, 0o700)
+    try {
+      writeFileSync(wrapperFd, MACOS_XCRUN_WRAPPER)
+    } finally {
+      closeSync(wrapperFd)
+    }
     appendFile(process.env.GITHUB_PATH, hostPath(wrapper))
     appendFile(process.env.GITHUB_ENV, `AX_CODE_TUI_MACOS_SDK=${hostPath(sdk)}`)
   }

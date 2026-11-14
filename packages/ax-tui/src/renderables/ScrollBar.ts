@@ -25,8 +25,6 @@ export class ScrollBarRenderable extends Renderable {
   public readonly endArrow: ArrowRenderable
   public readonly orientation: "vertical" | "horizontal"
 
-  protected _focusable: boolean = true
-
   private _scrollSize = 0
   private _scrollPosition = 0
   private _viewportSize = 0
@@ -122,7 +120,7 @@ export class ScrollBarRenderable extends Renderable {
       ...(options as BoxOptions),
     })
 
-    // Subclass field initializers default this to true; honor an explicit false.
+    // The parent field starts false. Scroll bars are focusable unless told otherwise.
     this._focusable = options.focusable ?? true
 
     this._onChange = options.onChange

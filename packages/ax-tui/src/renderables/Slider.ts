@@ -258,19 +258,7 @@ export class SliderRenderable extends Renderable {
       const thumbStartInCell = Math.max(virtualThumbStart, virtualCellStart)
       const thumbEndInCell = Math.min(virtualThumbEnd, virtualCellEnd)
       const coverage = thumbEndInCell - thumbStartInCell
-
-      let char = " "
-
-      if (coverage >= 2) {
-        char = "█"
-      } else {
-        const isLeftHalf = thumbStartInCell === virtualCellStart
-        if (isLeftHalf) {
-          char = "▌"
-        } else {
-          char = "▐"
-        }
-      }
+      const char = coverage >= 2 ? "█" : thumbStartInCell === virtualCellStart ? "▌" : "▐"
 
       for (let y = 0; y < this.height; y++) {
         buffer.setCellWithAlphaBlending(this.x + realX, this.y + y, char, this._foregroundColor, this._backgroundColor)

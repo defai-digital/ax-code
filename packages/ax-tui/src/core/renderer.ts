@@ -4518,13 +4518,10 @@ export class CliRenderer extends EventEmitter implements RenderContext {
 
       const frameRequests = Array.from(this.animationRequest.values())
       this.animationRequest.clear()
-      const animationRequestStart = performance.now()
       for (const callback of frameRequests) {
         callback(deltaTime)
         this.dropLive()
       }
-      const animationRequestEnd = performance.now()
-      const animationRequestTime = animationRequestEnd - animationRequestStart
 
       const start = performance.now()
       for (const frameCallback of this.frameCallbacks) {
@@ -4557,7 +4554,6 @@ export class CliRenderer extends EventEmitter implements RenderContext {
 
           const overallFrameTime = performance.now() - overallStart
 
-          // TODO: Add animationRequestTime to stats
           this.lib.updateStats(
             this.rendererPtr,
             overallFrameTime,
@@ -4756,7 +4752,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
         if (!currentRenderable || !this.isWithinContainer(currentRenderable, currentContainer)) {
           const parentContainer = currentContainer.parent || this.root
           this.selectionContainers.push(parentContainer)
-        } else if (currentRenderable && this.selectionContainers.length > 1) {
+        } else if (this.selectionContainers.length > 1) {
           let containerIndex = this.selectionContainers.indexOf(currentRenderable)
 
           if (containerIndex === -1) {

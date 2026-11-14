@@ -1616,7 +1616,6 @@ function convertToDebugSymbols<T extends Record<string, any>>(symbols: T): T {
   }
 
   const debugSymbols: Record<string, any> = {}
-  let hasTracing = false
 
   Object.entries(symbols).forEach(([key, value]) => {
     debugSymbols[key] = value
@@ -1641,7 +1640,6 @@ function convertToDebugSymbols<T extends Record<string, any>>(symbols: T): T {
   }
 
   if (env.AX_CODE_TUI_TRACE_FFI) {
-    hasTracing = true
     Object.entries(symbols).forEach(([key, value]) => {
       if (typeof value === "function") {
         // Initialize trace array for this symbol if not exists

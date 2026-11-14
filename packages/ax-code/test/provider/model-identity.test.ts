@@ -59,10 +59,18 @@ describe("resolved model identity", () => {
       api: { ...model.api, url: "https://user:password@gateway.example/v1?key=private-value" },
     })
     expect(JSON.stringify(result)).not.toMatch(/password|private-value/)
+    expect(result.deploymentKey.startsWith("deployment-v2:")).toBe(true)
+    expect(result.deploymentKey).not.toMatch(/^deployment-v2:[a-f0-9]{64}$/)
     expect(
       resolveModelIdentity({
         ...model,
         api: { ...model.api, url: "https://user:password@gateway.example/v1?key=other-value" },
+      }).deploymentKey,
+    ).not.toBe(result.deploymentKey)
+    expect(
+      resolveModelIdentity({
+        ...model,
+        api: { ...model.api, url: "https://user:other-secret@gateway.example/v1?key=private-value" },
       }).deploymentKey,
     ).not.toBe(result.deploymentKey)
   })

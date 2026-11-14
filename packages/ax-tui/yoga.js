@@ -92,7 +92,7 @@ import {
   WRAP_WRAP_REVERSE,
   Wrap,
   yoga_default
-} from "./index-WAMICJTK.js";
+} from "./index-UXYV2YFD.js";
 export {
   ALIGN_AUTO,
   ALIGN_BASELINE,

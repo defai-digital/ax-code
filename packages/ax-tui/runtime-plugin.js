@@ -56,7 +56,7 @@ const normalizeSourcePath = (path) => {
   if (cachedPath !== void 0) {
     return cachedPath;
   }
-  let normalizedPath = cleanPath;
+  let normalizedPath;
   try {
     normalizedPath = realpathSync(cleanPath);
   } catch {

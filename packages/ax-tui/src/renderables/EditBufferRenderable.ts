@@ -69,7 +69,6 @@ export interface EditBufferOptions extends RenderableOptions<EditBufferRenderabl
 
 export abstract class EditBufferRenderable extends Renderable implements LineInfoProvider {
   [BrandedEditBufferRenderable] = true
-  protected _focusable: boolean = true
   public selectable: boolean = true
   private _traits: EditorTraits = {}
 
@@ -120,7 +119,7 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
 
   constructor(ctx: RenderContext, options: EditBufferOptions) {
     super(ctx, options)
-    // Subclass field initializers default this to true; honor an explicit false.
+    // The parent field starts false. Editors are focusable unless told otherwise.
     this._focusable = options.focusable ?? true
 
     this._textColor = parseColor(options.textColor ?? this._defaultOptions.textColor)

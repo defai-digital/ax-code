@@ -9,8 +9,21 @@ import { mkdir, readFile, rename, rm, writeFile } from "fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import * as path from "path";
 var MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+function grammarDownloadUrl(source) {
+  let url;
+  try {
+    url = new URL(source);
+  } catch {
+    throw new Error("Parser download URL is invalid");
+  }
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "") {
+    throw new Error("Parser download URL must be https and cannot include credentials");
+  }
+  return url.href;
+}
 async function fetchContent(source) {
-  const response = await fetch(source, { signal: AbortSignal.timeout(3e4) });
+  const url = grammarDownloadUrl(source);
+  const response = await fetch(url, { signal: AbortSignal.timeout(3e4) });
   if (!response.ok || !response.body) {
     await response.body?.cancel();
     throw new Error(`Failed to fetch from ${source}: ${response.statusText}`);
@@ -61,6 +74,11 @@ var DownloadUtils = class {
   static async downloadOrLoad(source, cacheDir, cacheSubdir, fileExtension, useHashForCache = true, filetype) {
     const isUrl = source.startsWith("http://") || source.startsWith("https://");
     if (isUrl) {
+      try {
+        grammarDownloadUrl(source);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
       let cacheFileName;
       if (useHashForCache) {
         const hash = this.hashUrl(source);
@@ -111,6 +129,13 @@ var DownloadUtils = class {
    */
   static async downloadToPath(source, targetPath) {
     const isUrl = source.startsWith("http://") || source.startsWith("https://");
+    if (isUrl) {
+      try {
+        grammarDownloadUrl(source);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    }
     try {
       await mkdir(path.dirname(targetPath), { recursive: true });
     } catch (error) {
@@ -227,7 +252,7 @@ async function downloadAndCombineQueries(filetype, queryUrls, assetsDir, outputP
     } else {
       console.log(`    Downloading query ${i + 1}/${queryUrls.length}: ${queryUrl}`);
       try {
-        const response = await fetch(queryUrl);
+        const response = await fetch(grammarDownloadUrl(queryUrl));
         if (!response.ok) {
           console.warn(`Failed to download query from ${queryUrl}: ${response.statusText}`);
           continue;

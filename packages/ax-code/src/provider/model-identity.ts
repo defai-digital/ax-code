@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto"
+import { createHash, scryptSync } from "node:crypto"
 import { resolveProtocolProfile } from "./protocol-profile"
 import { declaredCapabilityEvidence } from "./capability-evidence"
 
@@ -23,6 +23,31 @@ export type ResolvedModelIdentity = Readonly<{
 
 const opaqueIDs = new WeakMap<object, number>()
 let nextOpaqueID = 0
+const ENDPOINT_CREDENTIAL_SALT = "ax-code-endpoint-identity"
+const MAX_CREDENTIAL_FINGERPRINTS = 64
+const credentialFingerprints = new Map<string, string>()
+
+/** Stretch a URL password so a leaked deployment key is not a fast hash of it. */
+function credentialFingerprint(secret: string): string {
+  const cached = credentialFingerprints.get(secret)
+  if (cached !== undefined) {
+    credentialFingerprints.delete(secret)
+    credentialFingerprints.set(secret, cached)
+    return cached
+  }
+  const fingerprint = scryptSync(secret, ENDPOINT_CREDENTIAL_SALT, 32).toString("hex")
+  credentialFingerprints.set(secret, fingerprint)
+  while (credentialFingerprints.size > MAX_CREDENTIAL_FINGERPRINTS) {
+    const oldest = credentialFingerprints.keys().next().value
+    if (oldest === undefined) break
+    credentialFingerprints.delete(oldest)
+  }
+  return fingerprint
+}
+
+function withCredential(digest: string, credential: string | undefined): string {
+  return credential ? `${digest}:${credential}` : digest
+}
 
 function opaqueID(value: object) {
   let id = opaqueIDs.get(value)
@@ -57,19 +82,25 @@ export function configurationKey(scope: string, value: unknown): string {
     .digest("hex")}`
 }
 
-function endpointIdentity(value: string): { display?: string; key: string } {
+function endpointIdentity(value: string): { display?: string; key: string; credential?: string } {
   if (!value) return { key: "sdk-default" }
+  let url: URL
   try {
-    const url = new URL(value)
-    const path = url.pathname.replace(/\/+$/, "")
-    const display = `${url.origin}${path}`
-    // Queries can route deployments, but may contain credentials. Hash their
-    // values rather than exposing them in diagnostics or calibration keys.
-    const query = [...url.searchParams.entries()].sort(([a, av], [b, bv]) => a.localeCompare(b) || av.localeCompare(bv))
-    return { display, key: configurationKey("endpoint", [display, query, url.username, url.password]) }
+    url = new URL(value)
   } catch {
     return { key: configurationKey("unresolved-endpoint", value) }
   }
+  const path = url.pathname.replace(/\/+$/, "")
+  const display = `${url.origin}${path}`
+  // Queries can route deployments, but may contain credentials. Keep their
+  // values out of diagnostics. A non-empty URL password is stretched with
+  // scrypt and appended after the SHA-256 fingerprint so the fast hash never
+  // sees the secret.
+  const query = [...url.searchParams.entries()].sort(([a, av], [b, bv]) => a.localeCompare(b) || av.localeCompare(bv))
+  const key = configurationKey("endpoint", [display, query, url.username, ""])
+  const secret = url.password
+  if (!secret) return { display, key }
+  return { display, key, credential: credentialFingerprint(secret) }
 }
 
 export function resolveModelIdentity(
@@ -92,25 +123,29 @@ export function resolveModelIdentity(
     profile: `${profile.id}@${profile.revision}`,
     ...(endpoint.display ? { endpoint: endpoint.display } : {}),
   })
-  const deploymentKey = configurationKey("deployment-v2", [
+  const deploymentDigest = configurationKey("deployment-v2", [
     deployment.providerID,
     deployment.modelID,
     deployment.protocol,
     deployment.profile,
     endpoint.key,
   ])
+  const deploymentKey = withCredential(deploymentDigest, endpoint.credential)
   return Object.freeze({
     selection: Object.freeze({ providerID: model.providerID, modelID: model.id }),
     deployment,
     deploymentKey,
-    languageKey: configurationKey("language-v2", [
-      deploymentKey,
-      connectionOptions,
-      model.options,
-      model.headers,
-      model.capabilities,
-      model.capabilities && declaredCapabilityEvidence(model.capabilities),
-      model.limit,
-    ]),
+    languageKey: withCredential(
+      configurationKey("language-v2", [
+        deploymentDigest,
+        connectionOptions,
+        model.options,
+        model.headers,
+        model.capabilities,
+        model.capabilities && declaredCapabilityEvidence(model.capabilities),
+        model.limit,
+      ]),
+      endpoint.credential,
+    ),
   })
 }

@@ -539,8 +539,6 @@ export class TerminalConsole extends EventEmitter {
   }
 
   private scrollUp(): boolean {
-    const logAreaHeight = Math.max(1, this.consoleHeight - 1)
-
     if (this.currentLineIndex > 0) {
       this.currentLineIndex--
       this.markNeedsRerender()

@@ -303,7 +303,7 @@ export async function createTestRenderer(options: TestRendererOptions): Promise<
     waitOptions: TestWaitForOptions = {},
   ): Promise<string> => {
     const maxPasses = normalizePositiveInteger(waitOptions.maxPasses, DEFAULT_MAX_PASSES)
-    let frame = captureCharFrame()
+    let frame: string
 
     for (let pass = 0; pass <= maxPasses; pass++) {
       await drainImmediateWork()

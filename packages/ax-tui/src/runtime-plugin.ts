@@ -131,8 +131,7 @@ const normalizeSourcePath = (path: string): string => {
     return cachedPath
   }
 
-  let normalizedPath = cleanPath
-
+  let normalizedPath: string
   try {
     normalizedPath = realpathSync(cleanPath)
   } catch {

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { readFileSync, readdirSync, lstatSync } from "node:fs"
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readdirSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { execFileSync } from "node:child_process"
@@ -13,6 +13,16 @@ const expectedFiles = [
   "vendor/package.json",
 ]
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex")
+
+function readRegularFile(file) {
+  const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    if (!fstatSync(fd).isFile()) throw new Error(`AkiTTY SDK package contains a non-regular entry: ${file}`)
+    return readFileSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}
 
 export function verifyAkittySdk(root = packageRoot, source) {
   const receipt = JSON.parse(readFileSync(resolve(root, "SOURCE.json"), "utf8"))
@@ -40,8 +50,7 @@ export function verifyAkittySdk(root = packageRoot, source) {
   }
   for (const name of expectedFiles) {
     const path = resolve(root, name)
-    if (!lstatSync(path).isFile() || hash(readFileSync(path)) !== receipt.files[name])
-      throw new Error(`AkiTTY SDK byte drift: ${name}`)
+    if (hash(readRegularFile(path)) !== receipt.files[name]) throw new Error(`AkiTTY SDK byte drift: ${name}`)
   }
   const wrapper = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"))
   const upstream = JSON.parse(readFileSync(resolve(root, "vendor/package.json"), "utf8"))

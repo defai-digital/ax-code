@@ -1,11 +1,11 @@
 import {
   ANSI,
   CliRenderer
-} from "./index-5ILXRSTC.js";
+} from "./index-WZRAUJQZ.js";
 import {
   SystemClock,
   TreeSitterClient
-} from "./index-WAMICJTK.js";
+} from "./index-UXYV2YFD.js";
 
 // src/testing/mock-keys.ts
 import { Buffer as Buffer2 } from "node:buffer";
@@ -167,7 +167,7 @@ function createMockKeys(renderer, options) {
       }
     }
     if (effectiveOtherModifiersMode && modifiers) {
-      let { keyValue, keyName } = resolveKeyInput(key);
+      const { keyValue } = resolveKeyInput(key);
       const valueToCharCodeMap = {
         "\b": 127,
         // backspace (or 8, but 127 is more common)
@@ -671,7 +671,7 @@ async function createTestRenderer(options) {
   };
   const waitForFrame = async (predicate, waitOptions = {}) => {
     const maxPasses = normalizePositiveInteger(waitOptions.maxPasses, DEFAULT_MAX_PASSES);
-    let frame = captureCharFrame();
+    let frame;
     for (let pass = 0; pass <= maxPasses; pass++) {
       await drainImmediateWork();
       frame = captureCharFrame();

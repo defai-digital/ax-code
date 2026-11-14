@@ -29,7 +29,7 @@ import {
   isTextNodeRenderable,
   mergeKeyAliases,
   mergeKeyBindings
-} from "./index-5ILXRSTC.js";
+} from "./index-WZRAUJQZ.js";
 import {
   ASCIIFontSelectionHelper,
   ATTRIBUTE_BASE_BITS,
@@ -183,7 +183,7 @@ import {
   wrapWithDelegates,
   yellow,
   yoga_exports
-} from "./index-WAMICJTK.js";
+} from "./index-UXYV2YFD.js";
 
 // src/post/color-bytes.ts
 function toU8(value) {
@@ -8208,17 +8208,7 @@ var SliderRenderable = class extends Renderable {
       const thumbStartInCell = Math.max(virtualThumbStart, virtualCellStart);
       const thumbEndInCell = Math.min(virtualThumbEnd, virtualCellEnd);
       const coverage = thumbEndInCell - thumbStartInCell;
-      let char = " ";
-      if (coverage >= 2) {
-        char = "\u2588";
-      } else {
-        const isLeftHalf = thumbStartInCell === virtualCellStart;
-        if (isLeftHalf) {
-          char = "\u258C";
-        } else {
-          char = "\u2590";
-        }
-      }
+      const char = coverage >= 2 ? "\u2588" : thumbStartInCell === virtualCellStart ? "\u258C" : "\u2590";
       for (let y = 0; y < this.height; y++) {
         buffer.setCellWithAlphaBlending(this.x + realX, this.y + y, char, this._foregroundColor, this._backgroundColor);
       }
@@ -8282,7 +8272,6 @@ var ScrollBarRenderable = class extends Renderable {
   startArrow;
   endArrow;
   orientation;
-  _focusable = true;
   _scrollSize = 0;
   _scrollPosition = 0;
   _viewportSize = 0;
@@ -8668,7 +8657,6 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
   content;
   horizontalScrollBar;
   verticalScrollBar;
-  _focusable = true;
   selectionListener;
   autoScrollMouseX = 0;
   autoScrollMouseY = 0;
@@ -9322,7 +9310,6 @@ var SelectRenderableEvents = /* @__PURE__ */ ((SelectRenderableEvents2) => {
   return SelectRenderableEvents2;
 })(SelectRenderableEvents || {});
 var SelectRenderable = class extends Renderable {
-  _focusable = true;
   _options = [];
   _selectedIndex = 0;
   scrollOffset = 0;
@@ -9705,7 +9692,6 @@ function calculateDynamicHeight(showUnderline, showDescription) {
   return height;
 }
 var TabSelectRenderable = class extends Renderable {
-  _focusable = true;
   _options = [];
   selectedIndex = 0;
   scrollOffset = 0;
@@ -11855,7 +11841,7 @@ var Keymap = class _Keymap {
   }
   distance(layer) {
     if (!this.layers.includes(layer)) return -1;
-    let enabled = true;
+    let enabled;
     try {
       enabled = layer.options.enabled?.() !== false;
     } catch {
@@ -12049,7 +12035,7 @@ var FocusManager = class _FocusManager {
     try {
       const initialFocus = this.renderer.currentFocusedRenderable;
       const active = [...this.scopes].filter((scope) => {
-        let enabled = true;
+        let enabled;
         try {
           enabled = scope.options.enabled?.() !== false;
         } catch {

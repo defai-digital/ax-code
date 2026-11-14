@@ -18,7 +18,6 @@ export declare class ScrollBarRenderable extends Renderable {
     readonly startArrow: ArrowRenderable;
     readonly endArrow: ArrowRenderable;
     readonly orientation: "vertical" | "horizontal";
-    protected _focusable: boolean;
     private _scrollSize;
     private _scrollPosition;
     private _viewportSize;

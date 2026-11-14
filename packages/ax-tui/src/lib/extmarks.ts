@@ -169,7 +169,6 @@ export class ExtmarksController {
         return
       }
 
-      const currentOffset = this.editorView.getVisualCursor().offset
       this.originalMoveUpVisual()
       const newOffset = this.editorView.getVisualCursor().offset
 
@@ -595,7 +594,6 @@ export class ExtmarksController {
       } else if (extmark.start < deleteOffset && extmark.end > deleteOffset) {
         extmark.end -= Math.min(extmark.end, deleteOffset + length) - deleteOffset
       } else if (extmark.start < deleteOffset + length && extmark.end > deleteOffset + length) {
-        const overlap = deleteOffset + length - extmark.start
         extmark.start = deleteOffset
         extmark.end -= length
       }

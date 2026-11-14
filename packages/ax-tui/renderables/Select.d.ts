@@ -39,7 +39,6 @@ export declare enum SelectRenderableEvents {
     ITEM_SELECTED = "itemSelected"
 }
 export declare class SelectRenderable extends Renderable {
-    protected _focusable: boolean;
     private _options;
     private _selectedIndex;
     private scrollOffset;

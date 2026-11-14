@@ -3,6 +3,8 @@ export interface DownloadResult {
     filePath?: string;
     error?: string;
 }
+/** Grammar asset URLs are https and never carry userinfo. */
+export declare function grammarDownloadUrl(source: string): string;
 export declare class DownloadUtils {
     private static hashUrl;
     /**

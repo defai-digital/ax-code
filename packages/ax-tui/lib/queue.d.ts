@@ -3,9 +3,9 @@
  */
 export declare class ProcessQueue<T> {
     private processor;
+    private autoProcess;
     private queue;
     private processing;
-    private autoProcess;
     constructor(processor: (item: T) => Promise<void> | void, autoProcess?: boolean);
     enqueue(item: T): void;
     private processQueue;

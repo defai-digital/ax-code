@@ -36,7 +36,7 @@ import {
   toArrayBuffer,
   treeSitterToTextChunks,
   validateBufferDimensions
-} from "./index-WAMICJTK.js";
+} from "./index-UXYV2YFD.js";
 
 // src/core/text-buffer-view.ts
 var TextBufferView = class _TextBufferView {
@@ -3003,7 +3003,6 @@ var TerminalConsole = class extends EventEmitter3 {
     }
   }
   scrollUp() {
-    const logAreaHeight = Math.max(1, this.consoleHeight - 1);
     if (this.currentLineIndex > 0) {
       this.currentLineIndex--;
       this.markNeedsRerender();
@@ -3613,7 +3612,6 @@ function isEditBufferRenderable(obj) {
 }
 var EditBufferRenderable = class extends Renderable {
   [BrandedEditBufferRenderable] = true;
-  _focusable = true;
   selectable = true;
   _traits = {};
   _textColor;
@@ -8070,13 +8068,10 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
       const overallStart = performance.now();
       const frameRequests = Array.from(this.animationRequest.values());
       this.animationRequest.clear();
-      const animationRequestStart = performance.now();
       for (const callback of frameRequests) {
         callback(deltaTime);
         this.dropLive();
       }
-      const animationRequestEnd = performance.now();
-      const animationRequestTime = animationRequestEnd - animationRequestStart;
       const start = performance.now();
       for (const frameCallback of this.frameCallbacks) {
         try {
@@ -8258,7 +8253,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
         if (!currentRenderable || !this.isWithinContainer(currentRenderable, currentContainer)) {
           const parentContainer = currentContainer.parent || this.root;
           this.selectionContainers.push(parentContainer);
-        } else if (currentRenderable && this.selectionContainers.length > 1) {
+        } else if (this.selectionContainers.length > 1) {
           let containerIndex = this.selectionContainers.indexOf(currentRenderable);
           if (containerIndex === -1) {
             const immediateParent = currentRenderable.parent || this.root;

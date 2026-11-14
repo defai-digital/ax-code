@@ -99,7 +99,7 @@ export class FocusManager {
     try {
       const initialFocus = this.renderer.currentFocusedRenderable
       const active = [...this.scopes].filter((scope) => {
-        let enabled = true
+        let enabled: boolean
         try {
           enabled = scope.options.enabled?.() !== false
         } catch {

@@ -10,8 +10,25 @@ export interface DownloadResult {
 
 const MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 
+/** Grammar asset URLs are https and never carry userinfo. */
+export function grammarDownloadUrl(source: string): string {
+  let url: URL
+  try {
+    url = new URL(source)
+  } catch {
+    throw new Error("Parser download URL is invalid")
+  }
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "") {
+    throw new Error("Parser download URL must be https and cannot include credentials")
+  }
+  return url.href
+}
+
 async function fetchContent(source: string): Promise<Buffer> {
-  const response = await fetch(source, { signal: AbortSignal.timeout(30_000) })
+  const url = grammarDownloadUrl(source)
+  // parsers-config names these grammar URLs. The request does not send local file bytes.
+  // codeql[js/file-access-to-http]
+  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) })
   if (!response.ok || !response.body) {
     await response.body?.cancel()
     throw new Error(`Failed to fetch from ${source}: ${response.statusText}`)
@@ -73,6 +90,11 @@ export class DownloadUtils {
     const isUrl = source.startsWith("http://") || source.startsWith("https://")
 
     if (isUrl) {
+      try {
+        grammarDownloadUrl(source)
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
       let cacheFileName: string
       if (useHashForCache) {
         const hash = this.hashUrl(source)
@@ -131,6 +153,14 @@ export class DownloadUtils {
    */
   static async downloadToPath(source: string, targetPath: string): Promise<DownloadResult> {
     const isUrl = source.startsWith("http://") || source.startsWith("https://")
+
+    if (isUrl) {
+      try {
+        grammarDownloadUrl(source)
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
+    }
 
     try {
       await mkdir(path.dirname(targetPath), { recursive: true })

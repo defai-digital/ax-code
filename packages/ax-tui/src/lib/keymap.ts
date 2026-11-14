@@ -149,7 +149,7 @@ export class Keymap {
 
   private distance(layer: Layer): number {
     if (!this.layers.includes(layer)) return -1
-    let enabled = true
+    let enabled: boolean
     try {
       enabled = layer.options.enabled?.() !== false
     } catch {
