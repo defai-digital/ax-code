@@ -35,6 +35,15 @@ describe("Antigravity native model enumeration", () => {
     ])
   })
 
+  test("caps catalog growth while retaining duplicate updates within the limit", () => {
+    const output = Array.from({ length: 2_000 }, (_, index) => `model-${index}\tModel ${index}`)
+    output.push("model-0\tUpdated first model")
+    const models = parseAntigravityModels(output.join("\n"))
+    expect(models).toHaveLength(1_024)
+    expect(models[0]).toEqual({ id: "model-0", name: "Updated first model" })
+    expect(models.at(-1)?.id).toBe("model-1023")
+  })
+
   test("falls back to the CLI default when model enumeration fails", async () => {
     const run = vi.spyOn(Process, "run").mockRejectedValue(new Error("timed out"))
     expect(await discoverAntigravityModels("agy")).toEqual([])

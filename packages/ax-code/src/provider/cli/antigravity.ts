@@ -6,6 +6,7 @@ import { cliEnv } from "./cli-language-model"
 import type { NativeCliModel } from "./native-models"
 
 const MODEL_DISCOVERY_TIMEOUT_MS = 10_000
+const MAX_DISCOVERED_MODELS = 1_024
 const log = Log.create({ service: "provider.cli.antigravity" })
 const modelRow = z.tuple([z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/), z.string().min(1)])
 
@@ -21,6 +22,8 @@ export function parseAntigravityModels(output: string): NativeCliModel[] {
     )
     if (!parsed.success) continue
     const [id, name] = parsed.data
+    // Keep an unexpectedly large external catalog from overwhelming the model picker.
+    if (!models.has(id) && models.size >= MAX_DISCOVERED_MODELS) continue
     models.set(id, { id, name })
   }
   return [...models.values()]
