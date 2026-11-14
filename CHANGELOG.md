@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.28] - 2026-11-14
+
+### Added
+
+- Restore Google Antigravity CLI support through the installed `agy` command, native model discovery, and existing login.
+- Accept `ax-code update` as an alias for `upgrade`, including target versions, options, and `check`.
+
+### Changed
+
+- Refresh the upstream model catalog and publish the paired SDK 2.6.82 with Antigravity provider connection support.
+
+### Fixed
+
+- Keep the root Antigravity conversation and streamed fallback responses intact, and bound discovered model catalogs.
+- Prevent plain upgrades from downgrading a newer installed version when release metadata is stale.
+- Reject invalid discovered versions before running an installer while preserving explicitly requested target versions.
+
 ## [7.30.27] - 2026-11-14
 
 ### Changed
