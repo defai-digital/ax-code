@@ -5522,30 +5522,6 @@
         "canonical_model_id": "stepfun/step-3.5-flash",
         "family": "step"
       },
-      "stepfun-ai/step-3.5-flash-2603": {
-        "id": "stepfun-ai/step-3.5-flash-2603",
-        "name": "Step 3.5 Flash 2603",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-04-02",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 65536
-        },
-        "canonical_model_id": "stepfun/step-3.5-flash-2603",
-        "family": "step"
-      },
       "pamanseau/OpenReasoning-Nemotron-32B": {
         "id": "pamanseau/OpenReasoning-Nemotron-32B",
         "name": "OpenReasoning Nemotron 32B",
@@ -31225,7 +31201,7 @@
         "tool_call": true
       },
       "scx-ai-gp/deepseek-v4.1-flash-1017": {
-        "attachment": false,
+        "attachment": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
         "family": "deepseek-flash",
         "id": "scx-ai-gp/deepseek-v4.1-flash-1017",
@@ -31235,7 +31211,8 @@
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -31808,7 +31785,9 @@
         "modalities": {
           "input": [
             "text",
-            "audio"
+            "image",
+            "audio",
+            "video"
           ],
           "output": [
             "text"
@@ -31961,7 +31940,7 @@
         "tool_call": true
       },
       "scx-ai-gp/deepseek-v4.1-flash-latest": {
-        "attachment": false,
+        "attachment": true,
         "family": "deepseek",
         "id": "scx-ai-gp/deepseek-v4.1-flash-latest",
         "limit": {
@@ -31970,7 +31949,8 @@
         },
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -32026,6 +32006,136 @@
         "reasoning": true,
         "release_date": "2026-10-17",
         "temperature": true,
+        "tool_call": true
+      },
+      "alibaba/kimi-k2.7-code": {
+        "attachment": true,
+        "canonical_model_id": "moonshotai/kimi-k2.7-code",
+        "family": "kimi-k2",
+        "id": "alibaba/kimi-k2.7-code",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Kimi K2.7 Code (Alibaba Cloud)",
+        "reasoning": true,
+        "release_date": "2026-06-12",
+        "temperature": false,
+        "tool_call": true
+      },
+      "alibaba/qwen3.8-2.4t-a95b": {
+        "attachment": false,
+        "canonical_model_id": "alibaba/qwen3.8-2.4t-a95b",
+        "family": "qwen",
+        "id": "alibaba/qwen3.8-2.4t-a95b",
+        "limit": {
+          "context": 983616,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 2.4T A95B (Alibaba Cloud)",
+        "reasoning": true,
+        "release_date": "2026-08-12",
+        "temperature": true,
+        "tool_call": true
+      },
+      "alibaba/qwen3.8-27b": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.8-27b",
+        "family": "qwen",
+        "id": "alibaba/qwen3.8-27b",
+        "limit": {
+          "context": 983616,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 27B (Alibaba Cloud)",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "google-ai-studio/gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "google-ai-studio/gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen (Google AI Studio)",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
+        "tool_call": true
+      },
+      "google-vertex/gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "google-vertex/gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen (Google Vertex AI)",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -53540,9 +53650,9 @@
         "release_date": "1970-01-01",
         "tool_call": true
       },
-      "deepseek-v4.1-flash-1017-basic": {
+      "deepseek-v4.1-flash-1017-economy": {
         "attachment": true,
-        "id": "deepseek-v4.1-flash-1017-basic",
+        "id": "deepseek-v4.1-flash-1017-economy",
         "limit": {
           "context": 1000000,
           "output": 384000
@@ -53556,7 +53666,7 @@
             "text"
           ]
         },
-        "name": "DeepSeek V4.1 Flash 1017 (Basic)",
+        "name": "DeepSeek V4.1 Flash 1017 (Economy)",
         "reasoning": true,
         "release_date": "1970-01-01",
         "tool_call": true
@@ -67161,8 +67271,8 @@
           ]
         },
         "limit": {
-          "context": 512000,
-          "output": 512000
+          "context": 1000000,
+          "output": 1000000
         },
         "canonical_model_id": "minimax/MiniMax-M3"
       },
@@ -67779,7 +67889,7 @@
         },
         "limit": {
           "context": 262144,
-          "output": 128000
+          "output": 131072
         },
         "canonical_model_id": "alibaba/qwen3.8-2.4t-a95b"
       },
@@ -67930,7 +68040,7 @@
           ]
         },
         "limit": {
-          "context": 262144,
+          "context": 1000000,
           "output": 128000
         },
         "canonical_model_id": "alibaba/qwen3.8-max-preview"
@@ -68149,29 +68259,6 @@
           "output": 65000
         },
         "canonical_model_id": "nvidia/nemotron-3-ultra-550b-a55b"
-      },
-      "nvidia/nemotron-3-nano-30b-a3b": {
-        "id": "nvidia/nemotron-3-nano-30b-a3b",
-        "name": "Nemotron 3 Nano 30B A3B",
-        "family": "nemotron",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2025-12-15",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 262144
-        },
-        "canonical_model_id": "nvidia/nemotron-3-nano-30b-a3b"
       },
       "spacexai/grok-4.5": {
         "id": "spacexai/grok-4.5",
@@ -72702,7 +72789,7 @@
         "id": "deepseek/deepseek-v4.1-flash",
         "limit": {
           "context": 1048576,
-          "output": 32768
+          "output": 1048576
         },
         "modalities": {
           "input": [
@@ -73127,8 +73214,8 @@
         "attachment": true,
         "id": "stepfun/step-5-preview",
         "limit": {
-          "context": 1048576,
-          "output": 1048576
+          "context": 1000000,
+          "output": 1000000
         },
         "modalities": {
           "input": [
@@ -74483,8 +74570,8 @@
         "family": "minimax",
         "id": "minimax/minimax-m3.1-flash",
         "limit": {
-          "context": 1048576,
-          "output": 1048576
+          "context": 1000000,
+          "output": 524288
         },
         "modalities": {
           "input": [
@@ -80810,6 +80897,32 @@
         "release_date": "2026-09-17",
         "temperature": true,
         "tool_call": true
+      },
+      "gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "gemini-4-hydrogen",
+        "limit": {
+          "context": 1000000,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -85153,6 +85266,33 @@
         "reasoning": true,
         "release_date": "2026-10-17",
         "temperature": true,
+        "tool_call": true
+      },
+      "gemini-4-hydrogen": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-hydrogen",
+        "family": "gemini",
+        "id": "gemini-4-hydrogen",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Hydrogen",
+        "reasoning": true,
+        "release_date": "2026-11-12",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -146598,6 +146738,53 @@
         "release_date": "2026-11-12",
         "temperature": false,
         "tool_call": true
+      },
+      "deepinfra/thinkingmachines/Inkling-2-Small": {
+        "attachment": true,
+        "canonical_model_id": "thinkingmachines/inkling-2-small",
+        "family": "ling",
+        "id": "deepinfra/thinkingmachines/Inkling-2-Small",
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Inkling 2 Small (Deep Infra)",
+        "reasoning": true,
+        "release_date": "2026-11-05",
+        "temperature": true,
+        "tool_call": true
+      },
+      "flexai/gpt-oss-20b@eu": {
+        "attachment": false,
+        "canonical_model_id": "openai/gpt-oss-20b",
+        "family": "gpt-oss",
+        "id": "flexai/gpt-oss-20b@eu",
+        "limit": {
+          "context": 131072,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT OSS 20B (FlexAI, EU)",
+        "reasoning": true,
+        "release_date": "2025-08-05",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -153981,7 +154168,7 @@
         "id": "deepseek/deepseek-v4-flash-0731",
         "limit": {
           "context": 1048576,
-          "output": 943718
+          "output": 65536
         },
         "modalities": {
           "input": [
@@ -154004,7 +154191,7 @@
         "id": "deepseek/deepseek-v4-pro",
         "limit": {
           "context": 1048576,
-          "output": 384000
+          "output": 393216
         },
         "modalities": {
           "input": [
@@ -154017,30 +154204,6 @@
         "name": "DeepSeek V4 Pro 0423",
         "reasoning": true,
         "release_date": "2026-04-24",
-        "temperature": true,
-        "tool_call": true
-      },
-      "deepseek/deepseek-v4.1-flash": {
-        "attachment": true,
-        "canonical_model_id": "deepseek/deepseek-v4.1-flash",
-        "family": "deepseek-flash",
-        "id": "deepseek/deepseek-v4.1-flash",
-        "limit": {
-          "context": 1048576,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4.1 Flash",
-        "reasoning": true,
-        "release_date": "2026-09-10",
         "temperature": true,
         "tool_call": true
       },
@@ -154545,7 +154708,7 @@
         "name": "GPT-5.6 Luna",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true
       },
       "openai/gpt-5.6-sol": {
@@ -154569,7 +154732,7 @@
         "name": "GPT-5.6 Sol",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true
       },
       "openai/gpt-5.6-terra": {
@@ -154593,7 +154756,7 @@
         "name": "GPT-5.6 Terra",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true
       },
       "openai/gpt-6-astra": {
@@ -154641,7 +154804,7 @@
         "name": "GPT-6 Luna",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true
       },
       "openai/gpt-6-sol": {
@@ -154665,7 +154828,7 @@
         "name": "GPT-6 Sol",
         "reasoning": true,
         "release_date": "2026-09-22",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true
       },
       "openai/gpt-6.1-sol": {
@@ -154833,54 +154996,6 @@
         "temperature": true,
         "tool_call": true
       },
-      "z-ai/glm-5.3": {
-        "attachment": false,
-        "canonical_model_id": "zhipuai/glm-5.3",
-        "family": "glm",
-        "id": "z-ai/glm-5.3",
-        "limit": {
-          "context": 1048576,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "GLM 5.3",
-        "reasoning": true,
-        "release_date": "2026-08-14",
-        "temperature": true,
-        "tool_call": true
-      },
-      "z-ai/glm-5.3-flash": {
-        "attachment": true,
-        "canonical_model_id": "zhipuai/glm-5.3-flash",
-        "family": "glm-flash",
-        "id": "z-ai/glm-5.3-flash",
-        "limit": {
-          "context": 1048576,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "GLM 5.3 Flash",
-        "reasoning": true,
-        "release_date": "2026-08-26",
-        "temperature": true,
-        "tool_call": true
-      },
       "google/gemini-4-argon": {
         "attachment": true,
         "canonical_model_id": "google/gemini-4-argon",
@@ -154951,7 +155066,7 @@
         "name": "GPT-5.6 Luna Pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true
       },
       "openai/gpt-5.6-sol-pro": {
@@ -154975,7 +155090,7 @@
         "name": "GPT-5.6 Sol Pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true
       },
       "openai/gpt-5.6-terra-pro": {
@@ -154999,7 +155114,7 @@
         "name": "GPT-5.6 Terra Pro",
         "reasoning": true,
         "release_date": "2026-07-09",
-        "temperature": true,
+        "temperature": false,
         "tool_call": true
       },
       "anthropic/claude-sonnet-5.5": {
@@ -155033,7 +155148,7 @@
         "id": "meta/muse-spark-open",
         "limit": {
           "context": 1048576,
-          "output": 262144
+          "output": 943718
         },
         "modalities": {
           "input": [
@@ -155082,8 +155197,8 @@
         "family": "qwen",
         "id": "qwen/qwen3.8-27b",
         "limit": {
-          "context": 1000000,
-          "output": 235929
+          "context": 262144,
+          "output": 65536
         },
         "modalities": {
           "input": [
@@ -155171,6 +155286,30 @@
         "name": "Gemini 4 Carbon",
         "reasoning": true,
         "release_date": "2026-11-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "thinkingmachines/inkling-2-small": {
+        "attachment": true,
+        "canonical_model_id": "thinkingmachines/inkling-2-small",
+        "family": "ling",
+        "id": "thinkingmachines/inkling-2-small",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Inkling 2 Small",
+        "reasoning": true,
+        "release_date": "2026-11-05",
         "temperature": true,
         "tool_call": true
       }
@@ -155633,52 +155772,6 @@
     ],
     "id": "sambanova",
     "models": {
-      "DeepSeek-V3.1": {
-        "attachment": false,
-        "canonical_model_id": "deepseek/deepseek-v3.1",
-        "family": "deepseek",
-        "id": "DeepSeek-V3.1",
-        "limit": {
-          "context": 131072,
-          "output": 7168
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek-V3.1",
-        "reasoning": true,
-        "release_date": "2025-08-21",
-        "temperature": true,
-        "tool_call": true
-      },
-      "DeepSeek-V3.2": {
-        "attachment": false,
-        "canonical_model_id": "deepseek/deepseek-v3.2",
-        "family": "deepseek",
-        "id": "DeepSeek-V3.2",
-        "limit": {
-          "context": 32768,
-          "output": 7168
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V3.2",
-        "reasoning": true,
-        "release_date": "2025-12-01",
-        "temperature": true,
-        "tool_call": true
-      },
       "gemma-4-31B-it": {
         "attachment": true,
         "canonical_model_id": "google/gemma-4-31b-it",
@@ -155750,11 +155843,11 @@
         "temperature": true,
         "tool_call": true
       },
-      "MiniMax-M3": {
+      "GLM-5.3": {
         "attachment": false,
-        "canonical_model_id": "minimax/MiniMax-M3",
-        "family": "minimax",
-        "id": "MiniMax-M3",
+        "canonical_model_id": "zhipuai/glm-5.3",
+        "family": "glm",
+        "id": "GLM-5.3",
         "limit": {
           "context": 1048576,
           "output": 1048576
@@ -155767,9 +155860,34 @@
             "text"
           ]
         },
-        "name": "MiniMax-M3",
+        "name": "GLM-5.3",
         "reasoning": true,
-        "release_date": "2026-06-01",
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "MiniMax-M3.1-Flash": {
+        "attachment": true,
+        "canonical_model_id": "minimax/MiniMax-M3.1-Flash",
+        "family": "minimax",
+        "id": "MiniMax-M3.1-Flash",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiniMax-M3.1-Flash",
+        "reasoning": true,
+        "release_date": "2026-10-19",
+        "status": "beta",
         "temperature": true,
         "tool_call": true
       }
