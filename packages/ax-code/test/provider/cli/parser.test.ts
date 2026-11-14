@@ -59,6 +59,28 @@ describe("antigravityCliParser", () => {
     )
   })
 
+  test("keeps the first init as root when a nested conversation emits its own init", () => {
+    const childInit = JSON.stringify({ event: "init", conversation_id: "child" })
+    const lines = [
+      init,
+      step("agent_response", "Hello "),
+      childInit,
+      step("agent_response", "nested", "child"),
+      result({ conversation_id: "child", response: "nested", usage: { input_tokens: 999, output_tokens: 999 } }),
+      step("agent_response", "root"),
+      result({ response: "Hello root", usage: { input_tokens: 10, output_tokens: 2 } }),
+    ]
+    const state = {}
+    expect(lines.map((line) => antigravityCliParser.parseStreamLine(line, state) ?? "").join("")).toBe("Hello root")
+    expect(antigravityCliParser.parseComplete(lines.join("\n"))).toEqual({ text: "Hello root" })
+    expect(antigravityCliParser.parseUsage?.(lines.join("\n"))).toMatchObject({ inputTokens: 10, outputTokens: 2 })
+  })
+
+  test.each([{}, { response: "" }])("falls back to streamed deltas when a successful result has %j", (data) => {
+    const lines = [init, step("agent_response", "streamed"), result(data)]
+    expect(antigravityCliParser.parseComplete(lines.join("\n"))).toEqual({ text: "streamed" })
+  })
+
   test("uses root terminal usage without counting per-step usage again", () => {
     const usage = { input_tokens: 100, output_tokens: 26, thinking_tokens: 16, cache_read_tokens: 80 }
     const lines = [

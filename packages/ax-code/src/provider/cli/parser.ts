@@ -93,6 +93,7 @@ export const antigravityCliParser: CliOutputParser = {
     const state: CliStreamState = {}
     let text = ""
     let response: string | undefined
+    let finished = false
     for (const line of output.split("\n")) {
       const event = parseCliJsonEventLine(line)
       if (!event) continue
@@ -106,16 +107,19 @@ export const antigravityCliParser: CliOutputParser = {
           stringField(result, "error") || `Google Antigravity CLI ended with ${reason || status}`,
         )
       }
+      finished = true
       response = stringField(result, "response")
     }
-    if (response === undefined && text) throw new CliOutputError("Google Antigravity CLI ended without a result")
-    return { text: response ?? text }
+    if (!finished && text) throw new CliOutputError("Google Antigravity CLI ended without a result")
+    // A successful root result is terminal on its own; fall back to streamed deltas when it omits the response.
+    return { text: response || text }
   },
   parseStreamLine(line, state = {}) {
     const event = parseCliJsonEventLine(line)
     if (!event) return null
     if (event.event === "init") {
-      state.antigravityRoot = stringField(event, "conversation_id")
+      // First init wins: nested sub-agent conversations emit their own init events.
+      state.antigravityRoot ??= stringField(event, "conversation_id")
       return null
     }
     const step = event.event === "step_update" ? recordField(event, "step_update") : undefined
