@@ -38,6 +38,11 @@ lock age alone is not evidence that the installer has stopped.
 
 ## Standalone installer users
 
+`ax-code upgrade` is the official CLI command. `ax-code update` is an alias that accepts the same target version,
+options, and `check` subcommand.
+Without a target version, an upgrade keeps a newer installed version when release metadata is stale.
+An invalid reported version fails the check without running an installer.
+
 Check your installation before upgrading:
 
 ```bash

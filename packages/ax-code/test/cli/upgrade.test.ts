@@ -422,3 +422,50 @@ describe("upgrade command failures", () => {
     }
   })
 })
+
+describe("manual upgrade version selection", () => {
+  test.each([
+    ["curl", "1.0.0", undefined, false, undefined],
+    ["brew", "1.0.0", undefined, false, undefined],
+    ["curl", "unknown", undefined, false, 2],
+    ["curl", current, undefined, false, undefined],
+    ["curl", patch, undefined, true, undefined],
+    ["curl", patch, "1.0.0", true, undefined],
+  ] as const)("handles method=%s latest=%s explicit=%s", async (method, latest, target, installs, exitCode) => {
+    const previousCode = process.exitCode
+    const spies = [
+      vi.spyOn(UI, "empty").mockImplementation(() => {}),
+      vi.spyOn(UI, "println").mockImplementation(() => {}),
+      vi.spyOn(prompts, "intro").mockImplementation(() => {}),
+      vi.spyOn(prompts, "outro").mockImplementation(() => {}),
+      vi.spyOn(prompts.log, "info").mockImplementation(() => {}),
+      vi.spyOn(prompts.log, "error").mockImplementation(() => {}),
+      vi.spyOn(prompts.log, "step").mockImplementation(() => {}),
+      vi.spyOn(prompts.log, "success").mockImplementation(() => {}),
+      vi.spyOn(prompts, "spinner").mockReturnValue({
+        start: vi.fn(),
+        stop: vi.fn(),
+        error: vi.fn(),
+        cancel: vi.fn(),
+        message: vi.fn(),
+        clear: vi.fn(),
+        isCancelled: false,
+      }),
+      vi.spyOn(RuntimeNotice, "staleRuntimeNotice").mockResolvedValue([]),
+    ]
+    methodSpy = vi.spyOn(Installation, "method").mockResolvedValue(method)
+    latestSpy = vi.spyOn(Installation, "latest").mockResolvedValue(latest)
+    installSpy = vi.spyOn(Installation, "upgrade").mockResolvedValue(undefined)
+    launcherSpy = vi.spyOn(Installation, "verifyActiveLauncher").mockResolvedValue({ ok: true, launchers: [] })
+    process.exitCode = undefined
+    try {
+      await UpgradeCommand.handler({ method, target })
+      expect(process.exitCode).toBe(exitCode)
+      if (installs) expect(installSpy).toHaveBeenCalledWith(method, target ?? latest)
+      else expect(installSpy).not.toHaveBeenCalled()
+    } finally {
+      process.exitCode = previousCode
+      for (const spy of spies.reverse()) spy.mockRestore()
+    }
+  })
+})

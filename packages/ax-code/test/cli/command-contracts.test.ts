@@ -4,12 +4,32 @@ import { cli as nodeCli } from "../../src/cli/boot-node"
 import { createAxCodeCli } from "../../src/cli/boot-shared"
 import { ReleaseNotesCommand } from "../../src/cli/cmd/release-notes"
 import { ProvidersAuthCommand } from "../../src/cli/cmd/providers/auth"
+import { UpgradeCommand, UpgradeCheckCommand } from "../../src/cli/cmd/upgrade"
 import { Installation } from "../../src/installation"
 
 vi.mock("../../src/cli/bootstrap/env", () => ({ init: vi.fn() }))
 vi.mock("../../src/cli/bootstrap/migrate", () => ({ migrate: vi.fn() }))
 
 afterEach(() => vi.restoreAllMocks())
+
+test.each(["upgrade", "update"])("%s routes version and method options to the upgrade handler", async (command) => {
+  const handler = vi.fn()
+  await createAxCodeCli([command, "v7.30.27", "--method", "curl"], [{ ...UpgradeCommand, handler }])
+    .cli.strict()
+    .parseAsync()
+  expect(handler).toHaveBeenCalledOnce()
+  expect(handler).toHaveBeenCalledWith(expect.objectContaining({ target: "v7.30.27", method: "curl" }))
+})
+
+test.each(["upgrade", "update"])("%s check routes to the upgrade check handler", async (command) => {
+  const handler = vi.spyOn(UpgradeCheckCommand, "handler").mockImplementation(async () => {})
+  const upgrade = vi.fn()
+  await createAxCodeCli([command, "check", "--json", "--method", "brew"], [{ ...UpgradeCommand, handler: upgrade }])
+    .cli.strict()
+    .parseAsync()
+  expect(handler).toHaveBeenCalledWith(expect.objectContaining({ json: true, method: "brew" }))
+  expect(upgrade).not.toHaveBeenCalled()
+})
 
 async function usage(argv: string[], parser = cli) {
   const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
@@ -104,6 +124,7 @@ test("every visible command belongs to exactly one rendered help section", async
   const names = commandSections.flatMap((section) => section.commands.map((command) => commandName(command)))
   expect(new Set(names).size).toBe(names.length)
   const help = await cli([]).getHelp()
+  expect(help).toMatch(/ax-code upgrade \[target\][^\n]*\[aliases: update\]/)
   for (const section of commandSections) {
     const group = help.slice(help.indexOf(section.title)).split(/\n\n/)[0]!
     for (const command of section.commands) expect(group).toContain(`ax-code ${command.command}`)

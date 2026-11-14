@@ -153,6 +153,7 @@ function formatMissingLauncherWarning(target: string, method: Installation.Metho
 
 export const UpgradeCommand = {
   command: "upgrade [target]",
+  aliases: ["update"],
   describe: "upgrade ax-code to the latest or a specific version",
   builder: (yargs: Argv) => {
     return yargs
@@ -242,8 +243,17 @@ export const UpgradeCommand = {
     const checkSpinner = prompts.spinner()
     checkSpinner.start("Checking for updates...")
     let target: string
+    let discoveredComparison: number | undefined
     try {
       target = args.target ? args.target.replace(/^v/, "") : await Installation.latest(method)
+      if (!args.target) {
+        discoveredComparison = Installation.compareVersions(Installation.VERSION, target)
+        if (discoveredComparison === undefined) {
+          throw new Error(
+            `Cannot compare current version ${Installation.VERSION} with reported latest version ${target}`,
+          )
+        }
+      }
     } catch (err) {
       checkSpinner.stop("Failed to check for updates")
       process.exitCode = 2
@@ -253,8 +263,10 @@ export const UpgradeCommand = {
     }
     checkSpinner.stop(`Latest version: ${target}`)
 
-    if (Installation.VERSION === target) {
-      prompts.log.success(`Already up to date (v${target})`)
+    // Stale release or package-manager metadata must never turn a plain
+    // upgrade into a downgrade. Explicit target versions remain intentional.
+    if (Installation.VERSION === target || (discoveredComparison !== undefined && discoveredComparison <= 0)) {
+      prompts.log.success(`Already up to date (v${Installation.VERSION})`)
       prompts.outro("Done")
       return
     }
