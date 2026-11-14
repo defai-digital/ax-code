@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  antigravityCliParser,
   claudeCodeParser,
   CliOutputError,
   codexCliParser,
@@ -8,6 +9,74 @@ import {
   museCliParser,
   parseCliJsonEventLine,
 } from "../../../src/provider/cli/parser"
+
+describe("antigravityCliParser", () => {
+  const init = JSON.stringify({ event: "init", conversation_id: "root" })
+  const step = (type: string, text: unknown, id = "root") =>
+    JSON.stringify({
+      event: "step_update",
+      step_update: { conversation_id: id, step_type: type, state: "ACTIVE", text_delta: text },
+    })
+  const result = (data: Record<string, unknown> = {}) =>
+    JSON.stringify({ event: "result", result: { conversation_id: "root", status: "SUCCESS", ...data } })
+
+  test("streams only root assistant deltas without repeating the final response", () => {
+    const lines = [
+      init,
+      step("user_input", "prompt"),
+      step("tool", "private tool data"),
+      step("agent_thought", "private reasoning"),
+      step("agent_response", "nested", "child"),
+      step("agent_response", "Hello "),
+      step("agent_response", 42),
+      step("agent_response", "世界\n"),
+      result({ response: "Hello 世界\n" }),
+    ]
+    const state = {}
+    expect(lines.map((line) => antigravityCliParser.parseStreamLine(line, state) ?? "").join("")).toBe("Hello 世界\n")
+    expect(antigravityCliParser.parseComplete(lines.join("\n"))).toEqual({ text: "Hello 世界\n" })
+  })
+
+  test("uses the root terminal response when no deltas were emitted", () => {
+    expect(antigravityCliParser.parseComplete([init, result({ response: "OK" })].join("\n"))).toEqual({ text: "OK" })
+    expect(antigravityCliParser.parseComplete(init)).toEqual({ text: "" })
+    expect(antigravityCliParser.parseStreamLine("{bad json")).toBeNull()
+    expect(antigravityCliParser.parseStreamLine('{"event":"future"}')).toBeNull()
+  })
+
+  test.each([
+    { status: "ERROR", error: "authentication required" },
+    { status: "CANCELLED" },
+    { status: "SUCCESS", finished_reason: "print_timeout" },
+    { status: "SUCCESS", finished_reason: "interrupted" },
+  ])("surfaces terminal failure $status $finished_reason", (data) => {
+    expect(() => antigravityCliParser.parseComplete(result({ response: "partial", ...data }))).toThrow(CliOutputError)
+  })
+
+  test("does not accept a truncated stream as a successful answer", () => {
+    expect(() => antigravityCliParser.parseComplete([init, step("agent_response", "partial")].join("\n"))).toThrow(
+      "ended without a result",
+    )
+  })
+
+  test("uses root terminal usage without counting per-step usage again", () => {
+    const usage = { input_tokens: 100, output_tokens: 26, thinking_tokens: 16, cache_read_tokens: 80 }
+    const lines = [
+      init,
+      JSON.stringify({ event: "step_update", step_update: { step_type: "checkpoint", usage } }),
+      result({ response: "OK", usage }),
+      result({ conversation_id: "child", response: "nested", usage: { input_tokens: 999, output_tokens: 999 } }),
+    ]
+    expect(antigravityCliParser.parseComplete(lines.join("\n"))).toEqual({ text: "OK" })
+    expect(antigravityCliParser.parseUsage?.(lines.join("\n"))).toEqual({
+      inputTokens: 100,
+      outputTokens: 26,
+      cacheReadTokens: 80,
+      reasoningTokens: 16,
+    })
+    expect(antigravityCliParser.parseUsage?.(result({ usage: { input_tokens: -1, output_tokens: 1 } }))).toBeUndefined()
+  })
+})
 
 describe("claudeCodeParser", () => {
   test("decodes CLI JSON event lines with non-JSON fallback", () => {

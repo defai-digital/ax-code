@@ -4,6 +4,20 @@ import { describe, expect, test } from "vitest"
 import { Env } from "../../src/util/env"
 
 describe("Env.parseBoolean", () => {
+  test("forwards Gemini API keys only to the Antigravity provider", () => {
+    const original = process.env.GEMINI_API_KEY
+    try {
+      process.env.GEMINI_API_KEY = "gemini-test-key"
+      expect(Env.sanitize().GEMINI_API_KEY).toBeUndefined()
+      expect(Env.withCliProviderKeys(Env.sanitize(), "antigravity-cli").GEMINI_API_KEY).toBe("gemini-test-key")
+      for (const providerID of [undefined, "codex-cli", "claude-code", "muse-cli"]) {
+        expect(Env.withCliProviderKeys(Env.sanitize(), providerID).GEMINI_API_KEY).toBeUndefined()
+      }
+    } finally {
+      if (original === undefined) delete process.env.GEMINI_API_KEY
+      else process.env.GEMINI_API_KEY = original
+    }
+  })
   test("recognizes true/1/yes/on as true", () => {
     for (const value of ["true", "TRUE", "1", "yes", "YES", "on", "ON", " on "]) {
       expect(Env.parseBoolean(value)).toBe(true)

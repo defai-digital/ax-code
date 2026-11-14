@@ -207,8 +207,10 @@ CLI process exits, including cancellation and spawn failures.
 | `kimi-cli`       | Kimi Code CLI           | `kimi`                 | `kimi-cli`        | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) (MIT)                 |
 | `muse-cli`       | Muse Code CLI           | `muse`                 | `muse-cli`        | Proprietary; bridged through the vendor CLI                                           |
 | `dsh-cli`        | DeepSeek Harness        | `dsh`                  | `dsh-cli`         | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (MIT) |
+| `antigravity-cli` | Google Antigravity CLI | `agy` | `antigravity-cli` | [Google Antigravity](https://antigravity.google/docs/cli/headless/) |
 
-The fallback model id is only listed when AX Code cannot read the CLI's own model cache or catalog. Once the CLI
+Antigravity keeps its fallback entry alongside the models returned by `agy models`, so selecting the fallback
+continues to use agy's saved default. Other fallback model ids are only listed when AX Code cannot read the CLI's own model cache or catalog. Once the CLI
 has populated it, AX Code lists the CLI's real models instead; run `ax-code models <provider-id>` for the ids you can
 pass to `--model`.
 
@@ -231,7 +233,19 @@ For Claude Code, install the local `claude` binary, run `claude` once to sign in
 
 For DeepSeek Harness, install the local `dsh` binary (`npm install -g @deepseek-ai/dsh`), put `DEEPSEEK_API_KEY` in your environment or in `~/.dsh/.env`, then `ax-code providers login dsh-cli`. AX Code runs `dsh --profile headless --json` with the `workspace-write` permission preset and approval policy `never`, in the session's working directory. dsh picks the DeepSeek model from its own profile; headless mode has no model flag. dsh uploads session logs with DeepSeek API requests and sends OTel session telemetry by default, so every bridged run passes a launcher `--patch` overlay (written to AX Code's cache directory as `dsh-privacy.patch.yml`) that disables both, and sets `DSH_TELEMETRY_MODE=DISABLED`. The hosted `deepseek` API provider remains a separate connection in which AX Code runs the agent loop itself.
 
+For Google Antigravity, install `agy` and sign in by running it interactively, then run
+`ax-code providers login antigravity-cli`. AX Code uses agy's cached login, sends each turn as a JSON message over
+stdin, and reads streamed responses and token usage. Native model slugs come from `agy models`; select one with
+`ax-code run --model antigravity-cli/<slug> -- "Your task"`. Effort variants use `--effort`. Model token limits are
+conservative adapter budgets because agy's model list does not publish them. The initial catalog advertises text
+input only. The hosted `google` API provider remains a separate connection.
+If agy is configured with `modelProvider: "gemini"`, AX Code forwards `GEMINI_API_KEY` only to this CLI provider.
+
 ### Isolation modes and CLI providers
+
+Antigravity currently supports AX Code's `full-access` mode, retaining agy's own permission settings without adding
+`--dangerously-skip-permissions`. AX Code rejects `read-only` and `workspace-write` before starting agy because its
+terminal sandbox and plan mode do not establish those filesystem boundaries.
 
 AX Code's isolation mode is a ceiling for the vendor CLI, not a hint: the CLI runs its own agent loop and tools, so it
 must never receive more access than the AX session has. The mapping lives in

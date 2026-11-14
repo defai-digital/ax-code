@@ -25,6 +25,8 @@ describe("application contracts", () => {
     expect(CLI_PROVIDER_IDS).toContain("grok-build-cli")
     expect(CLI_PROVIDER_IDS).toContain("claude-code")
     expect(CLI_PROVIDER_IDS).toContain("muse-cli")
+    expect(CLI_PROVIDER_IDS).toContain("antigravity-cli")
+    expect(providerConnectCategory("antigravity-cli")).toBe("cli")
     expect(CLI_PROVIDER_IDS).not.toContain("qoder-cli")
     expect(CLI_PROVIDER_IDS).not.toContain("minimax-cli")
     expect(providerConnectCategory("muse-cli")).toBe("cli")

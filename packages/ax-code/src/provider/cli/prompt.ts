@@ -14,6 +14,7 @@ const WEB_SEARCH_CLI_PROVIDERS = new Set([
   "kimi-cli",
   "muse-cli",
   "dsh-cli",
+  "antigravity-cli",
 ])
 
 const CLI_WEB_SEARCH_HINT = [

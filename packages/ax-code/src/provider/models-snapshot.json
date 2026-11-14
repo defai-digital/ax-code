@@ -158313,5 +158313,37 @@
     },
     "name": "BytePlus ModelArk",
     "npm": "@ai-sdk/openai-compatible"
+  },
+  "antigravity-cli": {
+    "env": [],
+    "id": "antigravity-cli",
+    "models": {
+      "antigravity-cli": {
+        "attachment": false,
+        "family": "antigravity",
+        "id": "antigravity-cli",
+        "limit": {
+          "context": 200000,
+          "output": 32000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Google Antigravity CLI default",
+        "options": {},
+        "reasoning": false,
+        "release_date": "2026-11-14",
+        "status": "active",
+        "temperature": false,
+        "tool_call": false
+      }
+    },
+    "name": "Google Antigravity CLI",
+    "npm": "cli"
   }
 }

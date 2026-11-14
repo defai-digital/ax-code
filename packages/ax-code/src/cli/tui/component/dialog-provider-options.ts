@@ -73,6 +73,7 @@ export const CLI_BINARIES: Record<string, string> = {
   "kimi-cli": "kimi",
   "muse-cli": "muse",
   "dsh-cli": "dsh",
+  "antigravity-cli": "agy",
 }
 
 export const OFFLINE_PROVIDERS = new Set<string>(LOCAL_RUNTIME_PROVIDER_IDS)

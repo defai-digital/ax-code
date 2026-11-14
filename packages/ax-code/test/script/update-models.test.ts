@@ -101,7 +101,7 @@ describe("update-models script", () => {
     // Retired CLI providers must not survive a refresh, even from a stale snapshot.
     expect(data["qoder-cli"]).toBeUndefined()
     expect(data["gemini-cli"]).toBeUndefined()
-    expect(data["antigravity-cli"]).toBeUndefined()
+    expect(data["antigravity-cli"].models["antigravity-cli"].id).toBe("antigravity-cli")
   })
 
   test("drops the direct xai provider and preserves the Grok CLI bridge", async () => {

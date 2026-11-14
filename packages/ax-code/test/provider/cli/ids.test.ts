@@ -3,6 +3,7 @@ import { isCliProviderID } from "../../../src/provider/cli/ids"
 
 describe("isCliProviderID", () => {
   test("accepts bundled CLI providers, including ones without the -cli suffix", () => {
+    expect(isCliProviderID("antigravity-cli")).toBe(true)
     expect(isCliProviderID("claude-code")).toBe(true)
     expect(isCliProviderID("codex-cli")).toBe(true)
   })
@@ -12,6 +13,7 @@ describe("isCliProviderID", () => {
   })
 
   test("rejects retired providers even when they follow the -cli convention", () => {
+    expect(isCliProviderID("gemini-cli")).toBe(false)
     expect(isCliProviderID("minimax-cli")).toBe(false)
     expect(isCliProviderID("qoder-cli")).toBe(false)
     expect(isCliProviderID("MiniMax-CLI")).toBe(false)

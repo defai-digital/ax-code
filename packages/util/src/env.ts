@@ -60,6 +60,7 @@ export namespace Env {
     "kimi-cli": ["KIMI_API_KEY", "KIMI_MODEL_API_KEY"],
     "muse-cli": ["META_API_KEY", "MODEL_API_KEY", "META_MODEL_API_KEY"],
     "dsh-cli": ["DEEPSEEK_API_KEY"],
+    "antigravity-cli": ["GEMINI_API_KEY"],
   }
 
   export function withCliProviderKeys(

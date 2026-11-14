@@ -7,6 +7,7 @@ const CLI_WEB_SEARCH_PROVIDER_IDS = new Set([
   "kimi-cli",
   "muse-cli",
   "dsh-cli",
+  "antigravity-cli",
 ])
 
 export type DisplayCapableModel = {

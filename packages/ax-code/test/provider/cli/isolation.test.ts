@@ -83,6 +83,7 @@ describe("cliIsolationArgs", () => {
   })
 
   test("read-only maps each supporting provider and rejects unsupported ones", () => {
+    expectUnsupported(() => cliIsolationArgs("antigravity-cli", "read-only", false), "read-only")
     expect(cliIsolationArgs("claude-code", "read-only", false)).toEqual({
       args: ["--permission-mode", "dontAsk", "--tools", "Read,Glob,Grep"],
     })
@@ -104,6 +105,7 @@ describe("cliIsolationArgs", () => {
   })
 
   test("workspace-write maps each supporting provider and rejects unsupported ones", () => {
+    expectUnsupported(() => cliIsolationArgs("antigravity-cli", "workspace-write", true), "workspace-write")
     expect(cliIsolationArgs("claude-code", "workspace-write", false)).toEqual({
       args: ["--permission-mode", "acceptEdits"],
     })
@@ -135,6 +137,17 @@ describe("session isolation context", () => {
 })
 
 describe("buildCliCommand isolation integration", () => {
+  test("Antigravity keeps prompts off argv and only adds explicit model and effort choices", () => {
+    const definition = CLI_PROVIDER_DEFINITIONS["antigravity-cli"]!
+    const config = { ...definition, providerID: "antigravity-cli", modelID: "antigravity-cli" }
+    const cmd = buildCliCommand(config, "private prompt", undefined, undefined, { args: [] })
+    expect(cmd).not.toContain("private prompt")
+    expect(cmd).not.toContain("--model")
+    expect(cmd).not.toContain("--dangerously-skip-permissions")
+    expect(
+      buildCliCommand({ ...config, modelID: "gemini-4-argon-high" }, "private prompt", undefined, "high", { args: [] }),
+    ).toEqual([...cmd, "--effort", "high", "--model", "gemini-4-argon-high"])
+  })
   test("read-only adds Claude Code's read-only permission mode", () => {
     process.env.AX_CODE_ISOLATION_MODE = "read-only"
     const definition = CLI_PROVIDER_DEFINITIONS["claude-code"]!

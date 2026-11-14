@@ -86,6 +86,71 @@ function numberField(record: Record<string, unknown> | undefined, key: string): 
   return typeof value === "number" && Number.isFinite(value) ? value : undefined
 }
 
+// agy 1.5.9: init, step_update (incremental text_delta), then result. Tool,
+// checkpoint, thinking, and nested conversation events are never answer text.
+export const antigravityCliParser: CliOutputParser = {
+  parseComplete(output) {
+    const state: CliStreamState = {}
+    let text = ""
+    let response: string | undefined
+    for (const line of output.split("\n")) {
+      const event = parseCliJsonEventLine(line)
+      if (!event) continue
+      text += this.parseStreamLine(line, state) ?? ""
+      const result = event.event === "result" ? recordField(event, "result") : undefined
+      if (!result || !antigravityRoot(result, state)) continue
+      const status = stringField(result, "status")
+      const reason = stringField(result, "finished_reason")
+      if ((status && status !== "SUCCESS") || reason) {
+        throw new CliOutputError(
+          stringField(result, "error") || `Google Antigravity CLI ended with ${reason || status}`,
+        )
+      }
+      response = stringField(result, "response")
+    }
+    if (response === undefined && text) throw new CliOutputError("Google Antigravity CLI ended without a result")
+    return { text: response ?? text }
+  },
+  parseStreamLine(line, state = {}) {
+    const event = parseCliJsonEventLine(line)
+    if (!event) return null
+    if (event.event === "init") {
+      state.antigravityRoot = stringField(event, "conversation_id")
+      return null
+    }
+    const step = event.event === "step_update" ? recordField(event, "step_update") : undefined
+    if (!step || !antigravityRoot(step, state) || step.step_type !== "agent_response") return null
+    return stringField(step, "text_delta") ?? null
+  },
+  parseUsage(output) {
+    const state: CliStreamState = {}
+    let usage: CliUsage | undefined
+    for (const line of output.split("\n")) {
+      this.parseStreamLine(line, state)
+      const event = parseCliJsonEventLine(line)
+      const result = event?.event === "result" ? recordField(event, "result") : undefined
+      if (!result || !antigravityRoot(result, state)) continue
+      const data = recordField(result, "usage")
+      const input = numberField(data, "input_tokens")
+      const output = numberField(data, "output_tokens")
+      if (input === undefined || output === undefined || input < 0 || output < 0) continue
+      usage = {
+        inputTokens: input,
+        outputTokens: output,
+        cacheReadTokens: Math.min(input, Math.max(0, numberField(data, "cache_read_tokens") ?? 0)),
+        reasoningTokens: Math.min(output, Math.max(0, numberField(data, "thinking_tokens") ?? 0)),
+      }
+    }
+    return usage
+  },
+}
+
+function antigravityRoot(data: Record<string, unknown>, state: CliStreamState): boolean {
+  const id = stringField(data, "conversation_id")
+  if (!state.antigravityRoot && id) state.antigravityRoot = id
+  return !id || !state.antigravityRoot || id === state.antigravityRoot
+}
+
 function textFromContentBlocks(value: unknown): string {
   if (!Array.isArray(value)) return ""
   return value

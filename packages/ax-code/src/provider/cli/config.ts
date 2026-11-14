@@ -5,6 +5,7 @@ import {
   kimiCliParser,
   museCliParser,
   dshCliParser,
+  antigravityCliParser,
   type CliOutputParser,
 } from "./parser"
 
@@ -18,7 +19,7 @@ export interface CliProviderDefinition {
    */
   optionalArgs?: string[]
   parser: CliOutputParser
-  promptMode: "stdin" | "arg" | "positional" | "file"
+  promptMode: "stdin" | "stream-json" | "arg" | "positional" | "file"
   promptFlag?: string
   workspaceArg?: string
 }
@@ -30,6 +31,12 @@ export interface CliProviderDefinition {
  * (full-access) defaults.
  */
 export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
+  "antigravity-cli": {
+    binary: "agy",
+    args: ["--input-format", "stream-json", "--output-format", "stream-json", "--disable-slash-commands"],
+    parser: antigravityCliParser,
+    promptMode: "stream-json",
+  },
   "claude-code": {
     binary: "claude",
     args: ["--print", "--verbose", "--output-format", "stream-json", "--include-partial-messages"],

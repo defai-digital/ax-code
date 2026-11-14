@@ -14,7 +14,13 @@ import path from "path"
 import { fileURLToPath } from "url"
 import { readJson, writeText } from "./fs-compat"
 import z from "zod"
-import { cloneJsonValue, formatModelsSnapshot, modelsSnapshotChanged, RETIRED_PROVIDER_IDS } from "./models-snapshot"
+import {
+  ANTIGRAVITY_CLI_PROVIDER,
+  cloneJsonValue,
+  formatModelsSnapshot,
+  modelsSnapshotChanged,
+  RETIRED_PROVIDER_IDS,
+} from "./models-snapshot"
 import { isHiddenDeepseekLegacySku } from "../src/provider/deepseek-catalog"
 import {
   GROQ_CHAT_MODEL_ALLOWLIST,
@@ -60,6 +66,7 @@ async function loadFetchedModels(): Promise<Record<string, any>> {
 }
 
 const fetched = await loadFetchedModels()
+fetched["antigravity-cli"] = cloneJsonValue(ANTIGRAVITY_CLI_PROVIDER)
 
 const existing = await readJson<Record<string, any>>(snapshotPath).catch((): Record<string, any> => ({}))
 

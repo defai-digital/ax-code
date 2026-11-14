@@ -2,6 +2,7 @@ import type { Provider } from "./provider"
 import { ProviderID, ModelID } from "./schema"
 import { Ssrf } from "../util/ssrf"
 import { CliLanguageModel } from "./cli/cli-language-model"
+import { discoverAntigravityModels } from "./cli/antigravity"
 import type { CliOutputParser } from "./cli/parser"
 import { resolveCliBinary } from "./cli/resolve-binary"
 import { normalizeKimiCodeModelID, resolveCliModel, resolveKimiConfigModels } from "./cli/resolve"
@@ -397,6 +398,7 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "kimi-cli": "Kimi Code CLI default",
   "muse-cli": "Muse Code CLI default",
   "dsh-cli": "DeepSeek Harness default",
+  "antigravity-cli": "Google Antigravity CLI default",
 }
 
 export { resolveCliBinary } from "./cli/resolve-binary"
@@ -895,7 +897,7 @@ interface CliLoaderOpts {
   args: string[]
   optionalArgs?: string[]
   parser: CliOutputParser
-  promptMode: "stdin" | "arg" | "positional" | "file"
+  promptMode: "stdin" | "stream-json" | "arg" | "positional" | "file"
   promptFlag?: string
   workspaceArg?: string
 }
@@ -936,6 +938,14 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         // builder produced its models.
         const finish = (models: Record<string, Provider.Model>, resolvedID?: string) =>
           finalizeCliDiscovery({ current, providerID: opts.providerID, models, resolved: resolvedID })
+        if (opts.providerID === "antigravity-cli") {
+          const models = cliModels(opts.providerID, current)
+          for (const item of await discoverAntigravityModels(path)) {
+            const model = cliModel(opts.providerID, current, item.id)
+            if (model) models[item.id] = { ...model, name: item.name }
+          }
+          return finish(models)
+        }
         if (opts.providerID === "claude-code") {
           const found = await claudeCodeFamilyModels(current, resolved.model)
           return finish(found.models, found.resolved)
@@ -960,8 +970,10 @@ const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
 const kimiCli = getCliProviderDefinition("kimi-cli")!
 const museCli = getCliProviderDefinition("muse-cli")!
 const dshCli = getCliProviderDefinition("dsh-cli")!
+const antigravityCli = getCliProviderDefinition("antigravity-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
+  "antigravity-cli": cliLoader({ providerID: "antigravity-cli", ...antigravityCli }),
   // Official DeepSeek cloud API — OpenAI-compatible (OpenCode: npm
   // @ai-sdk/openai-compatible + baseURL https://api.deepseek.com[/v1]).
   // Catalog already defines models + DEEPSEEK_API_KEY; pin baseURL so login

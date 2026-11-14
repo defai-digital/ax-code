@@ -7,6 +7,7 @@ export const LOCAL_PROVIDER_IDS = [
   "kimi-cli",
   "muse-cli",
   "dsh-cli",
+  "antigravity-cli",
   "ollama",
   "ax-studio",
 ] as const
@@ -15,11 +16,36 @@ export { RETIRED_PROVIDER_IDS }
 
 export type ModelsSnapshot = Record<string, unknown>
 
+export const ANTIGRAVITY_CLI_PROVIDER = {
+  id: "antigravity-cli",
+  name: "Google Antigravity CLI",
+  env: [],
+  npm: "cli",
+  models: {
+    "antigravity-cli": {
+      id: "antigravity-cli",
+      name: "Google Antigravity CLI default",
+      family: "antigravity",
+      attachment: false,
+      reasoning: false,
+      tool_call: false,
+      temperature: false,
+      release_date: "2026-11-14",
+      modalities: { input: ["text"], output: ["text"] },
+      // Conservative adapter budgets; agy models does not publish token limits.
+      limit: { context: 200000, output: 32000 },
+      options: {},
+      status: "active",
+    },
+  },
+}
+
 export function cloneJsonValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
 const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
+  "antigravity-cli": ANTIGRAVITY_CLI_PROVIDER,
   "grok-build-cli": {
     id: "grok-build-cli",
     name: "Grok Build CLI",

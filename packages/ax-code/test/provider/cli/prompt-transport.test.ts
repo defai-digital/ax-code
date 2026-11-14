@@ -57,7 +57,7 @@ async function collect(stream: ReadableStream<LanguageModelV3StreamPart>) {
 }
 
 describe.each(["doGenerate", "doStream"] as const)("%s prompt transport", (method) => {
-  test.each(["claude-code", "codex-cli", "grok-build-cli", "muse-cli"])(
+  test.each(["claude-code", "codex-cli", "grok-build-cli", "muse-cli", "antigravity-cli"])(
     "%s delivers the complete large prompt without putting it in argv",
     async (providerID) => {
       await using tmp = await tmpdir()
@@ -68,7 +68,8 @@ describe.each(["doGenerate", "doStream"] as const)("%s prompt transport", (metho
 const crypto = require("node:crypto");
 const args = process.argv.slice(2);
 const fileFlag = args.indexOf("--prompt-file");
-const input = fs.readFileSync(fileFlag === -1 ? 0 : args[fileFlag + 1]);
+const raw = fs.readFileSync(fileFlag === -1 ? 0 : args[fileFlag + 1]);
+const input = args.includes("--input-format") ? JSON.parse(raw.toString()).message.content : raw;
 process.stdout.write(crypto.createHash("sha256").update(input).digest("hex") + "\\n");
 `,
       )

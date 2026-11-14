@@ -19,6 +19,7 @@ const DEFAULTS: Record<string, string> = {
   "kimi-cli": "kimi-cli",
   "muse-cli": "muse-cli",
   "dsh-cli": "dsh-cli",
+  "antigravity-cli": "antigravity-cli",
 }
 
 const KIMI_CODE_LEGACY_MODEL_IDS = new Set(["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"])
@@ -243,6 +244,9 @@ async function resolveMuseModel(): Promise<CliModelInfo> {
 }
 
 const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
+  // Delegate to agy's saved default; settings may contain a display name for
+  // a retired model rather than a currently accepted model slug.
+  "antigravity-cli": async () => ({ model: DEFAULTS["antigravity-cli"]!, source: "default" }),
   "claude-code": resolveClaudeModel,
   "codex-cli": resolveCodexModel,
   "grok-build-cli": async () => ({ model: DEFAULTS["grok-build-cli"]!, source: "default" }),

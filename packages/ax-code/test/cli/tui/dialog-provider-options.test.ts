@@ -195,11 +195,14 @@ describe("provider dialog options", () => {
     expect(CLI_BINARIES["grok-build-cli"]).toBe("grok")
   })
 
+  test("includes Google Antigravity CLI", () => {
+    expect(CLI_PROVIDERS.has("antigravity-cli")).toBe(true)
+    expect(CLI_BINARIES["antigravity-cli"]).toBe("agy")
+  })
+
   test("excludes retired CLI providers", () => {
     expect(CLI_PROVIDERS.has("gemini-cli")).toBe(false)
     expect(CLI_BINARIES["gemini-cli"]).toBeUndefined()
-    expect(CLI_PROVIDERS.has("antigravity-cli")).toBe(false)
-    expect(CLI_BINARIES["antigravity-cli"]).toBeUndefined()
     expect(CLI_PROVIDERS.has("qoder-cli")).toBe(false)
     expect(CLI_BINARIES["qoder-cli"]).toBeUndefined()
   })
@@ -355,7 +358,7 @@ describe("provider dialog options", () => {
         })),
       ).toEqual([
         { value: "api", description: "2 providers" },
-        { value: "cli", description: "6 providers" },
+        { value: "cli", description: "7 providers" },
         { value: "ax-engine", description: "1 provider" },
         { value: "local", description: "6 providers" },
         { value: "private-gpu", description: "14 providers" },
@@ -468,8 +471,7 @@ describe("provider dialog options", () => {
     expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "grok-build-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "kimi-cli", toolcall: false })).toBe(true)
-    // Retired CLI providers no longer get the non-toolcall exemption.
-    expect(providerModelSelectable({ providerID: "antigravity-cli", toolcall: false })).toBe(false)
+    expect(providerModelSelectable({ providerID: "antigravity-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "groq", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "groq", toolcall: true })).toBe(true)
   })

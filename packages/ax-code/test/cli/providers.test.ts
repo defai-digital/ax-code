@@ -65,11 +65,11 @@ describe("providers command", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("codex-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("grok-build-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("qoder-cli")).toBe(false)
-    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("antigravity-cli")).toBe(false)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("kimi-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("muse-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("minimax-cli")).toBe(false)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("dsh-cli")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("antigravity-cli")).toBe(true)
   })
 
   test("providers login accepts default Cloud API provider ids directly", async () => {

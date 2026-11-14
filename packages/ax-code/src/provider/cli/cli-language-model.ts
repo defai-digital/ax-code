@@ -121,7 +121,7 @@ export interface CliLanguageModelConfig {
   /** Boolean flags that may be dropped if the installed CLI does not know them. */
   optionalArgs?: string[]
   parser: CliOutputParser
-  promptMode: "stdin" | "arg" | "positional" | "file"
+  promptMode: "stdin" | "stream-json" | "arg" | "positional" | "file"
   promptFlag?: string
   workspaceArg?: string
   /** Efforts this model accepts, from the CLI's model cache; overrides the provider default list. */
@@ -402,7 +402,12 @@ export class CliLanguageModel implements LanguageModelV3 {
   }
 
   private useStdin() {
-    return this.config.promptMode === "stdin"
+    return this.config.promptMode === "stdin" || this.config.promptMode === "stream-json"
+  }
+
+  private stdinPrompt(text: string): string {
+    if (this.config.promptMode !== "stream-json") return text
+    return JSON.stringify({ event: "user", message: { content: text } }) + "\n"
   }
 
   private async startProcess(options: LanguageModelV3CallOptions, jsonInstruction?: string) {
@@ -591,7 +596,11 @@ export class CliLanguageModel implements LanguageModelV3 {
         // Bound the stdin drain: a child that never reads stdin and never exits
         // would otherwise leave this await unsettled forever (the overall CLI
         // timeout is armed only after the write completes).
-        await withTimeout(writeCliPrompt(proc.stdin, text), CLI_TIMEOUT_MS, "CLI provider stdin write timed out")
+        await withTimeout(
+          writeCliPrompt(proc.stdin, this.stdinPrompt(text)),
+          CLI_TIMEOUT_MS,
+          "CLI provider stdin write timed out",
+        )
       } catch (error) {
         // A rejected optional flag can make the CLI exit before reading stdin,
         // so the write surfaces as EPIPE / a closed stdin. Treat that as the
@@ -742,7 +751,11 @@ export class CliLanguageModel implements LanguageModelV3 {
         // Bound the stdin drain: a child that never reads stdin and never exits
         // would otherwise leave this await unsettled forever (the overall CLI
         // timeout is armed only after the write completes).
-        await withTimeout(writeCliPrompt(proc.stdin, text), CLI_TIMEOUT_MS, "CLI provider stdin write timed out")
+        await withTimeout(
+          writeCliPrompt(proc.stdin, this.stdinPrompt(text)),
+          CLI_TIMEOUT_MS,
+          "CLI provider stdin write timed out",
+        )
       } catch (error) {
         stdinError = error
       }
@@ -772,7 +785,11 @@ export class CliLanguageModel implements LanguageModelV3 {
           throw new Error("CLI process stdin not available")
         }
         try {
-          await withTimeout(writeCliPrompt(proc.stdin, text), CLI_TIMEOUT_MS, "CLI provider stdin write timed out")
+          await withTimeout(
+            writeCliPrompt(proc.stdin, this.stdinPrompt(text)),
+            CLI_TIMEOUT_MS,
+            "CLI provider stdin write timed out",
+          )
         } catch (retryError) {
           await abort.kill()
           if (abort.isAborted) throw abort.abortError
@@ -1107,7 +1124,7 @@ export class CliLanguageModel implements LanguageModelV3 {
                 }
                 try {
                   await withTimeout(
-                    writeCliPrompt(proc.stdin, text),
+                    writeCliPrompt(proc.stdin, model.stdinPrompt(text)),
                     CLI_TIMEOUT_MS,
                     "CLI provider stdin write timed out",
                   )

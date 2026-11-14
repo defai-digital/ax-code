@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import { tmpdir } from "../../fixture/fixture"
+import { discoverAntigravityModels, parseAntigravityModels } from "../../../src/provider/cli/antigravity"
+import { Process } from "../../../src/util/process"
 import {
   parseClaudeModelCatalog,
   parseCodexModelsCache,
@@ -11,6 +13,35 @@ import {
 } from "../../../src/provider/cli/native-models"
 
 const originalTestHome = process.env.AX_CODE_TEST_HOME
+
+describe("Antigravity native model enumeration", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  test("accepts native tab-separated slugs and ignores diagnostics and malformed entries", () => {
+    expect(
+      parseAntigravityModels(
+        [
+          "Fetching available models...",
+          "gemini-4-argon-high\tGemini 4 Argon (High)",
+          "gemini-4-argon-high\tGemini 4 Argon (High)",
+          "--bad-model\tBad",
+          "missing-label\t",
+          "claude-opus-5-5-high\tClaude Opus 5.5 (High)\r",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      { id: "gemini-4-argon-high", name: "Gemini 4 Argon (High)" },
+      { id: "claude-opus-5-5-high", name: "Claude Opus 5.5 (High)" },
+    ])
+  })
+
+  test("falls back to the CLI default when model enumeration fails", async () => {
+    const run = vi.spyOn(Process, "run").mockRejectedValue(new Error("timed out"))
+    expect(await discoverAntigravityModels("agy")).toEqual([])
+    run.mockResolvedValue({ code: 1, stdout: Buffer.from("not-a-model\tError"), stderr: Buffer.alloc(0) })
+    expect(await discoverAntigravityModels("agy")).toEqual([])
+  })
+})
 
 beforeEach(() => {
   // Keep the test home authoritative even when the developer sets CLAUDE_CONFIG_DIR.

@@ -194,6 +194,7 @@ describe("CLI default discovery", () => {
     "kimi-cli": "kimi",
     "muse-cli": "muse",
     "dsh-cli": "dsh",
+    "antigravity-cli": "agy",
   }
 
   const CLI_ENV_KEYS = [
@@ -358,6 +359,28 @@ describe("CLI default discovery", () => {
       expect(second.provider.models[ModelID.make(providerID)]).toBeDefined()
     },
   )
+
+  test("Antigravity publishes native model slugs and keeps the CLI-owned default", async () => {
+    await using tmp = await tmpdir()
+    await prepareCli(tmp, "antigravity-cli")
+    const run = vi.spyOn(Process, "run").mockResolvedValue({
+      code: 0,
+      stdout: Buffer.from("gemini-4-argon-high\tGemini 4 Argon (High)\nclaude-opus-5-5-high\tClaude Opus 5.5 (High)\n"),
+      stderr: Buffer.alloc(0),
+    })
+    const { provider } = await discoverCli("antigravity-cli")
+    expect(Object.keys(provider.models).sort()).toEqual([
+      "antigravity-cli",
+      "claude-opus-5-5-high",
+      "gemini-4-argon-high",
+    ])
+    expect(provider.models[ModelID.make("gemini-4-argon-high")]?.name).toBe("Gemini 4 Argon (High)")
+    expectCliDefaultInvariant(provider.models, "antigravity-cli")
+    expect(run).toHaveBeenCalledWith(
+      [expect.stringContaining("agy"), "models"],
+      expect.objectContaining({ stdin: "ignore" }),
+    )
+  })
 
   test("muse uses the catalog default when settings configure no model", async () => {
     await using tmp = await tmpdir()

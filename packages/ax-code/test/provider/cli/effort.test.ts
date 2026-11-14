@@ -10,6 +10,11 @@ import { buildCliCommand } from "../../../src/provider/cli/cli-language-model"
 import { getCliProviderDefinition } from "../../../src/provider/cli/config"
 
 describe("CLI effort levels", () => {
+  test("Antigravity exposes and passes its supported effort levels", () => {
+    expect(cliEffortLevels("antigravity-cli")).toEqual(["low", "medium", "high", "xhigh", "max"])
+    expect(cliEffortArgs("antigravity-cli", "xhigh")).toEqual(["--effort", "xhigh"])
+    expect(cliEffortArgs("antigravity-cli", "ultra")).toEqual([])
+  })
   test("model efforts from the CLI cache replace the provider default list", () => {
     const efforts = cliModelEfforts({ cliEfforts: ["low", "high", "max", "ultra"] })
     expect(Object.keys(cliEffortVariants("codex-cli", efforts))).toEqual(["low", "high", "max", "ultra"])

@@ -25,6 +25,7 @@ export class CliIsolationUnsupportedError extends Error {
 }
 
 const CLI_ISOLATION_LABELS: Record<string, string> = {
+  "antigravity-cli": "Google Antigravity CLI",
   "kimi-cli": "Kimi Code CLI",
   "muse-cli": "Muse Code CLI",
 }
@@ -66,6 +67,10 @@ export function cliIsolationArgs(providerID: string, mode: Isolation.Mode, auton
   if (mode === "full-access") {
     return { args: providerID === "claude-code" && autonomous ? ["--dangerously-skip-permissions"] : [] }
   }
+
+  // agy's --sandbox restricts terminal commands, while --mode plan describes
+  // agent behavior. Neither establishes AX's filesystem isolation ceiling.
+  if (providerID === "antigravity-cli") throw new CliIsolationUnsupportedError(providerID, mode)
 
   if (mode === "read-only") {
     switch (providerID) {

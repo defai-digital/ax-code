@@ -3,7 +3,6 @@
 // refresh cannot resurrect a removed provider.
 export const RETIRED_PROVIDER_IDS = [
   "gemini-cli",
-  "antigravity-cli",
   "xai",
   "kilo",
   // Closed-source CLI agent with no maintained bridge.
