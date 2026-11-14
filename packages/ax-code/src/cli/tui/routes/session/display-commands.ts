@@ -17,7 +17,7 @@ import {
 } from "./display-command-helpers"
 import { sdkErrorMessage } from "./sdk-error-message"
 import { Filesystem } from "@/util/filesystem"
-import { RunReportServer } from "@/cli/cmd/run-report-server"
+import { RunReportServer } from "@/cli/cmd/run/report-server"
 import open from "open"
 
 type Session = SessionInfo & {

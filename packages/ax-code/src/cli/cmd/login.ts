@@ -1,1 +1,1 @@
-export { ProvidersLoginCommand as LoginCommand } from "./providers-impl"
+export { ProvidersLoginCommand as LoginCommand } from "./providers/command"

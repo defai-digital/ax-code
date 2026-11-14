@@ -543,7 +543,7 @@ reading this README from cold context). Internal agents working in this repo sho
 
 ### Layout
 
-pnpm + Turbo monorepo.
+pnpm + Turbo monorepo. See the [repository architecture](ARCHITECTURE.md) for the complete package map, placement rules and structural verification.
 
 | Path                 | What it owns                                                                                                   |
 | -------------------- | -------------------------------------------------------------------------------------------------------------- |

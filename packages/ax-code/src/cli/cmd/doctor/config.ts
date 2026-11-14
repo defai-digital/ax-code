@@ -1,6 +1,6 @@
-import type { Config } from "../../config/config"
-import { Instance } from "../../project/instance"
-import type { DoctorCheck } from "./doctor-health"
+import type { Config } from "../../../config/config"
+import { Instance } from "../../../project/instance"
+import type { DoctorCheck } from "./health"
 
 export function getConfiguredCredentialProviders(
   config: { provider?: Record<string, { options?: { apiKey?: unknown } }> } | undefined,
@@ -13,7 +13,7 @@ export function getConfiguredCredentialProviders(
 
 export async function getDoctorConfiguration(directory: string): Promise<{ config?: Config.Info; check: DoctorCheck }> {
   try {
-    const { Config } = await import("../../config/config")
+    const { Config } = await import("../../../config/config")
     const config = await Instance.provide({ directory, fn: () => Config.get() })
     return {
       config,

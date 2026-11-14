@@ -1175,60 +1175,60 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "096134477555c9fd0e662061148aa93973188ef67eced45a6e59279006b5faaf",
-          "file": "src/cli/cmd/mcp-impl.ts",
+          "fingerprint": "74ab8e6705059c8fe7cdf8286dfecdc852d4f16b4e1b97c21e0894df71da1f26",
+          "file": "src/cli/cmd/mcp/command.ts",
           "line": 298,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "87c7b21f04ac03f6e4b102a847e4dbe099691fc23802528c5c0fbf57cff65be5",
-          "file": "src/cli/cmd/providers-impl.ts",
+          "fingerprint": "2f9f37488a03b97b5e730d1c818d9c9b493146d8ef13159df18a03769f889d16",
+          "file": "src/cli/cmd/providers/command.ts",
           "line": 31,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "c760d9ebc7fc28da8db666f080c5c9ad513b0bf28f33c0f110ba5e33f34f5717",
-          "file": "src/cli/cmd/run-report-server.ts",
+          "fingerprint": "eddd09f56f0501773f9eddd47b59a6569a1908bf0f497036972f329ae4afdbd5",
+          "file": "src/cli/cmd/run/command.ts",
+          "line": 1389,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "ba365c4174c80bf8f9b40285ef01fa62b881f5897fb8d2355e9b5386592c87a6",
+          "file": "src/cli/cmd/run/report-server.ts",
           "line": 49,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "6af8767a224b53d9d496c7303afa14a81e9177e95c17aa216a3787572d816b6e",
-          "file": "src/cli/cmd/run-report.ts",
+          "fingerprint": "6a6a401dc3014fabf9a9c78276881b6c8325754d2f1d2e385bba0e129e084b12",
+          "file": "src/cli/cmd/run/report.ts",
           "line": 55,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "a8b384687e37c9a4fc43e82fec7421843ae8c6cc416d0fef93cdfadcccd8c103",
-          "file": "src/cli/cmd/run-report.ts",
+          "fingerprint": "e3eebc1621a3fbd59d6d19e483876bf08ca845cca88278195fd6f35093eccaf9",
+          "file": "src/cli/cmd/run/report.ts",
           "line": 67,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
         },
         {
-          "fingerprint": "4dcb143593e07a0e169e501fc140303edfae2d95c0a204bbad3dd340c497d4e1",
-          "file": "src/cli/cmd/run-report.ts",
+          "fingerprint": "5b97daf16f5e9f625e30476d48d25e373896a7a837df8b08ce8864318fc73b00",
+          "file": "src/cli/cmd/run/report.ts",
           "line": 68,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
-        },
-        {
-          "fingerprint": "aeb732a3e004738dcf5dceb3c1b29b0e98191cd2c2425912729796cc339015d5",
-          "file": "src/cli/cmd/run.ts",
-          "line": 1389,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
         },
         {
           "fingerprint": "5807164177136baacc781d3198964f3e5404e099acac3e8bf034f48b55f90bc6",
@@ -3292,65 +3292,65 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "482851bbb70d4eb9f1a7abad777d46da054588e7f9899648e24afd13c3c84d7b",
-          "file": "src/cli/cmd/doctor-credential-sources.ts",
-          "line": 65,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "54a3883bc543d7001174066696c5e897d61fdc9afcec8a61778ac5aa16b588f9",
-          "file": "src/cli/cmd/doctor-health.ts",
-          "line": 203,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "d032c7aac7f33fbb416bdb322f7ac5502de7737435d95d9c0869625beb42af21",
-          "file": "src/cli/cmd/doctor-storage.ts",
-          "line": 49,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "7dd8f549774a42b456491f4c05e1e9243507796c91106acad55328ee5f740567",
-          "file": "src/cli/cmd/doctor-storage.ts",
-          "line": 50,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "0a6befe39642d83d317f71d126d2de489f1be43b21f3bd469001f3f913472977",
-          "file": "src/cli/cmd/doctor.ts",
+          "fingerprint": "64589c93cbb5e28d11d1cb6d2e8b5deb217589b9143178e59449582da2a08ed3",
+          "file": "src/cli/cmd/doctor/command.ts",
           "line": 386,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "4595f4cdb0d0a499a89233c0b09190caafb6bf6591c46e4a555b236da70bfc9d",
-          "file": "src/cli/cmd/doctor.ts",
+          "fingerprint": "465027dc6e92ce2e61698c01fe819377bff9a18c063ab0c14a6c44368b2db792",
+          "file": "src/cli/cmd/doctor/command.ts",
           "line": 435,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "3414f28d02bdaeff63281b0912150b08b4c61ef811641bb7f055753702b6ee5e",
-          "file": "src/cli/cmd/doctor.ts",
+          "fingerprint": "0b80a13b559436dec48d5bd370c7316f21eace27808910f46444161cc090c47d",
+          "file": "src/cli/cmd/doctor/command.ts",
           "line": 439,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "9f034a8029f519d9013102421af4bf38c261d4a9e8b1628e94a8694702c9aed9",
-          "file": "src/cli/cmd/doctor.ts",
+          "fingerprint": "8c2352453fd8875ef55421065056fbb4d6dd45a5fde3c750580579223d70dd3c",
+          "file": "src/cli/cmd/doctor/command.ts",
           "line": 813,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "452f06b714a0b8f551fa6470ebf176804888da1da7de3dc053b3c2d1d265bfcb",
+          "file": "src/cli/cmd/doctor/credential-sources.ts",
+          "line": 65,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "6da336cfc387a26ce897d8ee8e7c0880010602a202564e31c68b86070bd1d976",
+          "file": "src/cli/cmd/doctor/health.ts",
+          "line": 203,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "78c8a166f1fc1a627871ecbac6c0f1c0c5d9abdd03613ae31e115dee3ede6fd6",
+          "file": "src/cli/cmd/doctor/storage.ts",
+          "line": 49,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "034e1424c54410f4bd27d1322ffb9d57be4dae5d7639ceda9ff8d22e877974a1",
+          "file": "src/cli/cmd/doctor/storage.ts",
+          "line": 50,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3380,24 +3380,24 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "869a4a06bc94771ea8f432c252085301a84194c3fd65219cd5b86f4419901c16",
-          "file": "src/cli/cmd/mcp-impl.ts",
+          "fingerprint": "11338418a18ca1e0da9b7ffe6a32c4e83c6fe20ee67c57ef31ae1a1d66fc9aa6",
+          "file": "src/cli/cmd/mcp/command.ts",
           "line": 729,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "63ffadbf7eb176db0cc77aa5fbb91e3c93479fbb26aff918188e7c552ed4cc61",
-          "file": "src/cli/cmd/mcp-impl.ts",
+          "fingerprint": "4404f942fe463f97a72b8481c0d79e94cd90a2094674c067788bcb3ef906b8dc",
+          "file": "src/cli/cmd/mcp/command.ts",
           "line": 731,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "98d84f1ba47df8e26f02234f832c5dcfff8345ddfb7088379e7af32f694e8b62",
-          "file": "src/cli/cmd/providers-auth.ts",
+          "fingerprint": "f1d7f63dd8ba5fa6fd8ba8207bb14aa14344816e73aa27cc814133fc2b1507ae",
+          "file": "src/cli/cmd/providers/auth.ts",
           "line": 22,
           "severity": "high",
           "kind": "path_traversal",
@@ -3516,36 +3516,36 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "3c03b8b4edb0bda472eb3725c5c70b711cc3297b3bca11e2d9d400b2155ab750",
-          "file": "src/cli/cmd/run-output.ts",
-          "line": 507,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "26f9faed8230a9c47613e591cde93bf832e41420c4af8c94d967cbaf3a2be26e",
-          "file": "src/cli/cmd/run.ts",
+          "fingerprint": "731b6148d4db686acd609ff1c2ab7f31a87431c9307260da4e4d64ad692d953b",
+          "file": "src/cli/cmd/run/command.ts",
           "line": 390,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
         },
         {
-          "fingerprint": "9342baba56a2e3ba03eaaaeb1e5be5559a06065d619e0f414c6f87b0d8518c17",
-          "file": "src/cli/cmd/run.ts",
+          "fingerprint": "73b9061fe1e67410082a93f9b3fc277907318e756252e7c2b7431948a9a38563",
+          "file": "src/cli/cmd/run/command.ts",
           "line": 942,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "6de2f8c078c30477597d3011651f6187e13c2d3aff538a466b0b77abe54808e1",
-          "file": "src/cli/cmd/run.ts",
+          "fingerprint": "394fe8246c4c8881d6f8e888a33df0536d9b5dd272ebd6424ff5dc09bedb067d",
+          "file": "src/cli/cmd/run/command.ts",
           "line": 1256,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
+        },
+        {
+          "fingerprint": "d9608f7ee51e3529bc6bd3b584b33a252646d5134adac95e0c54a3f56e846f02",
+          "file": "src/cli/cmd/run/output.ts",
+          "line": 507,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
         },
         {
           "fingerprint": "3fd13b10f21f3b3ab9b5364a7a97b98b08038a01eed9b1eacb17c4fb2bfebf16",
@@ -7233,16 +7233,16 @@
           "summary": "inline_url"
         },
         {
-          "fingerprint": "b006250416be179404e7334fdb6340ab37158743639f16c84350ad1ec693de87",
-          "file": "src/cli/cmd/mcp-impl.ts",
+          "fingerprint": "34a778dcbc106638d063145c9a5dcc291f237c7af2a889c8c301e7e480060631",
+          "file": "src/cli/cmd/mcp/command.ts",
           "line": 428,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
         },
         {
-          "fingerprint": "a84c73ed702ef2703d9db7463e2ae6b71ccb935dc5ba01979c2038a46e0e5028",
-          "file": "src/cli/cmd/mcp-impl.ts",
+          "fingerprint": "e1d79a9c85a49fa4698257cc850405d6793512636a2097b49785da3c364eb1f9",
+          "file": "src/cli/cmd/mcp/command.ts",
           "line": 1014,
           "severity": "medium",
           "kind": "inline_url",

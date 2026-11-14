@@ -1,35 +1,35 @@
-import { cmd } from "./cmd"
+import { cmd } from "../cmd"
 import * as prompts from "@clack/prompts"
-import { UI } from "../ui"
-import type { MCP } from "../../mcp"
-import type { Config } from "../../config/config"
-import { Installation } from "../../installation"
+import { UI } from "../../ui"
+import type { MCP } from "../../../mcp"
+import type { Config } from "../../../config/config"
+import { Installation } from "../../../installation"
 import path from "path"
-import { Global } from "../../global"
+import { Global } from "../../../global"
 import { modify, applyEdits, parse as parseJsonc, type ParseError } from "jsonc-parser"
-import { Filesystem } from "../../util/filesystem"
-import { FileLock } from "../../util/filelock"
-import { Lock } from "../../util/lock"
-import { isRecord } from "../../util/record"
+import { Filesystem } from "../../../util/filesystem"
+import { FileLock } from "../../../util/filelock"
+import { Lock } from "../../../util/lock"
+import { isRecord } from "../../../util/record"
 
 async function loadMcp() {
   const [{ MCP }, { McpAuth }, { McpOAuthProvider }, { Config }, { Instance }, { Bus }, { Permission }] =
     await Promise.all([
-      import("../../mcp"),
-      import("../../mcp/auth"),
-      import("../../mcp/oauth-provider"),
-      import("../../config/config"),
-      import("../../project/instance"),
-      import("../../bus"),
-      import("../../permission"),
+      import("../../../mcp"),
+      import("../../../mcp/auth"),
+      import("../../../mcp/oauth-provider"),
+      import("../../../config/config"),
+      import("../../../project/instance"),
+      import("../../../bus"),
+      import("../../../permission"),
     ])
   return { MCP, McpAuth, McpOAuthProvider, Config, Instance, Bus, Permission }
 }
-import { parseJsonPayload } from "../../util/json-value"
-import { toErrorMessage } from "../../util/error-message"
-import { parseShellArgs } from "../../util/shell-args"
-import { McpTuiCommand } from "./mcp-tui"
-import { McpWebMcpCommand } from "./mcp-webmcp"
+import { parseJsonPayload } from "../../../util/json-value"
+import { toErrorMessage } from "../../../util/error-message"
+import { parseShellArgs } from "../../../util/shell-args"
+import { McpTuiCommand } from "./tui"
+import { McpWebMcpCommand } from "./webmcp"
 import { EOL } from "os"
 
 // Above this many MCP tools, LLM tool-selection accuracy degrades and the
@@ -238,7 +238,7 @@ export const McpListCommand = cmd({
       }),
   async handler(args) {
     const { MCP, Config, Instance, Permission } = await loadMcp()
-    const { available: discoverAvailable } = await import("../../mcp/discovery")
+    const { available: discoverAvailable } = await import("../../../mcp/discovery")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -867,7 +867,7 @@ export const McpAddCommand = cmd({
   describe: "add an MCP server",
   async handler() {
     const { Instance } = await loadMcp()
-    const McpTemplates = await import("../../mcp/templates")
+    const McpTemplates = await import("../../../mcp/templates")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -1167,7 +1167,7 @@ export const McpDebugCommand = cmd({
         }
 
         // SSRF guard: validate the URL before making requests (BUG-004)
-        const { Ssrf } = await import("../../util/ssrf")
+        const { Ssrf } = await import("../../../util/ssrf")
         await Ssrf.assertPublicUrl(serverConfig.url, "mcp-debug")
 
         const spinner = prompts.spinner()

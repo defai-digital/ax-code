@@ -1,8 +1,8 @@
 import path from "path"
 import fs from "fs/promises"
-import { parseWindowsAxCodeProcesses, WINDOWS_PROCESS_COMMAND } from "./doctor-processes"
-import { parseJsonResult } from "../../util/json-value"
-import { Process } from "../../util/process"
+import { parseWindowsAxCodeProcesses, WINDOWS_PROCESS_COMMAND } from "./processes"
+import { parseJsonResult } from "../../../util/json-value"
+import { Process } from "../../../util/process"
 
 export type DoctorCheck = {
   name: string

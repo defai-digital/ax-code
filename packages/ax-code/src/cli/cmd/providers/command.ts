@@ -1,20 +1,20 @@
-import { Auth } from "../../auth"
+import { Auth } from "../../../auth"
 import * as prompts from "@clack/prompts"
-import { cmd } from "./cmd"
+import { cmd } from "../cmd"
 import { GITHUB_REPO_URL } from "@/constants/project"
-import { UI } from "../ui"
+import { UI } from "../../ui"
 import path from "path"
 import os from "os"
-import { Global } from "../../global"
-import { Instance } from "../../project/instance"
+import { Global } from "../../../global"
+import { Instance } from "../../../project/instance"
 import type { Hooks } from "@ax-code/plugin"
-import { Ssrf } from "../../util/ssrf"
-import { toErrorMessage } from "../../util/error-message"
+import { Ssrf } from "../../../util/ssrf"
+import { toErrorMessage } from "../../../util/error-message"
 import { Filesystem } from "@/util/filesystem"
 import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
 import { isRetiredProviderID } from "@/provider/retired-providers"
 import { AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine/constants"
-import { ProvidersAuthCommand } from "./providers-auth"
+import { ProvidersAuthCommand } from "./auth"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -29,19 +29,19 @@ function isHttpProviderUrl(input: string) {
 
 async function setProviderAuth(provider: string, info: Auth.Info) {
   await Auth.set(provider, info)
-  const { Provider } = await import("../../provider/provider")
+  const { Provider } = await import("../../../provider/provider")
   await Provider.invalidate().catch(() => {})
 }
 
 async function removeProviderAuth(provider: string) {
-  const { disconnectPrivateGpu, isDedicatedPrivateGpuProviderID } = await import("../../provider/private-gpu")
+  const { disconnectPrivateGpu, isDedicatedPrivateGpuProviderID } = await import("../../../provider/private-gpu")
   if (isDedicatedPrivateGpuProviderID(provider)) {
     await disconnectPrivateGpu(provider)
   } else {
-    const { CustomApiProvider } = await import("../../provider/custom-api-provider")
+    const { CustomApiProvider } = await import("../../../provider/custom-api-provider")
     if (!(await CustomApiProvider.removeIfManaged(provider))) await Auth.remove(provider)
   }
-  const { Provider } = await import("../../provider/provider")
+  const { Provider } = await import("../../../provider/provider")
   await Provider.invalidate().catch(() => {})
 }
 
@@ -350,8 +350,8 @@ export const ProvidersAxEngineCommand = cmd({
       prepareAxEngine,
       stopServer,
     } = await import("@/provider/ax-engine")
-    const { Config } = await import("../../config/config")
-    const { Provider } = await import("../../provider/provider")
+    const { Config } = await import("../../../config/config")
+    const { Provider } = await import("../../../provider/provider")
     const action = args.action
     const configuredOptions = ["status", "prepare", "start"].includes(action ?? "")
       ? await Instance.provide({
@@ -521,13 +521,13 @@ export const ProvidersListCommand = cmd({
       default: false,
     }),
   async handler(args) {
-    const { Config } = await import("../../config/config")
+    const { Config } = await import("../../../config/config")
     if (args.json) {
       await Instance.provide({
         directory: process.cwd(),
         async fn() {
-          const { Provider } = await import("../../provider/provider")
-          const { ModelsDev } = await import("../../provider/models")
+          const { Provider } = await import("../../../provider/provider")
+          const { ModelsDev } = await import("../../../provider/models")
           await Provider.ready()
           const connected = await Provider.list()
           const catalog = await ModelsDev.get()
@@ -557,8 +557,8 @@ export const ProvidersListCommand = cmd({
       return
     }
 
-    const { ModelsDev } = await import("../../provider/models")
-    const { getCliProviderDefinition } = await import("../../provider/cli/config")
+    const { ModelsDev } = await import("../../../provider/models")
+    const { getCliProviderDefinition } = await import("../../../provider/cli/config")
     UI.empty()
     const authPath = path.join(Global.Path.data, "auth.json")
     const homedir = os.homedir()
@@ -655,11 +655,11 @@ export const ProvidersLoginCommand = cmd({
         type: "string",
       }),
   async handler(args) {
-    const { Config } = await import("../../config/config")
-    const { Plugin } = await import("../../plugin")
-    const { ModelsDev } = await import("../../provider/models")
-    const { getCliProviderDefinition } = await import("../../provider/cli/config")
-    const { probeCliProvider } = await import("../../provider/cli/connect")
+    const { Config } = await import("../../../config/config")
+    const { Plugin } = await import("../../../plugin")
+    const { ModelsDev } = await import("../../../provider/models")
+    const { getCliProviderDefinition } = await import("../../../provider/cli/config")
+    const { probeCliProvider } = await import("../../../provider/cli/connect")
     const { map, pipe, sortBy, values } = await import("remeda")
     UI.empty()
     prompts.intro("Add credential")
@@ -984,7 +984,7 @@ export const ProvidersLogoutCommand = cmd({
         type: "string",
       }),
   async handler(args) {
-    const { ModelsDev } = await import("../../provider/models")
+    const { ModelsDev } = await import("../../../provider/models")
     UI.empty()
     const credentials = await Auth.all().then((x) => Object.entries(x))
     // Auth.all() drops entries whose keys no longer decrypt (machine key or
@@ -992,7 +992,7 @@ export const ProvidersLogoutCommand = cmd({
     // exactly the ones a user wants to log out of, so offer them for removal
     // instead of claiming no credential exists.
     const undecryptable = (await Auth.decryptionFailures()).filter((id) => !credentials.some(([key]) => key === id))
-    const { CustomApiProvider } = await import("../../provider/custom-api-provider")
+    const { CustomApiProvider } = await import("../../../provider/custom-api-provider")
     const known = new Set([...credentials.map(([key]) => key), ...undecryptable])
     const managedOrphans = (await CustomApiProvider.managedProviderIDs()).filter((id) => !known.has(id))
     prompts.intro("Remove credential")
@@ -1060,9 +1060,9 @@ export const ProvidersDisableCommand = cmd({
       type: "string",
     }),
   async handler(args) {
-    const { Config } = await import("../../config/config")
+    const { Config } = await import("../../../config/config")
     const { disableProviderPatch } = await import("@/provider/enablement")
-    const { ModelsDev } = await import("../../provider/models")
+    const { ModelsDev } = await import("../../../provider/models")
     UI.empty()
     prompts.intro("Disable provider")
     if (args.provider && isRetiredProviderID(args.provider)) {
@@ -1132,9 +1132,9 @@ export const ProvidersEnableCommand = cmd({
       type: "string",
     }),
   async handler(args) {
-    const { Config } = await import("../../config/config")
+    const { Config } = await import("../../../config/config")
     const { enableProviderPatch } = await import("@/provider/enablement")
-    const { ModelsDev } = await import("../../provider/models")
+    const { ModelsDev } = await import("../../../provider/models")
     UI.empty()
     prompts.intro("Enable provider")
     if (args.provider && isRetiredProviderID(args.provider)) {

@@ -684,7 +684,7 @@ describe("providers command", () => {
   })
 
   test("CLI provider login reports probe failures as user-facing errors", async () => {
-    const src = await fs.readFile(path.join(import.meta.dirname, "../../src/cli/cmd/providers-impl.ts"), "utf-8")
+    const src = await fs.readFile(path.join(import.meta.dirname, "../../src/cli/cmd/providers/command.ts"), "utf-8")
     expect(src).toContain("const result = await probeCliProvider(provider).catch((error) => {")
     expect(src).toContain("prompts.log.error(toErrorMessage(error))")
   })

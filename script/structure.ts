@@ -5,10 +5,17 @@ import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-i
 import { exists, readText, scan, writeText } from "../packages/ax-code/script/fs-compat"
 import { extractImportSpecifiers } from "./import-specifiers"
 import { INTERNAL_ONLY_ROOTS, unapprovedTrackedInternalPaths } from "./repository-policy"
+import {
+  discoverWorkspacePackages,
+  workspaceBoundaryViolations,
+  workspaceConfigurationProblems,
+  workspaceDependencyCycles,
+} from "./workspace-structure"
 
 const root = path.resolve(import.meta.dirname, "..")
 
 const note = [
+  "ARCHITECTURE.md",
   "packages/integration-github/ARCHITECTURE.md",
   "packages/ax-code/ARCHITECTURE.md",
   "packages/util/ARCHITECTURE.md",
@@ -17,8 +24,6 @@ const note = [
 ]
 
 const hot = ["packages/ax-code/src/cli/cmd", "packages/ax-code/src/cli/tui"]
-const workspacePackageRoots = ["packages", "packages/sdk/js"]
-const dependencyFields = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const
 const axCodeSrcRoot = path.join(root, "packages/ax-code/src")
 const runtimeBoundaryAllowedFiles = new Set([
   "packages/ax-code/src/index.ts",
@@ -112,10 +117,6 @@ function spec(text: string, file: string) {
   return extractImportSpecifiers(text, file).map((item) => item.specifier)
 }
 
-function readJSON(file: string) {
-  return JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>
-}
-
 async function docs() {
   const miss = [] as string[]
   for (const file of note) {
@@ -123,67 +124,6 @@ async function docs() {
     if (!ok) miss.push(file)
   }
   return miss
-}
-
-// A relative import must stay inside the file's own workspace package:
-// reaching a sibling package by path bypasses its declared `exports` contract,
-// and a sibling's `test/` directory is not a publishable artifact.
-function packageOf(file: string): string | undefined {
-  const parts = rel(file).split(path.sep).join("/").split("/")
-  if (parts[0] !== "packages") return undefined
-  if (parts[1] === "sdk" && parts[2] === "js") return "packages/sdk/js"
-  return parts[1] ? `packages/${parts[1]}` : undefined
-}
-
-function escapesPackage(file: string, name: string): boolean {
-  if (!name.startsWith(".")) return false
-  const pkg = packageOf(file)
-  if (!pkg) return false
-  const from = rel(file).split(path.sep).join("/")
-  const target = path.posix.normalize(path.posix.join(path.posix.dirname(from), name))
-  return target !== pkg && !target.startsWith(`${pkg}/`)
-}
-
-async function deep() {
-  const out = [] as { file: string; spec: string }[]
-  for (const dir of [
-    "packages/ax-code/src",
-    "packages/ax-code/test",
-    "packages/plugin/src",
-    "packages/plugin/test",
-    "packages/sdk/js/src",
-    "packages/integration-github",
-    "packages/util/src",
-    "packages/util/test",
-    "packages/ax-code-intel/src",
-    "packages/ax-code-intel/test",
-    "packages/ax-code-reason/src",
-    "packages/ax-code-reason/test",
-    "packages/ax-wiki/src",
-    "packages/ax-wiki/test",
-    "packages/ax-agent-runtime/src",
-    "packages/ax-agent-runtime/test",
-  ]) {
-    for (const file of await list(dir)) {
-      const text = await readText(file)
-      for (const name of spec(text, file)) {
-        if (name.includes("@ax-code/") && name.includes("/src/")) {
-          out.push({ file: rel(file), spec: name })
-          continue
-        }
-        if (name.includes("packages/") && name.includes("/src/")) {
-          out.push({ file: rel(file), spec: name })
-          continue
-        }
-        if (name.includes("../packages/") && name.includes("/src/")) {
-          out.push({ file: rel(file), spec: name })
-          continue
-        }
-        if (escapesPackage(file, name)) out.push({ file: rel(file), spec: name })
-      }
-    }
-  }
-  return out
 }
 
 async function sdkSourceImports() {
@@ -273,81 +213,6 @@ async function count(dir: string) {
   return sum
 }
 
-function workspacePackages() {
-  const packages = [] as { name: string; dir: string; manifest: string; dependencies: string[] }[]
-  const seen = new Set<string>()
-
-  for (const rootDir of workspacePackageRoots) {
-    const abs = path.join(root, rootDir)
-    if (!fs.existsSync(abs)) continue
-
-    const candidates = rootDir === "packages" ? fs.readdirSync(abs).map((name) => path.join(abs, name)) : [abs]
-    for (const candidate of candidates) {
-      const manifest = path.join(candidate, "package.json")
-      if (seen.has(manifest) || !fs.existsSync(manifest)) continue
-      seen.add(manifest)
-
-      const json = readJSON(manifest)
-      if (typeof json.name !== "string") continue
-      const deps = new Set<string>()
-      for (const field of dependencyFields) {
-        const value = json[field]
-        if (!value || typeof value !== "object" || Array.isArray(value)) continue
-        for (const name of Object.keys(value)) deps.add(name)
-      }
-
-      packages.push({
-        name: json.name,
-        dir: rel(candidate),
-        manifest: rel(manifest),
-        dependencies: [...deps].sort(),
-      })
-    }
-  }
-
-  return packages.sort((a, b) => a.name.localeCompare(b.name))
-}
-
-function dependencyCycles() {
-  const packages = workspacePackages()
-  const names = new Set(packages.map((item) => item.name))
-  const graph = new Map<string, string[]>()
-  for (const item of packages) {
-    graph.set(item.name, item.dependencies.filter((name) => names.has(name)).sort())
-  }
-
-  const cycles = new Set<string>()
-  const pathStack = [] as string[]
-  const visiting = new Set<string>()
-
-  function canonical(cycle: string[]) {
-    const body = cycle.slice(0, -1)
-    let best = body
-    for (let i = 1; i < body.length; i++) {
-      const rotated = body.slice(i).concat(body.slice(0, i))
-      if (rotated.join("\0") < best.join("\0")) best = rotated
-    }
-    return best.concat(best[0]!).join(" -> ")
-  }
-
-  function visit(name: string) {
-    if (visiting.has(name)) {
-      const start = pathStack.indexOf(name)
-      if (start >= 0) cycles.add(canonical(pathStack.slice(start).concat(name)))
-      return
-    }
-
-    visiting.add(name)
-    pathStack.push(name)
-    for (const dep of graph.get(name) ?? []) visit(dep)
-    pathStack.pop()
-    visiting.delete(name)
-  }
-
-  for (const item of packages) visit(item.name)
-  return [...cycles].sort()
-}
-
 function shape(dir: string) {
   let direct = 0
   let group = 0
@@ -406,10 +271,12 @@ function trackedInternalFiles() {
 
 async function main() {
   const miss = await docs()
-  const raw = await deep()
+  const packages = discoverWorkspacePackages(root)
+  const configuration = workspaceConfigurationProblems(root)
+  const raw = workspaceBoundaryViolations(root, packages)
   const sdkRaw = await sdkSourceImports()
   const runtimeBoundary = await runtimeInternalBoundaries()
-  const cycles = dependencyCycles()
+  const cycles = workspaceDependencyCycles(packages)
   const v4 = await V4Guardrails.check(path.join(root, "packages/ax-code"))
   const all = await size()
   const top10 = all.slice(0, 10)
@@ -422,10 +289,18 @@ async function main() {
   const out = [] as string[]
   out.push("# Repo Structure Report")
   out.push("")
+  out.push("## Workspace Configuration")
+  if (configuration.length) {
+    for (const problem of configuration) out.push(`- error: ${problem}`)
+  } else {
+    out.push("- ok: pnpm dependency policy is owned by pnpm-workspace.yaml")
+  }
+  out.push("")
   out.push("## Docs")
   out.push(miss.length ? `- missing: ${miss.join(", ")}` : "- ok: required architecture notes are present")
   out.push("")
   out.push("## Deep Imports")
+  out.push(`- scanned authored source and tests in ${packages.length} workspace packages`)
   if (raw.length) {
     for (const row of raw) out.push(`- ${row.file} imports ${row.spec}`)
   } else {
@@ -450,7 +325,7 @@ async function main() {
   out.push("")
   out.push("## Workspace Dependency Cycles")
   if (cycles.length) {
-    out.push("- warning: workspace package manifest cycles found")
+    out.push("- error: workspace package manifest cycles found")
     for (const cycle of cycles) out.push(`- ${cycle}`)
   } else {
     out.push("- ok: no workspace package manifest cycles found")
@@ -511,7 +386,9 @@ async function main() {
 
   if (
     miss.length ||
+    configuration.length ||
     raw.length ||
+    cycles.length ||
     runtimeBoundary.length ||
     v4.length ||
     stale.length ||

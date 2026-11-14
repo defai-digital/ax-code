@@ -27,7 +27,7 @@ import {
   runFileMime,
   RUN_BUILTIN_TOOL_IDS,
   validateJsonSchema,
-} from "../../src/cli/cmd/run-output"
+} from "../../src/cli/cmd/run/output"
 import { buildAttachHeaders } from "../../src/cli/attach-auth"
 
 test("run structured output resolves relative paths from caller cwd", async () => {

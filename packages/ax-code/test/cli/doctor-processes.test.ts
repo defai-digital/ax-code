@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { getDoctorProcessRegistryCheck } from "../../src/cli/cmd/doctor-processes"
+import { getDoctorProcessRegistryCheck } from "../../src/cli/cmd/doctor/processes"
 import type { ProcessRegistry } from "../../src/runtime/process-registry"
 
 function listed(

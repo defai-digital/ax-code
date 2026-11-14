@@ -33,4 +33,16 @@ describe("extractImportSpecifiers", () => {
 
     expect(extractImportSpecifiers(source, "fixture.ts")).toEqual([])
   })
+
+  test("includes TypeScript import types and typeof import queries", () => {
+    expect(
+      extractImportSpecifiers(
+        'type Input = import("type-package").Input\ntype Module = typeof import("query-package")',
+        "fixture.ts",
+      ),
+    ).toEqual([
+      { specifier: "type-package", line: 1, column: 21 },
+      { specifier: "query-package", line: 2, column: 29 },
+    ])
+  })
 })

@@ -3,7 +3,7 @@ import { cli, commandSections, commandName } from "../../src/cli/boot"
 import { cli as nodeCli } from "../../src/cli/boot-node"
 import { createAxCodeCli } from "../../src/cli/boot-shared"
 import { ReleaseNotesCommand } from "../../src/cli/cmd/release-notes"
-import { ProvidersAuthCommand } from "../../src/cli/cmd/providers-auth"
+import { ProvidersAuthCommand } from "../../src/cli/cmd/providers/auth"
 import { Installation } from "../../src/installation"
 
 vi.mock("../../src/cli/bootstrap/env", () => ({ init: vi.fn() }))

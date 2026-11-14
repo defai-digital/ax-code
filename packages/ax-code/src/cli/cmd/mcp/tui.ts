@@ -1,4 +1,4 @@
-import { cmd } from "./cmd"
+import { cmd } from "../cmd"
 import { serveTuiMcp } from "@/tuimcp/mcp-server"
 
 export const McpTuiCommand = cmd({

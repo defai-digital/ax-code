@@ -4,7 +4,7 @@ import type { ComputerUseProvider, ProbeReport } from "@ax-code/computer"
 import { Computer } from "@/computer/computer"
 import type { Config } from "@/config/config"
 import { toErrorMessage } from "@/util/error-message"
-import type { DoctorCheck } from "./doctor-health"
+import type { DoctorCheck } from "./health"
 
 const INSTALL_HINT = "the ax-computer server (canonical AX Computer protocol)"
 

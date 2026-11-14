@@ -3,7 +3,7 @@ import yargs from "yargs"
 import type { Argv } from "yargs"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
-import { buildProvidersDocument, ProvidersListCommand } from "../../src/cli/cmd/providers-impl"
+import { buildProvidersDocument, ProvidersListCommand } from "../../src/cli/cmd/providers/command"
 import { buildAgentsDocument, AgentListCommand } from "../../src/cli/cmd/agent"
 import {
   buildMcpDocument,
@@ -12,7 +12,7 @@ import {
   resolveMcpStatus,
   McpListCommand,
   McpAuthListCommand,
-} from "../../src/cli/cmd/mcp-impl"
+} from "../../src/cli/cmd/mcp/command"
 import { buildStatsDocument, statsLargeDatasetNotice, StatsCommand } from "../../src/cli/cmd/stats"
 import { buildContextDocument, ContextCommand } from "../../src/cli/cmd/context"
 import { MemoryStatusCommand, MemoryListCommand } from "../../src/cli/cmd/memory"

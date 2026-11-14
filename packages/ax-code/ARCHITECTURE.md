@@ -6,7 +6,15 @@
 
 ## Allowed Dependencies
 
-- may depend on `@ax-code/util`, `@ax-code/plugin`, `@ax-code/script`, `@ax-code/sdk`
+- `package.json` is authoritative for dependency identities and versions; the
+  [repository map](../../ARCHITECTURE.md) explains package ownership
+- compose extracted libraries (`ax-code-intel`, `ax-code-reason`, `ax-wiki`,
+  `ax-wiki-viewer`) through their declared exports and core host/glue modules
+- consume the framework through the `ax-tui` workspace alias; TUI application
+  behavior remains in this package
+- keep the agent-runtime incubation boundary enforced by
+  `script/check-agent-runtime-boundary.ts`; it does not authorize moving
+  executable policy out of core
 
 ## Placement
 
@@ -15,7 +23,7 @@
 - keep reusable low-level helpers in shared utility modules, not inside CLI or route files
 - avoid adding new unrelated logic to `src/cli` when it belongs in a domain package
 - keep the TUI application in `src/cli/tui`, not under `src/cli/cmd`
-- group `src/cli/cmd` by concern such as `github-agent/`, `runtime/`, and `storage/`, and keep root command files as thin compatibility shims
+- group `src/cli/cmd` by concern (`doctor/`, `run/`, `providers/`, `mcp/`, `github-agent/`, `runtime/`, `storage/`); keep root command facades thin and put helpers inside the concern folder
 
 ## Testing
 

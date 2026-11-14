@@ -1,7 +1,7 @@
 import path from "path"
 import z from "zod"
-import { parseJsonStrict } from "../../util/json-value"
-import { ProcessRegistry } from "../../runtime/process-registry"
+import { parseJsonStrict } from "../../../util/json-value"
+import { ProcessRegistry } from "../../../runtime/process-registry"
 
 export type DoctorCheck = {
   name: string

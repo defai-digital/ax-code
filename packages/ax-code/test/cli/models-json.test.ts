@@ -114,7 +114,7 @@ describe("models --json", () => {
 
   test("connected is derived from the same Provider.list() keys the handler lists (G9)", async () => {
     // The listing source is Provider.list() — the same map whose keys
-    // `providers list --json` (src/cli/cmd/providers-impl.ts) uses as its
+    // `providers list --json` (src/cli/cmd/providers/command.ts) uses as its
     // connected set — never the catalog merge, so no catalog-only provider
     // can appear in `models` output and every listed entry is connected by
     // construction. The field stays because the --json shape is documented;

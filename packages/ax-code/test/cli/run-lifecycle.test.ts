@@ -25,7 +25,7 @@ import {
   createRunLifecycle,
   RUN_LAST_RESORT_EXIT_DELAY_MS,
   RUN_SERVER_ABORT_BOUND_MS,
-} from "../../src/cli/cmd/run-lifecycle"
+} from "../../src/cli/cmd/run/lifecycle"
 import { UI } from "../../src/cli/ui"
 import { tmpdir } from "../fixture/fixture"
 import { Provider } from "../../src/provider/provider"
@@ -165,7 +165,7 @@ test("run accepts --quiet as a long-only boolean flag", async () => {
   const withoutFlag = await parseRunArgv(["hello"])
   expect(withoutFlag.quiet).toBe(false)
 
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
   // Documented in the builder, and no short alias exists.
   expect(src).toContain('.option("quiet"')
   expect(src).not.toContain('alias: ["q"]')
@@ -349,7 +349,7 @@ test.each([
 })
 
 test("run command validates an explicit model before creating a session", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
   const refresh = src.indexOf("await refreshRunProvidersOnModelMiss(")
   const validate = src.indexOf("const modelError = findRunModelError(")
   const create = src.indexOf("await session(sdk)")
@@ -432,7 +432,7 @@ test("attached run event rendering does not read local agent state", async () =>
 })
 
 test("run command awaits the event loop before bootstrap cleanup", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
   const loopStart = src.indexOf("const loopPromise = loop(events.stream)")
   const sendCommand = src.indexOf("await sdk.session.command", loopStart)
   const awaitLoop = src.indexOf("await loopResult", sendCommand)
@@ -446,7 +446,7 @@ test("run command awaits the event loop before bootstrap cleanup", async () => {
 })
 
 test("run command uses the requested directory for attached path display", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   expect(src).toContain('import { AsyncLocalStorage } from "node:async_hooks"')
   expect(src).toContain("const pathDisplayRootContext = new AsyncLocalStorage<string>()")
@@ -457,7 +457,7 @@ test("run command uses the requested directory for attached path display", async
 })
 
 test("run command restores cwd after a requested directory run", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   expect(src).toContain("const previousCwd = process.cwd()")
   expect(src).toContain("if (process.cwd() !== previousCwd)")
@@ -465,7 +465,7 @@ test("run command restores cwd after a requested directory run", async () => {
 })
 
 test("run command scopes the local SDK client to the runtime directory", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   expect(src).toContain("const runtimeDirectory = directory || callerCwd")
   expect(src).toContain("await bootstrap(runtimeDirectory")
@@ -480,7 +480,7 @@ test("run command scopes the local SDK client to the runtime directory", async (
 })
 
 test("run command treats the managed runtime like an attach for agent and provider lookups", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
   const normalized = src.replace(/\s+/g, " ")
 
   // --runtime talks to a remote server: agent validation, display-name
@@ -492,7 +492,7 @@ test("run command treats the managed runtime like an attach for agent and provid
 })
 
 test("run command logs tool renderer fallback errors", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   expect(src).toContain('Log.Default.debug("tool renderer fallback"')
   expect(src).toContain("error: toErrorMessage(error)")
@@ -500,7 +500,7 @@ test("run command logs tool renderer fallback errors", async () => {
 })
 
 test("run command wires structured output flags after the event loop", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   expect(src).toContain('.option("output-file"')
   expect(src).toContain('.option("output-schema"')
@@ -548,7 +548,7 @@ test("headless-run clears the idle timer before checking timeout state", async (
 })
 
 test("non-interactive run entry points share bounded pipe input handling", async () => {
-  const run = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const run = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
   const headless = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
 
   for (const source of [run, headless]) {
@@ -558,7 +558,7 @@ test("non-interactive run entry points share bounded pipe input handling", async
 })
 
 test("run registers one shared signal handler for SIGINT and SIGTERM and removes both", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   // CI runners send SIGTERM: both signals share one handler so either cancels
   // the run with status "cancelled" and exit 130.
@@ -729,7 +729,7 @@ test("autonomous pulse timer does not keep the process alive", async () => {
 })
 
 test("run command defaults to concise tool output with an opt-in --full flag", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   expect(src).toContain('.option("full"')
   expect(src).toContain(
@@ -743,7 +743,7 @@ test("run command defaults to concise tool output with an opt-in --full flag", a
   expect(src).toContain("todo(props<typeof TodoWriteTool>(part), full)")
 
   // Concise mode reuses the shared shaping helpers instead of printing raw output.
-  expect(src).toContain('from "../../util/tool-output"')
+  expect(src).toContain('from "../../../util/tool-output"')
   expect(src).toContain("tailLines(output)")
   expect(src).toContain("diffSummary(info.metadata.diff)")
   expect(src).toContain("formatDiffSummary(summary)")
@@ -751,7 +751,7 @@ test("run command defaults to concise tool output with an opt-in --full flag", a
 })
 
 test("run command caps error text but never hides it in concise mode", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   expect(src).toContain("const cappedError = tailLines(part.state.error)")
   expect(src).toContain("UI.error(cappedError.text)")
@@ -760,7 +760,7 @@ test("run command caps error text but never hides it in concise mode", async () 
 })
 
 test("run command json format still short-circuits before tool rendering", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
   const emitShort = src.indexOf('if (emit("tool_use", { part })) continue')
   const render = src.indexOf("tool(part)", emitShort)
   expect(emitShort).toBeGreaterThan(-1)
@@ -777,7 +777,7 @@ test("run --format jsonl/ndjson alias the NDJSON event stream (#419)", async () 
   expect(isRunEventStreamFormat("default")).toBe(false)
   expect(isRunEventStreamFormat(undefined)).toBe(false)
 
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
   expect(src).toContain('choices: ["default", "json", "jsonl", "ndjson"]')
   // Help text must say the stream is newline-delimited — not a single JSON
   // document — so `| jq` users pick the right tool (#419).
@@ -1428,7 +1428,7 @@ describe("createRunLifecycle", () => {
 })
 
 test("run records every server abort and awaits delivery before the terminal result and handler return", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   // The abort request promise is recorded in the lifecycle instead of being
   // fired and forgotten (F13).
@@ -1513,7 +1513,7 @@ test("UI.Style.TEXT_ITALIC is gated like the other style tokens", () => {
 })
 
 test("run --thinking routes italic styling through UI.Style instead of raw escapes", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
   // G8: no hardcoded italic/reset escape sequences may remain in run.ts, so
   // NO_COLOR or a non-TTY stderr can never leak raw escapes.
   // Concatenated so the Code Quality check sees the source text run.ts must contain.
@@ -1525,7 +1525,7 @@ test("run --thinking routes italic styling through UI.Style instead of raw escap
 })
 
 test("run answers permission asks for every session in the run's tree (G1)", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   // The tree is seeded from the main session and extended from
   // session.created/session.updated events whose parent is already in it.
@@ -1636,7 +1636,7 @@ test("run --format json writes a structured usage error line on missing prompt",
 })
 
 test("run event stream ends with a terminal result record", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
 
   expect(src).toContain("buildRunResultEvent(")
   // Whitespace-normalized: the status call wraps across lines in the source.
@@ -1695,7 +1695,7 @@ test("run accepts the steering flags as long-only kebab-case options", async () 
   expect(spacedVariant["prompt-file"]).toBe("-")
   expect(spacedVariant.message).toEqual(["hello"])
 
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
   expect(src).toContain('if (promptFileFlag === "-")')
 })
 
@@ -1890,8 +1890,8 @@ test("run --prompt-file - is a usage error when stdin is a TTY", async () => {
 })
 
 test("run arms the timeout before the first SDK call and prints the session id in the header", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
-  const lifecycleSrc = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run-lifecycle.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/command.ts"), "utf-8")
+  const lifecycleSrc = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run/lifecycle.ts"), "utf-8")
 
   // E2: the timer is armed (handler body) before the event subscription (the
   // first SDK call inside executeRun), so a black-holed attach host is bounded.

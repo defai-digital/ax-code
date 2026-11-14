@@ -1,5 +1,5 @@
 import type { Isolation as IsolationConfig } from "@/config/schema"
-import type { DoctorCheck } from "./doctor-health"
+import type { DoctorCheck } from "./health"
 
 /**
  * Egress allowlist preflight (ADR-232). Reports how strongly

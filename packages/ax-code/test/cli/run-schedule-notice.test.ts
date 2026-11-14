@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { pendingScheduledTaskNotice } from "../../src/cli/cmd/run-schedule-notice"
+import { pendingScheduledTaskNotice } from "../../src/cli/cmd/run/schedule-notice"
 
 describe("pendingScheduledTaskNotice", () => {
   test("returns undefined when there are no tasks", () => {

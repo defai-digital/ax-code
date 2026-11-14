@@ -1,6 +1,6 @@
 import { Process } from "../../src/util/process"
 import { describe, expect, test, vi } from "vitest"
-import { getRecentLogsChecks, getRunningInstancesCheck } from "../../src/cli/cmd/doctor-health"
+import { getRecentLogsChecks, getRunningInstancesCheck } from "../../src/cli/cmd/doctor/health"
 
 describe("doctor running instances", () => {
   test("ignores the current process and read-only doctor commands", async () => {

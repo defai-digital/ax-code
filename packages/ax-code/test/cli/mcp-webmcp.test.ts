@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest"
 import yargs from "yargs"
-import { McpWebMcpCommand } from "../../src/cli/cmd/mcp-webmcp"
+import { McpWebMcpCommand } from "../../src/cli/cmd/mcp/webmcp"
 import { McpCommand } from "../../src/cli/cmd/mcp"
 import { Config } from "../../src/config/config"
 import { parseJsonPayload } from "../../src/util/json-value"

@@ -319,7 +319,7 @@ describe("cli doctor", () => {
   })
 
   test("logs configured TUI port fallback failures", async () => {
-    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/doctor.ts"), "utf-8")
+    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/doctor/command.ts"), "utf-8")
     const start = src.indexOf("async function getConfiguredTuiPort()")
     const end = src.indexOf("export async function getDuplicateProjectIdentityCheck", start)
     expect(start).toBeGreaterThan(-1)

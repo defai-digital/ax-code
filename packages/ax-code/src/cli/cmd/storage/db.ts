@@ -8,7 +8,7 @@ import { toErrorMessage } from "../../../util/error-message"
 import { mkdirSync, closeSync, openSync } from "node:fs"
 import { dirname } from "node:path"
 import { once } from "node:events"
-import { getDoctorDatabaseIntegrityCheck } from "../doctor-storage"
+import { getDoctorDatabaseIntegrityCheck } from "../doctor/storage"
 
 async function openDatabase(dbPath: string, options: { readonly: boolean }) {
   const { DatabaseSync } = await import("node:sqlite")

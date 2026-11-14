@@ -1,1 +1,1 @@
-export * from "./providers-impl"
+export * from "./providers/command"

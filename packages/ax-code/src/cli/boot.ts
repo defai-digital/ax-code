@@ -37,8 +37,8 @@ import {
   isCliUsageFailureMessage,
   runArgvUsesEventStream,
   runUsageFailureHint,
-} from "./cmd/run-usage"
-import { buildRunEarlyErrorEvent } from "./cmd/run-output"
+} from "./cmd/run/usage"
+import { buildRunEarlyErrorEvent } from "./cmd/run/output"
 import { writeJsonUsageError } from "./cmd/json-output"
 import { ServeCommand } from "./cmd/serve"
 import { RuntimeCommand } from "./cmd/runtime"

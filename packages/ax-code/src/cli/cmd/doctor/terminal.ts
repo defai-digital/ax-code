@@ -7,8 +7,8 @@
  * reported.
  */
 
-import { Process } from "../../util/process"
-import { oscMuxFromEnv } from "../../cli/tui/util/osc-passthrough"
+import { Process } from "../../../util/process"
+import { oscMuxFromEnv } from "../../tui/util/osc-passthrough"
 
 export type TerminalDoctorCheck = {
   name: string

@@ -114,7 +114,7 @@ export const ModelsCommand = cmd({
           const providerMap: Record<string, ModelsProvider> = {}
           for (const [providerID, info] of Object.entries(providers)) providerMap[providerID] = info
           // `connected` uses the same definition as `providers list --json`
-          // (src/cli/cmd/providers-impl.ts): the keys of `Provider.list()`.
+          // (src/cli/cmd/providers/command.ts): the keys of `Provider.list()`.
           // The models listing above is drawn from that same connected map
           // rather than the catalog merge, so no catalog-only provider can
           // appear here and every listed entry is connected by construction.

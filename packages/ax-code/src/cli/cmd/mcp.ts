@@ -1,1 +1,1 @@
-export * from "./mcp-impl"
+export * from "./mcp/command"

@@ -6,7 +6,7 @@
 // live CLI which is not available in the test environment).
 
 import { test, expect } from "vitest"
-import { getCredentialSourcesCheck } from "../../src/cli/cmd/doctor-credential-sources"
+import { getCredentialSourcesCheck } from "../../src/cli/cmd/doctor/credential-sources"
 import type { Auth } from "../../src/auth"
 
 function makeAuth(entries: Array<[string, Auth.Info]>): Record<string, Auth.Info> {

@@ -158,7 +158,7 @@ test("export envelope is safe to print: no encrypted value survives", async () =
 })
 
 test("the exported file can be imported again from disk (dry-run, then --write)", async () => {
-  const { runExport, runImport } = await import("../../src/cli/cmd/providers-auth")
+  const { runExport, runImport } = await import("../../src/cli/cmd/providers/auth")
   await Auth.set("bedrock", {
     type: "credential_source",
     source: { kind: "aws_profile", profile: "dev", region: "us-east-1" },

@@ -85,7 +85,7 @@ const DEFERRED_STARTUP_SRCS = [
   path.join(TUI_ROOT, "component/prompt/stash.tsx"),
   path.join(TUI_ROOT, "context/theme.tsx"),
 ]
-const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/doctor-preload.ts")
+const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/doctor/preload.ts")
 const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/debug/explain-impl.ts")
 const BUILD_NODE_TUI_SRC = path.join(PACKAGE_ROOT, "script/build-node-tui.ts")
 const TUI_STARTUP_SMOKE_SRC = path.join(PACKAGE_ROOT, "script/tui-startup-smoke.ts")

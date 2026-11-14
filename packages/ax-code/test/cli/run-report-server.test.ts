@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest"
 import { Server } from "../../src/server/server"
-import { RunReportServer } from "../../src/cli/cmd/run-report-server"
+import { RunReportServer } from "../../src/cli/cmd/run/report-server"
 
 afterEach(() => {
   RunReportServer.clear()

@@ -1,4 +1,4 @@
-import { isRunEventStreamFormat } from "./run-format"
+import { isRunEventStreamFormat } from "./format"
 
 /** Yargs usage-failure message prefixes the shared CLI failure handler recognizes. */
 const CLI_USAGE_FAILURE_PREFIXES: readonly string[] = [

@@ -1,4 +1,4 @@
-import { cmd } from "./cmd"
+import { cmd } from "../cmd"
 
 export const McpWebMcpCommand = cmd({
   command: "webmcp",

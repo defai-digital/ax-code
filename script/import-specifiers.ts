@@ -45,6 +45,8 @@ export function extractImportSpecifiers(source: string, file = "source.ts"): Imp
       add(node.moduleSpecifier)
     } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
       add(node.moduleReference.expression)
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      add(node.argument.literal)
     } else if (ts.isCallExpression(node)) {
       const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword
       const isRequire = ts.isIdentifier(node.expression) && node.expression.text === "require"

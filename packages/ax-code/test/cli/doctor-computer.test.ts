@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import type { ComputerUseProvider, ProbeReport } from "@ax-code/computer"
-import { getComputerUseCheck } from "../../src/cli/cmd/doctor-computer"
+import { getComputerUseCheck } from "../../src/cli/cmd/doctor/computer"
 
 // Computer.resolveBackend honors the AX_COMPUTER_COMMAND host env override and
 // discovers the ax-computer server on PATH; the command assertions below would

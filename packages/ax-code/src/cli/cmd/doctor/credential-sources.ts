@@ -10,11 +10,11 @@
 // Everything is injectable: the doctor row never shells out during tests, and
 // the production runner is a 3 s bounded `Process.run`.
 
-import { Config } from "../../config/config"
-import { Instance } from "../../project/instance"
-import { Process } from "../../util/process"
-import type { DoctorCheck } from "./doctor-health"
-import { Auth } from "../../auth"
+import { Config } from "../../../config/config"
+import { Instance } from "../../../project/instance"
+import { Process } from "../../../util/process"
+import type { DoctorCheck } from "./health"
+import { Auth } from "../../../auth"
 
 export type CredentialSourcesDeps = {
   /** Read all auth entries. Injected so tests can pass a literal record. */

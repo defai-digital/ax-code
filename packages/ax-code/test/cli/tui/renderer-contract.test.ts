@@ -12,7 +12,7 @@ const TUI_RENDERER_RE =
   /(?:from\s+["'](?:ax-tui(?:\/|["'])|@opentui\/|opentui-spinner)|import\s+["'](?:ax-tui(?:\/|["'])|@opentui\/|opentui-spinner))/
 const SPINNER_SOLID_RE = /(?:from\s+["']ax-tui\/spinner\/solid["']|import\s+["']ax-tui\/spinner\/solid["'])/
 const TUI_ALLOWED_OUTSIDE_TUI = new Set([
-  path.join(SRC_ROOT, "cli/cmd/doctor-preload.ts"),
+  path.join(SRC_ROOT, "cli/cmd/doctor/preload.ts"),
   // Entry point must register the AX Code TUI Solid transform plugin before
   // boot for the source-bundle distribution (ADR-002), where bunfig.toml
   // preloads aren't in scope. See comment in src/index.ts.

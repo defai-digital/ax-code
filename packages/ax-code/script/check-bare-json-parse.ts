@@ -46,7 +46,7 @@ export namespace JsonParseGuard {
   // staleAllowlistEntries() so the allowlist stays honest.
   export const ExistingViolations: ReadonlySet<string> = new Set([
     "src/cli/cmd/release/check.ts",
-    "src/cli/cmd/run-output.ts",
+    "src/cli/cmd/run/output.ts",
     "src/cli/cmd/workflow-impl.ts",
     "src/desktop/webui.ts",
     "src/mcp/discovery.ts",

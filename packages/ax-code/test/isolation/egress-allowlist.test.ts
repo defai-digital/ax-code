@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import { OsSandbox } from "../../src/isolation/os-sandbox"
 import { EgressProxy } from "../../src/isolation/egress-proxy"
 import { Isolation } from "../../src/isolation"
-import { getEgressCheck } from "../../src/cli/cmd/doctor-egress"
+import { getEgressCheck } from "../../src/cli/cmd/doctor/egress"
 
 describe("Seatbelt egress allowlist profile (ADR-232)", () => {
   test("permits outbound only to the proxy loopback port", () => {

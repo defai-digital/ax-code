@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { getTuiPreloadCheck } from "../../src/cli/cmd/doctor-preload"
+import { getTuiPreloadCheck } from "../../src/cli/cmd/doctor/preload"
 
 describe("doctor TUI preload checks", () => {
   test("treats bundled runtimes as self-contained", () => {

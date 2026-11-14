@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 import path from "path"
 import { writeFile } from "fs/promises"
-import { getDoctorConfiguration, getConfiguredCredentialProviders } from "../../src/cli/cmd/doctor-config"
+import { getDoctorConfiguration, getConfiguredCredentialProviders } from "../../src/cli/cmd/doctor/config"
 import { Config } from "../../src/config/config"
 import { Global } from "../../src/global"
 import { tmpdir } from "../fixture/fixture"

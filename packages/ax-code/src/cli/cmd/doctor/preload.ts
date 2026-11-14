@@ -1,7 +1,7 @@
 import { createRequire } from "module"
-import { Installation } from "../../installation"
-import { runtimeMode, type RuntimeMode } from "../../installation/runtime-mode"
-import { resolveSync } from "../../bun/node-compat"
+import { Installation } from "../../../installation"
+import { runtimeMode, type RuntimeMode } from "../../../installation/runtime-mode"
+import { resolveSync } from "../../../bun/node-compat"
 
 export type DoctorCheck = {
   name: string

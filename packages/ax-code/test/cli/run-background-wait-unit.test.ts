@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { waitForRunBackground, RunBackgroundWaitError } from "../../src/cli/cmd/run-background-wait"
+import { waitForRunBackground, RunBackgroundWaitError } from "../../src/cli/cmd/run/background-wait"
 
 test("ordinary and scheduled-only runs finish without waiting", async () => {
   let messageReads = 0

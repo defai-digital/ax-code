@@ -7,10 +7,10 @@ import {
   parseSqliteJournalOverride,
   resolveSqliteJournalMode,
   type SqliteJournalMode,
-} from "../../storage/policy"
-import { isNetworkFilesystem } from "../../storage/network-fs"
-import { isCorruptError } from "../../storage/corrupt"
-import { listDatabaseBackups } from "../../storage/backup"
+} from "../../../storage/policy"
+import { isNetworkFilesystem } from "../../../storage/network-fs"
+import { isCorruptError } from "../../../storage/corrupt"
+import { listDatabaseBackups } from "../../../storage/backup"
 import { toErrorMessage } from "@/util/error-message"
 
 export type DoctorCheck = {

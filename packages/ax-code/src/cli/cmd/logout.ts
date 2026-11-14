@@ -1,1 +1,1 @@
-export { ProvidersLogoutCommand as LogoutCommand } from "./providers-impl"
+export { ProvidersLogoutCommand as LogoutCommand } from "./providers/command"

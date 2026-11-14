@@ -1,6 +1,6 @@
 // Shared tool-output shaping helpers used by both the terminal TUI
 // (src/cli/tui/routes/session) and the non-interactive `ax-code run`
-// renderer (src/cli/cmd/run.ts). Keep this module dependency-free so the
+// renderer (src/cli/cmd/run/command.ts). Keep this module dependency-free so the
 // run path does not pull TUI-only imports.
 
 // Parse a unified-diff string and return hunk/added/removed counts.

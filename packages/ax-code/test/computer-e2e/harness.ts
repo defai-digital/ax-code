@@ -107,7 +107,7 @@ export type SpawnFn = (
 /**
  * Inline config (AX_CODE_CONFIG_CONTENT) for a benchmark run: computer tools
  * enabled, RISK-class computer permission pre-allowed (headless `run`
- * auto-rejects every ask — see src/cli/cmd/run.ts), and the tool-only stall
+ * auto-rejects every ask — see src/cli/cmd/run/command.ts), and the tool-only stall
  * breaker raised so a long observe→act streak is not cut short at the default
  * 35 turns.
  */

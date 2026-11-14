@@ -11,12 +11,12 @@
 // 0 without writing. Existing connections are never overwritten; secret
 // placeholders cannot be re-created (the user must re-login instead).
 
-import { Auth } from "../../auth"
+import { Auth } from "../../../auth"
 import { Filesystem } from "@/util/filesystem"
 import path from "path"
-import { cmd } from "./cmd"
+import { cmd } from "../cmd"
 import * as prompts from "@clack/prompts"
-import { UI } from "../ui"
+import { UI } from "../../ui"
 
 function defaultExportPath() {
   return path.join(process.cwd(), "ax-code-auth-export.json")

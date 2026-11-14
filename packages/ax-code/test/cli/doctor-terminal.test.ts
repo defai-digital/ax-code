@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { runTerminalDoctorChecks, readTmuxOption } from "../../src/cli/cmd/doctor-terminal"
+import { runTerminalDoctorChecks, readTmuxOption } from "../../src/cli/cmd/doctor/terminal"
 import { executeTerminalDoctor } from "../../src/cli/cmd/doctor"
 
 function tmuxOptions(values: Record<string, string | undefined>) {

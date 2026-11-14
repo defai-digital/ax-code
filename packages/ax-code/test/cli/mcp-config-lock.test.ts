@@ -3,7 +3,7 @@ import path from "path"
 import { readFile } from "node:fs/promises"
 
 test("MCP config writes use process and cross-process locks", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/mcp-impl.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/mcp/command.ts"), "utf-8")
   const start = src.indexOf("async function addMcpToConfig")
   const end = src.indexOf("export const McpAddCommand", start)
   expect(start).toBeGreaterThan(-1)
