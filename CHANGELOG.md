@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.29] - 2026-11-15
+
+### Changed
+
+- Publish the paired SDK 2.6.83 maintenance release.
+
+### Fixed
+
+- Preserve text and JSON diagnostics from running processes when pruning older logs.
+- Retain ownership markers and diagnostics when a temporary filesystem error prevents reading the owner.
+
 ## [7.30.28] - 2026-11-14
 
 ### Added
