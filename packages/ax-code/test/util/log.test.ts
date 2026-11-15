@@ -95,6 +95,22 @@ describe("Log.prune", () => {
     expect(await fs.readdir(tmp.path)).toEqual(["2026-04-22T015405-000-main-new.log"])
   })
 
+  test("preserves logs when their ownership marker cannot be read", async () => {
+    await using tmp = await tmpdir()
+    const log = path.join(tmp.path, "2026-04-22T015403-649-main-live.log")
+    const marker = Log.ownerFile(log)
+    await fs.writeFile(log, "live diagnostics")
+    await fs.writeFile(log.replace(/\.log$/, ".json.log"), "{}")
+    await fs.writeFile(marker, `${process.pid}\n`)
+    const readFile = vi.spyOn(fs, "readFile").mockRejectedValueOnce(new Error("temporarily unavailable"))
+    try {
+      expect(await Log.prune(tmp.path, { keep: 0 })).toEqual({ removed: 0, kept: 2 })
+      expect(await fs.readdir(tmp.path)).toContain(path.basename(marker))
+    } finally {
+      readFile.mockRestore()
+    }
+  })
+
   test("treats json.log files as managed companions of stamped logs", () => {
     expect(Log.isManagedLogName("2026-04-22T015403-649-main-run1.log")).toBe(true)
     expect(Log.isManagedLogName("2026-04-22T015403-649-main-run1.json.log")).toBe(true)

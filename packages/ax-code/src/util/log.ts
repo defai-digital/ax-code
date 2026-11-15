@@ -379,7 +379,16 @@ export namespace Log {
     for (const marker of markers) {
       const logFile = marker.slice(0, -LOG_OWNER_SUFFIX.length)
       if (!isStampedLogName(path.basename(logFile))) continue
-      const pid = Number((await fs.readFile(marker, "utf8").catch(() => "")).trim())
+      let owner: string
+      try {
+        owner = await fs.readFile(marker, "utf8")
+      } catch {
+        // An unreadable marker does not prove that its owner has exited.
+        // Retain both diagnostics and marker so a later prune can retry.
+        active.add(logFile)
+        continue
+      }
+      const pid = Number(owner.trim())
       if (Number.isSafeInteger(pid) && pid > 0 && isAlive(pid)) {
         active.add(logFile)
         continue
