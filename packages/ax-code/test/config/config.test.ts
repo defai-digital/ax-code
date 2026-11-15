@@ -73,6 +73,28 @@ test("loads config with defaults when no files exist", async () => {
   })
 })
 
+test("does not load project config from ancestors outside the worktree", async () => {
+  await using outside = await tmpdir()
+  await using worktree = await tmpdir()
+  const directory = path.join(outside.path, "nested")
+  await fs.mkdir(directory)
+  await writeConfig(outside.path, { username: "outside" })
+
+  expect(await ConfigPaths.projectFiles("ax-code", directory, worktree.path)).toEqual([])
+})
+
+test("stops project config discovery at a worktree path with a trailing separator", async () => {
+  await using parent = await tmpdir()
+  const worktree = path.join(parent.path, "repo")
+  await fs.mkdir(worktree)
+  await writeConfig(parent.path, { username: "outside" })
+  await writeConfig(worktree, { username: "inside" })
+
+  expect(await ConfigPaths.projectFiles("ax-code", `${worktree}${path.sep}`, worktree)).toEqual([
+    path.join(worktree, "ax-code.json"),
+  ])
+})
+
 test("isolation schema preserves omitted fields for layered config", () => {
   expect(Config.Info.parse({ isolation: {} }).isolation).toEqual({})
   expect(Config.Info.parse({ isolation: { protected: ["secrets"] } }).isolation).toEqual({

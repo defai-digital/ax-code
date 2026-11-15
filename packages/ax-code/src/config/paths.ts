@@ -14,16 +14,18 @@ import { Log } from "@/util/log"
 export namespace ConfigPaths {
   const log = Log.create({ service: "config.paths" })
   export async function projectFiles(name: string, directory: string, worktree: string) {
+    const root = path.resolve(worktree)
+    let current = path.resolve(directory)
+    if (!Filesystem.contains(root, current)) return []
     // Walk the directory chain once (closest to farthest), then emit in
     // farthest-to-closest order so a closer directory's config always
     // merges after (and overrides) a farther one. Within a single
     // directory, `.json` is emitted before `.jsonc` so `.jsonc` still
     // wins when both exist in the same directory.
     const dirs: string[] = []
-    let current = directory
     while (true) {
       dirs.push(current)
-      if (worktree === current) break
+      if (root === current) break
       const parent = path.dirname(current)
       if (parent === current) break
       current = parent
