@@ -66,6 +66,35 @@ describe("Log.prune", () => {
     expect(remaining).toEqual([names[4], names[3]])
   })
 
+  test("keeps the logs of a running process beyond the retention count", async () => {
+    await using tmp = await tmpdir()
+    const live = "2026-04-22T015403-649-main-live"
+    const names = [1, 2, 3].map((n) => `2026-04-22T01540${n + 3}-000-main-run${n}.log`)
+    await fs.writeFile(path.join(tmp.path, `${live}.log`), "")
+    await fs.writeFile(path.join(tmp.path, `${live}.json.log`), "{}")
+    await fs.writeFile(Log.ownerFile(path.join(tmp.path, `${live}.log`)), "4242\n")
+    for (const name of names) await fs.writeFile(path.join(tmp.path, name), "run")
+
+    const result = await Log.prune(tmp.path, { keep: 2, isAlive: (pid) => pid === 4242 })
+
+    expect(result).toEqual({ removed: 1, kept: 4 })
+    expect((await fs.readdir(tmp.path)).sort()).toEqual(
+      [`${live}.json.log`, `${live}.log`, `${live}.log.pid`, names[1], names[2]].sort(),
+    )
+  })
+
+  test("drops the marker of a process that is gone and prunes its log normally", async () => {
+    await using tmp = await tmpdir()
+    const stale = "2026-04-22T015403-649-main-stale"
+    await fs.writeFile(path.join(tmp.path, `${stale}.log`), "old")
+    await fs.writeFile(Log.ownerFile(path.join(tmp.path, `${stale}.log`)), "4242\n")
+    await fs.writeFile(path.join(tmp.path, "2026-04-22T015405-000-main-new.log"), "new")
+    await fs.writeFile(Log.ownerFile(path.join(tmp.path, "2026-04-22T015405-000-main-new.log")), "not-a-pid")
+
+    expect(await Log.prune(tmp.path, { keep: 1, isAlive: () => false })).toEqual({ removed: 1, kept: 1 })
+    expect(await fs.readdir(tmp.path)).toEqual(["2026-04-22T015405-000-main-new.log"])
+  })
+
   test("treats json.log files as managed companions of stamped logs", () => {
     expect(Log.isManagedLogName("2026-04-22T015403-649-main-run1.log")).toBe(true)
     expect(Log.isManagedLogName("2026-04-22T015403-649-main-run1.json.log")).toBe(true)
@@ -208,6 +237,31 @@ describe("Log.init", () => {
     expect(path.basename(file!)).toBe("default-fallback-test.log")
     expect(path.basename(path.dirname(file!))).toMatch(/^ax-code-log-/)
     expect(warnings.join("")).toContain("falling back to")
+  })
+})
+
+describe("Log.init ownership", () => {
+  test("marks a stamped log with this process and releases it on the next init", async () => {
+    await using tmp = await tmpdir()
+    const name = Log.stampedName("main", new Date("2026-04-22T01:54:03.649Z"), "owner")
+    await Log.init({ print: false, dir: tmp.path, name }, { cleanup: () => {} })
+    const marker = Log.ownerFile(path.join(tmp.path, `${name}.log`))
+    expect((await fs.readFile(marker, "utf8")).trim()).toBe(String(process.pid))
+
+    // Its own prune must not remove it, however many newer runs exist.
+    await fs.writeFile(path.join(tmp.path, "2026-04-22T015500-000-main-newer.log"), "newer")
+    await Log.prune(tmp.path, { keep: 0 })
+    expect(await fs.readdir(tmp.path)).toContain(`${name}.log`)
+
+    await Log.init({ print: true })
+    await expect(fs.stat(marker)).rejects.toThrow()
+  })
+
+  test("does not mark an unmanaged log name", async () => {
+    await using tmp = await tmpdir()
+    await Log.init({ print: false, dir: tmp.path, name: "dev-owner-test" }, { cleanup: () => {} })
+    expect(await fs.readdir(tmp.path)).not.toContain("dev-owner-test.log.pid")
+    await Log.init({ print: true })
   })
 })
 

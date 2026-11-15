@@ -1,7 +1,7 @@
 import path from "path"
 import os from "os"
 import fs from "fs/promises"
-import { createWriteStream } from "fs"
+import { createWriteStream, unlinkSync } from "fs"
 import pino from "pino"
 import { Global } from "../global"
 import { Env } from "./env"
@@ -210,6 +210,13 @@ export namespace Log {
           ioTimeoutMs,
           `log file open timed out after ${ioTimeoutMs}ms`,
         )
+        // Claim before pruning starts, so another process that prunes this
+        // directory never sees this run's log without its owner.
+        if (isStampedLogName(options.filename)) {
+          await withTimeoutFn(claimLog(next), ioTimeoutMs, `log owner init timed out after ${ioTimeoutMs}ms`).catch(
+            () => undefined,
+          )
+        }
         void Promise.resolve(cleanupDir(dir)).catch(() => {})
         if (path.resolve(dir) !== path.resolve(options.dir)) {
           return {
@@ -240,6 +247,7 @@ export namespace Log {
     if (options.level) level = options.level
     const pinoLevel = level === "DEBUG" ? "debug" : level === "INFO" ? "info" : level === "WARN" ? "warn" : "error"
     await closeCurrentStream()
+    releaseLog()
     if (options.print) {
       // Print mode: stderr only, no Pino (avoid JSON/text interleaving)
       logpath = ""
@@ -319,6 +327,68 @@ export namespace Log {
 
   export const KEEP_STAMPED_LOGS = 20
 
+  /**
+   * A running process marks its stamped log with `<name>.log.pid`. Retention
+   * counts runs, not age, so twenty short `run` invocations used to delete
+   * the log of a TUI that was still writing to it: the process kept an
+   * unlinked file and its diagnostics were lost. Pruning skips a log whose
+   * owner is alive.
+   */
+  const LOG_OWNER_SUFFIX = ".pid"
+  let ownedLog: string | undefined
+  let releaseOnExit = false
+
+  export function ownerFile(logFile: string): string {
+    return `${logFile}${LOG_OWNER_SUFFIX}`
+  }
+
+  async function claimLog(logFile: string): Promise<void> {
+    await fs.writeFile(ownerFile(logFile), `${process.pid}\n`)
+    ownedLog = logFile
+    if (releaseOnExit) return
+    releaseOnExit = true
+    process.once("exit", releaseLog)
+  }
+
+  function releaseLog(): void {
+    if (!ownedLog) return
+    const file = ownerFile(ownedLog)
+    ownedLog = undefined
+    try {
+      unlinkSync(file)
+    } catch {
+      // Already gone, or the directory is unwritable. A marker left behind is
+      // dropped by the next prune once this pid is no longer running.
+    }
+  }
+
+  function processAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch (error) {
+      // EPERM: the process exists but belongs to another user.
+      return (error as NodeJS.ErrnoException).code === "EPERM"
+    }
+  }
+
+  /** Text-log paths owned by a running process. Drops markers whose owner is gone. */
+  async function activeLogs(dir: string, isAlive: (pid: number) => boolean): Promise<Set<string>> {
+    const active = new Set<string>()
+    const markers = await Glob.scan(`*.log${LOG_OWNER_SUFFIX}`, { cwd: dir, absolute: true, include: "file" })
+    for (const marker of markers) {
+      const logFile = marker.slice(0, -LOG_OWNER_SUFFIX.length)
+      if (!isStampedLogName(path.basename(logFile))) continue
+      const pid = Number((await fs.readFile(marker, "utf8").catch(() => "")).trim())
+      if (Number.isSafeInteger(pid) && pid > 0 && isAlive(pid)) {
+        active.add(logFile)
+        continue
+      }
+      await fs.unlink(marker).catch(() => undefined)
+    }
+    return active
+  }
+
   export function isManagedLogName(name: string): boolean {
     if (name.endsWith(".json.log")) {
       return isStampedLogName(`${name.slice(0, -".json.log".length)}.log`)
@@ -328,7 +398,7 @@ export namespace Log {
 
   export async function prune(
     dir: string,
-    options: { keep?: number } = {},
+    options: { keep?: number; isAlive?: (pid: number) => boolean } = {},
   ): Promise<{ removed: number; kept: number }> {
     const keep = options.keep ?? KEEP_STAMPED_LOGS
     if (!Number.isSafeInteger(keep) || keep < 0) throw new RangeError("Log retention must be a non-negative integer")
@@ -347,12 +417,16 @@ export namespace Log {
     // Rank runs by either representation: an empty text log may already have
     // been pruned while its JSON diagnostics still belong in the retention set.
     const logs = [...new Set(files.map(companionPath))].sort()
-    const keepLogs = new Set(keep === 0 ? [] : logs.slice(-keep))
+    // Logs of running processes are kept on top of the retention count, so a
+    // long-lived session neither loses its log nor crowds out finished runs.
+    const active = await activeLogs(dir, options.isAlive ?? processAlive)
+    const keepLogs = new Set(keep === 0 ? [] : logs.filter((log) => !active.has(log)).slice(-keep))
     const newest = logs[logs.length - 1]
     let removed = 0
 
     for (const file of files) {
       const companion = companionPath(file)
+      if (active.has(companion)) continue
       const retained = keepLogs.has(companion)
       let empty = false
       try {
