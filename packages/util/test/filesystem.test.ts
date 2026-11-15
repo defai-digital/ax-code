@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process"
 import * as fs from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, sep } from "node:path"
 import { Readable } from "node:stream"
 import { describe, expect, test } from "vitest"
 import { Filesystem } from "../src/filesystem"
@@ -104,5 +104,36 @@ describe("write without followSymlink", () => {
     } finally {
       await fs.rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe("bounded upward searches", () => {
+  async function search(method: "findUp" | "up" | "globUp", start: string, stop: string): Promise<string[]> {
+    if (method === "findUp") return Filesystem.findUp("target.txt", start, stop)
+    if (method === "up") return Array.fromAsync(Filesystem.up({ targets: ["target.txt"], start, stop }))
+    return Filesystem.globUp("target.txt", start, stop)
+  }
+
+  test.each(["findUp", "up", "globUp"] as const)("%s stops at a normalized stop path", async (method) => {
+    await withDirectory(async (directory) => {
+      const root = join(directory, "repo")
+      await fs.mkdir(root)
+      await fs.writeFile(join(directory, "target.txt"), "outside")
+      await fs.writeFile(join(root, "target.txt"), "inside")
+
+      expect(await search(method, `${root}${sep}`, root)).toEqual([join(root, "target.txt")])
+    })
+  })
+
+  test.each(["findUp", "up", "globUp"] as const)("%s does not search outside the stop boundary", async (method) => {
+    await withDirectory(async (directory) => {
+      const root = join(directory, "repo")
+      const start = join(directory, "elsewhere")
+      await fs.mkdir(root)
+      await fs.mkdir(start)
+      await fs.writeFile(join(start, "target.txt"), "outside")
+
+      expect(await search(method, start, root)).toEqual([])
+    })
   })
 })

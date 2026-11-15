@@ -309,12 +309,14 @@ export namespace Filesystem {
   }
 
   export async function findUp(target: string, start: string, stop?: string) {
-    let current = start
+    let current = pathResolve(start)
+    const boundary = stop === undefined ? undefined : pathResolve(stop)
+    if (boundary !== undefined && !contains(boundary, current)) return []
     const result = []
     while (true) {
       const search = join(current, target)
       if (await exists(search)) result.push(search)
-      if (stop === current) break
+      if (boundary === current) break
       const parent = dirname(current)
       if (parent === current) break
       current = parent
@@ -324,13 +326,15 @@ export namespace Filesystem {
 
   export async function* up(options: { targets: string[]; start: string; stop?: string }) {
     const { targets, start, stop } = options
-    let current = start
+    let current = pathResolve(start)
+    const boundary = stop === undefined ? undefined : pathResolve(stop)
+    if (boundary !== undefined && !contains(boundary, current)) return
     while (true) {
       for (const target of targets) {
         const search = join(current, target)
         if (await exists(search)) yield search
       }
-      if (stop === current) break
+      if (boundary === current) break
       const parent = dirname(current)
       if (parent === current) break
       current = parent
@@ -338,7 +342,9 @@ export namespace Filesystem {
   }
 
   export async function globUp(pattern: string, start: string, stop?: string) {
-    let current = start
+    let current = pathResolve(start)
+    const boundary = stop === undefined ? undefined : pathResolve(stop)
+    if (boundary !== undefined && !contains(boundary, current)) return []
     const result = []
     while (true) {
       const matches = await Glob.scan(pattern, {
@@ -348,7 +354,7 @@ export namespace Filesystem {
         dot: true,
       })
       result.push(...matches)
-      if (stop === current) break
+      if (boundary === current) break
       const parent = dirname(current)
       if (parent === current) break
       current = parent
