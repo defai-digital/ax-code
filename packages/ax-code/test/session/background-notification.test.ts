@@ -97,6 +97,58 @@ describe("BackgroundNotification", () => {
     expect(BackgroundNotification.drainForModelStep("ses_bn_lines")).toBeUndefined()
   })
 
+  test("monitor lines enforce the cumulative byte cap and count dropped lines", () => {
+    const sessionID = "ses_bn_byte_cap"
+    for (const line of ["a".repeat(1500), "b".repeat(1500)]) {
+      BackgroundNotification.recordMonitorLine({
+        sessionID,
+        monitorID: "bash_bytes",
+        description: "watch logs",
+        line,
+      })
+    }
+
+    const block = BackgroundNotification.drainForModelStep(sessionID)
+    expect(block).toContain("a".repeat(1500))
+    expect(block).not.toContain("b".repeat(1500))
+    expect(block).toContain("1 further line(s) dropped from this batch.")
+    expect(block).toContain("Batch truncated at the notification size cap.")
+  })
+
+  test("an oversized first monitor line does not consume the next line's budget", () => {
+    const sessionID = "ses_bn_oversized"
+    for (const line of ["x".repeat(2049), "still visible"]) {
+      BackgroundNotification.recordMonitorLine({
+        sessionID,
+        monitorID: "bash_oversized",
+        description: "watch logs",
+        line,
+      })
+    }
+
+    const block = BackgroundNotification.drainForModelStep(sessionID)
+    expect(block).not.toContain("x".repeat(2049))
+    expect(block).toContain("still visible")
+    expect(block).toContain("1 further line(s) dropped from this batch.")
+  })
+
+  test("an exactly full monitor batch is not marked truncated before dropping output", () => {
+    const sessionID = "ses_bn_exact_cap"
+    for (let i = 1; i <= 20; i++) {
+      BackgroundNotification.recordMonitorLine({
+        sessionID,
+        monitorID: "bash_exact",
+        description: "watch logs",
+        line: `line-${i}`,
+      })
+    }
+
+    const block = BackgroundNotification.drainForModelStep(sessionID)
+    expect(block).toContain("line-20")
+    expect(block).not.toContain("further line(s) dropped")
+    expect(block).not.toContain("Batch truncated at the notification size cap.")
+  })
+
   test("monitor exit is recorded and delivered", () => {
     BackgroundNotification.recordMonitorExit({
       sessionID: "ses_bn_mexit",

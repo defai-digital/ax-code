@@ -116,34 +116,28 @@ export namespace BackgroundNotification {
       (record): record is MonitorLinesRecord => record.kind === "monitor_lines" && record.monitorID === input.monitorID,
     )
     if (existing) {
-      if (existing.lines.length >= MAX_LINES_PER_MONITOR_RECORD || existing.bytes >= MAX_MONITOR_RECORD_BYTES) {
-        existing.droppedLines += 1
-        existing.truncated = true
-        return
-      }
       const bytes = Buffer.byteLength(input.line, "utf8")
-      if (bytes > MAX_MONITOR_RECORD_BYTES) {
+      if (existing.lines.length >= MAX_LINES_PER_MONITOR_RECORD || existing.bytes + bytes > MAX_MONITOR_RECORD_BYTES) {
+        existing.droppedLines += 1
         existing.truncated = true
         return
       }
       existing.lines.push(input.line)
       existing.bytes += bytes
-      if (existing.lines.length >= MAX_LINES_PER_MONITOR_RECORD || existing.bytes >= MAX_MONITOR_RECORD_BYTES) {
-        existing.truncated = true
-      }
       return
     }
     const bytes = Buffer.byteLength(input.line, "utf8")
+    const accepted = bytes <= MAX_MONITOR_RECORD_BYTES
     enqueue({
       kind: "monitor_lines",
       time: Date.now(),
       sessionID: input.sessionID,
       monitorID: input.monitorID,
       description: input.description,
-      lines: bytes > MAX_MONITOR_RECORD_BYTES ? [] : [input.line],
-      bytes: Math.min(bytes, MAX_MONITOR_RECORD_BYTES),
-      droppedLines: 0,
-      truncated: bytes > MAX_MONITOR_RECORD_BYTES,
+      lines: accepted ? [input.line] : [],
+      bytes: accepted ? bytes : 0,
+      droppedLines: accepted ? 0 : 1,
+      truncated: !accepted,
     })
   }
 
