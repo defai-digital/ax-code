@@ -932,6 +932,8 @@ export namespace DesktopBrowser {
   }
   // Whole-token or suffix for `key`, so `keyboard` stays visible. Other secret words
   // match anywhere in the folded token (`accesstoken`, `clientsecret`, `pässword`).
+  // A trailing digit run is a version or index, not part of the word: without this,
+  // `apiKey2` printed while its lowercase spelling `apikey2` was masked.
   const SECRET_WORDS = ["password", "passwd", "secret", "token", "authorization", "cookie", "apikey"]
   function secretLikeKey(key: string) {
     const tokens = key
@@ -941,7 +943,9 @@ export namespace DesktopBrowser {
       .toLowerCase()
       .split(/[^a-z0-9]+/)
       .filter(Boolean)
-    return tokens.some((token) => token.endsWith("key") || SECRET_WORDS.some((word) => token.includes(word)))
+    return tokens.some(
+      (token) => token.replace(/[0-9]+$/, "").endsWith("key") || SECRET_WORDS.some((word) => token.includes(word)),
+    )
   }
   function redactSecrets(value: unknown, depth = 0): unknown {
     if (depth > 32) return null

@@ -32,7 +32,7 @@ const snapshot = (): DesktopBrowser.Snapshot => ({
 async function fixture(
   fn: (info: Awaited<ReturnType<typeof Session.create>>, state: DesktopBrowser.Snapshot) => Promise<void>,
 ) {
-  await using tmp = await tmpdir({ git: true })
+  await using tmp = await tmpdir({ git: true, config: { username: "fixture" } })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {

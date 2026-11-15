@@ -57,7 +57,9 @@ const shaped = (extra: Partial<DesktopBrowser.Snapshot> = {}): DesktopBrowser.Sn
 })
 
 async function withSession(fn: (session: Session.Info, state: DesktopBrowser.Snapshot) => Promise<void>) {
-  await using tmp = await tmpdir({ git: true })
+  // `username` keeps Config.loadState off os.userInfo(), which throws ENOENT in
+  // sandboxed runners without a passwd entry (same reason as the other fixtures).
+  await using tmp = await tmpdir({ git: true, config: { username: "fixture" } })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => fn(await Session.create({}), shaped()),
@@ -304,8 +306,8 @@ test("list templates an invoke and schema failures happen before permission", as
 })
 
 test("enrollment requires an existing session in the normalized enrolling directory", async () => {
-  await using home = await tmpdir({ git: true })
-  await using elsewhere = await tmpdir({ git: true })
+  await using home = await tmpdir({ git: true, config: { username: "fixture" } })
+  await using elsewhere = await tmpdir({ git: true, config: { username: "fixture" } })
   const link = path.join(elsewhere.path, "same-directory")
   await symlink(home.path, link)
   const state = shaped()
@@ -420,6 +422,30 @@ test("inputPreview marks truncation and redacts concatenated or diacritic secret
   expect(dropped).toBe(total - shown)
   expect(dropped).toBeGreaterThan(0)
   expect(preview).not.toContain("\uFFFD")
+})
+
+test("inputPreview masks a key suffix that carries a digit run", () => {
+  // `keyboard` stays visible, but a trailing digit run is a version or index, not part
+  // of the word: the same secret must mask whether it is spelled `apikey2` or `apiKey2`.
+  const preview = DesktopBrowser.inputPreview({
+    apiKey2: "api-secret",
+    sessionKey2: "session-secret",
+    key2: "bare-secret",
+    api_key10: "snake-secret",
+    keyboard: "visible-key",
+    keyboard2: "visible-key-too",
+    note: "visible-note",
+  })
+  for (const secret of ["api-secret", "session-secret", "bare-secret", "snake-secret"]) {
+    expect(preview).not.toContain(secret)
+  }
+  expect(preview).toContain("[redacted]")
+  expect(preview).toContain("visible-key")
+  expect(preview).toContain("visible-key-too")
+  expect(preview).toContain("visible-note")
+  // Both spellings of one secret agree, which is what the digit run used to break.
+  expect(DesktopBrowser.inputPreview({ apikey2: "v" })).toBe('{"apikey2":"[redacted]"}')
+  expect(DesktopBrowser.inputPreview({ apiKey2: "v" })).toBe('{"apiKey2":"[redacted]"}')
 })
 
 test("compiled validators are reused until the catalog updates", async () => {
