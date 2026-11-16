@@ -25,7 +25,7 @@ export namespace ConfigPaths {
     const dirs: string[] = []
     while (true) {
       dirs.push(current)
-      if (root === current) break
+      if (path.relative(root, current) === "") break
       const parent = path.dirname(current)
       if (parent === current) break
       current = parent

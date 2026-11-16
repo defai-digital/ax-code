@@ -316,7 +316,7 @@ export namespace Filesystem {
     while (true) {
       const search = join(current, target)
       if (await exists(search)) result.push(search)
-      if (boundary === current) break
+      if (boundary !== undefined && relative(boundary, current) === "") break
       const parent = dirname(current)
       if (parent === current) break
       current = parent
@@ -334,7 +334,7 @@ export namespace Filesystem {
         const search = join(current, target)
         if (await exists(search)) yield search
       }
-      if (boundary === current) break
+      if (boundary !== undefined && relative(boundary, current) === "") break
       const parent = dirname(current)
       if (parent === current) break
       current = parent
@@ -354,7 +354,7 @@ export namespace Filesystem {
         dot: true,
       })
       result.push(...matches)
-      if (boundary === current) break
+      if (boundary !== undefined && relative(boundary, current) === "") break
       const parent = dirname(current)
       if (parent === current) break
       current = parent

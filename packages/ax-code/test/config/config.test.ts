@@ -95,6 +95,19 @@ test("stops project config discovery at a worktree path with a trailing separato
   ])
 })
 
+test.skipIf(process.platform !== "win32")("stops config discovery at a differently cased worktree path", async () => {
+  await using parent = await tmpdir()
+  const worktree = path.join(parent.path, "repo")
+  const directory = path.join(worktree, "nested")
+  await fs.mkdir(directory, { recursive: true })
+  await writeConfig(parent.path, { username: "outside" })
+  await writeConfig(worktree, { username: "inside" })
+
+  expect(await ConfigPaths.projectFiles("ax-code", directory, worktree.toUpperCase())).toEqual([
+    path.join(worktree, "ax-code.json"),
+  ])
+})
+
 test("isolation schema preserves omitted fields for layered config", () => {
   expect(Config.Info.parse({ isolation: {} }).isolation).toEqual({})
   expect(Config.Info.parse({ isolation: { protected: ["secrets"] } }).isolation).toEqual({
