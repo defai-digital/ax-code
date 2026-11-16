@@ -717,6 +717,13 @@ export namespace SessionCompaction {
       // unpruned and growing until large requests time out upstream. Compaction
       // is a trusted control-plane writer, so run the persistence detached from
       // the (possibly retired) turn, matching background subagent delivery.
+      //
+      // The detached write is bounded: it only re-marks *historical completed
+      // tool parts* the selection walk already chose (fixed part IDs at or
+      // below the prune window). A newer turn appends its own parts and never
+      // rewrites these, so landing after the turn retires cannot clobber
+      // newer-turn data; a fork/rollback between snapshot and write compacts
+      // them in the branch they belong to.
       let succeeded = 0
       let failed = 0
       await SessionExecutionContext.detached(async () => {
