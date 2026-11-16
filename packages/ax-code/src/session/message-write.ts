@@ -1,5 +1,5 @@
-import { type Database, eq, sql } from "../storage/db"
-import type { MessageV2 } from "./message-v2"
+import { type Database, and, eq, sql } from "../storage/db"
+import { MessageV2 } from "./message-v2"
 import { MessageTable, PartTable } from "./session.sql"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
@@ -46,6 +46,48 @@ export namespace MessageWrite {
       .run()
     assertOwned(result, "message", id)
     return canonical
+  }
+
+  // The caller owns a write transaction: read current rows and mark them
+  // without recreating deleted parts or replaying stale snapshot content.
+  export function compactToolParts(
+    db: Database.TxOrDb,
+    parts: readonly MessageV2.ToolPart[],
+    timestamp: number,
+  ): MessageV2.ToolPart[] {
+    const updated: MessageV2.ToolPart[] = []
+    for (const part of parts) {
+      const scope = and(
+        eq(PartTable.id, part.id),
+        eq(PartTable.session_id, part.sessionID),
+        eq(PartTable.message_id, part.messageID),
+      )
+      const row = db
+        .select({ data: PartTable.data })
+        .from(PartTable)
+        .innerJoin(
+          MessageTable,
+          and(eq(MessageTable.id, PartTable.message_id), eq(MessageTable.session_id, PartTable.session_id)),
+        )
+        .where(scope)
+        .get()
+      if (!row) continue
+      const current = MessageV2.Part.parse({
+        ...row.data,
+        id: part.id,
+        sessionID: part.sessionID,
+        messageID: part.messageID,
+      })
+      if (current.type !== "tool" || current.state.status !== "completed" || current.state.time.compacted) continue
+      const compacted: MessageV2.ToolPart = {
+        ...current,
+        state: { ...current.state, time: { ...current.state.time, compacted: timestamp } },
+      }
+      const { id, sessionID, messageID, ...data } = compacted
+      db.update(PartTable).set({ data, time_updated: timestamp }).where(scope).run()
+      updated.push(compacted)
+    }
+    return updated
   }
 
   function partRow(part: MessageV2.Part, time: number, timeUpdated: number) {

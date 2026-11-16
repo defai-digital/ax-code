@@ -1,3 +1,6 @@
+import { SessionShard } from "../../src/session/shard"
+import { PartTable } from "../../src/session/session.sql"
+import { eq } from "../../src/storage/db"
 import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
@@ -649,6 +652,116 @@ describe("session.compaction.prune tool estimates", () => {
       },
     })
   })
+
+  test.each(["part", "message"] as const)(
+    "does not restore a removed %s from a stale prune snapshot",
+    async (removed) => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { session, targetPartID } = await createPrunableSession(tmp.path, {
+            input: { filePath: "large.txt" },
+            output: "x".repeat(260_000),
+          })
+          const messages = await Session.messages({ sessionID: session.id })
+          const part = findToolPart(messages, targetPartID)!
+          if (removed === "part") {
+            await Session.removePart({ sessionID: session.id, messageID: part.messageID, partID: part.id })
+          } else {
+            await Session.removeMessage({ sessionID: session.id, messageID: part.messageID })
+          }
+
+          await SessionCompaction.prune({ sessionID: session.id, messages })
+
+          expect(findToolPart(await Session.messages({ sessionID: session.id }), targetPartID) === undefined).toBe(true)
+          // Also inspect the part table: shards do not cascade orphan rows.
+          const store = SessionShard.storeFor(session.id)
+          expect(
+            store.use((db) => db.select().from(PartTable).where(eq(PartTable.id, targetPartID)).get()),
+          ).toBeUndefined()
+        },
+      })
+    },
+  )
+
+  test("preserves current tool data when pruning from an older snapshot", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { session, targetPartID } = await createPrunableSession(tmp.path, {
+          input: { filePath: "large.txt" },
+          output: "x".repeat(260_000),
+        })
+        const messages = await Session.messages({ sessionID: session.id })
+        const part = findToolPart(messages, targetPartID)!
+        if (part.state.status !== "completed") throw new Error("expected completed tool part")
+        await Session.updatePart({
+          ...part,
+          state: { ...part.state, output: "updated output", metadata: { updated: true } },
+        })
+
+        await SessionCompaction.prune({ sessionID: session.id, messages })
+
+        const stored = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)!
+        if (stored.state.status !== "completed") throw new Error("expected completed tool part")
+        expect(stored.state.output).toBe("updated output")
+        expect(stored.state.metadata).toEqual({ updated: true })
+        expect(stored.state.time.compacted).toBeTypeOf("number")
+      },
+    })
+  })
+
+  test.each(["already compacted", "no longer completed", "batch failure"])(
+    "handles a stale prune with %s",
+    async (scenario) => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { session, targetPartID } = await createPrunableSession(tmp.path, {
+            input: { filePath: "large.txt" },
+            output: "x".repeat(260_000),
+          })
+          const messages = await Session.messages({ sessionID: session.id })
+          const part = findToolPart(messages, targetPartID)!
+          if (part.state.status !== "completed") throw new Error("expected completed tool part")
+          if (scenario === "already compacted") {
+            await Session.updatePart({
+              ...part,
+              state: { ...part.state, time: { ...part.state.time, compacted: 123 } },
+            })
+          } else if (scenario === "no longer completed") {
+            await Session.updatePart({
+              ...part,
+              state: { status: "error", input: part.state.input, error: "interrupted", time: { start: 1, end: 2 } },
+            })
+          }
+          const spy =
+            scenario === "batch failure"
+              ? vi.spyOn(Session, "compactToolParts").mockRejectedValueOnce(new Error("injected batch failure"))
+              : undefined
+          try {
+            await SessionCompaction.prune({ sessionID: session.id, messages })
+            const stored = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)!
+            if (scenario === "no longer completed") {
+              expect(stored.state.status).toBe("error")
+            } else {
+              if (stored.state.status !== "completed") throw new Error("expected completed tool part")
+              if (scenario === "already compacted") expect(stored.state.time.compacted).toBe(123)
+              else {
+                expect(stored.state.time.compacted).toBeTypeOf("number")
+                expect(spy).toHaveBeenCalledTimes(2)
+              }
+            }
+          } finally {
+            spy?.mockRestore()
+          }
+        },
+      })
+    },
+  )
 
   test("counts attachment placeholders when pruning", async () => {
     await using tmp = await tmpdir({

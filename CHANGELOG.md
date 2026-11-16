@@ -10,6 +10,7 @@ changes belong to AX Coder.
 
 - Keep tool-output pruning working after a turn ends so long sessions actually shed context instead of growing until
   large requests time out upstream.
+- Preserve current tool data during delayed pruning and never restore removed transcript parts.
 
 ## [7.30.30] - 2026-11-16
 

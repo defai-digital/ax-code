@@ -685,57 +685,23 @@ export namespace SessionCompaction {
         if (selectedTokens > PRUNE_MINIMUM) break
       }
 
-      const compactedParts = selectedCandidates.flatMap(({ part, tier }) => {
-        if (part.state.status !== "completed") return []
-        return [
-          {
-            tier,
-            part: {
-              ...part,
-              state: {
-                ...part.state,
-                time: {
-                  ...(part.state.time ?? { start: timestamp, end: timestamp }),
-                  compacted: timestamp,
-                },
-              },
-            },
-          },
-        ]
-      })
-      // Write all pruned parts in a single transaction; per-part writes
-      // meant one DB round-trip per part, which dominated prune time on
-      // large sessions. If the batch fails (e.g. one corrupt part aborts
-      // the transaction), fall back to per-part writes with per-iteration
-      // try/catch so a single failing part doesn't abort the rest.
-      //
-      // Prune is fired without awaiting at the end of a turn
-      // (prompt-loop-result), so by the time these writes run the originating
-      // turn's execution context may already be marked inactive. The
-      // stale-write guard would then reject every write (`.force` only skips
-      // schema parsing, not `assertWritable`), silently leaving the context
-      // unpruned and growing until large requests time out upstream. Compaction
-      // is a trusted control-plane writer, so run the persistence detached from
-      // the (possibly retired) turn, matching background subagent delivery.
-      //
-      // The detached write is bounded: it only re-marks *historical completed
-      // tool parts* the selection walk already chose (fixed part IDs at or
-      // below the prune window). A newer turn appends its own parts and never
-      // rewrites these, so landing after the turn retires cannot clobber
-      // newer-turn data; a fork/rollback between snapshot and write compacts
-      // them in the branch they belong to.
+      // Pruning can outlive its originating turn. Detach only the trusted
+      // persistence step; stale tool callbacks remain fenced. Read and mark
+      // current rows in one transaction so a delayed prune cannot restore
+      // deleted parts or overwrite newer data with its selection snapshot.
       let succeeded = 0
       let failed = 0
       await SessionExecutionContext.detached(async () => {
         try {
-          await Session.updateParts(compactedParts.map(({ part }) => part))
-          succeeded = compactedParts.length
+          succeeded = await Session.compactToolParts(
+            selectedCandidates.map(({ part }) => part),
+            timestamp,
+          )
         } catch (batchError) {
           log.warn("batch prune write failed, retrying per part", { err: batchError })
-          for (const { part, tier } of compactedParts) {
+          for (const { part, tier } of selectedCandidates) {
             try {
-              await Session.updatePart.force(part)
-              succeeded += 1
+              succeeded += await Session.compactToolParts([part], timestamp)
             } catch (e) {
               failed += 1
               log.warn("failed to compact part", { partID: part.id, tier, err: e })
@@ -743,7 +709,7 @@ export namespace SessionCompaction {
           }
         }
       })
-      log.info("pruned", { count: compactedParts.length, selectedTokens, succeeded, failed })
+      log.info("pruned", { count: selectedCandidates.length, selectedTokens, succeeded, failed })
     }
   }
 

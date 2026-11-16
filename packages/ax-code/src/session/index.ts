@@ -1468,8 +1468,7 @@ export namespace Session {
   }
 
   // Batch variant of updatePart: one transaction per chunk instead of one DB
-  // round-trip per part. Used by compaction pruning, which can touch hundreds
-  // of parts at once. Chunked so a single transaction never holds the write
+  // round-trip per part. Chunked so a single transaction never holds the write
   // lock for an unbounded number of rows — inserts are idempotent via
   // onConflictDoUpdate, so splitting the batch into separate commits is safe.
   export async function updateParts(parts: MessageV2.Part[]) {
@@ -1479,7 +1478,7 @@ export namespace Session {
     validatePartScope(parts, parts[0].sessionID)
     const time = Date.now()
     const PARTS_BATCH_SIZE = 500
-    // All parts in a batch belong to one session (compaction pruning).
+    // All parts in a batch belong to one session.
     const store = SessionShard.storeFor(parts[0].sessionID, { write: true })
     for (let i = 0; i < parts.length; i += PARTS_BATCH_SIZE) {
       const batch = parts.slice(i, i + PARTS_BATCH_SIZE)
@@ -1493,6 +1492,25 @@ export namespace Session {
       })
     }
     return parts
+  }
+
+  export async function compactToolParts(parts: MessageV2.ToolPart[], timestamp: number): Promise<number> {
+    SessionExecutionContext.assertWritable()
+    if (parts.length === 0) return 0
+    validatePartScope(parts, parts[0].sessionID)
+    const store = SessionShard.storeFor(parts[0].sessionID, { write: true })
+    const PARTS_BATCH_SIZE = 500
+    let count = 0
+    for (let i = 0; i < parts.length; i += PARTS_BATCH_SIZE) {
+      store.transaction((db) => {
+        const updated = MessageWrite.compactToolParts(db, parts.slice(i, i + PARTS_BATCH_SIZE), timestamp)
+        count += updated.length
+        store.effect(() => {
+          for (const part of updated) Bus.publishDetached(MessageV2.Event.PartUpdated, { part })
+        })
+      })
+    }
+    return count
   }
 
   export async function updateMessageWithParts(
