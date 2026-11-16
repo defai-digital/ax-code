@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.31] - 2026-11-16
+
+### Changed
+
+- Publish the paired SDK 2.6.85 maintenance release.
+
 ### Fixed
 
 - Keep tool-output pruning working after a turn ends so long sessions actually shed context instead of growing until
