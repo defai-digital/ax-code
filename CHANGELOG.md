@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.30] - 2026-11-16
+
+### Changed
+
+- Publish the paired SDK 2.6.84 maintenance release.
+
+### Fixed
+
+- Keep project configuration and upward searches inside their worktree boundary, including differently cased Windows paths.
+- Enforce cumulative UTF-8 byte limits on monitor notifications and report dropped lines accurately.
+- Mask indexed secret keys such as `apiKey2` and `sessionKey2` in WebMCP approval previews.
+
 ## [7.30.29] - 2026-11-15
 
 ### Changed
