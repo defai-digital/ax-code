@@ -23,6 +23,7 @@ import { ModelID, ProviderID } from "@/provider/schema"
 import { ObservedWindow } from "@/provider/observed-window"
 import { TokenLedger } from "@/provider/token-ledger"
 import { ContextTier } from "./context-tier"
+import { SessionExecutionContext } from "./execution-context"
 import { CompactionFallback } from "./compaction-fallback"
 import { isLocalProvider } from "./prompt/prompt-provider-fallback"
 import { sessionAssistantPath, zeroTokenUsage } from "./prompt/prompt-message-builders"
@@ -707,23 +708,34 @@ export namespace SessionCompaction {
       // large sessions. If the batch fails (e.g. one corrupt part aborts
       // the transaction), fall back to per-part writes with per-iteration
       // try/catch so a single failing part doesn't abort the rest.
+      //
+      // Prune is fired without awaiting at the end of a turn
+      // (prompt-loop-result), so by the time these writes run the originating
+      // turn's execution context may already be marked inactive. The
+      // stale-write guard would then reject every write (`.force` only skips
+      // schema parsing, not `assertWritable`), silently leaving the context
+      // unpruned and growing until large requests time out upstream. Compaction
+      // is a trusted control-plane writer, so run the persistence detached from
+      // the (possibly retired) turn, matching background subagent delivery.
       let succeeded = 0
       let failed = 0
-      try {
-        await Session.updateParts(compactedParts.map(({ part }) => part))
-        succeeded = compactedParts.length
-      } catch (batchError) {
-        log.warn("batch prune write failed, retrying per part", { err: batchError })
-        for (const { part, tier } of compactedParts) {
-          try {
-            await Session.updatePart.force(part)
-            succeeded += 1
-          } catch (e) {
-            failed += 1
-            log.warn("failed to compact part", { partID: part.id, tier, err: e })
+      await SessionExecutionContext.detached(async () => {
+        try {
+          await Session.updateParts(compactedParts.map(({ part }) => part))
+          succeeded = compactedParts.length
+        } catch (batchError) {
+          log.warn("batch prune write failed, retrying per part", { err: batchError })
+          for (const { part, tier } of compactedParts) {
+            try {
+              await Session.updatePart.force(part)
+              succeeded += 1
+            } catch (e) {
+              failed += 1
+              log.warn("failed to compact part", { partID: part.id, tier, err: e })
+            }
           }
         }
-      }
+      })
       log.info("pruned", { count: compactedParts.length, selectedTokens, succeeded, failed })
     }
   }

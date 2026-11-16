@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
 import { SessionCompaction } from "../../src/session/compaction"
+import { SessionExecutionContext } from "../../src/session/execution-context"
 import { effectiveTokenTotal } from "../../src/session/compaction-budget"
 import { Token } from "../../src/util/token"
 import { Instance } from "../../src/project/instance"
@@ -596,6 +597,49 @@ describe("session.compaction.prune tool estimates", () => {
         await SessionCompaction.prune({
           sessionID: session.id,
           messages: await Session.messages({ sessionID: session.id }),
+        })
+
+        const part = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)
+        expect(part?.state.status).toBe("completed")
+        if (part?.state.status !== "completed") throw new Error("expected completed tool part")
+        expect(part.state.time.compacted).toBeTypeOf("number")
+      },
+    })
+  })
+
+  test("prunes even when the originating turn's execution context is already retired", async () => {
+    // The prune is fired without awaiting at the end of a turn, so its writes
+    // can land after the turn's execution context was marked inactive. Every
+    // write used to be rejected by the stale-write guard (`.force` only skips
+    // schema parsing), leaving long sessions unpruned until large requests time
+    // out upstream. The persistence must run detached from the retired turn.
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { session, targetPartID } = await createPrunableSession(tmp.path, {
+          input: { filePath: "README.md", pattern: "x".repeat(260_000) },
+          output: "same",
+        })
+
+        // A retired turn: `active: false` makes assertWritable throw for any
+        // ctx-bound write, exactly as happens after the prompt loop releases.
+        const retiredTurn: SessionExecutionContext.Turn = {
+          sessionID: session.id,
+          stamp: { version: 1, generation: crypto.randomUUID() },
+          active: false,
+        }
+        await SessionExecutionContext.provide(retiredTurn, async () => {
+          // Sanity: the guard is live in this scope.
+          expect(() => SessionExecutionContext.assertWritable()).toThrow()
+          await SessionCompaction.prune({
+            sessionID: session.id,
+            messages: await Session.messages({ sessionID: session.id }),
+          })
         })
 
         const part = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)

@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep tool-output pruning working after a turn ends so long sessions actually shed context instead of growing until
+  large requests time out upstream.
+
 ## [7.30.30] - 2026-11-16
 
 ### Changed
