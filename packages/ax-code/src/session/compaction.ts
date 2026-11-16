@@ -562,6 +562,7 @@ export namespace SessionCompaction {
 
   const PRUNE_PROTECTED_TOOLS = ["skill"]
   const TOOL_RESULT_WRAPPER_TOKENS = 16
+  const PRUNE_BATCH_SIZE = 500
 
   function stringifyForEstimate(value: unknown) {
     try {
@@ -611,6 +612,16 @@ export namespace SessionCompaction {
     if (config.compaction?.prune === false) return
     log.info("pruning")
     const msgs = input.messages ?? (await Session.messages({ sessionID: input.sessionID }))
+
+    // Reject a mismatched snapshot before either batch or fallback writes.
+    for (const message of msgs) {
+      if (
+        message.info.sessionID !== input.sessionID ||
+        message.parts.some((part) => part.sessionID !== input.sessionID || part.messageID !== message.info.id)
+      ) {
+        throw new Session.WriteScopeError({ message: "Prune snapshot must belong to its target session" })
+      }
+    }
 
     // Classify messages into tiers for priority-based pruning
     const classified = ContextTier.classify(msgs)
@@ -687,24 +698,28 @@ export namespace SessionCompaction {
 
       // Pruning can outlive its originating turn. Detach only the trusted
       // persistence step; stale tool callbacks remain fenced. Read and mark
-      // current rows in one transaction so a delayed prune cannot restore
+      // current rows in a transaction per batch so a delayed prune cannot restore
       // deleted parts or overwrite newer data with its selection snapshot.
       let succeeded = 0
       let failed = 0
       await SessionExecutionContext.detached(async () => {
-        try {
-          succeeded = await Session.compactToolParts(
-            selectedCandidates.map(({ part }) => part),
-            timestamp,
-          )
-        } catch (batchError) {
-          log.warn("batch prune write failed, retrying per part", { err: batchError })
-          for (const { part, tier } of selectedCandidates) {
-            try {
-              succeeded += await Session.compactToolParts([part], timestamp)
-            } catch (e) {
-              failed += 1
-              log.warn("failed to compact part", { partID: part.id, tier, err: e })
+        for (let offset = 0; offset < selectedCandidates.length; offset += PRUNE_BATCH_SIZE) {
+          const batch = selectedCandidates.slice(offset, offset + PRUNE_BATCH_SIZE)
+          try {
+            succeeded += await Session.compactToolParts(
+              input.sessionID,
+              batch.map(({ part }) => part),
+              timestamp,
+            )
+          } catch (batchError) {
+            log.warn("batch prune write failed, retrying per part", { err: batchError })
+            for (const { part, tier } of batch) {
+              try {
+                succeeded += await Session.compactToolParts(input.sessionID, [part], timestamp)
+              } catch (e) {
+                failed += 1
+                log.warn("failed to compact part", { partID: part.id, tier, err: e })
+              }
             }
           }
         }

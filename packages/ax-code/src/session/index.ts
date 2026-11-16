@@ -1494,23 +1494,23 @@ export namespace Session {
     return parts
   }
 
-  export async function compactToolParts(parts: MessageV2.ToolPart[], timestamp: number): Promise<number> {
+  // Pruning owns bounded batches; each call reads and marks one atomic batch.
+  export async function compactToolParts(
+    sessionID: SessionID,
+    parts: MessageV2.ToolPart[],
+    timestamp: number,
+  ): Promise<number> {
     SessionExecutionContext.assertWritable()
     if (parts.length === 0) return 0
-    validatePartScope(parts, parts[0].sessionID)
-    const store = SessionShard.storeFor(parts[0].sessionID, { write: true })
-    const PARTS_BATCH_SIZE = 500
-    let count = 0
-    for (let i = 0; i < parts.length; i += PARTS_BATCH_SIZE) {
-      store.transaction((db) => {
-        const updated = MessageWrite.compactToolParts(db, parts.slice(i, i + PARTS_BATCH_SIZE), timestamp)
-        count += updated.length
-        store.effect(() => {
-          for (const part of updated) Bus.publishDetached(MessageV2.Event.PartUpdated, { part })
-        })
+    validatePartScope(parts, sessionID)
+    const store = SessionShard.storeFor(sessionID, { write: true })
+    return store.transaction((db) => {
+      const updated = MessageWrite.compactToolParts(db, parts, timestamp)
+      store.effect(() => {
+        for (const part of updated) Bus.publishDetached(MessageV2.Event.PartUpdated, { part })
       })
-    }
-    return count
+      return updated.length
+    })
   }
 
   export async function updateMessageWithParts(

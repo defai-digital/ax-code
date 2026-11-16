@@ -84,7 +84,7 @@ export namespace MessageWrite {
         state: { ...current.state, time: { ...current.state.time, compacted: timestamp } },
       }
       const { id, sessionID, messageID, ...data } = compacted
-      db.update(PartTable).set({ data, time_updated: timestamp }).where(scope).run()
+      db.update(PartTable).set({ data, time_updated: Date.now() }).where(scope).run()
       updated.push(compacted)
     }
     return updated

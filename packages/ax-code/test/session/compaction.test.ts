@@ -763,6 +763,84 @@ describe("session.compaction.prune tool estimates", () => {
     },
   )
 
+  test("rejects a snapshot from another session before pruning any parts", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { session, targetPartID } = await createPrunableSession(tmp.path, {
+          input: {},
+          output: "x".repeat(260_000),
+        })
+        const target = await Session.create({})
+        const messages = await Session.messages({ sessionID: session.id })
+        await expect(SessionCompaction.prune({ sessionID: target.id, messages })).rejects.toBeInstanceOf(
+          Session.WriteScopeError,
+        )
+        const stored = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)!
+        if (stored.state.status !== "completed") throw new Error("expected completed tool part")
+        expect(stored.state.time.compacted).toBeUndefined()
+      },
+    })
+  })
+
+  test("stamps the write time separately from prune selection and rejects missing completion times", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { session, targetPartID } = await createPrunableSession(tmp.path, { input: {}, output: "synthetic" })
+        const part = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)!
+        if (part.state.status !== "completed") throw new Error("expected completed tool part")
+        expect(MessageV2.Part.safeParse({ ...part, state: { ...part.state, time: undefined } }).success).toBe(false)
+        const store = SessionShard.storeFor(session.id)
+        const before = store.use((db) => db.select().from(PartTable).where(eq(PartTable.id, part.id)).get())!
+        const writeStarted = Date.now()
+        expect(await Session.compactToolParts(session.id, [part], 1)).toBe(1)
+        const after = store.use((db) => db.select().from(PartTable).where(eq(PartTable.id, part.id)).get())!
+        expect(after.time_created).toBe(before.time_created)
+        expect(after.time_updated).toBeGreaterThanOrEqual(writeStarted)
+        const stored = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)!
+        if (stored.state.status !== "completed") throw new Error("expected completed tool part")
+        expect(stored.state.time.compacted).toBe(1)
+      },
+    })
+  })
+
+  test("retries only the failed pruning batch after earlier batches commit", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { session, targetPartID } = await createPrunableSession(tmp.path, { input: {}, output: "synthetic" })
+        const part = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)!
+        if (part.state.status !== "completed") throw new Error("expected completed tool part")
+        const state = { ...part.state, input: {}, output: "", title: "", metadata: {} }
+        // Small synthetic results force selection across multiple 500-row batches.
+        await Session.updateParts(Array.from({ length: 4000 }, () => ({ ...part, id: PartID.ascending(), state })))
+        await Session.removePart({ sessionID: session.id, messageID: part.messageID, partID: part.id })
+        const compact = Session.compactToolParts
+        const spy = vi
+          .spyOn(Session, "compactToolParts")
+          .mockImplementationOnce(compact)
+          .mockRejectedValueOnce(new Error("injected second batch failure"))
+        try {
+          await SessionCompaction.prune({ sessionID: session.id })
+          expect(spy.mock.calls[0][1]).toHaveLength(500)
+          expect(spy.mock.calls[1][1]).toHaveLength(500)
+          const committed = new Set(spy.mock.calls[0][1].map((entry) => entry.id))
+          expect(spy.mock.calls.length).toBeGreaterThan(2)
+          for (const [sessionID, parts] of spy.mock.calls.slice(2)) {
+            expect(sessionID).toBe(session.id)
+            expect(parts.some((entry) => committed.has(entry.id))).toBe(false)
+          }
+        } finally {
+          spy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("counts attachment placeholders when pruning", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
