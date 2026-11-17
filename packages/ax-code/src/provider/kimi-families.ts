@@ -1,4 +1,4 @@
-import { familyDisplayName, familyReleaseTime, familySortKey, latestFamilyModels } from "./family-shared"
+import { familyDisplayName, familyReleaseTime, latestFamilyModels } from "./family-shared"
 
 const FAMILY_ORDER = ["kimi-k3", "kimi-coding"] as const
 
@@ -22,10 +22,6 @@ export function kimiFamilyId(input: { id?: string; family?: string }): string | 
     return "kimi-coding"
   }
   return undefined
-}
-
-export function kimiFamilySortKey(family?: string): number {
-  return familySortKey(FAMILY_ORDER, family)
 }
 
 export function latestKimiFamilyModels<T extends KimiFamilySource>(models: Record<string, T>): T[] {

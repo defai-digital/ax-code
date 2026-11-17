@@ -1,4 +1,4 @@
-import { familyDisplayName, familyReleaseTime, familySortKey, latestFamilyModels } from "./family-shared"
+import { familyDisplayName, familyReleaseTime, latestFamilyModels } from "./family-shared"
 
 const FAMILY_ORDER = ["grok-4"] as const
 
@@ -25,10 +25,6 @@ export function grokFamilyId(input: { id?: string; family?: string }): string | 
   const family = input.family?.toLowerCase()
   if (family === "grok" || family === "grok-4") return "grok-4"
   return undefined
-}
-
-export function grokFamilySortKey(family?: string): number {
-  return familySortKey(FAMILY_ORDER, family)
 }
 
 export function grokDisplayName(name: string | undefined, fallback: string): string {

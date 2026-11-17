@@ -46,12 +46,10 @@ export function resolve(phases: TaskPhase[]): ResolutionResult {
   // Build adjacency list and in-degree map
   const adjacency = new Map<string, string[]>()
   const inDegree = new Map<string, number>()
-  const phaseMap = new Map<string, TaskPhase>()
 
   for (const phase of phases) {
     adjacency.set(phase.id, [])
     inDegree.set(phase.id, 0)
-    phaseMap.set(phase.id, phase)
   }
 
   for (const phase of phases) {
@@ -110,16 +108,6 @@ export function resolve(phases: TaskPhase[]): ResolutionResult {
     batches,
     criticalPath: criticalPath(phases),
   }
-}
-
-/**
- * Get phases that are ready to execute given completed phases
- */
-export function ready(phases: TaskPhase[], completed: Set<string>): TaskPhase[] {
-  return phases.filter((p) => {
-    if (p.status !== "pending") return false
-    return p.dependencies.every((dep) => completed.has(dep))
-  })
 }
 
 /**

@@ -1,4 +1,4 @@
-import { familyDisplayName, familyReleaseTime, familySortKey, latestFamilyModels } from "./family-shared"
+import { familyDisplayName, familyReleaseTime, latestFamilyModels } from "./family-shared"
 
 const FAMILY_ORDER = ["gpt-flagship", "gpt-mini", "gpt-codex-spark"] as const
 
@@ -20,10 +20,6 @@ export function codexFamilyId(input: { id?: string; family?: string }): string |
   if (/(?:^|-)(nano|pro|sol|luna|terra|chat)(?:-|$)/.test(segment)) return undefined
   if (segment.startsWith("gpt-")) return "gpt-flagship"
   return undefined
-}
-
-export function codexFamilySortKey(family?: string): number {
-  return familySortKey(FAMILY_ORDER, family)
 }
 
 export function codexDisplayName(name: string | undefined, fallback: string): string {

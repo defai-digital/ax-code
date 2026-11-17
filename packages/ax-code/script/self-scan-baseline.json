@@ -684,7 +684,7 @@
       ]
     },
     "lifecycle_scan": {
-      "count": 237,
+      "count": 236,
       "findings": [
         {
           "fingerprint": "a7c13622ba7e0d28b7440aa5beab525b97481bf7e13bbae3815fdbbbd7e01e47",
@@ -2047,25 +2047,17 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "cbaffd2dbc1c5e852e440eca4cc0f69f9d7f2a52e42f032ed3f3d37f65883d52",
+          "fingerprint": "80cb5c7989c891b423c47575bc6074d8527b09ff96da229d2dd8d2b8ce4d104a",
+          "file": "src/planner/dependency.ts",
+          "line": 51,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "0b00d32a1fbc1e1896eea0ca2e2a38ba836adeb7ef1221dffc3386f744a856e9",
           "file": "src/planner/dependency.ts",
           "line": 52,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
-        },
-        {
-          "fingerprint": "da5a3ebed28b8d0a9280c912169f1cb379aee61efa9432e9bcbc3b6a3476c2f1",
-          "file": "src/planner/dependency.ts",
-          "line": 53,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
-        },
-        {
-          "fingerprint": "f3573779fc19882eb2428cace86be203d6a15b18d125209e09a480ab8ac3b6c0",
-          "file": "src/planner/dependency.ts",
-          "line": 54,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
