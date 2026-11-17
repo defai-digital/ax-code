@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.32] - 2026-11-17
+
+### Changed
+
+- Prepare AX Code 7.30.32 and SDK 2.6.86.
+
 ### Fixed
 
 - Keep native CLI run consumption separate from current context estimates so follow-up turns avoid false overflow.
