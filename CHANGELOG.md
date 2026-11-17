@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.30.33] - 2026-11-17
+
+### Changed
+
+- Prepare AX Code 7.30.33 and SDK 2.6.87.
+
 ### Fixed
 
 - Keep virtualized model picker rows stable during mouse hover and selection.
