@@ -2,7 +2,7 @@ import path from "path"
 import { afterEach, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import { Auth } from "../../src/auth"
-import { verifyCanary } from "../../src/auth/encryption"
+import { createCanary, isEncrypted, verifyCanary } from "../../src/auth/encryption"
 import { Global } from "../../src/global"
 import { currentLockHost } from "../../src/util/process-lock"
 import { Filesystem } from "../../src/util/filesystem"
@@ -115,6 +115,24 @@ test("all filters invalid auth entries and keeps valid ones", async () => {
   const data = await Auth.all()
   expect(data["anthropic"]).toMatchObject({ type: "api", key: "sk-test" })
   expect(data["broken"]).toBeUndefined()
+})
+
+test("all re-encrypts a plaintext key left beside a valid canary", async () => {
+  await fs.writeFile(
+    file,
+    JSON.stringify({
+      __canary: createCanary(),
+      anthropic: { type: "api", key: "sk-test" },
+    }),
+  )
+
+  const data = await Auth.all()
+  expect(data["anthropic"]).toMatchObject({ type: "api", key: "sk-test" })
+
+  const raw = await fs.readFile(file, "utf-8")
+  expect(raw).not.toContain("sk-test")
+  const onDisk = JSON.parse(raw)
+  expect(isEncrypted(onDisk.anthropic.key)).toBe(true)
 })
 
 test("coalesces concurrent first-run reads while creating the auth canary", async () => {
