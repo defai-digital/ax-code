@@ -10,7 +10,7 @@ import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
 import { SessionPrompt } from "../../session/prompt"
 import { SessionRecap } from "../../session/recap"
-import { SessionBtw } from "../../session/btw"
+import { BTW_MAX_QUESTION_CHARS, SessionBtw } from "../../session/btw"
 import { SessionCompaction } from "../../session/compaction"
 import { SessionRevert } from "../../session/revert"
 import { SessionStatus } from "@/session/status"
@@ -1235,7 +1235,7 @@ export const SessionRoutes = lazy(() =>
         "json",
         z
           .object({
-            question: z.string().trim().min(1).max(2000),
+            question: z.string().trim().min(1).max(BTW_MAX_QUESTION_CHARS),
             providerID: ProviderID.zod.optional(),
             modelID: ModelID.zod.optional(),
           })
