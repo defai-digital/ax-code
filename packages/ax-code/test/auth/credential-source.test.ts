@@ -3,11 +3,13 @@
 // export envelope contains only a placeholder summary for the secret entry
 // and keeps the full reference for any credential_source entry.
 
-import { test, expect, afterEach, beforeEach } from "vitest"
+import { test, expect, afterEach, beforeEach, vi } from "vitest"
+import * as prompts from "@clack/prompts"
 import path from "path"
 import fs from "fs/promises"
 import { Auth } from "../../src/auth"
 import { Global } from "../../src/global"
+import { Filesystem } from "../../src/util/filesystem"
 
 const file = path.join(Global.Path.data, "auth.json")
 const lockFile = `${file}.lock`
@@ -16,8 +18,244 @@ beforeEach(async () => {
   await fs.writeFile(file, "{}")
 })
 afterEach(async () => {
+  vi.restoreAllMocks()
+  vi.restoreAllMocks()
   await fs.writeFile(file, "{}")
   await fs.unlink(lockFile).catch(() => undefined)
+})
+
+test.each([
+  { kind: "aws_profile", profile: "dev", region: "us-east-1" },
+  { kind: "gcloud_adc", project: "demo", location: "us-central1" },
+  { kind: "azure_cli", tenant: "tenant", subscription: "subscription" },
+  { kind: "azure_cli" },
+])("export copies only reviewed reference fields for $kind", async (reference) => {
+  const secret = fakeKeyShape("extra")
+  const source = { ...reference, token: secret, nested: { secret }, customHint: "unreviewed" }
+  const entries: Record<string, Auth.Info> = { provider: { type: "credential_source", source } }
+  const { envelope, skipped } = await Auth.exportEnvelope({ read: async () => entries })
+  expect(skipped).toEqual([])
+  const exported = envelope.providers.provider
+  expect(exported).toEqual({ type: "credential_source", source: reference })
+  expect(JSON.stringify(envelope)).not.toContain(secret)
+  expect(source.token).toBe(secret)
+  if (exported.type !== "credential_source") throw new Error("Expected a reference export")
+  expect(exported.source).not.toBe(source)
+  exported.source.kind = "changed"
+  expect(source.kind).toBe(reference.kind)
+})
+
+test.each([
+  null,
+  undefined,
+  "invalid",
+  [],
+  {},
+  { kind: "future" },
+  { kind: "aws_profile", profile: "" },
+  { kind: "aws_profile", profile: 123 },
+  { kind: "gcloud_adc", project: "demo", location: 123 },
+])("export skips unsupported or invalid references without throwing: %j", async (source) => {
+  const { envelope, skipped } = await Auth.exportEnvelope({
+    read: async () => ({ provider: { type: "credential_source", source } }) as unknown as Record<string, Auth.Info>,
+  })
+  expect(envelope.providers).toEqual({})
+  expect(skipped).toEqual(["provider"])
+})
+
+test("unknown reference kinds remain readable in storage but are omitted from shareable exports", async () => {
+  const info: Auth.Info = { type: "credential_source", source: { kind: "future", reference: "public-name" } }
+  await Auth.set("future-provider", info)
+  expect(await Auth.get("future-provider")).toEqual(info)
+  const { envelope, skipped } = await Auth.exportEnvelope()
+  expect(envelope.providers).toEqual({})
+  expect(skipped).toEqual(["future-provider"])
+  expect(await Auth.get("future-provider")).toEqual(info)
+})
+
+test("import stores only reviewed reference fields", async () => {
+  const secret = fakeKeyShape("import")
+  const envelope: Auth.ExportEnvelope = {
+    version: 1,
+    exportedAt: "2026-11-17T00:00:00.000Z",
+    providers: {
+      provider: { type: "credential_source", source: { kind: "aws_profile", profile: "dev", token: secret } },
+    },
+  }
+  const result = await Auth.applyImport(envelope, await Auth.planImport(envelope))
+  expect(result.created).toEqual(["provider"])
+  expect(await Auth.get("provider")).toEqual({
+    type: "credential_source",
+    source: { kind: "aws_profile", profile: "dev" },
+  })
+  expect(await fs.readFile(file, "utf8")).not.toContain(secret)
+})
+
+test.each(["provider/", "provider?", "provider ", "", "__canary", "__proto__", "constructor", "prototype"])(
+  "import rejects invalid provider ID %j even with a forged plan",
+  async (providerID) => {
+    const existing: Auth.Info = { type: "api", key: fakeKeyShape("existing") }
+    await Auth.set("provider", existing)
+    const envelope: Auth.ExportEnvelope = {
+      version: 1,
+      exportedAt: "2026-11-17T00:00:00.000Z",
+      providers: { [providerID]: { type: "credential_source", source: { kind: "aws_profile", profile: "dev" } } },
+    }
+    const plan = await Auth.planImport(envelope)
+    expect(plan.willCreate).toEqual([])
+    expect(plan.willSkip).toEqual([{ providerID, reason: "invalid provider ID" }])
+    const result = await Auth.applyImport(envelope, { willCreate: [providerID], willSkip: [] })
+    expect(result.created).toEqual([])
+    expect(result.skipped).toEqual([{ providerID, reason: "invalid provider ID" }])
+    expect(await Auth.get("provider")).toEqual(existing)
+  },
+)
+
+test.each(["__canary", "__proto__", "constructor", "prototype"])(
+  "auth writes reject reserved provider ID %s",
+  async (providerID) => {
+    await expect(Auth.set(providerID, { type: "api", key: fakeKeyShape("reserved") })).rejects.toThrow(
+      "Invalid provider ID",
+    )
+    expect(await fs.readFile(file, "utf8")).toBe("{}")
+  },
+)
+
+test.each([
+  null,
+  {},
+  { version: 1, exportedAt: "today", providers: [] },
+  { version: 1, providers: {} },
+  { version: 2, exportedAt: "today", providers: {} },
+  { version: 1, exportedAt: "today", providers: "invalid" },
+])("import rejects a malformed envelope before touching storage: %j", async (envelope) => {
+  await expect(Auth.planImport(envelope)).rejects.toThrow("Invalid provider reference envelope")
+  await expect(Auth.applyImport(envelope, { willCreate: [], willSkip: [] })).rejects.toThrow(
+    "Invalid provider reference envelope",
+  )
+  expect(await fs.readFile(file, "utf8")).toBe("{}")
+})
+
+test("import revalidates a reference changed after planning", async () => {
+  const envelope: Auth.ExportEnvelope = {
+    version: 1,
+    exportedAt: "2026-11-17T00:00:00.000Z",
+    providers: { provider: { type: "credential_source", source: { kind: "aws_profile", profile: "dev" } } },
+  }
+  const plan = await Auth.planImport(envelope)
+  envelope.providers.provider = { type: "credential_source", source: { kind: "aws_profile" } }
+  const result = await Auth.applyImport(envelope, plan)
+  expect(result.created).toEqual([])
+  expect(result.skipped).toEqual([{ providerID: "provider", reason: "unsupported or invalid credential source" }])
+  expect(await Auth.get("provider")).toBeUndefined()
+})
+
+test.each([
+  null,
+  {},
+  { version: 1, providers: {} },
+  { version: 1, exportedAt: "2026-11-17", providers: [] },
+  { version: 1, exportedAt: "2026-11-17", providers: "invalid" },
+])("import rejects malformed envelopes before reading or writing auth: %j", async (envelope) => {
+  await expect(Auth.planImport(envelope)).rejects.toThrow("Invalid provider reference envelope")
+  await expect(Auth.applyImport(envelope, { willCreate: ["provider"], willSkip: [] })).rejects.toThrow(
+    "Invalid provider reference envelope",
+  )
+  expect(await fs.readFile(file, "utf8")).toBe("{}")
+})
+
+test("import skips unsupported entries while preserving valid references", async () => {
+  const envelope = {
+    version: 1,
+    exportedAt: "2026-11-17",
+    providers: {
+      valid: { type: "credential_source", source: { kind: "azure_cli" } },
+      unknown: { type: "credential_source", source: { kind: "future" } },
+      incomplete: { type: "credential_source", source: { kind: "aws_profile" } },
+      empty: null,
+    },
+  }
+  const plan = await Auth.planImport(envelope)
+  expect(plan.willCreate).toEqual(["valid"])
+  expect(plan.willSkip.map((entry) => entry.providerID)).toEqual(["unknown", "incomplete", "empty"])
+  expect((await Auth.applyImport(envelope, plan)).created).toEqual(["valid"])
+  expect(await Auth.get("valid")).toEqual({ type: "credential_source", source: { kind: "azure_cli" } })
+})
+
+test("export CLI reports references omitted from the shareable file", async () => {
+  const { runExport } = await import("../../src/cli/cmd/providers/auth")
+  await Auth.set("future-provider", { type: "credential_source", source: { kind: "future" } })
+  const warn = vi.spyOn(prompts.log, "warn").mockImplementation(() => undefined)
+  const exported = path.join(path.dirname(file), "skipped-reference-export.json")
+  try {
+    await runExport({ file: exported })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("future-provider"))
+    expect(await fs.readFile(exported, "utf8")).not.toContain("future-provider")
+  } finally {
+    await fs.rm(exported, { force: true })
+  }
+})
+
+test("import CLI reports invalid envelopes without printing their contents", async () => {
+  const { runImport } = await import("../../src/cli/cmd/providers/auth")
+  const secret = fakeKeyShape("malformed")
+  const imported = path.join(path.dirname(file), "invalid-reference-import.json")
+  const originalExitCode = process.exitCode
+  const error = vi.spyOn(prompts.log, "error").mockImplementation(() => undefined)
+  try {
+    await fs.writeFile(imported, JSON.stringify({ version: 1, exportedAt: "2026-11-17", providers: [secret] }))
+    await runImport({ file: imported, write: true, yes: true })
+    expect(process.exitCode).toBe(1)
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("Invalid provider reference envelope"))
+    expect(JSON.stringify(error.mock.calls)).not.toContain(secret)
+    expect(await fs.readFile(file, "utf8")).toBe("{}")
+  } finally {
+    process.exitCode = originalExitCode
+    await fs.rm(imported, { force: true })
+  }
+})
+
+test("import checks for an existing connection inside the write lock", async () => {
+  await Auth.set("other", { type: "api", key: fakeKeyShape("other") })
+  const envelope: Auth.ExportEnvelope = {
+    version: 1,
+    exportedAt: "2026-11-17T00:00:00.000Z",
+    providers: { provider: { type: "credential_source", source: { kind: "aws_profile", profile: "dev" } } },
+  }
+  const plan = await Auth.planImport(envelope)
+  const originalRead = Filesystem.readJson.bind(Filesystem)
+  let releaseRead!: () => void
+  const released = new Promise<void>((resolve) => {
+    releaseRead = resolve
+  })
+  let observeRead!: () => void
+  const observed = new Promise<void>((resolve) => {
+    observeRead = resolve
+  })
+  let intercepted = false
+  vi.spyOn(Filesystem, "readJson").mockImplementation(async (target) => {
+    const value = await originalRead(target)
+    if (target === file && !intercepted) {
+      intercepted = true
+      observeRead()
+      await released
+    }
+    return value
+  })
+  const pending = Auth.applyImport(envelope, plan)
+  try {
+    await observed
+    const existing: Auth.Info = { type: "api", key: fakeKeyShape("concurrent") }
+    await Auth.set("provider", existing)
+    releaseRead()
+    const result = await pending
+    expect(result.created).toEqual([])
+    expect(result.skipped).toEqual([{ providerID: "provider", reason: "exists" }])
+    expect(await Auth.get("provider")).toEqual(existing)
+  } finally {
+    releaseRead()
+    await pending
+  }
 })
 
 // Build key-shaped fixtures at runtime so the pre-commit secret scan does

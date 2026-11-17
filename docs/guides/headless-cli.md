@@ -338,6 +338,9 @@ ax-code capability list --path src/index.ts --json
 `--version` and `-v` show the installed CLI version. Use `release-notes --target-version` to select a changelog entry.
 Provider auth transfer uses `--input-file` / `--output-file` (or `-o`), and capability matching uses repeatable `--path`;
 `--file` remains an attachment option. Provider reference imports remain dry-run unless `--write` is supplied.
+Reference transfer copies only the documented AWS profile, Google ADC, and Azure CLI fields. Extra fields are
+omitted; unsupported or malformed references are skipped and reported. Stored future reference kinds remain
+readable. Imports require canonical provider IDs and never replace a connection created before the locked write.
 
 `ax-code debug config` prints a redacted view of the resolved configuration. Credentials, headers, environment maps,
 executable command configuration, and URL credentials/query values are masked. The effective runtime configuration

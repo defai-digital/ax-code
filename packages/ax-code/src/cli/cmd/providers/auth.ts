@@ -22,19 +22,22 @@ function defaultExportPath() {
   return path.join(process.cwd(), "ax-code-auth-export.json")
 }
 
-export async function runExport(args: { file?: string }) {
-  const { envelope } = await Auth.exportEnvelope()
+export async function runExport(args: { file?: string }): Promise<void> {
+  const { envelope, skipped } = await Auth.exportEnvelope()
   const target = args.file ?? defaultExportPath()
   await Filesystem.write(target, JSON.stringify(envelope, null, 2))
   const count = Object.keys(envelope.providers).length
   prompts.log.success(`Wrote ${count} provider entr${count === 1 ? "y" : "ies"} to ${target}`)
+  if (skipped.length) {
+    prompts.log.warn(`Skipped unsupported or invalid provider references: ${skipped.join(", ")}`)
+  }
   prompts.log.info(
     "Envelope contains reference data only. Secret-bearing entries (api/oauth/wellknown) are summarized as placeholders.",
   )
   prompts.outro("Done")
 }
 
-export async function runImport(args: { file?: string; write?: boolean; yes?: boolean }) {
+export async function runImport(args: { file?: string; write?: boolean; yes?: boolean }): Promise<void> {
   const file = args.file
   if (!file) {
     prompts.log.error("Missing --input-file <path>. `ax-code providers auth import --input-file path.json`")
@@ -50,13 +53,15 @@ export async function runImport(args: { file?: string; write?: boolean; yes?: bo
     process.exitCode = 1
     return
   }
-  if (!parsed || typeof parsed !== "object" || (parsed as { version?: unknown }).version !== 1) {
-    prompts.log.error("Envelope must be version 1 (from `ax-code providers auth export`).")
+  let plan: Auth.ImportPlan
+  try {
+    plan = await Auth.planImport(parsed)
+  } catch (error) {
+    if (!Auth.AuthError.isInstance(error)) throw error
+    prompts.log.error(error.data.message)
     process.exitCode = 1
     return
   }
-  const envelope = parsed as Auth.ExportEnvelope
-  const plan = await Auth.planImport(envelope)
   const header = args.write ? "Import plan (will apply)" : "Import plan (dry-run; pass --write to apply)"
   prompts.log.info(header)
   prompts.log.info(`  willCreate (${plan.willCreate.length}): ${plan.willCreate.join(", ") || "(none)"}`)
@@ -77,7 +82,7 @@ export async function runImport(args: { file?: string; write?: boolean; yes?: bo
     })
     if (prompts.isCancel(answer) || !answer) throw new UI.CancelledError()
   }
-  const { created, skipped } = await Auth.applyImport(envelope, plan)
+  const { created, skipped } = await Auth.applyImport(parsed, plan)
   prompts.log.success(`Created ${created.length} reference${created.length === 1 ? "" : "s"}`)
   for (const id of created) prompts.log.info(`  - ${id}`)
   if (skipped.length) {

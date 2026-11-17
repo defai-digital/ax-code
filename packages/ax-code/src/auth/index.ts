@@ -7,6 +7,8 @@ import z from "zod"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { encryptField, decryptField, createCanary, verifyCanary } from "./encryption"
+import { CredentialSourceReference } from "./credential-source"
+import { isRecord } from "../util/record"
 import { Lock } from "../util/lock"
 import { Log } from "../util/log"
 import { sleep } from "../util/timeout"
@@ -25,6 +27,7 @@ const LOCK_TIMEOUT_MS = 5_000
 const LOCK_POLL_MS = 20
 const LOCK_STALE_MS = 60 * 60 * 1000
 const LOCK_MALFORMED_GRACE_MS = LOCK_TIMEOUT_MS
+const RESERVED_AUTH_KEYS = new Set(["__canary", "__proto__", "constructor", "prototype"])
 
 type AuthLockBody = ProcessLockBody & {
   token: string
@@ -32,6 +35,15 @@ type AuthLockBody = ProcessLockBody & {
 
 function normalizeProviderID(providerID: string) {
   return providerID.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
+}
+
+function isCanonicalProviderID(providerID: string): boolean {
+  return (
+    providerID.length > 0 &&
+    !providerID.includes("..") &&
+    !RESERVED_AUTH_KEYS.has(providerID) &&
+    normalizeProviderID(providerID) === providerID
+  )
 }
 
 function readAuthData() {
@@ -256,10 +268,8 @@ export namespace Auth {
   export const CredentialSource = z
     .object({
       type: z.literal("credential_source"),
-      // Shape only; the source schema lives in src/provider/credential-source.ts
-      // and is validated on read in `all()`. We keep the on-disk shape
-      // permissive here so the auth store can survive a bump in
-      // CredentialSource.Source without forcing a migration.
+      // Storage stays permissive so future source kinds remain readable.
+      // Export/import validates reviewed reference fields separately.
       source: z
         .object({
           kind: z.string(),
@@ -449,13 +459,16 @@ export namespace Auth {
     return pending
   }
 
-  export async function set(key: string, info: Info) {
+  async function writeEntry(key: string, info: Info, options: { overwrite: boolean }): Promise<boolean> {
     const norm = normalizeProviderID(key)
-    if (!norm || norm.includes("..")) throw new AuthError({ message: "Invalid provider ID" })
+    if (!isCanonicalProviderID(norm)) throw new AuthError({ message: "Invalid provider ID" })
     try {
       using _crossProcess = await acquireFileLock()
       using _inProcess = await Lock.write("auth")
       const data = await readAuthData()
+      // Import checks existence under the same locks as the write. A
+      // connection created after planning or reading auth must win.
+      if (!options.overwrite && (Object.hasOwn(data, norm) || Object.hasOwn(data, norm + "/"))) return false
       if (norm !== key) delete data[key]
       delete data[norm + "/"]
       if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
@@ -466,6 +479,11 @@ export namespace Auth {
     }
     allPending = undefined
     await invalidateProviderCacheAfterAuthChange()
+    return true
+  }
+
+  export async function set(key: string, info: Info): Promise<void> {
+    await writeEntry(key, info, { overwrite: true })
   }
 
   export async function remove(key: string) {
@@ -508,9 +526,27 @@ export namespace Auth {
     providers: Record<string, ExportEntry>
   }
 
+  const ImportEnvelopeSchema = z.object({
+    version: z.literal(1),
+    exportedAt: z.string(),
+    // Preserve every own key for the provider-ID check below. z.record
+    // silently omits __proto__, which would hide a rejected import entry.
+    providers: z.custom<Record<string, unknown>>(isRecord),
+  })
+
+  function importProviders(input: unknown): Record<string, unknown> {
+    const parsed = ImportEnvelopeSchema.safeParse(input)
+    if (!parsed.success) {
+      throw new AuthError({
+        message: "Invalid provider reference envelope: expected version 1, exportedAt, and a providers object.",
+      })
+    }
+    return parsed.data.providers
+  }
+
   function summarizeSecretEntry(info: Info): ExportEntry {
     if (info.type === "credential_source") {
-      return { type: "credential_source", source: info.source as Record<string, unknown> }
+      return { type: "credential_source", source: CredentialSourceReference.parse(info.source) }
     }
     // The remaining types are secret-bearing. The export never carries
     // encrypted material; it carries a placeholder that names the shape so
@@ -564,13 +600,18 @@ export namespace Auth {
    * when they want the side effect.
    */
   export async function planImport(
-    envelope: ExportEnvelope,
+    envelope: unknown,
     input?: { existing?: Record<string, Info> },
   ): Promise<ImportPlan> {
+    const providers = importProviders(envelope)
     const existing = input?.existing ?? (await all())
     const willCreate: string[] = []
     const willSkip: { providerID: string; reason: string }[] = []
-    for (const [providerID, entry] of Object.entries(envelope.providers ?? {})) {
+    for (const [providerID, entry] of Object.entries(providers)) {
+      if (!isCanonicalProviderID(providerID)) {
+        willSkip.push({ providerID, reason: "invalid provider ID" })
+        continue
+      }
       // Never overwrite an existing connection — the user has to re-login.
       if (existing[providerID]) {
         willSkip.push({ providerID, reason: "exists" })
@@ -579,8 +620,12 @@ export namespace Auth {
       // Only reference-style entries are re-creatable. Summary placeholders
       // for an existing api/oauth/wellknown require the user to re-enter
       // their secret.
-      if (entry.type !== "credential_source") {
+      if (!isRecord(entry) || entry.type !== "credential_source") {
         willSkip.push({ providerID, reason: "secret entry requires re-authentication" })
+        continue
+      }
+      if (!CredentialSourceReference.safeParse(entry.source).success) {
+        willSkip.push({ providerID, reason: "unsupported or invalid credential source" })
         continue
       }
       willCreate.push(providerID)
@@ -594,9 +639,10 @@ export namespace Auth {
    * are never overwritten, matching the dry-run plan.
    */
   export async function applyImport(
-    envelope: ExportEnvelope,
+    envelope: unknown,
     plan: ImportPlan,
   ): Promise<{ created: string[]; skipped: { providerID: string; reason: string }[] }> {
+    const providers = importProviders(envelope)
     const created: string[] = []
     const skipped = [...plan.willSkip]
     // The plan can be stale: the CLI confirms it interactively, and another
@@ -604,19 +650,33 @@ export namespace Auth {
     // entry created after planning is still never overwritten.
     const existing = await all()
     for (const providerID of plan.willCreate) {
+      if (!isCanonicalProviderID(providerID)) {
+        skipped.push({ providerID, reason: "invalid provider ID" })
+        continue
+      }
       if (existing[providerID]) {
         skipped.push({ providerID, reason: "exists" })
         continue
       }
-      const entry = envelope.providers[providerID]
-      if (!entry || entry.type !== "credential_source") {
+      const entry = providers[providerID]
+      if (!isRecord(entry) || entry.type !== "credential_source") {
         skipped.push({ providerID, reason: "missing or unsupported entry" })
         continue
       }
-      await set(providerID, {
-        type: "credential_source",
-        source: entry.source as { kind: string } & Record<string, unknown>,
-      } as unknown as Info)
+      const source = CredentialSourceReference.safeParse(entry.source)
+      if (!source.success) {
+        skipped.push({ providerID, reason: "unsupported or invalid credential source" })
+        continue
+      }
+      const written = await writeEntry(
+        providerID,
+        { type: "credential_source", source: source.data },
+        { overwrite: false },
+      )
+      if (!written) {
+        skipped.push({ providerID, reason: "exists" })
+        continue
+      }
       created.push(providerID)
     }
     return { created, skipped }
