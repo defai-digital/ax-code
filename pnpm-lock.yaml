@@ -211,6 +211,12 @@ patchedDependencies:
   node-pty-prebuilt-multiarch@0.10.1-pre.5:
     hash: d66c86bdc842ce9e10882929db518f5cde2975adfe3e744fcba4af740bb4e4a4
     path: patches/node-pty-prebuilt-multiarch@0.10.1-pre.5.patch
+  picomatch@2.3.2:
+    hash: bce92aea138e74be956eb9b2dd395b38d2da74cdd8973999f05b8d6552141867
+    path: patches/picomatch@2.3.2.patch
+  picomatch@4.0.7:
+    hash: 62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5
+    path: patches/picomatch@4.0.7.patch
   sprintf-js@1.1.3:
     hash: 11ada20d9be72aebe9fab191bb6944ead0963d45352db3c4ab0419757e3c4f00
     path: patches/sprintf-js@1.1.3.patch
@@ -7893,7 +7899,7 @@ snapshots:
       detect-libc: 2.1.2
       is-glob: 4.0.3
       node-addon-api: 7.1.1
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5)
     optionalDependencies:
       '@parcel/watcher-android-arm64': 2.6.0
       '@parcel/watcher-darwin-arm64': 2.6.0
@@ -9116,9 +9122,9 @@ snapshots:
     dependencies:
       walk-up-path: 4.0.0
 
-  fdir@6.5.0(picomatch@4.0.7):
+  fdir@6.5.0(picomatch@4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5)):
     optionalDependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5)
 
   fetch-blob@3.2.0:
     dependencies:
@@ -9561,13 +9567,13 @@ snapshots:
 
   knip@6.39.0:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5))
       formatly: 0.7.1
       get-tsconfig: 4.14.3
       jiti: 2.7.0
       oxc-parser: 0.150.0
       oxc-resolver: 11.24.2
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5)
       smol-toml: 1.9.1
       strip-json-comments: 5.0.3
       tinyglobby: 0.2.17
@@ -9712,7 +9718,7 @@ snapshots:
   micromatch@4.0.8:
     dependencies:
       braces: 3.0.3(patch_hash=d238058db7f191c06f36401be60a19dab9695dd02d45b8b0483e4d26ea69cc89)
-      picomatch: 2.3.2
+      picomatch: 2.3.2(patch_hash=bce92aea138e74be956eb9b2dd395b38d2da74cdd8973999f05b8d6552141867)
 
   mime-db@1.54.0: {}
 
@@ -10010,9 +10016,9 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@2.3.2: {}
+  picomatch@2.3.2(patch_hash=bce92aea138e74be956eb9b2dd395b38d2da74cdd8973999f05b8d6552141867): {}
 
-  picomatch@4.0.7: {}
+  picomatch@4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5): {}
 
   pino-abstract-transport@3.0.0:
     dependencies:
@@ -10583,8 +10589,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5))
+      picomatch: 4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5)
 
   tinyrainbow@3.1.0: {}
 
@@ -10741,7 +10747,7 @@ snapshots:
   vite@8.1.6(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5)
       postcss: 8.5.23
       rolldown: 1.1.5
       tinyglobby: 0.2.17
@@ -10767,7 +10773,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.3
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=62fc3ab6d7064be7bbbb72f6dc0bbad892f207adbbda381bd832551614e0bec5)
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.0.4

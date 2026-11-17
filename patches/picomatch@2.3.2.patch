@@ -1,0 +1,164 @@
+diff --git a/lib/parse.js b/lib/parse.js
+index caa2b86aa5a567df33cef4bda3c7a97794f439f8..1549497131c2d9f43bcd5516148aafefb6a97816 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -139,25 +139,52 @@ const normalizeSimpleBranch = branch => {
+   return value.replace(/\\(.)/g, '$1');
+ };
+ 
+-const hasRepeatedCharPrefixOverlap = branches => {
++const hasBranchRepetitionOverlap = (branches, options) => {
++  const flags = options.flags || (options.nocase === true ? 'i' : '');
++  const ignoreCase = typeof flags === 'string' && flags.includes('i');
++  const caseFlags = ignoreCase ? 'i' + (flags.includes('v') ? 'v' : flags.includes('u') ? 'u' : '') : '';
+   const values = branches.map(normalizeSimpleBranch).filter(Boolean);
++  // Sardinas-Patterson suffix analysis detects ambiguity involving multiple
++  // words, e.g. (a|ab|b)+, without rejecting ordinary (js|jsx)+ patterns.
++  // Exhausting either bound takes the existing conservative literal fallback.
++  const MAX_OVERLAP_STATES = 256;
++  const MAX_OVERLAP_COMPARISONS = 4096;
++  let comparisons = 0;
++  const pending = [];
++  const seen = new Set();
++  const prefixRegexes = new Map();
++  const suffix = (word, prefix) => {
++    if (++comparisons > MAX_OVERLAP_COMPARISONS) return null;
++    if (!ignoreCase) return word.startsWith(prefix) ? word.slice(prefix.length) : undefined;
++    let regex = prefixRegexes.get(prefix);
++    if (!regex) {
++      const escape = "\\";
++      const escaped = [...prefix].map(ch => ch === escape || "^$.*+?()[]{}|".includes(ch) ? escape + ch : ch).join('');
++      regex = new RegExp('^(?:' + escaped + ')', caseFlags);
++      prefixRegexes.set(prefix, regex);
++    }
++    const match = regex.exec(word);
++    return match ? word.slice(match[0].length) : undefined;
++  };
++  const enqueue = value => {
++    if (value === null || value === '') return true;
++    if (value === undefined || seen.has(value)) return false;
++    seen.add(value);
++    pending.push(value);
++    return seen.size > MAX_OVERLAP_STATES;
++  };
+ 
+   for (let i = 0; i < values.length; i++) {
+-    for (let j = i + 1; j < values.length; j++) {
+-      const a = values[i];
+-      const b = values[j];
+-      const char = a[0];
+-
+-      if (!char || a !== char.repeat(a.length) || b !== char.repeat(b.length)) {
+-        continue;
+-      }
+-
+-      if (a === b || a.startsWith(b) || b.startsWith(a)) {
+-        return true;
+-      }
++    for (let j = 0; j < values.length; j++) {
++      if (i !== j && enqueue(suffix(values[i], values[j]))) return true;
++    }
++  }
++  for (let index = 0; index < pending.length; index++) {
++    for (const word of values) {
++      const residual = pending[index];
++      if (enqueue(suffix(word, residual)) || enqueue(suffix(residual, word))) return true;
+     }
+   }
+-
+   return false;
+ };
+ 
+@@ -266,6 +293,50 @@ const getStarExtglobSequenceOutput = pattern => {
+   return `${source}*`;
+ };
+ 
++// Backport of micromatch/picomatch#237, commit 1bf0d04563cb9ce568cf36efc5f6b7187d9911d5.
++// Also uses the safety detector from PR #235, commit 0150ed18b7971894bfd1824c8f96d6b63c70ad1f.
++// Copyright (c) 2017-present, Jon Schlinkert. MIT license retained in LICENSE.
++const branchContainsGlobStar = branch => {
++  let escaped = false;
++  let bracket = false;
++
++  for (let i = 0; i < branch.length; i++) {
++    const ch = branch[i];
++
++    if (escaped === true) {
++      escaped = false;
++      continue;
++    }
++
++    if (ch === '\\') {
++      escaped = true;
++      continue;
++    }
++
++    if (ch === '[' && bracket === false) {
++      bracket = true;
++      continue;
++    }
++
++    if (ch === ']' && bracket === true) {
++      bracket = false;
++      continue;
++    }
++
++    if (bracket === false && ch === '*' && branch[i + 1] !== '(') {
++      return true;
++    }
++  }
++
++  return false;
++};
++
++const isSelfRepeatingStarBranch = (branch, options) => {
++  if (/[\\/()[\]{}|!+@"']/.test(branch) || branch.includes('**')) return false;
++  if (options.bash === true && /[\n\r\u2028\u2029]/.test(branch)) return false;
++  return branch.includes('*');
++};
++
+ const repeatedExtglobRecursion = pattern => {
+   let depth = 0;
+   let value = pattern.trim();
+@@ -296,7 +367,7 @@ const analyzeRepeatedExtglob = (body, options) => {
+     if (
+       branches.some(branch => branch === '') ||
+       branches.some(branch => /^[*?]+$/.test(branch)) ||
+-      hasRepeatedCharPrefixOverlap(branches)
++      hasBranchRepetitionOverlap(branches, options)
+     ) {
+       return { risky: true };
+     }
+@@ -313,6 +384,21 @@ const analyzeRepeatedExtglob = (body, options) => {
+     }
+   }
+ 
++  // Overlapping class/question/group alternatives cannot be proven safe by
++  // literal-word analysis. Keep the existing literal fallback for them.
++  // Check raw class alternatives too: the upstream splitter counts nested
++  // opening brackets, although constructs such as [[] have only one class.
++  if ((branches.length > 1 && branches.some(branch => normalizeSimpleBranch(branch) === undefined))
++    || (body.includes('[') && body.includes('|'))) {
++    return { risky: true };
++  }
++
++  if (branches.some(branchContainsGlobStar)) {
++    return branches.length === 1 && isSelfRepeatingStarBranch(branches[0], options)
++      ? { risky: false, collapse: true }
++      : { risky: true };
++  }
++
+   return { risky: false };
+ };
+ 
+@@ -536,6 +622,10 @@ const parse = (input, options) => {
+       return;
+     }
+ 
++    if (analysis.collapse === true && (token.type === 'plus' || token.type === 'star')) {
++      token.close = token.type === 'plus' ? ')' : ')?';
++    }
++
+     let output = token.close + (opts.capture ? ')' : '');
+     let rest;
+ 

@@ -253,6 +253,7 @@ jobs:
       - name: Verify installed dependency security patches
         run: |
           node script/check-braces-depth-guard.mjs
+          node script/check-picomatch-security.mjs
           node script/check-sprintf-precision-guard.mjs
 
       - name: Security scan
