@@ -3,6 +3,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { BrowserScenario } from "../../src/browser-workflow/scenario"
 import { BrowserRunner } from "../../src/browser-workflow/runner"
+import { BrowserInventory } from "../../src/browser-workflow/inventory"
 import { BrowserWorkflowStore } from "../../src/browser-workflow/store"
 import { exportPlaywright, registrationTemplate } from "../../src/browser-workflow/export"
 import { linkSources } from "../../src/browser-workflow/diagnostics"
@@ -79,6 +80,27 @@ function fakePort(
 }
 
 describe("frozen browser scenarios", () => {
+  test("workflow inputs and diagnostics admit JWT fixtures while rejecting bearer credentials", () => {
+    const jwt = ["fixtureHeader", "fixturePayload", "fixtureSignature"].join(".")
+    const credential = ["sk", "live", "0123456789abcdefghij"].join("_")
+    const withValue = (value: string) => ({
+      ...manifest(),
+      steps: [
+        { action: "fill", locator: { role: "textbox", name: "Search" }, value },
+        { action: "assert", assertion: { locator: { role: "status", name: "Result" }, property: "count", equals: 1 } },
+      ],
+    })
+    expect(() => BrowserScenario.freeze(withValue(jwt), identity)).not.toThrow()
+    expect(() => BrowserScenario.freeze(withValue(credential), identity)).toThrow("Credentials")
+    expect(() => BrowserInventory.bounded({ value: jwt })).not.toThrow()
+    expect(() => BrowserInventory.bounded({ value: credential })).toThrow("Credentials")
+    expect(
+      BrowserRunner.lines({
+        content: [{ type: "text", text: `${jwt}\n${credential}\nordinary output` }],
+      }),
+    ).toEqual([jwt, "ordinary output"])
+  })
+
   test("lifecycle checkpoints fail on leaked tools, pass when removed, and unknown listings never prove absence", async () => {
     const frozen = BrowserScenario.freeze(
       { ...manifest(), steps: [{ action: "tool_presence", name: "admin_reset", present: false }] },

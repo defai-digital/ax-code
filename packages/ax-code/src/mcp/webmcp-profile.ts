@@ -7,6 +7,7 @@ import { promisify } from "node:util"
 import { readdirSync, readFileSync } from "node:fs"
 import { parseJsonPayload } from "@/util/json-value"
 import { isRecord } from "@/util/record"
+import { credentialLike as containsCredential, maskedCredentialValue } from "@/util/credential-value"
 import { exactOrigin, grantableOrigin as sharedGrantableOrigin, webMcpSchemeAllowed } from "./webmcp-origin"
 
 /** Consumer policy for the pinned external bridge, not a browser engine. */
@@ -249,28 +250,6 @@ export namespace WebMcpProfile {
    */
   export const SIGN_IN_PATH =
     /(?:^|\/)(?:log-?in|sign-?in|sso|oauth2?|authorize|auth|session\/new|account\/login)(?:\/|$)/i
-  /**
-   * Values that look like a bearer credential are refused before any prompt
-   * (ADR-174 rule 4): typing a credential is transmitting it. Unanchored, so
-   * a secret embedded in a longer value is still caught. Publishable keys
-   * (`pk_`) are deliberately absent; a JWT shape is labeled, not refused.
-   */
-  export const CREDENTIAL_VALUE: readonly RegExp[] = [
-    // Not a word boundary: `my_sk_live_…` must still match (underscore is a
-    // word character); only an alphanumeric prefix such as `task_live_…` is
-    // treated as a different token.
-    /(?<![A-Za-z0-9])(?:sk|rk)[-_](?:live|test|proj)?[-_]?[A-Za-z0-9_-]{16,}/,
-    /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/,
-    /\bgh[pousr]_[A-Za-z0-9]{20,}/,
-    /\bgithub_pat_[A-Za-z0-9_]{20,}/,
-    /\bxox[abcepsr]-[A-Za-z0-9-]{10,}/,
-    /\bAIza[0-9A-Za-z_-]{30,}/,
-    /\bya29\.[0-9A-Za-z_-]{20,}/,
-    /\bage-secret-key-1[a-z0-9]{20,}/i,
-    /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  ]
-  /** A JWT-shaped value: labeled and masked, never refused (fixtures use the shape). */
-  export const JWT_SHAPE = /[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/
   /**
    * Resource types the pinned chrome-devtools-mcp@1.10.1 bridge accepts
    * (FILTERABLE_RESOURCE_TYPES in its network tool). The local schema must
@@ -1672,14 +1651,10 @@ export namespace WebMcpProfile {
   }
 
   /** Whether a value contains a bearer-credential shape (ADR-174 rule 4). */
-  export function credentialLike(value: string): boolean {
-    return CREDENTIAL_VALUE.some((pattern) => pattern.test(value))
-  }
+  export const credentialLike = containsCredential
 
   /** Whether a value should be masked in prompts: a JWT shape or a credential. */
-  export function maskedValue(value: string): boolean {
-    return JWT_SHAPE.test(value) || credentialLike(value)
-  }
+  export const maskedValue = maskedCredentialValue
 
   /** Whether a snapshot node names a credential-like field (ADR-174 rule 4). */
   export function sensitiveTarget(node: SnapshotNode | undefined): boolean {

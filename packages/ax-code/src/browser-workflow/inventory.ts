@@ -1,6 +1,7 @@
 import path from "node:path"
 import ts from "typescript"
 import z from "zod"
+import { credentialLike } from "../util/credential-value"
 import { WebMcpProfile } from "../mcp/webmcp-profile"
 import { isRecord } from "../util/record"
 import { BrowserScenario } from "./scenario"
@@ -47,7 +48,7 @@ export namespace BrowserInventory {
     const json = JSON.stringify(value)
     if (json === undefined || Buffer.byteLength(json) > maxBytes)
       throw new Error("Browser workflow data exceeds byte limit")
-    if (WebMcpProfile.credentialLike(json)) throw new Error("Credentials are not allowed in browser workflow data")
+    if (credentialLike(json)) throw new Error("Credentials are not allowed in browser workflow data")
   }
 
   export function listing(value: unknown): Descriptor[] {

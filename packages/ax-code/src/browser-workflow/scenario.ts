@@ -1,5 +1,6 @@
 import z from "zod"
 import { createHash } from "node:crypto"
+import { credentialLike } from "../util/credential-value"
 import { WebMcpProfile } from "../mcp/webmcp-profile"
 
 export namespace BrowserScenario {
@@ -100,7 +101,7 @@ export namespace BrowserScenario {
     })
     .strict()
     .superRefine((value, ctx) => {
-      if (WebMcpProfile.credentialLike(JSON.stringify(value)))
+      if (credentialLike(JSON.stringify(value)))
         ctx.addIssue({ code: "custom", message: "Credentials are not allowed in scenarios" })
       if (Buffer.byteLength(JSON.stringify(value)) > 32768)
         ctx.addIssue({ code: "custom", message: "Scenario exceeds 32 KiB" })

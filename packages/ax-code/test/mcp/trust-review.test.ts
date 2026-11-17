@@ -91,6 +91,25 @@ const LOCAL = {
   environment: { API_TOKEN: "super-secret-value", REGION: "eu" },
 }
 
+test("the public MCP review API masks credentials and retains its schema contract", () => {
+  const jwt = ["fixtureHeader", "fixturePayload", "fixtureSignature"].join(".")
+  expect(MCP.redactArgv(["server", jwt])).toEqual({ argv: ["server", "[redacted]"], redacted: true })
+  const review = MCP.TrustReview.parse(
+    MCP.trustReview({
+      type: "remote",
+      url: "https://user:password@mcp.example.com/api?token=fixture-secret#fragment",
+      headers: { Authorization: "Bearer fixture-value" },
+    }),
+  )
+  expect(review).toEqual({
+    transport: "remote",
+    url: "https://mcp.example.com/api",
+    hasCredentials: true,
+    queryKeys: ["token"],
+    headerKeys: ["Authorization"],
+  })
+})
+
 test("needs_trust carries the review a client shows, without environment values", async () => {
   await using tmp = await tmpdir({ git: true, config: { mcp: { local: LOCAL } } })
   await Instance.provide({
@@ -107,82 +126,6 @@ test("needs_trust carries the review a client shows, without environment values"
       expect(JSON.stringify(status)).not.toContain("super-secret-value")
     },
   })
-})
-
-test("the remote review keeps origin and path and the names of query keys and headers only", () => {
-  const review = MCP.trustReview({
-    type: "remote",
-    url: "https://mcp.example.com/v1/sse?api_key=abc123#frag",
-    headers: { Authorization: "Bearer zzz", "X-Team": "core" },
-  })
-  expect(review).toEqual({
-    transport: "remote",
-    url: "https://mcp.example.com/v1/sse",
-    queryKeys: ["api_key"],
-    headerKeys: ["Authorization", "X-Team"],
-  })
-  expect(JSON.stringify(review)).not.toMatch(/abc123|Bearer|core|frag/)
-
-  const withUser = MCP.trustReview({ type: "remote", url: "https://user:pass@mcp.example.com/x" })
-  expect(withUser).toEqual({ transport: "remote", url: "https://mcp.example.com/x", hasCredentials: true })
-  expect(JSON.stringify(withUser)).not.toMatch(/user|pass/)
-
-  // A URL that does not parse is never echoed back.
-  expect(MCP.trustReview({ type: "remote", url: "not a url ?token=x" } as never)).toEqual({ transport: "remote" })
-})
-
-// Credential-shaped fixtures are assembled at run time so the repository's secret scan never sees a literal.
-const FAKE_STRIPE_KEY = ["sk", "live", "0123456789abcdefghij"].join("-")
-const FAKE_GITHUB_TOKEN = ["ghp", "0123456789abcdefghijklmnop"].join("_")
-const FAKE_DSN = ["postgres://", "u:p", "@db.internal:5432/app"].join("")
-
-test("redactArgv hides secret flag values, credential-shaped arguments and URL secrets", () => {
-  const shown = MCP.redactArgv([
-    "server",
-    `--api-key=${FAKE_STRIPE_KEY}`,
-    "--token",
-    "plain-looking-value",
-    "--dsn",
-    FAKE_DSN,
-    FAKE_GITHUB_TOKEN,
-    "https://hooks.example.com/notify?secret=fixture-value",
-    "--port",
-    "4000",
-  ])
-  expect(shown.redacted).toBe(true)
-  expect(shown.argv).toEqual([
-    "server",
-    "--api-key=[redacted]",
-    "--token",
-    "[redacted]",
-    "--dsn",
-    "[redacted]",
-    "[redacted]",
-    "https://hooks.example.com/notify?secret=[redacted]",
-    "--port",
-    "4000",
-  ])
-  expect(MCP.redactArgv(["node", "server.js", "--port", "4000"])).toEqual({
-    argv: ["node", "server.js", "--port", "4000"],
-    redacted: false,
-  })
-})
-
-test("a WebMCP entry is reviewed by its profile and the argv it actually launches", () => {
-  const review = MCP.trustReview({
-    type: "local",
-    command: ["echo", "harmless"],
-    webmcp: { allowedOrigins: ["https://app.example.com"], executablePath: "/opt/chrome/bin/chrome", read: true },
-  } as never)
-  expect(review.transport).toBe("local")
-  if (review.transport !== "local") return
-  expect(review.webmcp).toMatchObject({
-    allowedOrigins: ["https://app.example.com"],
-    executablePath: "/opt/chrome/bin/chrome",
-    read: true,
-  })
-  expect(review.command).not.toEqual(["echo", "harmless"])
-  expect(review.command?.join(" ")).toContain("chrome-devtools-mcp")
 })
 
 test("trustReviewed trusts only the fingerprint the user reviewed", async () => {

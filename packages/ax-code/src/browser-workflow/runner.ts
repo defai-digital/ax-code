@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { setTimeout as delay } from "node:timers/promises"
 import { BrowserScenario } from "./scenario"
+import { credentialLike } from "../util/credential-value"
 import { WebMcpProfile } from "../mcp/webmcp-profile"
 import { isRecord } from "../util/record"
 import { parseJsonPayload, parseJsonResult } from "../util/json-value"
@@ -44,7 +45,7 @@ export namespace BrowserRunner {
       .flatMap((item) =>
         isRecord(item) && item.type === "text" && typeof item.text === "string" ? item.text.split("\n") : [],
       )
-      .filter((line) => !WebMcpProfile.credentialLike(line))
+      .filter((line) => !credentialLike(line))
       .slice(-50)
       .map((line) => line.slice(0, 512))
   }
