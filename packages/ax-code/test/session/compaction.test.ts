@@ -16,6 +16,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { markEstimatedUsage } from "../../src/provider/usage"
+import { ObservedWindow } from "../../src/provider/observed-window"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Provider } from "../../src/provider/provider"
 import {
@@ -485,6 +486,30 @@ describe("session.compaction.isOverflow", () => {
 })
 
 describe("session.compaction.budgetStatus", () => {
+  test("calibration preserves the input ceiling for admission and summary requests", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = createModel({ context: 200_000, input: 100_000, output: 8_000 })
+        await ObservedWindow.store().recordOverflow(ObservedWindow.routeKeyFor(model), 160_000, {
+          statedLimit: 150_000,
+          catalogLimit: model.limit.context,
+        })
+        expect(await ObservedWindow.resolveModelWindow(model)).toMatchObject({ kind: "observed", window: 150_000 })
+        const budget = { cap: 100_000, reserved: 10_000, usable: 90_000 }
+        expect(await SessionCompaction.budget(model)).toEqual(budget)
+        expect(await SessionCompaction.requestBudget(model)).toEqual(budget)
+        expect(
+          await SessionCompaction.isOverflow({
+            model,
+            tokens: { input: 105_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          }),
+        ).toBe(true)
+      },
+    })
+  })
+
   test("reports why auto-compaction is disabled instead of failing silently", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

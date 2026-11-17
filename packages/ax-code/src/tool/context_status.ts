@@ -131,7 +131,8 @@ function lastUsedTokens(messages: MessageV2.WithParts[], model: Provider.Model) 
  * Ledger breakdown for the current request prefix (ADR-139 D2/D5). Returns
  * undefined when no anchor matches — callers then fall back to the
  * last-step usage snapshot. The tool cannot reconstruct the rendered system
- * prompt or tool surface, so anchor matching here is IDs + revision only.
+ * prompt or tool surface, so it verifies the IDs, revision, and rendered
+ * messages without checking system/tool hashes.
  */
 async function ledgerBreakdown(
   model: Provider.Model,
@@ -139,21 +140,20 @@ async function ledgerBreakdown(
 ): Promise<TokenLedger.LedgerBreakdown | undefined> {
   const messageIDs = ctx.messages.map((msg) => msg.info.id)
   if (messageIDs.length === 0) return undefined
+  // Convert before matching so the anchor verifies the exact rendered prefix,
+  // including tool-result expansion and changes under existing durable IDs.
+  const modelMessages = await MessageV2.toModelMessages(ctx.messages, model)
   const ledger = TokenLedger.forSession(ctx.sessionID)
-  // The tool cannot reconstruct the rendered system prompt or tool surface,
-  // so anchor matching here is IDs + revision only (full-hash callers get
-  // system/tool-change invalidation; see TokenLedger.findAnchor).
+  // Fresh conversion: transform plugins may mutate messages in place. The
+  // tool cannot reconstruct system/tool hashes; full-hash callers also get
+  // system/tool-change invalidation (see TokenLedger.findAnchor).
   const found = ledger.findAnchor({
     messageIDs,
+    messages: modelMessages,
     revision: TokenLedger.revisionFor(ctx.sessionID),
     routeKey: ObservedWindow.routeKeyFor(model),
   })
   if (!found && !isCliUsageModel(model)) return undefined
-  // Fresh conversion (no shared cache): transform plugins may mutate message
-  // objects in place, and this tool runs outside the prompt loop's cache
-  // policy. context_status is a diagnostic call, so the extra conversion cost
-  // is acceptable.
-  const modelMessages = await MessageV2.toModelMessages(ctx.messages, model)
   return ledger.current({
     messageIDs,
     revision: TokenLedger.revisionFor(ctx.sessionID),

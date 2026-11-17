@@ -9,6 +9,8 @@ changes belong to AX Coder.
 ### Fixed
 
 - Keep virtualized model picker rows stable during mouse hover and selection.
+- Preserve separate model input limits when calibrating context budgets.
+- Verify rendered request prefixes before reusing measured token counts, avoiding duplicate tool-output estimates and stale measurements.
 
 ## [7.30.32] - 2026-11-17
 

@@ -184,6 +184,7 @@ export namespace TokenLedger {
 
   type AnchorEntry = Anchor & {
     messageIDs: readonly string[]
+    messageHashes: readonly string[]
     revision: string
     toolSchemaHash: string
     systemHash: string
@@ -207,6 +208,8 @@ export namespace TokenLedger {
      */
     recordAnchor(input: {
       messageIDs: readonly string[]
+      /** Exact rendered request: one durable message may produce several model messages. */
+      messages: readonly ModelMessage[]
       revision: string
       toolSchemaHash: string
       systemHash: string
@@ -218,12 +221,14 @@ export namespace TokenLedger {
       const inputTokens = Math.max(0, input.usage.input)
       const cacheRead = Math.max(0, input.usage.cacheRead)
       const cacheWrite = Math.max(0, input.usage.cacheWrite)
+      const messageHashes = input.messages.map((message) => sha256(JSON.stringify(message)))
       const entry: AnchorEntry = {
-        prefixFingerprint: fingerprint(input),
+        prefixFingerprint: sha256(JSON.stringify([fingerprint(input), messageHashes])),
         measuredInputTokens: inputTokens + cacheRead + cacheWrite,
         routeKey: input.routeKey,
         at: input.at ?? Date.now(),
         messageIDs: [...input.messageIDs],
+        messageHashes,
         revision: input.revision,
         toolSchemaHash: input.toolSchemaHash,
         systemHash: input.systemHash,
@@ -247,9 +252,11 @@ export namespace TokenLedger {
      * Find the newest anchor whose message IDs still form a prefix of the
      * current request (same order, same revision). `toolSchemaHash` and
      * `systemHash` further constrain the match when the caller knows them;
-     * callers that cannot supply them (e.g. context_status) match on IDs and
-     * revision only. Hash-checking callers get full invalidation on system or
+     * callers that cannot supply them (e.g. context_status) still verify IDs,
+     * revision, and rendered messages. Full-hash callers invalidate on system or
      * tool-surface changes.
+     * Rendered snapshots additionally verify the model-message prefix and
+     * return its boundary, since durable IDs are not model-message offsets.
      *
      * The match also reports `hashVerified`: true only when the caller
      * supplied `systemHash` and it equals the entry's (plus `toolSchemaHash`
@@ -261,11 +268,13 @@ export namespace TokenLedger {
      */
     private findEntry(input: {
       messageIDs: readonly string[]
+      messages?: readonly ModelMessage[]
       revision: string
       routeKey?: RouteKey
       toolSchemaHash?: string
       systemHash?: string
     }): { entry: AnchorEntry; index: number; hashVerified: boolean } | undefined {
+      let messageHashes: string[] | undefined
       for (let i = this.anchors.length - 1; i >= 0; i--) {
         const entry = this.anchors[i]!
         if (input.routeKey !== undefined && entry.routeKey !== input.routeKey) continue
@@ -281,17 +290,21 @@ export namespace TokenLedger {
           }
         }
         if (!matches) continue
+        if (!input.messages || entry.messageHashes.length > input.messages.length) continue
+        messageHashes ??= input.messages.map((message) => sha256(JSON.stringify(message)))
+        if (entry.messageHashes.some((hash, index) => hash !== messageHashes![index])) continue
         const hashVerified =
           input.systemHash !== undefined &&
           entry.systemHash === input.systemHash &&
           (input.toolSchemaHash === undefined || entry.toolSchemaHash === input.toolSchemaHash)
-        return { entry, index: entry.messageIDs.length - 1, hashVerified }
+        return { entry, index: entry.messageHashes.length - 1, hashVerified }
       }
       return undefined
     }
 
     findAnchor(input: {
       messageIDs: readonly string[]
+      messages?: readonly ModelMessage[]
       revision: string
       routeKey?: RouteKey
       toolSchemaHash?: string
@@ -343,7 +356,7 @@ export namespace TokenLedger {
        */
       tools?: Record<string, { description?: string; inputSchema?: unknown }>
     }): LedgerBreakdown {
-      const found = this.findEntry(input)
+      const found = this.findEntry({ ...input, messages: input.tail.messages })
       const tailMessages = found ? input.tail.messages.slice(found.index + 1) : input.tail.messages
       const tailSystem = found?.hashVerified ? [] : input.tail.system
       const routeKey = input.routeKey ?? found?.entry.routeKey

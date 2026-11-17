@@ -1513,20 +1513,9 @@ export namespace SessionProcessor {
                     if (requestIDs?.length) {
                       const ledger = TokenLedger.forSession(input.sessionID)
                       const predicted = ledger.lastPrediction()
-                      // Filter messageIDs and messages to match what toModelMessages produces
-                      // (it drops messages with empty parts). This keeps the anchor's
-                      // fingerprint aligned with the actual request sent to the model.
-                      const nonEmptyIndices = requestMessages
-                        .map((msg, idx) =>
-                          (Array.isArray(msg.content) && msg.content.length === 0) ||
-                          (typeof msg.content === "string" && msg.content.trim() === "")
-                            ? -1
-                            : idx,
-                        )
-                        .filter((idx) => idx !== -1)
-                      const filteredMessageIDs = nonEmptyIndices.map((idx) => requestIDs[idx])
                       const anchor = ledger.recordAnchor({
-                        messageIDs: filteredMessageIDs,
+                        messageIDs: requestIDs,
+                        messages: requestMessages,
                         revision: TokenLedger.revisionFor(input.sessionID),
                         toolSchemaHash: TokenLedger.toolSchemaHashForRecord(activeStreamInput.tools ?? {}),
                         systemHash: TokenLedger.systemHashFor(activeStreamInput.system ?? []),

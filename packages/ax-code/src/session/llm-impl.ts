@@ -591,26 +591,13 @@ export namespace LLM {
         const routeKey = ObservedWindow.routeKeyFor(input.model)
         const ledger = TokenLedger.forSession(input.sessionID)
         const messageIDs = input.messageIDs!
-        // Filter messageIDs and messages to match what toModelMessages produces
-        // (it drops messages with empty parts). This keeps the ledger's tail
-        // estimation aligned with the actual request sent to the model.
-        const nonEmptyIndices = input.messages
-          .map((msg, idx) =>
-            (Array.isArray(msg.content) && msg.content.length === 0) ||
-            (typeof msg.content === "string" && msg.content.trim() === "")
-              ? -1
-              : idx,
-          )
-          .filter((idx) => idx !== -1)
-        const filteredMessageIDs = nonEmptyIndices.map((idx) => messageIDs[idx])
-        const filteredMessages = nonEmptyIndices.map((idx) => input.messages[idx])
         const breakdown = ledger.current({
-          messageIDs: filteredMessageIDs,
+          messageIDs,
           revision: TokenLedger.revisionFor(input.sessionID),
           toolSchemaHash: toolSchemaHashFor(tools),
           systemHash: TokenLedger.systemHashFor(input.system),
           routeKey,
-          tail: { system: input.system, messages: filteredMessages },
+          tail: { system: input.system, messages: input.messages },
           tools,
         })
         promptTokenEstimate = breakdown.total

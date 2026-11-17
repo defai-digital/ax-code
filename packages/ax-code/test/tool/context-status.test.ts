@@ -10,6 +10,7 @@ import { ToolRegistry } from "../../src/tool/registry"
 import { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { ObservedWindow } from "../../src/provider/observed-window"
+import { TokenLedger } from "../../src/provider/token-ledger"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -92,6 +93,60 @@ async function seedConversation(sessionID: SessionID, directory: string, ref = m
 }
 
 describe("tool.context_status", () => {
+  test("does not count an anchored tool result twice after model-message expansion", async () => {
+    await using tmp = await project({ contextTools: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await seedConversation(session.id, tmp.path)
+        const initial = await Session.messages({ sessionID: session.id })
+        const user = initial.find((message) => message.info.role === "user")!
+        const assistant = initial.find((message) => message.info.role === "assistant")!
+        await Session.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: user.info.id,
+          type: "text",
+          text: "Read the file",
+        })
+        await Session.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: assistant.info.id,
+          type: "tool",
+          callID: "call-read",
+          tool: "read",
+          state: {
+            status: "completed",
+            input: { filePath: "README.md" },
+            output: "x".repeat(4_000),
+            title: "Read file",
+            metadata: {},
+            time: { start: 1, end: 2 },
+          },
+        })
+        const messages = await Session.messages({ sessionID: session.id })
+        const model = await Provider.getModel(modelRef.providerID, modelRef.modelID)
+        const rendered = await MessageV2.toModelMessages(messages, model)
+        expect(rendered.length).toBeGreaterThan(messages.length)
+        const ledger = TokenLedger.forSession(session.id)
+        ledger.recordAnchor({
+          messageIDs: messages.map((message) => message.info.id),
+          messages: rendered,
+          revision: TokenLedger.revisionFor(session.id),
+          toolSchemaHash: "tools",
+          systemHash: "system",
+          usage: { input: 5_000, cacheRead: 0, cacheWrite: 0, source: "exact" },
+          routeKey: ObservedWindow.routeKeyFor(model),
+        })
+        const tool = (await ToolRegistry.tools(modelRef)).find((candidate) => candidate.id === "context_status")!
+        const result = await tool.execute({}, toolContext(session.id, messages))
+        expect(result.metadata.used).toBe(5_000)
+      },
+    })
+  })
+
   test("estimates legacy native CLI history instead of reporting cumulative consumption as context", async () => {
     await using tmp = await project({ contextTools: true, native: true })
     await Instance.provide({

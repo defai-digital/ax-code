@@ -509,6 +509,7 @@ describe("CliLanguageModel", () => {
             const ledger = new TokenLedger.SessionTokenLedger()
             expect(
               ledger.recordAnchor({
+                messages: [],
                 messageIDs: ["synthetic"],
                 revision: "0",
                 toolSchemaHash: "",

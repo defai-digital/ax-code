@@ -40,8 +40,8 @@ export type CompactionTokenUsage = {
 
 export type CompactionBudget = { cap: number; reserved: number; usable: number }
 
-// Observed-window (ADR-139 D3) budget options. `cap` replaces
-// `limit.input || limit.context` when an observed window exists; an unknown
+// Observed-window (ADR-139 D3) budget options. An observed window can tighten
+// `limit.input || limit.context`, never raise the declared input cap; an unknown
 // window returns no budget at all — auto-compaction stays off for that route
 // (same shape as `limit.context === 0`).
 export type CompactionWindowOptions = {
@@ -78,14 +78,15 @@ export function calculateCompactionBudget(
   // is smaller than limit.context; otherwise context is the cap. Use `||`
   // so a stray `limit.input: 0` falls through to context — `??` would
   // treat 0 as a valid cap and never compact. A calibrated observed window
-  // (ADR-139 D3) replaces both: it is the deployment's real, possibly
-  // shrunken, ceiling.
+  // (ADR-139 D3) may shrink this budget, but it measures the total window
+  // and must not raise a separate, tighter input ceiling.
   const declaredInput = model.limit.input
   const observed =
     window?.observedWindow !== undefined && Number.isFinite(window.observedWindow) && window.observedWindow > 0
       ? Math.floor(window.observedWindow)
       : undefined
-  const cap = observed ?? (declaredInput || context)
+  const declaredCap = declaredInput || context
+  const cap = observed === undefined ? declaredCap : Math.min(observed, declaredCap)
   // AX Engine rejects prompt + requested output above context. New model
   // cards expose an explicit input cap, but retain a safe fallback for older
   // config overrides that only declare context/output.

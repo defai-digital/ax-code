@@ -28,6 +28,7 @@ import { codexCliParser } from "../../src/provider/cli/parser"
 import { Process } from "../../src/util/process"
 import { ProviderID, ModelID } from "../../src/provider/schema"
 import { TokenLedger } from "../../src/provider/token-ledger"
+import { TokenEstimate } from "../../src/provider/token-estimate"
 import { ObservedWindow } from "../../src/provider/observed-window"
 import { SessionCompaction } from "../../src/session/compaction"
 import { completionClamp } from "../../src/session/compaction-budget"
@@ -161,6 +162,45 @@ function successfulTextStream(text = "done") {
 }
 
 describe("session.processor", () => {
+  test("anchors the rendered request without treating durable IDs as model-message offsets", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(
+          tmp.path,
+          processorDependencies({ stream: async () => successfulTextStream() }),
+        )
+        const messages: ModelMessage[] = [
+          { role: "user", content: "Read the file" },
+          { role: "assistant", content: [{ type: "tool-call", toolCallId: "call", toolName: "read", input: {} }] },
+          {
+            role: "tool",
+            content: [
+              {
+                type: "tool-result",
+                toolCallId: "call",
+                toolName: "read",
+                output: { type: "text", value: "x".repeat(4_000) },
+              },
+            ],
+          },
+        ]
+        await processor.process({ ...streamInput, messages, messageIDs: ["user", "assistant"] })
+        const tail: ModelMessage = { role: "user", content: "Continue" }
+        const ledger = TokenLedger.forSession(streamInput.sessionID)
+        const breakdown = ledger.current({
+          messageIDs: ["user", "assistant", "next"],
+          revision: TokenLedger.revisionFor(streamInput.sessionID),
+          routeKey: ObservedWindow.routeKeyFor(model),
+          tail: { system: [], messages: [...messages, tail] },
+        })
+        expect(breakdown.measured).toBe(100)
+        expect(breakdown.estimated).toBe(TokenEstimate.messageTokens(tail))
+      },
+    })
+  })
+
   test("two native CLI turns preserve consumption without inflating the next request or its calibrated window", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
