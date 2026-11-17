@@ -13,7 +13,7 @@ process.env.XDG_CONFIG_HOME = state
 process.env.XDG_DATA_HOME = state
 process.env.AX_CODE_DISABLE_PROJECT_CONFIG = "true"
 const { testRender } = await import("ax-tui/solid")
-const { InputRenderable, MouseButton, VirtualListRenderable, RGBA } = await import("ax-tui")
+const { InputRenderable, MouseButton, VirtualListRenderable, ScrollBoxRenderable, RGBA } = await import("ax-tui")
 const { KVProvider, useKV } = await import("../src/cli/tui/context/kv")
 const { TuiConfigProvider } = await import("../src/cli/tui/context/tui-config")
 const { LanguageProvider } = await import("../src/cli/tui/context/language")
@@ -534,6 +534,76 @@ try {
   assert.equal(delayedPicked, 3, "unrelated option updates must preserve manual navigation")
   dialog.clear()
   await setup.flush()
+  for (const [length, offset] of [
+    [40, 0],
+    [40, -1],
+    [40, 1],
+    [500, 0],
+    [500, -1],
+    [500, 1],
+  ] as const) {
+    const currentIndex = Math.floor(length / 2)
+    const targetIndex = currentIndex + offset
+    const models = Array.from({ length }, (_, index) => ({
+      title: `Synthetic model ${index}`,
+      value: { providerID: "synthetic", modelID: `model-${index}` },
+      category: `Provider ${Math.floor(index / 10)}`,
+    }))
+    const highlighted: string[] = []
+    const confirmed: string[] = []
+    dialog.replace(() => (
+      <DialogSelect
+        title="Mouse model picker"
+        options={models}
+        getKey={(option) => option.value.modelID}
+        current={models[currentIndex]!.value}
+        onMove={(option) => highlighted.push(option.value.modelID)}
+        onSelect={(option) => {
+          confirmed.push(option.value.modelID)
+          dialog.clear()
+        }}
+      />
+    ))
+    await setup.flush()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    await setup.flush()
+    const row = findRenderable(setup.renderer.root, (node) => node.id === `dialog-select-option-${targetIndex}`)!
+    assert(row, "the target model must be mounted")
+    let list = row.parent
+    while (list && !(list instanceof ScrollBoxRenderable)) list = list.parent
+    assert(list instanceof ScrollBoxRenderable)
+    const top = list.scrollTop
+    const pointer = { x: row.x + 1, y: row.y }
+    const currentRow = findRenderable(
+      setup.renderer.root,
+      (node) => node.id === `dialog-select-option-${currentIndex}`,
+    )!
+    await setup.mockMouse.moveTo(currentRow.x + 1, currentRow.y)
+    highlighted.length = 0
+    await setup.mockMouse.moveTo(pointer.x, pointer.y)
+    await setup.flush()
+    assert.equal(list.scrollTop, top, "moving the pointer between models must not scroll")
+    if (offset !== 0) {
+      assert(
+        highlighted.includes(models[targetIndex]!.value.modelID),
+        "hover must highlight the model under the pointer",
+      )
+    }
+    await setup.mockMouse.pressDown(pointer.x, pointer.y, MouseButton.LEFT)
+    for (let frame = 0; frame < 4; frame++) {
+      await setup.flush()
+      assert.equal(list.scrollTop, top, `mouse highlighting must not scroll a ${length}-model picker`)
+      const target = findRenderable(setup.renderer.root, (node) => node.id === row.id)
+      assert.equal(target?.y, pointer.y, "the model must remain under the stationary pointer")
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    assert(highlighted.length > 0)
+    assert(highlighted.every((model) => model === models[targetIndex]!.value.modelID))
+    await setup.mockMouse.release(pointer.x, pointer.y, MouseButton.LEFT)
+    await setup.flush()
+    assert.deepEqual(confirmed, [models[targetIndex]!.value.modelID])
+    assert.equal(dialog.stack.length, 0, "one mouse click must close the model picker once")
+  }
   const options = Array.from({ length: 5000 }, (_, index) => ({
     value: `entry-${index}`,
     title: `Entry ${String(index).padStart(5, "0")}`,

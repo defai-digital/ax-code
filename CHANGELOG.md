@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep virtualized model picker rows stable during mouse hover and selection.
+
 ## [7.30.32] - 2026-11-17
 
 ### Changed

@@ -280,11 +280,17 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     return `dialog-select-option-${index}`
   }
 
-  function moveTo(next: number, center = false) {
-    const previous = store.selected
+  // Pointer targets are already visible. Scrolling them moves virtual rows
+  // under the pointer and feeds synthetic hover events back into selection.
+  function highlight(next: number): void {
     setStore("selected", next)
     const option = selected()
     if (option) props.onMove?.(option)
+  }
+
+  function moveTo(next: number, center = false) {
+    const previous = store.selected
+    highlight(next)
     if (!scroll) return
     const target = findRenderableChild<{ id?: string; y: number }>(scroll, (child) => child.id === optionID(next), {
       name: "dialog-select-option-target",
@@ -502,17 +508,17 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           // against double-fires.
           armConfirm()
           const row = optionIndex()
-          if (row !== store.selected) moveTo(row)
+          if (row !== store.selected) highlight(row)
           confirmSelected()
         }}
         onMouseOver={() => {
           if (store.input !== "mouse") return
           armConfirm()
-          moveTo(optionIndex())
+          highlight(optionIndex())
         }}
         onMouseDown={() => {
           armConfirm()
-          moveTo(optionIndex())
+          highlight(optionIndex())
         }}
         backgroundColor={
           active()
