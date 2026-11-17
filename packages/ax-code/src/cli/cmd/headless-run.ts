@@ -4,11 +4,11 @@ import {
   createHeadlessConsoleEventSinks,
   createHeadlessIdleAbort,
   headlessInterruptExitCode,
-  headlessBackendOptions,
   resolveHeadlessWorkdir,
   withHeadlessBackend,
   withHeadlessGuards,
 } from "./headless-shared"
+import { headlessBackendOptions } from "./headless-options"
 import type { HeadlessRuntimeCommand } from "@/runtime/headless"
 import { readNonTtyStdin } from "@/cli/stdin"
 

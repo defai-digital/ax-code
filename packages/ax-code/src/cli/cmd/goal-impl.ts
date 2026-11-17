@@ -3,42 +3,11 @@ import { EOL } from "os"
 import type { Argv } from "yargs"
 import { cmd } from "./cmd"
 import { Filesystem } from "@/util/filesystem"
-import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import type { HeadlessRuntimeCommand } from "@/runtime/headless"
 import type { SessionGoal } from "../../session/goal"
 import type { SessionID } from "../../session/schema"
-import { parseIdleTimeoutMs } from "./idle-timeout"
+import { headlessBackendOptions } from "./headless-options"
 import { jsonOption, writeJson } from "./json-output"
-
-// Same options as headlessBackendOptions. Inlined so `goal` registration does
-// not import headless-shared (bootstrap and server constants).
-function headlessBackendOptions<T>(yargs: Argv<T>) {
-  return yargs
-    .option("attach", {
-      describe: `attach to a running ax-code server, e.g. http://localhost:${DEFAULT_SERVER_PORT}`,
-      type: "string",
-    })
-    .option("password", {
-      describe: "basic auth password for --attach; defaults to AX_CODE_SERVER_PASSWORD",
-      type: "string",
-    })
-    .option("autonomous", {
-      describe: "auto-answer permission/question prompts through the headless effect policy",
-      type: "boolean",
-      default: true,
-    })
-    .option("idle-timeout-ms", {
-      describe:
-        "abort if the headless session emits no events for this long (inactivity timeout — a busy long run keeps resetting it); set 0 to disable",
-      type: "number",
-      default: 10 * 60 * 1000,
-      coerce: parseIdleTimeoutMs,
-    })
-    .option("event-log", {
-      describe: "also write raw headless JSONL events to this file",
-      type: "string",
-    })
-}
 
 async function loadGoal() {
   const [{ SessionGoal }, { SessionID }, boot] = await Promise.all([

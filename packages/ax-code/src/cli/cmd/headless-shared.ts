@@ -1,11 +1,8 @@
 import path from "node:path"
-import type { Argv } from "yargs"
 import { bootstrap } from "../bootstrap"
 import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
 import { buildAttachAuthHeaders } from "../attach-auth"
-import { DEFAULT_SERVER_PORT } from "@/constants/server"
 import { assertLoopbackHttpUrl } from "@/util/listen-security"
-import { parseIdleTimeoutMs } from "./idle-timeout"
 import type { HeadlessEventSink } from "@/runtime/headless"
 
 // Shared plumbing for the headless CLI entry points (headless-run,
@@ -34,35 +31,6 @@ export function createInternalFetch(handler: FetchHandler, headers?: Record<stri
     }
     return handler(request)
   }) as typeof globalThis.fetch
-}
-
-/** Backend options shared by headless-run and goal resume. */
-export function headlessBackendOptions<T>(yargs: Argv<T>) {
-  return yargs
-    .option("attach", {
-      describe: `attach to a running ax-code server, e.g. http://localhost:${DEFAULT_SERVER_PORT}`,
-      type: "string",
-    })
-    .option("password", {
-      describe: "basic auth password for --attach; defaults to AX_CODE_SERVER_PASSWORD",
-      type: "string",
-    })
-    .option("autonomous", {
-      describe: "auto-answer permission/question prompts through the headless effect policy",
-      type: "boolean",
-      default: true,
-    })
-    .option("idle-timeout-ms", {
-      describe:
-        "abort if the headless session emits no events for this long (inactivity timeout — a busy long run keeps resetting it); set 0 to disable",
-      type: "number",
-      default: 10 * 60 * 1000,
-      coerce: parseIdleTimeoutMs,
-    })
-    .option("event-log", {
-      describe: "also write raw headless JSONL events to this file",
-      type: "string",
-    })
 }
 
 /**
