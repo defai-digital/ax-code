@@ -28,6 +28,9 @@ export type CompactionBudgetModel = {
 }
 
 export type CompactionTokenUsage = {
+  scope?: "request" | "run"
+  /** Estimated outer request/reply size for an opaque native CLI run. */
+  context?: { input: number; output: number }
   input: number
   output: number
   reasoning: number

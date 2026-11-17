@@ -19,15 +19,15 @@ const PROVIDER_ID = "context-status-provider"
 const MODEL_ID = "context-status-model"
 const LIMIT = { context: 200_000, input: 100_000, output: 8_000 }
 
-function project(config?: { contextTools?: boolean; compaction?: Record<string, unknown> }) {
+function project(config?: { contextTools?: boolean; compaction?: Record<string, unknown>; native?: boolean }) {
   return tmpdir({
     config: {
       ...(config?.contextTools ? { experimental: { context_tools: true } } : {}),
       ...(config?.compaction ? { compaction: config.compaction } : {}),
       provider: {
-        [PROVIDER_ID]: {
+        [config?.native ? "context-status-cli" : PROVIDER_ID]: {
           name: "Context Status Provider",
-          npm: "cli",
+          npm: config?.native ? "cli" : "@ai-sdk/openai-compatible",
           env: [],
           models: {
             [MODEL_ID]: {
@@ -67,14 +67,14 @@ const ASSISTANT_TOKENS = {
   cache: { read: 0, write: 0 },
 }
 
-async function seedConversation(sessionID: SessionID, directory: string) {
+async function seedConversation(sessionID: SessionID, directory: string, ref = modelRef) {
   const user = await Session.updateMessage({
     id: MessageID.ascending(),
     sessionID,
     role: "user",
     time: { created: Date.now() },
     agent: "build",
-    model: modelRef,
+    model: ref,
   } as any)
   await Session.updateMessage({
     id: MessageID.ascending(),
@@ -85,13 +85,43 @@ async function seedConversation(sessionID: SessionID, directory: string) {
     agent: "build",
     path: { cwd: directory, root: directory },
     tokens: ASSISTANT_TOKENS,
-    modelID: modelRef.modelID,
-    providerID: modelRef.providerID,
+    modelID: ref.modelID,
+    providerID: ref.providerID,
     time: { created: Date.now(), completed: Date.now() },
   } as MessageV2.Assistant)
 }
 
 describe("tool.context_status", () => {
+  test("estimates legacy native CLI history instead of reporting cumulative consumption as context", async () => {
+    await using tmp = await project({ contextTools: true, native: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const nativeRef = { ...modelRef, providerID: ProviderID.make("context-status-cli") }
+        const tools = await ToolRegistry.tools(nativeRef)
+        const tool = tools.find((candidate) => candidate.id === "context_status")
+        const session = await Session.create({})
+        await seedConversation(session.id, tmp.path, nativeRef)
+        const messages = await Session.messages({ sessionID: session.id })
+        const user = messages.find((message) => message.info.role === "user")!
+        await Session.updatePart({
+          id: PartID.ascending(),
+          sessionID: session.id,
+          messageID: user.info.id,
+          type: "text",
+          text: "Synthetic retained request.",
+        })
+        const before = await Session.messages({ sessionID: session.id })
+        const result = await tool!.execute({}, toolContext(session.id, before))
+        expect(result.metadata.used).toBeGreaterThan(0)
+        expect(result.metadata.used).toBeLessThan(effectiveTokenTotal(ASSISTANT_TOKENS))
+        expect(result.metadata.usageSource).toBe("estimated")
+        expect(JSON.parse(result.output).usageSource).toBe("estimated")
+        expect(await Session.messages({ sessionID: session.id })).toEqual(before)
+      },
+    })
+  })
+
   test("is absent from the tool list without experimental.context_tools", async () => {
     await using tmp = await project()
     await Instance.provide({

@@ -4,9 +4,55 @@ import path from "path"
 import { ObservedWindow } from "@/provider/observed-window"
 import { Filesystem } from "@/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
+import { Instance } from "@/project/instance"
+import type { Provider } from "@/provider/provider"
+import { ProviderID } from "@/provider/schema"
 
 const ROUTE = "test-provider/test-model"
 const CATALOG = 131_072
+
+describe("native CLI calibration quarantine", () => {
+  test.each(["codex-cli", "custom-native"])(
+    "ignores old calibration for %s without deleting it",
+    async (providerID) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = {
+            providerID,
+            id: "synthetic-model",
+            api: { id: "synthetic-model", url: "", npm: "cli" },
+            limit: { context: CATALOG, output: 8_000 },
+            options: {},
+            headers: {},
+          } as Provider.Model
+          const s = ObservedWindow.store()
+          const route = ObservedWindow.routeKeyFor(model)
+          await s.recordOverflow(route, 600_000, { statedLimit: 32_768, catalogLimit: CATALOG })
+          const before = s.snapshot()
+          expect(await ObservedWindow.resolveModelWindow(model)).toEqual({ kind: "catalog" })
+          await ObservedWindow.recordOverflowEvidence({
+            providerID,
+            scope: "run",
+            routeKey: route,
+            catalogLimit: CATALOG,
+            message: "maximum context length is 16384 tokens",
+          })
+          expect(s.snapshot()).toEqual(before)
+          const direct = {
+            ...model,
+            providerID: ProviderID.make("direct-api"),
+            api: { ...model.api, npm: "@ai-sdk/openai-compatible" },
+          }
+          const directRoute = ObservedWindow.routeKeyFor(direct)
+          await s.recordOverflow(directRoute, 60_000, { statedLimit: 32_768, catalogLimit: CATALOG })
+          expect(await ObservedWindow.resolveModelWindow(direct)).toMatchObject({ kind: "observed", window: 32_768 })
+        },
+      })
+    },
+  )
+})
 
 function store(options: { filePath?: string; now?: () => number } = {}) {
   return new ObservedWindow.ObservedWindowStore(options)

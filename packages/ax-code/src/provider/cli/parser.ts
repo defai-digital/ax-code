@@ -1,7 +1,7 @@
 import { parseCliJsonObject, type CliJsonObject } from "./json"
 import { isRecord } from "@/util/record"
 
-/** Real token usage reported by a CLI, already normalized to total counts. */
+/** Consumption reported by a native CLI run, not an outer prompt measurement. */
 export interface CliUsage {
   /** Total input (prompt) tokens, including any cached tokens. */
   inputTokens: number

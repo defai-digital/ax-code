@@ -21,6 +21,20 @@ import * as ImageResize from "../../src/session/image-resize"
 import { preparePromptRequest } from "../../src/session/prompt/prompt-request-build"
 import { Recorder } from "../../src/replay/recorder"
 import { DesktopBrowser } from "../../src/mcp/desktop-browser"
+import { PassThrough } from "node:stream"
+import { streamText, type ModelMessage } from "ai"
+import { CliLanguageModel } from "../../src/provider/cli/cli-language-model"
+import { codexCliParser } from "../../src/provider/cli/parser"
+import { Process } from "../../src/util/process"
+import { ProviderID, ModelID } from "../../src/provider/schema"
+import { TokenLedger } from "../../src/provider/token-ledger"
+import { ObservedWindow } from "../../src/provider/observed-window"
+import { SessionCompaction } from "../../src/session/compaction"
+import { completionClamp } from "../../src/session/compaction-budget"
+import {
+  maybeScheduleUsageCompaction,
+  maybeSchedulePreflightCompaction,
+} from "../../src/session/prompt/prompt-loop-compaction"
 
 const model: Provider.Model = {
   id: "test-model" as any,
@@ -147,6 +161,186 @@ function successfulTextStream(text = "done") {
 }
 
 describe("session.processor", () => {
+  test("two native CLI turns preserve consumption without inflating the next request or its calibrated window", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const nativeModel: Provider.Model = {
+          ...model,
+          providerID: ProviderID.make("codex-cli"),
+          id: ModelID.make("synthetic-model"),
+          api: { ...model.api, npm: "cli" },
+          capabilities: { ...model.capabilities, toolcall: false },
+          limit: { context: 200_000, output: 8_000 },
+        }
+        const cli = new CliLanguageModel({
+          providerID: nativeModel.providerID,
+          modelID: nativeModel.id,
+          binary: "synthetic-cli",
+          args: [],
+          parser: codexCliParser,
+          promptMode: "arg",
+          promptFlag: "-p",
+        })
+        const originalSpawn = Process.spawn
+        const spawn = vi.spyOn(Process, "spawn").mockImplementation((cmd, options) => {
+          if (cmd[0] !== "synthetic-cli") return originalSpawn(cmd, options)
+          const stdout = new PassThrough()
+          const stderr = new PassThrough()
+          const exited = new Promise<number>((resolve) =>
+            setTimeout(() => {
+              stdout.end(
+                [
+                  { type: "item.completed", item: { type: "agent_message", text: "Synthetic completed work." } },
+                  {
+                    type: "turn.completed",
+                    usage: { input_tokens: 600_000, cached_input_tokens: 500_000, output_tokens: 80 },
+                  },
+                ]
+                  .map((event) => JSON.stringify(event))
+                  .join("\n") + "\n",
+              )
+              stderr.end()
+              resolve(0)
+            }, 0),
+          )
+          return {
+            stdout,
+            stderr,
+            exited,
+            exitCode: null,
+            signalCode: null,
+            kill: () => true,
+            stdin: null,
+          } as unknown as Process.Child
+        })
+        const success = vi.spyOn(ObservedWindow.store(), "recordSuccess")
+        const create = vi.spyOn(SessionCompaction, "create").mockResolvedValue(undefined)
+        try {
+          const session = await Session.create({})
+          const ref = { providerID: nativeModel.providerID, modelID: nativeModel.id }
+          const messages: ModelMessage[] = []
+          const ids: string[] = []
+          const agent = await Agent.get("build")
+          const ledger = TokenLedger.forSession(session.id)
+          for (let turn = 0; turn < 2; turn++) {
+            const user = await Session.updateMessage({
+              id: MessageID.ascending(),
+              sessionID: session.id,
+              role: "user",
+              agent: "build",
+              model: ref,
+              time: { created: Date.now() },
+            })
+            if (user.role !== "user") throw new Error("Expected synthetic user")
+            const text = "Synthetic input. ".repeat(450)
+            await Session.updatePart({
+              id: PartID.ascending(),
+              sessionID: session.id,
+              messageID: user.id,
+              type: "text",
+              text,
+            })
+            messages.push({ role: "user", content: text })
+            ids.push(user.id)
+            const request = ledger.current({
+              messageIDs: ids,
+              revision: "0",
+              toolSchemaHash: "",
+              systemHash: "",
+              routeKey: ObservedWindow.routeKeyFor(nativeModel),
+              tail: { system: [], messages },
+            })
+            expect(request.total).toBeLessThan(20_000)
+            expect(
+              completionClamp({ context: 200_000, used: request.total, reserve: 20_000, staticCeiling: 8_000 }),
+            ).toBe(8_000)
+            const assistant = await Session.updateMessage({
+              id: MessageID.ascending(),
+              parentID: user.id,
+              sessionID: session.id,
+              role: "assistant",
+              agent: "build",
+              mode: "build",
+              path: { cwd: tmp.path, root: tmp.path },
+              modelID: nativeModel.id,
+              providerID: nativeModel.providerID,
+              time: { created: Date.now() },
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+            })
+            if (assistant.role !== "assistant") throw new Error("Expected synthetic assistant")
+            const processor = SessionProcessor.create(
+              { assistantMessage: assistant, sessionID: session.id, model: nativeModel, abort: AbortSignal.any([]) },
+              processorDependencies({
+                stream: async (input) =>
+                  streamText({ model: cli, messages: input.messages, maxRetries: 0 }) as unknown as Awaited<
+                    ReturnType<typeof LLM.stream>
+                  >,
+              }),
+            )
+            expect(
+              await processor.process({
+                user,
+                agent,
+                abort: AbortSignal.any([]),
+                sessionID: session.id,
+                system: [],
+                messages,
+                messageIDs: [...ids],
+                tools: {},
+                model: nativeModel,
+              }),
+            ).toBe("continue")
+            const persisted = await MessageV2.get({ sessionID: session.id, messageID: assistant.id })
+            expect(persisted.info).toMatchObject({
+              role: "assistant",
+              tokens: { input: 100_000, cache: { read: 500_000 }, scope: "run" },
+            })
+            expect(processor.message.error).toBeUndefined()
+            expect(processor.lastStepUsage?.context?.input).toBeGreaterThan(0)
+            expect(persisted.parts.find((part) => part.type === "step-finish")).toMatchObject({
+              tokens: { scope: "run", context: processor.lastStepUsage?.context },
+            })
+            expect(
+              await maybeScheduleUsageCompaction({
+                sessionID: session.id,
+                agent: "build",
+                userModel: ref,
+                model: nativeModel,
+                lastFinished: processor.message,
+                lastFinishedStepTokens: processor.lastStepUsage,
+              }),
+            ).toBe(false)
+            messages.push({ role: "assistant", content: "Synthetic completed work." })
+            ids.push(assistant.id)
+          }
+          expect(success).not.toHaveBeenCalled()
+          expect(create).not.toHaveBeenCalled()
+          expect(TokenLedger.driftFor(ObservedWindow.routeKeyFor(nativeModel))).toBe(1)
+          expect(
+            await maybeSchedulePreflightCompaction({
+              sessionID: session.id,
+              agent: "build",
+              agentInfo: agent,
+              userModel: ref,
+              model: nativeModel,
+              userParts: [],
+              system: [],
+              requestMessages: [...messages, { role: "user", content: "x".repeat(900_000) }],
+              omitToolSchemas: true,
+            }),
+          ).toEqual({ action: "compact" })
+          expect(create).toHaveBeenCalledTimes(1)
+        } finally {
+          spawn.mockRestore()
+          success.mockRestore()
+          create.mockRestore()
+        }
+      },
+    })
+  })
+
   test("preserves distinct generated tests that share fenced setup code", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

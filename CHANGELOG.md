@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep native CLI run consumption separate from current context estimates so follow-up turns avoid false overflow.
+- Report unavailable compaction model settings with a recovery action while preserving session history.
+
 ## [7.30.31] - 2026-11-16
 
 ### Changed

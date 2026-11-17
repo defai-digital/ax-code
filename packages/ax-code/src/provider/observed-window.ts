@@ -27,6 +27,8 @@ import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
 import { resolveModelIdentity } from "./model-identity"
+import { isCliProviderID } from "./cli/ids"
+import { isCliUsageModel } from "./context-usage"
 
 const log = Log.create({ service: "provider.observed-window" })
 
@@ -129,6 +131,12 @@ export namespace ObservedWindow {
    */
   export function routeKeyFor(model: Provider.Model): string {
     return resolveModelIdentity(model).deploymentKey
+  }
+
+  /** Native agent context is not the outer AX request; ignore old run-derived calibration without rewriting it. */
+  export async function resolveModelWindow(model: Provider.Model): Promise<WindowResolution> {
+    if (isCliUsageModel(model)) return { kind: "catalog" }
+    return store().resolveWindow(routeKeyFor(model), model.limit.context)
   }
 
   const RecordSchema = z.object({
@@ -537,6 +545,8 @@ export namespace ObservedWindow {
    * is best-effort and must not disturb error handling.
    */
   export async function recordOverflowEvidence(input: {
+    providerID?: string
+    scope?: "request" | "run"
     routeKey?: string
     sessionID?: string
     catalogLimit?: number
@@ -544,6 +554,7 @@ export namespace ObservedWindow {
     responseBody?: string
   }): Promise<void> {
     try {
+      if (input.scope === "run" || isCliProviderID(input.providerID)) return
       if (!input.routeKey) return
       if (input.catalogLimit === undefined || !Number.isFinite(input.catalogLimit) || input.catalogLimit <= 0) return
       const statedLimit = extractStatedLimit(input.message ?? "", input.responseBody)

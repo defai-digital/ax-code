@@ -13,7 +13,7 @@
 import { createHash } from "node:crypto"
 import type { ModelMessage } from "ai"
 import { TokenEstimate } from "./token-estimate"
-import { usageSource, type UsageSource } from "./usage"
+import { usageScope, usageSource, type UsageScope, type UsageSource } from "./usage"
 
 export namespace TokenLedger {
   // `${providerID}/${resolvedModelID}` (+ endpoint origin for custom
@@ -175,6 +175,7 @@ export namespace TokenLedger {
   }
 
   export type AnchorUsage = {
+    scope?: UsageScope
     input: number
     cacheRead: number
     cacheWrite: number
@@ -213,7 +214,7 @@ export namespace TokenLedger {
       routeKey: RouteKey
       at?: number
     }): Anchor | undefined {
-      if (input.usage.source !== "exact") return undefined
+      if (input.usage.source !== "exact" || input.usage.scope === "run") return undefined
       const inputTokens = Math.max(0, input.usage.input)
       const cacheRead = Math.max(0, input.usage.cacheRead)
       const cacheWrite = Math.max(0, input.usage.cacheWrite)
@@ -390,6 +391,6 @@ export namespace TokenLedger {
 
   /** Convenience: exact-only guard matching the anchoring rule. */
   export function isAnchorable(usage: unknown): boolean {
-    return usageSource(usage) === "exact"
+    return usageSource(usage) === "exact" && usageScope(usage) === "request"
   }
 }

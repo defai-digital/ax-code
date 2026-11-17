@@ -74,8 +74,9 @@ import {
   footerTokenChip,
   hasActiveSubagentInSessionTree,
 } from "../../routes/session/footer-view-model"
-import { calculateCompactionBudget, effectiveTokenTotal } from "@/session/compaction-budget"
+import { calculateCompactionBudget } from "@/session/compaction-budget"
 import { Gauge } from "@tui/ui/primitives/gauge"
+import { modelContextTokens } from "@/provider/context-usage"
 import { KeyHint } from "@tui/ui/primitives/key-hint"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
 import { stringWidth } from "@/bun/node-compat"
@@ -1000,7 +1001,10 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
       // The compactor compares the LATEST step's usage against the budget,
       // not the turn-cumulative message totals (which grow with every step
       // and would pin the gauge near 100% on any multi-step turn).
-      totalTokens: effectiveTokenTotal(Usage.lastStepTokens(sync.data.part[last.id] ?? []) ?? last.tokens),
+      totalTokens: modelContextTokens(
+        Usage.lastStepTokens(sync.data.part[last.id] ?? []) ?? last.tokens,
+        model?.providerID === last.providerID ? model : last.providerID,
+      ),
       budget,
       compactionAuto: sync.data.config.compaction?.auto,
       contextLimit: model?.limit?.context,

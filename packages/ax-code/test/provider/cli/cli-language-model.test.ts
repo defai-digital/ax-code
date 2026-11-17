@@ -1,3 +1,8 @@
+import { generateText, streamText } from "ai"
+import type { Provider } from "../../../src/provider/provider"
+import { Session } from "../../../src/session"
+import { TokenLedger } from "../../../src/provider/token-ledger"
+import { modelContextTokens } from "../../../src/provider/context-usage"
 import { test, expect, describe, vi, beforeEach } from "vitest"
 import {
   buildCliCommand,
@@ -7,8 +12,8 @@ import {
   resetRejectedOptionalCliFlags,
 } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
-import { claudeCodeParser, grokBuildCliParser, museCliParser } from "../../../src/provider/cli/parser"
-import { usageSource } from "../../../src/provider/usage"
+import { claudeCodeParser, codexCliParser, grokBuildCliParser, museCliParser } from "../../../src/provider/cli/parser"
+import { usageContext, usageScope, usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
 import { existsSync } from "node:fs"
@@ -307,6 +312,7 @@ describe("CliLanguageModel", () => {
             outputTokens: { total: 2, text: 2, reasoning: 0 },
           })
           expect(usageSource(finish.usage)).toBe("exact")
+          expect(usageScope(finish.usage)).toBe("run")
         },
       })
     } finally {
@@ -420,6 +426,7 @@ describe("CliLanguageModel", () => {
             outputTokens: { total: 14, text: 14, reasoning: 0 },
           })
           expect(usageSource(finish.usage)).toBe("exact")
+          expect(usageScope(finish.usage)).toBe("run")
         },
       })
     } finally {
@@ -453,6 +460,105 @@ describe("CliLanguageModel", () => {
             if (value.type === "text-delta") text += value.delta
           }
           expect(text).toBe('ALPHA\n{"k":1}')
+        },
+      })
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test.each(["generate", "stream"] as const)(
+    "%s preserves native run totals through the real SDK without anchoring them",
+    async (mode) => {
+      await using tmp = await tmpdir()
+      const jsonl =
+        [
+          { type: "item.completed", item: { id: "synthetic", type: "agent_message", text: "Synthetic answer" } },
+          { type: "turn.completed", usage: { input_tokens: 600_000, cached_input_tokens: 500_000, output_tokens: 80 } },
+        ]
+          .map((entry) => JSON.stringify(entry))
+          .join("\n") + "\n"
+      const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild(jsonl))
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const model = makeModel({ providerID: "codex-cli", parser: codexCliParser })
+            const settings = { model, prompt: "A synthetic short request", maxRetries: 0 }
+            const result = mode === "generate" ? await generateText(settings) : streamText(settings)
+            expect(await result.text).toBe("Synthetic answer")
+            const usage = await result.usage
+            expect(usageSource(usage)).toBe("exact")
+            expect(usageScope(usage)).toBe("run")
+            expect(usageContext(usage)?.input).toBeGreaterThan(0)
+            const route = { providerID: "codex-cli", api: { npm: "cli" } } as Provider.Model
+            const normalized = Session.getUsage({ model: route, usage }).tokens
+            expect(normalized).toMatchObject({
+              input: 100_000,
+              output: 80,
+              cache: { read: 500_000, write: 0 },
+              scope: "run",
+            })
+            expect(modelContextTokens(normalized, route)).toBeLessThan(1_000)
+            expect(TokenLedger.isAnchorable(usage)).toBe(false)
+            const aggregate = Session.getUsage({ model: route, usage: await result.totalUsage }).tokens
+            expect(aggregate).toMatchObject({ input: 100_000, output: 80, scope: "run" })
+            // SDK aggregation drops raw provenance. The native route still prevents
+            // these whole-run totals from being interpreted as a prompt snapshot.
+            expect(modelContextTokens(aggregate, route)).toBeUndefined()
+            const ledger = new TokenLedger.SessionTokenLedger()
+            expect(
+              ledger.recordAnchor({
+                messageIDs: ["synthetic"],
+                revision: "0",
+                toolSchemaHash: "",
+                systemHash: "",
+                routeKey: "synthetic",
+                usage: {
+                  input: normalized.input,
+                  cacheRead: normalized.cache.read,
+                  cacheWrite: 0,
+                  source: "exact",
+                  scope: usageScope(usage),
+                },
+              }),
+            ).toBeUndefined()
+          },
+        })
+      } finally {
+        spawn.mockRestore()
+      }
+    },
+  )
+
+  test("a failed native run emits no successful context snapshot", async () => {
+    await using tmp = await tmpdir()
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementation(() =>
+        failedChild(
+          "native run failed",
+          1,
+          '{"type":"item.completed","item":{"type":"agent_message","text":"partial"}}\n{"type":"turn.failed","error":{"message":"synthetic failure"}}\n',
+        ),
+      )
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({ providerID: "codex-cli", parser: codexCliParser })
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "synthetic" }] }],
+          })
+          const events = []
+          let failure: unknown
+          try {
+            for await (const event of stream) events.push(event)
+          } catch (error) {
+            failure = error
+          }
+          expect(events.some((event) => event.type === "finish")).toBe(false)
+          expect(failure !== undefined || events.some((event) => event.type === "error")).toBe(true)
         },
       })
     } finally {

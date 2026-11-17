@@ -618,7 +618,7 @@ export namespace LLM {
         // ceiling. Clamping against the catalog limit would let a shrunken
         // route send prompt + output past its window and re-enter the
         // overflow -> compact -> overflow loop this clamp exists to prevent.
-        const resolved = await ObservedWindow.store().resolveWindow(routeKey, input.model.limit.context)
+        const resolved = await ObservedWindow.resolveModelWindow(input.model)
         const observedWindow = resolved.kind === "observed" ? resolved.window : undefined
         const budget = calculateCompactionBudget(
           input.model,

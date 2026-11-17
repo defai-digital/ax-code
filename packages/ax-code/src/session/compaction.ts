@@ -34,15 +34,34 @@ import {
   MIN_USABLE_TOKENS,
   SUPER_LONG_USABLE_FRACTION,
   calculateCompactionBudget,
-  effectiveTokenTotal,
   type CompactionBudget,
 } from "./compaction-budget"
 import { MediaProjection } from "./media-projection"
 import { agentModel } from "./prompt/prompt-command-selection"
 import { SessionEvidence } from "./evidence"
+import { modelContextTokens } from "../provider/context-usage"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
+  const MODEL_UNAVAILABLE = "COMPACTION_MODEL_UNAVAILABLE"
+
+  async function overrideModel(agent: Agent.Info, providerID: ProviderID): Promise<Provider.Model | undefined> {
+    const pinned = await agentModel(agent)
+    try {
+      return pinned
+        ? await Provider.getModel(pinned.providerID, pinned.modelID)
+        : await Provider.getSmallModel(providerID)
+    } catch (error) {
+      if (!Provider.ModelNotFoundError.isInstance(error)) throw error
+      const configKey = pinned ? "agent.compaction.model" : "small_model"
+      const target = `${error.data.providerID}/${error.data.modelID}`
+      throw new MessageV2.APIError({
+        message: `Cannot compact this session: ${configKey} selects unavailable model ${target}. Update or remove ${configKey}, then resume the session.`,
+        isRetryable: false,
+        metadata: { errorCode: MODEL_UNAVAILABLE, configKey },
+      })
+    }
+  }
   const inFlight = new Set<string>()
 
   /** Machine-readable marker on the synthetic plan-carryover part (ADR-141). */
@@ -408,7 +427,7 @@ export namespace SessionCompaction {
     // A known observed window replaces the catalog cap for manual compactions
     // too; an unknown window falls back to the catalog (manual compaction is
     // still attempted — only AUTO-compaction is disabled for those routes).
-    const resolved = await ObservedWindow.store().resolveWindow(ObservedWindow.routeKeyFor(model), model.limit.context)
+    const resolved = await ObservedWindow.resolveModelWindow(model)
     return calculateCompactionBudget(
       model,
       config.compaction?.reserved,
@@ -463,7 +482,7 @@ export namespace SessionCompaction {
     }
     // Observed-window calibration (ADR-139 D3): a shrunken deployment window
     // replaces the catalog cap; an unknown route disables auto-compaction.
-    const resolved = await ObservedWindow.store().resolveWindow(ObservedWindow.routeKeyFor(model), model.limit.context)
+    const resolved = await ObservedWindow.resolveModelWindow(model)
     if (resolved.kind === "unknown") {
       reportBudgetDisabled(model, "unknown_window")
       return { reason: "unknown_window" }
@@ -542,6 +561,7 @@ export namespace SessionCompaction {
   export async function isOverflow(input: {
     tokens: MessageV2.Assistant["tokens"]
     model: Provider.Model
+    usageProviderID?: ProviderID
     superLong?: boolean
     /**
      * Local estimate to compare when the provider reported no usage at all
@@ -555,7 +575,9 @@ export namespace SessionCompaction {
     const tokenBudget = await budget(input.model)
     if (!tokenBudget) return false
     const limit = input.superLong ? tokenBudget.usable * SUPER_LONG_USABLE_FRACTION : tokenBudget.usable
-    const measured = effectiveTokenTotal(input.tokens)
+    const source =
+      input.usageProviderID && input.usageProviderID !== input.model.providerID ? input.usageProviderID : input.model
+    const measured = modelContextTokens(input.tokens, source) ?? 0
     const total = measured > 0 ? measured : Math.max(0, input.fallbackTokens ?? 0)
     return total >= limit
   }
@@ -783,6 +805,10 @@ export namespace SessionCompaction {
         }
       }
       return result
+    } catch (error) {
+      if (!MessageV2.APIError.isInstance(error) || error.data.metadata?.errorCode !== MODEL_UNAVAILABLE) throw error
+      Session.publishError({ sessionID: input.sessionID, error: error.toObject() })
+      return "stop" as const
     } finally {
       inFlight.delete(input.sessionID)
     }
@@ -831,11 +857,9 @@ export namespace SessionCompaction {
     const userModel = await Provider.resolveRequestedModel(userMessage.model)
     // Compaction uses an exact role pin, an explicit small_model, or the
     // original session primary. Catalog recommendations grant no route.
-    const pinned = await agentModel(agent)
-    let model = pinned
-      ? await Provider.getModel(pinned.providerID, pinned.modelID)
-      : ((await Provider.getSmallModel(userModel.providerID)) ??
-        (await Provider.getModel(userModel.providerID, userModel.modelID)))
+    let model =
+      (await overrideModel(agent, userModel.providerID)) ??
+      (await Provider.getModel(userModel.providerID, userModel.modelID))
     // Resolve the next explicit recovery target only after a transient failure.
     const resolveNextRung = async (
       current: Provider.Model,
@@ -1315,6 +1339,19 @@ When constructing the summary, try to stick to this template:
       keep: z.number().int().min(1).max(COMPACTION_KEEP_MAX).optional(),
     }),
     async (input) => {
+      // Validate configured overrides before mutating history. Existing markers
+      // are checked again by process() so repairing the pin permits a resume.
+      const agent = await Agent.get("compaction")
+      if (agent) {
+        try {
+          await overrideModel(agent, input.model.providerID)
+        } catch (error) {
+          if (MessageV2.APIError.isInstance(error) && error.data.metadata?.errorCode === MODEL_UNAVAILABLE) {
+            Session.publishError({ sessionID: input.sessionID, error: error.toObject() })
+          }
+          throw error
+        }
+      }
       const triggerReason = input.triggerReason ?? (input.auto ? "provider_usage" : "manual")
       log.info("compaction scheduled", {
         command: "session.compaction.create",

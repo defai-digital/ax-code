@@ -22,7 +22,7 @@ import { Log } from "@/util/log"
 import { ScopedFlag } from "@/flag/scoped"
 import { Token } from "@/util/token"
 import { withTimeout } from "@/util/timeout"
-import { markEstimatedUsage } from "../usage"
+import { markEstimatedUsage, markRunUsage } from "../usage"
 import { parseJsonResult } from "../../util/json-value"
 import { Shell } from "@/shell/shell"
 import { Instance } from "@/project/instance"
@@ -328,24 +328,22 @@ export function buildCliCommand(
   return cmd
 }
 
-function estimatedUsage(input: string, output: string): LanguageModelV3Usage {
-  const inputTokens = Token.estimate(input)
-  const outputTokens = Token.estimate(output)
-  const usage = markEstimatedUsage({
-    inputTokens: { total: inputTokens, noCache: inputTokens, cacheRead: 0, cacheWrite: 0 },
-    outputTokens: { total: outputTokens, text: outputTokens, reasoning: 0 },
-  })
-  // The AI SDK rebuilds usage (asLanguageModelUsage) into a fresh object,
-  // dropping the non-enumerable marker on the object above; it copies `raw` by
-  // reference, so mirror the marker there for the consumers that read the
-  // SDK-normalized usage (processor ledger, observed window, session usage).
-  // Non-enumerable so it never changes the shape callers compare or serialize.
-  Object.defineProperty(usage, "raw", { value: markEstimatedUsage({}), enumerable: false, configurable: true })
-  return usage
+function cliUsage(parsed: CliUsage | undefined, input: string, output: string): LanguageModelV3Usage {
+  const context = { input: Token.estimate(input), output: Token.estimate(output) }
+  const measured = mapCliUsage(parsed)
+  const usage =
+    measured ??
+    markEstimatedUsage({
+      inputTokens: { total: context.input, noCache: context.input, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: context.output, text: context.output, reasoning: 0 },
+    })
+  if (!measured) Object.defineProperty(usage, "raw", { value: markEstimatedUsage({}), configurable: true })
+  // Native agents own their internal requests. Consumption stays exact when
+  // reported, while the outer request/reply snapshot is always an estimate.
+  return markRunUsage(usage, context)
 }
 
-// Map normalized CLI usage to the V3 shape. Real usage is intentionally not
-// marked estimated, so the token ledger can anchor on it.
+// Map native consumption to the V3 shape without changing its accuracy.
 function mapCliUsage(usage: CliUsage | undefined): LanguageModelV3Usage | undefined {
   if (!usage) return undefined
   const cacheRead = usage.cacheReadTokens ?? 0
@@ -713,7 +711,7 @@ export class CliLanguageModel implements LanguageModelV3 {
     return {
       content: [{ type: "text" as const, text: outputText }],
       finishReason: { unified: "stop" as const, raw: undefined },
-      usage: mapCliUsage(this.config.parser.parseUsage?.(rawStdout)) ?? estimatedUsage(text, outputText),
+      usage: cliUsage(this.config.parser.parseUsage?.(rawStdout), text, outputText),
       warnings: [],
     }
   }
@@ -1019,7 +1017,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           endText()
           controller.enqueue({
             type: "finish",
-            usage: mapCliUsage(parser.parseUsage?.(rawOutput)) ?? estimatedUsage(text, output.join("")),
+            usage: cliUsage(parser.parseUsage?.(rawOutput), text, output.join("")),
             finishReason: { unified: "stop", raw: undefined },
           })
           safeClose()
@@ -1049,7 +1047,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           const rawOutput = raw.join("")
           controller.enqueue({
             type: "finish",
-            usage: mapCliUsage(parser.parseUsage?.(rawOutput)) ?? estimatedUsage(text, output.join("")),
+            usage: cliUsage(parser.parseUsage?.(rawOutput), text, output.join("")),
             finishReason: { unified: "stop", raw: undefined },
           })
           safeClose()

@@ -171,6 +171,11 @@ export type AssistantMessage = {
   }
   summary?: boolean
   tokens: {
+    scope?: "request" | "run"
+    context?: {
+      input: number
+      output: number
+    }
     total?: number
     input: number
     output: number
@@ -4781,6 +4786,11 @@ export type StepFinishPart = {
   reason: string
   snapshot?: string
   tokens: {
+    scope?: "request" | "run"
+    context?: {
+      input: number
+      output: number
+    }
     total?: number
     input: number
     output: number

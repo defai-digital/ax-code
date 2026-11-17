@@ -9,13 +9,13 @@ import { observedCapabilitiesForModel } from "../provider/resolved-model"
 import { SessionCompaction } from "../session/compaction"
 import {
   calculateCompactionBudget,
-  effectiveTokenTotal,
   type CompactionBudget,
   type CompactionWindowOptions,
 } from "../session/compaction-budget"
 import { MessageV2 } from "../session/message-v2"
 import { ObservedWindow } from "../provider/observed-window"
 import { TokenLedger } from "../provider/token-ledger"
+import { isCliUsageModel, modelContextTokens } from "../provider/context-usage"
 
 // Resolve the model this tool was initialized for, falling back to the
 // session's most recent user message model and finally the configured
@@ -56,7 +56,7 @@ async function resolveBudget(model: Provider.Model): Promise<{
   windowSource: "catalog" | "observed" | "unknown"
   observedWindow?: number
 }> {
-  const resolution = await ObservedWindow.store().resolveWindow(ObservedWindow.routeKeyFor(model), model.limit.context)
+  const resolution = await ObservedWindow.resolveModelWindow(model)
   const windowOptions: CompactionWindowOptions | undefined =
     resolution.kind === "observed"
       ? { observedWindow: resolution.window }
@@ -104,7 +104,7 @@ async function resolveBudget(model: Provider.Model): Promise<{
   return { budget: fallback, auto: false, autoCompactionReason: status.reason, windowSource, observedWindow }
 }
 
-function lastUsedTokens(messages: MessageV2.WithParts[]) {
+function lastUsedTokens(messages: MessageV2.WithParts[], model: Provider.Model) {
   const last = messages.findLast((msg) => {
     if (msg.info.role !== "assistant") return false
     const tokens = msg.info.tokens
@@ -121,7 +121,10 @@ function lastUsedTokens(messages: MessageV2.WithParts[]) {
   // is nearly full when it is not. Fall back to the message totals only when
   // no step-finish part exists (single-step turns, where they agree).
   const step = last.parts.findLast((part): part is MessageV2.StepFinishPart => part.type === "step-finish")
-  return effectiveTokenTotal(step?.tokens ?? last.info.tokens)
+  return modelContextTokens(
+    step?.tokens ?? last.info.tokens,
+    model.providerID === last.info.providerID ? model : last.info.providerID,
+  )
 }
 
 /**
@@ -145,7 +148,7 @@ async function ledgerBreakdown(
     revision: TokenLedger.revisionFor(ctx.sessionID),
     routeKey: ObservedWindow.routeKeyFor(model),
   })
-  if (!found) return undefined
+  if (!found && !isCliUsageModel(model)) return undefined
   // Fresh conversion (no shared cache): transform plugins may mutate message
   // objects in place, and this tool runs outside the prompt loop's cache
   // policy. context_status is a diagnostic call, so the extra conversion cost
@@ -171,11 +174,12 @@ export const ContextStatusTool = Tool.define("context_status", async (initCtx) =
       const { budget, auto, autoCompactionReason, windowSource, observedWindow } = await resolveBudget(model)
       const breakdown = await ledgerBreakdown(model, ctx).catch(() => undefined)
       // The ledger total (measured anchor + drift-corrected tail estimate)
-      // replaces the last-step usage snapshot only when a matching anchor
-      // exists; otherwise the step usage is the freshest real evidence.
-      const used = breakdown ? breakdown.total : lastUsedTokens(ctx.messages)
+      // replaces the last-step usage snapshot when an anchor matches. Native
+      // CLI totals are consumption, so recompute their outer context estimate.
+      const used = breakdown ? breakdown.total : (lastUsedTokens(ctx.messages, model) ?? 0)
       const headroom = Math.max(0, budget.usable - used)
       const status = {
+        ...(isCliUsageModel(model) ? { usageSource: "estimated" } : {}),
         cap: budget.cap,
         usable: budget.usable,
         used,
@@ -193,6 +197,7 @@ export const ContextStatusTool = Tool.define("context_status", async (initCtx) =
           windowSource,
           observedWindow,
           ledger: breakdown,
+          ...(isCliUsageModel(model) ? { usageSource: "estimated" } : {}),
         },
         output: JSON.stringify(status, null, 2),
       }

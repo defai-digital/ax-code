@@ -113,6 +113,7 @@ export async function maybeScheduleUsageCompaction(input: {
     ? await SessionCompaction.isOverflow({
         tokens: tokens ?? zeroTokenUsage(),
         model: input.model,
+        usageProviderID: input.lastFinished.providerID,
         superLong: input.superLong,
         fallbackTokens: TokenLedger.forSession(input.sessionID).lastTotal(),
       })

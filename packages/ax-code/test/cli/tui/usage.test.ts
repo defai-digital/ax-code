@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { modelContextTokens } from "../../../src/provider/context-usage"
 import { Usage } from "../../../src/cli/tui/routes/session/usage"
 
 function assistant(input: { input?: number; output?: number; reasoning?: number; read?: number; write?: number }) {
@@ -62,4 +63,15 @@ describe("Usage.last", () => {
 
     expect(Usage.last(msgs as any)).toBeUndefined()
   })
+})
+
+test("step snapshots preserve outer CLI context while legacy CLI totals remain unknown", () => {
+  const counts = { input: 100_000, output: 50, reasoning: 0, cache: { read: 500_000, write: 0 } }
+  const scoped = Usage.lastStepTokens([
+    { type: "step-finish", tokens: { ...counts, scope: "run", context: { input: 1_000, output: 50 } } },
+  ])!
+  expect(modelContextTokens(scoped, "codex-cli")).toBe(1_050)
+  const legacy = Usage.lastStepTokens([{ type: "step-finish", tokens: counts }])!
+  expect(modelContextTokens(legacy, "codex-cli")).toBeUndefined()
+  expect(modelContextTokens(legacy, "direct-provider")).toBe(600_050)
 })

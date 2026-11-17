@@ -36,7 +36,8 @@ import { Recorder } from "@/replay/recorder"
 import { SessionShard } from "./shard"
 import { asRecord } from "@/util/record"
 import { toErrorMessage } from "../util/error-message"
-import { usageSource } from "@/provider/usage"
+import { isCliUsageModel } from "@/provider/context-usage"
+import { usageScope, usageSource } from "@/provider/usage"
 import { ObservedWindow } from "@/provider/observed-window"
 import { TokenLedger } from "@/provider/token-ledger"
 import { AgentOptimizationTrace } from "@/session/agent-optimization-trace"
@@ -1501,7 +1502,7 @@ export namespace SessionProcessor {
                   // never part of the anchor quantity.
                   {
                     const routeKey = ObservedWindow.routeKeyFor(input.model)
-                    if (source === "exact") {
+                    if (!isCliUsageModel(input.model) && TokenLedger.isAnchorable(value.usage)) {
                       const promptSize = usage.tokens.input + usage.tokens.cache.read + usage.tokens.cache.write
                       void ObservedWindow.store()
                         .recordSuccess(routeKey, promptSize, { catalogLimit: input.model.limit.context })
@@ -1534,6 +1535,7 @@ export namespace SessionProcessor {
                           cacheRead: usage.tokens.cache.read,
                           cacheWrite: usage.tokens.cache.write,
                           source,
+                          scope: isCliUsageModel(input.model) ? "run" : usageScope(value.usage),
                         },
                         routeKey,
                       })
@@ -1558,6 +1560,7 @@ export namespace SessionProcessor {
                       : ((value.finishReason as { type?: string })?.type ?? String(value.finishReason ?? "stop"))
                   input.assistantMessage.finish = usedTools ? "tool-calls" : finishReason
                   input.assistantMessage.tokens = {
+                    ...(usage.tokens.scope ? { scope: usage.tokens.scope, context: usage.tokens.context } : {}),
                     total: (usage.tokens.total ?? 0) + (input.assistantMessage.tokens.total ?? 0),
                     input: usage.tokens.input + input.assistantMessage.tokens.input,
                     output: usage.tokens.output + input.assistantMessage.tokens.output,
@@ -2003,6 +2006,7 @@ export namespace SessionProcessor {
             })
             const error = MessageV2.fromError(e, {
               providerID: input.model.providerID,
+              usageScope: isCliUsageModel(input.model) ? "run" : "request",
               routeKey: ObservedWindow.routeKeyFor(input.model),
               sessionID: input.sessionID,
               catalogLimit: input.model.limit.context,

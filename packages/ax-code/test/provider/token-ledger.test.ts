@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "vitest"
 import type { ModelMessage } from "ai"
 import { TokenLedger } from "@/provider/token-ledger"
 import { TokenEstimate } from "@/provider/token-estimate"
-import { USAGE_SOURCE_KEY } from "@/provider/usage"
+import { markRunUsage, USAGE_SOURCE_KEY } from "@/provider/usage"
 
 const ROUTE = "test-provider/test-model"
 
@@ -46,6 +46,18 @@ describe("SessionTokenLedger", () => {
       ledger.recordAnchor(anchorInput({ usage: { input: 1, cacheRead: 0, cacheWrite: 0, source: "missing" } })),
     ).toBeUndefined()
     expect(ledger.findAnchor({ messageIDs: ["m1", "m2"], revision: "0" })).toBeUndefined()
+  })
+
+  test("exact run-scoped consumption is not a prompt anchor", () => {
+    const ledger = new TokenLedger.SessionTokenLedger()
+    const reported = markRunUsage({ inputTokens: 600_000, outputTokens: 50 }, { input: 1_000, output: 50 })
+    expect(TokenLedger.isAnchorable(reported)).toBe(false)
+    expect(
+      ledger.recordAnchor(
+        anchorInput({ usage: { input: 100_000, cacheRead: 500_000, cacheWrite: 0, source: "exact", scope: "run" } }),
+      ),
+    ).toBeUndefined()
+    expect(ledger.lastTotal()).toBeUndefined()
   })
 
   test("current() reports measured prefix plus drift-corrected tail estimate", () => {

@@ -18,8 +18,9 @@ export namespace Usage {
   // part. Message-level totals accumulate across every step of the turn, so
   // anything that wants "current context size" (the footer context gauge,
   // matching what the compactor compares against the budget) must use the
-  // per-step value. Undefined when the message carries no step-finish part —
-  // callers fall back to the message totals (accurate for single-step turns).
+  // per-step value, including the outer context estimate for native CLI runs.
+  // Undefined when no step-finish part exists; context consumers also check
+  // the usage scope before falling back to message totals.
   export function lastStepTokens(parts: readonly unknown[]): AssistantMessage["tokens"] | undefined {
     for (let i = parts.length - 1; i >= 0; i--) {
       const value = parts[i]
@@ -31,7 +32,13 @@ export namespace Usage {
       const usage = tokens as Record<string, unknown>
       if (typeof usage.input !== "number" || typeof usage.output !== "number") return undefined
       const cache = usage.cache && typeof usage.cache === "object" ? (usage.cache as Record<string, unknown>) : {}
+      const context =
+        usage.context && typeof usage.context === "object" ? (usage.context as Record<string, unknown>) : undefined
       return {
+        ...(usage.scope === "run" || usage.scope === "request" ? { scope: usage.scope } : {}),
+        ...(context && typeof context.input === "number" && typeof context.output === "number"
+          ? { context: { input: context.input, output: context.output } }
+          : {}),
         total: typeof usage.total === "number" ? usage.total : undefined,
         input: usage.input,
         output: usage.output,

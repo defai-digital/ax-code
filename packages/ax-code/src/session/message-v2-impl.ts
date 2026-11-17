@@ -302,6 +302,8 @@ export namespace MessageV2 {
     reason: z.string(),
     snapshot: z.string().optional(),
     tokens: z.object({
+      scope: z.enum(["request", "run"]).optional(),
+      context: z.object({ input: z.number().nonnegative(), output: z.number().nonnegative() }).optional(),
       total: z.number().optional(),
       input: z.number(),
       output: z.number(),
@@ -488,6 +490,8 @@ export namespace MessageV2 {
     }),
     summary: z.boolean().optional(),
     tokens: z.object({
+      scope: z.enum(["request", "run"]).optional(),
+      context: z.object({ input: z.number().nonnegative(), output: z.number().nonnegative() }).optional(),
       total: z.number().optional(),
       input: z.number(),
       output: z.number(),
@@ -1420,6 +1424,7 @@ export namespace MessageV2 {
    */
   export type FromErrorContext = {
     providerID: ProviderID
+    usageScope?: "request" | "run"
     routeKey?: string
     sessionID?: SessionID
     catalogLimit?: number
@@ -1495,6 +1500,8 @@ export namespace MessageV2 {
         })
         if (parsed.type === "context_overflow") {
           void ObservedWindow.recordOverflowEvidence({
+            scope: ctx.usageScope,
+            providerID: ctx.providerID,
             routeKey: ctx.routeKey,
             sessionID: ctx.sessionID,
             catalogLimit: ctx.catalogLimit,
@@ -1588,6 +1595,8 @@ export namespace MessageV2 {
           if (parsed) {
             if (parsed.type === "context_overflow") {
               void ObservedWindow.recordOverflowEvidence({
+                scope: ctx.usageScope,
+                providerID: ctx.providerID,
                 routeKey: ctx.routeKey,
                 sessionID: ctx.sessionID,
                 catalogLimit: ctx.catalogLimit,

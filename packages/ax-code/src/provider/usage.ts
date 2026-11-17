@@ -1,8 +1,46 @@
 import type { LanguageModelV2Usage } from "@ai-sdk/provider"
 
 export const USAGE_SOURCE_KEY = "__axCodeUsageSource"
+const USAGE_SCOPE_KEY = "__axCodeUsageScope"
+const CONTEXT_USAGE_KEY = "__axCodeContextUsage"
 
 export type UsageSource = "exact" | "estimated" | "missing"
+export type UsageScope = "request" | "run"
+type ContextUsage = { input: number; output: number }
+
+function metadata(usage: unknown, key: string): unknown {
+  if (!usage || typeof usage !== "object") return undefined
+  const record = usage as Record<string, unknown>
+  if (record[key] !== undefined) return record[key]
+  const raw = record.raw
+  return raw && typeof raw === "object" ? (raw as Record<string, unknown>)[key] : undefined
+}
+
+/** Scope is independent of accuracy: exact native run totals are not a prompt measurement. */
+export function usageScope(usage: unknown): UsageScope {
+  return metadata(usage, USAGE_SCOPE_KEY) === "run" ? "run" : "request"
+}
+
+export function usageContext(usage: unknown): ContextUsage | undefined {
+  const value = metadata(usage, CONTEXT_USAGE_KEY)
+  if (!value || typeof value !== "object") return undefined
+  const { input, output } = value as Record<string, unknown>
+  if (typeof input !== "number" || !Number.isFinite(input) || input < 0) return undefined
+  if (typeof output !== "number" || !Number.isFinite(output) || output < 0) return undefined
+  return { input, output }
+}
+
+/** Mirror provenance in raw because the AI SDK copies it when rebuilding usage. */
+export function markRunUsage<T extends object>(usage: T, context: ContextUsage): T {
+  const record = usage as Record<string, unknown>
+  const raw = record.raw && typeof record.raw === "object" ? record.raw : {}
+  for (const target of [usage, raw]) {
+    Object.defineProperty(target, USAGE_SCOPE_KEY, { value: "run", configurable: true })
+    Object.defineProperty(target, CONTEXT_USAGE_KEY, { value: Object.freeze({ ...context }), configurable: true })
+  }
+  if (record.raw !== raw) Object.defineProperty(usage, "raw", { value: raw, configurable: true })
+  return usage
+}
 
 type UsageWithSource = LanguageModelV2Usage & {
   [USAGE_SOURCE_KEY]?: UsageSource

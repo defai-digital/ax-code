@@ -37,7 +37,8 @@ import { SessionID, MessageID, PartID, SessionStop } from "./schema"
 import type { Provider } from "@/provider/provider"
 import { providerModelKey } from "@/provider/model-key"
 import { ModelID, ProviderID } from "@/provider/schema"
-import { usageSource } from "@/provider/usage"
+import { isCliUsageModel } from "@/provider/context-usage"
+import { usageContext, usageScope, usageSource } from "@/provider/usage"
 import { TokenLedger } from "@/provider/token-ledger"
 import { Permission } from "@/permission"
 import { Global } from "@/global"
@@ -1644,6 +1645,9 @@ export namespace Session {
       const total = Math.max(reportedTotal ?? 0, componentTotal)
 
       const tokens = {
+        ...(usageScope(input.usage) === "run" || isCliUsageModel(input.model)
+          ? { scope: "run" as const, context: usageContext(input.usage) }
+          : {}),
         total,
         input: adjustedInputTokens,
         output: adjustedOutputTokens,
