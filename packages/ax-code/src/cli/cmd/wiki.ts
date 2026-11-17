@@ -1,23 +1,37 @@
 import { AX_WIKI_DIR_DEFAULT } from "@ax-code/ax-wiki"
+import type { WikiStatus } from "@ax-code/ax-wiki/node"
 import type { Argv } from "yargs"
 import path from "node:path"
 import open from "open"
 import { UI } from "../ui"
 import { Filesystem } from "../../util/filesystem"
-import type { WikiBuildReport, WikiRuntimeConfig, WikiStatus } from "../../wiki"
+import type { WikiBuildReport } from "../../wiki/build-report"
+import type { WikiRuntimeConfig } from "../../wiki/config"
 import { cmd } from "./cmd"
 
 async function loadWiki() {
-  const [root, wiki, visualization, boot] = await Promise.all([
+  const [root, wiki, config, report, planning, git, boot] = await Promise.all([
     import("../../wiki/root"),
-    import("../../wiki"),
-    import("../../wiki/visualization"),
+    import("@ax-code/ax-wiki/node"),
+    import("../../wiki/config"),
+    import("../../wiki/build-report"),
+    import("../../wiki/planning"),
+    import("../../wiki/git"),
     import("../bootstrap"),
   ])
   return {
     wikiProjectRoot: root.wikiProjectRoot,
-    ...wiki,
-    WikiVisualization: visualization.WikiVisualization,
+    getWikiStatus: wiki.getWikiStatus,
+    lintWiki: wiki.lintWiki,
+    buildWikiCards: wiki.buildWikiCards,
+    writeWikiCards: wiki.writeWikiCards,
+    relatedWikiPages: wiki.relatedWikiPages,
+    ensureAgentsWikiPointers: wiki.ensureAgentsWikiPointers,
+    engineConfig: config.engineConfig,
+    resolveWikiRuntimeConfig: config.resolveWikiRuntimeConfig,
+    readWikiBuildReport: report.readWikiBuildReport,
+    planNativeWiki: planning.planNativeWiki,
+    gitHeadCommit: git.gitHeadCommit,
     bootstrap: boot.bootstrap,
     bootstrapReadonly: boot.bootstrapReadonly,
   }
@@ -57,7 +71,7 @@ export function wikiStatusExitCode(status: Pick<WikiStatus, "exists" | "healthy"
 }
 
 async function printStatus(status: WikiStatus, json: boolean, report?: WikiBuildReport) {
-  const { summarizeWikiBuildReport } = await loadWiki()
+  const { summarizeWikiBuildReport } = await import("../../wiki/build-report")
   if (json) {
     console.log(JSON.stringify(report ? { ...status, lastBuild: report } : status, null, 2))
     return
@@ -209,6 +223,7 @@ async function runGenerateOrUpdate(
   await withWiki(
     args,
     async ({ root, config, api }) => {
+      const { runNativeWiki } = await import("../../wiki/native")
       UI.println(
         `${UI.Style.TEXT_INFO_BOLD}${action === "generate" ? "Generating" : "Updating"} native AX Wiki…${UI.Style.TEXT_NORMAL}`,
       )
@@ -216,7 +231,7 @@ async function runGenerateOrUpdate(
       UI.println(`  dir:   ${config.dir}/`)
       UI.println(`  model: ${config.model ?? "AX Code default"}`)
       const started = Date.now()
-      const result = await api.runNativeWiki({
+      const result = await runNativeWiki({
         root,
         action,
         dir: config.dir,
@@ -374,19 +389,19 @@ export const WikiVizCommand = cmd({
         return true
       }),
   handler: async (args) => {
-    const api = await loadWiki()
-    const document = await withWiki(args, async ({ root, config, api }) =>
-      api.WikiVisualization.render(await api.WikiVisualization.snapshot(root, config.dir)),
+    const { WikiVisualization } = await import("../../wiki/visualization")
+    const document = await withWiki(args, async ({ root, config }) =>
+      WikiVisualization.render(await WikiVisualization.snapshot(root, config.dir)),
     )
     if (args.export !== undefined) {
       if (!args.export.trim()) throw new Error("--export requires a destination")
       // @scan-suppress security_scan - Caller-selected export path. This command writes only the HTML the user named.
       const destination = path.resolve(Filesystem.callerCwd(), args.export)
-      await api.WikiVisualization.exportHtml(destination, document.html)
+      await WikiVisualization.exportHtml(destination, document.html)
       UI.println(`Wrote Wiki evidence snapshot: ${destination}`)
       return
     }
-    const server = await api.WikiVisualization.serve(document)
+    const server = await WikiVisualization.serve(document)
     let finish!: () => void
     const stopped = new Promise<void>((resolve) => {
       finish = resolve

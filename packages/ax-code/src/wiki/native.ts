@@ -1,6 +1,4 @@
-import { execFile } from "node:child_process"
 import path from "node:path"
-import { promisify } from "node:util"
 import {
   createWikiBuildLock,
   createWikiPageResultCache,
@@ -9,8 +7,6 @@ import {
   AX_WIKI_EVIDENCE_SCHEMA_VERSION,
   AX_WIKI_GENERATOR,
   buildAxWiki,
-  createWikiPlan,
-  discoverSources,
   emptyEvidenceBundle,
   loadAxWikiConfig,
   renderEvidenceBundle,
@@ -28,7 +24,6 @@ import {
   type WikiBuildResult,
   type WikiPageGenerationRequest,
   type WikiPageGenerationResult,
-  type WikiPlan,
   type WikiSource,
 } from "@ax-code/ax-wiki/node"
 import { APICallError, NoObjectGeneratedError, streamObject, streamText } from "ai"
@@ -55,9 +50,11 @@ import { writeWikiBuildReport, WIKI_BUILD_REPORT_SCHEMA_VERSION, type WikiBuildR
 import { engineConfig, resolveWikiRuntimeConfig } from "./config"
 import { resolveWikiReasoning } from "./reasoning"
 import { createIdleWikiSourceRanker } from "./embedding-ranker"
+import { gitHeadCommit, gitWorktreeDirty } from "./git"
 import { SYMBOL_SUMMARIES_MAX, SYMBOL_SUMMARY_MAX } from "@ax-code/ax-wiki/node"
 
-const execFileAsync = promisify(execFile)
+export { gitHeadCommit } from "./git"
+export { planNativeWiki } from "./planning"
 
 const PAGE_SUMMARY_MAX = 600
 const PAGE_SYMBOLS_MAX = 80
@@ -574,19 +571,6 @@ async function resolveModel(model?: string, sessionID?: SessionID) {
   }
 }
 
-export async function gitHeadCommit(root: string): Promise<string | undefined> {
-  try {
-    const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], {
-      cwd: root,
-      timeout: 10_000,
-      windowsHide: true,
-    })
-    return stdout.trim() || undefined
-  } catch {
-    return undefined
-  }
-}
-
 function renderTypedEvidence(request: WikiPageGenerationRequest): string | undefined {
   if (request.evidence) return renderEvidenceBundle(request.evidence)
   return request.graphContext
@@ -784,32 +768,6 @@ async function evidenceProvider(
       sources: toSourceRecords(input.sources),
     }
   }
-}
-
-async function gitWorktreeDirty(root: string): Promise<boolean> {
-  try {
-    const { stdout } = await execFileAsync("git", ["status", "--porcelain", "--untracked-files=normal"], {
-      cwd: root,
-      timeout: 10_000,
-      windowsHide: true,
-    })
-    return stdout.length > 0
-  } catch {
-    // The evidence contract has no unknown state. Conservatively mark an
-    // unavailable worktree probe dirty instead of claiming a clean snapshot.
-    return true
-  }
-}
-
-export async function planNativeWiki(input: { root: string; dir?: string }): Promise<WikiPlan> {
-  const config = await resolveWikiRuntimeConfig({ dir: input.dir })
-  const diskConfig = await loadAxWikiConfig(input.root)
-  const runtimeConfig = Object.fromEntries(
-    Object.entries(engineConfig(config)).filter((entry) => entry[1] !== undefined),
-  )
-  const planConfig = { ...diskConfig, ...runtimeConfig }
-  const sources = await discoverSources({ root: input.root, wikiDir: config.dir, config: planConfig })
-  return createWikiPlan(sources, planConfig)
 }
 
 export async function runNativeWiki(input: {
