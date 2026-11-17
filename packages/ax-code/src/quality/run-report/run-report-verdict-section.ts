@@ -1,5 +1,5 @@
-import { SessionDre } from "../../session/dre"
-import { SessionRisk } from "../../session/risk"
+import type { SessionDre } from "../../session/dre"
+import type { SessionRisk } from "../../session/risk"
 import { confidenceTone, esc, readiness, readinessTone, tone, validation } from "./run-report-format"
 import { chip, gauge, stat } from "./run-report-widgets"
 

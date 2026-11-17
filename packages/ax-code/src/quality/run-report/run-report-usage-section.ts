@@ -1,4 +1,4 @@
-import { SessionUsage } from "../../session/usage"
+import type { SessionUsage } from "../../session/usage"
 import { compact, num, time } from "./run-report-format"
 import { barChart, stat } from "./run-report-widgets"
 

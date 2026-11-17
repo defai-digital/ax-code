@@ -1,4 +1,4 @@
-import { SessionRisk } from "../../session/risk"
+import type { SessionRisk } from "../../session/risk"
 import { esc, validation } from "./run-report-format"
 import { chip } from "./run-report-widgets"
 

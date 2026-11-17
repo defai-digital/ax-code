@@ -1,5 +1,5 @@
-import { SessionDre } from "../../session/dre"
-import { SessionGraph } from "../../session/graph"
+import type { SessionDre } from "../../session/dre"
+import type { SessionGraph } from "../../session/graph"
 import { esc, num, time, tone } from "./run-report-format"
 import { chip, stat } from "./run-report-widgets"
 

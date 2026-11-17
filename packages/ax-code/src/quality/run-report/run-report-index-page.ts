@@ -1,11 +1,13 @@
 import type { Session } from "../../session"
-import { Risk } from "../../risk/score"
-import { SessionUsage } from "../../session/usage"
+import type { Risk } from "../../risk/score"
+import { levelForScore } from "../../risk/level"
+import type { SessionUsage } from "../../session/usage"
 import { live, themeScript, themeToggle } from "./run-report-assets"
 import { compact, esc, num, tone } from "./run-report-format"
 import { style } from "./run-report-style"
 import { barChart, dailyChart, stat } from "./run-report-widgets"
 import { ledgerSection } from "./run-report-ledger"
+import { createReportLink } from "./run-report-links"
 
 export type SessionSummaryRow = { session: Session.Info; risk: Risk.Assessment }
 
@@ -85,7 +87,7 @@ function health(rows: SessionSummaryRow[]) {
     `<div class="panel" style="margin-bottom:16px">`,
     `<h3>Session Health</h3>`,
     `<div class="summary-stats">`,
-    stat({ label: "Avg risk", value: `${avgScore}/100`, kind: tone(Risk.levelForScore(avgScore)), icon: "◌" }),
+    stat({ label: "Avg risk", value: `${avgScore}/100`, kind: tone(levelForScore(avgScore)), icon: "◌" }),
     stat({ label: "Ready", value: num(readinessCounts.ready ?? 0), kind: "low", icon: "✓" }),
     stat({
       label: "Needs attention",
@@ -113,12 +115,7 @@ function health(rows: SessionSummaryRow[]) {
 export function index(input: { rows: SessionSummaryRow[]; usage: SessionUsage.Info; search: string }) {
   const base = new URLSearchParams(input.search.startsWith("?") ? input.search.slice(1) : input.search)
   const dir = base.get("directory") ?? input.rows[0]?.session.directory ?? undefined
-  const link = (path: string, label: string, query?: Record<string, string>) => {
-    const url = new URL(path, "http://ax-code.local")
-    for (const [key, value] of base.entries()) url.searchParams.set(key, value)
-    for (const [key, value] of Object.entries(query ?? {})) url.searchParams.set(key, value)
-    return `<a href="${esc(url.pathname + url.search)}">${esc(label)}</a>`
-  }
+  const link = createReportLink(base)
 
   const models = Object.entries(input.usage.models)
     .sort((a, b) => b[1].tokens - a[1].tokens || a[0].localeCompare(b[0]))

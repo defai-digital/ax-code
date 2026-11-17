@@ -1,5 +1,5 @@
-import { SessionRisk } from "../../session/risk"
-import { ProbabilisticRollout } from "../probabilistic-rollout"
+import type { SessionRisk } from "../../session/risk"
+import * as Readiness from "../probabilistic-rollout/probabilistic-rollout-readiness"
 import { esc } from "./run-report-format"
 import { chip } from "./run-report-widgets"
 
@@ -23,11 +23,11 @@ export function qualityReadinessSection(input: SessionRisk.Detail) {
     `<div class="validation-list">`,
     summaries
       .map(({ workflow, summary }) => {
-        const first = ProbabilisticRollout.targetedTestRecommendations(summary)[0]
+        const first = Readiness.targetedTestRecommendations(summary)[0]
         const firstLine = first ? `<br><span class="muted">first: ${esc(first)}</span>` : ""
-        const readiness = ProbabilisticRollout.readinessStateLabel(summary)
-        const detail = ProbabilisticRollout.readinessDetailLabel(summary)
-        const nextAction = ProbabilisticRollout.readinessNextActionLabel(summary)
+        const readiness = Readiness.readinessStateLabel(summary)
+        const detail = Readiness.readinessDetailLabel(summary)
+        const nextAction = Readiness.readinessNextActionLabel(summary)
         return [
           `<div class="validation-item">`,
           `<span class="validation-icon">${workflow === "review" ? "R" : workflow === "debug" ? "D" : "Q"}</span>`,
@@ -37,8 +37,8 @@ export function qualityReadinessSection(input: SessionRisk.Detail) {
           nextAction ? `<br><span class="muted">${esc(nextAction)}</span>` : "",
           `</span>`,
           `<span class="validation-status">${chip({
-            label: ProbabilisticRollout.readinessStateLabel(summary),
-            kind: ProbabilisticRollout.readinessStateKind(summary),
+            label: Readiness.readinessStateLabel(summary),
+            kind: Readiness.readinessStateKind(summary),
           })}</span>`,
           `</div>`,
         ].join("")

@@ -1,4 +1,4 @@
-import { SessionDre } from "../../session/dre"
+import type { SessionDre } from "../../session/dre"
 import { esc, tone } from "./run-report-format"
 import { chip } from "./run-report-widgets"
 

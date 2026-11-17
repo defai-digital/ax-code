@@ -9,6 +9,7 @@ import { toErrorMessage } from "../util/error-message"
 import { parseJsonResult } from "../util/json-value"
 import { uniqueStrings } from "../util/string-list"
 import type { SessionID } from "../session/schema"
+import { levelForScore as riskLevelForScore, type RiskLevel } from "./level"
 
 const log = Log.create({ service: "risk" })
 
@@ -20,7 +21,7 @@ function endedBeforeCompletion(reason: string | null | undefined): boolean {
 }
 
 export namespace Risk {
-  export type Level = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  export type Level = RiskLevel
   export type ValidationState = "not_run" | "passed" | "failed" | "partial"
   export type DiffState = "recorded" | "derived" | "missing"
   export type SemanticRisk = SessionSemanticCore.Risk
@@ -523,9 +524,7 @@ export namespace Risk {
     })
   }
 
-  export function levelForScore(score: number): Level {
-    return score >= 70 ? "CRITICAL" : score >= 45 ? "HIGH" : score >= 20 ? "MEDIUM" : "LOW"
-  }
+  export const levelForScore = riskLevelForScore
 
   function isValidation(input: string) {
     return [
