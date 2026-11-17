@@ -41,6 +41,55 @@ export function glow(hd: HdCanvas, cx: number, cy: number, radius: number, color
   }
 }
 
+type GlowPainter = (cx: number, cy: number, radius: number, color: RGB, strength: number, squash?: number) => void
+// A channel can change by at most 255; rounding needs half a channel step.
+const GLOW_ALPHA_DENOMINATOR = 2 * 255
+const GLOW_ROUNDING_MARGIN = 1e-9
+
+/**
+ * Bind the quantized glow painter used by large space and volcano blooms.
+ * Writes land on integer pixels: alpha below 1/510 cannot change a channel,
+ * so the existing row/column window can skip those blends exactly.
+ */
+export function createFastGlow(hd: HdCanvas): GlowPainter {
+  const pixels = hd.pixels
+  return (cx: number, cy: number, radius: number, color: RGB, strength: number, squash = 1): void => {
+    if (radius <= 0 || strength <= 0) return
+    const ry = radius * squash
+    const xa = Math.max(0, Math.floor(cx - radius))
+    const xb = Math.min(hd.w - 1, Math.ceil(cx + radius))
+    const ya = Math.max(0, Math.floor(cy - ry))
+    const yb = Math.min(hd.h - 1, Math.ceil(cy + ry))
+    const cr = color[0]!
+    const cg = color[1]!
+    const cb = color[2]!
+    // Include the rounding boundary; shrinking it loses a half-channel blend.
+    const dSkip = Math.min(1, 1 - Math.sqrt(1 / (GLOW_ALPHA_DENOMINATOR * strength)) + GLOW_ROUNDING_MARGIN)
+    for (let y = ya; y <= yb; y++) {
+      const dy = (y + 0.5 - cy) / ry
+      if (dy >= dSkip || dy <= -dSkip) continue
+      const fxSpan = Math.sqrt(Math.max(0, dSkip * dSkip - dy * dy)) * radius + 1
+      const xlo = Math.max(xa, Math.ceil(cx - fxSpan))
+      const xhi = Math.min(xb, Math.floor(cx + fxSpan))
+      let i = (y * hd.w + xlo) * 3
+      for (let x = xlo; x <= xhi; x++, i += 3) {
+        const d = Math.hypot((x + 0.5 - cx) / radius, dy)
+        if (d >= dSkip) continue
+        const f = 1 - d
+        const alpha = strength * f * f
+        if (alpha <= 0) continue
+        const a = alpha > 1 ? 1 : alpha
+        const p0 = pixels[i]!
+        pixels[i] = Math.round(p0 + (cr - p0) * a)
+        const p1 = pixels[i + 1]!
+        pixels[i + 1] = Math.round(p1 + (cg - p1) * a)
+        const p2 = pixels[i + 2]!
+        pixels[i + 2] = Math.round(p2 + (cb - p2) * a)
+      }
+    }
+  }
+}
+
 /** Scanline fill of a convex polygon; `colorAt` receives pixel coordinates. */
 export function fillPoly(
   hd: HdCanvas,

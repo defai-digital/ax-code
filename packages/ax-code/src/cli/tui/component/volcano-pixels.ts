@@ -1,4 +1,4 @@
-import { blendPx, clamp01, hash2, vrect } from "./atmos-paint"
+import { blendPx, createFastGlow, clamp01, hash2, vrect } from "./atmos-paint"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   VOLCANO_BASE,
@@ -55,43 +55,7 @@ export function renderVolcanoPixels(width: number, height: number, style: Volcan
   const fire = eruption ? hdMix(glowDeep, glowHot, pulse) : glowDeep
   const pixels = hd.pixels
 
-  /** atmos-paint glow twin with identical math. Every write in this pipeline
-   * lands on integer pixels, so blending where alpha < 1/510 is provably the
-   * identity and can be skipped (per pixel and via the row/column window). */
-  const glowFast = (cx: number, cy: number, radius: number, color: RGB, strength: number, squash = 1) => {
-    if (radius <= 0 || strength <= 0) return
-    const ry = radius * squash
-    const xa = Math.max(0, Math.floor(cx - radius))
-    const xb = Math.min(hd.w - 1, Math.ceil(cx + radius))
-    const ya = Math.max(0, Math.floor(cy - ry))
-    const yb = Math.min(hd.h - 1, Math.ceil(cy + ry))
-    const cr = color[0]!
-    const cg = color[1]!
-    const cb = color[2]!
-    const dSkip = 1 - Math.sqrt(1 / (510 * strength)) - 1e-9
-    for (let y = ya; y <= yb; y++) {
-      const dy = (y + 0.5 - cy) / ry
-      if (dy >= dSkip || dy <= -dSkip) continue
-      const fxSpan = Math.sqrt(Math.max(0, dSkip * dSkip - dy * dy)) * radius + 1
-      const xlo = Math.max(xa, Math.ceil(cx - fxSpan))
-      const xhi = Math.min(xb, Math.floor(cx + fxSpan))
-      let i = (y * hd.w + xlo) * 3
-      for (let x = xlo; x <= xhi; x++, i += 3) {
-        const d = Math.hypot((x + 0.5 - cx) / radius, dy)
-        if (d >= dSkip) continue
-        const f = 1 - d
-        const alpha = strength * f * f
-        if (alpha <= 0) continue
-        const a = alpha > 1 ? 1 : alpha
-        const p0 = pixels[i]!
-        pixels[i] = Math.round(p0 + (cr - p0) * a)
-        const p1 = pixels[i + 1]!
-        pixels[i + 1] = Math.round(p1 + (cg - p1) * a)
-        const p2 = pixels[i + 2]!
-        pixels[i + 2] = Math.round(p2 + (cb - p2) * a)
-      }
-    }
-  }
+  const glowFast = createFastGlow(hd)
 
   hd.sky((v) => volcanoSkyRgb(style, v))
   // Sky: red-lit horizon in eruption, starfield and moon in calm.
