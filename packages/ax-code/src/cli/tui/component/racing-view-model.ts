@@ -33,7 +33,6 @@ export const RACING_CYCLE_MS = 2400
 export const RACING_COLORS = {
   "racing-day": {
     sky: "#7ab5d3",
-    skyBottom: "#cfe8f5",
     sun: "#ffdf6a",
     mountain: "#5a7a4a",
     mountainFar: "#87a86e",
@@ -59,7 +58,6 @@ export const RACING_COLORS = {
   },
   "racing-night": {
     sky: "#8ba0c8",
-    skyBottom: "#b06a3a",
     sun: "#ffdf6a",
     mountain: "#1e2b22",
     mountainFar: "#2c3a30",
@@ -87,18 +85,6 @@ export const RACING_COLORS = {
 
 export function racingBackground(style: RacingStyle) {
   return style === "racing-day" ? "#8ec8e8" : "#141c38"
-}
-
-/** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
-export function racingSkyRgb(style: RacingStyle, t: number): readonly [number, number, number] {
-  const x = Math.max(0, Math.min(1, t))
-  const from = [1, 3, 5].map((offset) => parseInt(racingBackground(style).slice(offset, offset + 2), 16))
-  const to = [1, 3, 5].map((offset) => parseInt(RACING_COLORS[style].skyBottom.slice(offset, offset + 2), 16))
-  return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * x)) as [
-    number,
-    number,
-    number,
-  ]
 }
 
 /** 200ms road beat looping bit-identically with the 2400ms cycle. */
