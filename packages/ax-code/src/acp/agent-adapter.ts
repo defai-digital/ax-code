@@ -86,13 +86,14 @@ export async function defaultModel(
       return undefined
     })
 
-  const providers = await sdk.config
+  const catalog = await sdk.config
     .providers({ directory }, { throwOnError: true })
-    .then((x) => x.data?.providers ?? [])
+    .then((response) => response.data)
     .catch((error) => {
       log.error("failed to list providers for default model", { error })
-      return []
+      return undefined
     })
+  const providers = catalog?.providers ?? []
 
   if (specified && providers.length) {
     const provider = providers.find((p) => p.id === specified.providerID)
@@ -114,16 +115,16 @@ export async function defaultModel(
 
   if (specified && !providers.length) return specified
 
-  // Provider order comes from the connected-provider response. Keep provider
-  // selection separate from Provider.sort(), which only ranks models within
-  // one provider and must not create a hidden cross-provider preference.
+  // An empty server default means this provider has no eligible model.
+  // Older responses may omit defaults, so rank those providers locally.
+  const defaults = catalog?.default
   for (const provider of providers) {
-    const [best] = Provider.sort(Object.values(provider.models))
-    if (best) {
-      return {
-        providerID: ProviderID.make(provider.id),
-        modelID: ModelID.make(best.id),
-      }
+    const modelID =
+      defaults && Object.hasOwn(defaults, provider.id)
+        ? defaults[provider.id]
+        : Provider.connectedDefaultModelID(provider)
+    if (modelID && Object.hasOwn(provider.models, modelID) && provider.models[modelID]) {
+      return { providerID: ProviderID.make(provider.id), modelID: ModelID.make(modelID) }
     }
   }
 

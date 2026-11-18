@@ -10,7 +10,7 @@ import { declaredCapabilityEvidence } from "./capability-evidence"
 // legitimately want anyway.
 const TOOLCALL_OPTIONAL_PROVIDER_IDS = new Set<string>(CLI_PROVIDER_IDS)
 
-type SelectableModel = {
+export type SelectableModel = {
   tool_call?: boolean
   capabilities?: {
     toolcall?: boolean
@@ -88,6 +88,15 @@ export function skuKey(modelID: string) {
   return normalizeProviderModelId(modelIdFinalSegment(modelID).replace(/\[\d+[mM]\]$/, ""))
 }
 
+export type SelectableProvider = { id: string; models: Record<string, SelectableModel | undefined> }
+
+export function findSelectableSkuID(provider: SelectableProvider, normalizedSku: string): string | undefined {
+  if (!normalizedSku) return undefined
+  return Object.keys(provider.models)
+    .filter((id) => skuKey(id) === normalizedSku && modelSelectableForProvider(provider.id, provider.models[id]))
+    .sort((left, right) => left.length - right.length || left.localeCompare(right))[0]
+}
+
 /**
  * The same model on another connected provider: exact model ID first, then
  * the same SKU under a reseller prefix or a "[1m]" suffix, which is how
@@ -95,7 +104,7 @@ export function skuKey(modelID: string) {
  * was disabled after the model moved behind a custom gateway.
  */
 export function sameSkuOnConnectedProvider(
-  providers: readonly { id: string; models: Record<string, SelectableModel | undefined> }[],
+  providers: readonly SelectableProvider[],
   model: { providerID: string; modelID: string },
 ): { providerID: string; modelID: string } | undefined {
   // Sort candidates so the relocation target is deterministic: with several
@@ -112,11 +121,8 @@ export function sameSkuOnConnectedProvider(
       return { providerID: provider.id, modelID: model.modelID }
   }
   const needle = skuKey(model.modelID)
-  if (!needle) return undefined
   for (const provider of candidates) {
-    const hit = Object.keys(provider.models)
-      .filter((id) => skuKey(id) === needle && modelSelectableForProvider(provider.id, provider.models[id]))
-      .sort((left, right) => left.length - right.length || left.localeCompare(right))[0]
+    const hit = findSelectableSkuID(provider, needle)
     if (hit) return { providerID: provider.id, modelID: hit }
   }
   return undefined

@@ -4,12 +4,15 @@ import { pathToFileURL } from "url"
 import { defaultModel, modelVariantsFromProviders, parseModelSelection, parseUri } from "../../src/acp/agent-adapter"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 
-function configWithProviders(providers: Array<{ id: string; models: Record<string, unknown> }>) {
+function configWithProviders(
+  providers: Array<{ id: string; models: Record<string, unknown> }>,
+  defaults?: Record<string, string>,
+) {
   return {
     sdk: {
       config: {
         get: async () => ({ data: {} }),
-        providers: async () => ({ data: { providers } }),
+        providers: async () => ({ data: { providers, default: defaults } }),
       },
     },
   } as any
@@ -68,6 +71,37 @@ describe("ACP agent adapter", () => {
 
   test("fails clearly instead of inventing a stale fallback when no provider is connected", async () => {
     await expect(defaultModel(configWithProviders([]))).rejects.toThrow("No connected provider has an available model")
+  })
+
+  test("does not default to non-chat or non-tool-capable models from a legacy provider response", async () => {
+    const config = configWithProviders([
+      {
+        id: "local-gateway",
+        models: {
+          "z-embed": { id: "z-embed", capabilities: { toolcall: true } },
+          "y-chat": { id: "y-chat", capabilities: { toolcall: false } },
+        },
+      },
+      { id: "openai", models: { "gpt-5": { id: "gpt-5", capabilities: { toolcall: true } } } },
+    ])
+    expect(await defaultModel(config)).toEqual({ providerID: "openai", modelID: "gpt-5" })
+  })
+
+  test("honors the provider server's eligibility and default model", async () => {
+    const config = configWithProviders(
+      [
+        { id: "unqualified", models: { first: { id: "first", capabilities: { toolcall: true } } } },
+        {
+          id: "qualified",
+          models: {
+            "lexically-last": { id: "lexically-last", capabilities: { toolcall: true } },
+            default: { id: "default", capabilities: { toolcall: true } },
+          },
+        },
+      ],
+      { unqualified: "", qualified: "default" },
+    )
+    expect(await defaultModel(config)).toEqual({ providerID: "qualified", modelID: "default" })
   })
 
   test("follows a configured model to the connected provider that serves the same SKU", async () => {

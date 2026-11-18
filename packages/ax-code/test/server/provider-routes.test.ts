@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { Hono } from "hono"
 import fs from "fs/promises"
 import path from "path"
 import { Auth } from "../../src/auth"
@@ -6,7 +7,7 @@ import { Config } from "../../src/config/config"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
-import { redactProviderInfo } from "../../src/server/routes/config"
+import { ConfigRoutes, redactProviderInfo } from "../../src/server/routes/config"
 import {
   AxEngineConnectionBody,
   AxEngineModelActionBody,
@@ -14,7 +15,11 @@ import {
   AxEngineStartBody,
   shouldShowProviderInList,
 } from "../../src/server/routes/provider"
-import { AX_ENGINE_MODEL_IDS, AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID } from "../../src/provider/ax-engine"
+import {
+  AX_ENGINE_DEFAULT_MODEL_ID,
+  AX_ENGINE_MODEL_IDS,
+  AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+} from "../../src/provider/ax-engine"
 import { selectAxEngineLocalModels } from "../../src/provider/ax-engine/local-models"
 import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
 import { Log } from "../../src/util/log"
@@ -32,6 +37,52 @@ describe("provider routes", () => {
   // leave a heavy instance that Config.updateGlobal must dispose on attach.
   afterEach(async () => {
     await Instance.disposeAll().catch(() => undefined)
+  })
+
+  test("publishes usable configured defaults and preserves the managed AX Engine choice", async () => {
+    const card = (id: string, tool_call: boolean): ModelsDev.Model => ({
+      id,
+      name: id,
+      release_date: "",
+      attachment: false,
+      reasoning: false,
+      temperature: true,
+      tool_call,
+      modalities: { input: ["text"], output: ["text"] },
+      limit: { context: 65_536, output: 8_192 },
+    })
+    function configured(id: string, models: Record<string, ModelsDev.Model>, options: Record<string, unknown> = {}) {
+      return Provider.fromModelsDevProvider({ id, name: id, env: [], models, options })!
+    }
+    const higherPack = "tiel-coder-35b-axq-mxfp8"
+    const engine = configured(
+      "ax-engine",
+      {
+        [higherPack]: card(higherPack, true),
+        [AX_ENGINE_DEFAULT_MODEL_ID]: card(AX_ENGINE_DEFAULT_MODEL_ID, true),
+      },
+      { connectionMode: "managed" },
+    )
+    const local = configured("custom", {
+      "z-embedding": card("z-embedding", true),
+      "y-no-tools": card("y-no-tools", false),
+      "a-chat": card("a-chat", true),
+    })
+    const unavailable = configured("unavailable", { chat: card("chat", false) })
+    const registry = vi.spyOn(Provider, "list").mockResolvedValue({
+      [engine.id]: engine,
+      [local.id]: local,
+      [unavailable.id]: unavailable,
+    })
+    try {
+      const response = await new Hono().route("/config", ConfigRoutes()).request("/config/providers")
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({
+        default: { "ax-engine": AX_ENGINE_DEFAULT_MODEL_ID, custom: "a-chat", unavailable: "" },
+      })
+    } finally {
+      registry.mockRestore()
+    }
   })
 
   test("rejects auth updates before writing when directory is invalid", async () => {

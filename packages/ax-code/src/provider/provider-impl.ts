@@ -52,6 +52,7 @@ import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider, modelSupportDecision } from "./model-support"
 import { defaultModelIDForProvider, MODEL_FORMAT_HELP, modelFamilyDefault } from "./implicit-default"
+import { isNonChatModelID, modelSelectableForProvider, type SelectableModel } from "./model-selectability"
 import {
   CUSTOM_LOADERS,
   type CustomModelLoader,
@@ -1703,15 +1704,25 @@ export namespace Provider {
     return getModel(target.providerID, target.modelID)
   }
 
-  // This ranks models within a provider; it does not rank providers for
-  // Council/Arena. CLI discovery may publish both a generic fallback model
-  // and the model resolved from the CLI's own settings. Prefer that resolved
-  // model when it exists.
-
   export function defaultModelID(providerID: string, models: Record<string, Model>) {
     return defaultModelIDForProvider(providerID, models)
   }
 
+  /** Report a usable default within a connected provider without changing provider order. */
+  export function connectedDefaultModelID(provider: {
+    id: string
+    options?: Record<string, unknown>
+    models: Record<string, SelectableModel & { id: string; providerID?: string }>
+  }): string | undefined {
+    if (provider.id === AX_ENGINE_PROVIDER_ID && resolveAxEngineConnectMode(provider.options) === "managed") {
+      return defaultModelIDForProvider(provider.id, provider.models)
+    }
+    return sort(Object.values(provider.models)).find(
+      (model) => !isNonChatModelID(model.id) && modelSelectableForProvider(provider.id, model),
+    )?.id
+  }
+
+  // Prefer the CLI's resolved model over the generic bridge sentinel.
   export function sort<T extends { id: string; providerID?: string }>(models: T[]) {
     return sortBy(models, [(model) => (isGenericCliFallbackModel(model) ? 1 : 0), "asc"], [(model) => model.id, "desc"])
   }

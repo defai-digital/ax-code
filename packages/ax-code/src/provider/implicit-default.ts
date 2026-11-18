@@ -1,6 +1,6 @@
 import recommendations from "./model-recommendations.json"
 import { AX_ENGINE_DEFAULT_MODEL_ID, AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
-import { modelSelectableForProvider, skuKey } from "./model-selectability"
+import { findSelectableSkuID, modelSelectableForProvider, skuKey, type SelectableProvider } from "./model-selectability"
 
 const FAMILY_DEFAULTS = recommendations.families
 
@@ -13,14 +13,8 @@ export function modelFamilyDefault(name: string) {
 
 export const MODEL_FORMAT_HELP = 'expected "provider/model" from `ax-code models`, or family name deepseek, glm, qwen'
 
-/** Session default when the user does not pass --model / config.model. */
 /** UI suggestions only. Runtime defaultModel never traverses this list. */
 export const IMPLICIT_DEFAULT_MODEL_SKUS = recommendations.startup
-
-type SelectableProvider = {
-  id: string
-  models: Record<string, Parameters<typeof modelSelectableForProvider>[1]>
-}
 
 export function preferredDefaultSkuForProvider(providerID: string): string | undefined {
   if (providerID === AX_ENGINE_PROVIDER_ID) return undefined
@@ -41,12 +35,9 @@ export function findSelectableSku(
   sku: string,
 ): { providerID: string; modelID: string } | undefined {
   const needle = skuKey(sku)
-  if (!needle) return undefined
   for (const provider of providers) {
     if (provider.id === AX_ENGINE_PROVIDER_ID) continue
-    const hit = Object.keys(provider.models)
-      .filter((id) => skuKey(id) === needle && modelSelectableForProvider(provider.id, provider.models[id]))
-      .sort((left, right) => left.length - right.length || left.localeCompare(right))[0]
+    const hit = findSelectableSkuID(provider, needle)
     if (hit) return { providerID: provider.id, modelID: hit }
   }
   return undefined
@@ -64,7 +55,7 @@ export function pickImplicitDefaultModel(
 
 export function defaultModelIDForProvider(
   providerID: string,
-  models: Record<string, Parameters<typeof modelSelectableForProvider>[1]>,
+  models: SelectableProvider["models"],
 ): string | undefined {
   // An explicitly chosen managed provider has a default; the global implicit
   // chain still excludes AX Engine so it cannot start a local download.
