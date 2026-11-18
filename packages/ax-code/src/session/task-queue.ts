@@ -13,6 +13,13 @@ import { MessageID, PartID, ScheduledTaskID, SessionID, TaskQueueID } from "./sc
 import { MessageTable, TaskQueueTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { ForegroundOwnership } from "./foreground-ownership"
+import {
+  ACTIVE_QUEUE_EXECUTION_STATUSES,
+  workflowMaxParallel,
+  workflowPacing,
+  workflowPacingDelay,
+  WORKFLOW_PACING_WINDOW_MS,
+} from "./workflow-queue-admission"
 
 const log = Log.create({ service: "task-queue" })
 
@@ -48,6 +55,7 @@ export namespace TaskQueue {
   const taskToolSource = "task"
   const queuePayloadJson = sql`case when json_valid(${TaskQueueTable.payload}) then ${TaskQueueTable.payload} end`
   const pendingDeliveryStatuses = ["pending", "delivering"] as const
+  const WORKFLOW_CLEANUP_KEY = "workflowTimeoutCleanup"
 
   export function isTaskSubagent(item: Info): boolean {
     return item.kind === "subagent" && item.payload["source"] === taskToolSource
@@ -55,6 +63,13 @@ export namespace TaskQueue {
 
   export const Payload = z.record(z.string(), z.unknown())
   export type Payload = z.infer<typeof Payload>
+
+  function enqueuePayload(payload: Payload): Payload {
+    if (!Object.hasOwn(payload, WORKFLOW_CLEANUP_KEY)) return payload
+    const clean = { ...payload }
+    delete clean[WORKFLOW_CLEANUP_KEY]
+    return clean
+  }
 
   const WorkflowChild = z.object({ runID: z.string(), phaseID: z.string(), childID: z.string() })
   export type WorkflowChild = z.infer<typeof WorkflowChild>
@@ -356,7 +371,7 @@ export namespace TaskQueue {
         model: parsed.model,
         source_message_id: parsed.sourceMessageID,
         source_task_id: parsed.sourceTaskID,
-        payload: parsed.payload,
+        payload: enqueuePayload(parsed.payload),
         execution_timeout_ms: parsed.executionTimeoutMs,
         time_created: now,
         time_updated: now,
@@ -375,35 +390,42 @@ export namespace TaskQueue {
     if (parsed.source) conditions.push(sql`json_extract(${queuePayloadJson}, '$.source') = ${parsed.source}`)
     if (parsed.status) conditions.push(eq(TaskQueueTable.status, parsed.status))
     if (parsed.statuses && parsed.statuses.length > 0) conditions.push(inArray(TaskQueueTable.status, parsed.statuses))
-    return readQueueItems(conditions, parsed)
+    const projectID = Instance.project.id
+    return SessionShard.storeForProject(projectID).use((db) => readQueueItems(db, projectID, conditions, parsed))
   }
 
-  function readQueueItems(conditions: SQL[], options: Pick<ListInput, "newestCreatedFirst" | "limit"> = {}): Info[] {
-    const projectID = Instance.project.id
+  function readQueueItems(
+    db: Database.TxOrDb,
+    projectID: ProjectID,
+    conditions: SQL[],
+    options: Pick<ListInput, "newestCreatedFirst" | "limit"> = {},
+  ): Info[] {
     const order = [desc(TaskQueueTable.time_created), desc(TaskQueueTable.id)]
     if (!options.newestCreatedFirst) order.unshift(asc(TaskQueueTable.position))
-    return SessionShard.storeForProject(projectID).use((db) => {
-      let query = db
-        .select()
-        .from(TaskQueueTable)
-        .where(and(eq(TaskQueueTable.project_id, projectID), ...conditions))
-        .orderBy(...order)
-        .$dynamic()
-      if (options.limit) query = query.limit(options.limit)
-      return query
-        .all()
-        .map(readableQueueItem)
-        .filter((item) => item !== undefined)
-    })
+    let query = db
+      .select()
+      .from(TaskQueueTable)
+      .where(and(eq(TaskQueueTable.project_id, projectID), ...conditions))
+      .orderBy(...order)
+      .$dynamic()
+    if (options.limit) query = query.limit(options.limit)
+    return query
+      .all()
+      .map(readableQueueItem)
+      .filter((item) => item !== undefined)
   }
 
-  /** Read only a phase's eligible children or a run's recent starts for pacing. */
-  export async function listWorkflowChildren(
-    input: { runID: string; excludeID?: TaskQueueID } & (
-      | { phaseID: string; statuses: readonly Status[] }
+  type WorkflowChildSelection = Pick<WorkflowChild, "runID"> & { excludeID?: TaskQueueID } & (
+      | (Pick<WorkflowChild, "phaseID"> & { statuses: readonly Status[] })
       | { startedAfter: number }
-    ),
-  ): Promise<Info[]> {
+    )
+
+  export async function listWorkflowChildren(input: WorkflowChildSelection): Promise<Info[]> {
+    const projectID = Instance.project.id
+    return SessionShard.storeForProject(projectID).use((db) => readWorkflowChildren(db, projectID, input))
+  }
+
+  function readWorkflowChildren(db: Database.TxOrDb, projectID: ProjectID, input: WorkflowChildSelection): Info[] {
     // Validate the scheduling identity before reading rows. Full workflow
     // specs and execution options are validated by the workflow runtime.
     const conditions = [
@@ -422,7 +444,7 @@ export namespace TaskQueue {
         gt(TaskQueueTable.time_started, input.startedAfter),
       )
     }
-    return readQueueItems(conditions)
+    return readQueueItems(db, projectID, conditions)
   }
 
   /**
@@ -664,7 +686,7 @@ export namespace TaskQueue {
         model: parsed.model,
         source_message_id: parsed.sourceMessageID,
         source_task_id: parsed.sourceTaskID,
-        payload: parsed.payload,
+        payload: enqueuePayload(parsed.payload),
         execution_timeout_ms: parsed.executionTimeoutMs,
         time_created: now,
         time_updated: now,
@@ -701,6 +723,7 @@ export namespace TaskQueue {
      * cancelSupersededPhaseChildren.
      */
     onlyFromActive?: boolean
+    workflowTimeoutCleanup?: { token: string; until: number; owner: ExecutorOwner | undefined }
   }): Promise<Info> {
     const isTerminalTarget = isTerminalStatus(input.status)
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
@@ -723,6 +746,24 @@ export namespace TaskQueue {
       if (ownedStatuses.includes(input.status)) {
         const payload = withExecutorOwner(current.payload, now)
         if (payload) updates.payload = payload
+      }
+      if (input.status === "failed" && input.workflowTimeoutCleanup) {
+        const { token, until, owner } = input.workflowTimeoutCleanup
+        const currentOwner = executorOwner(current.payload)
+        const workflow = workflowChild(current)
+        if (
+          workflow &&
+          until > now &&
+          owner &&
+          currentOwner?.pid === owner.pid &&
+          currentOwner.boot === owner.boot &&
+          currentOwner.time === owner.time
+        ) {
+          // Publishing failure frees the active row, but cancellation keeps
+          // its phase slot until the teardown finishes or the grace expires.
+          const reservation: WorkflowTimeoutCleanup = { ...workflow, token, until, owner }
+          updates.payload = { ...current.payload, [WORKFLOW_CLEANUP_KEY]: reservation }
+        }
       }
       return writeRow(db, input.id, updates)
     })
@@ -1079,23 +1120,30 @@ export namespace TaskQueue {
     return result
   }
 
-  export async function claimForExecution(id: TaskQueueID): Promise<Info | undefined> {
-    const now = Date.now()
-    // Read-modify-write inside one immediate transaction (same pattern as
-    // setDelivery/claimResultDelivery below): an earlier implementation read
-    // the row via a separate awaited get(), so a concurrent edit() landing in
-    // that gap committed its payload change first and this write then stamped
-    // the executor owner onto the pre-edit snapshot — silently reverting the
-    // edit. Moving the read into the callback closed the same-tick gap, but a
-    // foreign process's edit could still commit between the plain SELECT and
-    // the guarded UPDATE (the status guard does not cover the payload), so the
-    // claim now runs in a BEGIN IMMEDIATE transaction that serializes the
-    // whole read-modify-write across processes.
-    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
-      if (!currentRow) return undefined
+  type ExecutionClaim =
+    | { kind: "claimed"; item: Info }
+    | { kind: "waiting"; item: Info; retryAfterMs?: number }
+    | { kind: "unavailable"; item?: Info }
+
+  export async function claimForExecution(id: TaskQueueID): Promise<ExecutionClaim> {
+    const projectID = Instance.project.id
+    // BEGIN IMMEDIATE serializes the policy reads and claim across processes.
+    // Re-read the row here so edits made before the claim determine the policy
+    // and execution payload that actually take effect.
+    const claim = SessionShard.storeForProject(projectID, { write: true }).transaction((db): ExecutionClaim => {
+      const currentRow = db
+        .select()
+        .from(TaskQueueTable)
+        .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.project_id, projectID)))
+        .get()
+      if (!currentRow) return { kind: "unavailable" }
       const current = fromRow(currentRow)
-      if (current.status !== "queued" && current.status !== "waiting_for_idle") return undefined
+      if (current.status !== "queued" && current.status !== "waiting_for_idle") {
+        return { kind: "unavailable", item: current }
+      }
+      const now = Date.now()
+      const wait = workflowAdmissionWait(db, current, now)
+      if (wait) return { kind: "waiting", item: current, ...wait }
 
       // "running" is an owned status (see ownedStatuses): restart recovery's
       // dead-owner fast path depends on payload.executorOwner being stamped
@@ -1105,6 +1153,13 @@ export namespace TaskQueue {
       // freshness alone and never fast-fails a row whose owning process has
       // verifiably died.
       const ownerPayload = withExecutorOwner(current.payload, now)
+      let payload = ownerPayload
+      if (Object.hasOwn(current.payload, WORKFLOW_CLEANUP_KEY)) {
+        // Admission already checked this reservation, so a claim may discard
+        // it in the same write that begins the next attempt.
+        payload = ownerPayload ?? { ...current.payload }
+        delete payload[WORKFLOW_CLEANUP_KEY]
+      }
       const row = db
         .update(TaskQueueTable)
         .set({
@@ -1112,7 +1167,7 @@ export namespace TaskQueue {
           error: null,
           time_updated: now,
           time_started: current.time.started ?? now,
-          ...(ownerPayload ? { payload: ownerPayload } : {}),
+          ...(payload ? { payload } : {}),
         })
         .where(
           and(
@@ -1123,13 +1178,54 @@ export namespace TaskQueue {
         )
         .returning()
         .get()
-      return row ? fromRow(row) : undefined
+      return row ? { kind: "claimed", item: fromRow(row) } : { kind: "unavailable" }
     })
-    if (!item) return undefined
-    assertProjectItem(item)
-    publishUpdated(item)
-    await syncWorkflowStatusIfNeeded(item)
-    return item
+    if (claim.kind === "claimed") {
+      publishUpdated(claim.item)
+      await syncWorkflowStatusIfNeeded(claim.item)
+    }
+    return claim
+  }
+
+  function workflowAdmissionWait(db: Database.TxOrDb, item: Info, now: number): { retryAfterMs?: number } | undefined {
+    const ownCleanup = liveWorkflowCleanup(item.payload, now)
+    if (ownCleanup) return { retryAfterMs: ownCleanup.until - now }
+    const workflow = workflowChild(item)
+    if (!workflow) return undefined
+    const { runID, phaseID } = workflow
+    const maxParallel = workflowMaxParallel(item.payload)
+    if (maxParallel !== undefined) {
+      const active = readWorkflowChildren(db, item.projectID, {
+        runID,
+        phaseID,
+        excludeID: item.id,
+        statuses: ACTIVE_QUEUE_EXECUTION_STATUSES,
+      })
+      if (active.length >= maxParallel) return {}
+      const occupied = new Set(active.map((child) => child.id))
+      const cleanup = readQueueItems(db, item.projectID, [
+        sql`json_extract(${queuePayloadJson}, ${`$.${WORKFLOW_CLEANUP_KEY}.runID`}) = ${runID}`,
+        sql`json_extract(${queuePayloadJson}, ${`$.${WORKFLOW_CLEANUP_KEY}.phaseID`}) = ${phaseID}`,
+        sql`json_extract(${queuePayloadJson}, ${`$.${WORKFLOW_CLEANUP_KEY}.until`}) > ${now}`,
+      ])
+      let earliestRelease = Infinity
+      for (const child of cleanup) {
+        const reservation = liveWorkflowCleanup(child.payload, now)
+        if (!reservation || occupied.has(child.id)) continue
+        occupied.add(child.id)
+        earliestRelease = Math.min(earliestRelease, reservation.until)
+      }
+      if (occupied.size >= maxParallel) return { retryAfterMs: earliestRelease - now }
+    }
+    const pacing = workflowPacing(item.payload)
+    if (!pacing) return undefined
+    const recent = readWorkflowChildren(db, item.projectID, {
+      runID,
+      excludeID: item.id,
+      startedAfter: now - WORKFLOW_PACING_WINDOW_MS,
+    })
+    const retryAfterMs = workflowPacingDelay(recent, item.payload, pacing, now)
+    return retryAfterMs > 0 ? { retryAfterMs } : undefined
   }
 
   export async function attachSession(id: TaskQueueID, sessionID: SessionID): Promise<Info> {
@@ -1179,6 +1275,33 @@ export namespace TaskQueue {
   export type ExecutorOwner = z.infer<typeof ExecutorOwner>
   export const EXECUTOR_OWNER_KEY = "executorOwner"
 
+  const WorkflowTimeoutCleanup = WorkflowChild.extend({ token: z.string(), until: z.number(), owner: ExecutorOwner })
+  type WorkflowTimeoutCleanup = z.infer<typeof WorkflowTimeoutCleanup>
+
+  function liveWorkflowCleanup(payload: Payload, now: number): WorkflowTimeoutCleanup | undefined {
+    const parsed = WorkflowTimeoutCleanup.safeParse(payload[WORKFLOW_CLEANUP_KEY])
+    if (parsed.success && parsed.data.until > now && executorOwnerAlive(parsed.data.owner)) return parsed.data
+    return undefined
+  }
+
+  export function releaseWorkflowTimeoutCleanup(id: TaskQueueID, token: string): void {
+    const projectID = Instance.project.id
+    const updated = SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
+      const row = db
+        .select()
+        .from(TaskQueueTable)
+        .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.project_id, projectID)))
+        .get()
+      if (!row) return undefined
+      const cleanup = WorkflowTimeoutCleanup.safeParse(row.payload[WORKFLOW_CLEANUP_KEY])
+      if (!cleanup.success || cleanup.data.token !== token) return undefined
+      const payload = { ...row.payload }
+      delete payload[WORKFLOW_CLEANUP_KEY]
+      return writeRow(db, id, { payload })
+    })
+    if (updated) publishUpdated(updated)
+  }
+
   /**
    * Machine-readable classification of why a terminal "failed" row ended up
    * that way, stored in `payload.interruptionReason` (same no-ALTER-path
@@ -1195,7 +1318,7 @@ export namespace TaskQueue {
     return parsed.success ? parsed.data : undefined
   }
 
-  const ownedStatuses: readonly Status[] = ["running", "blocked_permission", "blocked_question", "waiting_for_idle"]
+  const ownedStatuses: readonly Status[] = [...ACTIVE_QUEUE_EXECUTION_STATUSES, "waiting_for_idle"]
   const liveBoots = new Set<string>()
   const bootToken = Instance.state(
     () => {
@@ -1266,7 +1389,7 @@ export namespace TaskQueue {
           and(
             eq(TaskQueueTable.id, id),
             eq(TaskQueueTable.project_id, Instance.project.id),
-            inArray(TaskQueueTable.status, ["running", "blocked_permission", "blocked_question"]),
+            inArray(TaskQueueTable.status, ACTIVE_QUEUE_EXECUTION_STATUSES),
           ),
         )
         .run()
@@ -1989,6 +2112,7 @@ export namespace TaskQueue {
 
   const serverOwnedEditFields = [
     EXECUTOR_OWNER_KEY,
+    WORKFLOW_CLEANUP_KEY,
     "controlDeliveries",
     "resultDelivery",
     "deliveryStatus",

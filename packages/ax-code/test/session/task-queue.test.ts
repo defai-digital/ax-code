@@ -2103,13 +2103,16 @@ describe("TaskQueue", () => {
     },
   )
 
-  test.each([1, 2, undefined])("keeps one workflow slot occupied during timeout cleanup: %s", async (maxParallel) => {
+  test.each([1, 2, undefined])("holds phase slots during cross-directory cleanup: %s", async (maxParallel) => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const firstSession = await Session.create({})
-        const secondSession = await Session.create({})
+        const successorDirectory = path.join(tmp.path, "successor")
+        await fs.promises.mkdir(successorDirectory)
+        const secondSession = await Instance.provide({ directory: successorDirectory, fn: () => Session.create({}) })
+        expect(secondSession.projectID).toBe(firstSession.projectID)
         const result = await createStoppedAssistantTextResponse({
           sessionID: firstSession.id,
           parent: {
@@ -2162,15 +2165,19 @@ describe("TaskQueue", () => {
           })
           await TaskQueueExecutor.start(first)
           await waitForQueueStatus(first.id, "failed")
-          successor = await TaskQueue.enqueue({
-            sessionID: secondSession.id,
-            kind: "subagent",
-            title: "Next workflow child",
-            payload: {
-              workflow: { ...workflow, childID: secondChild.id },
-              maxParallel,
-              body: { parts: [{ type: "text", text: "Second child" }] },
-            },
+          successor = await Instance.provide({
+            directory: successorDirectory,
+            fn: () =>
+              TaskQueue.enqueue({
+                sessionID: secondSession.id,
+                kind: "subagent",
+                title: "Next workflow child",
+                payload: {
+                  workflow: { ...workflow, childID: secondChild.id },
+                  maxParallel,
+                  body: { parts: [{ type: "text", text: "Second child" }] },
+                },
+              }),
           })
           const started = await TaskQueueExecutor.start(successor)
           if (maxParallel === 1) {
@@ -2842,7 +2849,7 @@ describe("TaskQueue", () => {
           const editCall = TaskQueue.edit({ id: item.id, payload: { text: "raced edit" } })
           const claimed = await TaskQueue.claimForExecution(item.id)
 
-          expect(claimed?.status).toBe("running")
+          expect(claimed).toMatchObject({ kind: "claimed", item: { status: "running" } })
           await expect(editCall).rejects.toThrow("changed; reload")
 
           const after = await TaskQueue.get(item.id)
@@ -2863,7 +2870,7 @@ describe("TaskQueue", () => {
           const pauseCall = TaskQueue.pause(item.id)
           const claimed = await TaskQueue.claimForExecution(item.id)
 
-          expect(claimed?.status).toBe("running")
+          expect(claimed).toMatchObject({ kind: "claimed", item: { status: "running" } })
           await expect(pauseCall).rejects.toThrow("Cannot pause task queue item")
 
           expect((await TaskQueue.get(item.id)).status).toBe("running")
@@ -2882,7 +2889,7 @@ describe("TaskQueue", () => {
           const cancelCall = TaskQueue.cancel(item.id)
           const claimed = await TaskQueue.claimForExecution(item.id)
 
-          expect(claimed?.status).toBe("running")
+          expect(claimed).toMatchObject({ kind: "claimed", item: { status: "running" } })
           await expect(cancelCall).rejects.toThrow("Cannot cancel task queue item")
 
           expect((await TaskQueue.get(item.id)).status).toBe("running")
@@ -2902,7 +2909,7 @@ describe("TaskQueue", () => {
           const sendNowCall = TaskQueue.sendNow(second.id)
           const claimed = await TaskQueue.claimForExecution(second.id)
 
-          expect(claimed?.status).toBe("running")
+          expect(claimed).toMatchObject({ kind: "claimed", item: { status: "running" } })
           await expect(sendNowCall).rejects.toThrow("Cannot send now task queue item")
 
           // The lost race must not have shifted the sibling's position either.
@@ -2940,7 +2947,7 @@ describe("TaskQueue", () => {
           try {
             await waitForChildLine(child, "locked")
             const claimed = await TaskQueue.claimForExecution(item.id)
-            expect(claimed?.status).toBe("running")
+            expect(claimed).toMatchObject({ kind: "claimed", item: { status: "running" } })
           } finally {
             if (child.exitCode === null) child.kill()
             await waitForExit(child)

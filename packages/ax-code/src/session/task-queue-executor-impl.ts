@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { Bus } from "@/bus"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Permission } from "@/permission"
@@ -6,7 +7,8 @@ import { Question } from "@/question"
 import { EventQuery } from "@/replay/query"
 import { Log } from "@/util/log"
 import { KeyedSerialQueue } from "@/util/queue"
-import { uniqueItems, uniqueSortedStrings, uniqueStrings } from "@/util/string-list"
+import { uniqueItems, uniqueStrings } from "@/util/string-list"
+import { scheduleUnref } from "@/util/timeout"
 import { voidSafe } from "@/util/void-safe"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
@@ -23,6 +25,7 @@ import {
   type PromptIsolationPolicy as PromptIsolationPolicyType,
 } from "./prompt/prompt-runtime-policy"
 import { TaskQueue } from "./task-queue"
+import { ACTIVE_QUEUE_EXECUTION_STATUSES as activeStatuses, workflowMaxParallel } from "./workflow-queue-admission"
 import { ScheduledTaskID, type SessionID, type TaskQueueID } from "./schema"
 import type {
   WorkflowArtifactID,
@@ -51,8 +54,6 @@ type QueueExecution = {
   cancel?: (options?: { cancelQueueItems?: boolean }) => Promise<unknown>
 }
 
-const activeStatuses = ["running", "blocked_permission", "blocked_question"] as const
-const WORKFLOW_PACING_WINDOW_MS = 60_000
 const DEFAULT_EXECUTION_TIMEOUT_MS = 72 * 60 * 60 * 1_000
 // How long a timed-out execution's cancellation may take to settle before the
 // timeout cleanup force-releases the session start key. Without the bound, a
@@ -60,7 +61,13 @@ const DEFAULT_EXECUTION_TIMEOUT_MS = 72 * 60 * 60 * 1_000
 // parks the session key forever and no successor ever drains.
 const CANCELLATION_SETTLE_MS = 30_000
 const EXECUTION_HEARTBEAT_MS = 30_000
-const workflowPacingTimers = new Map<TaskQueueID, ReturnType<typeof setTimeout>>()
+const workflowRetryTimers = Instance.state(
+  () => new Map<TaskQueueID, ReturnType<typeof scheduleUnref>>(),
+  async (timers) => {
+    for (const timer of timers.values()) timer.clear()
+    timers.clear()
+  },
+)
 const startLocks = Instance.state(
   () => new KeyedSerialQueue(),
   async (queue) => {
@@ -69,7 +76,10 @@ const startLocks = Instance.state(
 )
 
 const timeoutCleanup = Instance.state(
-  () => ({ pending: new Map<TaskQueueID, { key: string; item: TaskQueue.Info }>(), disposed: false }),
+  () => ({
+    pending: new Map<TaskQueueID, { key: string; workflow?: { token: string; until: number } }>(),
+    disposed: false,
+  }),
   async (state) => {
     state.disposed = true
     state.pending.clear()
@@ -122,7 +132,7 @@ export namespace TaskQueueExecutor {
     const execution = queueItemExecution(item)
     if (!execution) return item
 
-    return withStartLocks(item, execution, async () => {
+    return startLocks().run(startLockKey(item, execution), async () => {
       const latest = await TaskQueue.get(item.id)
       const latestExecution = queueItemExecution(latest)
       if (!latestExecution) return latest
@@ -133,24 +143,23 @@ export namespace TaskQueueExecutor {
           ? latest
           : TaskQueue.setStatus({ id: latest.id, status: "waiting_for_idle" })
       }
-      if (await shouldWaitForWorkflowPhaseSlot(latest)) return latest
-      const pacingWaitMs = await workflowPacingWaitMs(latest)
-      if (pacingWaitMs > 0) {
-        scheduleWorkflowPacingRetry(latest, pacingWaitMs)
-        return latest
-      }
-
       // Recheck cleanup after asynchronous admission checks, immediately before claiming.
-      const keys = startLockKeys(latest, latestExecution)
-      if ([...timeoutCleanup().pending.values()].some((pending) => keys.includes(pending.key))) {
+      const key = startLockKey(latest, latestExecution)
+      if ([...timeoutCleanup().pending.values()].some((pending) => pending.key === key)) {
         const error = "Waiting for a timed-out execution and its cancellation to settle."
         return latest.status === "waiting_for_idle" && latest.error === error
           ? latest
           : TaskQueue.setStatus({ id: latest.id, status: "waiting_for_idle", error })
       }
 
-      const running = await TaskQueue.claimForExecution(latest.id)
-      if (!running) return TaskQueue.get(latest.id)
+      const claim = await TaskQueue.claimForExecution(latest.id)
+      if (claim.kind === "waiting") {
+        if (claim.retryAfterMs !== undefined) scheduleWorkflowRetry(claim.item, claim.retryAfterMs)
+        return claim.item
+      }
+      if (claim.kind === "unavailable") return claim.item ?? TaskQueue.get(latest.id)
+      const running = claim.item
+      clearWorkflowRetry(running.id)
 
       // Re-derive the execution plan from the row the claim actually
       // returned, not `latestExecution` (built from the pre-claim snapshot).
@@ -205,23 +214,8 @@ export namespace TaskQueueExecutor {
   }
 }
 
-function withStartLocks<T>(item: TaskQueue.Info, execution: QueueExecution, fn: () => Promise<T>): Promise<T> {
-  const keys = startLockKeys(item, execution)
-  let run = fn
-  for (const key of [...keys].reverse()) {
-    const next = run
-    run = () => startLocks().run(key, next)
-  }
-  return run()
-}
-
-function startLockKeys(item: TaskQueue.Info, execution: QueueExecution): string[] {
-  const keys = execution.sessionID
-    ? [`session:${item.projectID}:${execution.sessionID}`]
-    : [`task:${item.projectID}:${item.id}`]
-  const workflow = TaskQueue.workflowChild(item)
-  if (workflow) keys.push(`workflow-phase:${item.projectID}:${workflow.runID}:${workflow.phaseID}`)
-  return uniqueSortedStrings(keys)
+function startLockKey(item: TaskQueue.Info, execution: QueueExecution): string {
+  return execution.sessionID ? `session:${item.projectID}:${execution.sessionID}` : `task:${item.projectID}:${item.id}`
 }
 
 async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecution) {
@@ -353,11 +347,10 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
       })
       const cleanup = timeoutCleanup()
       // Retain the session key (or the task itself for sessionless work).
-      // Workflow cleanup continues to occupy one phase slot, not every slot.
-      cleanup.pending.set(item.id, {
-        key: startLockKeys(item, execution).find((key) => !key.startsWith("workflow-phase:"))!,
-        item,
-      })
+      const until = Date.now() + CANCELLATION_SETTLE_MS
+      const workflow = TaskQueue.workflowChild(item) ? { token: randomUUID(), until } : undefined
+      const pending = { key: startLockKey(item, execution), workflow }
+      cleanup.pending.set(item.id, pending)
       // Reject first: synchronous cancellation can resolve the original run,
       // but that late result must never win over the expired deadline.
       reject(error)
@@ -391,20 +384,21 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
         await Promise.race([
           Promise.allSettled([run, cancellation]),
           new Promise((resolve) => {
-            graceTimer = setTimeout(resolve, CANCELLATION_SETTLE_MS)
+            graceTimer = setTimeout(resolve, Math.max(0, until - Date.now()))
             // Best-effort cleanup only: a hung execution must not keep the
             // process alive for the grace either.
             graceTimer.unref?.()
           }),
         ])
         clearTimeout(graceTimer)
-        if (cleanup.disposed) return
+        if (cleanup.disposed || cleanup.pending.get(item.id) !== pending) return
         cleanup.pending.delete(item.id)
+        if (workflow) TaskQueue.releaseWorkflowTimeoutCleanup(item.id, workflow.token)
         // Settled queue promises do not prove OS-level process quiescence.
         // They do ensure this cancellation can no longer target a successor.
         const current = await TaskQueue.get(item.id)
         if (current.sessionID) await TaskQueueExecutor.drainNextForSession(current.sessionID)
-        await drainNextWorkflowPhaseItem(current)
+        await drainNextWorkflowPhaseItem(item)
       }, "task-queue.timeout-cleanup")
     }, timeoutMs)
   })
@@ -461,7 +455,14 @@ async function finishIfRunning(
 ) {
   const current = await TaskQueue.get(item.id)
   if (!isActiveQueueStatus(current.status)) return current
-  return TaskQueue.setStatus({ id: item.id, status: input.status, error: input.error, onlyFromActive: true })
+  const cleanup = input.status === "failed" ? timeoutCleanup().pending.get(item.id)?.workflow : undefined
+  return TaskQueue.setStatus({
+    id: item.id,
+    status: input.status,
+    error: input.error,
+    onlyFromActive: true,
+    ...(cleanup && { workflowTimeoutCleanup: { ...cleanup, owner: TaskQueue.executorOwner(item.payload) } }),
+  })
 }
 
 function startDetachedQueueTask(task: () => Promise<void>) {
@@ -487,24 +488,9 @@ async function shouldWaitForIdle(sessionID: SessionID, currentTaskID: TaskQueueI
   return active.some((item) => item.id !== currentTaskID)
 }
 
-async function shouldWaitForWorkflowPhaseSlot(item: TaskQueue.Info) {
-  const workflow = TaskQueue.workflowChild(item)
-  const maxParallel = workflowMaxParallel(item.payload)
-  if (!workflow || maxParallel === undefined) return false
-  const { runID, phaseID } = workflow
-  const active = await TaskQueue.listWorkflowChildren({ runID, phaseID, statuses: activeStatuses, excludeID: item.id })
-  const occupied = new Set(active.map((entry) => entry.id))
-  for (const { item: predecessor } of timeoutCleanup().pending.values()) {
-    const owner = TaskQueue.workflowChild(predecessor)
-    if (owner?.runID === runID && owner.phaseID === phaseID) occupied.add(predecessor.id)
-  }
-  return occupied.size >= maxParallel
-}
-
 async function drainNextWorkflowPhaseItem(item: TaskQueue.Info) {
   const workflow = TaskQueue.workflowChild(item)
   if (!workflow || workflowMaxParallel(item.payload) === undefined) return
-  if (await shouldWaitForWorkflowPhaseSlot(item)) return
 
   const { runID, phaseID } = workflow
   const candidates = await TaskQueue.listWorkflowChildren({ runID, phaseID, statuses: ["queued", "waiting_for_idle"] })
@@ -513,78 +499,34 @@ async function drainNextWorkflowPhaseItem(item: TaskQueue.Info) {
   await TaskQueueExecutor.start(next)
 }
 
-async function workflowPacingWaitMs(item: TaskQueue.Info, now = Date.now()) {
-  const workflow = TaskQueue.workflowChild(item)
-  const pacing = workflowPacing(item.payload)
-  if (!workflow || !pacing) return 0
-
-  const recent = await TaskQueue.listWorkflowChildren({
-    runID: workflow.runID,
-    startedAfter: now - WORKFLOW_PACING_WINDOW_MS,
-    excludeID: item.id,
-  })
-  const started = recent
-    .flatMap(({ time, payload }) =>
-      time.started === undefined
-        ? []
-        : [{ startedAt: time.started, tokens: workflowEstimatedTokensForPacing(payload) }],
-    )
-    .sort((left, right) => left.startedAt - right.startedAt)
-
-  const requestWaitMs =
-    started.length >= pacing.maxRequestsPerMinute
-      ? Math.max(1, started[0]!.startedAt + WORKFLOW_PACING_WINDOW_MS - now)
-      : 0
-  const tokenWaitMs = workflowTokenPacingWaitMs({
-    started,
-    requestedTokens: workflowEstimatedTokensForPacing(item.payload),
-    maxTokensPerMinute: pacing.maxTokensPerMinute,
-    now,
-  })
-  return Math.max(requestWaitMs, tokenWaitMs)
+function clearWorkflowRetry(id: TaskQueueID): void {
+  const timers = workflowRetryTimers()
+  const timer = timers.get(id)
+  timer?.clear()
+  timers.delete(id)
 }
 
-function workflowTokenPacingWaitMs(input: {
-  started: Array<{ startedAt: number; tokens: number }>
-  requestedTokens: number
-  maxTokensPerMinute: number
-  now: number
-}) {
-  // A request larger than the whole per-minute budget can never be paced:
-  // waiting cannot make room for it, so it is admitted immediately.
-  if (input.requestedTokens <= 0 || input.requestedTokens > input.maxTokensPerMinute) return 0
-  let total = input.requestedTokens + input.started.reduce((sum, item) => sum + item.tokens, 0)
-  if (total <= input.maxTokensPerMinute) return 0
-  for (const item of input.started) {
-    total -= item.tokens
-    if (total <= input.maxTokensPerMinute) {
-      return Math.max(1, item.startedAt + WORKFLOW_PACING_WINDOW_MS - input.now)
-    }
-  }
-  return 0
-}
-
-function scheduleWorkflowPacingRetry(item: TaskQueue.Info, waitMs: number) {
-  if (workflowPacingTimers.has(item.id)) return
-  const timer = setTimeout(() => {
-    workflowPacingTimers.delete(item.id)
+function scheduleWorkflowRetry(item: TaskQueue.Info, waitMs: number) {
+  const timers = workflowRetryTimers()
+  if (timers.has(item.id)) return
+  const timer = scheduleUnref(() => {
+    timers.delete(item.id)
     void TaskQueue.get(item.id)
       .then((latest) => TaskQueueExecutor.start(latest))
       .catch((error) => {
-        DiagnosticLog.recordProcess("server.taskQueueWorkflowPacingRetryFailed", {
+        DiagnosticLog.recordProcess("server.taskQueueWorkflowRetryFailed", {
           taskID: item.id,
           sessionID: item.sessionID,
           error,
         })
-        log.warn("failed to retry workflow child after pacing wait", {
+        log.warn("failed to retry workflow child after admission wait", {
           taskID: item.id,
           sessionID: item.sessionID,
           error,
         })
       })
   }, waitMs)
-  ;(timer as { unref?: () => void }).unref?.()
-  workflowPacingTimers.set(item.id, timer)
+  timers.set(item.id, timer)
 }
 
 function sessionPromptBusy(sessionID: SessionID) {
@@ -1390,29 +1332,6 @@ function workflowEscalationPolicy(value: unknown): "inherit" | "ask" | "deny" | 
   return value === "inherit" || value === "ask" || value === "deny" ? value : undefined
 }
 
-function workflowMaxParallel(payload: TaskQueue.Payload) {
-  return positiveInteger(payload["maxParallel"])
-}
-
-function workflowPacing(payload: TaskQueue.Payload) {
-  const pacing = payload["pacing"]
-  if (!pacing || typeof pacing !== "object") return undefined
-  const record = pacing as Record<string, unknown>
-  const maxRequestsPerMinute = positiveInteger(record.maxRequestsPerMinute)
-  const maxTokensPerMinute = positiveInteger(record.maxTokensPerMinute)
-  if (maxRequestsPerMinute === undefined || maxTokensPerMinute === undefined) return undefined
-  return { maxRequestsPerMinute, maxTokensPerMinute }
-}
-
-function workflowEstimatedTokensForPacing(payload: TaskQueue.Payload) {
-  const budgetSlice = payload["budgetSlice"]
-  if (!budgetSlice || typeof budgetSlice !== "object") return 0
-  const record = budgetSlice as Record<string, unknown>
-  const total = positiveInteger(record.maxTotalTokens)
-  if (total !== undefined) return total
-  return (positiveInteger(record.maxInputTokensPerChild) ?? 0) + (positiveInteger(record.maxOutputTokensPerChild) ?? 0)
-}
-
 type WorkflowSubagentBudgetUsage = {
   totalTokens: number
   inputTokens: number
@@ -1519,10 +1438,6 @@ function truncateArtifactSummary(text: string) {
 
 function nonNegativeNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined
-}
-
-function positiveInteger(value: unknown) {
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
 }
 
 function applyWorkflowEffortPolicy(body: Record<string, unknown>, item: TaskQueue.Info): Record<string, unknown> {
