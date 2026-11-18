@@ -13,7 +13,11 @@ import { WorkflowChildWorktree, WorkflowPhaseID, type WorkflowPhaseRecord, type 
 
 const log = Log.create({ service: "workflow.phase-preparation" })
 const Target = z.object({ directory: z.string().min(1), payload: WorkflowChildWorktree })
-const Slot = z.object({ sessionID: SessionID.zod, target: Target })
+const Slot = z.object({
+  sessionID: SessionID.zod,
+  target: Target,
+  pending: z.literal(true).optional(),
+})
 const Checkpoint = z.object({ phaseID: WorkflowPhaseID.zod, slots: z.array(Slot) })
 
 type WorkflowChildRuntimeTarget = z.output<typeof Target>
@@ -40,28 +44,36 @@ export async function loadPhasePreparation(
 
   return {
     async reserve(index, writePolicy) {
-      const existing = checkpoint.slots[index]
-      if (existing) {
-        const target = existing.target
-        if (target.payload.mode === "dedicated") {
-          const { Worktree } = await import("../worktree")
-          const worktrees = await Worktree.list()
-          const registered = worktrees.some(
-            (worktree) =>
-              Filesystem.resolve(worktree.directory) === target.directory && worktree.branch === target.payload.branch,
-          )
-          if (!registered)
-            throw new HTTPException(409, { message: "A prepared workflow worktree is no longer available." })
+      let slot = checkpoint.slots[index]
+      if (!slot) {
+        const target = await planTarget(runID, phase.specPhaseID, index, writePolicy)
+        slot = {
+          sessionID: SessionID.descending(),
+          target,
+          pending: target.payload.mode === "dedicated" ? true : undefined,
         }
-        return existing
+        checkpoint.slots[index] = slot
+        // Save both identities before creating a Git checkout or a registry row.
+        await Storage.write(key, checkpoint)
       }
-      const target = await prepareTarget(runID, phase.specPhaseID, index, writePolicy)
-      const slot = { sessionID: SessionID.descending(), target }
-      checkpoint.slots[index] = slot
-      // The session lives in the registry, which is separate from a sharded
-      // queue. Persist its identity before creating the row so retries can
-      // resume setup whether or not admission reached its transaction.
-      await Storage.write(key, checkpoint)
+
+      if (slot.pending) {
+        await prepareDedicatedWorktree(slot.target)
+        slot.target.directory = Filesystem.resolve(slot.target.directory)
+        delete slot.pending
+        await Storage.write(key, checkpoint)
+      } else if (slot.target.payload.mode === "dedicated") {
+        const { Worktree } = await import("../worktree")
+        const target = slot.target
+        const worktrees = await Worktree.list()
+        const registered = worktrees.some(
+          (worktree) =>
+            Filesystem.resolve(worktree.directory) === target.directory && worktree.branch === target.payload.branch,
+        )
+        if (!registered) {
+          throw new HTTPException(409, { message: "A prepared workflow worktree is no longer available." })
+        }
+      }
       return slot
     },
     async clear() {
@@ -74,7 +86,7 @@ export async function loadPhasePreparation(
   }
 }
 
-async function prepareTarget(
+async function planTarget(
   runID: WorkflowRunID,
   specPhaseID: string,
   index: number,
@@ -88,14 +100,21 @@ async function prepareTarget(
   }
 
   const { Worktree } = await import("../worktree")
-  const info = await Worktree.makeWorktreeInfo(`workflow-${runID}-${specPhaseID}-${index + 1}`)
-  const bootstrap = await Worktree.createFromInfo(info)
+  const info = await Worktree.makeWorktreeInfo(`workflow-${runID}-${specPhaseID}-${index + 1}`, {
+    reserveDirectory: false,
+  })
+  return {
+    directory: info.directory,
+    payload: { mode: "dedicated", ...info },
+  }
+}
+
+async function prepareDedicatedWorktree(target: WorkflowChildRuntimeTarget): Promise<void> {
+  const { Worktree } = await import("../worktree")
+  const info = Worktree.Info.parse(target.payload)
+  const bootstrap = await Worktree.createFromInfo(info, undefined, undefined, { resume: true })
   if (!(await bootstrap())) {
     throw new Worktree.StartCommandFailedError({ message: "Workflow worktree failed to become ready" })
-  }
-  return {
-    directory: Filesystem.resolve(info.directory),
-    payload: { mode: "dedicated", ...info },
   }
 }
 

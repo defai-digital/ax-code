@@ -404,7 +404,7 @@ export namespace Worktree {
     return items
   }
 
-  type BranchChoice = { branch?: string; existingBranch?: string }
+  type BranchChoice = { branch?: string; existingBranch?: string; reserveDirectory?: boolean }
 
   async function candidate(root: string, base?: string, choice: BranchChoice = {}) {
     for (const attempt of Array.from({ length: 26 }, (_, i) => i)) {
@@ -427,6 +427,9 @@ export namespace Worktree {
         }
       }
 
+      const info = Info.parse({ name, branch, directory })
+      if (choice.reserveDirectory === false) return info
+
       // Attempt to create the directory atomically to close the TOCTOU window.
       // If another process created it between our exists() check and now, mkdir
       // throws EEXIST and we retry with a new name.
@@ -437,7 +440,7 @@ export namespace Worktree {
         throw e
       }
 
-      return Info.parse({ name, branch, directory })
+      return info
     }
 
     throw new NameGenerationFailedError({ message: "Failed to generate a unique worktree name" })
@@ -619,11 +622,15 @@ export namespace Worktree {
     info: Info,
     startCommand?: string,
     startPoint?: string,
-    options: { borrowed?: boolean } = {},
+    options: { borrowed?: boolean; resume?: boolean } = {},
   ) {
-    const args = options.borrowed
-      ? ["worktree", "add", "--no-checkout", info.directory, info.branch]
-      : ["worktree", "add", "--no-checkout", "-b", info.branch, info.directory]
+    const resumable = options.resume && !options.borrowed
+    // Complete checkout before marking ownership. Keep the hook behavior of
+    // the deferred checkout by disabling Git hooks for this one command.
+    const args = resumable
+      ? ["-c", "core.hooksPath=/dev/null", "worktree", "add"]
+      : ["worktree", "add", "--no-checkout"]
+    args.push(...(options.borrowed ? [info.directory, info.branch] : ["-b", info.branch, info.directory]))
     if (startPoint && !options.borrowed) args.push(StartPoint.parse(startPoint))
     // Mark a borrowed branch before git publishes the worktree, so no window
     // exists in which it could be treated as owned. A mark this call added is
@@ -632,6 +639,16 @@ export namespace Worktree {
     // owned mark is written under the same lock, right after git creates the
     // branch.
     const created = await withBranchLock(async () => {
+      if (resumable && (await worktreeBranchMap()).get(await canonical(info.directory)) === info.branch) {
+        if (
+          (await branchFlag(info.branch, OWNED_KEY)) !== "set" ||
+          (await branchFlag(info.branch, BORROWED_KEY)) !== "absent"
+        ) {
+          throw new CreateFailedError({ message: "Cannot verify ownership of the prepared worktree" })
+        }
+        return undefined
+      }
+
       const markedHere = options.borrowed && (await branchFlag(info.branch, BORROWED_KEY)) === "absent"
       if (options.borrowed) await setBranchFlag(info.branch, BORROWED_KEY)
       const result = await git(args, { cwd: Instance.worktree })
@@ -644,7 +661,7 @@ export namespace Worktree {
       if (!options.borrowed) await setBranchFlag(info.branch, OWNED_KEY).catch(() => undefined)
       return result
     })
-    if (created.exitCode !== 0) {
+    if (created && created.exitCode !== 0) {
       throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
     }
 
@@ -656,6 +673,9 @@ export namespace Worktree {
       }
       await Project.addSandbox(Instance.project.id, info.directory)
     } catch (err) {
+      // The caller has already recorded the checkout and can retry. Leave its
+      // files intact, including any edits made while setup was interrupted.
+      if (resumable) throw err
       log.warn("failed to record worktree in database; rolling back git worktree", {
         directory: info.directory,
         error: toErrorMessage(err),
@@ -692,8 +712,8 @@ export namespace Worktree {
 
     return () => {
       const start = async () => {
-        const populated = await git(["reset", "--hard"], { cwd: info.directory })
-        if (populated.exitCode !== 0) {
+        const populated = resumable ? undefined : await git(["reset", "--hard"], { cwd: info.directory })
+        if (populated && populated.exitCode !== 0) {
           const message = errorText(populated) || "Failed to populate worktree"
           log.error("worktree checkout failed", { directory: info.directory, message })
           GlobalBus.emit("event", {

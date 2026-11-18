@@ -1099,6 +1099,82 @@ describe("WorkflowScheduler", () => {
     },
   )
 
+  test("resumes a dedicated worktree after an interruption before bootstrap", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(path.join(tmp.path, "tracked.txt"), "original")
+    execFileSync("git", ["add", "tracked.txt"], { cwd: tmp.path })
+    execFileSync("git", ["commit", "-m", "Add tracked fixture"], { cwd: tmp.path })
+    await fs.writeFile(path.join(tmp.path, ".git", "hooks", "post-checkout"), "#!/bin/sh\ntouch checkout-hook-ran\n", {
+      mode: 0o755,
+    })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "interrupted-worktree",
+              name: "Interrupted worktree",
+              description: "A retry can continue a worktree already created by Git.",
+              permissions: { writePolicy: "worktree-required" },
+              phases: [{ id: "edit", name: "Edit", kind: "sequential", prompt: "Offline fixture." }],
+            }),
+          })
+          const create = Worktree.createFromInfo
+          const spy = vi.spyOn(Worktree, "createFromInfo").mockImplementationOnce(async (...args) => {
+            await create(...args)
+            throw new Error("interrupted before bootstrap")
+          })
+          const options = { allowWriteWorkflows: true, autoStartChildren: false }
+          await expect(WorkflowScheduler.start(run.id, options)).rejects.toThrow("interrupted before bootstrap")
+          spy.mockRestore()
+          expect(await TaskQueue.list()).toHaveLength(0)
+          const [original] = await Worktree.list()
+          const edited = path.join(original.directory, "tracked.txt")
+          expect(await fs.readFile(edited, "utf8")).toBe("original")
+          await expect(fs.stat(path.join(original.directory, "checkout-hook-ran"))).rejects.toMatchObject({
+            code: "ENOENT",
+          })
+          await fs.writeFile(edited, "staged edit")
+          execFileSync("git", ["add", "tracked.txt"], { cwd: original.directory })
+          await fs.writeFile(edited, "local edit during interruption")
+
+          const owner = `branch.${original.branch}.axCodeOwned`
+          execFileSync("git", ["config", "--unset", owner], { cwd: tmp.path })
+          await expect(WorkflowScheduler.start(run.id, options)).rejects.toThrow(
+            "Cannot verify ownership of the prepared worktree",
+          )
+          expect(await Worktree.list()).toEqual([original])
+          expect(await TaskQueue.list()).toHaveLength(0)
+          execFileSync("git", ["config", owner, original.branch!], { cwd: tmp.path })
+
+          const retried = await WorkflowScheduler.start(run.id, options)
+          expect(retried.children).toHaveLength(1)
+          expect(await Worktree.list()).toEqual([original])
+          const [item] = await TaskQueue.list()
+          expect(item.directory).toBe(await fs.realpath(original.directory))
+          expect(execFileSync("git", ["show", ":tracked.txt"], { cwd: item.directory, encoding: "utf8" })).toBe(
+            "staged edit",
+          )
+          expect(await fs.readFile(path.join(item.directory, "tracked.txt"), "utf8")).toBe(
+            "local edit during interruption",
+          )
+        },
+      })
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          for (const worktree of await Worktree.list()) await Worktree.remove({ directory: worktree.directory })
+        },
+      })
+    }
+  })
+
   test("rejects a phase that exceeds the remaining child budget without charging the rejected batch", async () => {
     await using tmp = await tmpdir({ git: true })
     vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
