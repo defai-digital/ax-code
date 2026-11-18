@@ -57,7 +57,12 @@ const PATTERNS: Array<{ name: string; re: RegExp }> = [
   // dumps with `"cost": "number"` are also caught — the previous regen had
   // `"cost": {` which the brace branch already covered, but a future
   // string-valued schema would otherwise slip through.
-  { name: "schema-field", re: /["']?cost["']?\s*:\s*(z\.|number\b|string\b|\{|Cost\b|"(?:number|string)")/g },
+  {
+    name: "schema-field",
+    // Match a complete property name, including paired quotes. An optional
+    // opening quote also matched the suffix of model IDs such as :low-cost.
+    re: /(?<![\w$])(?:"cost"|'cost'|cost)\s*:\s*(z\.|number\b|string\b|\{|Cost\b|"(?:number|string)")/g,
+  },
   // OpenAPI required arrays containing "cost".
   { name: "openapi-required-cost", re: /"required"\s*:\s*\[[^\]]*"cost"[^\]]*\]/g },
   // Pricing-style identifiers.
