@@ -176,8 +176,7 @@ export namespace WorkflowRoutineTrigger {
   export async function run(input: RunInput) {
     const parsed = RunInput.parse(input)
     const template = await findApiRoutineTemplate(parsed.route)
-    const run = await WorkflowTemplate.createRun({
-      templateID: template.id,
+    const run = await WorkflowTemplate.createRunFromTemplate(template, {
       parentSessionID: parsed.parentSessionID,
       modelPolicy: parsed.modelPolicy,
       inputValues: parsed.inputValues,

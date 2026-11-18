@@ -196,15 +196,22 @@ export namespace WorkflowTemplate {
   }
 
   export async function createRun(input: CreateRunInput): Promise<WorkflowRun.Info> {
-    const parsed = CreateRunInput.parse(input)
-    const template = await get(parsed.templateID)
+    const { templateID, ...options } = CreateRunInput.parse(input)
+    return createRunFromTemplate(await get(templateID), options)
+  }
+
+  /** Use the same revision the caller selected when admitting a routine. */
+  export async function createRunFromTemplate(
+    template: Info,
+    options: Omit<z.output<typeof CreateRunInput>, "templateID">,
+  ): Promise<WorkflowRun.Info> {
     if (template.trust !== "trusted") throw new WorkflowTemplateUntrustedError(template.id)
     return WorkflowRun.create({
-      parentSessionID: parsed.parentSessionID,
+      parentSessionID: options.parentSessionID,
       sourceTemplateID: template.id,
-      sourceTaskID: parsed.sourceTaskID,
-      spec: applyWorkflowModelPolicyOverride(template.spec, parsed.modelPolicy),
-      inputValues: parsed.inputValues,
+      sourceTaskID: options.sourceTaskID,
+      spec: applyWorkflowModelPolicyOverride(template.spec, options.modelPolicy),
+      inputValues: options.inputValues,
     })
   }
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import {
   WorkflowFixtureSpecs,
@@ -376,6 +376,49 @@ describe("WorkflowRoutineTrigger", () => {
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("runs the API routine revision selected for the requested route", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { templateID, route } = await WorkflowRoutineTrigger.create({
+            templateID: "builtin:noop-dry-run",
+            scope: "project",
+            route: "workflow/original-route",
+            enabled: true,
+            trust: "trusted",
+          })
+          const original = await WorkflowTemplate.get(templateID)
+          const list = WorkflowTemplate.list
+          const changeRoute = vi.spyOn(WorkflowTemplate, "list").mockImplementationOnce(async () => {
+            const selected = await list()
+            await WorkflowRoutineTrigger.create({
+              templateID,
+              scope: "project",
+              route: "workflow/new-route",
+              enabled: true,
+              trust: "trusted",
+            })
+            return selected
+          })
+          try {
+            const result = await WorkflowRoutineTrigger.run({ route })
+            expect(result.template.revision).toBe(original.revision)
+            expect(result.run.spec).toEqual(original.spec)
+            expect(result.run.status).toBe("completed")
+            await expect(WorkflowRoutineTrigger.run({ route })).rejects.toThrow(WorkflowRoutineNotFoundError)
+          } finally {
+            changeRoute.mockRestore()
+          }
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
     }
   })
 
