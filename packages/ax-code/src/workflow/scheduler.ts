@@ -7,6 +7,7 @@ import { Instance } from "../project/instance"
 import type { TaskQueue } from "../session/task-queue"
 import { NotFoundError } from "../storage/db"
 import { FileLock } from "../util/filelock"
+import { Filesystem } from "../util/filesystem"
 import { Hash } from "../util/hash"
 import { KeyedSerialQueue } from "../util/queue"
 import { JsonBoolean } from "../util/schema"
@@ -147,7 +148,7 @@ export namespace WorkflowScheduler {
       const phasePlan = plan.phases.find((item) => item.specPhaseID === phase.specPhaseID)
       if (!phasePlan) throw new Error(`No dry-run phase plan for workflow phase ${phase.specPhaseID}`)
       if (parsed.enqueueChildren || phase.kind === "noop") {
-        const admitted = await admitDurablePhase(initial, phase, phasePlan, parsed)
+        const admitted = await admitDurablePhase(runID, phase.id, phasePlan, parsed)
         if (admitted.kind === "advance") continue
         if (admitted.kind === "queued" && parsed.autoStartChildren && admitted.tasks.length > 0) {
           // Dispatch after releasing the lock. Starting a child synchronizes
@@ -196,12 +197,11 @@ export namespace WorkflowScheduler {
   }
 
   async function admitDurablePhase(
-    initial: WorkflowRunDetail,
-    phase: WorkflowRunDetail["phases"][number],
+    runID: WorkflowRunID,
+    phaseID: WorkflowPhaseID,
     plan: WorkflowDryRunPhase,
     options: z.output<typeof StartOptions>,
   ): Promise<{ kind: "advance" | "stop" } | { kind: "queued"; tasks: TaskQueue.Info[] }> {
-    const runID = initial.id
     // Serialize preparation of this run across worktrees and processes.
     // A run's phases share one lock, and the database owns admission.
     // @scan-suppress security_scan Hash.fast encodes the run key as hex without path separators.
@@ -212,10 +212,10 @@ export namespace WorkflowScheduler {
     })
     const current = await WorkflowRun.getDetail(runID)
     if (current.status !== "running" && current.status !== "blocked") return { kind: "stop" }
-    const latestPhase = current.phases.find((item) => item.id === phase.id)
-    if (!latestPhase) throw new Error(`Missing workflow phase ${phase.id}`)
-    if (latestPhase.status === "completed") return { kind: "advance" }
-    if (WorkflowRun.isTerminalPhaseStatus(latestPhase.status) || latestPhase.status === "paused") {
+    const phase = current.phases.find((item) => item.id === phaseID)
+    if (!phase) throw new Error(`Missing workflow phase ${phaseID}`)
+    if (phase.status === "completed") return { kind: "advance" }
+    if (WorkflowRun.isTerminalPhaseStatus(phase.status) || phase.status === "paused") {
       return { kind: "stop" }
     }
 
@@ -231,7 +231,7 @@ export namespace WorkflowScheduler {
     }
 
     if (phase.kind === "noop") {
-      await ensurePhasePromptArtifact(runID, initial.spec, phase, plan)
+      await ensurePhasePromptArtifact(runID, current.spec, phase, plan)
       const advanced = await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
       if (advanced.status !== "running") return { kind: "stop" }
       await WorkflowRun.appendArtifact({
@@ -248,6 +248,28 @@ export namespace WorkflowScheduler {
 
     if (!WorkflowRun.canPreparePhaseChildren(runID, phase.id, plan.children.length)) return { kind: "stop" }
 
+    // A retry or a child's completion can reach the scheduler from a different
+    // checkout. Prepare new children only from the run's original workspace.
+    if (!(await Filesystem.isDir(current.directory))) {
+      throw new HTTPException(409, { message: "The workflow's original workspace is unavailable." })
+    }
+    return await Instance.provide({
+      directory: current.directory,
+      fn: () => prepareAndEnqueueChildren(current, phase, plan, options),
+    })
+  }
+
+  async function prepareAndEnqueueChildren(
+    run: WorkflowRunDetail,
+    phase: WorkflowRunDetail["phases"][number],
+    plan: WorkflowDryRunPhase,
+    options: z.output<typeof StartOptions>,
+  ): Promise<{ kind: "queued"; tasks: TaskQueue.Info[] }> {
+    if (Instance.project.id !== run.projectID) {
+      throw new HTTPException(409, { message: "The workflow's original workspace now belongs to another project." })
+    }
+
+    const runID = run.id
     const preparation = await loadPhasePreparation(runID, phase)
     const prepared: Awaited<ReturnType<typeof WorkflowRun.prepareQueuedChild>>[] = []
     for (const childPlan of plan.children) {
@@ -255,12 +277,12 @@ export namespace WorkflowScheduler {
       const child = await Instance.provide({
         directory: target.directory,
         fn: async () => {
-          if (Instance.project.id !== initial.projectID) {
+          if (Instance.project.id !== run.projectID) {
             throw new HTTPException(409, { message: "A prepared workflow target belongs to another project." })
           }
           const session = await prepareWorkflowChildSession(sessionID, {
-            parentID: initial.parentSessionID,
-            title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1} (@${childPlan.agent ?? "workflow"} workflow child)`,
+            parentID: run.parentSessionID,
+            title: `${run.spec.name}: ${phase.name} #${childPlan.index + 1} (@${childPlan.agent ?? "workflow"} workflow child)`,
           })
           return WorkflowRun.prepareQueuedChild(
             {
@@ -272,10 +294,10 @@ export namespace WorkflowScheduler {
               budgetSlice: childPlan.budgetSlice,
             },
             {
-              title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
+              title: `${run.spec.name}: ${phase.name} #${childPlan.index + 1}`,
               specPhaseID: phase.specPhaseID,
               startOptions: options,
-              sourceTaskID: initial.sourceTaskID,
+              sourceTaskID: run.sourceTaskID,
               payload: {
                 worktree: target.payload,
                 prompt: childPlan.prompt,
@@ -295,7 +317,7 @@ export namespace WorkflowScheduler {
       })
       prepared.push(child)
     }
-    await ensurePhasePromptArtifact(runID, initial.spec, phase, plan)
+    await ensurePhasePromptArtifact(runID, run.spec, phase, plan)
     const tasks = await WorkflowRun.enqueuePhaseChildren(runID, phase.id, prepared)
     if (tasks.length > 0) await preparation.clear()
     return { kind: "queued", tasks }

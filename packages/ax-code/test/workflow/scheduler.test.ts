@@ -1039,9 +1039,13 @@ describe("WorkflowScheduler", () => {
   })
 
   test.each(["read-only", "worktree-required"] as const)(
-    "retries %s phase setup without duplicating prepared resources",
+    "retries %s phase setup in the original workspace without duplicating resources",
     async (writePolicy) => {
       await using tmp = await tmpdir({ git: true })
+      await using linked = await tmpdir()
+      execFileSync("git", ["worktree", "add", "--detach", linked.path], { cwd: tmp.path, stdio: "pipe" })
+      execFileSync("git", ["commit", "--allow-empty", "-m", "Different checkout base"], { cwd: linked.path })
+      const originalHead = execFileSync("git", ["rev-parse", "HEAD"], { cwd: tmp.path, encoding: "utf8" })
       vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
       try {
         await Instance.provide({
@@ -1059,10 +1063,10 @@ describe("WorkflowScheduler", () => {
             })
             const startOptions = { allowWriteWorkflows: true, autoStartChildren: false }
             const create = Session.create
-            const spy = vi
-              .spyOn(Session, "create")
-              .mockImplementationOnce(create)
-              .mockRejectedValueOnce(new Error("preparation interrupted"))
+            const spy = vi.spyOn(Session, "create").mockImplementationOnce(async (...args) => {
+              await create(...args)
+              throw new Error("preparation interrupted")
+            })
             await expect(WorkflowScheduler.start(run.id, startOptions)).rejects.toThrow("preparation interrupted")
             spy.mockRestore()
             const partial = await WorkflowRun.getDetail(run.id)
@@ -1071,18 +1075,30 @@ describe("WorkflowScheduler", () => {
             expect(partial.budgetUsage.childAgents).toBe(0)
             expect(await TaskQueue.list()).toHaveLength(0)
 
-            const worktree = (await Worktree.list())[0]
+            const worktree = (await Worktree.list()).find((item) => item.directory !== linked.path)
             const note = worktree ? path.join(worktree.directory, "local-notes.txt") : undefined
             if (note) await fs.writeFile(note, "Notes added after interruption")
 
-            const retried = await WorkflowScheduler.start(run.id, startOptions)
+            const retried = await Instance.provide({
+              directory: linked.path,
+              fn: () => WorkflowScheduler.start(run.id, startOptions),
+            })
             expect(retried.children).toHaveLength(2)
             expect(retried.budgetUsage.childAgents).toBe(2)
-            expect(await TaskQueue.list()).toHaveLength(2)
+            const tasks = await TaskQueue.list()
+            expect(tasks).toHaveLength(2)
+            for (const task of tasks) {
+              if (writePolicy === "read-only") expect(task.directory).toBe(tmp.path)
+              else
+                expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: task.directory, encoding: "utf8" })).toBe(
+                  originalHead,
+                )
+            }
             expect([...Session.list()].map((session) => session.id).sort()).toEqual(
               retried.children.map((child) => child.sessionID).sort(),
             )
-            expect(await Worktree.list()).toHaveLength(writePolicy === "worktree-required" ? 2 : 0)
+            const preparedWorktrees = (await Worktree.list()).filter((item) => item.directory !== linked.path)
+            expect(preparedWorktrees).toHaveLength(writePolicy === "worktree-required" ? 2 : 0)
             if (note) expect(await fs.readFile(note, "utf8")).toBe("Notes added after interruption")
           },
         })

@@ -57,14 +57,21 @@ export async function loadPhasePreparation(
         await Storage.write(key, checkpoint)
       }
 
+      const target = slot.target
+      if (
+        target.payload.mode === "current" &&
+        (target.directory !== Instance.directory ||
+          Filesystem.resolve(target.payload.directory) !== Filesystem.resolve(Instance.worktree))
+      ) {
+        throw new HTTPException(409, { message: "A prepared workflow child points outside the original workspace." })
+      }
       if (slot.pending) {
-        await prepareDedicatedWorktree(slot.target)
-        slot.target.directory = Filesystem.resolve(slot.target.directory)
+        await prepareDedicatedWorktree(target)
+        target.directory = Filesystem.resolve(target.directory)
         delete slot.pending
         await Storage.write(key, checkpoint)
-      } else if (slot.target.payload.mode === "dedicated") {
+      } else if (target.payload.mode === "dedicated") {
         const { Worktree } = await import("../worktree")
-        const target = slot.target
         const worktrees = await Worktree.list()
         const registered = worktrees.some(
           (worktree) =>
