@@ -217,31 +217,52 @@ describe("background subagent result delivery", () => {
     })
   })
 
-  test("preserves root wake when the parent has unrelated active queue work", async () => {
-    await using tmp = await tmpdir({ git: true })
+  test.each([false, true])(
+    "wakes the parent in its own directory despite unrelated queue work (cold: %s)",
+    async (coldParent) => {
+      await using tmp = await tmpdir({ git: true })
+      const workerDirectory = path.join(tmp.path, "worker")
+      await mkdir(workerDirectory)
+      const provide = coldParent ? Instance.provideScoped : Instance.provide
+      const { parent, task } = await provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({})
+          const task = await createCompletedBackgroundTask(parent.id, tmp.path, "root result")
+          const unrelated = await TaskQueue.enqueue({
+            sessionID: parent.id,
+            kind: "prompt",
+            title: "unrelated active prompt",
+            payload: {},
+          })
+          await TaskQueue.setStatus({ id: unrelated.id, status: "running" })
+          return { parent, task }
+        },
+      })
+      expect(Instance.list().includes(parent.directory)).toBe(!coldParent)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const parent = await Session.create({})
-        const task = await createCompletedBackgroundTask(parent.id, tmp.path, "root result")
-        const unrelated = await TaskQueue.enqueue({
+      const wakes = vi.fn()
+      vi.spyOn(SessionPrompt, "loop").mockImplementation(async ({ sessionID }) => {
+        const row = await TaskQueue.get(task.item.id)
+        wakes({ sessionID, directory: Instance.directory, deliveryStatus: row.payload["deliveryStatus"] })
+        return undefined as never
+      })
+
+      const delivered = await Instance.provide({
+        directory: workerDirectory,
+        fn: () => deliverBackgroundSubagentHandoff(task),
+      })
+
+      expect(delivered.payload["deliveryStatus"]).toBe("delivered")
+      await vi.waitFor(() =>
+        expect(wakes).toHaveBeenCalledExactlyOnceWith({
           sessionID: parent.id,
-          kind: "prompt",
-          title: "unrelated active prompt",
-          payload: {},
-        })
-        await TaskQueue.setStatus({ id: unrelated.id, status: "running" })
-        const loop = vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
-
-        await deliverBackgroundSubagentHandoff(task)
-
-        await vi.waitFor(() => {
-          expect(loop).toHaveBeenCalledWith({ sessionID: parent.id })
-        })
-      },
-    })
-  })
+          directory: parent.directory,
+          deliveryStatus: "delivered",
+        }),
+      )
+    },
+  )
 
   test("a result consumed by waitfor does not require another synthesis turn", async () => {
     await using tmp = await tmpdir({ git: true })
