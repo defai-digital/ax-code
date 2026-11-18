@@ -73,6 +73,58 @@ describe("ScheduledTask run-now overlap protection", () => {
     })
   })
 
+  test.each(["skip", "run_once"] as const)("a due tick honors a last-moment change to %s", async (catchUpPolicy) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "Catch-up changed during polling",
+          prompt: "Check the build.",
+          schedule: { type: "once", runAt: now + 1_000 },
+          catchUpPolicy: catchUpPolicy === "skip" ? "run_once" : "skip",
+        })
+
+        // runDue reads its candidate list before yielding. Save the new
+        // policy without changing the due timestamp before it can claim.
+        const tick = ScheduledTask.runDue(now + 6 * 60_000)
+        await ScheduledTask.update({ id: task.id, catchUpPolicy })
+        expect(await tick).toHaveLength(catchUpPolicy === "skip" ? 0 : 1)
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+          { status: catchUpPolicy === "skip" ? "missed_skip" : "running" },
+        ])
+      },
+    })
+  })
+
+  test("a due tick advances the replacement cadence even when its first due time is unchanged", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const minute = 60_000
+        const runAt = Math.floor(Date.now() / minute) * minute + 15 * minute
+        const task = await ScheduledTask.create({
+          title: "Cadence changed during polling",
+          prompt: "Check the build.",
+          schedule: { type: "once", runAt },
+        })
+
+        const tick = ScheduledTask.runDue(runAt + 6 * minute)
+        const replacement = await ScheduledTask.update({
+          id: task.id,
+          schedule: { type: "cron", expression: `${new Date(runAt).getUTCMinutes()} * * * *`, timezone: "UTC" },
+        })
+        expect(replacement.nextRunAt).toBe(runAt)
+        expect(await tick).toHaveLength(1)
+        expect((await ScheduledTask.get(task.id)).nextRunAt).toBe(runAt + 60 * minute)
+      },
+    })
+  })
+
   test.each(["run-now", "due"] as const)("binds a %s queue item to the saved task checkout", async (trigger) => {
     await using tmp = await tmpdir({ git: true })
     await using linked = await tmpdir()

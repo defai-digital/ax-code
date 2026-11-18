@@ -980,200 +980,177 @@ export namespace ScheduledTask {
   export async function runDue(now = Date.now()): Promise<RunNowResult[]> {
     const due = await list({ status: "active", dueBefore: now, limit: 50 })
     const results: RunNowResult[] = []
-    for (const task of due) {
-      if (task.nextRunAt === undefined || task.nextRunAt > now) continue
-      const deadlineMs = task.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
-      reconcileOrphanRuns(task.id, now, deadlineMs)
-      // Overlap protection: one open run per task. A still-running occurrence
-      // skips this fire and records it, rather than double-executing.
-      if (hasOpenRun(task.id, now, deadlineMs)) {
-        const next = nextRunAt(task.schedule, now)
-        const skipped = recordSkippedOccurrence(task, next, "skipped_overlap", now, 1, undefined, {
-          collapseRepeat: task.schedule.type === "once",
-        })
-        if (skipped) {
-          publishUpdated(skipped.task)
-          if (skipped.run) publishSkipped(skipped.task, skipped.run)
-          log.info("skipped overlapping scheduled task occurrence", { taskID: task.id })
-        }
-        continue
-      }
-      // Missed detection is based on the NOMINAL schedule so jitter can never
-      // corrupt catch-up accounting (council: grace/coalescing use nominal times).
-      // A one-shot whose stored next_run_at no longer equals the nominal runAt
-      // is a failure-policy retry (or an overlap re-arm), not a missed calendar
-      // occurrence — the skip catch-up policy must not disable it for being
-      // late, or a single failed fire plus a short backend outage would
-      // silently kill the reminder the failure policy was meant to retry.
-      const oneShotRetry = task.schedule.type === "once" && task.nextRunAt !== task.schedule.runAt
-      const missed = !oneShotRetry && now - task.nextRunAt > MISSED_RUN_GRACE_MS
-      // Deterministic anti-herd spread applies only to on-time fires and is capped
-      // below the grace window, so a jitter-delayed task is never misread as missed.
-      if (!missed && now < task.nextRunAt + jitterOffsetMs(task)) continue
-      const coalesced = countCoalesced(task.schedule, task.nextRunAt, now)
-      const skip = task.catchUpPolicy === "skip" && missed
-      if (skip) {
-        const next = nextRunAt(task.schedule, coalesced.lastOccurrence)
-        const skipped = recordSkippedOccurrence(task, next, "missed_skip", now, coalesced.count, task.nextRunAt)
-        if (skipped) {
-          publishUpdated(skipped.task)
-          if (skipped.run) publishSkipped(skipped.task, skipped.run)
-          log.info("skipped missed scheduled task occurrence", {
-            taskID: task.id,
-            occurrenceAt: task.nextRunAt,
-            coalescedCount: coalesced.count,
-            nextRunAt: next,
-          })
-        }
-        continue
-      }
-      const next = nextRunAt(task.schedule, coalesced.lastOccurrence)
-      const claimed = claimDueTask(task, next, now, coalesced.count)
+    for (const { id, nextRunAt: occurrenceAt } of due) {
+      if (occurrenceAt === undefined || occurrenceAt > now) continue
+      const claimed = claimDueTask(id, occurrenceAt, now)
       if (!claimed) continue
+      if ("reason" in claimed) {
+        publishUpdated(claimed.task)
+        if (claimed.run) publishSkipped(claimed.task, claimed.run)
+        log.info("skipped scheduled task occurrence", {
+          taskID: id,
+          reason: claimed.reason,
+          occurrenceAt,
+          coalescedCount: claimed.run?.coalescedCount,
+          nextRunAt: claimed.task.nextRunAt,
+        })
+        continue
+      }
       try {
         results.push(await dispatchClaimedRun(claimed))
       } catch (error) {
-        log.warn("scheduled task dispatch failed", { taskID: task.id, error })
+        log.warn("scheduled task dispatch failed", { taskID: id, error })
       }
     }
     return results
   }
 
-  function claimDueTask(
-    task: Info,
-    next: number | undefined,
-    now: number,
-    coalescedCount: number,
-  ): ClaimedQueueRun | undefined {
-    return SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-      // Authoritative overlap guard: a manual run-now can insert its
-      // `running` row between this caller's hasOpenRun read and this
-      // transaction, and the next_run_at CAS alone does not see it (run-now
-      // never advances next_run_at). Aborting returns undefined so the tick
-      // skips this occurrence; the next poll records it as skipped_overlap.
-      if (hasOpenRunIn(db, task.id, now, task.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS)) return undefined
-      const claimed = db
-        .update(ScheduledTaskTable)
-        .set({
-          // A one-time task is NOT disabled at claim: it stays active with a
-          // null next_run_at (never due again) while the run executes, and is
-          // disabled only when a run completes successfully — a failed one-time
-          // reminder is retried under the failure policy instead of vanishing
-          // silently (PRD-2026-09-12).
-          next_run_at: next ?? null,
-          time_updated: now,
-          last_run_at: now,
-          error: null,
-        })
-        .where(
-          and(
-            eq(ScheduledTaskTable.id, task.id),
-            eq(ScheduledTaskTable.status, "active"),
-            eq(ScheduledTaskTable.next_run_at, task.nextRunAt!),
-          ),
-        )
-        .returning()
-        .get()
-      if (!claimed) return undefined
+  type OccurrencePlan = { next: number | undefined; coalescedCount: number }
+  type SkipReason = Extract<RunStatus, "skipped_overlap" | "missed_skip">
+  type SkippedOccurrence = { task: Info; reason: SkipReason; run?: RunInfo }
 
-      // Claim freshness: build the queue payload from the row we just claimed
-      // (RETURNING), not the pre-claim list read, so a concurrent edit to the
-      // prompt/model/agent cannot be silently executed from a stale snapshot.
-      const claimedTask = fromRow(claimed)
+  function readDueTask(db: Database.TxOrDb, id: ScheduledTaskID, occurrenceAt: number): Info | undefined {
+    const row = db
+      .select()
+      .from(ScheduledTaskTable)
+      .where(
+        and(
+          eq(ScheduledTaskTable.id, id),
+          eq(ScheduledTaskTable.project_id, Instance.project.id),
+          eq(ScheduledTaskTable.status, "active"),
+          eq(ScheduledTaskTable.next_run_at, occurrenceAt),
+        ),
+      )
+      .get()
+    if (!row) return undefined
+    const task = Info.safeParse(fromRowInput(row))
+    if (task.success) return task.data
+    log.warn("skipping corrupt scheduled task row", { id })
+    return undefined
+  }
+
+  function planDueOccurrence(
+    task: Info,
+    occurrenceAt: number,
+    now: number,
+  ): (OccurrencePlan & { skip: boolean }) | undefined {
+    // One-shot retries and overlap re-arms have a due time that differs from
+    // runAt. Catch-up policy must not treat them as missed calendar events.
+    const oneShotRetry = task.schedule.type === "once" && occurrenceAt !== task.schedule.runAt
+    const missed = !oneShotRetry && now - occurrenceAt > MISSED_RUN_GRACE_MS
+    if (!missed && now < occurrenceAt + jitterOffsetMs(task)) return undefined
+    const coalesced = countCoalesced(task.schedule, occurrenceAt, now)
+    return {
+      next: nextRunAt(task.schedule, coalesced.lastOccurrence),
+      coalescedCount: coalesced.count,
+      skip: task.catchUpPolicy === "skip" && missed,
+    }
+  }
+
+  function claimDueTask(
+    id: ScheduledTaskID,
+    occurrenceAt: number,
+    now: number,
+  ): ClaimedQueueRun | SkippedOccurrence | undefined {
+    const projectID = Instance.project.id
+    // Catch-up can enumerate many occurrences. Plan from a fresh read and
+    // recheck its inputs under the write lock before committing the decision.
+    const snapshot = SessionShard.storeForProject(projectID).use((db) => readDueTask(db, id, occurrenceAt))
+    if (!snapshot) return undefined
+    const plan = planDueOccurrence(snapshot, occurrenceAt, now)
+    return SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
+      const task = readDueTask(db, id, occurrenceAt)
+      if (!task) return undefined
+      const deadlineMs = task.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
+      reconcileOrphanRunsIn(db, id, now, deadlineMs)
+      if (hasOpenRunIn(db, id, now, deadlineMs)) {
+        const overlap = { next: nextRunAt(task.schedule, now), coalescedCount: 1 }
+        return recordSkippedOccurrence(db, task, "skipped_overlap", overlap, occurrenceAt, now)
+      }
+      if (
+        !plan ||
+        task.catchUpPolicy !== snapshot.catchUpPolicy ||
+        !isDeepStrictEqual(task.schedule, snapshot.schedule)
+      )
+        return undefined
+      if (plan.skip) return recordSkippedOccurrence(db, task, "missed_skip", plan, occurrenceAt, now)
+
       const queueItem = TaskQueue.enqueueInTransaction(
         db,
-        // Pass the PRE-claim lastRunAt: the claim above already stamped
-        // last_run_at=now, which must not leak into the coalesce envelope.
-        scheduledQueueInput(claimedTask, task.nextRunAt!, "scheduled", coalescedCount, task.lastRunAt),
-        { now, directory: claimedTask.directory },
+        scheduledQueueInput(task, occurrenceAt, "scheduled", plan.coalescedCount),
+        { now, directory: task.directory },
       )
       const run = insertRunRow(db, {
-        taskID: task.id,
+        taskID: id,
         triggerType: "scheduled",
         status: "running",
-        occurrenceAt: task.nextRunAt,
-        coalescedCount,
+        occurrenceAt,
+        coalescedCount: plan.coalescedCount,
         queueID: queueItem.id,
         now,
       })
       const row = db
         .update(ScheduledTaskTable)
-        .set({ last_queue_id: queueItem.id, time_updated: now })
-        .where(eq(ScheduledTaskTable.id, task.id))
+        .set({
+          // Leave a one-shot active until it succeeds so a failure can re-arm it.
+          next_run_at: plan.next ?? null,
+          last_queue_id: queueItem.id,
+          last_run_at: now,
+          time_updated: now,
+          error: null,
+        })
+        .where(eq(ScheduledTaskTable.id, id))
         .returning()
         .get()
-      if (!row) throw new Error(`Scheduled task disappeared during queue handoff: ${task.id}`)
+      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
       return { task: fromRow(row), queueItem, run }
     })
   }
 
-  // CAS-advance a task whose occurrence is being skipped (overlap or missed-skip),
-  // recording the skip as a terminal run row in the same transaction. Returns
-  // undefined when another poller won the claim race. With collapseRepeat, a
-  // repeat skip of the same open occurrence re-arms without recording a row:
-  // the one-time overlap re-arm otherwise fires this path on every poll,
-  // flooding the bounded run history and toasting once per minute for a single
-  // blocked occurrence.
   function recordSkippedOccurrence(
+    db: Database.TxOrDb,
     task: Info,
-    next: number | undefined,
-    status: Extract<RunStatus, "skipped_overlap" | "missed_skip">,
+    reason: SkipReason,
+    plan: OccurrencePlan,
+    occurrenceAt: number,
     now: number,
-    coalescedCount: number,
-    occurrenceAt?: number,
-    options?: { collapseRepeat?: boolean },
-  ): { task: Info; run: RunInfo | undefined } | undefined {
-    return SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-      const claimed = db
-        .update(ScheduledTaskTable)
-        .set({
-          // A one-time occurrence skipped by the catch-up policy (missed_skip)
-          // is done: disable it rather than leave an active row with a null
-          // next_run_at (a zombie that never fires). Stamp last_run_at so the
-          // finished row stays inside pruneFinishedOneShots' retention clock
-          // (a null last_run_at is never lte the cutoff and would leak).
-          // An overlap skip only means another run is currently delivering the
-          // task, so re-arm the next poll instead — if that run fails, the
-          // failure policy still applies (PRD-2026-09-12).
-          next_run_at:
-            task.schedule.type === "once" && status === "skipped_overlap"
-              ? now + ONESHOT_OVERLAP_RETRY_MS
-              : (next ?? null),
-          time_updated: now,
-          ...(task.schedule.type === "once" && status === "missed_skip"
-            ? { status: "disabled" as const, last_run_at: now }
-            : {}),
-        })
-        .where(
-          and(
-            eq(ScheduledTaskTable.id, task.id),
-            eq(ScheduledTaskTable.status, "active"),
-            eq(ScheduledTaskTable.next_run_at, task.nextRunAt!),
-          ),
-        )
-        .returning()
-        .get()
-      if (!claimed) return undefined
-      if (options?.collapseRepeat) {
-        const last = db
-          .select({ status: ScheduledTaskRunTable.status })
-          .from(ScheduledTaskRunTable)
-          .where(eq(ScheduledTaskRunTable.task_id, task.id))
-          .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
-          .limit(1)
-          .get()
-        if (last?.status === status) return { task: fromRow(claimed), run: undefined }
-      }
-      const run = insertRunRow(db, {
-        taskID: task.id,
-        triggerType: "scheduled",
-        status,
-        occurrenceAt: occurrenceAt ?? task.nextRunAt,
-        coalescedCount,
-        now,
+  ): SkippedOccurrence {
+    const oneShot = task.schedule.type === "once"
+    const overlap = oneShot && reason === "skipped_overlap"
+    const row = db
+      .update(ScheduledTaskTable)
+      .set({
+        // Keep a missed one-shot eligible for retention cleanup. An
+        // overlapping one-shot instead gets another chance to become due.
+        next_run_at: overlap ? now + ONESHOT_OVERLAP_RETRY_MS : (plan.next ?? null),
+        time_updated: now,
+        ...(oneShot && reason === "missed_skip" ? { status: "disabled" as const, last_run_at: now } : {}),
       })
-      return { task: fromRow(claimed), run }
+      .where(eq(ScheduledTaskTable.id, task.id))
+      .returning()
+      .get()
+    if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${task.id}` })
+    const updated = fromRow(row)
+    if (overlap) {
+      const last = db
+        .select({ status: ScheduledTaskRunTable.status })
+        .from(ScheduledTaskRunTable)
+        .where(eq(ScheduledTaskRunTable.task_id, task.id))
+        .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
+        .limit(1)
+        .get()
+      // Repeated polls can re-arm the same overlap before the open run ends.
+      if (last?.status === reason) return { task: updated, reason }
+    }
+    const run = insertRunRow(db, {
+      taskID: task.id,
+      triggerType: "scheduled",
+      status: reason,
+      occurrenceAt,
+      coalescedCount: plan.coalescedCount,
+      now,
     })
+    return { task: updated, reason, run }
   }
 
   function insertRunRow(
@@ -1333,54 +1310,54 @@ export namespace ScheduledTask {
   }
 
   function reconcileOrphanRuns(taskID: ScheduledTaskID, now: number, deadlineMs: number): number {
+    return SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) =>
+      reconcileOrphanRunsIn(db, taskID, now, deadlineMs),
+    )
+  }
+
+  function reconcileOrphanRunsIn(
+    db: Database.TxOrDb,
+    taskID: ScheduledTaskID,
+    now: number,
+    deadlineMs: number,
+  ): number {
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
-    return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      let closed = 0
-      const candidates = db
-        .select({
-          id: ScheduledTaskRunTable.id,
-          queueID: ScheduledTaskRunTable.queue_id,
-          workflowRunID: ScheduledTaskRunTable.workflow_run_id,
+    let closed = 0
+    const candidates = db
+      .select({
+        id: ScheduledTaskRunTable.id,
+        queueID: ScheduledTaskRunTable.queue_id,
+        workflowRunID: ScheduledTaskRunTable.workflow_run_id,
+      })
+      .from(ScheduledTaskRunTable)
+      .where(
+        and(
+          eq(ScheduledTaskRunTable.task_id, taskID),
+          eq(ScheduledTaskRunTable.status, "running"),
+          lte(ScheduledTaskRunTable.time_started, staleBefore),
+        ),
+      )
+      .all()
+    for (const candidate of candidates) {
+      if (isTaskQueueRunLive(db, candidate.queueID)) continue
+      // A workflow dispatch keeps the run row `running` for the workflow's
+      // whole lifetime, so an old row is an orphan only when its workflow is
+      // gone or terminal. Failing a row whose workflow is still executing
+      // would mislabel a live execution as orphaned, and the late outcome
+      // would lose its row.
+      if (candidate.workflowRunID && isWorkflowRunLive(db, candidate.workflowRunID)) continue
+      db.update(ScheduledTaskRunTable)
+        .set({
+          status: "failed",
+          error: `${ORPHAN_RUN_ERROR_PREFIX} no outcome was recorded (backend likely restarted)`,
+          time_completed: now,
+          time_updated: now,
         })
-        .from(ScheduledTaskRunTable)
-        .where(
-          and(
-            eq(ScheduledTaskRunTable.task_id, taskID),
-            eq(ScheduledTaskRunTable.status, "running"),
-            lte(ScheduledTaskRunTable.time_started, staleBefore),
-          ),
-        )
-        .all()
-      for (const candidate of candidates) {
-        if (isTaskQueueRunLive(db, candidate.queueID)) continue
-        // A workflow dispatch keeps the run row `running` for the workflow's
-        // whole lifetime, so an old row is an orphan only when its workflow is
-        // gone or terminal. Failing a row whose workflow is still executing
-        // would mislabel a live execution as orphaned, and the late outcome
-        // would lose its row.
-        if (candidate.workflowRunID && isWorkflowRunLive(db, candidate.workflowRunID)) continue
-        db.update(ScheduledTaskRunTable)
-          .set({
-            status: "failed",
-            error: `${ORPHAN_RUN_ERROR_PREFIX} no outcome was recorded (backend likely restarted)`,
-            time_completed: now,
-            time_updated: now,
-          })
-          .where(
-            and(
-              eq(ScheduledTaskRunTable.id, candidate.id),
-              // The candidate selection is not a transaction with this write:
-              // an outcome landing in the gap must not be overwritten. Keep
-              // the atomic filter the pre-loop single UPDATE had.
-              eq(ScheduledTaskRunTable.status, "running"),
-              lte(ScheduledTaskRunTable.time_started, staleBefore),
-            ),
-          )
-          .run()
-        closed += 1
-      }
-      return closed
-    })
+        .where(eq(ScheduledTaskRunTable.id, candidate.id))
+        .run()
+      closed += 1
+    }
+    return closed
   }
 
   // Orphan reconciliation otherwise happens only for due tasks and on run-now,
@@ -1441,14 +1418,9 @@ export namespace ScheduledTask {
     occurrenceAt: number,
     reason: "manual" | "scheduled",
     coalescedCount = 1,
-    envelopeLastRunAt?: number,
   ): TaskQueue.EnqueueInput {
-    // The coalesce envelope reports when the task PREVIOUSLY ran. Callers that
-    // stamp last_run_at before building the payload (the claim path) must pass
-    // the pre-claim value, otherwise the envelope echoes the current fire time.
-    const lastRunAt = envelopeLastRunAt ?? task.lastRunAt
     const prompt =
-      coalescedCount > 1 ? withCoalesceEnvelope(task.prompt, coalescedCount, occurrenceAt, lastRunAt) : task.prompt
+      coalescedCount > 1 ? withCoalesceEnvelope(task.prompt, coalescedCount, occurrenceAt, task.lastRunAt) : task.prompt
     return {
       kind: "automation",
       title: task.title,
