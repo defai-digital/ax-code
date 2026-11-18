@@ -6,7 +6,7 @@ import { NamedError } from "@ax-code/util/error"
 import z from "zod"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
-import { encryptField, decryptField, createCanary, verifyCanary } from "./encryption"
+import { encryptField, decryptField, createCanary, verifyCanary, isEncrypted } from "./encryption"
 import { CredentialSourceReference } from "./credential-source"
 import { isRecord } from "../util/record"
 import { Lock } from "../util/lock"
@@ -321,6 +321,24 @@ export namespace Auth {
     return !!(entry && typeof entry === "object" && "__needsReEncrypt" in entry)
   }
 
+  function sensitiveFields(type: unknown): readonly string[] {
+    if (type === "api") return ["key"]
+    if (type === "wellknown") return ["key", "token"]
+    if (type === "oauth") return ["access", "refresh"]
+    return []
+  }
+
+  // A plaintext secret beside a valid canary skips the missing-canary
+  // migration and would stay readable on disk.
+  function hasPlaintextSecret(value: unknown): boolean {
+    if (!value || typeof value !== "object" || !("type" in value)) return false
+    const record = value as Record<string, unknown>
+    return sensitiveFields(record.type).some((field) => {
+      const secret = record[field]
+      return typeof secret === "string" && secret !== "" && !isEncrypted(secret)
+    })
+  }
+
   function encryptEntry(info: Info): unknown {
     const raw = { ...info } as Record<string, unknown>
     if (info.type === "api") return encryptField(raw, "key")
@@ -363,13 +381,19 @@ export namespace Auth {
     const { __canary: _, ...providerData } = data
     const entries: Record<string, Info> = {}
     const decryptedByKey = new Map<string, unknown>()
+    const plaintext: string[] = []
 
     for (const [key, value] of Object.entries(providerData)) {
       const decrypted = decryptEntry(value)
       decryptedByKey.set(key, decrypted)
       if (needsReEncrypt(decrypted)) migrate = true
+      if (hasPlaintextSecret(value)) plaintext.push(key)
       const parsed = Info.safeParse(decrypted)
       if (parsed.success) entries[key] = parsed.data
+    }
+    if (plaintext.length > 0) {
+      migrate = true
+      log.warn(`re-encrypting ${plaintext.length} plaintext provider credential(s): ${plaintext.join(", ")}`)
     }
 
     // Identify providers whose keys failed decryption (field set to undefined)
@@ -377,14 +401,7 @@ export namespace Auth {
     for (const [key, decrypted] of decryptedByKey) {
       if (decrypted && typeof decrypted === "object" && "type" in decrypted) {
         const d = decrypted as Record<string, unknown>
-        const sensitive =
-          d.type === "api"
-            ? ["key"]
-            : d.type === "wellknown"
-              ? ["key", "token"]
-              : d.type === "oauth"
-                ? ["access", "refresh"]
-                : []
+        const sensitive = sensitiveFields(d.type)
         if (sensitive.some((f) => d[f] === undefined) && !(key in entries)) {
           failed.push(key)
         }

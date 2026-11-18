@@ -1,5 +1,8 @@
+import fs from "fs/promises"
+import path from "path"
 import { afterEach, describe, expect, test } from "vitest"
 import { tmpdir } from "../fixture/fixture"
+import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { Auth } from "../../src/auth"
 import { Config } from "../../src/config/config"
@@ -192,4 +195,63 @@ describe("private-gpu connect and disconnect", () => {
       })
     },
   )
+
+  test("connect deletes a plaintext apiKey left in global config", async () => {
+    const providerID = "alibaba-pai"
+    const inlineKey = "inline-secret-token"
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      if (String(input) === "http://127.0.0.1:18110/v1/models") {
+        return new Response(JSON.stringify({ data: [{ id: "kimi-k3" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+      return originalFetch(input)
+    }) as typeof fetch
+
+    await fs.mkdir(Global.Path.config, { recursive: true })
+    const jsonc = path.join(Global.Path.config, "ax-code.jsonc")
+    const globalFile = await fs
+      .stat(jsonc)
+      .then(() => jsonc)
+      .catch(() => path.join(Global.Path.config, "ax-code.json"))
+    await fs.writeFile(
+      globalFile,
+      JSON.stringify({
+        username: "kept-name",
+        provider: {
+          [providerID]: {
+            options: {
+              baseURL: "http://old.example/v1",
+              apiKey: inlineKey,
+            },
+          },
+        },
+      }),
+    )
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        try {
+          await connectPrivateGpu({
+            providerID,
+            baseURL: "http://127.0.0.1:18110",
+            apiKey: "endpoint-token",
+          })
+          expect(await Auth.get(providerID)).toEqual({ type: "api", key: "endpoint-token" })
+          const saved = (await Config.getGlobal()).provider?.[providerID]
+          expect(saved?.options?.baseURL).toBe("http://127.0.0.1:18110/v1")
+          expect(saved?.options).not.toHaveProperty("apiKey")
+          expect((await Config.getGlobal()).username).toBe("kept-name")
+          const raw = await fs.readFile(globalFile, "utf-8")
+          expect(raw).not.toContain(inlineKey)
+          expect(raw).not.toContain("apiKey")
+        } finally {
+          await disconnectPrivateGpu(providerID)
+        }
+      },
+    })
+  })
 })

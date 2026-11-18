@@ -54,6 +54,9 @@ export function privateGpuProviderConfig(
       options: {
         baseURL: normalizeVendorBaseURL(baseURL, vendor),
         timeout: PRIVATE_GPU_REQUEST_TIMEOUT_MS,
+        // updateGlobal merges omitted fields. A key saved inline before this
+        // connect would otherwise stay in the config file after Auth.set.
+        apiKey: undefined,
       },
       ...(models.length > 0 ? { models: privateGpuConfigModels(models) } : {}),
     },
