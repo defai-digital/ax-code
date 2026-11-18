@@ -2,12 +2,12 @@ import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
-import type { TextPart } from "@ax-code/sdk/v2"
 import { Locale } from "@/util/locale"
 import { DialogMessage } from "./dialog-message"
 import { useDialog } from "../../ui/dialog"
 import type { PromptInfo } from "../../component/prompt/history"
 import { routeNote } from "./route"
+import { timelineEntries } from "./timeline-messages"
 
 export function DialogTimeline(props: {
   sessionID: string
@@ -24,16 +24,9 @@ export function DialogTimeline(props: {
   })
 
   const options = createMemo((): DialogSelectOption<string>[] => {
-    const messages = sync.data.message[props.sessionID] ?? []
-    const result = [] as DialogSelectOption<string>[]
-    for (const message of messages) {
-      if (message.role !== "user") continue
-      const part = (sync.data.part[message.id] ?? []).find(
-        (x) => x.type === "text" && !x.synthetic && !x.ignored,
-      ) as TextPart
-      if (!part) continue
-      result.push({
-        title: part.text.replace(/\n/g, " "),
+    const result = timelineEntries(sync.data.message[props.sessionID] ?? [], sync.data.part).map(
+      ({ message, title }): DialogSelectOption<string> => ({
+        title,
         value: message.id,
         description: routeNote(message, sync.data.part[message.id] ?? [], sync.data.agent) || undefined,
         footer: Locale.time(message.time.created),
@@ -42,8 +35,8 @@ export function DialogTimeline(props: {
             <DialogMessage messageID={message.id} sessionID={props.sessionID} setPrompt={props.setPrompt} />
           ))
         },
-      })
-    }
+      }),
+    )
     if (result.length === 0) {
       return [
         {
@@ -55,7 +48,6 @@ export function DialogTimeline(props: {
         },
       ]
     }
-    result.reverse()
     return result
   })
 

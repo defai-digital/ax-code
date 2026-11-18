@@ -465,7 +465,7 @@ describe("AX Code TUI stability guardrails", () => {
 
     expect(timelineForkDialog).toContain('log.warn("timeline fork failed"')
     expect(timelineForkDialog).toContain('message: error instanceof Error ? error.message : "Failed to fork session"')
-    expect(timelineForkDialog).toContain("promptState(sync.data.part[message.id] ?? [])")
+    expect(timelineForkDialog).toContain("onSelect: (dialog) => forkMessage(message.id, dialog)")
     expect(timelineForkDialog).toContain('title: uiText("ui.noForkTargetAvailable")')
     expect(timelineForkDialog).toContain(
       'description: uiText("ui.noUserMessagesWithTextContentAreAvailableToForkFrom")',

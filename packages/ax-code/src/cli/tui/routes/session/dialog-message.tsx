@@ -4,7 +4,6 @@ import { useSync } from "@tui/context/sync"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import type { DialogContext } from "@tui/ui/dialog"
 import { useSDK } from "@tui/context/sdk"
-import { useRoute } from "@tui/context/route"
 import { Clipboard } from "@tui/util/clipboard"
 import { EventQuery } from "@/replay/query"
 import { messageRoute } from "./route"
@@ -13,6 +12,7 @@ import { Locale } from "@/util/locale"
 import { promptState } from "./messages"
 import { sdkErrorMessage } from "./sdk-error-message"
 import { useToast } from "@tui/ui/toast"
+import { createMessageFork } from "./message-fork"
 
 const log = Log.create({ service: "tui.dialog-message" })
 
@@ -26,6 +26,13 @@ export function DialogMessage(props: {
   const sync = useSync()
   const sdk = useSDK()
   const toast = useToast()
+  const forkMessage = createMessageFork({
+    sessionID: () => props.sessionID,
+    onError: (error, messageID) => {
+      log.warn("dialog message fork failed", { error, sessionID: props.sessionID, messageID })
+      toast.show({ message: error instanceof Error ? error.message : "Failed to fork session", variant: "error" })
+    },
+  })
   const message = createMemo(() => sync.data.message[props.sessionID]?.find((x) => x.id === props.messageID))
   const routeInfo = createMemo(() => {
     const msg = message()
@@ -47,7 +54,6 @@ export function DialogMessage(props: {
       },
     ]
   })
-  const route = useRoute()
 
   // Fenced code blocks across the message's text parts — drives the
   // conditional "Copy code block" action below.
@@ -299,34 +305,7 @@ export function DialogMessage(props: {
               return
             }
 
-            await sdk.client.session
-              .fork({
-                sessionID: props.sessionID,
-                messageID: msg.id,
-              })
-              .then((result) => {
-                if (!result.data) {
-                  const errorMessage = typeof result.error === "string" ? result.error : "Failed to fork session"
-                  throw new Error(errorMessage)
-                }
-                route.navigate({
-                  sessionID: result.data.id,
-                  type: "session",
-                  initialPrompt: promptState(sync.data.part[msg.id] ?? []),
-                })
-                dialog.clear()
-              })
-              .catch((error) => {
-                log.warn("dialog message fork failed", {
-                  error,
-                  sessionID: props.sessionID,
-                  messageID: msg.id,
-                })
-                toast.show({
-                  message: error instanceof Error ? error.message : "Failed to fork session",
-                  variant: "error",
-                })
-              })
+            await forkMessage(msg.id, dialog)
           },
         },
       ]}
