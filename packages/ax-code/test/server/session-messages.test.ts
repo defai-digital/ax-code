@@ -404,7 +404,7 @@ describe("session.prompt_async error handling", () => {
       "async function finishIfRunning",
     )
     expect(execute).toContain('DiagnosticLog.recordProcess("server.taskQueueTaskFailed"')
-    expect(execute).toContain("finishIfRunning(item, {")
+    expect(execute).toContain("finishIfRunning(attempt, {")
     expect(execute).toContain('status: "failed"')
     expect(execute).toContain("NamedError.message(error)")
   })

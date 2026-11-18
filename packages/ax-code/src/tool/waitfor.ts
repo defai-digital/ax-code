@@ -266,6 +266,7 @@ export const WaitForTool = Tool.define("waitfor", async () => {
             time: Date.now(),
           },
           resultEmpty,
+          expectedTerminal: latest,
         }).catch((error) => {
           log.warn("failed to claim background task result", { taskQueueID: item.id, error })
           return undefined

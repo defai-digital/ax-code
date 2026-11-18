@@ -65,9 +65,10 @@ export namespace TaskQueue {
   export type Payload = z.infer<typeof Payload>
 
   function enqueuePayload(payload: Payload): Payload {
-    if (!Object.hasOwn(payload, WORKFLOW_CLEANUP_KEY)) return payload
+    if (!Object.hasOwn(payload, WORKFLOW_CLEANUP_KEY) && !Object.hasOwn(payload, EXECUTOR_OWNER_KEY)) return payload
     const clean = { ...payload }
     delete clean[WORKFLOW_CLEANUP_KEY]
+    delete clean[EXECUTOR_OWNER_KEY]
     return clean
   }
 
@@ -711,70 +712,95 @@ export namespace TaskQueue {
     return item
   }
 
-  export async function setStatus(input: {
-    id: TaskQueueID
-    status: Status
-    error?: string
-    /**
-     * When true, apply the non-terminal guard even to terminal targets: the
-     * write is a no-op (and re-reads the current row) if a concurrent writer has
-     * already settled the row to a terminal status. Used by `finishIfRunning` so
-     * a "completed" write cannot clobber a concurrent "cancelled" from
-     * cancelSupersededPhaseChildren.
-     */
-    onlyFromActive?: boolean
-    workflowTimeoutCleanup?: { token: string; until: number; owner: ExecutorOwner | undefined }
-  }): Promise<Info> {
-    const isTerminalTarget = isTerminalStatus(input.status)
-    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+  type StatusUpdate = { status: Status; error?: string }
+  type TimeoutReservation = { token: string; until: number }
+
+  function writeStatus(db: Database.TxOrDb, current: Info, input: StatusUpdate, cleanup?: TimeoutReservation): Info {
+    const now = Date.now()
+    const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
+      status: input.status,
+      error: input.error,
+      time_updated: now,
+    }
+    if (input.status === "running" && current.time.started === undefined) updates.time_started = now
+    if (isTerminalStatus(input.status)) updates.time_completed = now
+    // Permission and question events may change the status of a live claim.
+    // They must preserve the executor identity that owns it.
+    if (ownedStatuses.includes(input.status) && !executorOwner(current.payload)?.generation) {
+      const payload = withExecutorOwner(current.payload, now)
+      if (payload) updates.payload = payload
+    }
+    if (input.status === "failed" && cleanup && cleanup.until > now) {
+      const workflow = workflowChild(current)
+      const owner = executorOwner(current.payload)
+      if (workflow && owner) {
+        const reservation: WorkflowTimeoutCleanup = { ...workflow, ...cleanup, owner }
+        updates.payload = { ...current.payload, [WORKFLOW_CLEANUP_KEY]: reservation }
+      }
+    }
+    return writeRow(db, current.id, updates)
+  }
+
+  async function publishStatus(item: Info): Promise<void> {
+    publishUpdated(item)
+    await syncWorkflowStatusIfNeeded(item)
+    if (isTerminalStatus(item.status)) await clearSessionQueueMetadataIfCurrent(item)
+  }
+
+  export async function setStatus(input: StatusUpdate & { id: TaskQueueID; onlyFromActive?: boolean }): Promise<Info> {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const current = fromRow(readRow(db, input.id))
       assertProjectItem(current)
       // A stale blocker refresh must not reopen a terminal task. Guarded
       // terminal mutations also preserve the outcome that settled first.
-      if (isTerminalStatus(current.status) && (!isTerminalTarget || input.onlyFromActive)) return current
-
-      // Read the latest payload under the same lock used by ledger writers.
-      // Stamping ownership must preserve concurrent message and result claims.
-      const now = Date.now()
-      const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
-        status: input.status,
-        error: input.error,
-        time_updated: now,
+      if (isTerminalStatus(current.status) && (!isTerminalStatus(input.status) || input.onlyFromActive)) {
+        return { item: current, changed: false }
       }
-      if (input.status === "running" && current.time.started === undefined) updates.time_started = now
-      if (isTerminalTarget) updates.time_completed = now
-      if (ownedStatuses.includes(input.status)) {
-        const payload = withExecutorOwner(current.payload, now)
-        if (payload) updates.payload = payload
-      }
-      if (input.status === "failed" && input.workflowTimeoutCleanup) {
-        const { token, until, owner } = input.workflowTimeoutCleanup
-        const currentOwner = executorOwner(current.payload)
-        const workflow = workflowChild(current)
-        if (
-          workflow &&
-          until > now &&
-          owner &&
-          currentOwner?.pid === owner.pid &&
-          currentOwner.boot === owner.boot &&
-          currentOwner.time === owner.time
-        ) {
-          // Publishing failure frees the active row, but cancellation keeps
-          // its phase slot until the teardown finishes or the grace expires.
-          const reservation: WorkflowTimeoutCleanup = { ...workflow, token, until, owner }
-          updates.payload = { ...current.payload, [WORKFLOW_CLEANUP_KEY]: reservation }
-        }
-      }
-      return writeRow(db, input.id, updates)
+      return { item: writeStatus(db, current, input), changed: true }
     })
-    publishUpdated(item)
-    await syncWorkflowStatusIfNeeded(item)
-    // Terminal statuses must not leave the session pointing at a finished
-    // queue item (UI/session metadata otherwise looks permanently "queued").
-    if (isTerminalTarget && item.sessionID) {
-      await clearSessionQueueMetadataIfCurrent(item)
-    }
-    return item
+    if (result.changed) await publishStatus(result.item)
+    return result.item
+  }
+
+  export async function finishExecution(
+    attempt: ExecutionAttempt,
+    input: StatusUpdate & { status: "completed" | "failed" | "cancelled"; cleanup?: TimeoutReservation },
+  ): Promise<{ item: Info; changed: boolean } | undefined> {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      const current = readExecution(db, attempt)
+      if (!current) return undefined
+      if (!ACTIVE_QUEUE_EXECUTION_STATUSES.some((status) => status === current.status)) {
+        return isTerminalStatus(current.status) ? { item: current, changed: false } : undefined
+      }
+      return { item: writeStatus(db, current, input, input.cleanup), changed: true }
+    })
+    if (result?.changed) await publishStatus(result.item)
+    return result
+  }
+
+  export async function refreshExecutionBlockStatus(
+    observed: Info,
+    status: "running" | "blocked_permission" | "blocked_question",
+  ): Promise<void> {
+    const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      const current = fromRow(readRow(db, observed.id))
+      assertProjectItem(current)
+      if (current.status === status || !ACTIVE_QUEUE_EXECUTION_STATUSES.some((value) => value === current.status)) {
+        return undefined
+      }
+      const before = executorOwner(observed.payload)
+      const after = executorOwner(current.payload)
+      if (
+        before?.generation !== after?.generation ||
+        before?.pid !== after?.pid ||
+        before?.boot !== after?.boot ||
+        before?.time !== after?.time
+      ) {
+        return undefined
+      }
+      return writeStatus(db, current, { status })
+    })
+    if (changed) await publishStatus(changed)
   }
 
   export const DeliveryStatus = z.enum(["pending", "delivering", "delivered", "blocked"])
@@ -824,6 +850,7 @@ export namespace TaskQueue {
     id: TaskQueueID
     claim: ResultDeliveryClaim
     resultEmpty?: boolean
+    expectedTerminal?: Info
   }): Promise<{ item: Info; claim?: ResultDeliveryClaim; claimed: boolean; accepted: boolean }> {
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
@@ -831,6 +858,16 @@ export namespace TaskQueue {
       const current = fromRow(currentRow)
       const status = DeliveryStatus.safeParse(current.payload["deliveryStatus"])
       const existing = resultDeliveryClaim(current)
+      const expected = input.expectedTerminal
+      if (
+        expected &&
+        (!isTerminalStatus(current.status) ||
+          expected.status !== current.status ||
+          expected.time.completed !== current.time.completed ||
+          executorOwner(expected.payload)?.generation !== executorOwner(current.payload)?.generation)
+      ) {
+        return { item: current, claimed: false, accepted: false }
+      }
 
       if (status.success && status.data === "delivered") {
         const accepted =
@@ -1120,8 +1157,27 @@ export namespace TaskQueue {
     return result
   }
 
+  export type ExecutionAttempt = { id: TaskQueueID; generation: string }
+
+  function executionCondition(attempt: ExecutionAttempt): SQL | undefined {
+    return and(
+      eq(TaskQueueTable.id, attempt.id),
+      eq(TaskQueueTable.project_id, Instance.project.id),
+      sql`json_extract(${queuePayloadJson}, '$.executorOwner.generation') = ${attempt.generation}`,
+    )
+  }
+
+  function readExecution(db: Database.TxOrDb, attempt: ExecutionAttempt): Info | undefined {
+    const row = db.select().from(TaskQueueTable).where(executionCondition(attempt)).get()
+    return row ? fromRow(row) : undefined
+  }
+
+  export function executionItem(attempt: ExecutionAttempt): Info | undefined {
+    return SessionShard.storeForProject(Instance.project.id).use((db) => readExecution(db, attempt))
+  }
+
   type ExecutionClaim =
-    | { kind: "claimed"; item: Info }
+    | { kind: "claimed"; item: Info; attempt: ExecutionAttempt }
     | { kind: "waiting"; item: Info; retryAfterMs?: number }
     | { kind: "unavailable"; item?: Info }
 
@@ -1152,14 +1208,12 @@ export namespace TaskQueue {
       // tests). Without it, recoverInterrupted falls back to heartbeat
       // freshness alone and never fast-fails a row whose owning process has
       // verifiably died.
-      const ownerPayload = withExecutorOwner(current.payload, now)
-      let payload = ownerPayload
-      if (Object.hasOwn(current.payload, WORKFLOW_CLEANUP_KEY)) {
-        // Admission already checked this reservation, so a claim may discard
-        // it in the same write that begins the next attempt.
-        payload = ownerPayload ?? { ...current.payload }
-        delete payload[WORKFLOW_CLEANUP_KEY]
+      const attempt = { id, generation: randomUUID() }
+      const payload: Payload = {
+        ...current.payload,
+        [EXECUTOR_OWNER_KEY]: { ...currentExecutorOwner(now), generation: attempt.generation },
       }
+      delete payload[WORKFLOW_CLEANUP_KEY]
       const row = db
         .update(TaskQueueTable)
         .set({
@@ -1167,7 +1221,7 @@ export namespace TaskQueue {
           error: null,
           time_updated: now,
           time_started: current.time.started ?? now,
-          ...(payload ? { payload } : {}),
+          payload,
         })
         .where(
           and(
@@ -1178,7 +1232,7 @@ export namespace TaskQueue {
         )
         .returning()
         .get()
-      return row ? { kind: "claimed", item: fromRow(row) } : { kind: "unavailable" }
+      return row ? { kind: "claimed", item: fromRow(row), attempt } : { kind: "unavailable" }
     })
     if (claim.kind === "claimed") {
       publishUpdated(claim.item)
@@ -1228,30 +1282,19 @@ export namespace TaskQueue {
     return retryAfterMs > 0 ? { retryAfterMs } : undefined
   }
 
-  export async function attachSession(id: TaskQueueID, sessionID: SessionID): Promise<Info> {
+  export async function attachSession(attempt: ExecutionAttempt, sessionID: SessionID): Promise<Info> {
     await assertSessionCompatible(sessionID)
     const now = Date.now()
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(TaskQueueTable)
         .set({ session_id: sessionID, time_updated: now })
-        .where(
-          and(
-            eq(TaskQueueTable.id, id),
-            eq(TaskQueueTable.project_id, Instance.project.id),
-            inArray(TaskQueueTable.status, ["running", "blocked_permission", "blocked_question"]),
-          ),
-        )
+        .where(and(executionCondition(attempt), inArray(TaskQueueTable.status, ACTIVE_QUEUE_EXECUTION_STATUSES)))
         .returning()
         .get()
       if (!row) {
-        const current = db
-          .select()
-          .from(TaskQueueTable)
-          .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.project_id, Instance.project.id)))
-          .get()
-        if (!current) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
-        throw new Error(`Scheduled automation stopped before execution (${fromRow(current).status})`)
+        const current = readExecution(db, attempt)
+        throw new Error(`Scheduled automation stopped before execution (${current?.status ?? "claim retired"})`)
       }
       return fromRow(row)
     })
@@ -1271,6 +1314,7 @@ export namespace TaskQueue {
     pid: z.number().int(),
     boot: z.string().min(1),
     time: z.number(),
+    generation: z.uuid().optional(),
   })
   export type ExecutorOwner = z.infer<typeof ExecutorOwner>
   export const EXECUTOR_OWNER_KEY = "executorOwner"
@@ -1380,18 +1424,12 @@ export namespace TaskQueue {
     return typeof row.time_updated === "number" && now - row.time_updated < livenessMs
   }
 
-  export function heartbeat(id: TaskQueueID, now = Date.now()): boolean {
+  export function heartbeat(attempt: ExecutionAttempt, now = Date.now()): boolean {
     return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const result = db
         .update(TaskQueueTable)
         .set({ time_updated: now })
-        .where(
-          and(
-            eq(TaskQueueTable.id, id),
-            eq(TaskQueueTable.project_id, Instance.project.id),
-            inArray(TaskQueueTable.status, ACTIVE_QUEUE_EXECUTION_STATUSES),
-          ),
-        )
+        .where(and(executionCondition(attempt), inArray(TaskQueueTable.status, ACTIVE_QUEUE_EXECUTION_STATUSES)))
         .run()
       return result.changes > 0
     })

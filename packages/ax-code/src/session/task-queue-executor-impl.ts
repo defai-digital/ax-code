@@ -50,9 +50,11 @@ type WorkflowRunApi = typeof import("../workflow/run").WorkflowRun
 
 type QueueExecution = {
   sessionID?: SessionID
-  run: () => Promise<unknown>
-  cancel?: (options?: { cancelQueueItems?: boolean }) => Promise<unknown>
+  run: (attempt: TaskQueue.ExecutionAttempt) => Promise<unknown>
+  cancel?: (current: TaskQueue.Info | undefined, options?: CancelOptions) => Promise<unknown>
 }
+
+type CancelOptions = { cancelQueueItems?: boolean }
 
 const DEFAULT_EXECUTION_TIMEOUT_MS = 72 * 60 * 60 * 1_000
 // How long a timed-out execution's cancellation may take to settle before the
@@ -77,7 +79,7 @@ const startLocks = Instance.state(
 
 const timeoutCleanup = Instance.state(
   () => ({
-    pending: new Map<TaskQueueID, { key: string; workflow?: { token: string; until: number } }>(),
+    pending: new Map<string, { key: string; workflow?: { token: string; until: number } }>(),
     disposed: false,
   }),
   async (state) => {
@@ -158,7 +160,7 @@ export namespace TaskQueueExecutor {
         return claim.item
       }
       if (claim.kind === "unavailable") return claim.item ?? TaskQueue.get(latest.id)
-      const running = claim.item
+      const { item: running, attempt } = claim
       clearWorkflowRetry(running.id)
 
       // Re-derive the execution plan from the row the claim actually
@@ -170,13 +172,13 @@ export namespace TaskQueueExecutor {
       const claimedExecution = queueItemExecution(running)
       const task = SessionExecution.bindSuccessor(claimedExecution?.sessionID, async () => {
         if (!claimedExecution) {
-          await finishIfRunning(running, {
+          await finishIfRunning(attempt, {
             status: "failed",
             error: "Task queue item became unexecutable after an edit raced its execution claim.",
           })
           return
         }
-        await executeClaimedItem(running, claimedExecution)
+        await executeClaimedItem(running, claimedExecution, attempt)
       })
       try {
         startDetachedQueueTask(task)
@@ -218,77 +220,78 @@ function startLockKey(item: TaskQueue.Info, execution: QueueExecution): string {
   return execution.sessionID ? `session:${item.projectID}:${execution.sessionID}` : `task:${item.projectID}:${item.id}`
 }
 
-async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecution) {
+type QueueResult = { status: "completed"; result: unknown } | QueueExecutionOutcome
+
+async function executeClaimedItem(
+  item: TaskQueue.Info,
+  execution: QueueExecution,
+  attempt: TaskQueue.ExecutionAttempt,
+) {
   try {
-    // Keep execution.run() and finishIfRunning("completed") in separate try
-    // blocks. If they shared one block a DB error from finishIfRunning would
-    // fall into the catch and mark a successfully-run task as "failed".
-    let succeeded = false
-    let cancelled: { error: string } | undefined
-    let result: unknown
+    let outcome: QueueResult
+    let failure: unknown
     try {
-      result = await runWithExecutionWatchdog(item, execution)
-      const latest = await TaskQueue.get(item.id).catch(() => item)
-      const outcome = outcomeForQueueExecution({ ...item, ...latest }, result)
-      if (outcome?.status === "cancelled") {
-        cancelled = outcome
-      } else {
-        if (outcome) throw new Error(outcome.error)
-        succeeded = true
-      }
+      const result = await runWithExecutionWatchdog(item, execution, attempt)
+      const current = TaskQueue.executionItem(attempt)
+      if (!current) return
+      outcome = outcomeForQueueExecution(current, result) ?? { status: "completed", result }
+      if (outcome.status === "failed") throw new Error(outcome.error)
     } catch (error) {
+      failure = error
+      outcome = { status: "failed", error: NamedError.message(error) }
+    }
+
+    const error = outcome.status === "completed" ? undefined : outcome.error
+    const finished = await finishIfRunning(attempt, { status: outcome.status, error })
+    if (!finished) return
+    const settled = finished.item
+    if (finished.changed && outcome.status === "failed") {
       DiagnosticLog.recordProcess("server.taskQueueTaskFailed", {
         taskID: item.id,
         sessionID: item.sessionID,
         kind: item.kind,
-        error,
+        error: failure,
       })
-      const finished = await finishIfRunning(item, {
-        status: "failed",
-        error: NamedError.message(error),
-      })
-      await syncScheduledTaskOutcome(finished, error)
-      await deliverLiveTaskSubagent(finished, { status: "failed", error: NamedError.message(error) })
-      log.error("task queue item execution failed", { taskID: item.id, sessionID: item.sessionID, error })
+      log.error("task queue item execution failed", { taskID: item.id, sessionID: item.sessionID, error: failure })
     }
-    if (cancelled) {
-      // Expected clean termination (for example a goal budget stop): cancel
-      // the row instead of failing it so /queue does not show a spurious red
-      // failure for work that ended by design.
-      const finished = await finishIfRunning(item, { status: "cancelled", error: cancelled.error })
-      await syncScheduledTaskOutcome(finished, new Error(cancelled.error))
-      await deliverLiveTaskSubagent(finished, { status: "cancelled", error: cancelled.error })
-    }
-    if (succeeded) {
-      const finished = await finishIfRunning(item, { status: "completed" })
-      await syncScheduledTaskOutcome(finished)
-      await deliverLiveTaskSubagent(finished, { status: "completed", result })
+    if (settled.status === "completed" && outcome.status === "completed") {
+      await syncScheduledTaskOutcome(settled, attempt)
+      await deliverLiveTaskSubagent(settled, outcome)
+    } else if (settled.status === "failed" || settled.status === "cancelled") {
+      const message = settled.error ?? error ?? `Task ended with status ${settled.status}.`
+      const terminalError = finished.changed ? (failure ?? new Error(message)) : new Error(message)
+      await syncScheduledTaskOutcome(settled, attempt, terminalError)
+      await deliverLiveTaskSubagent(settled, { status: settled.status, error: message })
     }
   } finally {
-    const current = await TaskQueue.get(item.id).catch(() => item)
-    if (current.sessionID) {
-      await TaskQueueExecutor.drainNextForSession(current.sessionID).catch((error) => {
-        DiagnosticLog.recordProcess("server.taskQueueDrainFailed", {
-          taskID: item.id,
-          sessionID: item.sessionID,
-          error,
-        })
-        log.warn("failed to drain task queue after item settled", { taskID: item.id, sessionID: item.sessionID, error })
-      })
-    }
-    await drainNextWorkflowPhaseItem(item).catch((error) => {
-      DiagnosticLog.recordProcess("server.taskQueueWorkflowDrainFailed", {
+    const current = TaskQueue.executionItem(attempt)
+    if (current) await drainAfterExecution(current)
+  }
+}
+
+async function drainAfterExecution(item: TaskQueue.Info) {
+  if (item.sessionID) {
+    await TaskQueueExecutor.drainNextForSession(item.sessionID).catch((error) => {
+      DiagnosticLog.recordProcess("server.taskQueueDrainFailed", {
         taskID: item.id,
         sessionID: item.sessionID,
         error,
       })
-      log.warn("failed to drain workflow phase queue after item settled", {
-        taskID: item.id,
-        sessionID: item.sessionID,
-        error,
-      })
+      log.warn("failed to drain task queue after item settled", { taskID: item.id, sessionID: item.sessionID, error })
     })
   }
+  await drainNextWorkflowPhaseItem(item).catch((error) => {
+    DiagnosticLog.recordProcess("server.taskQueueWorkflowDrainFailed", {
+      taskID: item.id,
+      sessionID: item.sessionID,
+      error,
+    })
+    log.warn("failed to drain workflow phase queue after item settled", {
+      taskID: item.id,
+      sessionID: item.sessionID,
+      error,
+    })
+  })
 }
 
 async function deliverLiveTaskSubagent(
@@ -306,7 +309,11 @@ async function deliverLiveTaskSubagent(
     })
 }
 
-async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueExecution): Promise<unknown> {
+async function runWithExecutionWatchdog(
+  item: TaskQueue.Info,
+  execution: QueueExecution,
+  attempt: TaskQueue.ExecutionAttempt,
+): Promise<unknown> {
   const timeoutMs = item.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS
   let timeout: ReturnType<typeof setTimeout> | undefined
   let abandoned = false
@@ -314,14 +321,14 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
     try {
       // A row that left the active statuses (for example a blocked task the
       // user cancelled) must stop its live execution, not only change its row.
-      if (TaskQueue.heartbeat(item.id) || abandoned) return
+      if (abandoned || TaskQueue.heartbeat(attempt)) return
       abandoned = true
       log.warn("task queue item is no longer active; cancelling its execution", {
         taskID: item.id,
         sessionID: item.sessionID,
       })
       void Promise.resolve()
-        .then(() => (execution.cancel ? execution.cancel({ cancelQueueItems: false }) : cancelAbandonedExecution(item)))
+        .then(() => cancelAttempt(execution, TaskQueue.executionItem(attempt), { cancelQueueItems: false }))
         .catch((error) => {
           log.warn("failed to cancel abandoned task queue execution", {
             taskID: item.id,
@@ -335,7 +342,9 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
   }, EXECUTION_HEARTBEAT_MS)
   heartbeat.unref?.()
 
-  const run = Promise.resolve().then(execution.run)
+  const run = Promise.resolve().then(() => {
+    if (executionIsActive(attempt)) return execution.run(attempt)
+  })
   const deadline = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
       const error = new Error(`Task queue execution timed out after ${timeoutMs} ms; cancellation requested.`)
@@ -345,27 +354,30 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
         kind: item.kind,
         timeoutMs,
       })
+      let current: TaskQueue.Info | undefined
+      try {
+        current = TaskQueue.executionItem(attempt)
+      } catch (readError) {
+        reject(readError)
+        return
+      }
+      // Reject first: synchronous cancellation can resolve the original run.
+      reject(error)
+      if (!current) {
+        voidSafe(() => cancelAttempt(execution, undefined), "task-queue.retired-timeout")
+        return
+      }
       const cleanup = timeoutCleanup()
-      // Retain the session key (or the task itself for sessionless work).
       const until = Date.now() + CANCELLATION_SETTLE_MS
       const workflow = TaskQueue.workflowChild(item) ? { token: randomUUID(), until } : undefined
       const pending = { key: startLockKey(item, execution), workflow }
-      cleanup.pending.set(item.id, pending)
-      // Reject first: synchronous cancellation can resolve the original run,
-      // but that late result must never win over the expired deadline.
-      reject(error)
+      cleanup.pending.set(attempt.generation, pending)
       const cancellation = Promise.resolve()
-        .then(async () => {
-          // A user cancellation can outlive its first cleanup attempt, or
-          // arrive before the first heartbeat. Keep the deadline's retry
-          // scoped too, so it cannot cascade into unrelated queued work.
-          const current = await TaskQueue.get(item.id).catch(() => item)
+        .then(() => {
+          const current = TaskQueue.executionItem(attempt)
           const options =
-            abandoned || !activeStatuses.some((status) => status === current.status)
-              ? { cancelQueueItems: false }
-              : undefined
-          if (execution.cancel) return options ? execution.cancel(options) : execution.cancel()
-          return cancelTimedOutExecution(item, options)
+            abandoned || !current || !isActiveQueueStatus(current.status) ? { cancelQueueItems: false } : undefined
+          return cancelAttempt(execution, current, options)
         })
         .catch((error) => {
           log.warn("failed to cancel timed-out task queue execution", {
@@ -391,13 +403,13 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
           }),
         ])
         clearTimeout(graceTimer)
-        if (cleanup.disposed || cleanup.pending.get(item.id) !== pending) return
-        cleanup.pending.delete(item.id)
+        if (cleanup.disposed || cleanup.pending.get(attempt.generation) !== pending) return
+        cleanup.pending.delete(attempt.generation)
         if (workflow) TaskQueue.releaseWorkflowTimeoutCleanup(item.id, workflow.token)
         // Settled queue promises do not prove OS-level process quiescence.
         // They do ensure this cancellation can no longer target a successor.
-        const current = await TaskQueue.get(item.id)
-        if (current.sessionID) await TaskQueueExecutor.drainNextForSession(current.sessionID)
+        const current = TaskQueue.executionItem(attempt)
+        if (current?.sessionID) await TaskQueueExecutor.drainNextForSession(current.sessionID)
         await drainNextWorkflowPhaseItem(item)
       }, "task-queue.timeout-cleanup")
     }, timeoutMs)
@@ -411,35 +423,33 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
   }
 }
 
-async function cancelTimedOutExecution(item: TaskQueue.Info, options?: { cancelQueueItems?: boolean }) {
-  const current = await TaskQueue.get(item.id).catch(() => item)
-  if (!current.sessionID) return
+async function cancelAttempt(execution: QueueExecution, current: TaskQueue.Info | undefined, options?: CancelOptions) {
+  if (execution.cancel) return execution.cancel(current, options)
+  return cancelSession(current, options)
+}
+
+async function cancelSession(current: TaskQueue.Info | undefined, options?: CancelOptions) {
+  if (!current?.sessionID) return
   if (options) await SessionPrompt.cancel(current.sessionID, options)
   else await SessionPrompt.cancel(current.sessionID)
 }
 
-// The queue row already carries the cancellation; only stop the live run and
-// leave other queue items for that session alone.
-async function cancelAbandonedExecution(item: TaskQueue.Info) {
-  const current = await TaskQueue.get(item.id).catch(() => item)
-  if (current.sessionID) await SessionPrompt.cancel(current.sessionID, { cancelQueueItems: false })
-}
-
-async function syncScheduledTaskOutcome(item: TaskQueue.Info, error?: unknown) {
+async function syncScheduledTaskOutcome(item: TaskQueue.Info, attempt: TaskQueue.ExecutionAttempt, error?: unknown) {
   const scheduledTaskID = item.payload["scheduledTaskID"]
   if (typeof scheduledTaskID !== "string" || !scheduledTaskID.startsWith("sch_")) return
   // Workflow dispatch completion is not workflow completion. The workflow
   // queue bridge records the terminal outcome after its children settle.
   if (item.payload["workflowTemplateID"] && item.status === "completed") return
   await import("./scheduled-task")
-    .then(({ ScheduledTask }) =>
-      ScheduledTask.recordQueueOutcome(
+    .then(({ ScheduledTask }) => {
+      if (!TaskQueue.executionItem(attempt)) return
+      return ScheduledTask.recordQueueOutcome(
         ScheduledTaskID.make(scheduledTaskID),
         item.status === "completed" ? "completed" : "failed",
         error,
         item.id,
-      ),
-    )
+      )
+    })
     .catch((syncError) => {
       log.warn("failed to sync scheduled task queue outcome", {
         taskID: item.id,
@@ -450,19 +460,11 @@ async function syncScheduledTaskOutcome(item: TaskQueue.Info, error?: unknown) {
 }
 
 async function finishIfRunning(
-  item: TaskQueue.Info,
-  input: { status: Extract<TaskQueue.Status, "completed" | "failed" | "cancelled">; error?: string },
+  attempt: TaskQueue.ExecutionAttempt,
+  input: { status: "completed" | "failed" | "cancelled"; error?: string },
 ) {
-  const current = await TaskQueue.get(item.id)
-  if (!isActiveQueueStatus(current.status)) return current
-  const cleanup = input.status === "failed" ? timeoutCleanup().pending.get(item.id)?.workflow : undefined
-  return TaskQueue.setStatus({
-    id: item.id,
-    status: input.status,
-    error: input.error,
-    onlyFromActive: true,
-    ...(cleanup && { workflowTimeoutCleanup: { ...cleanup, owner: TaskQueue.executorOwner(item.payload) } }),
-  })
+  const cleanup = input.status === "failed" ? timeoutCleanup().pending.get(attempt.generation)?.workflow : undefined
+  return TaskQueue.finishExecution(attempt, { ...input, cleanup })
 }
 
 function startDetachedQueueTask(task: () => Promise<void>) {
@@ -550,12 +552,13 @@ function isActiveQueueStatus(status: TaskQueue.Status) {
   return activeStatuses.includes(status as (typeof activeStatuses)[number])
 }
 
-async function requireActiveQueueItem(id: TaskQueueID) {
-  const current = await TaskQueue.get(id)
-  if (!isActiveQueueStatus(current.status)) {
-    throw new Error(`Scheduled automation stopped before execution (${current.status})`)
-  }
-  return current
+function executionIsActive(attempt: TaskQueue.ExecutionAttempt): boolean {
+  const current = TaskQueue.executionItem(attempt)
+  return current !== undefined && isActiveQueueStatus(current.status)
+}
+
+function requireActiveQueueItem(attempt: TaskQueue.ExecutionAttempt): void {
+  if (!executionIsActive(attempt)) throw new Error("Scheduled automation stopped before execution")
 }
 
 type QueueExecutionOutcome = { status: "failed"; error: string } | { status: "cancelled"; error: string }
@@ -655,27 +658,16 @@ async function refreshSessionBlockStatus(sessionID: SessionID) {
     const active = await activeSessionItems(sessionID)
     if (active.length === 0) return
     const target = await sessionBlockStatus(sessionID)
-    await Promise.all(
-      active.map(async (item) => {
-        // Re-read the live status before writing: the item may have completed,
-        // failed, or been cancelled between the snapshot above and now (e.g.
-        // run() finished right after the permission reply that triggered this
-        // refresh). Never transition an item that is no longer active, or we'd
-        // resurrect a terminal item back to "running" and wedge it forever.
-        const current = await TaskQueue.get(item.id).catch(() => undefined)
-        if (!current || !isActiveQueueStatus(current.status)) return
-        const status = target ?? "running"
-        if (current.status === status) return
-        await TaskQueue.setStatus({ id: item.id, status })
-      }),
-    )
+    await Promise.all(active.map((item) => TaskQueue.refreshExecutionBlockStatus(item, target ?? "running")))
   } catch (error) {
     DiagnosticLog.recordProcess("server.taskQueueBlockRefreshFailed", { sessionID, error })
     log.warn("failed to refresh task queue block status", { sessionID, error })
   }
 }
 
-async function sessionBlockStatus(sessionID: SessionID): Promise<TaskQueue.Status | undefined> {
+async function sessionBlockStatus(
+  sessionID: SessionID,
+): Promise<"blocked_permission" | "blocked_question" | undefined> {
   const [permissions, questions] = await Promise.all([Permission.list(), Question.list()])
   if (permissions.some((request) => request.sessionID === sessionID)) return "blocked_permission"
   if (questions.some((request) => request.sessionID === sessionID)) return "blocked_question"
@@ -780,8 +772,9 @@ async function runScheduledPromptAutomation(
   item: TaskQueue.Info,
   scheduledTaskID: ScheduledTaskID,
   execution: QueueExecution,
+  attempt: TaskQueue.ExecutionAttempt,
 ): Promise<unknown> {
-  await requireActiveQueueItem(item.id)
+  requireActiveQueueItem(attempt)
   const prompt = (sessionID: SessionID, reused: boolean) => {
     const body = promptBodyFromQueueItem(item)
     if (!body) throw new Error(`Scheduled task ${scheduledTaskID} has no executable prompt`)
@@ -793,7 +786,7 @@ async function runScheduledPromptAutomation(
 
   if (item.sessionID) {
     const started = await startLocks().run(scheduledSessionLockKey(item.projectID, item.sessionID), async () => {
-      await requireActiveQueueItem(item.id)
+      requireActiveQueueItem(attempt)
       return { result: prompt(item.sessionID!, false) }
     })
     return started.result
@@ -805,10 +798,10 @@ async function runScheduledPromptAutomation(
   if (reuseID) {
     const reused = await startLocks().run(scheduledSessionLockKey(item.projectID, reuseID), async () => {
       if (!(await sessionStillReusable(item, scheduledTaskID, reuseID, Session, ScheduledTask))) return
-      await TaskQueue.attachSession(item.id, reuseID)
+      await TaskQueue.attachSession(attempt, reuseID)
       item.sessionID = reuseID
       execution.sessionID = reuseID
-      await requireActiveQueueItem(item.id)
+      requireActiveQueueItem(attempt)
       if (sessionPromptBusy(reuseID)) return
       // Serialize admission only. Holding this lock for the entire prompt would
       // prevent a successor from observing timeout cleanup and returning idle-wait.
@@ -819,8 +812,8 @@ async function runScheduledPromptAutomation(
 
   const session = await Session.create({ title: item.title })
   try {
-    await requireActiveQueueItem(item.id)
-    await TaskQueue.attachSession(item.id, session.id)
+    requireActiveQueueItem(attempt)
+    await TaskQueue.attachSession(attempt, session.id)
   } catch (error) {
     await Session.remove(session.id).catch((removeError) => {
       log.warn("failed to discard cancelled scheduled session", {
@@ -834,7 +827,7 @@ async function runScheduledPromptAutomation(
   item.sessionID = session.id
   execution.sessionID = session.id
   const started = await startLocks().run(scheduledSessionLockKey(item.projectID, session.id), async () => {
-    await requireActiveQueueItem(item.id)
+    requireActiveQueueItem(attempt)
     return { result: prompt(session.id, false) }
   })
   return started.result
@@ -846,12 +839,12 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
   let workflowRunID: WorkflowRunID | undefined
   const execution: QueueExecution = {
     sessionID: item.sessionID,
-    cancel: async (options) => {
-      if (!workflowRunID) return cancelTimedOutExecution(item, options)
+    cancel: async (current, options) => {
+      if (!workflowRunID) return cancelSession(current, options)
       const { WorkflowScheduler } = await import("../workflow/scheduler")
       return WorkflowScheduler.cancel(workflowRunID)
     },
-    run: () =>
+    run: (attempt) =>
       runInQueueItemInstance(item, async () => {
         const workflowTemplateID = item.payload["workflowTemplateID"]
         if (typeof workflowTemplateID === "string" && workflowTemplateID.length > 0) {
@@ -863,7 +856,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
           })
           workflowRunID = run.id
           try {
-            await requireActiveQueueItem(item.id)
+            requireActiveQueueItem(attempt)
           } catch (error) {
             await WorkflowScheduler.cancelUnstarted(run.id).catch((cancelError) => {
               log.warn("failed to cancel timed-out scheduled workflow run", {
@@ -896,7 +889,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
           return detail
         }
 
-        return runScheduledPromptAutomation(item, ScheduledTaskID.make(scheduledTaskID), execution)
+        return runScheduledPromptAutomation(item, ScheduledTaskID.make(scheduledTaskID), execution, attempt)
       }),
   }
   return execution
@@ -920,34 +913,36 @@ function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
   const controller = new AbortController()
   return {
     sessionID,
-    cancel: async (options) => {
+    cancel: async (current, options) => {
       controller.abort()
-      await SessionPrompt.cancel(sessionID, options)
+      if (current) await SessionPrompt.cancel(sessionID, options)
     },
-    run: () =>
+    run: (attempt) =>
       runInQueueItemInstance(item, async () => {
         // A background `task` subagent returns from the tool before it runs, so
         // its SubagentStop fires here when the run settles, like the foreground
         // path in tool/task.ts. Workflow children are not task subagents.
-        if (item.payload["source"] !== "task") return runSubagent()
+        if (item.payload["source"] !== "task") return runSubagent(attempt)
         let status: "completed" | "failed" = "failed"
         try {
-          const result = await runSubagent()
-          if (!assistantError(result)) status = "completed"
+          const result = await runSubagent(attempt)
+          if (result && !assistantError(result)) status = "completed"
           return result
         } finally {
           const { fireSubagentStop } = await import("../tool/task-shared")
-          await fireSubagentStop({ sessionID, agent: item.agent ?? "", status })
+          if (TaskQueue.executionItem(attempt)) await fireSubagentStop({ sessionID, agent: item.agent ?? "", status })
         }
       }),
   }
 
-  async function runSubagent() {
+  async function runSubagent(attempt: TaskQueue.ExecutionAttempt) {
     const body = promptBodyFromQueueItem(item)
     if (!body) throw new Error(`Subagent queue item ${item.id} has no executable prompt`)
     const next = await applyRestartContinuation(item, body)
     const executionStartedAt = Date.now()
+    if (!executionIsActive(attempt)) return undefined
     let result = await SessionPrompt.prompt({ ...next, sessionID })
+    if (!executionIsActive(attempt)) return result
     const work = assistantError(result) ? undefined : await inspectSubagentBackgroundWork(sessionID, executionStartedAt)
     if (work) {
       const background = await prepareSubagentBackgroundFinalization({
@@ -957,6 +952,7 @@ function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
         signal: controller.signal,
         tools: next.tools,
       })
+      if (!executionIsActive(attempt)) return result
       result = await SessionPrompt.prompt({
         ...next,
         sessionID,
@@ -968,7 +964,7 @@ function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
     // Only the final result is recorded for workflow usage; the interim
     // "work started" turn is not the child's deliverable.
     const workflow = TaskQueue.workflowChild(item)
-    if (workflow) await recordWorkflowSubagentUsage(workflow, result)
+    if (workflow && executionIsActive(attempt)) await recordWorkflowSubagentUsage(workflow, result)
     return result
   }
 }

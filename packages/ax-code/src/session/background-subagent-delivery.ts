@@ -93,7 +93,11 @@ export async function deliverBackgroundSubagentHandoff(input: {
     partID: PartID.ascending(),
     time: Date.now(),
   }
-  const selection = await TaskQueue.claimResultDelivery({ id: input.item.id, claim: requestedClaim })
+  const selection = await TaskQueue.claimResultDelivery({
+    id: input.item.id,
+    claim: requestedClaim,
+    expectedTerminal: input.item,
+  })
   const { item, claim } = selection
   if (!selection.accepted || claim?.owner !== "handoff") return item
 

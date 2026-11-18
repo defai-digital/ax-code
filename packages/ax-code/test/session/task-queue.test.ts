@@ -661,7 +661,8 @@ describe("TaskQueue", () => {
         const running = await TaskQueue.enqueue({ sessionID: session.id, kind: "prompt", title: "Live prompt" })
         const blocked = await TaskQueue.enqueue({ kind: "prompt", title: "Live review" })
         const waiting = await TaskQueue.enqueue({ kind: "automation", title: "Live wait" })
-        await TaskQueue.setStatus({ id: running.id, status: "running" })
+        const claim = await TaskQueue.claimForExecution(running.id)
+        if (claim.kind !== "claimed") throw new Error("Expected to claim the live prompt")
         await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission", error: "approval required" })
         await TaskQueue.setStatus({ id: waiting.id, status: "waiting_for_idle" })
 
@@ -694,7 +695,7 @@ describe("TaskQueue", () => {
           // a live-but-silent owner is treated as hung and recovered. Rows
           // waiting for idle are never heartbeated, so the owner is enough.
           const beat = Date.now() + TaskQueue.RESTART_RECOVERY_LIVENESS_MS
-          expect(TaskQueue.heartbeat(running.id, beat)).toBe(true)
+          expect(TaskQueue.heartbeat(claim.attempt, beat)).toBe(true)
           const afterBeat = await TaskQueue.recoverInterrupted({ now: beat + 1_000 })
           expect(afterBeat.live.map((item) => item.id).sort()).toEqual([running.id, waiting.id].sort())
           expect(afterBeat.failed.map((item) => item.id)).toEqual([blocked.id])
@@ -784,8 +785,9 @@ describe("TaskQueue", () => {
         // died: the row's owner pid is gone, so recovery treats it as
         // interrupted instead of live.
         const session = await Session.create({})
-        await TaskQueue.setStatus({ id: queueItem!.id, status: "running" })
-        await TaskQueue.attachSession(queueItem!.id, session.id)
+        const execution = await TaskQueue.claimForExecution(queueItem.id)
+        if (execution.kind !== "claimed") throw new Error("Expected to claim the scheduled occurrence")
+        await TaskQueue.attachSession(execution.attempt, session.id)
         SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
           db.update(TaskQueueTable)
             .set({
@@ -1641,7 +1643,7 @@ describe("TaskQueue", () => {
             ...rest: any[]
           ) => {
             const handle = realSetTimeout(fn, ms, ...rest)
-            if (ms === 30_000) graceTimers.push(handle)
+            if (ms !== undefined && ms > 1_000 && ms <= 30_000) graceTimers.push(handle)
             return handle
           }) as any)
           await TaskQueueExecutor.start(item)
