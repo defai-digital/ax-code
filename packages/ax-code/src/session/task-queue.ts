@@ -835,20 +835,17 @@ export namespace TaskQueue {
   // "delivered" after; a crash mid-flight is redelivered by re-persisting with
   // the recorded message/part ids (upsert = idempotent), never by appending a
   // second copy.
-  export const ControlDeliveryStatus = z.enum(["pending", "delivered"])
-  export type ControlDeliveryStatus = z.infer<typeof ControlDeliveryStatus>
-
-  export const ControlDelivery = z.object({
+  const ControlDelivery = z.object({
     messageID: z.string(),
     partID: z.string(),
     text: z.string(),
-    status: ControlDeliveryStatus,
+    status: z.enum(["pending", "delivered"]),
     time: z.number(),
   })
-  export type ControlDelivery = z.infer<typeof ControlDelivery>
+  type ControlDelivery = z.infer<typeof ControlDelivery>
 
-  // Bound the ledger so a chatty parent cannot grow the payload row without
-  // limit. Entries are appended in time order, so the tail is the newest.
+  // Bound the ledger by discarding completed history first. Pending entries
+  // hold the message identity needed to recover an interrupted delivery.
   const MAX_CONTROL_DELIVERIES = 50
 
   export function controlDeliveries(item: Info): ControlDelivery[] {
@@ -860,39 +857,26 @@ export namespace TaskQueue {
     })
   }
 
-  export async function setControlDelivery(input: {
-    id: TaskQueueID
-    messageID: string
-    partID: string
-    text: string
-    status: ControlDeliveryStatus
-  }): Promise<Info> {
-    const now = Date.now()
-    // Same transactional rule as setDelivery: the pending → delivered ledger
-    // flip must not interleave with a concurrent payload writer, or a
-    // redelivery after crash allocates fresh message/part ids and the child
-    // sees the control message twice (ADR-057 exactly-once).
-    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-      const currentRow = readRow(db, input.id)
-      const current = fromRow(currentRow)
-      const entries = controlDeliveries(current).filter((entry) => entry.messageID !== input.messageID)
-      entries.push({
-        messageID: input.messageID,
-        partID: input.partID,
-        text: input.text,
-        status: input.status,
-        time: now,
-      })
-      const payload: Payload = {
-        ...current.payload,
-        controlDeliveries: entries.slice(-MAX_CONTROL_DELIVERIES),
-      }
-      const item = writePayloadRow(db, input.id, payload, now)
-      return item
+  function writeControlDeliveries(db: Database.TxOrDb, item: Info, entries: ControlDelivery[], now: number): Info {
+    return writePayloadRow(db, item.id, { ...item.payload, controlDeliveries: entries }, now)
+  }
+
+  export async function completeControlDelivery(input: { id: TaskQueueID; messageID: MessageID }): Promise<Info> {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      const current = fromRow(readRow(db, input.id))
+      assertProjectItem(current)
+      const entries = controlDeliveries(current)
+      const pending = entries.find((entry) => entry.messageID === input.messageID && entry.status === "pending")
+      // A late duplicate completion must not recreate an evicted receipt.
+      if (!pending) return { item: current, changed: false }
+
+      const now = Date.now()
+      const remaining = entries.filter((entry) => entry.messageID !== input.messageID)
+      remaining.push({ ...pending, status: "delivered", time: now })
+      return { item: writeControlDeliveries(db, current, remaining, now), changed: true }
     })
-    assertProjectItem(item)
-    publishUpdated(item)
-    return item
+    if (result.changed) publishUpdated(result.item)
+    return result.item
   }
 
   /**
@@ -912,10 +896,8 @@ export namespace TaskQueue {
     partID: string
     text: string
   }): Promise<{ item: Info; entry?: ControlDelivery; claimed: boolean }> {
-    const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-      const currentRow = readRow(db, input.id)
-      const current = fromRow(currentRow)
+      const current = fromRow(readRow(db, input.id))
       assertProjectItem(current)
       if (
         !isTaskSubagent(current) ||
@@ -927,10 +909,17 @@ export namespace TaskQueue {
       // Completion and admission serialize on the queue row. A terminal
       // task returns its outcome without claiming or replaying a delivery.
       if (isTerminalStatus(current.status)) return { item: current, claimed: false }
-      const existing = controlDeliveries(current)
-        .filter((entry) => entry.status === "pending" && entry.text === input.text)
-        .sort((a, b) => a.time - b.time)[0]
+      const entries = controlDeliveries(current)
+      const pending = entries.filter((entry) => entry.status === "pending")
+      const existing = pending.filter((entry) => entry.text === input.text).sort((a, b) => a.time - b.time)[0]
       if (existing) return { item: current, entry: existing, claimed: false }
+      if (pending.length >= MAX_CONTROL_DELIVERIES) {
+        throw new HTTPException(409, {
+          message: "Too many unfinished follow-up deliveries for this task. Retry an existing follow-up first.",
+        })
+      }
+
+      const now = Date.now()
       const entry: ControlDelivery = {
         messageID: input.messageID,
         partID: input.partID,
@@ -938,14 +927,16 @@ export namespace TaskQueue {
         status: "pending",
         time: now,
       }
-      const entries = [...controlDeliveries(current).filter((e) => e.messageID !== input.messageID), entry].slice(
-        -MAX_CONTROL_DELIVERIES,
-      )
-      const payload: Payload = {
-        ...current.payload,
-        controlDeliveries: entries,
-      }
-      const item = writePayloadRow(db, input.id, payload, now)
+      // Entries are appended when recorded or completed. Drop the oldest
+      // delivered entries to make room while preserving every pending id.
+      let excess = Math.max(0, entries.length + 1 - MAX_CONTROL_DELIVERIES)
+      const retained = entries.filter((delivery) => {
+        if (delivery.status === "pending" || excess === 0) return true
+        excess--
+        return false
+      })
+      retained.push(entry)
+      const item = writeControlDeliveries(db, current, retained, now)
       return { item, entry, claimed: true }
     })
     if (result.claimed) publishUpdated(result.item)

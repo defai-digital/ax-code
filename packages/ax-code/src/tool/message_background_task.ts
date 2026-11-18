@@ -147,13 +147,7 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
         metadata: { source: "background_task_control", taskID: item.id },
       },
     })
-    const delivered = await TaskQueue.setControlDelivery({
-      id: item.id,
-      messageID,
-      partID,
-      text: params.message,
-      status: "delivered",
-    })
+    const delivered = await TaskQueue.completeControlDelivery({ id: item.id, messageID })
 
     // Let the queue retain ownership if the task paused or stopped while the
     // message was being persisted or the child workspace was booting.

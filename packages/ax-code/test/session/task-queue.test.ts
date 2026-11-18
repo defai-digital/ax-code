@@ -3163,12 +3163,12 @@ describe("TaskQueue payload write atomicity", () => {
         // race on the same payload row; neither may clobber the other's keys.
         await Promise.all([
           TaskQueue.setDelivery({ id: created.id, status: "delivered" }),
-          TaskQueue.setControlDelivery({
+          TaskQueue.claimControlDelivery({
             id: created.id,
+            sessionID: session.id,
             messageID: "msg_control_race",
             partID: "prt_control_race",
             text: "steer the child",
-            status: "pending",
           }),
         ])
 
@@ -3228,6 +3228,48 @@ describe("TaskQueue payload write atomicity", () => {
         const latest = await TaskQueue.get(item.id)
         expect(latest.status).toBe("queued")
         expect(latest.payload["text"]).toBe("new body")
+      },
+    })
+  })
+
+  test("keeps existing claims retryable when the control ledger is full", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const child = await Session.create({})
+        const item = await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "background task",
+          payload: { source: "task" },
+        })
+        const claim = (text: string) =>
+          TaskQueue.claimControlDelivery({
+            id: item.id,
+            sessionID: child.id,
+            messageID: MessageID.ascending(),
+            partID: PartID.ascending(),
+            text,
+          })
+        const historyLimit = 50
+        for (let index = 0; index < historyLimit; index++) await claim(`follow-up ${index}`)
+        const before = TaskQueue.controlDeliveries(await TaskQueue.get(item.id))
+
+        await expect(claim("extra follow-up")).rejects.toThrow("Too many unfinished follow-up deliveries")
+        expect(TaskQueue.controlDeliveries(await TaskQueue.get(item.id))).toEqual(before)
+        const retry = await claim(before[0].text)
+        expect(retry.claimed).toBe(false)
+        expect(retry.entry).toEqual(before[0])
+
+        const firstMessageID = MessageID.make(before[0].messageID)
+        await TaskQueue.completeControlDelivery({ id: item.id, messageID: firstMessageID })
+        const admitted = await claim("extra follow-up")
+        expect(admitted.claimed).toBe(true)
+        const retained = [...before.slice(1), admitted.entry]
+        expect(TaskQueue.controlDeliveries(admitted.item)).toEqual(retained)
+        const lateCompletion = await TaskQueue.completeControlDelivery({ id: item.id, messageID: firstMessageID })
+        expect(TaskQueue.controlDeliveries(lateCompletion)).toEqual(retained)
       },
     })
   })

@@ -401,10 +401,10 @@ describe("tool.message_background_task", () => {
           initialPrompt: "original request",
         })
         const loop = vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
-        const setControlDelivery = TaskQueue.setControlDelivery
-        vi.spyOn(TaskQueue, "setControlDelivery").mockImplementation(async (input) => {
+        const completeControlDelivery = TaskQueue.completeControlDelivery
+        vi.spyOn(TaskQueue, "completeControlDelivery").mockImplementation(async (input) => {
           await TaskQueue.setStatus({ id: item.id, status: "paused" })
-          return setControlDelivery(input)
+          return completeControlDelivery(input)
         })
         const result = await (
           await MessageBackgroundTaskTool.init()
@@ -445,7 +445,7 @@ describe("tool.message_background_task", () => {
     },
   )
 
-  test.each([false, true])("redelivers once after a crash (edited: %s)", async (edited) => {
+  test.each(["running", "edited", "history"] as const)("redelivers once after a crash (%s)", async (mode) => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -455,16 +455,16 @@ describe("tool.message_background_task", () => {
         const parent = await Session.create({})
         const { child, item } = await enqueueBackgroundSubagent({
           parent: parent.id,
-          status: edited ? "queued" : "running",
+          status: mode === "running" ? "running" : "queued",
           initialPrompt: "do the original task",
         })
 
         // Simulate a kill after the message was persisted but before the
         // ledger entry flipped to delivered: the "delivered" write fails once.
-        const real = TaskQueue.setControlDelivery
+        const real = TaskQueue.completeControlDelivery
         let killed = false
-        vi.spyOn(TaskQueue, "setControlDelivery").mockImplementation(async (input) => {
-          if (input.status === "delivered" && !killed) {
+        vi.spyOn(TaskQueue, "completeControlDelivery").mockImplementation(async (input) => {
+          if (!killed) {
             killed = true
             throw new Error("simulated mid-flight crash")
           }
@@ -485,7 +485,7 @@ describe("tool.message_background_task", () => {
         expect(afterCrash).toHaveLength(1)
         const originalCreated = afterCrash[0]?.info.time.created
 
-        if (edited) {
+        if (mode === "edited") {
           const editedBody = { parts: [{ type: "text", text: "rewritten queued request" }] }
           const updated = await TaskQueue.edit({
             id: item.id,
@@ -493,6 +493,21 @@ describe("tool.message_background_task", () => {
           })
           expect(updated.payload["body"]).toEqual(editedBody)
           expect(TaskQueue.controlDeliveries(updated)).toEqual([pendingEntry])
+        }
+
+        if (mode === "history") {
+          const historyLimit = 50
+          const tool = await MessageBackgroundTaskTool.init()
+          for (let index = 0; index < historyLimit; index++) {
+            const later = await tool.execute(
+              { task_id: item.id, message: `follow-up ${index}` },
+              toolContext(parent.id),
+            )
+            expect(later.metadata.delivered).toBe(true)
+          }
+          const history = TaskQueue.controlDeliveries(await TaskQueue.get(item.id))
+          expect(history).toContainEqual(pendingEntry)
+          expect(history).toHaveLength(historyLimit)
         }
 
         const retry = await (
@@ -509,8 +524,11 @@ describe("tool.message_background_task", () => {
         expect(afterRetry[0]?.info.time.created).toBe(originalCreated)
 
         latest = await TaskQueue.get(TaskQueueID.make(item.id))
-        expect(TaskQueue.controlDeliveries(latest)).toHaveLength(1)
-        expect(TaskQueue.controlDeliveries(latest)[0].status).toBe("delivered")
+        const entries = TaskQueue.controlDeliveries(latest)
+        expect(entries.filter((entry) => entry.messageID === pendingEntry.messageID)).toEqual([
+          expect.objectContaining({ status: "delivered", partID: pendingEntry.partID }),
+        ])
+        if (mode !== "history") expect(entries).toHaveLength(1)
       },
     })
   })
