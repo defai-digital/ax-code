@@ -815,6 +815,54 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("restart recovery settles old failed dispatches and preserves an explicit retry", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { queued, waiting, retry, pending } = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const enqueue = async (title: string, failed: boolean) => {
+          const task = await ScheduledTask.create({
+            title,
+            prompt: "Ping me.",
+            schedule: { type: "once", runAt: Date.now() + 60_000 },
+          })
+          const { queueItem } = await ScheduledTask.runNow(task.id)
+          if (!queueItem) throw new Error("Expected a scheduled queue item")
+          // Older dispatch code recorded the run outcome without settling the queue item.
+          if (failed)
+            await ScheduledTask.recordQueueOutcome(task.id, "failed", new Error("Dispatch failed"), queueItem.id)
+          return queueItem.id
+        }
+
+        const queued = await enqueue("Failed queued dispatch", true)
+        const waiting = await enqueue("Failed waiting dispatch", true)
+        await TaskQueue.setStatus({ id: waiting, status: "waiting_for_idle" })
+        const retry = await enqueue("Operator retry", true)
+        await TaskQueue.setStatus({ id: retry, status: "failed" })
+        await TaskQueue.retry(retry)
+        const pending = await enqueue("Interrupted before dispatch", false)
+        return { queued, waiting, retry, pending }
+      },
+    })
+
+    const recovered = await restartInstance(tmp.path)
+    expect(recovered.failed.map((item) => item.id)).toEqual(expect.arrayContaining([queued, waiting]))
+    expect(recovered.failed).toHaveLength(2)
+    expect(recovered.requeued).toEqual([])
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        for (const id of [queued, waiting]) {
+          expect(await TaskQueue.get(id)).toMatchObject({ status: "failed", error: "Dispatch failed" })
+        }
+        expect((await TaskQueue.listRestartableQueued()).map((item) => item.id)).toEqual([retry, pending])
+        expect((await TaskQueue.claimForExecution(retry)).kind).toBe("claimed")
+      },
+    })
+  })
+
   test("restart recovery requeues a steered row whose apply never landed", async () => {
     await using tmp = await tmpdir({ git: true })
 

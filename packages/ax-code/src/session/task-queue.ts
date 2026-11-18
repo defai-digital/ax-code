@@ -2016,10 +2016,47 @@ export namespace TaskQueue {
     live: Info[]
   }
 
+  function recoverFailedScheduledDispatches(db: Database.TxOrDb, projectID: ProjectID, now: number): Info[] {
+    // Old scheduler dispatches could finalize the run while its queue item
+    // was still pending. Repair the original item before restart can requeue
+    // it. A queue generation may belong to an explicit operator retry.
+    const rows = db
+      .select({ id: TaskQueueTable.id, error: ScheduledTaskRunTable.error })
+      .from(TaskQueueTable)
+      .innerJoin(
+        ScheduledTaskRunTable,
+        and(
+          eq(ScheduledTaskRunTable.queue_id, TaskQueueTable.id),
+          eq(ScheduledTaskRunTable.project_id, TaskQueueTable.project_id),
+          eq(ScheduledTaskRunTable.task_id, TaskQueueTable.source_task_id),
+        ),
+      )
+      .where(
+        and(
+          eq(TaskQueueTable.project_id, projectID),
+          eq(TaskQueueTable.kind, "automation"),
+          inArray(TaskQueueTable.status, ["queued", "waiting_for_idle"]),
+          inArray(ScheduledTaskRunTable.status, ["failed", "timeout"]),
+          sql`json_extract(${queuePayloadJson}, '$.scheduledTaskID') = ${ScheduledTaskRunTable.task_id}`,
+          sql`json_extract(${queuePayloadJson}, ${`$.${RETRY_GENERATION_KEY}`}) is null`,
+        ),
+      )
+      .all()
+    return rows.map(({ id, error }) =>
+      writeRow(db, id, {
+        status: "failed",
+        error: error ?? "Scheduled task dispatch failed.",
+        time_completed: now,
+        time_updated: now,
+      }),
+    )
+  }
+
   export async function recoverInterrupted(options?: {
     now?: number
     livenessMs?: number
   }): Promise<RecoverInterruptedResult> {
+    const projectID = Instance.project.id
     const now = options?.now ?? Date.now()
     const livenessMs = options?.livenessMs ?? RESTART_RECOVERY_LIVENESS_MS
     const interruptedStatuses = ["running", "blocked_permission", "blocked_question"] as const
@@ -2031,19 +2068,14 @@ export namespace TaskQueue {
     let transactionSucceeded = false
     let changed: RecoverInterruptedResult
     try {
-      changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      changed = SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
+        const failed = recoverFailedScheduledDispatches(db, projectID, now)
         const rows = db
           .select()
           .from(TaskQueueTable)
-          .where(
-            and(
-              eq(TaskQueueTable.project_id, Instance.project.id),
-              inArray(TaskQueueTable.status, recoverableStatuses),
-            ),
-          )
+          .where(and(eq(TaskQueueTable.project_id, projectID), inArray(TaskQueueTable.status, recoverableStatuses)))
           .all()
 
-        const failed: Info[] = []
         const requeued: Info[] = []
         const preserved: Info[] = []
         const live: Info[] = []
