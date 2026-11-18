@@ -98,25 +98,30 @@ const restartRecoveryState = Instance.state(
   },
 )
 
-async function recoverInterruptedTaskQueue() {
-  const result = await TaskQueue.recoverInterrupted()
-  // Requeued items are reset to "queued" but never auto-started —
-  // drainNextForSession() only fires after a task completes, so the
-  // first recovered item would sit idle forever without an explicit
-  // start.
-  if (result.requeued.length > 0) {
-    const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
-    for (const item of result.requeued) {
+async function startRecoveredQueueItems(items: TaskQueue.Info[]): Promise<void> {
+  if (items.length === 0) return
+  const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
+  for (const item of items) {
+    try {
       await TaskQueueExecutor.start(item)
+    } catch (error) {
+      Log.Default.warn("task queue item restart failed", { taskID: item.id, error: toErrorMessage(error) })
     }
   }
+}
+
+async function recoverInterruptedTaskQueue(): Promise<void> {
+  const result = await TaskQueue.recoverInterrupted()
+  // A requeued item may be the only work in its session; without an
+  // explicit start there may be no preceding task to drain the queue.
+  await startRecoveredQueueItems(result.requeued)
   // Fresh heartbeats and held foreground guards defer recovery. Keep
   // rechecking pending steers too: a peer can die just before bootstrap,
   // leaving an admitted correction fresh but no longer driven by anyone.
   const state = restartRecoveryState()
   if (state.timer) clearTimeout(state.timer)
   state.timer = undefined
-  if (result.live.length === 0) return result
+  if (result.live.length === 0) return
   state.timer = setTimeout(() => {
     state.timer = undefined
     recoverInterruptedTaskQueue().catch((error) => {
@@ -125,7 +130,6 @@ async function recoverInterruptedTaskQueue() {
     })
   }, TaskQueue.RESTART_RECOVERY_LIVENESS_MS)
   state.timer.unref?.()
-  return result
 }
 
 async function initializeInstance(owner: boolean) {
@@ -140,13 +144,7 @@ async function initializeInstance(owner: boolean) {
         // its detached executor is started. If the process exits in that narrow
         // post-commit window, the row remains queued and must be resumed here;
         // ordinary manually-queued items intentionally remain user-controlled.
-        const scheduled = await TaskQueue.listRestartableQueued()
-        if (scheduled.length > 0) {
-          const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
-          for (const item of scheduled) {
-            await TaskQueueExecutor.start(item)
-          }
-        }
+        await startRecoveredQueueItems(await TaskQueue.listRestartableQueued())
       },
     })
   background({
