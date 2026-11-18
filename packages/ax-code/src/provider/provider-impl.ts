@@ -1,3 +1,4 @@
+import { AX_TRUST_STREAM_KEEPALIVE_HEADER, normalizeAxTrustStream } from "./ax-trust-stream"
 import { isMiniMaxM3ChatRequest, normalizeMiniMaxReasoning } from "./minimax-reasoning"
 import { applyDefaultContextWindow } from "./context-defaults"
 import { RoutePolicy } from "./route-policy"
@@ -1344,6 +1345,8 @@ export namespace Provider {
             chunkAbortCtl ?? new AbortController(),
             (opts.signal as AbortSignal) ?? undefined,
           )
+          const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+          if (headers.get(AX_TRUST_STREAM_KEEPALIVE_HEADER) === "1") res = normalizeAxTrustStream(res)
           return normalizeMiniMaxReasoning(res, minimaxReasoning)
         }
 
