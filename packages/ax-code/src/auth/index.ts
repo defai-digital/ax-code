@@ -502,7 +502,7 @@ export namespace Auth {
 
   async function updateEntry(
     key: string,
-    update: (current: unknown) => { value: unknown } | undefined,
+    update: (current: unknown, data: Record<string, unknown>) => { value: unknown } | undefined,
   ): Promise<boolean> {
     const norm = normalizeProviderID(key)
     if (!isCanonicalProviderID(norm)) throw new AuthError({ message: "Invalid provider ID" })
@@ -512,7 +512,7 @@ export namespace Auth {
         : Object.hasOwn(data, norm + "/")
           ? data[norm + "/"]
           : undefined
-      const change = update(current)
+      const change = update(current, data)
       if (!change) return false
       if (norm !== key) delete data[key]
       delete data[norm + "/"]
@@ -539,25 +539,66 @@ export namespace Auth {
     await writeEntry(key, info, { overwrite: true })
   }
 
-  /** Write a nonempty API key and return a rollback owned by that encrypted write. */
-  export async function setApiKeyWithRollback(key: string, apiKey: string): Promise<() => Promise<boolean>> {
+  async function writeApiKeyWithRollback(key: string, apiKey: string): Promise<() => Promise<boolean>>
+  async function writeApiKeyWithRollback(
+    key: string,
+    apiKey: string,
+    expected: ReadonlyMap<string, unknown>,
+  ): Promise<(() => Promise<boolean>) | undefined>
+  async function writeApiKeyWithRollback(
+    key: string,
+    apiKey: string,
+    expected?: ReadonlyMap<string, unknown>,
+  ): Promise<(() => Promise<boolean>) | undefined> {
     if (!apiKey) throw new AuthError({ message: "API key must not be empty" })
+    const keys = entryAliases(key)
     let previous: unknown
     let written: unknown
-    await updateEntry(key, (current) => {
+    const saved = await updateEntry(key, (current, data) => {
+      if (expected && !isDeepStrictEqual(snapshotEntries(data, keys), expected)) return
       previous = current
       written = encryptEntry({ type: "api", key: apiKey })
       return { value: written }
     })
+    if (!saved) {
+      await invalidateAuthState()
+      return
+    }
     // Randomized encryption distinguishes peer writes of the same plaintext.
     // Cache the operation so invoking this rollback again cannot undo later work.
+    const owned = new Map([[normalizeProviderID(key), written]])
     let rollback: Promise<boolean> | undefined
     return () =>
-      (rollback ??= updateEntry(key, (current) => {
-        if (!isDeepStrictEqual(current, written)) return
+      (rollback ??= updateEntry(key, (_current, data) => {
+        if (!isDeepStrictEqual(snapshotEntries(data, keys), owned)) return
         const parsed = Info.safeParse(decryptEntry(previous))
         return { value: parsed.success ? encryptEntry(parsed.data) : previous }
       }))
+  }
+
+  /** Write a nonempty API key and return a rollback owned by that encrypted write. */
+  export function setApiKeyWithRollback(key: string, apiKey: string): Promise<() => Promise<boolean>> {
+    return writeApiKeyWithRollback(key, apiKey)
+  }
+
+  /** Read the stored key and prepare a conditional write for a caller deriving its credential. */
+  export async function prepareApiKeyWrite(key: string): Promise<{
+    info: Info | undefined
+    write: (apiKey: string) => Promise<(() => Promise<boolean>) | undefined>
+  }> {
+    const keys = entryAliases(key)
+    let expected = new Map<string, unknown>()
+    let stored: unknown
+    await updateEntry(key, (current, data) => {
+      stored = current
+      expected = snapshotEntries(data, keys)
+      return undefined
+    })
+    const parsed = Info.safeParse(decryptEntry(stored))
+    return {
+      info: parsed.success ? parsed.data : undefined,
+      write: (apiKey) => writeApiKeyWithRollback(key, apiKey, expected),
+    }
   }
 
   function entryAliases(key: string): string[] {
@@ -569,13 +610,21 @@ export namespace Auth {
     for (const key of keys) delete data[key]
   }
 
+  function snapshotEntries(data: Record<string, unknown>, keys: readonly string[]): Map<string, unknown> {
+    const entries = new Map<string, unknown>()
+    for (const key of keys) {
+      if (Object.hasOwn(data, key)) entries.set(key, data[key])
+    }
+    return entries
+  }
+
   /** Capture a credential and return a one-shot removal that preserves later replacements. */
   export async function prepareRemoval(key: string): Promise<() => Promise<boolean>> {
     if (!isCanonicalProviderID(normalizeProviderID(key))) throw new AuthError({ message: "Invalid provider ID" })
     const keys = entryAliases(key)
-    let snapshot: { present: boolean; value: unknown }[] = []
+    let snapshot = new Map<string, unknown>()
     await updateStoredData((data) => {
-      snapshot = keys.map((alias) => ({ present: Object.hasOwn(data, alias), value: data[alias] }))
+      snapshot = snapshotEntries(data, keys)
       return false
     })
     const remove = async (): Promise<boolean> => {
@@ -583,18 +632,12 @@ export namespace Auth {
       const written = await updateStoredData((data) => {
         // Another disconnect may already have completed. There is no newer
         // credential to protect, so config cleanup should still go through.
-        if (keys.every((alias) => !Object.hasOwn(data, alias))) {
+        const current = snapshotEntries(data, keys)
+        if (current.size === 0) {
           matched = true
           return false
         }
-        if (
-          keys.some(
-            (alias, index) =>
-              Object.hasOwn(data, alias) !== snapshot[index].present ||
-              !isDeepStrictEqual(data[alias], snapshot[index].value),
-          )
-        )
-          return false
+        if (!isDeepStrictEqual(current, snapshot)) return false
         matched = true
         clearEntries(data, keys)
         return true

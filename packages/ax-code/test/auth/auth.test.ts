@@ -561,6 +561,26 @@ test("prepared removal drops an in-flight read of a credential a peer has alread
   expect(await fresh).toBeUndefined()
 })
 
+test.each(["write", "rollback"] as const)(
+  "a prepared API key %s preserves a peer alias beside an unchanged canonical key",
+  async (phase) => {
+    await Auth.set("provider", { type: "api", key: "old-value" })
+    const prepared = await Auth.prepareApiKeyWrite("provider")
+    expect(prepared.info).toEqual({ type: "api", key: "old-value" })
+    const rollback = phase === "rollback" ? await prepared.write("new-value") : undefined
+    const data = await Filesystem.readJson<Record<string, unknown>>(file)
+    data["provider/"] = { type: "api", key: "peer-alias" }
+    await Filesystem.writeJson(file, data, 0o600)
+    if (phase === "rollback") {
+      expect(rollback).toBeDefined()
+      expect(await rollback!()).toBe(false)
+    } else {
+      expect(await prepared.write("new-value")).toBeUndefined()
+    }
+    expect(await Filesystem.readJson(file)).toEqual(data)
+  },
+)
+
 test.each(["", "__canary"])("prepared removal rejects a reserved or empty provider ID (%s)", async (providerID) => {
   await Auth.set("provider", { type: "api", key: "old-value" })
   const before = await fs.readFile(file, "utf8")

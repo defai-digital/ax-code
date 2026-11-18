@@ -526,7 +526,18 @@ export const ProviderRoutes = lazy(() =>
         try {
           const config = await Config.get()
           const providerName = config.provider?.[AX_ENGINE_PROVIDER_ID]?.name ?? "AX Engine (Local)"
-          const previousAuth = body.mode === "attach" ? await Auth.get(AX_ENGINE_PROVIDER_ID) : undefined
+          const prepared =
+            body.mode === "attach" && !body.apiKey?.trim()
+              ? await Auth.prepareApiKeyWrite(AX_ENGINE_PROVIDER_ID)
+              : undefined
+          const previousAuth =
+            body.mode === "attach" ? (prepared ? prepared.info : await Auth.get(AX_ENGINE_PROVIDER_ID)) : undefined
+
+          const credentialConflict = () =>
+            serviceUnavailable(c, {
+              message: "AX Engine credentials changed during the connection update",
+              details: { resource: "axEngineConnection", providerID: AX_ENGINE_PROVIDER_ID },
+            })
           try {
             if (body.mode === "managed") {
               const removeAuth = await Auth.prepareRemoval(AX_ENGINE_PROVIDER_ID)
@@ -541,10 +552,7 @@ export const ProviderRoutes = lazy(() =>
               }
               if (!removed) {
                 await rollback()
-                return serviceUnavailable(c, {
-                  message: "AX Engine credentials changed during the connection update",
-                  details: { resource: "axEngineConnection", providerID: AX_ENGINE_PROVIDER_ID },
-                })
+                return credentialConflict()
               }
               return c.json(await axEngineConnectionView())
             }
@@ -578,7 +586,10 @@ export const ProviderRoutes = lazy(() =>
               apiKey,
             })
 
-            const rollback = await Auth.setApiKeyWithRollback(AX_ENGINE_PROVIDER_ID, apiKey)
+            const rollback = prepared
+              ? await prepared.write(apiKey)
+              : await Auth.setApiKeyWithRollback(AX_ENGINE_PROVIDER_ID, apiKey)
+            if (!rollback) return credentialConflict()
             try {
               await Config.updateGlobal({
                 provider: axEngineAttachProviderConfig({

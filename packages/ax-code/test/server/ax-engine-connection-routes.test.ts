@@ -136,7 +136,9 @@ describe("AX Engine connection guard cleanup", () => {
         throw new Error("Snapshot read failed")
       })
       const first = f.request(
-        read === "config" ? { mode: "managed" } : { mode: "attach", baseURL: "http://127.0.0.1:31419" },
+        read === "config"
+          ? { mode: "managed" }
+          : { mode: "attach", baseURL: "http://127.0.0.1:31419", apiKey: "explicit-key" },
       )
       try {
         await reading.promise
@@ -243,4 +245,30 @@ test.each([false, true])("managed save compensates for a failed credential write
   expect(config.provider?.[AX_ENGINE_PROVIDER_ID]?.options?.connectionMode).toBe(peer ? "managed" : undefined)
   expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toEqual({ type: "api", key: "previous-key" })
   if (peer) await Config.removeGlobalProvider(AX_ENGINE_PROVIDER_ID)
+})
+
+test.each([
+  { previous: "previous-key", peer: "peer-key", requested: undefined },
+  { previous: "previous-key", peer: "previous-key", requested: " " },
+  { previous: undefined, peer: "peer-key", requested: undefined },
+])("implicit attach rejects a credential change during the probe (%j)", async ({ previous, peer, requested }) => {
+  const f = fixture()
+  if (previous) await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: previous })
+  vi.mocked(probeAxEngineConnection).mockImplementationOnce(async ({ baseURL }) => {
+    await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: peer })
+    return { baseURL, models: [], toolcall: true }
+  })
+  const response = await f.request({ mode: "attach", baseURL: "http://127.0.0.1:31419", apiKey: requested })
+  expect(response.status).toBe(409)
+  expect(f.updateConfig).not.toHaveBeenCalled()
+  expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toEqual({ type: "api", key: peer })
+})
+
+test("implicit attach can keep an unchanged saved credential", async () => {
+  const f = fixture()
+  await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: "saved-key" })
+  const response = await f.request({ mode: "attach", baseURL: "http://127.0.0.1:31419" })
+  expect(response.status).toBe(200)
+  expect(probeAxEngineConnection).toHaveBeenCalledWith(expect.objectContaining({ apiKey: "saved-key" }))
+  expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toEqual({ type: "api", key: "saved-key" })
 })
