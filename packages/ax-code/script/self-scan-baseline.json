@@ -5068,33 +5068,33 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "4d24394b9043929cfad5e4830620f97fd3fdee7c920db1fbe9b85b81eb73ba1d",
-          "file": "src/mcp/webmcp-profile.ts",
-          "line": 618,
+          "fingerprint": "f07270ceac490a346911d314659ec85c21db2b1b5de50394b5c7c6c622691600",
+          "file": "src/mcp/webmcp-launch.ts",
+          "line": 23,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "185b25696478992166f092dc5f40ecc9f5abddeff2f61722ea5ae8bd4b6a9852",
-          "file": "src/mcp/webmcp-profile.ts",
-          "line": 630,
+          "fingerprint": "e60f8d0850256cc3a88a41bbe8c8c1f50c9ea9dc9d4f1bf9aaa11b6ae2ce6f69",
+          "file": "src/mcp/webmcp-launch.ts",
+          "line": 38,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "9459a1fac1c35c001b3d4e74cc9ec0391bebb51730fb068db4f71ef1afb53ab8",
-          "file": "src/mcp/webmcp-profile.ts",
-          "line": 694,
+          "fingerprint": "eefe5480e4c3194e98a30d841671c16ad4aa5c09ba08e98676be10f2c52b5fee",
+          "file": "src/mcp/webmcp-launch.ts",
+          "line": 102,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "e6f6eb32d91a36a14dc7d1a91e061deacb39863ebd1a47eaf28074b7a966f0f0",
-          "file": "src/mcp/webmcp-profile.ts",
-          "line": 722,
+          "fingerprint": "59baada63996257a48ed679a80ea311b1a82022c45860ed1c773801301740a69",
+          "file": "src/mcp/webmcp-launch.ts",
+          "line": 130,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -7169,17 +7169,17 @@
           "summary": "inline_secret_shape"
         },
         {
-          "fingerprint": "adb6d1c8a1725a36d3561221cbfc2bd6443d0763f57e5c3081920e5ea0a95bc6",
-          "file": "src/mcp/webmcp-profile.ts",
-          "line": 625,
+          "fingerprint": "0870c08ddce4bcb3624be69ab28348d19d972bedd6c286a8f983385324b77047",
+          "file": "src/mcp/webmcp-launch.ts",
+          "line": 31,
           "severity": "high",
           "kind": "inline_secret_shape",
           "summary": "inline_secret_shape"
         },
         {
-          "fingerprint": "d8414493baab11c7df4bbaa1ed836a1d6549a0906c539b80a3324632c4a9c89d",
-          "file": "src/mcp/webmcp-profile.ts",
-          "line": 768,
+          "fingerprint": "c9d6cb321fc2edc1a05ccb5cf9b9c007576d68f056b084746e4110ff9345bfcb",
+          "file": "src/mcp/webmcp-launch.ts",
+          "line": 176,
           "severity": "high",
           "kind": "inline_secret_shape",
           "summary": "inline_secret_shape"

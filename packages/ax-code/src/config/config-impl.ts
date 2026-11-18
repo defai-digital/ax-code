@@ -43,7 +43,7 @@ import { FeatureFlag } from "../util/feature-flags"
 import { ScopedFlag } from "../flag/scoped"
 import { parseJsonResult } from "../util/json-value"
 import { FileCommand } from "../command/file-command"
-import { WebMcpProfile } from "@/mcp/webmcp-profile"
+import * as WebMcpLaunch from "@/mcp/webmcp-launch"
 // Single source of truth for the public config schema URL. Written into
 // every user's ax-code.json on first load, into legacy-TOML migrations,
 // and into remote wellknown configs that omit `$schema`. See issue #17.
@@ -1935,7 +1935,7 @@ export namespace Config {
    * two can never drift apart.
    */
   function productDefaultWebMcpEntry() {
-    return WebMcpProfile.config({ allowedOrigins: [], read: true, interact: true }, false)
+    return WebMcpLaunch.config({ allowedOrigins: [], read: true, interact: true }, false)
   }
 
   /**
@@ -2101,7 +2101,7 @@ export namespace Config {
     // drifted or hand-edited stored command does not survive the toggle.
     const normalized =
       "webmcp" in entry && entry.webmcp !== undefined && entry.type === "local"
-        ? WebMcpProfile.config(entry.webmcp, enabled)
+        ? WebMcpLaunch.config(entry.webmcp, enabled)
         : { ...entry, enabled }
     const updated = patchJsonc(before, { mcp: { [name]: normalized } })
     // Validate before writing: a malformed result must never replace the file.

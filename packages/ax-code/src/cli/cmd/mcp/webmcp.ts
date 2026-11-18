@@ -41,7 +41,7 @@ export const McpWebMcpCommand = cmd({
         describe: "Launch a vendored, integrity-pinned bridge install (requires the managed allowVendored requirement)",
       }),
   async handler(args) {
-    const { WebMcpProfile } = await import("@/mcp/webmcp-profile")
+    const WebMcpLaunch = await import("@/mcp/webmcp-launch")
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(args.name)) {
       throw new Error("MCP server name must contain 1-64 ASCII letters, digits, underscores or hyphens")
     }
@@ -50,7 +50,7 @@ export const McpWebMcpCommand = cmd({
     if (args.persistentProfile && args.headless) {
       throw new Error("Use either --headless or --persistent-profile, not both: a persistent profile is never headless")
     }
-    const config = WebMcpProfile.config(
+    const config = WebMcpLaunch.config(
       {
         allowedOrigins: args.origin ?? [],
         headless: args.headless,
