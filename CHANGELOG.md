@@ -14,6 +14,12 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Preserve the previous private GPU credential when reconnecting fails, without overwriting a concurrent replacement.
+- Re-encrypt plaintext provider credentials beside a valid encryption canary and remove stale inline private GPU keys.
+- Keep dismissed message-fork requests from replacing newer routes or dialogs, and preserve prompt attachments while caches are pruned.
+- Retain gateway request IDs and nested socket diagnostics when streams fail, preserving partial output without automatic replay.
+- Keep project initialization, maintenance, shutdown and configuration refresh from waiting on their own lifecycle work.
+- Reject incomplete authoritative verification evidence and retain original evidence sets across reruns.
 - Keep virtualized model picker rows stable during mouse hover and selection.
 - Preserve separate model input limits when calibrating context budgets.
 - Verify rendered request prefixes before reusing measured token counts, avoiding duplicate tool-output estimates and stale measurements.
