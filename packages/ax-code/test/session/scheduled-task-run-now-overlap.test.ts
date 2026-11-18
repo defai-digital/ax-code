@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { ScheduledTask } from "../../src/session/scheduled-task"
+import { TaskQueueID } from "../../src/session/schema"
 import { TaskQueueTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { eq } from "../../src/storage/db"
@@ -280,7 +281,7 @@ describe("ScheduledTask run-now overlap protection", () => {
     })
   })
 
-  test("run-now dispatch failure finalizes the run row instead of wedging overlap", async () => {
+  test.each(["manual", "scheduled"] as const)("%s dispatch failure settles the queue and run", async (trigger) => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -292,16 +293,47 @@ describe("ScheduledTask run-now overlap protection", () => {
           prompt: "Fail loudly.",
           schedule: { type: "once", runAt: now + 60_000 },
         })
-        await expect(ScheduledTask.runNow(task.id)).rejects.toThrow("boom dispatch")
+        if (trigger === "manual") {
+          await expect(ScheduledTask.runNow(task.id)).rejects.toThrow("boom dispatch")
+        } else {
+          expect(await ScheduledTask.runDue(now + 7 * 60_000)).toEqual([])
+        }
         const runs = await ScheduledTask.listRuns({ taskID: task.id })
-        expect(runs.filter((run) => run.status === "running")).toHaveLength(0)
-        expect(runs.some((run) => run.status === "failed" && (run.error ?? "").includes("boom dispatch"))).toBe(true)
+        expect(runs).toHaveLength(1)
+        const [run] = runs
+        expect(run).toMatchObject({ status: "failed", error: "boom dispatch", queueID: expect.any(String) })
+        expect(await TaskQueue.get(TaskQueueID.make(run.queueID!))).toMatchObject({
+          status: "failed",
+          error: "boom dispatch",
+        })
 
-        // The wedged-run regression: the next run-now must not be blocked by
-        // overlap protection for deadline+grace.
         vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
         const second = await ScheduledTask.runNow(task.id)
-        expect(second.queueItem).toBeDefined()
+        expect(second.queueItem?.id).toBeDefined()
+        expect(second.queueItem?.id).not.toBe(run.queueID)
+      },
+    })
+  })
+
+  test("dispatch failure preserves a queue item already claimed for execution", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementationOnce(async (item) => {
+          expect((await TaskQueue.claimForExecution(item.id)).kind).toBe("claimed")
+          throw new Error("boom dispatch")
+        })
+        const task = await ScheduledTask.create({
+          title: "Concurrent dispatch",
+          prompt: "Run once.",
+          schedule: { type: "once", runAt: Date.now() + 60_000 },
+        })
+        await expect(ScheduledTask.runNow(task.id)).rejects.toThrow("boom dispatch")
+        const [run] = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(run).toMatchObject({ status: "running", queueID: expect.any(String) })
+        expect(await TaskQueue.get(TaskQueueID.make(run.queueID!))).toMatchObject({ status: "running" })
+        await expect(ScheduledTask.runNow(task.id)).rejects.toMatchObject({ status: 409 })
       },
     })
   })

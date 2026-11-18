@@ -761,6 +761,8 @@ export namespace ScheduledTask {
     })
   }
 
+  type ClaimedQueueRun = { task: Info; run: RunInfo; queueItem: TaskQueue.Info }
+
   export async function runNow(id: ScheduledTaskID): Promise<RunNowResult> {
     const current = await get(id)
     const now = Date.now()
@@ -771,50 +773,38 @@ export namespace ScheduledTask {
       reconcileOrphanRuns(id, now, deadlineMs)
       return hasOpenRun(id, now, deadlineMs)
     })
-    let claimedQueueID: TaskQueueID | undefined
+    let claimed: ClaimedQueueRun
     try {
       if (current.workflowTemplateID) return await runInWorkspace(current, () => runWorkflowNow(current))
-      const { task, run, queued } = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction(
-        (db) => {
-          const task = readRunNowTask(db, current, now)
-          const queuedItem = TaskQueue.enqueueInTransaction(db, scheduledQueueInput(task, now, "manual"), {
-            now,
-            directory: task.directory,
+      claimed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+        const task = readRunNowTask(db, current, now)
+        const queuedItem = TaskQueue.enqueueInTransaction(db, scheduledQueueInput(task, now, "manual"), {
+          now,
+          directory: task.directory,
+        })
+        const runRow = insertRunRow(db, {
+          taskID: id,
+          triggerType: "manual",
+          status: "running",
+          occurrenceAt: now,
+          coalescedCount: 1,
+          queueID: queuedItem.id,
+          now,
+        })
+        const row = db
+          .update(ScheduledTaskTable)
+          .set({
+            last_queue_id: queuedItem.id,
+            last_run_at: now,
+            error: null,
+            time_updated: now,
           })
-          const runRow = insertRunRow(db, {
-            taskID: id,
-            triggerType: "manual",
-            status: "running",
-            occurrenceAt: now,
-            coalescedCount: 1,
-            queueID: queuedItem.id,
-            now,
-          })
-          const row = db
-            .update(ScheduledTaskTable)
-            .set({
-              last_queue_id: queuedItem.id,
-              last_run_at: now,
-              error: null,
-              time_updated: now,
-            })
-            .where(eq(ScheduledTaskTable.id, id))
-            .returning()
-            .get()
-          if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
-          return { task: fromRow(row), run: runRow, queued: queuedItem }
-        },
-      )
-      claimedQueueID = queued.id
-      await TaskQueue.publishEnqueued(queued)
-      publishUpdated(task)
-      publishFired(task, run)
-      // Commit the relationship before detached execution begins. Otherwise a
-      // very fast failure can record an error and then have it erased by this
-      // metadata write racing behind the executor.
-      const { TaskQueueExecutor } = await import("./task-queue-executor")
-      const queueItem = await TaskQueueExecutor.start(queued)
-      return { task, queueItem }
+          .where(eq(ScheduledTaskTable.id, id))
+          .returning()
+          .get()
+        if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+        return { task: fromRow(row), run: runRow, queueItem: queuedItem }
+      })
     } catch (error) {
       if (error instanceof RunNowClaimRejected) throw error
       if (error instanceof WorkflowDispatchRecorded) {
@@ -822,19 +812,31 @@ export namespace ScheduledTask {
         // surface the original dispatch error without double-recording.
         throw error.original
       }
-      if (claimedQueueID) {
-        // The run row exists and is `running`: finalize it through the queue
-        // outcome path (like the scheduler tick's dispatch failure does) so a
-        // failed dispatch cannot wedge overlap protection for
-        // deadline+grace or bypass the consecutive-failure policy.
-        await recordQueueOutcome(id, "failed", error, claimedQueueID).catch((recordError) => {
-          log.warn("scheduled task dispatch failure record failed", { taskID: id, error: recordError })
-        })
-        throw error
-      }
       await recordRunFailure(id, error).catch((recordError) => {
         log.warn("scheduled task failure record failed", { taskID: id, error: recordError })
       })
+      throw error
+    }
+    return dispatchClaimedRun(claimed)
+  }
+
+  async function dispatchClaimedRun({ task, run, queueItem }: ClaimedQueueRun): Promise<RunNowResult> {
+    try {
+      await TaskQueue.publishEnqueued(queueItem)
+      publishUpdated(task)
+      publishFired(task, run)
+      const { TaskQueueExecutor } = await import("./task-queue-executor")
+      return { task, queueItem: await TaskQueueExecutor.start(queueItem) }
+    } catch (error) {
+      try {
+        // Only an unclaimed item from this dispatch can be failed here.
+        // An executor that claimed the item owns the run outcome.
+        if (await TaskQueue.failPendingDispatch(queueItem, toErrorMessage(error))) {
+          await recordQueueOutcome(task.id, "failed", error, queueItem.id)
+        }
+      } catch (recordError) {
+        log.warn("scheduled task dispatch failure record failed", { taskID: task.id, error: recordError })
+      }
       throw error
     }
   }
@@ -1013,25 +1015,21 @@ export namespace ScheduledTask {
       const next = nextRunAt(task.schedule, coalesced.lastOccurrence)
       const claimed = claimDueTask(task, next, now, coalesced.count)
       if (!claimed) continue
-      publishUpdated(claimed.task)
-      publishFired(claimed.task, claimed.run)
-      if (!claimed.queueItem) continue
-      await TaskQueue.publishEnqueued(claimed.queueItem)
       try {
-        const { TaskQueueExecutor } = await import("./task-queue-executor")
-        const queueItem = await TaskQueueExecutor.start(claimed.queueItem)
-        results.push({ task: claimed.task, queueItem })
+        results.push(await dispatchClaimedRun(claimed))
       } catch (error) {
-        await recordQueueOutcome(task.id, "failed", error, claimed.queueItem.id).catch((recordError) => {
-          log.warn("scheduled task dispatch failure record failed", { taskID: task.id, error: recordError })
-        })
         log.warn("scheduled task dispatch failed", { taskID: task.id, error })
       }
     }
     return results
   }
 
-  function claimDueTask(task: Info, next: number | undefined, now: number, coalescedCount: number) {
+  function claimDueTask(
+    task: Info,
+    next: number | undefined,
+    now: number,
+    coalescedCount: number,
+  ): ClaimedQueueRun | undefined {
     return SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       // Authoritative overlap guard: a manual run-now can insert its
       // `running` row between this caller's hasOpenRun read and this

@@ -846,6 +846,18 @@ export namespace TaskQueue {
     return result.item
   }
 
+  export async function failPendingDispatch(observed: Info, error: string): Promise<boolean> {
+    const failed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      const current = findProjectItem(db, observed.id)
+      if (!current || (current.status !== "queued" && current.status !== "waiting_for_idle")) return undefined
+      if (!sameQueueAttempt(observed, current)) return undefined
+      return writeStatus(db, current, { status: "failed", error })
+    })
+    if (!failed) return false
+    await publishStatus(failed)
+    return true
+  }
+
   export async function finishExecution(
     attempt: ExecutionAttempt,
     input: StatusUpdate & { status: "completed" | "failed" | "cancelled"; cleanup?: TimeoutReservation },
