@@ -103,6 +103,33 @@ test("custom API save surfaces rollback failure alongside the original failure",
   })
 })
 
+test("a failed refresh after a custom API save restores both config and auth", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await CustomApiProvider.upsert(providerID, providerInput("previous-credential"))
+      const previous = (await Config.getGlobal()).provider?.[providerID]
+      const failure = new Error("Refresh listener failed")
+      const listener = (event: { directory?: string }) => {
+        if (event.directory !== "global") return
+        GlobalBus.off("event", listener)
+        throw failure
+      }
+      GlobalBus.on("event", listener)
+      try {
+        await expect(
+          CustomApiProvider.upsert(providerID, { ...providerInput("new-credential"), name: "Replacement" }),
+        ).rejects.toBe(failure)
+        expect((await Config.getGlobal()).provider?.[providerID]).toEqual(previous)
+        expect(await Auth.get(providerID)).toEqual({ type: "api", key: "previous-credential" })
+      } finally {
+        GlobalBus.off("event", listener)
+      }
+    },
+  })
+})
+
 test("a failed custom API delete does not rewrite a peer credential", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({

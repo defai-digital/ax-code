@@ -50,6 +50,8 @@ import { ProjectConfigTrust } from "./project-config-trust"
 import { isFileUrl } from "../util/file-url"
 import { mergeConfig, migrateDeprecatedModeIntoAgent } from "./merge-policy"
 import { editConfigFile, editConfigFileWithRollback, parseConfig } from "./file-update"
+import type { ConfigFileEditOptions, ConfigFileRollback } from "./file-transaction"
+import { withRollback } from "../util/rollback"
 import { restrictUntrustedAgent, restrictUntrustedConfig, tightenIsolationFloor } from "./untrusted-policy"
 
 const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
@@ -1619,26 +1621,20 @@ export namespace Config {
     })
   }
 
-  function globalPatch(config: Info): (before: string | undefined) => string {
+  function patchGlobalConfig(config: Info): Promise<ConfigFileRollback<Info>> {
     // Patch raw JSONC in place to retain comments and unevaluated references.
-    return (before) => patchJsonc(before ?? "{}", config)
+    return editGlobalConfig((before) => patchJsonc(before ?? "{}", config), {
+      enablementOnly: isProviderEnablementUpdate(config),
+    })
   }
 
-  export async function updateGlobal(config: Info) {
-    const filepath = globalConfigFile()
-    const next = await editConfigFile(filepath, globalPatch(config))
-
-    await refreshAfterGlobalUpdate(isProviderEnablementUpdate(config))
-
-    return next
+  export async function updateGlobal(config: Info): Promise<Info> {
+    return (await patchGlobalConfig(config)).value
   }
 
   /** Patch global config and retain a restore operation for that exact write. */
   export async function updateGlobalWithRollback(config: Info): Promise<() => Promise<boolean>> {
-    const filepath = globalConfigFile()
-    const updated = await editConfigFileWithRollback(filepath, globalPatch(config))
-    if (!updated) throw new Error("Global config patch produced no edit")
-    return refreshGlobalEdit(filepath, updated.rollback, isProviderEnablementUpdate(config))
+    return (await patchGlobalConfig(config)).rollback
   }
 
   /**
@@ -1666,83 +1662,64 @@ export namespace Config {
     global.reset()
   }
 
+  function editProviderEntry(text: string, providerID: string, provider: Provider | undefined): string {
+    return applyEdits(
+      text,
+      modify(text, ["provider", providerID], provider, {
+        formattingOptions: { insertSpaces: true, tabSize: 2 },
+      }),
+    )
+  }
+
   /** Replace one global provider without retaining stale nested model entries. */
-  export async function setGlobalProvider(providerID: string, provider: Provider) {
-    const filepath = globalConfigFile()
-    const next = await editConfigFile(
-      filepath,
-      (before) => {
+  export async function setGlobalProvider(providerID: string, provider: Provider): Promise<Info> {
+    const next = await editGlobalConfig(
+      (before, filepath) => {
         const text = before ?? "{}"
         parseConfig(text, filepath)
-        return applyEdits(
-          text,
-          modify(text, ["provider", providerID], provider, {
-            formattingOptions: { insertSpaces: true, tabSize: 2 },
-          }),
-        )
+        return editProviderEntry(text, providerID, provider)
       },
       { skipUnchanged: true },
     )
-    await refreshAfterGlobalUpdate(false)
-    return next
-  }
-
-  function providerRemoval(
-    filepath: string,
-    providerID: string,
-    guard?: (provider: Provider) => boolean,
-  ): (before: string | undefined) => string | undefined {
-    return (before) => {
-      const text = before ?? "{}"
-      const existing = parseConfig(text, filepath)
-      const providers = existing.provider
-      if (!providers || !Object.hasOwn(providers, providerID)) return
-      const provider = providers[providerID]
-      if (guard && !guard(provider)) return
-      return applyEdits(
-        text,
-        modify(text, ["provider", providerID], undefined, {
-          formattingOptions: { insertSpaces: true, tabSize: 2 },
-        }),
-      )
-    }
+    return next.value
   }
 
   /** Remove exactly one provider from the writable global config. */
   export async function removeGlobalProvider(providerID: string): Promise<boolean> {
-    const filepath = globalConfigFile()
-    const removed = await editConfigFile(filepath, providerRemoval(filepath, providerID))
-    if (removed) await refreshAfterGlobalUpdate(false)
-    return removed !== undefined
+    return (await removeGlobalProviderWithRollback(providerID)) !== undefined
   }
 
-  async function refreshGlobalEdit(
-    filepath: string,
-    restoreFile: () => Promise<boolean>,
-    enablementOnly: boolean,
-  ): Promise<() => Promise<boolean>> {
+  type GlobalEditOptions = ConfigFileEditOptions & { enablementOnly?: boolean }
+
+  function editGlobalConfig(
+    edit: (before: string | undefined, filepath: string) => string,
+    options?: GlobalEditOptions,
+  ): Promise<ConfigFileRollback<Info>>
+  function editGlobalConfig(
+    edit: (before: string | undefined, filepath: string) => string | undefined,
+    options?: GlobalEditOptions,
+  ): Promise<ConfigFileRollback<Info> | undefined>
+  async function editGlobalConfig(
+    edit: (before: string | undefined, filepath: string) => string | undefined,
+    { enablementOnly = false, ...options }: GlobalEditOptions = {},
+  ): Promise<ConfigFileRollback<Info> | undefined> {
+    const filepath = globalConfigFile()
+    const edited = await editConfigFileWithRollback(filepath, (before) => edit(before, filepath), options)
+    if (!edited) return
     const restore = async (): Promise<boolean> => {
       if (globalConfigFile() !== filepath) return false
-      const restored = await restoreFile()
+      const restored = await edited.rollback()
       if (restored) await refreshAfterGlobalUpdate(enablementOnly)
       return restored
     }
     let pending: Promise<boolean> | undefined
     const rollback = (): Promise<boolean> => (pending ??= restore())
-    try {
-      await refreshAfterGlobalUpdate(enablementOnly)
-    } catch (error) {
-      try {
-        await rollback()
-      } catch (rollbackError) {
-        throw new AggregateError(
-          [error, rollbackError],
-          "Failed to refresh global config and restore its previous revision",
-        )
-      }
-      throw error
-    }
-    return rollback
+    await withRollback(
+      () => refreshAfterGlobalUpdate(enablementOnly),
+      rollback,
+      "Failed to refresh global config and restore its previous revision",
+    )
+    return { value: edited.value, rollback }
   }
 
   /** Restore the captured raw document only while this removal still owns it. */
@@ -1750,10 +1727,14 @@ export namespace Config {
     providerID: string,
     guard?: (provider: Provider) => boolean,
   ): Promise<(() => Promise<boolean>) | undefined> {
-    const filepath = globalConfigFile()
-    const removed = await editConfigFileWithRollback(filepath, providerRemoval(filepath, providerID, guard))
-    if (!removed) return
-    return refreshGlobalEdit(filepath, removed.rollback, false)
+    const removed = await editGlobalConfig((before, filepath) => {
+      const text = before ?? "{}"
+      const providers = parseConfig(text, filepath).provider
+      if (!providers || !Object.hasOwn(providers, providerID)) return
+      if (guard && !guard(providers[providerID])) return
+      return editProviderEntry(text, providerID, undefined)
+    })
+    return removed?.rollback
   }
 
   export async function directories() {

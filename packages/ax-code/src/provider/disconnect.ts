@@ -1,5 +1,6 @@
 import { Auth } from "@/auth"
 import { Config } from "@/config/config"
+import { withRollback } from "@/util/rollback"
 import { isDedicatedPrivateGpuProviderID } from "./private-gpu/presets"
 
 type DisconnectOptions = {
@@ -12,19 +13,9 @@ export async function removeProviderConnection(providerID: string, options: Disc
   const removeAuth = await Auth.prepareRemoval(providerID)
   const rollback = await Config.removeGlobalProviderWithRollback(providerID, options.removeConfigIf)
   if (options.requireConfigRemoval && !rollback) return false
-  let removed: boolean
-  try {
-    removed = await removeAuth()
-  } catch (cause) {
-    // A failed credential publication leaves auth unchanged. Restore only the
-    // config revision this operation still owns, without rewriting auth.
-    try {
-      await rollback?.()
-    } catch (rollbackError) {
-      throw new AggregateError([cause, rollbackError], "Failed to disconnect provider and restore its config")
-    }
-    throw cause
-  }
+  // A failed credential publication leaves auth unchanged. Restore only the
+  // config revision this operation still owns, without rewriting auth.
+  const removed = await withRollback(removeAuth, rollback, "Failed to disconnect provider and restore its config")
   // Reconnect writes its credential before its config. If it replaced the
   // credential we observed, retain its config or restore our captured version.
   if (!removed) await rollback?.()

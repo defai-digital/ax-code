@@ -10,6 +10,7 @@ import { isRetiredProviderID } from "@/provider/retired-providers"
 import { isLocalHostname } from "@/util/local-host"
 import { isNonChatModelID, skuKey } from "@/provider/model-selectability"
 import { isRecord } from "@/util/record"
+import { withRollback } from "@/util/rollback"
 import { Ssrf } from "@/util/ssrf"
 import { resolveCapabilityEvidence, withCapabilityEvidence } from "./capability-evidence"
 import { removeProviderConnection } from "./disconnect"
@@ -646,21 +647,11 @@ export namespace CustomApiProvider {
       models,
     })
     const rollback = input.apiKey !== undefined ? await Auth.setApiKeyWithRollback(providerID, input.apiKey) : undefined
-    try {
-      await Config.setGlobalProvider(providerID, nextProvider)
-    } catch (cause) {
-      if (rollback) {
-        try {
-          await rollback()
-        } catch (rollbackError) {
-          throw new AggregateError(
-            [cause, rollbackError],
-            "Failed to save custom API provider and restore its credential",
-          )
-        }
-      }
-      throw cause
-    }
+    await withRollback(
+      () => Config.setGlobalProvider(providerID, nextProvider),
+      rollback,
+      "Failed to save custom API provider and restore its credential",
+    )
     return viewFromProvider(providerID, nextProvider, rollback !== undefined || previousAuth?.type === "api")
   }
 

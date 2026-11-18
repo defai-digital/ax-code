@@ -3,6 +3,7 @@ import type { BigIntStats } from "node:fs"
 import { FileLock } from "../util/filelock"
 import { Filesystem } from "../util/filesystem"
 import { Lock } from "../util/lock"
+import { withRollback } from "../util/rollback"
 import { ConfigPaths } from "./paths"
 
 export type ConfigFileEdit<T> = { text: string; value: T }
@@ -90,23 +91,14 @@ export async function transactConfigFileWithRollback<T>(
   return withConfigFileLock(filepath, async (before) => {
     const result = await publishCandidate(filepath, before, edit, options)
     if (!result) return
-    let revision: FileRevision | undefined
-    if (result.written) {
-      try {
-        revision = await fs.lstat(filepath, { bigint: true })
-      } catch (error) {
-        // No receipt can be issued. Restore before releasing the write locks.
-        try {
-          await restoreConfigFile(filepath, before)
-        } catch (rollbackError) {
-          throw new AggregateError(
-            [error, rollbackError],
-            "Failed to capture config write ownership and restore config",
-          )
-        }
-        throw error
-      }
-    }
+    // If no receipt can be issued, restore before releasing the write locks.
+    const revision = result.written
+      ? await withRollback(
+          () => fs.lstat(filepath, { bigint: true }),
+          () => restoreConfigFile(filepath, before),
+          "Failed to capture config write ownership and restore config",
+        )
+      : undefined
     let rollback: Promise<boolean> | undefined
     return {
       value: result.candidate.value,

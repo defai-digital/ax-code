@@ -1,5 +1,6 @@
 import { Auth } from "@/auth"
 import { Config } from "@/config/config"
+import { withRollback } from "@/util/rollback"
 import { removeProviderConnection } from "../disconnect"
 import {
   PRIVATE_GPU_REQUEST_TIMEOUT_MS,
@@ -76,18 +77,11 @@ export async function connectPrivateGpu(input: {
     apiKey: input.apiKey,
   })
   const rollback = await Auth.setApiKeyWithRollback(vendor.id, input.apiKey.trim())
-  try {
-    await Config.updateGlobal({
-      provider: privateGpuProviderConfig(vendor, discovered.baseURL, discovered.models),
-    })
-  } catch (error) {
-    try {
-      await rollback()
-    } catch (rollbackError) {
-      throw new AggregateError([error, rollbackError], "Failed to save private GPU config and restore its credential")
-    }
-    throw error
-  }
+  await withRollback(
+    () => Config.updateGlobal({ provider: privateGpuProviderConfig(vendor, discovered.baseURL, discovered.models) }),
+    rollback,
+    "Failed to save private GPU config and restore its credential",
+  )
   return {
     providerID: vendor.id,
     baseURL: discovered.baseURL,

@@ -43,6 +43,7 @@ import { isSupportedHost } from "@/provider/ax-engine/platform"
 import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/model-cache"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
 import { toErrorMessage } from "@/util/error-message"
+import { withRollback } from "@/util/rollback"
 import {
   DEFAULT_SETUP_PROVIDER_IDS,
   dedupeApiCloudVendorVariants,
@@ -258,22 +259,6 @@ async function axEngineConnectionView() {
       error: toErrorMessage(error),
     }
   }
-}
-
-async function restoreAxEngineConnection(
-  rollback: () => Promise<boolean>,
-  cause: unknown,
-  operation: "configuration" | "credential",
-): Promise<never> {
-  try {
-    await rollback()
-  } catch (restoreError) {
-    throw new AggregateError(
-      [cause, restoreError],
-      `Failed to update AX Engine connection and restore its ${operation}`,
-    )
-  }
-  throw cause
 }
 
 export const ProviderRoutes = lazy(() =>
@@ -544,12 +529,11 @@ export const ProviderRoutes = lazy(() =>
               const rollback = await Config.updateGlobalWithRollback({
                 provider: axEngineManagedProviderConfig(providerName),
               })
-              let removed: boolean
-              try {
-                removed = await removeAuth()
-              } catch (error) {
-                return await restoreAxEngineConnection(rollback, error, "configuration")
-              }
+              const removed = await withRollback(
+                removeAuth,
+                rollback,
+                "Failed to update AX Engine connection and restore its configuration",
+              )
               if (!removed) {
                 await rollback()
                 return credentialConflict()
@@ -590,16 +574,17 @@ export const ProviderRoutes = lazy(() =>
               ? await prepared.write(apiKey)
               : await Auth.setApiKeyWithRollback(AX_ENGINE_PROVIDER_ID, apiKey)
             if (!rollback) return credentialConflict()
-            try {
-              await Config.updateGlobal({
-                provider: axEngineAttachProviderConfig({
-                  providerName,
-                  baseURL: probe.baseURL,
+            await withRollback(
+              () =>
+                Config.updateGlobal({
+                  provider: axEngineAttachProviderConfig({
+                    providerName,
+                    baseURL: probe.baseURL,
+                  }),
                 }),
-              })
-            } catch (error) {
-              return await restoreAxEngineConnection(rollback, error, "credential")
-            }
+              rollback,
+              "Failed to update AX Engine connection and restore its credential",
+            )
 
             // Attach mode never owns the external process. Release any managed
             // process AX Code started earlier so it does not keep model memory.
