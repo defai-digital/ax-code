@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.0] - 2026-11-18
+
+### Changed
+
+- Publish the paired SDK 2.6.88.
+
+### Fixed
+
+- Register workflow phases and reserve child budgets atomically across linked worktrees. Resume dispatch after an interrupted start.
+- Enforce workflow concurrency and pacing when claiming queue items. Hold the slot while a timed-out child stops.
+- Tie queue updates, retries, and cancellation to the execution attempt they observed.
+- Settle active workflow and queue dispatches before deleting a schedule. Preserve a schedule when a replacement occurrence is active.
+- Validate inline workflow dispatch before it starts and preserve cancellation against late results.
+- Keep nested subagent work and background handoffs visible when unrelated task history fills the queue.
+
 ## [7.30.33] - 2026-11-18
 
 ### Changed
