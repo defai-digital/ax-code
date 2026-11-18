@@ -90,7 +90,7 @@ describe("ScheduledTask workflow outcome recording", () => {
     })
   })
 
-  test("a late outcome for an orphan-swept run applies the failure policy exactly once", async () => {
+  test.each(["completed", "failed"] as const)("adopts a late %s workflow outcome exactly once", async (status) => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -117,13 +117,19 @@ describe("ScheduledTask workflow outcome recording", () => {
               .run()
           })
 
-          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", new Error("workflow really failed"))
-          const adopted = await ScheduledTask.get(task.id)
-          expect(adopted.error).toBe("workflow really failed")
+          const error = new Error("workflow really failed")
+          const adopted = await ScheduledTask.recordWorkflowOutcome(task.id, status, error, "wfr_outcome_orphan")
+          const message = status === "failed" ? error.message : undefined
+          expect(adopted.error).toBe(message)
+          const run = (await ScheduledTask.listRuns({ taskID: task.id })).find(
+            (candidate) => candidate.workflowRunID === "wfr_outcome_orphan",
+          )
+          expect(run?.status).toBe(status)
+          expect(run?.error).toBe(message)
           expect(adopted.nextRunAt).toBeDefined()
 
           await new Promise((resolve) => setTimeout(resolve, 20))
-          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", new Error("workflow really failed"))
+          await ScheduledTask.recordWorkflowOutcome(task.id, status, error, "wfr_outcome_orphan")
           const repeat = await ScheduledTask.get(task.id)
           expect(repeat.nextRunAt).toBe(adopted.nextRunAt)
         } finally {

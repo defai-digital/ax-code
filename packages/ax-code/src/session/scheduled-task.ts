@@ -932,7 +932,7 @@ export namespace ScheduledTask {
   async function recordRunFailure(id: ScheduledTaskID, error: unknown): Promise<Info> {
     const now = Date.now()
     const message = toErrorMessage(error)
-    const { task, run } = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+    const outcome = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const row = db
         .update(ScheduledTaskTable)
         .set({
@@ -953,13 +953,9 @@ export namespace ScheduledTask {
         error: message,
         now,
       })
-      return { task: fromRow(row), run: runRow }
+      return { run: runRow, ...applyFailurePolicy(db, row, now) }
     })
-    if (task.status === "active") await applyFailurePolicy(task, now)
-    const latest = await get(id)
-    publishUpdated(latest)
-    emitRunEvents(id, "failed", run, message)
-    return latest
+    return publishOutcome(id, outcome)
   }
 
   export async function runDue(now = Date.now()): Promise<RunNowResult[]> {
@@ -1399,16 +1395,14 @@ export namespace ScheduledTask {
   // neither do orphaned runs: a backend restart abandoning an in-flight run
   // is infrastructure noise, not a task failure — counting it lets repeated
   // deploys auto-pause a healthy schedule.
-  function consecutiveFailures(taskID: ScheduledTaskID): number {
-    const rows = SessionShard.storeForProject(Instance.project.id).use((db) => {
-      return db
-        .select({ status: ScheduledTaskRunTable.status, error: ScheduledTaskRunTable.error })
-        .from(ScheduledTaskRunTable)
-        .where(eq(ScheduledTaskRunTable.task_id, taskID))
-        .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
-        .limit(RUN_HISTORY_LIMIT)
-        .all()
-    })
+  function consecutiveFailures(db: Database.TxOrDb, taskID: ScheduledTaskID): number {
+    const rows = db
+      .select({ status: ScheduledTaskRunTable.status, error: ScheduledTaskRunTable.error })
+      .from(ScheduledTaskRunTable)
+      .where(eq(ScheduledTaskRunTable.task_id, taskID))
+      .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
+      .limit(RUN_HISTORY_LIMIT)
+      .all()
     let count = 0
     for (const row of rows) {
       if (row.status === "failed" || row.status === "timeout") {
@@ -1469,137 +1463,119 @@ export namespace ScheduledTask {
     )
   }
 
+  type OutcomeSource = { queueID: TaskQueueID } | { workflowRunID?: string }
+  type OutcomeStatus = "completed" | "failed" | "timeout"
+  type TaskRow = typeof ScheduledTaskTable.$inferSelect
+  type RecordedOutcome = { run: RunInfo; row?: TaskRow; pausedAfter?: number }
+
   export async function recordQueueOutcome(
     id: ScheduledTaskID,
     status: "completed" | "failed",
-    error?: unknown,
-    queueID?: TaskQueueID,
-    workflowRunID?: string,
+    error: unknown,
+    queueID: TaskQueueID,
   ): Promise<Info> {
-    const now = Date.now()
-    const runStatus: RunStatus = status === "completed" ? "completed" : isTimeoutError(error) ? "timeout" : "failed"
-    const errorMessage = status === "failed" ? toErrorMessage(error) : undefined
+    const message = status === "failed" ? toErrorMessage(error) : undefined
+    const runStatus = message?.toLowerCase().includes("timed out") ? "timeout" : status
+    return recordOutcome(id, { queueID }, runStatus, message)
+  }
 
-    // Idempotent, supersede-safe terminal transition: only a still-running row
-    // keyed by this queue id moves to terminal. Duplicate or late callbacks no-op.
-    let run: RunInfo | undefined
-    if (queueID) {
-      run = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+  async function recordOutcome(
+    id: ScheduledTaskID,
+    source: OutcomeSource,
+    status: OutcomeStatus,
+    error: string | undefined,
+  ): Promise<Info> {
+    const projectID = Instance.project.id
+    const now = Date.now()
+    const outcome = SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
+      let run: RunInfo | undefined
+      if ("queueID" in source) {
         const row = db
           .update(ScheduledTaskRunTable)
-          .set({ status: runStatus, error: errorMessage, time_completed: now, time_updated: now })
-          .where(and(eq(ScheduledTaskRunTable.queue_id, queueID), eq(ScheduledTaskRunTable.status, "running")))
+          .set({ status, error: error ?? null, time_completed: now, time_updated: now })
+          .where(
+            and(
+              eq(ScheduledTaskRunTable.task_id, id),
+              eq(ScheduledTaskRunTable.project_id, projectID),
+              eq(ScheduledTaskRunTable.queue_id, source.queueID),
+              eq(ScheduledTaskRunTable.status, "running"),
+            ),
+          )
           .returning()
           .get()
-        return row ? runFromRow(row) : undefined
-      })
-      // Only the callback that finalized the run may change its task summary
-      // or retry policy. A duplicate or conflicting terminal callback must not
-      // disable a failed one-shot or overwrite a successful outcome.
-      if (!run) return get(id)
-    }
+        if (row) run = runFromRow(row)
+      } else {
+        run = claimWorkflowOutcomeRun(db, id, status, error, source.workflowRunID, now)
+      }
+      // Only the callback that settles the run may update the schedule.
+      if (!run) return undefined
 
-    // Guarded summary write: only update the task row if this queue or workflow
-    // id is still the most recent one, so an outcome from a superseded run cannot
-    // overwrite a newer run's state. The pre-read happens inside the same store
-    // block so the one-shot disable decision and the write stay consistent.
-    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const conditions = [eq(ScheduledTaskTable.id, id)]
-      if (queueID) conditions.push(eq(ScheduledTaskTable.last_queue_id, queueID))
-      if (workflowRunID) conditions.push(eq(ScheduledTaskTable.last_workflow_run_id, workflowRunID))
+      // A superseded callback can close its own run. Its retry policy and
+      // summary belong to the schedule only while it is the latest run.
+      const conditions = [eq(ScheduledTaskTable.id, id), eq(ScheduledTaskTable.project_id, projectID)]
+      if ("queueID" in source) conditions.push(eq(ScheduledTaskTable.last_queue_id, source.queueID))
+      else if (source.workflowRunID) conditions.push(eq(ScheduledTaskTable.last_workflow_run_id, source.workflowRunID))
+
       const current = db
-        .select()
+        .select({ schedule: ScheduledTaskTable.schedule, status: ScheduledTaskTable.status })
         .from(ScheduledTaskTable)
         .where(and(...conditions))
         .get()
-      if (!current) return undefined
-      // A one-time task is disabled only by a successful run (PRD-2026-09-12).
-      // Failures keep it active so the failure policy below can retry it. A
-      // corrupt persisted schedule must not block the outcome write — only a
-      // row that provably parses as `once` is disabled here.
-      const currentSchedule = Schedule.safeParse(current.schedule)
+      if (!current) return { run }
+      const schedule = Schedule.safeParse(current.schedule)
       const disableOneShot =
-        runStatus === "completed" &&
-        current.status !== "disabled" &&
-        currentSchedule.success &&
-        currentSchedule.data.type === "once"
+        status === "completed" && current.status !== "disabled" && schedule.success && schedule.data.type === "once"
       const row = db
         .update(ScheduledTaskTable)
         .set({
-          error: status === "failed" ? errorMessage : null,
+          error: error ?? null,
           time_updated: now,
           ...(disableOneShot ? { status: "disabled" as const, next_run_at: null } : {}),
         })
         .where(and(...conditions))
         .returning()
         .get()
-      return row ? fromRow(row) : undefined
+
+      // Keep run history, the summary, and backoff in the same transaction.
+      // A failed write must leave the outcome available for another callback.
+      return row && status !== "completed" ? { run, ...applyFailurePolicy(db, row, now) } : { run, row }
     })
+    return publishOutcome(id, outcome)
+  }
 
-    if (!task) {
-      // Superseded or vanished — nothing to update; keep the run row as the record.
-      if (run) emitRunEvents(id, runStatus, run, errorMessage)
-      return get(id)
+  async function publishOutcome(id: ScheduledTaskID, outcome?: RecordedOutcome): Promise<Info> {
+    const task = outcome?.row ? fromRow(outcome.row) : await get(id)
+    if (!outcome) return task
+    if (outcome.pausedAfter !== undefined) {
+      log.warn("scheduled task auto-paused after repeated failures", { taskID: id, failures: outcome.pausedAfter })
+      publishFailedPersistently(task)
     }
-
-    if (status === "failed" && task.status === "active") {
-      await applyFailurePolicy(task, now)
-    }
-
-    publishUpdated(task)
-    if (run) emitRunEvents(id, runStatus, run, errorMessage)
+    if (outcome.row) publishUpdated(task)
+    if (outcome.run.status === "completed") publishSucceeded(task, outcome.run)
+    else publishFailed(task, outcome.run)
     return task
   }
 
-  function emitRunEvents(id: ScheduledTaskID, runStatus: RunStatus, run: RunInfo, errorMessage?: string) {
-    get(id)
-      .then((task) => {
-        if (runStatus === "completed") publishSucceeded(task, run)
-        else if (runStatus === "failed" || runStatus === "timeout") publishFailed(task, { ...run, error: errorMessage })
-      })
-      .catch((error) => {
-        log.warn("scheduled task run event publish failed", { taskID: id, error: toErrorMessage(error) })
-      })
-  }
-
-  function isTimeoutError(error: unknown): boolean {
-    return toErrorMessage(error).toLowerCase().includes("timed out")
-  }
-
-  // Bounded exponential cooldown on consecutive failures, then auto-pause. The
-  // counter is derived from run history (shards have no ALTER path for a column).
-  async function applyFailurePolicy(task: Info, now: number): Promise<void> {
-    const failures = consecutiveFailures(task.id)
-    if (failures >= MAX_CONSECUTIVE_FAILURES) {
-      const paused = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-        const row = db
-          .update(ScheduledTaskTable)
-          .set({
-            status: "paused",
-            error: `auto-paused after ${failures} consecutive failures: ${task.error ?? "unknown error"}`,
-            time_updated: now,
-          })
-          .where(and(eq(ScheduledTaskTable.id, task.id), eq(ScheduledTaskTable.status, "active")))
-          .returning()
-          .get()
-        return row ? fromRow(row) : undefined
-      })
-      if (paused) {
-        log.warn("scheduled task auto-paused after repeated failures", { taskID: task.id, failures })
-        publishFailedPersistently(paused)
-      }
-      return
-    }
+  // Bounded exponential cooldown on consecutive failures, then auto-pause.
+  function applyFailurePolicy(db: Database.TxOrDb, row: TaskRow, now: number): { row: TaskRow; pausedAfter?: number } {
+    if (row.status !== "active") return { row }
+    const failures = consecutiveFailures(db, row.id)
+    const pause = failures >= MAX_CONSECUTIVE_FAILURES
     const backoff = Math.min(FAILURE_BACKOFF_BASE_MS * 2 ** (failures - 1), FAILURE_BACKOFF_MAX_MS)
-    SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      db.update(ScheduledTaskTable)
-        .set({
-          next_run_at: sql`max(coalesce(${ScheduledTaskTable.next_run_at}, 0), ${now + backoff})`,
-          time_updated: now,
-        })
-        .where(and(eq(ScheduledTaskTable.id, task.id), eq(ScheduledTaskTable.status, "active")))
-        .run()
-    })
+    const updated = db
+      .update(ScheduledTaskTable)
+      .set(
+        pause
+          ? {
+              status: "paused",
+              error: `auto-paused after ${failures} consecutive failures: ${row.error ?? "unknown error"}`,
+            }
+          : { next_run_at: sql`max(coalesce(${ScheduledTaskTable.next_run_at}, 0), ${now + backoff})` },
+      )
+      .where(eq(ScheduledTaskTable.id, row.id))
+      .returning()
+      .get()
+    return updated ? { row: updated, pausedAfter: pause ? failures : undefined } : { row }
   }
 
   export async function recordWorkflowRun(id: ScheduledTaskID, workflowRunID: string): Promise<Info> {
@@ -1639,57 +1615,49 @@ export namespace ScheduledTask {
   // terminal run on every later sibling sync and each repeat would push
   // next_run_at further out under the failure policy.
   function claimWorkflowOutcomeRun(
+    db: Database.TxOrDb,
     taskID: ScheduledTaskID,
-    status: RunStatus,
-    error?: string,
-    workflowRunID?: string,
+    status: OutcomeStatus,
+    error: string | undefined,
+    workflowRunID: string | undefined,
+    now: number,
   ): RunInfo | undefined {
-    const now = Date.now()
-    return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      // Bind the claim to the reporting workflow run when the caller knows it:
-      // a late outcome from an older occurrence must not terminate the row of
-      // a newer one that is still executing.
-      const open = db
-        .update(ScheduledTaskRunTable)
-        .set({ status, error, time_completed: now, time_updated: now })
-        .where(
-          and(
-            eq(ScheduledTaskRunTable.task_id, taskID),
-            eq(ScheduledTaskRunTable.status, "running"),
-            ...(workflowRunID ? [eq(ScheduledTaskRunTable.workflow_run_id, workflowRunID)] : []),
-          ),
-        )
-        .returning()
-        .get()
-      if (open) return runFromRow(open)
+    // Bind the claim to the reporting workflow when known. An older
+    // workflow must not terminate the row of a newer occurrence.
+    const conditions = [
+      eq(ScheduledTaskRunTable.task_id, taskID),
+      eq(ScheduledTaskRunTable.project_id, Instance.project.id),
+    ]
+    if (workflowRunID) conditions.push(eq(ScheduledTaskRunTable.workflow_run_id, workflowRunID))
+    const open = db
+      .update(ScheduledTaskRunTable)
+      .set({ status, error: error ?? null, time_completed: now, time_updated: now })
+      .where(and(...conditions, eq(ScheduledTaskRunTable.status, "running")))
+      .returning()
+      .get()
+    if (open) return runFromRow(open)
 
-      const latest = db
-        .select({ id: ScheduledTaskRunTable.id })
-        .from(ScheduledTaskRunTable)
-        .where(
-          and(
-            eq(ScheduledTaskRunTable.task_id, taskID),
-            ...(workflowRunID ? [eq(ScheduledTaskRunTable.workflow_run_id, workflowRunID)] : []),
-          ),
-        )
-        .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
-        .limit(1)
-        .get()
-      if (!latest) return undefined
-      const adopted = db
-        .update(ScheduledTaskRunTable)
-        .set({ status, error, time_updated: now })
-        .where(
-          and(
-            eq(ScheduledTaskRunTable.id, latest.id),
-            eq(ScheduledTaskRunTable.status, "failed"),
-            like(ScheduledTaskRunTable.error, `${ORPHAN_RUN_ERROR_PREFIX}%`),
-          ),
-        )
-        .returning()
-        .get()
-      return adopted ? runFromRow(adopted) : undefined
-    })
+    const latest = db
+      .select({ id: ScheduledTaskRunTable.id })
+      .from(ScheduledTaskRunTable)
+      .where(and(...conditions))
+      .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
+      .limit(1)
+      .get()
+    if (!latest) return undefined
+    const adopted = db
+      .update(ScheduledTaskRunTable)
+      .set({ status, error: error ?? null, time_updated: now })
+      .where(
+        and(
+          eq(ScheduledTaskRunTable.id, latest.id),
+          eq(ScheduledTaskRunTable.status, "failed"),
+          like(ScheduledTaskRunTable.error, `${ORPHAN_RUN_ERROR_PREFIX}%`),
+        ),
+      )
+      .returning()
+      .get()
+    return adopted ? runFromRow(adopted) : undefined
   }
 
   export async function recordWorkflowOutcome(
@@ -1699,23 +1667,9 @@ export namespace ScheduledTask {
     workflowRunID?: string,
   ): Promise<Info> {
     const fallback = status === "cancelled" ? "Scheduled workflow was cancelled." : "Scheduled workflow failed."
-    const runStatus: RunStatus = status === "completed" ? "completed" : "failed"
-    const errorMessage = status === "completed" ? undefined : toErrorMessage(error ?? fallback)
-    // Without this the run row inserted at claim/dispatch would stay `running`
-    // until orphan reconciliation mislabeled a finished workflow as failed.
-    const run = claimWorkflowOutcomeRun(id, runStatus, errorMessage, workflowRunID)
-    // No run owed this outcome: it was already recorded (or the task never
-    // dispatched one), so a repeated report is a no-op rather than another
-    // failure-policy application.
-    if (!run) return get(id)
-    emitRunEvents(id, runStatus, run, errorMessage)
-    return recordQueueOutcome(
-      id,
-      status === "completed" ? "completed" : "failed",
-      error ?? fallback,
-      undefined,
-      workflowRunID,
-    )
+    const runStatus = status === "completed" ? "completed" : "failed"
+    const message = status === "completed" ? undefined : toErrorMessage(error ?? fallback)
+    return recordOutcome(id, { workflowRunID }, runStatus, message)
   }
 
   function normalizeSchedulerPollMs(value: number | undefined) {

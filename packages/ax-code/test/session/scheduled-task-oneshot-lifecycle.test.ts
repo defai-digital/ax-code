@@ -8,7 +8,7 @@ import type { ScheduledTaskID } from "../../src/session/schema"
 import { ScheduledTaskTable, TaskQueueTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { TaskQueue } from "../../src/session/task-queue"
-import { NotFoundError, eq } from "../../src/storage/db"
+import { NotFoundError, eq, sql } from "../../src/storage/db"
 import { tmpdir } from "../fixture/fixture"
 
 type Toast = {
@@ -120,6 +120,76 @@ describe("ScheduledTask one-shot lifecycle", () => {
 
           expect(await ScheduledTask.get(task.id)).toEqual(settled)
           expect(await ScheduledTask.listRuns({ taskID: task.id })).toEqual(runs)
+        },
+      })
+    },
+  )
+
+  test("a callback for a different task preserves both schedules and the pending run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const schedule = { type: "once", runAt: Date.now() + 60_000 } as const
+        const first = await ScheduledTask.create({ title: "First", prompt: "Run once.", schedule })
+        const second = await ScheduledTask.create({ title: "Second", prompt: "Run once.", schedule })
+        const { queueItem } = await ScheduledTask.runNow(first.id)
+        if (!queueItem) throw new Error("Expected a scheduled queue item")
+        const original = await ScheduledTask.get(first.id)
+
+        await ScheduledTask.recordQueueOutcome(second.id, "completed", undefined, queueItem.id)
+        expect(await ScheduledTask.listRuns({ taskID: first.id })).toMatchObject([{ status: "running" }])
+        expect(await ScheduledTask.get(first.id)).toEqual(original)
+        expect(await ScheduledTask.get(second.id)).toEqual(second)
+
+        await ScheduledTask.recordQueueOutcome(first.id, "completed", undefined, queueItem.id)
+        expect((await ScheduledTask.get(first.id)).status).toBe("disabled")
+      },
+    })
+  })
+
+  test.each(["completed", "failed"] as const)(
+    "a failed summary write leaves the %s outcome eligible for retry",
+    async (status) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const now = Date.now()
+          const task = await ScheduledTask.create({
+            title: "Retry the outcome write",
+            prompt: "Run once.",
+            schedule: { type: "once", runAt: now + 1_000 },
+          })
+          const { queueItem } = await claimOnce(task.id, now + 2_000)
+          if (!queueItem) throw new Error("Expected a scheduled queue item")
+          const original = await ScheduledTask.get(task.id)
+          const settle = () => ScheduledTask.recordQueueOutcome(task.id, status, "Dispatch failed", queueItem.id)
+
+          const store = SessionShard.storeForProject(Instance.project.id, { write: true })
+          store.use((db) =>
+            db.run(sql`CREATE TEMP TRIGGER fail_outcome_write BEFORE UPDATE ON scheduled_task
+              WHEN NEW.status = 'disabled' OR NEW.next_run_at IS NOT NULL
+              BEGIN SELECT RAISE(ABORT, 'fixture outcome failure'); END`),
+          )
+          try {
+            await expect(settle()).rejects.toThrow()
+            expect(await ScheduledTask.get(task.id)).toEqual(original)
+            expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "running" }])
+          } finally {
+            store.use((db) => db.run(sql`DROP TRIGGER fail_outcome_write`))
+          }
+
+          const settled = await settle()
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status }])
+          if (status === "completed") {
+            expect(settled.status).toBe("disabled")
+          } else {
+            expect(settled).toMatchObject({ status: "active", error: "Dispatch failed" })
+            expect(settled.nextRunAt).toBeGreaterThan(now)
+          }
         },
       })
     },
