@@ -1,11 +1,14 @@
+import { Instance } from "@/project/instance"
 import { abortError } from "@/util/abort"
 import { Log } from "@/util/log"
 import { sleep } from "@/util/timeout"
 import { NotFoundError } from "@/storage/db"
 import { Session } from "."
+import { SessionExecution } from "./execution"
 import { MessageV2 } from "./message-v2"
 import { SessionPrompt } from "./prompt"
 import {
+  runInBackgroundSubagentSession,
   wakeBackgroundSubagentSession,
   writeBackgroundSubagentMessage,
   type BackgroundSubagentRecipient,
@@ -202,7 +205,7 @@ export async function deliverBackgroundSubagentHandoff(input: {
       claim,
       resultEmpty: failed || isEmptySubagentResultText(text),
     })
-    wakeParent(parent)
+    if (delivered.completed) wakeParent(parent)
     return delivered.item
   } catch (error) {
     log.warn("failed to deliver background subagent handoff", {
@@ -224,11 +227,17 @@ export async function recoverBackgroundSubagentHandoffs() {
   let delivered = 0
   let preserved = 0
   let blocked = 0
+  const saved: SavedHandoff[] = []
 
   for (const item of items) {
     try {
       let current = item
       const claim = TaskQueue.resultDeliveryClaim(current)
+      if (current.payload["deliveryStatus"] === "delivered" && claim?.owner === "handoff") {
+        const parentID = await resolveParentSessionID(current)
+        if (parentID) saved.push({ parentID, taskID: current.id, claim })
+        continue
+      }
       if (claim?.owner === "waitfor") {
         if (await waitForResultWasPersisted(item, claim)) {
           await TaskQueue.completeResultDelivery({ id: item.id, claim })
@@ -257,6 +266,15 @@ export async function recoverBackgroundSubagentHandoffs() {
         error,
       })
     }
+  }
+
+  for (const handoff of saved) {
+    await recoverParentWake(handoff).catch((error) => {
+      log.warn("failed to recover parent wake after background subagent handoff", {
+        sessionID: handoff.parentID,
+        error,
+      })
+    })
   }
 
   return { delivered, preserved, blocked }
@@ -315,20 +333,98 @@ async function recoveryOutcome(
   }
 }
 
-function wakeParent(parent: BackgroundSubagentRecipient): void {
-  // A direct parent that is collecting nested results finalizes on its own, and
-  // a queued parent still has an active row that will drain and finalize. A
-  // loop here would race that finalization and spend a turn on evidence the
-  // parent is already folding in. Root sessions have neither and still wake.
-  if (isCollectingNestedResults(parent.id)) return
-  void wakeBackgroundSubagentSession(
-    parent,
-    async () => !isCollectingNestedResults(parent.id) && !(await hasActiveQueueRow(parent.id)),
-  ).catch((error) => {
-    log.warn("failed to wake parent after background subagent handoff", {
-      sessionID: parent.id,
-      directory: parent.directory,
-      error,
-    })
+type SavedHandoff = {
+  parentID: SessionID
+  taskID: TaskQueue.Info["id"]
+  claim: Extract<TaskQueue.ResultDeliveryClaim, { owner: "handoff" }>
+}
+
+async function isUnansweredHandoff(handoff: SavedHandoff): Promise<boolean> {
+  for await (const { info, parts } of MessageV2.stream(handoff.parentID)) {
+    if (info.role === "assistant") {
+      const interrupted =
+        MessageV2.AbortedError.isInstance(info.error) && info.error.data.metadata?.reason === "backend_restart"
+      if (interrupted) continue
+      // Respect a terminal response or deliberate stop. An intermediate
+      // tool step can still need the ordinary prompt loop to finish.
+      if (info.error || (info.time.completed !== undefined && info.finish !== "tool-calls")) return false
+      continue
+    }
+
+    // A later request supersedes the handoff. Match both parts of the
+    // durable claim before letting startup recovery drive the transcript.
+    return (
+      info.id === handoff.claim.messageID &&
+      parts.some(
+        (part) =>
+          part.id === handoff.claim.partID &&
+          part.type === "text" &&
+          part.synthetic === true &&
+          part.metadata?.["source"] === "background_subagent_handoff" &&
+          part.metadata?.["taskQueueID"] === handoff.taskID,
+      )
+    )
+  }
+  return false
+}
+
+async function recoverParentWake(handoff: SavedHandoff): Promise<void> {
+  const parent = await Session.get(handoff.parentID).catch((error: unknown) => {
+    if (NotFoundError.isInstance(error)) return undefined
+    throw error
   })
+  if (!parent || parent.projectID !== Instance.project.id || parent.time.archived !== undefined) return
+  // Read only the tail before entering a workspace. Historical handoffs
+  // that already have a response should not boot a workspace at startup.
+  if (!(await isUnansweredHandoff(handoff)) || !(await canWakeParent(parent.id))) return
+  void runInBackgroundSubagentSession(parent, () =>
+    SessionExecution.withRun(parent.id, async () => {
+      // Hold the foreground lease while checking for a newer turn. A peer
+      // can finish or supersede the handoff between discovery and admission.
+      const current = await Session.get(parent.id)
+      if (
+        current.directory !== parent.directory ||
+        current.projectID !== parent.projectID ||
+        current.time.archived !== undefined
+      )
+        return
+      if (!(await canWakeParent(parent.id)) || !(await isUnansweredHandoff(handoff))) return
+
+      const item = await TaskQueue.get(handoff.taskID)
+      const claim = TaskQueue.resultDeliveryClaim(item)
+      if (
+        item.payload["deliveryStatus"] !== "delivered" ||
+        claim?.owner !== "handoff" ||
+        claim.messageID !== handoff.claim.messageID ||
+        claim.partID !== handoff.claim.partID ||
+        (await resolveParentSessionID(item)) !== parent.id
+      )
+        return
+      await SessionPrompt.loop({ sessionID: parent.id })
+    }),
+  ).catch((error) => {
+    if (error instanceof Session.BusyError) return
+    logParentWakeFailure(parent, error)
+  })
+}
+
+async function canWakeParent(sessionID: SessionID): Promise<boolean> {
+  // Direct parents collecting nested results and queued parents finalize in
+  // their own execution once the handoffs land.
+  return !isCollectingNestedResults(sessionID) && !(await hasActiveQueueRow(sessionID))
+}
+
+function logParentWakeFailure(parent: BackgroundSubagentRecipient, error: unknown): void {
+  log.warn("failed to wake parent after background subagent handoff", {
+    sessionID: parent.id,
+    directory: parent.directory,
+    error,
+  })
+}
+
+function wakeParent(parent: BackgroundSubagentRecipient): void {
+  if (isCollectingNestedResults(parent.id)) return
+  void wakeBackgroundSubagentSession(parent, () => canWakeParent(parent.id)).catch((error) =>
+    logParentWakeFailure(parent, error),
+  )
 }

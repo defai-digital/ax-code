@@ -379,6 +379,86 @@ describe("background subagent result delivery", () => {
     })
   })
 
+  test.each(["unanswered", "interrupted", "answered", "stopped", "superseded"] as const)(
+    "restart recovery respects the state of a saved handoff (%s)",
+    async (state) => {
+      await using tmp = await tmpdir({ git: true })
+      const firstWake = vi.spyOn(SessionPrompt, "loop").mockRejectedValue(new Error("interrupted before response"))
+      const { parent, task, handoff } = await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parent = await Session.create({})
+          const task = await createCompletedBackgroundTask(parent.id, tmp.path, "saved child result")
+          const delivered = await deliverBackgroundSubagentHandoff(task)
+          expect(delivered.payload["deliveryStatus"]).toBe("delivered")
+          await vi.waitFor(() => expect(firstWake).toHaveBeenCalledExactlyOnceWith({ sessionID: parent.id }))
+          const [handoff] = await handoffParts(parent.id)
+          const message = await MessageV2.get({ sessionID: parent.id, messageID: handoff.messageID })
+          if (message.info.role !== "user") throw new Error("Expected saved handoff")
+          if (state === "answered" || state === "interrupted" || state === "stopped") {
+            const error =
+              state === "answered"
+                ? undefined
+                : new MessageV2.AbortedError({
+                    message: "Interrupted",
+                    metadata: state === "interrupted" ? { reason: "backend_restart" } : undefined,
+                  }).toObject()
+            await Session.updateMessage({
+              id: MessageID.ascending(),
+              role: "assistant",
+              sessionID: parent.id,
+              parentID: handoff.messageID,
+              mode: message.info.agent,
+              agent: message.info.agent,
+              providerID: message.info.model.providerID,
+              modelID: message.info.model.modelID,
+              path: { cwd: tmp.path, root: tmp.path },
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+              finish: "stop",
+              error,
+              time: { created: Date.now(), completed: Date.now() },
+            })
+          }
+          if (state === "superseded") {
+            const user = await Session.updateMessage({
+              ...message.info,
+              id: MessageID.ascending(),
+              time: { created: Date.now() },
+            })
+            await Session.updatePart({
+              id: PartID.ascending(),
+              type: "text",
+              sessionID: parent.id,
+              messageID: user.id,
+              text: "User started another request",
+            })
+          }
+          return { parent, task, handoff }
+        },
+      })
+
+      await Instance.disposeAll()
+      firstWake.mockReset().mockResolvedValue(undefined as never)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const candidates = await TaskQueue.listBackgroundResultDeliveriesForRecovery()
+          expect(candidates.some((item) => item.id === task.item.id)).toBe(
+            state !== "answered" && state !== "superseded",
+          )
+          await recoverBackgroundSubagentHandoffs()
+          const needsWake = state === "unanswered" || state === "interrupted"
+          if (needsWake) {
+            await vi.waitFor(() => expect(firstWake).toHaveBeenCalledExactlyOnceWith({ sessionID: parent.id }))
+          }
+          expect(await handoffParts(parent.id)).toEqual([handoff])
+          expect((await TaskQueue.get(task.item.id)).payload["deliveryStatus"]).toBe("delivered")
+          if (!needsWake) expect(firstWake).not.toHaveBeenCalled()
+        },
+      })
+    },
+  )
+
   test("recovery delivers a cancelled background result", async () => {
     await using tmp = await tmpdir({ git: true })
 

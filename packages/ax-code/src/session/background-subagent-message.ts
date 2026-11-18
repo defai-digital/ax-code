@@ -84,12 +84,21 @@ export async function wakeBackgroundSubagentSession(
   recipient: BackgroundSubagentRecipient,
   shouldWake: () => Promise<boolean>,
 ): Promise<void> {
+  await runInBackgroundSubagentSession(recipient, async () => {
+    if (await shouldWake()) await SessionPrompt.loop({ sessionID: recipient.id })
+  })
+}
+
+export async function runInBackgroundSubagentSession(
+  recipient: BackgroundSubagentRecipient,
+  run: () => Promise<void>,
+): Promise<void> {
   await SessionExecutionContext.detached(() =>
     Instance.provide({
       directory: recipient.directory,
       fn: async () => {
         assertRecipientProject(recipient)
-        if (await shouldWake()) await SessionPrompt.loop({ sessionID: recipient.id })
+        await run()
       },
     }),
   )

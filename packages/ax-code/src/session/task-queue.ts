@@ -10,7 +10,7 @@ import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
 import { SessionMetadata } from "./metadata"
 import { MessageID, PartID, ScheduledTaskID, SessionID, TaskQueueID } from "./schema"
-import { TaskQueueTable } from "./session.sql"
+import { MessageTable, TaskQueueTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { ForegroundOwnership } from "./foreground-ownership"
 
@@ -410,6 +410,31 @@ export namespace TaskQueue {
   }
 
   export async function listBackgroundResultDeliveriesForRecovery(): Promise<Info[]> {
+    const payload = sql`case when json_valid(${TaskQueueTable.payload}) then ${TaskQueueTable.payload} end`
+    const laterData = sql`case when json_valid(later.data) then later.data end`
+    // Use the transcript index to exclude ordinary answered and superseded
+    // handoffs before hydrating candidate rows. Admission still checks the
+    // exact saved message, claim, and current parent under its execution lock.
+    const hasUnsettledHandoff = sql`exists (
+      select 1
+      from ${MessageTable} as handoff
+      where handoff.id = json_extract(${payload}, '$.resultDelivery.messageID')
+        and not exists (
+          select 1
+          from ${MessageTable} as later
+          where later.session_id = handoff.session_id
+            and (later.time_created, later.id) > (handoff.time_created, handoff.id)
+            and (
+              json_extract(${laterData}, '$.role') = 'user'
+              or (
+                json_extract(${laterData}, '$.role') = 'assistant'
+                and json_extract(${laterData}, '$.error') is null
+                and json_type(${laterData}, '$.time.completed') in ('integer', 'real')
+                and json_extract(${laterData}, '$.finish') is not 'tool-calls'
+              )
+            )
+        )
+    )`
     return SessionShard.storeForProject(Instance.project.id).use((db) =>
       db
         .select()
@@ -419,6 +444,15 @@ export namespace TaskQueue {
             eq(TaskQueueTable.project_id, Instance.project.id),
             eq(TaskQueueTable.kind, "subagent"),
             inArray(TaskQueueTable.status, terminalStatuses),
+            sql`json_extract(${payload}, '$.source') = ${taskToolSource}`,
+            sql`(
+              json_extract(${payload}, '$.deliveryStatus') is not 'delivered'
+              or json_extract(${payload}, '$.resultDelivery.owner') = 'waitfor'
+              or (
+                json_extract(${payload}, '$.resultDelivery.owner') = 'handoff'
+                and ${hasUnsettledHandoff}
+              )
+            )`,
           ),
         )
         .orderBy(asc(TaskQueueTable.time_completed), asc(TaskQueueTable.id))
@@ -429,7 +463,7 @@ export namespace TaskQueue {
             if (!isLiveTaskSubagentPayload(item.payload)) return []
             const delivery = DeliveryStatus.safeParse(item.payload["deliveryStatus"])
             const claim = resultDeliveryClaim(item)
-            if (delivery.success && delivery.data === "delivered" && claim?.owner !== "waitfor") return []
+            if (delivery.success && delivery.data === "delivered" && !claim) return []
             return [item]
           } catch {
             log.warn("skipping corrupt background result delivery row", { id: row.id })
