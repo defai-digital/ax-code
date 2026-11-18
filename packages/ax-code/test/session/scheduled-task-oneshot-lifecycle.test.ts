@@ -550,6 +550,122 @@ describe("ScheduledTask one-shot lifecycle", () => {
     })
   })
 
+  test("retention keeps a disabled one-shot while its dispatch is live", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "Disabled with a running dispatch",
+          prompt: "Run once.",
+          schedule: { type: "once", runAt: now + 1_000 },
+        })
+        const { queueItem } = await claimOnce(task.id, now + 2_000)
+        if (!queueItem) throw new Error("Expected a scheduled queue item")
+        const claim = await TaskQueue.claimForExecution(queueItem.id)
+        if (claim.kind !== "claimed") throw new Error("Expected to claim the dispatch")
+        await ScheduledTask.update({ id: task.id, status: "disabled" })
+
+        const sweepAt = now + 91 * 24 * 60 * 60 * 1_000
+        expect(ScheduledTask.pruneFinishedOneShots(sweepAt)).toBe(0)
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "running" }])
+
+        await TaskQueue.finishExecution(claim.attempt, { status: "completed" })
+        await ScheduledTask.recordQueueOutcome(task.id, "completed", undefined, queueItem.id)
+        expect(ScheduledTask.pruneFinishedOneShots(sweepAt)).toBe(1)
+        await expect(ScheduledTask.get(task.id)).rejects.toThrow(NotFoundError)
+      },
+    })
+  })
+
+  test("retention keeps a disabled one-shot with timing still pending", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "Disabled before its next reminder",
+          prompt: "Run once.",
+          schedule: { type: "once", runAt: now + 60_000 },
+        })
+        const { queueItem } = await ScheduledTask.runNow(task.id)
+        if (!queueItem) throw new Error("Expected a scheduled queue item")
+        await TaskQueue.setStatus({ id: queueItem.id, status: "failed" })
+        await ScheduledTask.recordQueueOutcome(task.id, "failed", "Dispatch failed", queueItem.id)
+        const disabled = await ScheduledTask.update({ id: task.id, status: "disabled" })
+        expect(disabled.nextRunAt).toBeDefined()
+
+        expect(ScheduledTask.pruneFinishedOneShots(now + 91 * 24 * 60 * 60 * 1_000)).toBe(0)
+        expect(await ScheduledTask.get(task.id)).toEqual(disabled)
+      },
+    })
+  })
+
+  test("history retention keeps a live occurrence after many skipped ticks", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const started = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const task = await ScheduledTask.create({
+          title: "Long-running recurring task",
+          prompt: "Check the build.",
+          schedule: { type: "cron", expression: "* * * * *", timezone: "UTC" },
+        })
+        if (task.nextRunAt === undefined) throw new Error("Expected a due occurrence")
+        const minute = 60_000
+        const first = task.nextRunAt + 6 * minute
+        const { queueItem } = await claimOnce(task.id, first)
+        if (!queueItem) throw new Error("Expected a scheduled queue item")
+
+        // More skipped ticks than the history high-water mark. The carrier
+        // remains runnable throughout, even once its claim timestamp is old.
+        const count = ScheduledTask.RUN_HISTORY_LIMIT * 2 + 1
+        for (let index = 1; index <= count; index++) {
+          expect(await ScheduledTask.runDue(first + index * minute)).toEqual([])
+        }
+        expect(started).toHaveBeenCalledTimes(1)
+        const runs = await ScheduledTask.listRuns({ taskID: task.id, limit: count + 1 })
+        expect(runs.filter((run) => run.status === "skipped_overlap")).toHaveLength(ScheduledTask.RUN_HISTORY_LIMIT)
+        expect(runs.find((run) => run.queueID === queueItem.id)?.status).toBe("running")
+        expect(await ScheduledTask.runDue(first + (count + 6) * minute)).toEqual([])
+        expect(started).toHaveBeenCalledTimes(1)
+      },
+    })
+  })
+
+  test("history reads keep valid runs when an older row is malformed", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const task = await ScheduledTask.create({
+          title: "History with an old malformed row",
+          prompt: "Check the build.",
+          schedule: { type: "once", runAt: Date.now() + 60_000 },
+        })
+        const first = await ScheduledTask.runNow(task.id)
+        if (!first.queueItem) throw new Error("Expected a scheduled queue item")
+        await TaskQueue.setStatus({ id: first.queueItem.id, status: "completed" })
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(ScheduledTaskRunTable)
+            .set({ status: "invalid" })
+            .where(eq(ScheduledTaskRunTable.queue_id, first.queueItem!.id))
+            .run()
+        })
+        const second = await ScheduledTask.runNow(task.id)
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+          { status: "running", queueID: second.queueItem?.id },
+        ])
+      },
+    })
+  })
+
   test("recurring tasks are unaffected by the one-shot completion rule", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

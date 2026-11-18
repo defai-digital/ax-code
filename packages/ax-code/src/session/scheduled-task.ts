@@ -17,6 +17,7 @@ import {
   isNull,
   like,
   lte,
+  ne,
   notInArray,
   or,
   sql,
@@ -326,8 +327,8 @@ export namespace ScheduledTask {
     return Info.parse(fromRowInput(row))
   }
 
-  function runFromRow(row: typeof ScheduledTaskRunTable.$inferSelect): RunInfo {
-    return RunInfo.parse({
+  function runFromRowInput(row: typeof ScheduledTaskRunTable.$inferSelect) {
+    return {
       id: row.id,
       taskID: row.task_id,
       projectID: row.project_id,
@@ -344,7 +345,11 @@ export namespace ScheduledTask {
         created: row.time_created,
         updated: row.time_updated ?? undefined,
       },
-    })
+    }
+  }
+
+  function runFromRow(row: typeof ScheduledTaskRunTable.$inferSelect): RunInfo {
+    return RunInfo.parse(runFromRowInput(row))
   }
 
   // Lifecycle toasts are the primary user-facing signal that durable automation
@@ -487,8 +492,9 @@ export namespace ScheduledTask {
         .limit(parsed.limit ?? RUN_HISTORY_LIMIT)
         .all()
         .flatMap((row) => {
-          const result = RunInfo.safeParse(runFromRow(row))
+          const result = RunInfo.safeParse(runFromRowInput(row))
           if (result.success) return [result.data]
+          log.warn("skipping corrupt scheduled task run", { id: row.id })
           return []
         })
     })
@@ -1192,26 +1198,24 @@ export namespace ScheduledTask {
     return runFromRow(row)
   }
 
-  // Bound per-task history. Only GC when clearly over the threshold to avoid
-  // write amplification on hot tasks.
-  function pruneRuns(db: any, taskID: ScheduledTaskID) {
-    const countRow = db
+  // Keep open occurrences for overlap protection, and trim terminal history
+  // only once it reaches the high-water mark to avoid frequent rewrites.
+  function pruneRuns(db: Database.TxOrDb, taskID: ScheduledTaskID): void {
+    const terminal = and(eq(ScheduledTaskRunTable.task_id, taskID), ne(ScheduledTaskRunTable.status, "running"))
+    const count = db
       .select({ value: sql<number>`count(*)` })
       .from(ScheduledTaskRunTable)
-      .where(eq(ScheduledTaskRunTable.task_id, taskID))
+      .where(terminal)
       .get()
-    const count = Number(countRow?.value ?? 0)
-    if (count <= RUN_HISTORY_GC_THRESHOLD) return
-    const keepIDs = db
+    if ((count?.value ?? 0) <= RUN_HISTORY_GC_THRESHOLD) return
+    const keep = db
       .select({ id: ScheduledTaskRunTable.id })
       .from(ScheduledTaskRunTable)
-      .where(eq(ScheduledTaskRunTable.task_id, taskID))
+      .where(terminal)
       .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
       .limit(RUN_HISTORY_LIMIT)
-      .all()
-      .map((row: { id: ScheduledTaskRunID }) => row.id)
     db.delete(ScheduledTaskRunTable)
-      .where(and(eq(ScheduledTaskRunTable.task_id, taskID), notInArray(ScheduledTaskRunTable.id, keepIDs)))
+      .where(and(terminal, notInArray(ScheduledTaskRunTable.id, keep)))
       .run()
   }
 
@@ -1843,17 +1847,24 @@ export namespace ScheduledTask {
     tick()
   }
 
-  // Opportunistic retention: fired one-time tasks (status=disabled) accumulate
-  // forever otherwise. Never touches active/paused or recurring rows.
+  // Clean up old, finished one-time tasks. Check dispatch liveness and
+  // delete under the same write lock as retry and re-arm operations.
   export function pruneFinishedOneShots(now = Date.now()): number {
-    return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    const projectID = Instance.project.id
+    return SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
       const rows = db
-        .select({ id: ScheduledTaskTable.id, schedule: ScheduledTaskTable.schedule })
+        .select({
+          id: ScheduledTaskTable.id,
+          schedule: ScheduledTaskTable.schedule,
+          lastQueueID: ScheduledTaskTable.last_queue_id,
+          lastWorkflowRunID: ScheduledTaskTable.last_workflow_run_id,
+        })
         .from(ScheduledTaskTable)
         .where(
           and(
-            eq(ScheduledTaskTable.project_id, Instance.project.id),
+            eq(ScheduledTaskTable.project_id, projectID),
             eq(ScheduledTaskTable.status, "disabled"),
+            isNull(ScheduledTaskTable.next_run_at),
             lte(ScheduledTaskTable.last_run_at, now - ONESHOT_RETENTION_MS),
           ),
         )
@@ -1862,8 +1873,18 @@ export namespace ScheduledTask {
       for (const row of rows) {
         const schedule = Schedule.safeParse(row.schedule)
         if (!schedule.success || schedule.data.type !== "once") continue
-        db.delete(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, row.id)).run()
-        removed++
+        const live = readLiveDispatches(db, {
+          id: row.id,
+          lastQueueID: row.lastQueueID ?? undefined,
+          lastWorkflowRunID: row.lastWorkflowRunID ?? undefined,
+        })
+        if (live.queueIDs.length > 0 || live.workflowRunIDs.length > 0) continue
+        const deleted = db
+          .delete(ScheduledTaskTable)
+          .where(eq(ScheduledTaskTable.id, row.id))
+          .returning({ id: ScheduledTaskTable.id })
+          .get()
+        if (deleted) removed++
       }
       return removed
     })
