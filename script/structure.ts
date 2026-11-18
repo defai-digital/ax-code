@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process"
 import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-in-v4"
 import { exists, readText, scan, writeText } from "../packages/ax-code/script/fs-compat"
 import { extractImportSpecifiers } from "./import-specifiers"
+import { runtimeInterfaceImportAllowed } from "./runtime-boundary"
 import { INTERNAL_ONLY_ROOTS, unapprovedTrackedInternalPaths } from "./repository-policy"
 import {
   discoverWorkspacePackages,
@@ -25,20 +26,6 @@ const note = [
 
 const hot = ["packages/ax-code/src/cli/cmd", "packages/ax-code/src/cli/tui"]
 const axCodeSrcRoot = path.join(root, "packages/ax-code/src")
-const runtimeBoundaryAllowedFiles = new Set([
-  "packages/ax-code/src/index.ts",
-  "packages/ax-code/src/index-compiled.ts",
-  // Node runtime entry points — boot the CLI exactly like index.ts does.
-  "packages/ax-code/src/index-node.ts",
-  "packages/ax-code/src/index-node-tui.ts",
-  "packages/ax-code/src/sdk/programmatic.ts",
-  "packages/ax-code/src/sdk/programmatic-impl.ts",
-  "packages/ax-code/src/runtime/local-client.ts",
-  // Intentionally use the shared runtime HTTP/WS adapter (ADR-036 S1): these
-  // are second servers, not domain code reaching into the CLI/server interface.
-  "packages/ax-code/src/mcp/oauth-callback.ts",
-  "packages/ax-code/src/control-plane/workspace-server/server.ts",
-])
 
 const ext = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])
 const old = [
@@ -150,33 +137,16 @@ function resolveAxCodeImport(file: string, name: string) {
   return undefined
 }
 
-function isAxCodeInterfaceTarget(target: string) {
-  const normalized = rel(target).split(path.sep).join("/")
-  return (
-    normalized === "packages/ax-code/src/cli" ||
-    normalized.startsWith("packages/ax-code/src/cli/") ||
-    normalized === "packages/ax-code/src/server" ||
-    normalized.startsWith("packages/ax-code/src/server/")
-  )
-}
-
-function isAxCodeInterfaceFile(file: string) {
-  const normalized = rel(file).split(path.sep).join("/")
-  return normalized.startsWith("packages/ax-code/src/cli/") || normalized.startsWith("packages/ax-code/src/server/")
-}
-
 async function runtimeInternalBoundaries() {
   const out = [] as { file: string; spec: string }[]
   const seen = new Set<string>()
   for (const file of await list("packages/ax-code/src")) {
     const relative = rel(file).split(path.sep).join("/")
-    if (isAxCodeInterfaceFile(file)) continue
-    if (runtimeBoundaryAllowedFiles.has(relative)) continue
 
     const text = await readText(file)
     for (const name of spec(text, file)) {
       const target = resolveAxCodeImport(file, name)
-      if (!target || !isAxCodeInterfaceTarget(target)) continue
+      if (!target || runtimeInterfaceImportAllowed(relative, rel(target).split(path.sep).join("/"))) continue
       const key = `${relative}\0${name}`
       if (seen.has(key)) continue
       seen.add(key)

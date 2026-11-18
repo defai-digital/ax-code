@@ -10,10 +10,10 @@
 
 import z from "zod"
 import { Log } from "../util/log.js"
-import { bootstrap } from "../cli/bootstrap.js"
+import { withTransientInstance as bootstrap } from "../project/with-instance.js"
 import { Server } from "../server/server.js"
 import { Auth } from "../auth/index.js"
-import { seedRuntimeFlags } from "../cli/bootstrap/env.js"
+import { ensureSdkRuntime } from "./runtime.js"
 import { ToolRegistry } from "../tool/registry.js"
 import { Tool } from "../tool/tool.js"
 import { createAxCodeClient } from "@ax-code/sdk/v2/client"
@@ -153,15 +153,6 @@ function withSdkTimeout<T>(
   onTimeout?: () => void,
 ): Promise<T> {
   return withTimeout(promise, ms, undefined, { unref: true, error: makeError, onTimeout })
-}
-
-let logInitialized = false
-
-async function ensureLog() {
-  if (logInitialized) return
-  logInitialized = true
-  await Log.init({ print: false, dev: false, level: "ERROR" })
-  seedRuntimeFlags(process.env, { preservePid: true })
 }
 
 // ============================================================
@@ -937,7 +928,7 @@ function createSessionHandle(
  */
 export async function createAgent(options?: AgentOptions): Promise<Agent> {
   const opts = { directory: process.cwd(), ...options }
-  await ensureLog()
+  await ensureSdkRuntime()
 
   let sdk: AxCodeClient
   let disposed = false

@@ -1,3 +1,4 @@
+import { seedRuntimeFlags } from "../../runtime/flags"
 import { Installation } from "../../installation"
 import { runtimeMode } from "../../installation/runtime-mode"
 import { NativePerf } from "../../perf/native"
@@ -39,10 +40,8 @@ export type RestoreOriginalCwdDep = {
   chdir?: (dir: string) => void
 }
 
-export type RuntimeFlagOptions = {
-  pid?: number
-  preservePid?: boolean
-}
+export { seedRuntimeFlags }
+export type { RuntimeFlagOptions } from "../../runtime/flags"
 
 function setEnvValue(
   env: Record<string, string | undefined>,
@@ -50,15 +49,6 @@ function setEnvValue(
   value: string | number | boolean | undefined,
 ) {
   env[key] = typeof value === "undefined" ? undefined : String(value)
-}
-
-export function seedRuntimeFlags(env: Record<string, string | undefined>, options: RuntimeFlagOptions = {}) {
-  const pid = options.pid ?? process.pid
-  setEnvValue(env, "AGENT", "1")
-  setEnvValue(env, "AX_CODE", "1")
-  setEnvValue(env, "OPENCODE", "1")
-  if (options.preservePid) env.AX_CODE_PID ??= String(pid)
-  else setEnvValue(env, "AX_CODE_PID", pid)
 }
 
 export function level(log?: string, _local = Installation.isLocal(), debug = false): Log.Level {
