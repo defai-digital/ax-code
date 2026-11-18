@@ -10,6 +10,7 @@ import type { ProjectID } from "../project/schema"
 import { fn } from "../util/fn"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
+import { KeyedSerialQueue } from "../util/queue"
 import { git } from "../util/git"
 import { Filesystem } from "../util/filesystem"
 import { toErrorMessage } from "../util/error-message"
@@ -612,22 +613,17 @@ export namespace Worktree {
     return branch.startsWith("ax-code/") || branch.startsWith("opencode/")
   }
 
-  // Serializes ownership decisions with borrowing and branch deletion inside
-  // this process, so a branch cannot be borrowed between remove()'s ownership
-  // check and its `git branch -D`. Separate processes are not coordinated.
-  const branchLocks = new Map<string, Promise<unknown>>()
-
-  async function withBranchLock<T>(task: () => Promise<T>): Promise<T> {
-    const key = Instance.worktree
-    const previous = branchLocks.get(key) ?? Promise.resolve()
-    const next = previous.catch(() => undefined).then(task)
-    branchLocks.set(key, next)
-    try {
-      return await next
-    } finally {
-      if (branchLocks.get(key) === next) branchLocks.delete(key)
-    }
+  async function gitCommonDirectory(cwd: string): Promise<string | undefined> {
+    const result = await git(["rev-parse", "--git-common-dir"], { cwd })
+    const directory = result.text().replace(/\n$/, "")
+    if (result.exitCode !== 0 || !directory) return undefined
+    // @scan-suppress security_scan Git's own metadata path may be relative to the checkout or outside it.
+    return resolveWorktreePath(path.resolve(cwd, Filesystem.windowsPath(directory)))
   }
+
+  // Linked checkouts share branch config and refs. Serialize borrowing and
+  // branch deletion across them within this process.
+  const branchLocks = new KeyedSerialQueue()
 
   export async function createFromInfo(
     info: Info,
@@ -649,7 +645,9 @@ export namespace Worktree {
     // checked out elsewhere), so a failed borrow does not pin the branch. The
     // owned mark is written under the same lock, right after git creates the
     // branch.
-    const created = await withBranchLock(async () => {
+    const common = await gitCommonDirectory(Instance.worktree)
+    if (!common) throw new CreateFailedError({ message: "Failed to locate Git repository metadata" })
+    const created = await branchLocks.run(common, async () => {
       if (
         resumable &&
         (await findGitWorktree(Instance.worktree, await resolveWorktreePath(info.directory)))?.branch === info.branch
@@ -878,9 +876,7 @@ export namespace Worktree {
     if (!input?.operationId) return createNow(input)
     // Scope by the repository's common git directory: separate clones of one
     // project share a project ID but must not share created worktrees.
-    const common = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: Instance.worktree })
-    const repository =
-      common.exitCode === 0 ? await resolveWorktreePath(outputText(common.stdout).trim()) : Instance.worktree
+    const repository = (await gitCommonDirectory(Instance.worktree)) ?? Instance.worktree
     const key = `${repository}\u0000${input.operationId}`
     const request = operationRequest(input)
     const known = operations.get(key)
@@ -953,26 +949,14 @@ export namespace Worktree {
     await forgetOperationsFor(input.directory)
 
     const directory = await resolveWorktreePath(input.directory)
-    // Git calls in this removal need a cwd that survives it. Instance.worktree
-    // is the CURRENT checkout, which is the very directory being removed when
-    // the caller runs inside its own worktree: after `git worktree remove`
-    // deletes it, every later spawn fails and collapses to exitCode 1
-    // (util/git.ts), which `branchFlag` reads as "absent" — so the owned
-    // branch was never deleted. Project.fromDirectory records the primary
-    // checkout in Instance.project.worktree, which outlives every linked
-    // worktree removal. Only removing the primary itself (git refuses that
-    // below, before deleting anything) can match it; fall back to the common
-    // git dir, captured while it still exists — its parent would be the
-    // checkout being removed.
-    const repository = await (async () => {
-      const primary = await resolveWorktreePath(Instance.project.worktree)
-      if (primary !== directory) return primary
-      const common = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"], {
-        cwd: Instance.worktree,
-      })
-      if (common.exitCode === 0 && outputText(common.stdout)) return resolveWorktreePath(outputText(common.stdout))
-      return Instance.worktree
-    })()
+    // Use a checkout that survives removal, including when this instance is
+    // running inside the worktree being removed. Git refuses to remove the
+    // primary checkout, so use its common Git directory for that request.
+    const primary = await resolveWorktreePath(Instance.project.worktree)
+    const removingPrimary = primary === directory
+    const common = await gitCommonDirectory(removingPrimary ? Instance.worktree : primary)
+    if (!common) throw new RemoveFailedError({ message: "Failed to locate Git repository metadata" })
+    const repository = removingPrimary ? common : primary
     // Resolve registry paths before removing the checkout so aliases still refer to it.
     const recordedDirectories = (
       await Promise.all(
@@ -1084,7 +1068,7 @@ export namespace Worktree {
     } catch (error) {
       cleanupError = error
     } finally {
-      await withBranchLock(async () => {
+      await branchLocks.run(common, async () => {
         branch = (await ownsBranch(checkedOut, repository)) ? checkedOut : undefined
         if (!branch) return
         const deleted = await git(["branch", "-D", branch], { cwd: repository })

@@ -1,5 +1,7 @@
-import { execFileSync } from "child_process"
-import { afterEach, expect, test } from "vitest"
+import { execFileSync } from "node:child_process"
+import { afterEach, expect, test, vi } from "vitest"
+import * as GitUtil from "@/util/git"
+import { sleep } from "@/util/timeout"
 import { Instance } from "@/project/instance"
 import { Worktree } from "@/worktree"
 import { tmpdir } from "../fixture/fixture"
@@ -221,4 +223,70 @@ test("a refused borrow does not leave the branch marked borrowed", async () => {
       expect(() => gitOut(tmp.path, ["config", "--get", `branch.${current}.axCodeBorrowed`])).toThrow()
     },
   })
+})
+
+test("a failed borrow cannot clear another checkout's borrowed branch flag", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await using linked = await tmpdir()
+  const branch = "ax-code/concurrent-borrow"
+  gitOut(tmp.path, ["branch", branch])
+  gitOut(tmp.path, ["worktree", "add", "--detach", linked.path])
+
+  const firstAtAdd = Promise.withResolvers<void>()
+  const releaseFirst = Promise.withResolvers<void>()
+  const secondValidated = Promise.withResolvers<void>()
+  const git = GitUtil.git
+  const spy = vi.spyOn(GitUtil, "git").mockImplementation(async (args, opts) => {
+    if (opts.cwd === tmp.path && args[0] === "worktree" && args[1] === "add" && args.at(-1) === branch) {
+      firstAtAdd.resolve()
+      await releaseFirst.promise
+      return {
+        exitCode: 1,
+        stdout: Buffer.alloc(0),
+        stderr: Buffer.from("simulated first borrow failure"),
+        text: () => "",
+      }
+    }
+    const result = await git(args, opts)
+    if (opts.cwd === linked.path && args[0] === "show-ref" && args.at(-1) === `refs/heads/${branch}`) {
+      secondValidated.resolve()
+    }
+    return result
+  })
+
+  try {
+    const first = Instance.provide({
+      directory: tmp.path,
+      fn: () => Worktree.create({ name: "failed-borrow", existingBranch: branch }),
+    })
+    const failed = expect(first).rejects.toThrow("simulated first borrow failure")
+    await Promise.race([firstAtAdd.promise, failed])
+
+    const second = Instance.provide({
+      directory: linked.path,
+      fn: () => Worktree.create({ name: "successful-borrow", existingBranch: branch }),
+    })
+    try {
+      // An unserialized borrow can finish while the first call still owns the flag.
+      await Promise.race([secondValidated.promise, second])
+      await Promise.race([second, sleep(750)])
+    } finally {
+      releaseFirst.resolve()
+      await failed
+    }
+
+    const info = await second
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Worktree.borrowedBranch(info.directory)).toBe(branch)
+        await expect(Worktree.reset({ directory: info.directory })).rejects.toThrow(/branch AX Code did not create/)
+        await Worktree.remove({ directory: info.directory })
+      },
+    })
+    expect(branches(tmp.path)).toContain(branch)
+  } finally {
+    releaseFirst.resolve()
+    spy.mockRestore()
+  }
 })
