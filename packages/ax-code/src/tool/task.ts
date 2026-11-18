@@ -9,21 +9,21 @@ import {
   taskFanOutAllowed,
 } from "./task-shared"
 import { Tool } from "./tool"
-import { BackgroundShell } from "./bash-background"
 import DESCRIPTION from "./task.txt"
 import { assertPoolAlias, modelPoolParameter, resolvePoolModel } from "./task-model-pool"
 import z from "zod"
 import { Session } from "../session"
-import { BackgroundNotification } from "../session/background-notification"
 import { SessionID, MessageID, type TaskQueueID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { MessageV2 } from "../session/message-v2"
 import { needsRecoveredResultReview } from "../session/background-subagent-handoff"
+import { beginNestedResultCollection } from "../session/background-subagent-delivery"
 import {
-  beginNestedResultCollection,
-  nestedSubagentWork,
-  waitForNestedSubagentResults,
-} from "../session/background-subagent-delivery"
+  inspectSubagentBackgroundWork,
+  prepareSubagentBackgroundFinalization,
+  SUBAGENT_FINALIZATION_WINDOW_MS,
+} from "../session/background-subagent-finalization"
+import { TaskQueue } from "../session/task-queue"
 import { agentModel } from "../session/prompt/prompt-command-selection"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
@@ -54,7 +54,6 @@ export class BackgroundCapacityError extends Error {
 // request and then never streams tokens would hang forever without
 // this timeout.
 const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
-const SUBAGENT_FINALIZE_TIMEOUT_MS = 2 * 60 * 1000
 
 const EMPTY_FINALIZE_INSTRUCTION =
   `Your previous subagent turn ended without a usable final response. ` +
@@ -62,23 +61,6 @@ const EMPTY_FINALIZE_INSTRUCTION =
   `Do not call more tools unless absolutely required. ` +
   `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
 
-// Sent after the child's background shells and background subagent tasks
-// finish: the final turn must fold their evidence in without launching more
-// detached work.
-const BACKGROUND_FINALIZE_INSTRUCTION =
-  `Background work started by this task has finished. ` +
-  `Produce the final result for this task now in plain text, using bash_output to read any background shell output you have not consumed and including the evidence from any background tasks that completed. ` +
-  `Do not start new shells or monitors, and do not delegate further. ` +
-  `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`
-
-// Sent when the background wait exhausted the budget reserved for it. The
-// task must still return usable evidence rather than fail: the final turn
-// reports the partial result and says explicitly that work is still running.
-const BACKGROUND_ONGOING_INSTRUCTION =
-  `Background work started by this task is still running and did not finish within the available time. ` +
-  `Produce the best final result for this task now in plain text, using bash_output to read any background output already produced. ` +
-  `Say explicitly which background work (shells or tasks) is still running and what evidence remains pending. ` +
-  `Do not start new shells or monitors, and do not delegate further.`
 const log = Log.create({ service: "task-tool" })
 
 const baseParameters = z.object({
@@ -157,9 +139,8 @@ async function startBackgroundSubagent(input: {
 }) {
   const { params, ctx, session, agent, model, taskTools, promptParts, ensureNotAborted } = input
   ensureNotAborted()
-  const { TaskQueue } = await import("../session/task-queue")
   const { TaskQueueExecutor } = await import("../session/task-queue-executor")
-  await assertBackgroundCapacity(ctx.sessionID, TaskQueue)
+  await assertBackgroundCapacity(ctx.sessionID)
 
   const queued = await TaskQueue.enqueue({
     sessionID: session.id,
@@ -247,10 +228,7 @@ async function startBackgroundSubagent(input: {
   )
 }
 
-async function assertBackgroundCapacity(
-  parentSessionID: SessionID,
-  TaskQueue: typeof import("../session/task-queue").TaskQueue,
-) {
+async function assertBackgroundCapacity(parentSessionID: SessionID) {
   const children = await Session.children(parentSessionID)
   let active = 0
   for (const child of children) {
@@ -342,10 +320,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       ensureNotAborted()
       if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
 
-      if (params.background) {
-        const { TaskQueue } = await import("../session/task-queue")
-        await assertBackgroundCapacity(ctx.sessionID, TaskQueue)
-      }
+      if (params.background) await assertBackgroundCapacity(ctx.sessionID)
 
       const canFanOut = taskFanOutAllowed(agent)
 
@@ -491,10 +466,6 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       let finalizeAttempted = false
       let finalizeError: ReturnType<typeof errorDetails> | undefined
       let initialEmpty = false
-      // Whether background work needs a finalization turn (completed or still
-      // running). Distinct from `backgroundTimedOut`, which only records that
-      // the bounded wait actually expired.
-      let backgroundWorkPending = false
       let backgroundTimedOut = false
       try {
         ensureNotAborted()
@@ -556,63 +527,36 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         // finalization. A finalize forced by finished background work is not
         // recovery from an empty response.
         initialEmpty = initialText.trim().length === 0 && TaskOutputSchema.fromResult(result) === undefined
-        // Persistent shells (monitors) are expected to keep running; waiting
-        // for one would burn the whole task budget. A queued completion
-        // notification means work already finished, so it still deserves a
-        // final turn. Monitor lines are progress, not completion, and must not
-        // force that final turn.
-        const shellWorkPending =
-          BackgroundShell.list(session.id).some((shell) => shell.status === "running" && shell.persistent !== true) ||
-          BackgroundNotification.pendingCompletionCount(session.id) > 0
-        // A direct background subagent delivers its evidence as a handoff into
-        // this session. Both the queued executor and this direct path must
-        // wait for unsettled deliveries, and a delivery that landed during
-        // this turn still needs a synthesis turn, or the task's answer would
-        // omit the work it just delegated. Rows delivered before this turn
-        // were already synthesized and must not finalize it again.
-        const nestedWork = initialError
-          ? { pending: false, settled: false }
-          : await nestedSubagentWork({ sessionID: session.id, since: promptStartedAt })
+        const work = initialError ? undefined : await inspectSubagentBackgroundWork(session.id, promptStartedAt)
         // While this task is collecting nested results, a handoff delivery
         // must not wake the session with a loop that races this finalization.
-        using _nestedCollection =
-          nestedWork.pending || nestedWork.settled ? beginNestedResultCollection(session.id) : undefined
-        backgroundWorkPending = !initialError && (shellWorkPending || nestedWork.pending || nestedWork.settled)
-        if (backgroundWorkPending) {
-          // Spend the remaining original budget on the wait, but reserve the
-          // finalize window so the final prompt still has time to run.
-          const waitEndsAt =
-            Date.now() +
-            Math.max(0, SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt) - SUBAGENT_FINALIZE_TIMEOUT_MS)
-          let timedOut = false
-          if (shellWorkPending) {
-            const outcome = await BackgroundShell.waitForCompletion(session.id, {
+        using _nestedCollection = work?.needsNestedCollection ? beginNestedResultCollection(session.id) : undefined
+        const background = work
+          ? await prepareSubagentBackgroundFinalization({
+              work,
+              startedAt: promptStartedAt,
+              executionBudgetMs: SUBAGENT_TIMEOUT_MS,
               signal: ctx.abort,
-              timeoutMs: Math.max(0, waitEndsAt - Date.now()),
+              tools: taskTools,
             })
-            timedOut = outcome === "timeout"
-          }
-          if (nestedWork.pending) {
-            const outcome = await waitForNestedSubagentResults({
-              sessionID: session.id,
-              signal: ctx.abort,
-              timeoutMs: Math.max(0, waitEndsAt - Date.now()),
-            })
-            if (outcome === "timeout") timedOut = true
-          }
+          : undefined
+        if (background) {
           ensureNotAborted()
-          backgroundTimedOut = timedOut
+          backgroundTimedOut = background.timedOut
         }
         // A child that satisfied output_schema produced usable evidence even
         // with no prose, so the empty-result finalize retry must not run. The
         // background path still finalizes: its last turn only reported that
         // the detached work had started, or ended with work still running.
-        if (backgroundWorkPending || (initialEmpty && !initialError)) {
+        if (background || (initialEmpty && !initialError)) {
           finalizeAttempted = true
           const finalizeMessageID = MessageID.ascending()
-          const finalizeTimeoutMs = backgroundWorkPending
-            ? Math.min(SUBAGENT_FINALIZE_TIMEOUT_MS, Math.max(1, SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt)))
-            : SUBAGENT_FINALIZE_TIMEOUT_MS
+          const finalizeTimeoutMs = background
+            ? Math.min(
+                SUBAGENT_FINALIZATION_WINDOW_MS,
+                Math.max(1, SUBAGENT_TIMEOUT_MS - (Date.now() - promptStartedAt)),
+              )
+            : SUBAGENT_FINALIZATION_WINDOW_MS
           try {
             result = await withTimeout(
               SessionPrompt.prompt({
@@ -626,18 +570,12 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
                 agentRouting: "preserve",
                 isolation: constraints.isolation,
                 toolsScope: "turn",
-                tools: backgroundWorkPending
-                  ? { ...taskTools, bash: false, monitor: false, task: false, task_parallel: false }
-                  : { ...taskTools, task: false },
+                tools: background?.tools ?? { ...taskTools, task: false },
                 format: structuredFormat,
                 parts: [
                   {
                     type: "text",
-                    text: backgroundWorkPending
-                      ? backgroundTimedOut
-                        ? BACKGROUND_ONGOING_INSTRUCTION
-                        : BACKGROUND_FINALIZE_INSTRUCTION
-                      : EMPTY_FINALIZE_INSTRUCTION,
+                    text: background?.text ?? EMPTY_FINALIZE_INSTRUCTION,
                   },
                 ],
               }),

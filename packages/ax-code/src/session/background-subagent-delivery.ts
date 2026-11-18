@@ -41,72 +41,6 @@ export function isCollectingNestedResults(sessionID: SessionID): boolean {
 }
 
 /**
- * Classifies the direct child task-subagent rows of `sessionID`:
- * `pending` means a handoff delivery has not settled yet (any active row, or
- * any terminal row still pending/delivering), so the caller must wait;
- * `settled` means the automatic handoff route created a terminal row at or
- * after `since`, so its evidence landed during this execution and still needs
- * a synthesis turn. A waitfor-consumed row already reached the child as a tool
- * result and needs none. Non-task rows (prompts, workflows, monitors) are not
- * this task's evidence.
- */
-export async function nestedSubagentWork(input: {
-  sessionID: SessionID
-  since: number
-}): Promise<{ pending: boolean; settled: boolean }> {
-  const { active, terminal } = await nestedSubagentRows(input.sessionID)
-  return {
-    pending: active.length > 0 || terminal.some(hasPendingDelivery),
-    // A row from a previous execution was already synthesized (or has its own
-    // wake), so counting it here would finalize the same evidence again.
-    settled: terminal.some(
-      (item) => item.time.created >= input.since && TaskQueue.resultDeliveryClaim(item)?.owner !== "waitfor",
-    ),
-  }
-}
-
-/**
- * Whether a direct child of `sessionID` still needs its background-handoff
- * delivery to settle. Delivered or blocked rows are settled and never make the
- * wait loop wait for them.
- */
-export async function hasPendingNestedSubagentResults(sessionID: SessionID): Promise<boolean> {
-  const { active, terminal } = await nestedSubagentRows(sessionID)
-  return active.length > 0 || terminal.some(hasPendingDelivery)
-}
-
-function hasPendingDelivery(item: TaskQueue.Info) {
-  const delivery = TaskQueue.DeliveryStatus.safeParse(item.payload["deliveryStatus"])
-  return delivery.success && (delivery.data === "pending" || delivery.data === "delivering")
-}
-
-async function nestedSubagentRows(sessionID: SessionID) {
-  // A task-subagent row belongs to the child session it runs, not to the
-  // parent that launched it, so query only this parent's direct children.
-  // A project-wide bounded query let unrelated terminal rows crowd an owned
-  // row out of the limit and hide real nested work.
-  const children = await Session.children(sessionID)
-  const rows = (
-    await Promise.all(
-      children.map((child) =>
-        TaskQueue.list({
-          sessionID: child.id,
-          kind: "subagent",
-          source: "task",
-          parentSessionID: sessionID,
-          limit: 500,
-          descending: true,
-        }),
-      ),
-    )
-  ).flat()
-  return {
-    active: rows.filter((item) => !TaskQueue.isTerminalStatus(item.status)),
-    terminal: rows.filter((item) => TaskQueue.isTerminalStatus(item.status)),
-  }
-}
-
-/**
  * Bounded, abort-aware wait for the direct background subagents of
  * `sessionID`. Returns "timeout" when the caller's budget runs out; the
  * caller then keeps its existing explicit ongoing/partial result path.
@@ -120,7 +54,8 @@ export async function waitForNestedSubagentResults(input: {
   const deadline = Date.now() + Math.max(0, input.timeoutMs)
   for (;;) {
     if (input.signal?.aborted) throw abortError()
-    if (!(await hasPendingNestedSubagentResults(input.sessionID))) return "completed"
+    const { pending } = await TaskQueue.nestedSubagentWork({ sessionID: input.sessionID })
+    if (!pending) return "completed"
     const remaining = deadline - Date.now()
     if (remaining <= 0) return "timeout"
     await sleep(Math.min(NESTED_RESULT_POLL_MS, remaining), { signal: input.signal })

@@ -8,7 +8,6 @@ import { Session } from "../../src/session"
 import {
   BackgroundSubagentDeliveryInternals,
   deliverBackgroundSubagentHandoff,
-  nestedSubagentWork,
   recoverBackgroundSubagentHandoffs,
   waitForNestedSubagentResults,
 } from "../../src/session/background-subagent-delivery"
@@ -18,7 +17,9 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionSummary } from "../../src/session/summary"
 import { syntheticTextPart } from "../../src/session/prompt/prompt-message-builders"
-import { MessageID, PartID, type SessionID } from "../../src/session/schema"
+import { MessageID, PartID, TaskQueueID, type SessionID } from "../../src/session/schema"
+import { TaskQueueTable } from "../../src/session/session.sql"
+import { SessionShard } from "../../src/session/shard"
 import { TaskQueue } from "../../src/session/task-queue"
 import { WaitForTool } from "../../src/tool/waitfor"
 import { tmpdir } from "../fixture/fixture"
@@ -282,7 +283,7 @@ describe("background subagent result delivery", () => {
         await TaskQueue.claimResultDelivery({ id: task.item.id, claim })
         await TaskQueue.completeResultDelivery({ id: task.item.id, claim })
 
-        const work = await nestedSubagentWork({ sessionID: parent.id, since: Date.now() - 1000 })
+        const work = await TaskQueue.nestedSubagentWork({ sessionID: parent.id, since: Date.now() - 1000 })
         expect(work).toEqual({ pending: false, settled: false })
       },
     })
@@ -297,7 +298,10 @@ describe("background subagent result delivery", () => {
         const parent = await Session.create({})
         const task = await createCompletedBackgroundTask(parent.id, tmp.path, "current child result")
         const since = Date.now() - 1000
-        expect(await nestedSubagentWork({ sessionID: parent.id, since })).toEqual({ pending: true, settled: true })
+        expect(await TaskQueue.nestedSubagentWork({ sessionID: parent.id, since })).toEqual({
+          pending: true,
+          settled: true,
+        })
         vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
         await deliverBackgroundSubagentHandoff(task)
 
@@ -311,8 +315,67 @@ describe("background subagent result delivery", () => {
           await TaskQueue.setStatus({ id: unrelated.id, status: "completed" })
         }
 
-        const work = await nestedSubagentWork({ sessionID: parent.id, since })
+        const work = await TaskQueue.nestedSubagentWork({ sessionID: parent.id, since })
         expect(work).toEqual({ pending: false, settled: true })
+      },
+    })
+  })
+
+  test("tracks nested work even below a full page of history from the same child", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const child = await Session.create({ parentID: parent.id })
+        const payload = { source: "task", parentSessionID: parent.id, deliveryStatus: "pending" }
+        const task = await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "current nested task",
+          payload,
+        })
+        await TaskQueue.setStatus({ id: task.id, status: "running" })
+        const since = task.time.created
+        SessionShard.storeForProject(parent.projectID, { write: true }).transaction((db) => {
+          for (let index = 1; index <= 500; index++) {
+            db.insert(TaskQueueTable)
+              .values({
+                id: TaskQueueID.ascending(),
+                project_id: parent.projectID,
+                session_id: child.id,
+                directory: child.directory,
+                kind: "subagent",
+                status: "completed",
+                position: task.position + index,
+                title: "previous execution",
+                payload: { ...payload, deliveryStatus: "delivered" },
+                time_created: since - 1,
+              })
+              .run()
+          }
+        })
+
+        expect.soft(await TaskQueue.nestedSubagentWork({ sessionID: parent.id, since })).toEqual({
+          pending: true,
+          settled: false,
+        })
+        await expect.soft(waitForNestedSubagentResults({ sessionID: parent.id, timeoutMs: 0 })).resolves.toBe("timeout")
+
+        await TaskQueue.setStatus({ id: task.id, status: "completed" })
+        expect.soft(await TaskQueue.nestedSubagentWork({ sessionID: parent.id, since: since + 1 })).toEqual({
+          pending: true,
+          settled: false,
+        })
+        await expect.soft(waitForNestedSubagentResults({ sessionID: parent.id, timeoutMs: 0 })).resolves.toBe("timeout")
+
+        await TaskQueue.setDelivery({ id: task.id, status: "delivered" })
+        expect.soft(await TaskQueue.nestedSubagentWork({ sessionID: parent.id, since })).toEqual({
+          pending: false,
+          settled: true,
+        })
+        await expect(waitForNestedSubagentResults({ sessionID: parent.id, timeoutMs: 0 })).resolves.toBe("completed")
       },
     })
   })

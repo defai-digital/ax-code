@@ -5,7 +5,7 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { Database, NotFoundError, and, asc, desc, eq, gt, inArray, sql } from "@/storage/db"
+import { Database, NotFoundError, and, asc, desc, eq, gt, gte, inArray, or, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
 import { SessionMetadata } from "./metadata"
@@ -46,6 +46,8 @@ export namespace TaskQueue {
   export const nonterminalStatuses: readonly Status[] = Status.options.filter((status) => !isTerminalStatus(status))
 
   const taskToolSource = "task"
+  const queuePayloadJson = sql`case when json_valid(${TaskQueueTable.payload}) then ${TaskQueueTable.payload} end`
+  const pendingDeliveryStatuses = ["pending", "delivering"] as const
 
   export function isTaskSubagent(item: Info): boolean {
     return item.kind === "subagent" && item.payload["source"] === taskToolSource
@@ -109,12 +111,9 @@ export namespace TaskQueue {
     sessionID: SessionID.zod.optional(),
     kind: Kind.optional(),
     source: z.literal(taskToolSource).optional(),
-    parentSessionID: SessionID.zod.optional(),
     status: Status.optional(),
     statuses: z.array(Status).optional(),
     limit: z.number().int().positive().max(500).optional(),
-    /** Reverse queue position order. */
-    descending: z.boolean().optional(),
     /** Sort by descending creation time, overriding queue position ordering. */
     newestCreatedFirst: z.boolean().optional(),
   })
@@ -181,6 +180,14 @@ export namespace TaskQueue {
         completed: row.time_completed ?? undefined,
       },
     })
+  }
+
+  function readableQueueItem(row: typeof TaskQueueTable.$inferSelect): Info | undefined {
+    try {
+      return fromRow(row)
+    } catch {
+      log.warn("skipping corrupt task queue row", { id: row.id })
+    }
   }
 
   // Every read and payload-write of a queue row funnels through these two
@@ -357,19 +364,11 @@ export namespace TaskQueue {
     const conditions = [eq(TaskQueueTable.project_id, Instance.project.id)]
     if (parsed.sessionID) conditions.push(eq(TaskQueueTable.session_id, parsed.sessionID))
     if (parsed.kind) conditions.push(eq(TaskQueueTable.kind, parsed.kind))
-    if (parsed.source || parsed.parentSessionID) {
-      const payload = sql`case when json_valid(${TaskQueueTable.payload}) then ${TaskQueueTable.payload} end`
-      if (parsed.source) conditions.push(sql`json_extract(${payload}, '$.source') = ${parsed.source}`)
-      if (parsed.parentSessionID) {
-        conditions.push(sql`json_extract(${payload}, '$.parentSessionID') = ${parsed.parentSessionID}`)
-      }
-    }
+    if (parsed.source) conditions.push(sql`json_extract(${queuePayloadJson}, '$.source') = ${parsed.source}`)
     if (parsed.status) conditions.push(eq(TaskQueueTable.status, parsed.status))
     if (parsed.statuses && parsed.statuses.length > 0) conditions.push(inArray(TaskQueueTable.status, parsed.statuses))
     const order = [desc(TaskQueueTable.time_created), desc(TaskQueueTable.id)]
-    if (!parsed.newestCreatedFirst) {
-      order.unshift(parsed.descending ? desc(TaskQueueTable.position) : asc(TaskQueueTable.position))
-    }
+    if (!parsed.newestCreatedFirst) order.unshift(asc(TaskQueueTable.position))
     return SessionShard.storeForProject(Instance.project.id).use((db) => {
       let query = db
         .select()
@@ -378,14 +377,73 @@ export namespace TaskQueue {
         .orderBy(...order)
         .$dynamic()
       if (parsed.limit) query = query.limit(parsed.limit)
-      return query.all().flatMap((row) => {
-        try {
-          return [fromRow(row)]
-        } catch {
-          log.warn("skipping corrupt task queue row", { id: row.id })
-          return []
+      return query
+        .all()
+        .map(readableQueueItem)
+        .filter((item) => item !== undefined)
+    })
+  }
+
+  /**
+   * Pending work includes any active child and any terminal child whose
+   * automatic delivery is pending or in flight, regardless of age.
+   * When `since` is supplied, also report terminal rows from this execution
+   * that require automatic synthesis. Results claimed by waitfor already
+   * have their own tool-result path.
+   */
+  export async function nestedSubagentWork(input: {
+    sessionID: SessionID
+    since?: number
+  }): Promise<{ pending: boolean; settled: boolean }> {
+    const projectID = Instance.project.id
+    const Session = await loadSession()
+    const children = await Session.children(input.sessionID)
+    const work = { pending: false, settled: false }
+    if (children.length === 0) return work
+    await Promise.all(children.map((child) => assertSessionCompatible(child.id)))
+
+    const pendingDelivery = inArray(sql`json_extract(${queuePayloadJson}, '$.deliveryStatus')`, pendingDeliveryStatuses)
+    const since = input.since
+    const relevantStatus = or(
+      inArray(TaskQueueTable.status, nonterminalStatuses),
+      and(
+        inArray(TaskQueueTable.status, terminalStatuses),
+        or(pendingDelivery, since === undefined ? undefined : gte(TaskQueueTable.time_created, since)),
+      ),
+    )
+    // Check lifecycle state before reading rows. Queue position orders a
+    // display page and can put long-lived work behind historical executions.
+    return SessionShard.storeForProject(projectID).use((db) => {
+      for (const child of children) {
+        const rows = db
+          .select()
+          .from(TaskQueueTable)
+          .where(
+            and(
+              eq(TaskQueueTable.project_id, projectID),
+              eq(TaskQueueTable.session_id, child.id),
+              eq(TaskQueueTable.kind, "subagent"),
+              sql`json_extract(${queuePayloadJson}, '$.source') = ${taskToolSource}`,
+              sql`json_extract(${queuePayloadJson}, '$.parentSessionID') = ${input.sessionID}`,
+              relevantStatus,
+            ),
+          )
+          .all()
+        for (const row of rows) {
+          const item = readableQueueItem(row)
+          if (!item) continue
+          const terminal = isTerminalStatus(item.status)
+          work.pending ||=
+            !terminal || pendingDeliveryStatuses.some((status) => status === item.payload["deliveryStatus"])
+          work.settled ||=
+            terminal &&
+            since !== undefined &&
+            item.time.created >= since &&
+            resultDeliveryClaim(item)?.owner !== "waitfor"
+          if (work.pending && (since === undefined || work.settled)) return work
         }
-      })
+      }
+      return work
     })
   }
 
