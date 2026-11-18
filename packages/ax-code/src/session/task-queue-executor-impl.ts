@@ -123,13 +123,15 @@ export namespace TaskQueueExecutor {
   }
 
   export async function start(item: TaskQueue.Info): Promise<TaskQueue.Info> {
-    if (item.directory !== Instance.directory) {
-      return Instance.provide({
-        directory: item.directory,
-        fn: () => start(item),
-      })
-    }
+    const prepared = TaskQueue.repairScheduledWorkspace(item)
+    if (prepared.directory === Instance.directory) return startInWorkspace(prepared)
+    return Instance.provide({
+      directory: prepared.directory,
+      fn: () => startInWorkspace(prepared),
+    })
+  }
 
+  async function startInWorkspace(item: TaskQueue.Info): Promise<TaskQueue.Info> {
     ensureSessionBlockObservers()
     const execution = queueItemExecution(item)
     if (!execution) return item
@@ -140,7 +142,14 @@ export namespace TaskQueueExecutor {
       if (!latestExecution) return latest
       if (latest.status !== "queued" && latest.status !== "waiting_for_idle") return latest
 
-      if (latestExecution.sessionID && (await shouldWaitForIdle(latestExecution.sessionID, latest.id))) {
+      const sessionID = latestExecution.sessionID
+      // A legacy automation may already be bound to a session in the wrong
+      // checkout. Let execution record that failure without waiting on it.
+      if (
+        sessionID &&
+        (latest.kind !== "automation" || (await scheduledSessionMatchesWorkspace(sessionID))) &&
+        (await shouldWaitForIdle(sessionID, latest.id))
+      ) {
         return latest.status === "waiting_for_idle"
           ? latest
           : TaskQueue.setStatus({ id: latest.id, status: "waiting_for_idle" })
@@ -774,6 +783,11 @@ async function resolveReusableScheduledSession(
   return previous
 }
 
+async function scheduledSessionMatchesWorkspace(sessionID: SessionID): Promise<boolean> {
+  const { Session } = await import(".")
+  return (await Session.get(sessionID)).directory === Instance.directory
+}
+
 async function runScheduledPromptAutomation(
   item: TaskQueue.Info,
   scheduledTaskID: ScheduledTaskID,
@@ -791,6 +805,9 @@ async function runScheduledPromptAutomation(
   }
 
   if (item.sessionID) {
+    if (!(await scheduledSessionMatchesWorkspace(item.sessionID))) {
+      throw new Error("The scheduled session belongs to a different workspace.")
+    }
     const started = await startLocks().run(scheduledSessionLockKey(item.projectID, item.sessionID), async () => {
       requireActiveQueueItem(attempt)
       return { result: prompt(item.sessionID!, false) }

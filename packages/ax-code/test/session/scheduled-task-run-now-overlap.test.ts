@@ -6,6 +6,9 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { ScheduledTask } from "../../src/session/scheduled-task"
+import { TaskQueueTable } from "../../src/session/session.sql"
+import { SessionShard } from "../../src/session/shard"
+import { eq } from "../../src/storage/db"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { getParsedWorkflowFixtureSpec, WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
@@ -139,6 +142,61 @@ describe("ScheduledTask run-now overlap protection", () => {
     } finally {
       vi.unstubAllEnvs()
     }
+  })
+
+  test.each(["pending", "attached"] as const)("recovers a legacy %s dispatch with a stale directory", async (state) => {
+    await using tmp = await tmpdir({ git: true })
+    await using linked = await tmpdir()
+    execFileSync("git", ["worktree", "add", "--detach", linked.path], { cwd: tmp.path, stdio: "pipe" })
+    const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue(undefined as never)
+    const now = Date.now()
+    const task = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        ScheduledTask.create({
+          title: "Legacy scheduled dispatch",
+          prompt: "Use the task's workspace.",
+          schedule: { type: "once", runAt: now + 60_000 },
+        }),
+    })
+    await Instance.provide({
+      directory: linked.path,
+      fn: async () => {
+        const dispatch = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const [fired] = await ScheduledTask.runDue(now + 7 * 60_000)
+        dispatch.mockRestore()
+        const id = fired?.queueItem?.id
+        if (!id) throw new Error("Expected a queued scheduled run")
+        const previous = state === "attached" ? await Session.create({ title: "Earlier attempt" }) : undefined
+        SessionShard.storeForProject(task.projectID, { write: true }).use((db) =>
+          db
+            .update(TaskQueueTable)
+            .set({ directory: linked.path, session_id: previous?.id })
+            .where(eq(TaskQueueTable.id, id))
+            .run(),
+        )
+
+        await TaskQueueExecutor.start(await TaskQueue.get(id))
+        await vi.waitFor(
+          async () => {
+            const item = await TaskQueue.get(id)
+            const expectedStatus = previous ? "failed" : "completed"
+            expect(item.status).toBe(expectedStatus)
+            expect((await ScheduledTask.listRuns({ taskID: task.id }))[0]?.status).toBe(expectedStatus)
+            expect(item.directory).toBe(tmp.path)
+            if (previous) {
+              expect(item.error).toContain("different workspace")
+              expect(item.sessionID).toBe(previous.id)
+              expect(prompt).not.toHaveBeenCalled()
+            } else {
+              expect(prompt).toHaveBeenCalledOnce()
+              expect((await Session.get(item.sessionID!)).directory).toBe(tmp.path)
+            }
+          },
+          { timeout: 5_000 },
+        )
+      },
+    })
   })
 
   test("rejects workflow run-now when the saved workspace is gone", async () => {

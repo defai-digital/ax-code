@@ -12,7 +12,7 @@ import { WorkflowChildTable, WorkflowRunTable } from "@/workflow/workflow.sql"
 import type { WorkflowRunID } from "@/workflow/state"
 import { SessionMetadata } from "./metadata"
 import { MessageID, PartID, ScheduledTaskID, SessionID, TaskQueueID } from "./schema"
-import { MessageTable, TaskQueueTable } from "./session.sql"
+import { MessageTable, ScheduledTaskRunTable, ScheduledTaskTable, TaskQueueTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { ForegroundOwnership } from "./foreground-ownership"
 import {
@@ -372,6 +372,50 @@ export namespace TaskQueue {
     const parsed = EnqueueInput.parse(input)
     if (parsed.sessionID) throw new Error("Session queue writes require prepareEnqueue before the transaction")
     return insertEnqueued(db, parsed, options.now ?? Date.now(), options)
+  }
+
+  /** Repair the directory of pending items written before scheduled claims stored the task's workspace. */
+  export function repairScheduledWorkspace(item: Info): Info {
+    if (item.kind !== "automation" || (item.status !== "queued" && item.status !== "waiting_for_idle")) return item
+    const taskID = ScheduledTaskID.zod.safeParse(item.payload["scheduledTaskID"])
+    if (!taskID.success || taskID.data !== item.sourceTaskID) return item
+    assertProjectItem(item)
+
+    // An item payload can name any task. Trust only the queue ID recorded
+    // by the scheduler as part of the durable run claim.
+    const workspace = (db: Database.TxOrDb) =>
+      db
+        .select({ directory: ScheduledTaskTable.directory })
+        .from(ScheduledTaskRunTable)
+        .innerJoin(ScheduledTaskTable, eq(ScheduledTaskTable.id, ScheduledTaskRunTable.task_id))
+        .where(
+          and(
+            eq(ScheduledTaskRunTable.queue_id, item.id),
+            eq(ScheduledTaskRunTable.task_id, taskID.data),
+            eq(ScheduledTaskRunTable.project_id, item.projectID),
+            eq(ScheduledTaskTable.project_id, item.projectID),
+          ),
+        )
+        .get()?.directory
+    const directory = SessionShard.storeForProject(item.projectID).use(workspace)
+    if (!directory || directory === item.directory) return item
+
+    const result = SessionShard.storeForProject(item.projectID, { write: true }).transaction((db) => {
+      const current = fromRow(readRow(db, item.id))
+      assertProjectItem(current)
+      if (
+        current.kind !== "automation" ||
+        (current.status !== "queued" && current.status !== "waiting_for_idle") ||
+        current.sourceTaskID !== taskID.data ||
+        current.payload["scheduledTaskID"] !== taskID.data
+      )
+        return { item: current, changed: false }
+      const saved = workspace(db)
+      if (!saved || saved === current.directory) return { item: current, changed: false }
+      return { item: writeRow(db, current.id, { directory: saved }), changed: true }
+    })
+    if (result.changed) publishUpdated(result.item)
+    return result.item
   }
 
   async function parseEnqueue(input: EnqueueInput): Promise<z.output<typeof EnqueueInput>> {
