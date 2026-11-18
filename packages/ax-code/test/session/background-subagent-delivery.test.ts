@@ -1,5 +1,9 @@
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
 import {
   BackgroundSubagentDeliveryInternals,
@@ -9,8 +13,10 @@ import {
   waitForNestedSubagentResults,
 } from "../../src/session/background-subagent-delivery"
 import { SessionCompaction } from "../../src/session/compaction"
+import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
+import { SessionSummary } from "../../src/session/summary"
 import { syntheticTextPart } from "../../src/session/prompt/prompt-message-builders"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import { TaskQueue } from "../../src/session/task-queue"
@@ -92,6 +98,94 @@ async function handoffParts(parentID: SessionID) {
 }
 
 describe("background subagent result delivery", () => {
+  test.each([false, true])(
+    "a background handoff preserves the active parent turn's fallback route (separate worker: %s)",
+    async (crossDirectory) => {
+      const providerID = ProviderID.make("fixture")
+      const primary = ModelID.make("primary")
+      const original = ModelID.make("original")
+      const edited = ModelID.make("edited")
+      const card = { tool_call: true, limit: { context: 128_000, output: 8_192 } }
+      await using tmp = await tmpdir({
+        git: true,
+        config: {
+          enabled_providers: [providerID],
+          provider: {
+            [providerID]: {
+              npm: "@ai-sdk/openai-compatible",
+              api: "https://fixture.invalid/v1",
+              models: { [primary]: card, [original]: card, [edited]: card },
+            },
+          },
+        },
+      })
+
+      const workerDirectory = path.join(tmp.path, "worker")
+      if (crossDirectory) await mkdir(workerDirectory)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const config = await Config.get()
+          config.llm_routing = { fallback: [{ providerID, modelID: original }] }
+          const parent = await Session.create({ title: "Live handoff route" })
+          const task = await createCompletedBackgroundTask(parent.id, tmp.path, "Child result")
+          const targets: ModelID[] = []
+          const response = (text?: string) =>
+            ({
+              fullStream: (async function* () {
+                yield { type: "start" }
+                yield { type: "start-step" }
+                if (text) {
+                  yield { type: "text-start", id: "response" }
+                  yield { type: "text-delta", id: "response", text }
+                  yield { type: "text-end", id: "response" }
+                }
+                yield {
+                  type: "finish-step",
+                  finishReason: "stop",
+                  usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+                }
+                yield { type: "finish" }
+              })(),
+            }) as unknown as Awaited<ReturnType<typeof LLM.stream>>
+          vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+          vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+            if (input.small) return response("Fixture title")
+            targets.push(input.model.id)
+            if (targets.length === 1) {
+              config.llm_routing = { fallback: [{ providerID, modelID: edited }] }
+              const deliver = () => deliverBackgroundSubagentHandoff(task)
+              const delivered = crossDirectory
+                ? await Instance.provide({ directory: workerDirectory, fn: deliver })
+                : await deliver()
+              expect(delivered.payload["deliveryStatus"]).toBe("delivered")
+              return response()
+            }
+            if (input.model.id === primary) {
+              throw new MessageV2.APIError({
+                message: "Primary unavailable",
+                statusCode: 503,
+                isRetryable: false,
+                metadata: { retryExhausted: "true" },
+              })
+            }
+            return response("Fallback answered")
+          })
+
+          await SessionPrompt.prompt({
+            sessionID: parent.id,
+            model: { providerID, modelID: primary },
+            agent: "build",
+            parts: [{ type: "text", text: "Continue the current work." }],
+          })
+
+          expect(await handoffParts(parent.id)).toHaveLength(1)
+          expect(targets.slice(0, 3)).toEqual([primary, primary, original])
+        },
+      })
+    },
+  )
+
   test("waitfor and automatic handoff select exactly one result consumer", async () => {
     await using tmp = await tmpdir({ git: true })
 

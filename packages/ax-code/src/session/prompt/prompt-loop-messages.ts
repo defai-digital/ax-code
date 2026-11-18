@@ -53,22 +53,45 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
   }
 }
 
+type UserMessageCursor = Pick<MessageV2.User, "id" | "time">
+type PromptContinuations = {
+  record(message: UserMessageCursor): void
+  has(id: MessageID): boolean
+  discardObserved(cursor: UserMessageCursor): void
+}
+
+function isAfter(id: MessageID, created: number, cursor: UserMessageCursor): boolean {
+  return created > cursor.time.created || (created === cursor.time.created && id > cursor.id)
+}
+
+export function createPromptContinuations(): PromptContinuations {
+  const pending = new Map<MessageID, number>()
+  return {
+    record(message: UserMessageCursor): void {
+      pending.set(message.id, message.time.created)
+    },
+    has(id: MessageID): boolean {
+      return pending.has(id)
+    },
+    discardObserved(cursor: UserMessageCursor): void {
+      for (const [id, created] of pending) {
+        if (!isAfter(id, created, cursor)) pending.delete(id)
+      }
+    },
+  }
+}
+
 export function hasNewUserRequestAfter(
   messages: readonly MessageV2.WithParts[],
-  previous: MessageV2.User,
-  continuationIDs: ReadonlySet<MessageID>,
+  previous: UserMessageCursor,
+  continuations: Pick<PromptContinuations, "has">,
 ): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const { info, parts } = messages[i]
     if (info.role !== "user") continue
     // Use the history's order because compaction may have hidden the previous user message.
-    if (
-      info.time.created < previous.time.created ||
-      (info.time.created === previous.time.created && info.id <= previous.id)
-    ) {
-      return false
-    }
-    if (!continuationIDs.has(info.id) && !parts.some((part) => part.type === "compaction")) return true
+    if (!isAfter(info.id, info.time.created, previous)) return false
+    if (!continuations.has(info.id) && !parts.some((part) => part.type === "compaction")) return true
   }
   return false
 }

@@ -316,8 +316,9 @@ export namespace SessionPrompt {
     return receipt
   }
 
-  function start(sessionID: SessionID) {
-    return runState.start(sessionID)
+  /** Record a trusted continuation after its durable write. */
+  export function recordContinuation(message: Pick<MessageV2.User, "sessionID" | "id" | "time">): void {
+    runState.recordContinuation(message)
   }
 
   function resume(sessionID: SessionID) {
@@ -410,8 +411,8 @@ export namespace SessionPrompt {
 
     const resumedAbort = resume_existing ? resume(sessionID) : undefined
     const isResumingActiveLoop = resumedAbort !== undefined
-    const abort = isResumingActiveLoop ? undefined : start(sessionID)
-    if (!abort) {
+    const run = isResumingActiveLoop ? undefined : runState.start(sessionID)
+    if (!run) {
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
         // Capture atomically: a concurrent cancel() may have deleted the
         // state entry between the `start()` check above and this access,
@@ -422,6 +423,7 @@ export namespace SessionPrompt {
         }
       })
     }
+    const { signal: abort, continuations: recoveryContinuations } = run
 
     // Loop bookkeeping the `await using` disposers below read. Declared before
     // the first disposer: beginPromptLoopRecording / Provider.warmup() can
@@ -647,7 +649,6 @@ export namespace SessionPrompt {
     let cachedModel: PromptCacheEntry<Provider.Model>
     let fallbackModelOverride: MessageV2.User["model"] | undefined
     let previousRecoveryUser: MessageV2.User | undefined
-    const recoveryContinuationIDs = new Set<MessageID>()
     // Pending user-facing notice for an automatic provider fallback (#394,
     // #415). Only the ORIGINALLY requested provider is recorded here; the
     // single clean notice persisted on the fallback turn's assistant message
@@ -669,7 +670,7 @@ export namespace SessionPrompt {
 
     async function continueWithText(text: string, messages = msgs): Promise<void> {
       const message = await createAutonomousTextContinuation({ sessionID, messages, text })
-      recoveryContinuationIDs.add(message.info.id)
+      recoveryContinuations.record(message.info)
     }
 
     async function continueAutonomousLoop({
@@ -864,7 +865,7 @@ export namespace SessionPrompt {
         mediaProjection = "normal"
       }
       if (previousRecoveryUser?.id !== lastUser.id) {
-        if (previousRecoveryUser && hasNewUserRequestAfter(msgs, previousRecoveryUser, recoveryContinuationIDs)) {
+        if (previousRecoveryUser && hasNewUserRequestAfter(msgs, previousRecoveryUser, recoveryContinuations)) {
           fallbackCandidates = structuredClone((await Config.get()).llm_routing?.fallback ?? [])
           fallbackModelOverride = undefined
           failedFallbackModelKeys.clear()
@@ -872,8 +873,8 @@ export namespace SessionPrompt {
           fallbackNoticePart = undefined
         }
         previousRecoveryUser = lastUser
-        recoveryContinuationIDs.clear()
       }
+      recoveryContinuations.discardObserved(lastUser)
       if (fallbackModelOverride) {
         lastUser = {
           ...lastUser,
@@ -1147,9 +1148,7 @@ export namespace SessionPrompt {
           sessionID,
           busyRetries: compactionRetries.busy,
           fallbackCandidates,
-          onContinuationCommitted: (id) => {
-            recoveryContinuationIDs.add(id)
-          },
+          onContinuationCommitted: recoveryContinuations.record,
         })
         if (compaction.action === "break") {
           reason = compaction.reason
@@ -2677,7 +2676,7 @@ export namespace SessionPrompt {
   export async function shell(input: ShellInput) {
     return SessionExecution.withRun(input.sessionID, () =>
       executeShellCommand(input, {
-        start,
+        start: (sessionID) => runState.start(sessionID)?.signal,
         queuedCallbacks: runState.queuedCallbacks,
         markIdle: runState.markIdle,
         prepareHandoff: SessionExecution.prepareHandoff,

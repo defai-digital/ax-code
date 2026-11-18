@@ -4,6 +4,7 @@ import { MessageV2 } from "../message-v2"
 import type { SessionID } from "../schema"
 import { SessionSteering } from "../steering"
 import { SessionStatus } from "../status"
+import { createPromptContinuations } from "./prompt-loop-messages"
 
 type PromptRunCallback = {
   resolve(input: MessageV2.WithParts): void
@@ -19,6 +20,7 @@ type PromptRunEntry = {
   abort: AbortController
   running: boolean
   callbacks: PromptRunCallback[]
+  continuations: ReturnType<typeof createPromptContinuations>
 }
 
 export function createPromptRunState() {
@@ -53,13 +55,20 @@ export function createPromptRunState() {
       const existing = s[sessionID]
       if (existing?.running) return
       const controller = new AbortController()
+      const continuations = createPromptContinuations()
       s[sessionID] = {
         abort: controller,
         running: true,
         callbacks: existing?.callbacks ?? [],
+        continuations,
       }
       SessionSteering.begin(sessionID, controller.signal)
-      return controller.signal
+      return { signal: controller.signal, continuations }
+    },
+
+    recordContinuation(message: Pick<MessageV2.User, "sessionID" | "id" | "time">): void {
+      const entry = state()[message.sessionID]
+      if (entry?.running && !entry.abort.signal.aborted) entry.continuations.record(message)
     },
 
     resume(sessionID: SessionID) {

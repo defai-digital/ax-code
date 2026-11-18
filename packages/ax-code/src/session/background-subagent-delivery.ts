@@ -1,5 +1,6 @@
 import { abortError } from "@/util/abort"
 import { Log } from "@/util/log"
+import { Instance } from "@/project/instance"
 import { sleep } from "@/util/timeout"
 import { NotFoundError } from "@/storage/db"
 import { Session } from "."
@@ -270,6 +271,27 @@ async function persistParentHandoff(
   item: TaskQueue.Info,
   claim: Extract<TaskQueue.ResultDeliveryClaim, { owner: "handoff" }>,
 ) {
+  const parent = await Session.get(parentSessionID)
+  // A queue worker may be running in the child worktree. Use the existing
+  // parent instance so the continuation is registered with its active loop.
+  if (
+    parent.directory !== Instance.directory &&
+    (await Instance.withExisting(parent.directory, async () => {
+      await writeParentHandoff(parentSessionID, text, item, claim)
+      return true
+    }))
+  ) {
+    return
+  }
+  await writeParentHandoff(parentSessionID, text, item, claim)
+}
+
+async function writeParentHandoff(
+  parentSessionID: SessionID,
+  text: string,
+  item: TaskQueue.Info,
+  claim: Extract<TaskQueue.ResultDeliveryClaim, { owner: "handoff" }>,
+): Promise<void> {
   const messages = await Session.messages({ sessionID: parentSessionID })
   const lastUser = messages.findLast(
     (message) => message.info.role === "user" && !message.parts.some((part) => part.type === "compaction"),
@@ -282,7 +304,7 @@ async function persistParentHandoff(
   )
   const sourceUser =
     existing?.info.role === "user" ? existing.info : lastUser?.info.role === "user" ? lastUser.info : undefined
-  const user = (await Session.updateMessage({
+  const user: MessageV2.User = {
     id: claim.messageID,
     sessionID: parentSessionID,
     role: "user",
@@ -295,8 +317,8 @@ async function persistParentHandoff(
     format: sourceUser?.format,
     variant: sourceUser?.variant,
     requestedDepth: sourceUser?.requestedDepth,
-  })) as MessageV2.User
-  await Session.updatePart({
+  }
+  const part: MessageV2.TextPart = {
     id: claim.partID,
     messageID: user.id,
     sessionID: user.sessionID,
@@ -307,6 +329,9 @@ async function persistParentHandoff(
       source: "background_subagent_handoff",
       taskQueueID: item.id,
     },
+  }
+  await Session.updateMessageWithParts(user, [part], {
+    afterCommit: () => SessionPrompt.recordContinuation(user),
   })
 }
 

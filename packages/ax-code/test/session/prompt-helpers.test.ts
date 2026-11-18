@@ -7,7 +7,7 @@ import { tmpdir } from "../fixture/fixture"
 import { MessageV2 } from "../../src/session/message-v2"
 import { Session } from "../../src/session"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
-import { hasNewUserRequestAfter } from "../../src/session/prompt/prompt-loop-messages"
+import { createPromptContinuations, hasNewUserRequestAfter } from "../../src/session/prompt/prompt-loop-messages"
 import {
   agentInfo,
   appendShellOutputChunk,
@@ -600,7 +600,16 @@ describe("session.prompt helpers", () => {
     })
     const previous = user("msg_002", 2)
     const older = { info: user("msg_001", 1), parts: [] }
-    const submitted = { info: user("msg_003", 2), parts: [] }
+    const submitted: MessageV2.WithParts = { info: user("msg_003", 2), parts: [] }
+    submitted.parts.push({
+      id: PartID.make("prt_submitted"),
+      sessionID,
+      messageID: submitted.info.id,
+      type: "text",
+      text: "New user instructions",
+      synthetic: true,
+      metadata: { source: "background_subagent_handoff" },
+    })
     const marker: MessageV2.WithParts = { info: user("msg_004", 3), parts: [] }
     marker.parts.push({
       id: PartID.make("prt_marker"),
@@ -610,10 +619,16 @@ describe("session.prompt helpers", () => {
       auto: true,
     })
     const replay = { info: user("msg_005", 4), parts: [] }
-    const continuations = new Set([replay.info.id])
+    const continuations = createPromptContinuations()
+    continuations.record(replay.info)
 
     expect(hasNewUserRequestAfter([older, marker, replay], previous, continuations)).toBe(false)
     expect(hasNewUserRequestAfter([older, submitted, marker, replay], previous, continuations)).toBe(true)
+    const later = user("msg_006", 4)
+    continuations.record(later)
+    continuations.discardObserved(replay.info)
+    expect(continuations.has(replay.info.id)).toBe(false)
+    expect(continuations.has(later.id)).toBe(true)
   })
 
   test("scanLoopMessages returns the last step-finish tokens of the finished turn", () => {

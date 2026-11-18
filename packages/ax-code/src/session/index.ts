@@ -1517,7 +1517,7 @@ export namespace Session {
   export async function updateMessageWithParts(
     info: MessageV2.Info,
     parts: MessageV2.Part[],
-    admission?: { beforeCommit(): void; afterCommit(): void },
+    admission?: { beforeCommit?(): void; afterCommit(): void },
   ) {
     const execution = SessionExecutionContext.stamp(info.sessionID)
     validatePartScope(parts, info.sessionID, info.id)
@@ -1525,7 +1525,7 @@ export namespace Session {
     const partTime = Date.now()
     const store = SessionShard.storeFor(info.sessionID, { write: true })
     store.transaction((db) => {
-      admission?.beforeCommit()
+      admission?.beforeCommit?.()
       info = MessageWrite.message(db, info, messageTimeUpdated, execution)
       MessageWrite.parts(db, parts, partTime, Date.now())
     })
