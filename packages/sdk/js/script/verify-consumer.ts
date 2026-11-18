@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url"
 import { artifactDir, pack, tarballName } from "./github-package.mjs"
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url))
-const repoRoot = path.resolve(packageRoot, "../../..")
 const require = createRequire(import.meta.url)
 const compilerManifestPath = require.resolve("@typescript/native/package.json")
 const compilerManifest = JSON.parse(await fs.readFile(compilerManifestPath, "utf8")) as { bin: Record<string, string> }
@@ -37,8 +36,11 @@ const installedRoot = path.join(consumerRoot, "node_modules", publicName)
 const copiedDependencies = new Map<string, string>()
 
 async function findDependency(name: string, from: string): Promise<string> {
-  for (let dir = from; dir.startsWith(`${repoRoot}${path.sep}`) || dir === repoRoot; dir = path.dirname(dir)) {
-    const candidate = path.join(dir, "node_modules", name)
+  // pnpm package realpaths can live outside a linked worktree. Follow the
+  // package's own Node resolution paths, including its transitive siblings.
+  const resolver = createRequire(path.join(from, "package.json"))
+  for (const directory of resolver.resolve.paths(name) ?? []) {
+    const candidate = path.join(directory, name)
     const real = await fs.realpath(candidate).catch(() => undefined)
     if (real) return real
   }
