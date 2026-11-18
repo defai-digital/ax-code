@@ -474,7 +474,7 @@ describe("scheduled task routes", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const runAt = Date.now() + 10
+        const runAt = Date.now() + 1_000
         const task = await ScheduledTask.create({
           title: "Atomic handoff",
           prompt: "Do not lose this occurrence.",
@@ -485,11 +485,12 @@ describe("scheduled task routes", () => {
         })
 
         try {
-          await expect(ScheduledTask.runDue(runAt + 1)).rejects.toThrow("simulated queue insert failure")
+          await expect(ScheduledTask.runDue(runAt + 1)).resolves.toEqual([])
           const refreshed = await ScheduledTask.get(task.id)
           expect(refreshed.nextRunAt).toBe(runAt)
           expect(refreshed.lastRunAt).toBeUndefined()
           expect(await TaskQueue.list()).toEqual([])
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toEqual([])
         } finally {
           enqueue.mockRestore()
         }

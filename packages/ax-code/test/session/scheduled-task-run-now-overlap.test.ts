@@ -7,9 +7,9 @@ import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { ScheduledTaskID, TaskQueueID } from "../../src/session/schema"
-import { TaskQueueTable } from "../../src/session/session.sql"
+import { ScheduledTaskTable, TaskQueueTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
-import { eq } from "../../src/storage/db"
+import { eq, sql } from "../../src/storage/db"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { getParsedWorkflowFixtureSpec, WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
@@ -149,6 +149,101 @@ describe("ScheduledTask run-now overlap protection", () => {
         } finally {
           clock.mockRestore()
         }
+      },
+    })
+  })
+
+  test.each(["invalid timezone", "invalid JSON", "enqueue failure"] as const)(
+    "a due task with %s leaves later tasks eligible",
+    async (failure) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const now = Date.now()
+          const rejected = await ScheduledTask.create({
+            title: "Failing due task",
+            prompt: "First.",
+            schedule: { type: "once", runAt: now + 1_000 },
+          })
+          const healthy = await ScheduledTask.create({
+            title: "Healthy due task",
+            prompt: "Second.",
+            schedule: { type: "once", runAt: now + 2_000 },
+          })
+          if (failure === "invalid timezone") {
+            SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+              db.update(ScheduledTaskTable)
+                .set({ schedule: { type: "cron", expression: "* * * * *", timezone: "Not/A_Timezone" } })
+                .where(eq(ScheduledTaskTable.id, rejected.id))
+                .run()
+            })
+          } else if (failure === "invalid JSON") {
+            SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+              db.run(sql`update scheduled_task set schedule = ${"{"} where id = ${rejected.id}`)
+            })
+          } else {
+            const enqueue = TaskQueue.enqueueInTransaction
+            vi.spyOn(TaskQueue, "enqueueInTransaction").mockImplementationOnce((...args) => {
+              enqueue(...args)
+              throw new Error("Injected queue write failure")
+            })
+          }
+
+          const runs = await ScheduledTask.runDue(now + 6 * 60_000)
+          expect(runs.map(({ task }) => task.id)).toEqual([healthy.id])
+          expect(await TaskQueue.list()).toMatchObject([{ sourceTaskID: healthy.id }])
+          SessionShard.storeForProject(Instance.project.id).use((db) => {
+            expect(
+              db
+                .select({ nextRunAt: ScheduledTaskTable.next_run_at })
+                .from(ScheduledTaskTable)
+                .where(eq(ScheduledTaskTable.id, rejected.id))
+                .get()?.nextRunAt,
+            ).toBe(rejected.nextRunAt)
+          })
+          if (failure !== "invalid JSON") expect(await ScheduledTask.listRuns({ taskID: rejected.id })).toEqual([])
+        },
+      })
+    },
+  )
+
+  test("a full page of malformed rows cannot hide a healthy due task", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const malformed = await ScheduledTask.create({
+          title: "Malformed duplicate",
+          prompt: "First.",
+          schedule: { type: "once", runAt: now + 1_000 },
+        })
+        const healthy = await ScheduledTask.create({
+          title: "Healthy due task",
+          prompt: "Second.",
+          schedule: { type: "once", runAt: now + 2_000 },
+        })
+        SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+          db.delete(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, malformed.id)).run()
+          db.insert(ScheduledTaskTable)
+            .values(
+              Array.from({ length: 50 }, () => ({
+                id: ScheduledTaskID.ascending(),
+                project_id: malformed.projectID,
+                directory: malformed.directory,
+                title: malformed.title,
+                prompt: malformed.prompt,
+                schedule: { type: "invalid" },
+                status: "active",
+                next_run_at: malformed.nextRunAt,
+              })),
+            )
+            .run()
+        })
+        expect((await ScheduledTask.runDue(now + 6 * 60_000)).map(({ task }) => task.id)).toEqual([healthy.id])
       },
     })
   })

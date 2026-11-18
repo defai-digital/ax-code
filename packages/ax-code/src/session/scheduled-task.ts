@@ -49,6 +49,7 @@ export namespace ScheduledTask {
   export const countCoalesced = Timing.countCoalesced
 
   const MISSED_RUN_GRACE_MS = 5 * 60 * 1_000
+  const MAX_DUE_TASKS_PER_POLL = 50
 
   // ADR-059 tuning. Run history is bounded per task; overlap / backoff state is
   // DERIVED from history rather than stored on `scheduled_task` (shards have no
@@ -399,6 +400,12 @@ export namespace ScheduledTask {
     })
   }
 
+  const scheduledTaskOrder = [
+    asc(ScheduledTaskTable.next_run_at),
+    desc(ScheduledTaskTable.time_created),
+    desc(ScheduledTaskTable.id),
+  ] as const
+
   export async function list(input: Partial<ListInput> = {}): Promise<Info[]> {
     const parsed = ListInput.partial().parse(input)
     const conditions = [eq(ScheduledTaskTable.project_id, Instance.project.id)]
@@ -409,11 +416,7 @@ export namespace ScheduledTask {
         .select()
         .from(ScheduledTaskTable)
         .where(and(...conditions))
-        .orderBy(
-          asc(ScheduledTaskTable.next_run_at),
-          desc(ScheduledTaskTable.time_created),
-          desc(ScheduledTaskTable.id),
-        )
+        .orderBy(...scheduledTaskOrder)
         .$dynamic()
       if (parsed.limit) query = query.limit(parsed.limit)
       // A single corrupt row must not wedge the scheduler tick or 500 the list
@@ -945,29 +948,52 @@ export namespace ScheduledTask {
     return publishOutcome(id, outcome)
   }
 
+  async function listDueOccurrences(now: number): Promise<{ id: ScheduledTaskID; occurrenceAt: number | null }[]> {
+    const projectID = Instance.project.id
+    // Discover due occurrences without decoding schedules. A malformed row
+    // must fail only when its own claim is attempted.
+    return SessionShard.storeForProject(projectID).use((db) =>
+      db
+        .select({ id: ScheduledTaskTable.id, occurrenceAt: ScheduledTaskTable.next_run_at })
+        .from(ScheduledTaskTable)
+        .where(
+          and(
+            eq(ScheduledTaskTable.project_id, projectID),
+            eq(ScheduledTaskTable.status, "active"),
+            lte(ScheduledTaskTable.next_run_at, now),
+          ),
+        )
+        .orderBy(...scheduledTaskOrder)
+        .all(),
+    )
+  }
+
   export async function runDue(now = Date.now()): Promise<RunNowResult[]> {
-    const due = await list({ status: "active", dueBefore: now, limit: 50 })
+    const due = await listDueOccurrences(now)
     const results: RunNowResult[] = []
-    for (const { id, nextRunAt: occurrenceAt } of due) {
-      if (occurrenceAt === undefined || occurrenceAt > now) continue
-      const claimed = claimDueTask(id, occurrenceAt, now)
-      if (!claimed) continue
-      if ("reason" in claimed) {
-        publishUpdated(claimed.task)
-        if (claimed.run) publishSkipped(claimed.task, claimed.run)
-        log.info("skipped scheduled task occurrence", {
-          taskID: id,
-          reason: claimed.reason,
-          occurrenceAt,
-          coalescedCount: claimed.run?.coalescedCount,
-          nextRunAt: claimed.task.nextRunAt,
-        })
-        continue
-      }
+    let claimedCount = 0
+    for (const { id, occurrenceAt } of due) {
+      if (claimedCount >= MAX_DUE_TASKS_PER_POLL) break
+      if (occurrenceAt === null) continue
       try {
+        const claimed = claimDueTask(id, occurrenceAt, now)
+        if (!claimed) continue
+        claimedCount++
+        if ("reason" in claimed) {
+          publishUpdated(claimed.task)
+          if (claimed.run) publishSkipped(claimed.task, claimed.run)
+          log.info("skipped scheduled task occurrence", {
+            taskID: id,
+            reason: claimed.reason,
+            occurrenceAt,
+            coalescedCount: claimed.run?.coalescedCount,
+            nextRunAt: claimed.task.nextRunAt,
+          })
+          continue
+        }
         results.push(await dispatchClaimedRun(claimed))
       } catch (error) {
-        log.warn("scheduled task dispatch failed", { taskID: id, error })
+        log.warn("scheduled task poll failed for occurrence", { taskID: id, occurrenceAt, error })
       }
     }
     return results
