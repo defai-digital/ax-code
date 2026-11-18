@@ -11,12 +11,10 @@
 import z from "zod"
 import { Log } from "../util/log.js"
 import { withTransientInstance as bootstrap } from "../project/with-instance.js"
-import { Server } from "../server/server.js"
 import { Auth } from "../auth/index.js"
 import { ensureSdkRuntime } from "./runtime.js"
 import { ToolRegistry } from "../tool/registry.js"
 import { Tool } from "../tool/tool.js"
-import { createAxCodeClient } from "@ax-code/sdk/v2/client"
 import type {
   Message as ApiMessage,
   AxCodeClient,
@@ -28,7 +26,7 @@ import type {
   SessionMessagesResponse,
 } from "@ax-code/sdk/v2/client"
 import { internalBaseUrl } from "../util/internal-url.js"
-import { ServerRuntimeAuth } from "../server/runtime-auth.js"
+import { RuntimeLocalClient } from "../runtime/local-client.js"
 import { toError, toErrorMessage } from "../util/error-message.js"
 import { withTimeout } from "../util/timeout.js"
 import type {
@@ -554,24 +552,6 @@ function fromSdkTool(sdkTool: SdkTool): Tool.Info {
 }
 
 // ============================================================
-// IN-PROCESS CLIENT
-// ============================================================
-
-function createInProcessClient(directory: string): AxCodeClient {
-  const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const request = new Request(input, init)
-    ServerRuntimeAuth.apply(request.headers)
-    return Server.Default().fetch(request)
-  }) as typeof globalThis.fetch
-
-  return createAxCodeClient({
-    baseUrl: internalBaseUrl(),
-    fetch: fetchFn,
-    directory,
-  })
-}
-
-// ============================================================
 // EVENT COLLECTION
 // ============================================================
 
@@ -999,7 +979,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
         }
       }
 
-      sdk = createInProcessClient(opts.directory)
+      sdk = RuntimeLocalClient.create({ directory: opts.directory, baseUrl: internalBaseUrl() })
       resolve()
 
       // Block the bootstrap callback until dispose() is called so

@@ -31,9 +31,7 @@ test("programmatic tool argument formatting falls back when serialization throws
 test("programmatic SDK internals use AX Code client naming", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
 
-  expect(src).toContain("createAxCodeClient")
   expect(src).toContain("AxCodeClient")
-  expect(src).not.toContain("createOpencodeClient")
   expect(src).not.toContain("OpencodeClient")
 })
 

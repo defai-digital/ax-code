@@ -11,8 +11,6 @@ const cliEntries = new Set([
 // permit importing CLI startup, flags, commands or terminal presentation.
 const serverHosts = new Set([
   ...cliEntries,
-  `${sourceRoot}sdk/programmatic.ts`,
-  `${sourceRoot}sdk/programmatic-impl.ts`,
   `${sourceRoot}runtime/local-client.ts`,
   `${sourceRoot}mcp/oauth-callback.ts`,
   `${sourceRoot}control-plane/workspace-server/server.ts`,
