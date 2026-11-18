@@ -1727,18 +1727,6 @@ export namespace Provider {
     return sortBy(models, [(model) => (isGenericCliFallbackModel(model) ? 1 : 0), "asc"], [(model) => model.id, "desc"])
   }
 
-  /** Preserve exact user intent; availability is checked by getModel at dispatch. */
-  export async function resolvePinnedModel(model: {
-    providerID: ProviderID
-    modelID: ModelID
-  }): Promise<{ providerID: ProviderID; modelID: ModelID } | undefined> {
-    return model
-  }
-
-  export async function resolveRequestedModel(model: { providerID: ProviderID; modelID: ModelID }) {
-    return model
-  }
-
   export async function defaultModel() {
     const cfg = await Config.get()
     if (cfg.model) return parseModel(cfg.model)

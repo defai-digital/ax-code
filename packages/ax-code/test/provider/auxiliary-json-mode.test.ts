@@ -4,7 +4,6 @@ vi.mock("ai", () => ({ generateObject: vi.fn() }))
 vi.mock("@/config/config", () => ({ Config: { get: vi.fn(async () => ({ routing: { llm: true } })) } }))
 vi.mock("@/provider/provider", () => ({
   Provider: {
-    resolveRequestedModel: vi.fn(async (model) => model),
     getModel: vi.fn(async () => ({})),
     getLanguage: vi.fn(async () => ({})),
     getSmallModel: vi.fn(async () => ({})),

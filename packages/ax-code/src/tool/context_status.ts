@@ -23,16 +23,16 @@ import { isCliUsageModel, modelContextTokens } from "../provider/context-usage"
 // never a guessed one.
 async function resolveModel(initModel: { providerID: string; modelID: string } | undefined, ctx: Tool.Context) {
   if (initModel) {
-    const reference = await Provider.resolveRequestedModel({
+    const reference = {
       providerID: ProviderID.make(initModel.providerID),
       modelID: ModelID.make(initModel.modelID),
-    })
+    }
     const model = await Provider.getModel(reference.providerID, reference.modelID).catch(() => undefined)
     if (model) return model
   }
   const user = ctx.messages.findLast((msg) => msg.info.role === "user")
   if (user && user.info.role === "user") {
-    const reference = await Provider.resolveRequestedModel(user.info.model)
+    const reference = user.info.model
     const model = await Provider.getModel(reference.providerID, reference.modelID).catch(() => undefined)
     if (model) return model
   }

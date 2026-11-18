@@ -175,7 +175,7 @@ export namespace SessionRecap {
         log.warn("recap agent missing", { sessionID: input.sessionID })
         return undefined
       }
-      const userModel = await Provider.resolveRequestedModel(lastUser.model)
+      const userModel = lastUser.model
       // Same precedence as the title agent: explicit model pin first, then
       // the provider's small tier, then the session model as fallback.
       const model = await (async () => {

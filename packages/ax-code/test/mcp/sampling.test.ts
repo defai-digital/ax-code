@@ -1,7 +1,13 @@
 import { afterAll, afterEach, beforeAll, expect, test, vi } from "vitest"
+import { Agent } from "../../src/agent/agent"
 import { McpSampling } from "../../src/mcp/sampling"
 import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
+import { ModelID, ProviderID } from "../../src/provider/schema"
+import { Session } from "../../src/session"
+import { LLM } from "../../src/session/llm"
+import type { MessageV2 } from "../../src/session/message-v2"
 import { SessionID } from "../../src/session/schema"
 
 // Autonomous mode defaults ON at runtime (AX_CODE_AUTONOMOUS) and the
@@ -16,6 +22,7 @@ afterAll(() => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Instance.disposeAll()
 })
 
@@ -134,6 +141,30 @@ test("planRequest rejects empty messages, oversize, unknown roles, and non-text 
     maxTokensCap: 1000,
   })
   expect(nonText).toMatchObject({ ok: false })
+})
+
+test("defaultGenerate returns the exact session model reference with the completion", async () => {
+  const providerID = ProviderID.make("fixture-provider")
+  const modelID = ModelID.make("session-alias")
+  const resolved = { id: ModelID.make("resolved-model"), providerID } as Provider.Model
+  vi.spyOn(Agent, "get").mockResolvedValue({ name: "recap" } as Agent.Info)
+  vi.spyOn(Session, "messages").mockResolvedValue([
+    { info: { role: "user", model: { providerID, modelID } }, parts: [] },
+  ] as unknown as MessageV2.WithParts[])
+  const getModel = vi.spyOn(Provider, "getModel").mockResolvedValue(resolved)
+  const stream = vi.spyOn(LLM, "stream").mockResolvedValue({
+    text: Promise.resolve("  sampled output  "),
+  } as unknown as Awaited<ReturnType<typeof LLM.stream>>)
+  await expect(
+    McpSampling.defaultGenerate({
+      sessionID: callContext().sessionID,
+      signal: new AbortController().signal,
+      messages: [{ role: "user", text: "hi" }],
+      maxTokens: 200,
+    }),
+  ).resolves.toEqual({ model: "fixture-provider/session-alias", text: "sampled output", stopReason: "endTurn" })
+  expect(getModel).toHaveBeenCalledWith(providerID, modelID)
+  expect(stream).toHaveBeenCalledWith(expect.objectContaining({ model: resolved, tools: {}, retries: 0 }))
 })
 
 // -------------------------------------------------------------------------

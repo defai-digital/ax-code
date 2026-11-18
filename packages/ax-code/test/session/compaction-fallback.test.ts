@@ -179,9 +179,6 @@ describe("session.compaction model fallback (C9)", () => {
         fn: async () => {
           const small = createModel({ providerID: "test", modelID: "test-small" })
           const pin = createModel({ providerID: "test", modelID: "test-pin" })
-          const resolvePin = vi
-            .spyOn(Provider, "resolvePinnedModel")
-            .mockResolvedValue({ providerID: ProviderID.make("test"), modelID: ModelID.make("test-pin") })
           const session = createModel({ providerID: "test", modelID: "test-model" })
           const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
           const { getModel } = mockProviders({
@@ -227,7 +224,6 @@ describe("session.compaction model fallback (C9)", () => {
               expect(failed.error.data.metadata?.failureClass).toBe("model_unsupported")
             }
           } finally {
-            resolvePin.mockRestore()
             processor.spy.mockRestore()
             smallSpy.mockRestore()
             getModel.mockRestore()
@@ -355,13 +351,6 @@ describe("session.compaction model fallback (C9)", () => {
             models: {},
           },
         } as never)
-        // The compaction agent's pin is resolved through agentModel →
-        // resolvePinnedModel (which consults the real Provider.list() — not
-        // the spy above). Stub it directly so the pin reads as available and
-        // the privacy guard is what this test exercises.
-        const resolveSpy = vi
-          .spyOn(Provider, "resolvePinnedModel")
-          .mockResolvedValue({ providerID: ProviderID.make("local"), modelID: ModelID.make("local-small") })
         const processor = mockProcessor([
           { type: "fail", error: apiError({ message: "Internal Server Error", statusCode: 500, isRetryable: true }) },
           { type: "succeed" },
@@ -395,7 +384,6 @@ describe("session.compaction model fallback (C9)", () => {
         } finally {
           processor.spy.mockRestore()
           listSpy.mockRestore()
-          resolveSpy.mockRestore()
           smallSpy.mockRestore()
           getModel.mockRestore()
         }

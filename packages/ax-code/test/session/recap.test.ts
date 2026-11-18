@@ -193,7 +193,6 @@ describe("recap generation boundary", () => {
     vi.spyOn(Session, "get").mockResolvedValue({ id: sessionID } as Session.Info)
     const persist = vi.spyOn(Session, "setLastRecap").mockResolvedValue({ id: sessionID } as Session.Info)
     const agent = vi.spyOn(Agent, "get").mockResolvedValue({ name: "recap" } as Agent.Info)
-    vi.spyOn(Provider, "resolveRequestedModel").mockImplementation(async (model) => model)
     const model = { id: "small", providerID: "openai" } as Provider.Model
     vi.spyOn(Provider, "getSmallModel").mockResolvedValue(model)
     const stream = vi

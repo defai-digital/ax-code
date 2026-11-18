@@ -4378,18 +4378,9 @@ test("defaultModel does not relocate a configured model to another provider", as
       expect(String(model.providerID)).toBe("deepseek")
       expect(String(model.modelID)).toBe("deepseek-v4-pro")
 
-      await expect(
-        Provider.resolveRequestedModel({
-          providerID: ProviderID.make("deepseek"),
-          modelID: ModelID.make("deepseek-v4-pro"),
-        }),
-      ).resolves.toEqual({ providerID: "deepseek", modelID: "deepseek-v4-pro" })
-      await expect(
-        Provider.resolveRequestedModel({
-          providerID: ProviderID.make("deepseek"),
-          modelID: ModelID.make("unknown-model"),
-        }),
-      ).resolves.toEqual({ providerID: "deepseek", modelID: "unknown-model" })
+      await expect(Provider.getModel(model.providerID, model.modelID)).rejects.toBeInstanceOf(
+        Provider.ModelNotFoundError,
+      )
     },
   })
 })

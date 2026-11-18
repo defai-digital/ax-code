@@ -1081,7 +1081,6 @@ describe("wiki model resolution", () => {
   }
 
   test("an explicit pin wins without consulting the session", async () => {
-    vi.spyOn(Provider, "resolvePinnedModel").mockResolvedValue(PIN as never)
     const messages = vi.spyOn(Session, "messages")
     const fallback = vi.spyOn(Provider, "defaultModel")
     expect(await resolveWikiModelRef({ model: "pinned-provider/pinned-model", sessionID: ID })).toEqual(PIN)
@@ -1091,7 +1090,6 @@ describe("wiki model resolution", () => {
 
   test("falls back to the invoking session model when no pin is given", async () => {
     vi.spyOn(Session, "messages").mockResolvedValue(userMessage(SESSION_MODEL))
-    vi.spyOn(Provider, "resolveRequestedModel").mockResolvedValue(SESSION_MODEL as never)
     vi.spyOn(Provider, "getModel").mockResolvedValue({} as never)
     const fallback = vi.spyOn(Provider, "defaultModel")
     expect(await resolveWikiModelRef({ sessionID: ID })).toEqual(SESSION_MODEL)
@@ -1100,7 +1098,6 @@ describe("wiki model resolution", () => {
 
   test("falls back to the default model when the session model is no longer available", async () => {
     vi.spyOn(Session, "messages").mockResolvedValue(userMessage(SESSION_MODEL))
-    vi.spyOn(Provider, "resolveRequestedModel").mockResolvedValue(SESSION_MODEL as never)
     vi.spyOn(Provider, "getModel").mockRejectedValue(
       new Provider.ModelNotFoundError({
         providerID: SESSION_MODEL.providerID,
@@ -1112,7 +1109,6 @@ describe("wiki model resolution", () => {
   })
 
   test("keeps an unavailable explicit pin exact instead of falling back", async () => {
-    vi.spyOn(Provider, "resolvePinnedModel").mockResolvedValue(PIN as never)
     const getModel = vi.spyOn(Provider, "getModel")
     const fallback = vi.spyOn(Provider, "defaultModel")
     expect(await resolveWikiModelRef({ model: "pinned-provider/pinned-model", sessionID: ID })).toEqual(PIN)
@@ -1126,10 +1122,9 @@ describe("wiki model resolution", () => {
       { info: { role: "assistant" } },
       { info: { role: "user", model: SESSION_MODEL } },
     ] as never)
-    const requested = vi.spyOn(Provider, "resolveRequestedModel").mockResolvedValue(SESSION_MODEL as never)
-    vi.spyOn(Provider, "getModel").mockResolvedValue({} as never)
+    const getModel = vi.spyOn(Provider, "getModel").mockResolvedValue({} as never)
     expect(await resolveWikiModelRef({ sessionID: ID })).toEqual(SESSION_MODEL)
-    expect(requested).toHaveBeenCalledWith(SESSION_MODEL)
+    expect(getModel).toHaveBeenCalledWith(SESSION_MODEL.providerID, SESSION_MODEL.modelID)
   })
 
   test("falls back to the default model without user messages or on lookup failure", async () => {

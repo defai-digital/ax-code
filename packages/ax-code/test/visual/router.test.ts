@@ -86,7 +86,6 @@ vi.mock("@/provider/provider", () => ({
     list: vi.fn(),
     defaultModel: vi.fn(),
     getModel: vi.fn(),
-    resolveRequestedModel: vi.fn(async (model: { providerID: string; modelID: string }) => model),
   },
 }))
 

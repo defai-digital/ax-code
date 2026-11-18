@@ -523,8 +523,7 @@ const log = Log.create({ service: "wiki" })
  * default with a warning.
  */
 export async function resolveWikiModelRef(input: { model?: string; sessionID?: SessionID }) {
-  const pinned = input.model ? await Provider.resolvePinnedModel(Provider.parseModel(input.model)) : undefined
-  if (pinned) return pinned
+  if (input.model) return Provider.parseModel(input.model)
   if (input.sessionID) {
     const session = await resolveSessionModelRef(input.sessionID)
     if (session) return session
@@ -540,10 +539,8 @@ async function resolveSessionModelRef(sessionID: SessionID) {
       | undefined
     const model = lastUser?.model
     if (!model?.providerID || !model?.modelID) return undefined
-    const reference = await Provider.resolveRequestedModel({ providerID: model.providerID, modelID: model.modelID })
-    // resolveRequestedModel keeps the pair exact without checking it, so
-    // availability is only known from getModel. Check here, where an
-    // unavailable session model can still fall back to the default.
+    const reference = { providerID: model.providerID, modelID: model.modelID }
+    // An inherited session model can fall back when it is unavailable.
     await Provider.getModel(reference.providerID, reference.modelID)
     return reference
   } catch (error) {

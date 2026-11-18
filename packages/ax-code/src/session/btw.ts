@@ -84,9 +84,7 @@ export namespace SessionBtw {
 
     // ADR-213: the session's model with a small output cap. An explicit
     // request model wins, then the recap agent pin, then the session model.
-    const requested = await (input.model
-      ? Promise.resolve(input.model)
-      : Provider.resolveRequestedModel(lastUser.model))
+    const requested = input.model ?? lastUser.model
     const model = await Provider.getModel(requested.providerID, requested.modelID)
 
     try {

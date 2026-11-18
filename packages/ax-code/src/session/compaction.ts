@@ -854,7 +854,7 @@ export namespace SessionCompaction {
 
     const agent = await Agent.get("compaction")
     if (!agent) throw new Error("Compaction agent is not configured or has been disabled")
-    const userModel = await Provider.resolveRequestedModel(userMessage.model)
+    const userModel = userMessage.model
     // Compaction uses an exact role pin, an explicit small_model, or the
     // original session primary. Catalog recommendations grant no route.
     let model =

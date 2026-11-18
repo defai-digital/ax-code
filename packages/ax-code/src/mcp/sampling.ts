@@ -250,7 +250,7 @@ export namespace McpSampling {
     const lastEntry = [...history].reverse().find((entry) => entry.info.role === "user")
     if (!lastEntry) throw new Error("the session has no user message to attach a sampling call to")
     const lastUser: MessageV2.User = lastEntry.info as MessageV2.User
-    const requested = await Provider.resolveRequestedModel(lastUser.model)
+    const requested = lastUser.model
     const model = await Provider.getModel(requested.providerID, requested.modelID)
     const result = await LLM.stream({
       agent,

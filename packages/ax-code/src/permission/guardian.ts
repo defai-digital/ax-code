@@ -196,19 +196,12 @@ Return a json object with action ("allow", "deny", or "ask") and reason (a nonem
   type LanguageModel = Awaited<ReturnType<typeof import("@/provider/provider").Provider.getLanguage>>
   type ReviewModel = { language: LanguageModel; maxOutputTokens: number }
 
-  /**
-   * Resolve the review model: AX_CODE_AUTONOMOUS_GUARDIAN_MODEL when set, the
-   * configured default model otherwise. Returns null when no default model is
-   * configured, undefined on resolution failure (both fail closed to ask).
-   */
-  async function resolveModel(start: number): Promise<ReviewModel | null | undefined> {
+  /** Use the guardian override or configured default and fail closed on resolution errors. */
+  async function resolveModel(start: number): Promise<ReviewModel | undefined> {
     try {
       const { Provider } = await import("@/provider/provider")
       const override = Flag.AX_CODE_AUTONOMOUS_GUARDIAN_MODEL
-      const modelRef = override
-        ? await Provider.resolvePinnedModel(Provider.parseModel(override))
-        : await Provider.defaultModel()
-      if (!modelRef) return override ? undefined : null
+      const modelRef = override ? Provider.parseModel(override) : await Provider.defaultModel()
       const resolved = await Provider.getModel(modelRef.providerID, modelRef.modelID)
       const { ProviderTransform } = await import("@/provider/transform")
       return {
@@ -282,7 +275,6 @@ Return a json object with action ("allow", "deny", or "ask") and reason (a nonem
   export async function review(input: ReviewInput): Promise<Verdict> {
     const start = Date.now()
     const model = await resolveModel(start)
-    if (model === null) return record({ action: "ask", reason: "no default model configured" })
     if (model === undefined) return record({ action: "ask", reason: "guardian unavailable" })
 
     const first = await attemptReview(input, model, 1, start)

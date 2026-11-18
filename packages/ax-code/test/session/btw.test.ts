@@ -83,7 +83,6 @@ describe("btw generation boundary", () => {
     const updateMessage = vi.spyOn(Session, "updateMessage")
     const updatePart = vi.spyOn(Session, "updatePart")
     const agent = vi.spyOn(Agent, "get").mockResolvedValue({ name: "recap" } as Agent.Info)
-    vi.spyOn(Provider, "resolveRequestedModel").mockImplementation(async (model) => model)
     const model = { id: "gpt-5.2", providerID: "openai" } as Provider.Model
     const getModel = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
     const stream = vi
