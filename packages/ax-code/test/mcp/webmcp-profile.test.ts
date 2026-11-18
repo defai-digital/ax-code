@@ -1,12 +1,64 @@
 import { describe, expect, test } from "vitest"
 import { Config } from "../../src/config/config"
 import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
+import * as WebMcpListing from "../../src/mcp/webmcp-listing"
 import { McpTrust } from "../../src/mcp/trust"
 import path from "node:path"
 
 const origins = ["https://example.test", "http://127.0.0.1:3000"]
 
 describe("WebMCP profile", () => {
+  test("facade and listing owner share approval state across a pending baseline rewrite", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: origins }).webmcp
+    const original = [{ name: "search", description: "approved definition" }]
+    const replacement = [{ name: "search", description: "replacement definition" }]
+    WebMcpListing.recordListing(WebMcpListing.stateFor(profile), 1, original, "https://example.test/")
+    const approval = WebMcpProfile.captureApproval(profile, 1, "search")
+    if (!approval) throw new Error("Expected an approval snapshot")
+    const call = { pageId: 1, toolName: "search" }
+    WebMcpProfile.bindApproval(call, approval)
+    expect(WebMcpListing.approvalFor(call)).toBe(approval)
+    WebMcpProfile.recordListing(WebMcpProfile.stateFor(profile), 1, replacement, "https://example.test/")
+    expect(
+      WebMcpListing.verifyBinding(profile, 1, "search", replacement, "https://example.test/", approval),
+    ).toMatchObject({ ok: false, error: expect.stringContaining("definition changed since approval") })
+    const unlisted = { pageId: 1, toolName: "missing" }
+    WebMcpListing.denyApproval(unlisted)
+    expect(WebMcpProfile.approvalDenied(unlisted)).toBe(true)
+    expect(WebMcpProfile.approvalDenied({ ...unlisted })).toBe(false)
+  })
+
+  test("page close clears owner listings, snapshots, dialogs and ownership only for that connection and page", () => {
+    const profile = WebMcpProfile.config({ allowedOrigins: origins }).webmcp
+    const other = WebMcpProfile.config({ allowedOrigins: origins }).webmcp
+    const tools = [{ name: "search" }]
+    for (const connection of [profile, other]) {
+      for (const pageId of [1, 2]) {
+        WebMcpListing.recordListing(WebMcpListing.stateFor(connection), pageId, tools, "https://example.test/")
+        WebMcpProfile.recordSnapshot(connection, pageId, new Map(), "https://example.test/")
+        WebMcpProfile.recordDialog(connection, pageId, {
+          structuredContent: { dialog: { type: "alert", message: "hello" } },
+        })
+        WebMcpProfile.markAgentPage(connection, pageId)
+      }
+    }
+    WebMcpProfile.forgetPage(profile, 1)
+    expect(WebMcpListing.stateFor(profile).pages.has(1)).toBe(false)
+    expect(WebMcpListing.captureApproval(profile, 1, "search")).toBeUndefined()
+    expect(WebMcpProfile.snapshotUrlFor(profile, 1)).toBeUndefined()
+    expect(WebMcpProfile.dialogFor(profile, 1)).toBeUndefined()
+    expect(WebMcpProfile.isAgentPage(profile, 1)).toBe(false)
+    for (const [connection, pageId] of [
+      [profile, 2],
+      [other, 1],
+    ] as const) {
+      expect(WebMcpListing.captureApproval(connection, pageId, "search")).toBeDefined()
+      expect(WebMcpProfile.snapshotUrlFor(connection, pageId)).toBe("https://example.test/")
+      expect(WebMcpProfile.dialogFor(connection, pageId)?.message).toBe("hello")
+      expect(WebMcpProfile.isAgentPage(connection, pageId)).toBe(true)
+    }
+  })
+
   test("generates disabled, isolated, pinned and origin-restricted configuration", () => {
     const config = WebMcpProfile.config({ allowedOrigins: origins })
     expect(config.enabled).toBe(false)

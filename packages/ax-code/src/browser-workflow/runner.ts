@@ -3,6 +3,7 @@ import { setTimeout as delay } from "node:timers/promises"
 import { BrowserScenario } from "./scenario"
 import { credentialLike } from "../util/credential-value"
 import { WebMcpProfile } from "../mcp/webmcp-profile"
+import * as WebMcpListing from "../mcp/webmcp-listing"
 import { isRecord } from "../util/record"
 import { parseJsonPayload, parseJsonResult } from "../util/json-value"
 
@@ -206,19 +207,19 @@ export namespace BrowserRunner {
                 : "Assertion state unavailable or ambiguous"
         } else if (step.action === "tool_presence") {
           const listing = await call("list_webmcp_tools", { pageId })
-          const descriptors = WebMcpProfile.parseToolListing(listing)
+          const descriptors = WebMcpListing.parseToolListing(listing)
           if (!descriptors) throw new Error("Structured page-tool descriptors unavailable")
           const found = descriptors.filter((entry) => entry.name === step.name)
           status = found.length > 1 ? "unknown" : (found.length === 1) === step.present ? "pass" : "fail"
           if (status === "pass" && step.present && step.descriptorHash)
-            status = WebMcpProfile.descriptorHash(found[0]!) === step.descriptorHash ? "pass" : "fail"
+            status = WebMcpListing.descriptorHash(found[0]!) === step.descriptorHash ? "pass" : "fail"
           reason = status === "pass" ? "Tool lifecycle checkpoint matched" : "Tool lifecycle checkpoint differed"
         } else if (step.action === "contract") {
           const listing = await call("list_webmcp_tools", { pageId })
-          const descriptors = WebMcpProfile.parseToolListing(listing)
+          const descriptors = WebMcpListing.parseToolListing(listing)
           if (!descriptors) throw new Error("Structured page-tool descriptors unavailable")
           const descriptor = descriptors.find((entry) => entry.name === step.name)
-          if (!descriptor || WebMcpProfile.descriptorHash(descriptor) !== step.descriptorHash) {
+          if (!descriptor || WebMcpListing.descriptorHash(descriptor) !== step.descriptorHash) {
             status = "fail"
             reason = "Page-tool descriptor changed or is missing"
           } else {

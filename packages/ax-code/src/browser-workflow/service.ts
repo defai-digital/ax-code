@@ -13,7 +13,7 @@ import { linkSources, readLocalSource } from "./diagnostics"
 import { Instance } from "../project/instance"
 import { BackgroundShell } from "../tool/bash-background"
 import type { Tool } from "../tool/tool"
-import { WebMcpProfile } from "../mcp/webmcp-profile"
+import * as WebMcpListing from "../mcp/webmcp-listing"
 import { isRecord } from "../util/record"
 import { BrowserWorkbench } from "./workbench"
 
@@ -83,14 +83,14 @@ export namespace BrowserWorkflow {
     if (args.action === "contracts") {
       host.requireBridge(args.server)
       const listing = await host.browser(args.server, "list_webmcp_tools", { pageId: args.pageId }, ctx.abort)
-      const descriptors = WebMcpProfile.parseToolListing(listing)
+      const descriptors = WebMcpListing.parseToolListing(listing)
       if (!descriptors) throw new Error("Structured page-tool descriptors unavailable")
       return {
         title: "Page-tool contracts",
         output: JSON.stringify(
           descriptors.map((descriptor) => ({
             ...descriptor,
-            descriptorHash: WebMcpProfile.descriptorHash(descriptor),
+            descriptorHash: WebMcpListing.descriptorHash(descriptor),
           })),
           null,
           2,

@@ -2,7 +2,7 @@ import path from "node:path"
 import ts from "typescript"
 import z from "zod"
 import { credentialLike } from "../util/credential-value"
-import { WebMcpProfile } from "../mcp/webmcp-profile"
+import * as WebMcpListing from "../mcp/webmcp-listing"
 import { isRecord } from "../util/record"
 import { BrowserScenario } from "./scenario"
 import { readLocalSource } from "./diagnostics"
@@ -25,7 +25,7 @@ export namespace BrowserInventory {
     )
     .max(16)
     .default([])
-  export type Descriptor = WebMcpProfile.ToolDescriptor
+  export type Descriptor = WebMcpListing.ToolDescriptor
   export type Candidate = {
     file: string
     line: number
@@ -52,14 +52,14 @@ export namespace BrowserInventory {
   }
 
   export function listing(value: unknown): Descriptor[] {
-    const descriptors = WebMcpProfile.parseToolListing(value)
+    const descriptors = WebMcpListing.parseToolListing(value)
     if (
       !descriptors ||
-      descriptors.length > WebMcpProfile.MAX_TOOLS ||
+      descriptors.length > WebMcpListing.MAX_TOOLS ||
       new Set(descriptors.map((item) => item.name)).size !== descriptors.length
     )
       throw new Error("Complete unambiguous page-tool inventory unavailable")
-    bounded(descriptors, WebMcpProfile.MAX_DESCRIPTOR_BYTES)
+    bounded(descriptors, WebMcpListing.MAX_DESCRIPTOR_BYTES)
     return descriptors
   }
 
