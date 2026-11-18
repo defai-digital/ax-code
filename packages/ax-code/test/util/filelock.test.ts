@@ -73,7 +73,7 @@ setInterval(() => {}, 1000)
   test("a live holder remains exclusive past the legacy stale age", async () => {
     await using tmp = await tmpdir()
     const filepath = path.join(tmp.path, "state.json")
-    using holder = await FileLock.acquire(filepath)
+    using _holder = await FileLock.acquire(filepath)
     const now = Date.now()
     const clock = vi.spyOn(Date, "now").mockReturnValue(now + 120_000)
     try {

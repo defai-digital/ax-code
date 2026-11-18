@@ -14,7 +14,7 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
-    "noUnusedLocals": false,
+    "noUnusedLocals": true,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
     "jsx": "preserve",

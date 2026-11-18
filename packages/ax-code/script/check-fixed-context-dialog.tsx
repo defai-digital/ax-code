@@ -14,7 +14,7 @@ process.env.AX_CODE_DISABLE_PROJECT_CONFIG = "true"
 const { testRender } = await import("ax-tui/solid")
 const { KVProvider, useKV } = await import("../src/cli/tui/context/kv")
 const { TuiConfigProvider } = await import("../src/cli/tui/context/tui-config")
-const { LanguageProvider, useLanguage } = await import("../src/cli/tui/context/language")
+const { LanguageProvider } = await import("../src/cli/tui/context/language")
 const { ThemeProvider } = await import("../src/cli/tui/context/theme")
 const { KeybindProvider } = await import("../src/cli/tui/context/keybind")
 const { ToastProvider } = await import("../src/cli/tui/ui/toast")
@@ -24,15 +24,11 @@ const { DialogPrompt } = await import("../src/cli/tui/ui/dialog-prompt")
 const { FixedContextDialog } = await import("../src/cli/tui/component/dialog-fixed-context")
 const { createEffect } = await import("solid-js")
 
-let language!: ReturnType<typeof useLanguage>
 let dialog!: ReturnType<typeof useDialog>
-let kvStore!: ReturnType<typeof useKV>
 let ready = false
 function Controls() {
-  language = useLanguage()
   dialog = useDialog()
   const kv = useKV()
-  kvStore = kv
   createEffect(() => {
     ready = kv.ready
   })

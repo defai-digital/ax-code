@@ -26,7 +26,7 @@ import { PluginLifetime } from "./lifetime"
 import { PluginData } from "./data"
 import { isFileUrl } from "../util/file-url"
 import { toErrorMessage } from "@/util/error-message"
-import { SessionID, type SessionID as SessionIDType } from "@/session/schema"
+import { SessionID } from "@/session/schema"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })

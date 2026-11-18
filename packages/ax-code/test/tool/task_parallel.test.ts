@@ -1153,7 +1153,7 @@ describe("task_parallel swarm scale (item: swarm)", () => {
       fn: async () => {
         const { ctx } = await parent(tmp.path)
         const cancelled = Promise.withResolvers<void>()
-        const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
           await cancelled.promise
           throw new DOMException("cancelled", "AbortError")
         }) as any)

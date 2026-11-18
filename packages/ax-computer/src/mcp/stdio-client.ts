@@ -147,7 +147,7 @@ export class StdioMcpClient implements McpClient {
     return client
   }
 
-  constructor(private readonly options: StdioMcpClientOptions) {
+  constructor(options: StdioMcpClientOptions) {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
     this.stdoutLineLimit = options.stdoutLineLimit ?? STDOUT_LINE_LIMIT
     assertSpawnableCommand(options.command)

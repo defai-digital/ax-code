@@ -5,10 +5,10 @@ type ResourcePage = { resources: Array<{ name: string; uri: string }>; nextCurso
 
 const bridge = vi.hoisted(() => ({
   capabilities: { prompts: {}, resources: {} } as Record<string, unknown> | undefined,
-  promptPage: (_cursor?: string): { prompts: Array<{ name: string; description: string }>; nextCursor?: string } => ({
+  promptPage: (_cursor?: string): PromptPage => ({
     prompts: [],
   }),
-  resourcePage: (_cursor?: string): { resources: Array<{ name: string; uri: string }>; nextCursor?: string } => ({
+  resourcePage: (_cursor?: string): ResourcePage => ({
     resources: [],
   }),
   promptCalls: [] as Array<string | undefined>,

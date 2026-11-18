@@ -14,13 +14,7 @@ import { AX_ENGINE_PROVIDER_ID, AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID } fr
 import { cliEffortVariants, cliModelEfforts } from "./cli/effort"
 import { wrapThinkTagText, type ThinkTagName } from "./think-tags"
 import { PromptCachePolicy } from "./prompt-cache-policy"
-import {
-  isKimiProtocol,
-  isMiniMaxM3ModelSegment,
-  isMiniMaxThinkingForcedOn,
-  isOpenRouterGlm5,
-  resolveProtocolProfile,
-} from "./protocol-profile"
+import { isKimiProtocol, isMiniMaxThinkingForcedOn, isOpenRouterGlm5, resolveProtocolProfile } from "./protocol-profile"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 

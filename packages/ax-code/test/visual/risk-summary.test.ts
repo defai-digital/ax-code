@@ -1,10 +1,5 @@
 import { describe, expect, test } from "vitest"
-import {
-  computeRiskLevel,
-  computeResidualRisk,
-  formatResidualRisk,
-  type ResidualRiskLevel,
-} from "../../src/visual/risk-summary"
+import { computeRiskLevel, computeResidualRisk, formatResidualRisk } from "../../src/visual/risk-summary"
 import type { VisualFinding } from "../../src/visual/run"
 
 function makeFinding(overrides: Partial<VisualFinding> = {}): VisualFinding {

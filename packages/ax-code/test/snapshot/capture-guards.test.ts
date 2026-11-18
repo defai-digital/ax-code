@@ -220,7 +220,7 @@ describe("interrupted capture marker", () => {
     await Guards.writeCaptureMarker(gitdir, { pid: 999_997, startedAt: Date.now() - 120_000 })
 
     const recover = async () => {
-      using lock = await FileLock.acquire(path.join(gitdir, "ax-code", "operation"))
+      using _lock = await FileLock.acquire(path.join(gitdir, "ax-code", "operation"))
       return Guards.recoverInterruptedCapture({ gitdir, pidAlive: () => false })
     }
     const results = await Promise.all([recover(), recover()])

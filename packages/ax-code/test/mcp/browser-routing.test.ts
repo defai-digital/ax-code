@@ -1,8 +1,4 @@
-import fs from "node:fs/promises"
-import { existsSync } from "node:fs"
-import path from "node:path"
 import { afterEach, expect, test, vi } from "vitest"
-import { parse as parseJsonc } from "jsonc-parser"
 import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 
 const bridge = vi.hoisted(() => ({

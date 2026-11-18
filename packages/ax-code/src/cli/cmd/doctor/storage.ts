@@ -6,7 +6,6 @@ import {
   formatStorageBytes,
   parseSqliteJournalOverride,
   resolveSqliteJournalMode,
-  type SqliteJournalMode,
 } from "../../../storage/policy"
 import { isNetworkFilesystem } from "../../../storage/network-fs"
 import { isCorruptError } from "../../../storage/corrupt"

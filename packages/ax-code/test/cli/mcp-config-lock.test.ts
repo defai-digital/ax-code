@@ -60,7 +60,7 @@ test.each(["add", "remove", "invalid"] as const)(
     }
     expect(ConfigPaths.readFile).toHaveBeenCalledOnce()
     expect(processHeld || fileHeld).toBe(false)
-    using processLock = await processWrite(file)
+    using _processLock = await processWrite(file)
     using crossProcessLock = await fileAcquire(file, { timeoutMs: 1000 })
     expect(crossProcessLock).toBeDefined()
   },

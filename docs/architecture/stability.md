@@ -18,6 +18,12 @@ How AX Code stays reliable for long interactive sessions and headless runs.
 | **Permissions**    | Double-submit latch + reply timeout                                                    | `permission-submit-latch`, permission prompt                 |
 | **Repo wiki**      | Path containment, atomic manifest-last writes, protected content, pre-write validation | `packages/ax-wiki`; `src/wiki/*`                             |
 
+## Compiler checks
+
+The core TypeScript check enables `noUnusedLocals` for its source, tests, and supporting modules. Cleanup preserves
+resource lifetimes and test setup effects; intentionally unused `using` handles use an `_` prefix instead of removing
+the acquisition or disposal.
+
 ## Saved follow-up refresh
 
 Full-screen and inline TUI modes share `cli/tui/util/follow-up-refresh.ts`. Requests are scoped to the selected session

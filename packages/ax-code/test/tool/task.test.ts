@@ -2473,7 +2473,6 @@ describe("tool.task", () => {
         fakeProc.pid = undefined
         fakeProc.exitCode = 0
 
-        let childSessionID: string | undefined
         let pendingAfterClose = 0
         let promptCalls = 0
 
@@ -2481,7 +2480,6 @@ describe("tool.task", () => {
           promptCalls++
           if (promptCalls === 1) {
             const sessionID = String(input.sessionID)
-            childSessionID = sessionID
             BackgroundShell.register({
               sessionID,
               command: "echo finished",

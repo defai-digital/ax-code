@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { compareVisualRuns, formatCompareSummary, type CompareResult } from "../../src/visual/compare"
+import { compareVisualRuns, formatCompareSummary } from "../../src/visual/compare"
 import type { VisualRun, VisualFinding } from "../../src/visual/run"
 
 function makeRun(overrides: Partial<VisualRun> = {}): VisualRun {

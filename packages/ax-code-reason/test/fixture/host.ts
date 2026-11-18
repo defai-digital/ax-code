@@ -22,7 +22,6 @@ import {
 import type { ProjectID } from "../../src/id"
 import { RefactorPlanID, EmbeddingCacheID } from "../../src/id"
 import {
-  type DebugEngineStores,
   type PlanInsert,
   type PlanListOptions,
   type PlanRepository,

@@ -11,10 +11,6 @@ import { getContext } from "../../src/memory/injector"
 
 const DAY = 24 * 60 * 60 * 1000
 
-function home(projectRoot: string) {
-  return path.dirname(path.dirname(UsageRecord.directory(projectRoot)))
-}
-
 describe("memory.usage", () => {
   test("records use counts and keeps last_used_at monotonic", async () => {
     await using tmp = await tmpdir()

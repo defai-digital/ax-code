@@ -1,5 +1,5 @@
 import { blendPx, createFastGlow, clamp01, fillPoly, hash2 } from "./atmos-paint"
-import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
+import { createHdCanvas, hdDarken, hdHex, hdMix } from "./scene-hd"
 import {
   SPACE_COLUMNS,
   SPACE_CRATERS,

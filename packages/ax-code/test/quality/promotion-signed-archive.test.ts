@@ -1527,7 +1527,7 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
   test("rejects a recorded attestation packet that is no longer available", async () => {
     const { packagedArchive } = buildPackagedArchive()
     await clearSignedArchives()
-    await using tmp = await tmpdir()
+    await using _tmp = await tmpdir()
     try {
       const signing = {
         attestedBy: "release-integrity-bot",
