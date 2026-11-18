@@ -30,7 +30,7 @@ const requestIDs = new WeakMap<Error, string>()
 export function rememberNetworkRequestID(error: unknown, headers: Headers): void {
   const id = headers.get("x-request-id")
   if (error instanceof Error && id && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
-    requestIDs.set(error, id)
+    requestIDs.set(error, id) // @scan-suppress lifecycle_scan: WeakMap keys do not retain errors.
   }
 }
 
