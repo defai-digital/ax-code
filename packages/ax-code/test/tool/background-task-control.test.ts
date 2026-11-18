@@ -1,25 +1,24 @@
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { SessionCompaction } from "../../src/session/compaction"
 import { Session } from "../../src/session"
+import { SessionExecutionContext } from "../../src/session/execution-context"
+import { SessionPrompt } from "../../src/session/prompt"
 import { MessageID, PartID, TaskQueueID, type SessionID } from "../../src/session/schema"
 import { TaskQueue } from "../../src/session/task-queue"
 import { ListBackgroundTasksTool } from "../../src/tool/list_background_tasks"
-import { MessageBackgroundTaskInternals, MessageBackgroundTaskTool } from "../../src/tool/message_background_task"
+import { MessageBackgroundTaskTool } from "../../src/tool/message_background_task"
 import { tmpdir } from "../fixture/fixture"
 
-const originalNudge = MessageBackgroundTaskInternals.nudge
-let nudge: ReturnType<typeof vi.fn<(sessionID: SessionID) => Promise<unknown>>>
-
 afterEach(async () => {
-  MessageBackgroundTaskInternals.nudge = originalNudge
   vi.restoreAllMocks()
   await Instance.disposeAll()
 })
 
 function stubNudge() {
-  nudge = vi.fn((_sessionID: SessionID) => Promise.resolve())
-  MessageBackgroundTaskInternals.nudge = nudge
+  return vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
 }
 
 function toolContext(sessionID: SessionID) {
@@ -249,7 +248,7 @@ describe("tool.message_background_task", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        stubNudge()
+        const nudge = stubNudge()
         const parent = await Session.create({})
         const { child, item } = await enqueueBackgroundSubagent({
           parent: parent.id,
@@ -273,8 +272,7 @@ describe("tool.message_background_task", () => {
         ).toBe(true)
 
         // The prompt loop was nudged so the child actually processes it.
-        expect(nudge).toHaveBeenCalledTimes(1)
-        expect(nudge).toHaveBeenCalledWith(child.id)
+        await vi.waitFor(() => expect(nudge).toHaveBeenCalledExactlyOnceWith({ sessionID: child.id }))
 
         // The ledger records the delivery (ADR-057 guard).
         const latest = await TaskQueue.get(TaskQueueID.make(item.id))
@@ -282,6 +280,78 @@ describe("tool.message_background_task", () => {
         expect(entries).toHaveLength(1)
         expect(entries[0].status).toBe("delivered")
         expect(entries[0].messageID).toBe(result.metadata.messageID)
+      },
+    })
+  })
+
+  test.each([false, true])("wakes the child in its recorded workspace (cold: %s)", async (coldChild) => {
+    await using tmp = await tmpdir({ git: true })
+    const childDirectory = path.join(tmp.path, "child")
+    await mkdir(childDirectory)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const provide = coldChild ? Instance.provideScoped : Instance.provide
+        const { child, item } = await provide({
+          directory: childDirectory,
+          fn: () => enqueueBackgroundSubagent({ parent: parent.id, initialPrompt: "original request" }),
+        })
+        expect(Instance.list().includes(child.directory)).toBe(!coldChild)
+        const wakes = vi.fn()
+        vi.spyOn(SessionPrompt, "loop").mockImplementation(async ({ sessionID }) => {
+          const row = await TaskQueue.get(item.id)
+          const messages = controlTexts(await Session.messages({ sessionID }), "look at the next file")
+          wakes({
+            sessionID,
+            directory: Instance.directory,
+            ledger: TaskQueue.controlDeliveries(row).map((entry) => entry.status),
+            messages: messages.map((message) => message.info.id),
+            turn: SessionExecutionContext.peek(),
+          })
+          return undefined as never
+        })
+        const tool = await MessageBackgroundTaskTool.init()
+        const result = await SessionExecutionContext.provide(
+          { sessionID: parent.id, stamp: { version: 1, generation: crypto.randomUUID() }, active: true },
+          () => tool.execute({ task_id: item.id, message: "look at the next file" }, toolContext(parent.id)),
+        )
+        expect(result.metadata.delivered).toBe(true)
+        await vi.waitFor(() =>
+          expect(wakes).toHaveBeenCalledExactlyOnceWith({
+            sessionID: child.id,
+            directory: child.directory,
+            ledger: ["delivered"],
+            messages: [result.metadata.messageID],
+            turn: undefined,
+          }),
+        )
+      },
+    })
+  })
+
+  test("leaves a task paused while a control message is being saved", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const { child, item } = await enqueueBackgroundSubagent({
+          parent: parent.id,
+          initialPrompt: "original request",
+        })
+        const loop = vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+        const setControlDelivery = TaskQueue.setControlDelivery
+        vi.spyOn(TaskQueue, "setControlDelivery").mockImplementation(async (input) => {
+          await TaskQueue.setStatus({ id: item.id, status: "paused" })
+          return setControlDelivery(input)
+        })
+        const result = await (
+          await MessageBackgroundTaskTool.init()
+        ).execute({ task_id: item.id, message: "wait before continuing" }, toolContext(parent.id))
+        expect(loop).not.toHaveBeenCalled()
+        expect(result.metadata).toMatchObject({ delivered: true, status: "paused" })
+        expect(controlTexts(await Session.messages({ sessionID: child.id }), "wait before continuing")).toHaveLength(1)
       },
     })
   })
@@ -294,7 +364,7 @@ describe("tool.message_background_task", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          stubNudge()
+          const nudge = stubNudge()
           const parent = await Session.create({})
           const { child, item } = await enqueueBackgroundSubagent({
             parent: parent.id,
@@ -355,11 +425,6 @@ describe("tool.message_background_task", () => {
         expect(afterCrash).toHaveLength(1)
         const originalCreated = afterCrash[0]?.info.time.created
 
-        vi.restoreAllMocks()
-        // Restore the nudge stub cleared by restoreAllMocks (it was assigned,
-        // not spied, so re-stub explicitly).
-        stubNudge()
-
         const retry = await (
           await MessageBackgroundTaskTool.init()
         ).execute({ task_id: item.id, message: "also cover the tests" }, toolContext(parent.id))
@@ -386,7 +451,7 @@ describe("tool.message_background_task", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        stubNudge()
+        const nudge = stubNudge()
         const parent = await Session.create({})
         const { child, item } = await enqueueBackgroundSubagent({
           parent: parent.id,
@@ -422,7 +487,7 @@ describe("tool.message_background_task", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        stubNudge()
+        const nudge = stubNudge()
         const caller = await Session.create({})
         const other = await Session.create({})
         const foreign = await enqueueBackgroundSubagent({ parent: other.id, status: "running" })

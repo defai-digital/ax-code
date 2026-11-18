@@ -1,12 +1,15 @@
 import { abortError } from "@/util/abort"
 import { Log } from "@/util/log"
-import { Instance } from "@/project/instance"
 import { sleep } from "@/util/timeout"
 import { NotFoundError } from "@/storage/db"
 import { Session } from "."
 import { MessageV2 } from "./message-v2"
 import { SessionPrompt } from "./prompt"
-import { SessionExecutionContext } from "./execution-context"
+import {
+  wakeBackgroundSubagentSession,
+  writeBackgroundSubagentMessage,
+  type BackgroundSubagentRecipient,
+} from "./background-subagent-message"
 import { MessageID, PartID, SessionID } from "./schema"
 import { TaskQueue } from "./task-queue"
 import { childVisibleText, formatBackgroundTaskHandoff, isEmptySubagentResultText } from "./background-subagent-handoff"
@@ -149,8 +152,6 @@ export const BackgroundSubagentDeliveryInternals = {
   async afterPersist(_item: TaskQueue.Info): Promise<void> {},
 }
 
-type HandoffParent = Pick<Session.Info, "id" | "directory" | "projectID">
-
 export async function deliverBackgroundSubagentHandoff(input: {
   item: TaskQueue.Info
   outcome:
@@ -196,7 +197,18 @@ export async function deliverBackgroundSubagentHandoff(input: {
     if (parent.projectID !== item.projectID) {
       throw new Error("Background subagent handoff has a parent in a different project.")
     }
-    await persistParentHandoff(parent, handoff, item, claim)
+    await writeBackgroundSubagentMessage({
+      recipient: parent,
+      messageID: claim.messageID,
+      item,
+      part: {
+        id: claim.partID,
+        text: handoff,
+        synthetic: true,
+        metadata: { source: "background_subagent_handoff", taskQueueID: item.id },
+      },
+      afterCommit: (message) => SessionPrompt.recordContinuation(message),
+    })
     await BackgroundSubagentDeliveryInternals.afterPersist(item)
     const delivered = await TaskQueue.completeResultDelivery({
       id: item.id,
@@ -271,72 +283,6 @@ async function resolveParentSessionID(item: TaskQueue.Info) {
   return child?.parentID
 }
 
-async function persistParentHandoff(
-  parent: HandoffParent,
-  text: string,
-  item: TaskQueue.Info,
-  claim: Extract<TaskQueue.ResultDeliveryClaim, { owner: "handoff" }>,
-): Promise<void> {
-  const write = async () => {
-    assertParentProject(parent)
-    await writeParentHandoff(parent.id, text, item, claim)
-    return true
-  }
-  // A queue worker may be running in the child worktree. Use the existing
-  // parent instance so the continuation is registered with its active loop.
-  if (parent.directory !== Instance.directory && (await Instance.withExisting(parent.directory, write))) return
-  await write()
-}
-
-async function writeParentHandoff(
-  parentSessionID: SessionID,
-  text: string,
-  item: TaskQueue.Info,
-  claim: Extract<TaskQueue.ResultDeliveryClaim, { owner: "handoff" }>,
-): Promise<void> {
-  const messages = await Session.messages({ sessionID: parentSessionID })
-  const lastUser = messages.findLast(
-    (message) => message.info.role === "user" && !message.parts.some((part) => part.type === "compaction"),
-  )
-  const existing = await MessageV2.get({ sessionID: parentSessionID, messageID: claim.messageID }).catch(
-    (error: unknown) => {
-      if (NotFoundError.isInstance(error)) return undefined
-      throw error
-    },
-  )
-  const sourceUser =
-    existing?.info.role === "user" ? existing.info : lastUser?.info.role === "user" ? lastUser.info : undefined
-  const user: MessageV2.User = {
-    id: claim.messageID,
-    sessionID: parentSessionID,
-    role: "user",
-    time: { created: existing?.info.role === "user" ? existing.info.time.created : Date.now() },
-    agent: sourceUser?.agent ?? item.agent ?? "build",
-    model: sourceUser?.model ?? queueModel(item.model),
-    tools: sourceUser?.tools,
-    isolation: sourceUser?.isolation,
-    system: sourceUser?.system,
-    format: sourceUser?.format,
-    variant: sourceUser?.variant,
-    requestedDepth: sourceUser?.requestedDepth,
-  }
-  const part: MessageV2.TextPart = {
-    id: claim.partID,
-    messageID: user.id,
-    sessionID: user.sessionID,
-    type: "text",
-    text,
-    synthetic: true,
-    metadata: {
-      source: "background_subagent_handoff",
-      taskQueueID: item.id,
-    },
-  }
-  await Session.updateMessageWithParts(user, [part], {
-    afterCommit: () => SessionPrompt.recordContinuation(user),
-  })
-}
-
 async function waitForResultWasPersisted(
   item: TaskQueue.Info,
   claim: Extract<TaskQueue.ResultDeliveryClaim, { owner: "waitfor" }>,
@@ -382,39 +328,15 @@ async function recoveryOutcome(
   }
 }
 
-export function queueModel(model: unknown): MessageV2.User["model"] {
-  if (!model || typeof model !== "object") {
-    return { providerID: "unknown" as never, modelID: "unknown" as never }
-  }
-  const record = model as { providerID?: unknown; modelID?: unknown }
-  if (typeof record.providerID === "string" && typeof record.modelID === "string") {
-    return { providerID: record.providerID as never, modelID: record.modelID as never }
-  }
-  return { providerID: "unknown" as never, modelID: "unknown" as never }
-}
-
-function assertParentProject(parent: HandoffParent): void {
-  if (Instance.project.id !== parent.projectID) {
-    throw new Error("Background handoff workspace no longer belongs to the parent project.")
-  }
-}
-
-function wakeParent(parent: HandoffParent): void {
+function wakeParent(parent: BackgroundSubagentRecipient): void {
   // A direct parent that is collecting nested results finalizes on its own, and
   // a queued parent still has an active row that will drain and finalize. A
   // loop here would race that finalization and spend a turn on evidence the
   // parent is already folding in. Root sessions have neither and still wake.
   if (isCollectingNestedResults(parent.id)) return
-  void SessionExecutionContext.detached(() =>
-    Instance.provide({
-      directory: parent.directory,
-      fn: async () => {
-        assertParentProject(parent)
-        if (isCollectingNestedResults(parent.id)) return
-        if (await hasActiveQueueRow(parent.id)) return
-        await SessionPrompt.loop({ sessionID: parent.id })
-      },
-    }),
+  void wakeBackgroundSubagentSession(
+    parent,
+    async () => !isCollectingNestedResults(parent.id) && !(await hasActiveQueueRow(parent.id)),
   ).catch((error) => {
     log.warn("failed to wake parent after background subagent handoff", {
       sessionID: parent.id,

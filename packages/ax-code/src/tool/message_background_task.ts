@@ -5,9 +5,8 @@ import { Session } from "../session"
 import { MessageID, PartID, SessionID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { TaskQueue } from "../session/task-queue"
-import { SessionPrompt } from "../session/prompt"
-import { MessageV2 } from "../session/message-v2"
-import { isLiveTaskSubagent, queueModel } from "../session/background-subagent-delivery"
+import { isLiveTaskSubagent } from "../session/background-subagent-delivery"
+import { wakeBackgroundSubagentSession, writeBackgroundSubagentMessage } from "../session/background-subagent-message"
 import { childResultText, resolveTarget } from "./waitfor"
 import { Log } from "@/util/log"
 
@@ -23,16 +22,6 @@ const TERMINAL_STATUSES: TaskQueue.Status[] = ["completed", "failed", "cancelled
 // paused row must stay paused.
 const NUDGE_STATUSES: TaskQueue.Status[] = ["running", "blocked_permission", "blocked_question"]
 
-// Test seam (same pattern as WaitForInternals): tests stub the nudge so no
-// provider loop runs offline. Production nudge = wake the child session's
-// prompt loop, the same mechanism the completion-handoff path uses to wake
-// the parent (background-subagent-delivery.ts wakeParent).
-export const MessageBackgroundTaskInternals = {
-  nudge(sessionID: SessionID): Promise<unknown> {
-    return SessionPrompt.loop({ sessionID })
-  },
-}
-
 const parameters = z.object({
   task_id: z
     .string()
@@ -41,20 +30,6 @@ const parameters = z.object({
     ),
   message: z.string().min(1).describe("The follow-up message to deliver to the background task"),
 })
-
-// Only the DIRECT parent may message a background task (ADR-057 D2 scoping):
-// the payload records the spawning session, with the child session's parentID
-// as fallback (same resolution as the handoff path's resolveParentSessionID).
-async function isDirectChild(item: TaskQueue.Info, sessionID: SessionID) {
-  const fromPayload = item.payload["parentSessionID"]
-  if (typeof fromPayload === "string" && fromPayload === sessionID) return true
-  if (!item.sessionID) return false
-  const child: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(item.sessionID).catch((e) => {
-    if (NotFoundError.isInstance(e)) return undefined
-    throw e
-  })
-  return child?.parentID === sessionID
-}
 
 function formatControlMessage(item: TaskQueue.Info, text: string) {
   return [
@@ -77,62 +52,6 @@ function controlResult(title: string, metadata: ControlMetadata, output: string)
   return { title, metadata, output }
 }
 
-// Persist the control message as a user message in the child session. Both
-// writes are upserts keyed on the ledger-recorded ids, so redelivery after a
-// mid-flight crash re-writes the SAME message instead of appending a copy.
-// The text part is deliberately NOT synthetic: queued-user-message handling
-// (prompt-loop-messages.ts remindQueuedMessages) folds it into the child's
-// next provider request when the child is mid-turn, so a reentrant message
-// becomes follow-up input without corrupting the running turn.
-async function persistControlMessage(input: {
-  item: TaskQueue.Info
-  sessionID: SessionID
-  messageID: MessageID
-  partID: PartID
-  text: string
-}) {
-  const messages = await Session.messages({ sessionID: input.sessionID })
-  const lastUser = messages.findLast(
-    (message) => message.info.role === "user" && !message.parts.some((part) => part.type === "compaction"),
-  )
-  // Redelivery rewrites the same row via upsert; keep the original
-  // time.created so the message's recorded send time does not drift to the
-  // last retry.
-  const existing = await MessageV2.get({ sessionID: input.sessionID, messageID: input.messageID }).catch(
-    (e: unknown) => {
-      if (NotFoundError.isInstance(e)) return undefined
-      throw e
-    },
-  )
-  const sourceUser =
-    existing?.info.role === "user" ? existing.info : lastUser?.info.role === "user" ? lastUser.info : undefined
-  const user = (await Session.updateMessage({
-    id: input.messageID,
-    sessionID: input.sessionID,
-    role: "user",
-    time: { created: existing?.info.role === "user" ? existing.info.time.created : Date.now() },
-    agent: sourceUser?.agent ?? input.item.agent ?? "build",
-    model: sourceUser?.model ?? queueModel(input.item.model),
-    tools: sourceUser?.tools,
-    isolation: sourceUser?.isolation,
-    system: sourceUser?.system,
-    format: sourceUser?.format,
-    variant: sourceUser?.variant,
-    requestedDepth: sourceUser?.requestedDepth,
-  })) as MessageV2.User
-  await Session.updatePart({
-    id: input.partID,
-    messageID: user.id,
-    sessionID: user.sessionID,
-    type: "text",
-    text: formatControlMessage(input.item, input.text),
-    metadata: {
-      source: "background_task_control",
-      taskID: input.item.id,
-    },
-  })
-}
-
 export const MessageBackgroundTaskTool = Tool.define("message_background_task", {
   description: DESCRIPTION,
   parameters,
@@ -150,7 +69,13 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
       )
     }
 
-    if (!(await isDirectChild(item, ctx.sessionID))) {
+    const child = await Session.get(item.sessionID).catch((error: unknown) => {
+      if (NotFoundError.isInstance(error)) return undefined
+      throw error
+    })
+    // The spawning session in the ledger and the recorded child parent both
+    // support task ownership checks, including rows predating the payload field.
+    if (item.payload["parentSessionID"] !== ctx.sessionID && child?.parentID !== ctx.sessionID) {
       throw new Error(
         `Task ${item.id} was not started from this session. Only the session that started a background task may message it.`,
       )
@@ -186,7 +111,10 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
       )
     }
 
-    const childSessionID = item.sessionID
+    if (!child) throw new NotFoundError({ message: `Session not found: ${item.sessionID}` })
+    if (child.projectID !== item.projectID) {
+      throw new Error("Background task child belongs to a different project.")
+    }
 
     // Exactly-once via the ADR-055 ledger (ADR-057 D3 guard pattern):
     // 1. atomically claim a "pending" control delivery slot (a same-text
@@ -202,12 +130,26 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
       partID: PartID.ascending(),
       text: params.message,
     })
+    if (claim.item.sessionID !== child.id) {
+      throw new Error("Background task changed its child session before delivery.")
+    }
     const redelivered = !claim.claimed
     const messageID = MessageID.make(claim.entry.messageID)
     const partID = PartID.make(claim.entry.partID)
 
-    await persistControlMessage({ item, sessionID: childSessionID, messageID, partID, text: params.message })
-    await TaskQueue.setControlDelivery({
+    // A control message is normal follow-up input, including mid-turn, where
+    // queued-user-message handling picks it up on the next provider request.
+    await writeBackgroundSubagentMessage({
+      recipient: child,
+      item: claim.item,
+      messageID,
+      part: {
+        id: partID,
+        text: formatControlMessage(item, params.message),
+        metadata: { source: "background_task_control", taskID: item.id },
+      },
+    })
+    const delivered = await TaskQueue.setControlDelivery({
       id: item.id,
       messageID,
       partID,
@@ -215,14 +157,14 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
       status: "delivered",
     })
 
-    // Nudge the child's prompt loop. If the child is mid-turn, loop() joins
-    // the active run's queue and the persisted message is picked up as
-    // follow-up input; if the child just finished, a fresh loop starts on it.
-    // Queued/paused rows are not nudged: the queue owns their start.
-    // Fire-and-forget with a logged catch, same as wakeParent.
-    if (NUDGE_STATUSES.includes(item.status)) {
-      void MessageBackgroundTaskInternals.nudge(childSessionID).catch((error) => {
-        log.warn("failed to nudge background task prompt loop", { sessionID: childSessionID, error })
+    // Let the queue retain ownership if the task paused or stopped while the
+    // message was being persisted or the child workspace was booting.
+    if (NUDGE_STATUSES.includes(delivered.status)) {
+      void wakeBackgroundSubagentSession(child, async () => {
+        const current = await TaskQueue.get(item.id)
+        return current.sessionID === child.id && NUDGE_STATUSES.includes(current.status)
+      }).catch((error) => {
+        log.warn("failed to nudge background task prompt loop", { sessionID: child.id, error })
       })
     }
 
@@ -230,16 +172,16 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
       item.title,
       {
         taskID: item.id,
-        sessionID: childSessionID,
-        status: item.status,
+        sessionID: child.id,
+        status: delivered.status,
         messageID,
         delivered: true,
         redelivered,
       },
       [
         `task_id: ${item.id}`,
-        `session_id: ${childSessionID}`,
-        `state: ${item.status}`,
+        `session_id: ${child.id}`,
+        `state: ${delivered.status}`,
         "",
         redelivered
           ? "Message delivered (redelivery of an interrupted send — the task still sees it exactly once)."
