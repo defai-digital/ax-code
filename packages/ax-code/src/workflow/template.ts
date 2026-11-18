@@ -1,11 +1,12 @@
 import path from "path"
 import fs from "fs/promises"
-import { createHash } from "crypto"
 import z from "zod"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { SessionID } from "../session/schema"
+import { FileLock } from "../util/filelock"
 import { Filesystem } from "../util/filesystem"
+import { Hash } from "../util/hash"
 import { WorkflowFixtureSpecs } from "./fixtures"
 import { WorkflowRun } from "./run"
 import { WorkflowRunID } from "./state"
@@ -114,22 +115,23 @@ export namespace WorkflowTemplate {
 
   export async function get(id: ID): Promise<Info> {
     const parsed = ID.parse(id)
-    const { source } = splitID(parsed)
+    const { source, specID } = splitID(parsed)
     if (source === "builtin") {
       const template = builtins[parsed]
       if (!template) throw new WorkflowTemplateNotFoundError(parsed)
       return Info.parse(template)
     }
 
-    const template = await readTemplate(source, parsed)
+    const template = await readTemplateFromPath(source, templatePath(source, specID))
     if (!template) throw new WorkflowTemplateNotFoundError(parsed)
-    return Info.parse(template)
+    return template
   }
 
   export async function save(input: SaveInput): Promise<Info> {
     const parsed = SaveInput.parse(input)
     const file = templatePath(parsed.scope, parsed.spec.id)
-    const current = await readStoredTemplateForUpdate(file)
+    using _lock = await lockTemplateMutation(file)
+    const current = await readStoredTemplate(file)
     const now = Date.now()
     const stored = Stored.parse({
       schemaVersion: 1,
@@ -148,11 +150,12 @@ export namespace WorkflowTemplate {
 
   export async function promote(id: ID): Promise<Info> {
     const parsed = ID.parse(id)
-    const { source } = splitID(parsed)
+    const { source, specID } = splitID(parsed)
     if (source === "builtin")
       throw new WorkflowTemplatePromotionError(parsed, "Built-in templates are already trusted.")
 
-    const file = templatePath(source, splitID(parsed).specID)
+    const file = templatePath(source, specID)
+    using _lock = await lockTemplateMutation(file)
     const stored = await readStoredTemplate(file)
     if (!stored) throw new WorkflowTemplateNotFoundError(parsed)
     const promoted = Stored.parse({
@@ -175,6 +178,7 @@ export namespace WorkflowTemplate {
       throw new WorkflowTemplateRemovalError(parsed, "Built-in templates ship with the product and cannot be removed.")
 
     const file = templatePath(source, specID)
+    using _lock = await lockTemplateMutation(file)
     const stored = await readStoredTemplate(file)
     if (!stored) throw new WorkflowTemplateNotFoundError(parsed)
     await fs.rm(file)
@@ -220,11 +224,6 @@ export namespace WorkflowTemplate {
     return templates.filter((template): template is Info => !!template)
   }
 
-  async function readTemplate(source: Exclude<Source, "builtin">, id: ID): Promise<Info | undefined> {
-    const { specID } = splitID(id)
-    return readTemplateFromPath(source, templatePath(source, specID))
-  }
-
   async function readTemplateFromPath(source: Exclude<Source, "builtin">, file: string): Promise<Info | undefined> {
     const stored = await readStoredTemplate(file)
     if (!stored) return undefined
@@ -232,15 +231,6 @@ export namespace WorkflowTemplate {
   }
 
   async function readStoredTemplate(file: string): Promise<Stored | undefined> {
-    const value = await Filesystem.readJson<unknown>(file).catch((error) => {
-      if (Filesystem.isEnoent(error)) return undefined
-      throw error
-    })
-    if (value === undefined) return undefined
-    return Stored.parse(value)
-  }
-
-  async function readStoredTemplateForUpdate(file: string): Promise<Stored | undefined> {
     const value = await Filesystem.readJson<unknown>(file).catch((error) => {
       if (Filesystem.isEnoent(error)) return undefined
       throw error
@@ -289,10 +279,15 @@ export namespace WorkflowTemplate {
     return path.join(templateDir(source), `${specID}.json`)
   }
 
+  function lockTemplateMutation(file: string): Promise<Disposable> {
+    // FileLock keeps a guard file. Store it in application state, away from templates in Git worktrees.
+    const key = Hash.fast(`${Filesystem.resolve(path.dirname(file))}\0${path.basename(file)}`)
+    // @scan-suppress security_scan Hash.fast encodes the lock key as hex without path separators.
+    return FileLock.acquire(path.join(Global.Path.state, "workflow-template", key))
+  }
+
   export function specHash(spec: WorkflowSpecV1): string {
-    return `sha256:${createHash("sha256")
-      .update(JSON.stringify(canonical(spec)))
-      .digest("hex")}`
+    return `sha256:${Hash.fast(JSON.stringify(canonical(spec)))}`
   }
 
   function canonical(value: unknown): unknown {

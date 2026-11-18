@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
+import { Filesystem } from "../../src/util/filesystem"
+import { sleep } from "../../src/util/timeout"
 import {
   WorkflowTemplate,
   WorkflowTemplateNotFoundError,
@@ -161,6 +163,55 @@ describe("WorkflowTemplate", () => {
         })
         expect(updated.trust).toBe("candidate")
         expect(updated.revision).toBe(3)
+      },
+    })
+  })
+
+  test.each(["save", "remove"] as const)("serializes template promotion with a concurrent %s", async (action) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spec = { ...getParsedWorkflowFixtureSpec("noopDryRun"), id: "concurrent-template" }
+        const saved = await WorkflowTemplate.save({ scope: "project", spec })
+        const promotionAtWrite = Promise.withResolvers<void>()
+        const resumePromotion = Promise.withResolvers<void>()
+        const writeJson = Filesystem.writeJson
+        const write = vi.spyOn(Filesystem, "writeJson").mockImplementationOnce(async (...args) => {
+          promotionAtWrite.resolve()
+          await resumePromotion.promise
+          return writeJson(...args)
+        })
+        try {
+          const promotion = WorkflowTemplate.promote(saved.id)
+          await Promise.race([promotionAtWrite.promise, promotion])
+
+          const edited = { ...spec, description: "Updated while promotion is writing." }
+          const mutation =
+            action === "save"
+              ? WorkflowTemplate.save({ scope: "project", spec: edited })
+              : WorkflowTemplate.remove(saved.id)
+          try {
+            await Promise.race([mutation, sleep(500)])
+          } finally {
+            resumePromotion.resolve()
+            expect(await promotion).toMatchObject({ revision: 2, trust: "trusted", specHash: saved.specHash })
+          }
+          await mutation
+
+          if (action === "save") {
+            await expect(WorkflowTemplate.get(saved.id)).resolves.toMatchObject({
+              description: edited.description,
+              revision: 3,
+              trust: "candidate",
+            })
+          } else {
+            await expect(WorkflowTemplate.get(saved.id)).rejects.toThrow(WorkflowTemplateNotFoundError)
+          }
+        } finally {
+          resumePromotion.resolve()
+          write.mockRestore()
+        }
       },
     })
   })
