@@ -296,6 +296,24 @@ async function release(directory: string, owner: ScopeOwner, insideChange = fals
   await (insideChange ? cleanup() : change(directory, cleanup))
 }
 
+/** Only the initializer's exact, non-closing generation may bypass its pending boot. */
+function initializingContext(directory: string, current = context.peek()): Shape | undefined {
+  const own = current && generations.get(current)
+  if (!current || !own || !initializing.has(own) || cache.get(directory) !== own || closingGenerations.has(own)) return
+  return current
+}
+
+/** Reserve the existing scoped lifetime before awaiting readiness or running a callback. */
+async function runInInstance<R>(directory: string, ready: Promise<Shape>, fn: () => R, current?: Shape): Promise<R> {
+  const owner = scopes.get(ready)
+  if (owner) owner.users++ // @scan-suppress race_scan - Synchronous reservation; the counter update never spans an await.
+  try {
+    return await context.provide(current ?? (await ready), fn)
+  } finally {
+    if (owner) await release(directory, owner)
+  }
+}
+
 async function runInstance<R>(input: InstanceInput<R>, scoped: boolean): Promise<R> {
   const directory = Filesystem.resolve(input.directory)
   if (cleanupContext.peek() === directory) throw shuttingDownError(directory)
@@ -303,8 +321,7 @@ async function runInstance<R>(input: InstanceInput<R>, scoped: boolean): Promise
   // Initializers may use their own instance while boot is pending. Other
   // callers wait for lifecycle changes instead of entering a closing generation.
   while (changes.pending(directory)) {
-    const own = current && generations.get(current)
-    if (own && initializing.has(own) && cache.get(directory) === own && !closingGenerations.has(own)) break
+    if (initializingContext(directory, current)) break
     await changes.pending(directory)?.catch(() => undefined)
   }
   let ready = cache.get(directory)
@@ -313,14 +330,7 @@ async function runInstance<R>(input: InstanceInput<R>, scoped: boolean): Promise
     ready = create({ directory, init: input.init }, scoped)
   }
   if (closingGenerations.has(ready)) throw shuttingDownError(directory)
-  const owner = scopes.get(ready)
-  if (owner) owner.users++ // @scan-suppress race_scan - Synchronous reservation; the counter update never spans an await.
-  try {
-    const ctx = current && generations.get(current) === ready ? current : await ready
-    return await context.provide(ctx, input.fn)
-  } finally {
-    if (owner) await release(directory, owner)
-  }
+  return runInInstance(directory, ready, input.fn, current && generations.get(current) === ready ? current : undefined)
 }
 
 async function disposeCurrent(ctx: Shape, expected: Promise<Shape>): Promise<void> {
@@ -381,29 +391,29 @@ export const Instance = {
   async provideScoped<R>(input: InstanceInput<R>): Promise<R> {
     return runInstance(input, true)
   },
-  /** Run maintenance against an existing context without bootstrapping a directory. */
+  /** Maintain a ready context or the caller's own initializer; skip unavailable peers without bootstrapping. */
   async withExisting<R>(directory: string, fn: () => R): Promise<R | undefined> {
     const key = Filesystem.resolve(directory)
-    if (disposal.directories.has(key) || changes.pending(key)) return undefined
+    const own = initializingContext(key)
     const existing = cache.get(key)
     if (!existing) return undefined
-    let current: Shape
-    try {
-      current = await existing
-    } catch {
-      // A failed boot is no longer an existing runtime. Do not let its
-      // rejected cache entry abort maintenance after storage was committed.
-      return undefined
+    // Maintenance must never wait on another unfinished initializer: that
+    // initializer may itself be awaiting the operation requesting maintenance.
+    if (!own && (initializing.has(existing) || disposal.directories.has(key) || changes.pending(key))) return undefined
+    let current = own
+    if (!current) {
+      try {
+        current = await existing
+      } catch {
+        // A failed boot is no longer an existing runtime.
+        return undefined
+      }
     }
-    if (disposal.directories.has(key) || changes.pending(key) || cache.get(key) !== existing) return undefined
-    const owner = scopes.get(existing)
-    if (owner) owner.users++ // @scan-suppress race_scan - Synchronous reservation; the counter update never spans an await.
-    try {
-      return await context.provide(current, fn)
-    } finally {
-      if (owner) await release(key, owner)
-    }
+    if (cache.get(key) !== existing || closingGenerations.has(existing)) return undefined
+    if (!own && (disposal.directories.has(key) || changes.pending(key))) return undefined
+    return runInInstance(key, existing, fn, current)
   },
+
   get current() {
     return context.use()
   },
