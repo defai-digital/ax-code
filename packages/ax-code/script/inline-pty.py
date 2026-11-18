@@ -90,6 +90,15 @@ def assert_cursor_below(data, last_record, height):
     assert row > anchor, f"Final cursor row {row} is not below transcript row {anchor}"
 
 
+def assert_no_pixel_graphics(data):
+    # The Kitty query action tests terminal support without displaying or
+    # storing an image. It can appear inside a tmux passthrough sequence.
+    for control_data in re.findall(rb"\x1b_G([^;\x1b]*)", data):
+        actions = [key for key in control_data.split(b",") if key.startswith(b"a=")]
+        assert actions == [b"a=q"], ("Kitty graphics in inline output", control_data)
+    assert not re.search(rb"\x1bP[0-9;]*q", data), "Sixel graphics in inline output"
+
+
 def run(width, height, storm=False, terminate=False, prefix=None, logfile=None, full=False):
     pid, fd = pty.fork()
     if pid == 0:
@@ -172,7 +181,7 @@ def run(width, height, storm=False, terminate=False, prefix=None, logfile=None, 
     if full:
         assert measurement_start is not None and measurement_end is not None, repr(data[-3000:])
         return (measurement_end - measurement_start) / 20
-    assert b"\x1b_G" not in data and not re.search(rb"\x1bP[0-9;]*q", data), "Pixel graphics in inline output"
+    assert_no_pixel_graphics(data)
     assert b"\x1b[2J" not in data, "Display was erased"
     assert b"\x1b[?1049l" not in data, "Alternate screen was popped"
     for mode in [25, 2004, 1000, 1002, 1003, 1006]:
