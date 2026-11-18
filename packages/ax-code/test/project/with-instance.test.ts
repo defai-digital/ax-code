@@ -64,3 +64,37 @@ test("callback failure still disposes resources and propagates the original erro
   ).rejects.toBe(failure)
   expect(disposed).toHaveBeenCalledTimes(1)
 })
+
+test("nested scoped callers do not dispose their outer caller's resources", async () => {
+  await using tmp = await tmpdir()
+  const disposed = vi.fn(async () => {})
+  const state = Instance.state(() => ({ ready: true }), disposed)
+  await withTransientInstance(tmp.path, async () => {
+    const original = state()
+    await withReadonlyInstance(tmp.path, async () => {
+      expect(state()).toBe(original)
+    })
+    expect(disposed).not.toHaveBeenCalled()
+    expect(state()).toBe(original)
+  })
+  expect(disposed).toHaveBeenCalledTimes(1)
+})
+
+test("a scoped caller borrows a persistent instance without disposing it", async () => {
+  await using tmp = await tmpdir()
+  const disposed = vi.fn(async () => {})
+  const state = Instance.state(() => ({ ready: true }), disposed)
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const original = state()
+      await withTransientInstance(tmp.path, async () => {
+        expect(state()).toBe(original)
+      })
+      expect(disposed).not.toHaveBeenCalled()
+      expect(Instance.list()).toContain(tmp.path)
+      await Instance.dispose()
+    },
+  })
+  expect(disposed).toHaveBeenCalledTimes(1)
+})

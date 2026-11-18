@@ -101,6 +101,11 @@ export class KeyedSerialQueue {
     return this.tails.size
   }
 
+  /** Current per-key sequencing tail; later submissions may extend it. */
+  pending(key: string): Promise<unknown> | undefined {
+    return this.tails.get(key)
+  }
+
   // Clears registry entries for future submissions. Already-started work and
   // already-chained waiters keep running; this is useful during teardown when
   // new work should not wait on stale tails, but it is not cancellation.

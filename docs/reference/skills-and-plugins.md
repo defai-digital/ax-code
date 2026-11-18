@@ -115,6 +115,8 @@ Plugin factories receive optional `lifecycle` in their input. `lifecycle.signal`
 or the plugin is retired. Register timers, watchers, and subscriptions with `lifecycle.onDispose(cleanup)`. The returned
 function unregisters that cleanup. Registrations run at most once; registering after disposal starts cleanup immediately.
 Cleanup callbacks start in reverse registration order, each with a one-second budget, and may finish concurrently.
+During instance teardown, release resources through handles captured during setup. Entering or reloading that closing
+instance fails with a lifecycle error.
 
 Transform hooks receive an optional third argument, `{ signal }`; config and event hooks receive it as their second
 argument. This signal cancels work while the callback is pending; use `lifecycle.signal` for work owned by the plugin

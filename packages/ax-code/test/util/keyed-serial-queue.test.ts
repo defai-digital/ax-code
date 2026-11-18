@@ -14,6 +14,27 @@ async function flush(count = 3) {
 }
 
 describe("KeyedSerialQueue", () => {
+  test("a per-key tail waits through a failed predecessor and clears after the last admitted task", async () => {
+    const queue = new KeyedSerialQueue()
+    const release = Promise.withResolvers<void>()
+    const failure = new Error("first task failed")
+    const first = queue
+      .run("project", async () => {
+        await release.promise
+        throw failure
+      })
+      .catch((error) => error)
+    const second = queue.run("project", async () => "ready")
+    const pending = queue.pending("project")
+    expect(pending).toBeDefined()
+    expect(queue.pending("other")).toBeUndefined()
+    release.resolve()
+    await pending
+    expect(await first).toBe(failure)
+    expect(await second).toBe("ready")
+    expect(queue.pending("project")).toBeUndefined()
+  })
+
   test("drain waits for its admitted snapshot without blocking on later work", async () => {
     const queue = new KeyedSerialQueue()
     const initialGate = deferred()

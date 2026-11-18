@@ -1,3 +1,6 @@
+import { NamedError } from "@ax-code/util/error"
+import { KeyedSerialQueue } from "@/util/queue"
+import z from "zod"
 import { GlobalBus } from "@/bus/global"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
@@ -115,7 +118,7 @@ function emit(directory: string) {
   })
 }
 
-function boot(input: { directory: string; init?: () => Promise<any>; project?: Project.Info; worktree?: string }) {
+function boot(input: { directory: string; init?: () => Promise<unknown>; project?: Project.Info; worktree?: string }) {
   const manager = ServiceManager.reset(input.directory)
   manager.start("Project.fromDirectory")
   emitLifecycle({
@@ -200,29 +203,188 @@ function track(directory: string, next: Promise<Shape>) {
   return task
 }
 
-export const Instance = {
-  async provide<R>(input: { directory: string; init?: () => Promise<any>; fn: () => R }): Promise<R> {
-    const directory = Filesystem.resolve(input.directory)
-    let existing = cache.get(directory)
-    if (!existing) {
-      Log.Default.info("creating instance", { directory })
-      existing = track(
-        directory,
-        boot({
-          directory,
-          init: input.init,
-        }),
-      )
-    }
-    const ctx = await existing
-    return context.provide(ctx, async () => {
-      return input.fn()
+type InstanceInput<R> = { directory: string; init?: () => Promise<unknown>; fn: () => R }
+type BootstrapInput = { directory: string; init?: () => Promise<unknown>; project?: Project.Info; worktree?: string }
+type ScopeOwner = { users: number; current: Promise<Shape> }
+
+const scopes = new WeakMap<Promise<Shape>, ScopeOwner>()
+const generations = new WeakMap<Shape, Promise<Shape>>()
+const closingGenerations = new WeakSet<Promise<Shape>>()
+const activeDisposals = new WeakSet<Promise<Shape>>()
+const changes = new KeyedSerialQueue()
+const initializing = new WeakSet<Promise<Shape>>()
+const cleanupContext = Context.create<string>("instance cleanup")
+const ShuttingDownError = NamedError.create(
+  "InstanceShuttingDownError",
+  z.object({ directory: z.string(), message: z.string() }),
+)
+const InitializingError = NamedError.create(
+  "InstanceInitializingError",
+  z.object({ directory: z.string(), message: z.string() }),
+)
+
+function shuttingDownError(directory: string): InstanceType<typeof ShuttingDownError> {
+  return new ShuttingDownError({
+    directory,
+    message: "Project instance is shutting down; wait for cleanup before entering it again.",
+  })
+}
+
+function initializingError(directory: string): InstanceType<typeof InitializingError> {
+  return new InitializingError({
+    directory,
+    message: "Project instance is still initializing; finish initialization before requesting reload or disposal.",
+  })
+}
+
+/** Lifecycle mutations use the shared per-directory FIFO. */
+function change<T>(directory: string, work: () => Promise<T>): Promise<T> {
+  return changes.run(directory, work)
+}
+
+function create(input: BootstrapInput, scoped: boolean, inherited?: ScopeOwner, insideChange = false): Promise<Shape> {
+  let owner = inherited
+  let ctx: Shape | undefined
+  let ready: Promise<Shape>
+  const started = boot({
+    ...input,
+    init: async () => {
+      // Install the cache identity before an initializer can reenter provide().
+      await Promise.resolve()
+      ctx = context.use()
+      generations.set(ctx, ready) // @scan-suppress lifecycle_scan - Weak keys release metadata with instance contexts.
+      await input.init?.()
+    },
+  })
+  ready = track(
+    input.directory,
+    started
+      .finally(() => initializing.delete(ready))
+      .catch(async (error) => {
+        if (owner && ctx) {
+          const failed = ctx
+          const cleanup = () => disposeCurrent(failed, ready)
+          await (insideChange ? cleanup() : change(input.directory, cleanup)).catch((cleanupError) => {
+            Log.Default.warn("failed instance cleanup failed", { error: toErrorMessage(cleanupError) })
+          })
+        } else if (owner && cache.get(input.directory) === ready) {
+          ServiceManager.clear(input.directory)
+        }
+        throw error
+      }),
+  )
+  initializing.add(ready)
+  if (scoped && !owner) owner = { users: 0, current: ready }
+  if (owner) {
+    owner.current = ready
+    scopes.set(ready, owner) // @scan-suppress lifecycle_scan - Weak keys release ownership metadata with boot promises.
+  }
+  return ready
+}
+
+async function release(directory: string, owner: ScopeOwner, insideChange = false): Promise<void> {
+  if (--owner.users > 0) return
+  const cleanup = async (): Promise<void> => {
+    const ready = owner.current
+    const current = cache.get(directory)
+    if (owner.users > 0 || (current && current !== ready)) return
+    const ctx = await ready.catch(() => undefined)
+    const latest = cache.get(directory)
+    if (!ctx || owner.users > 0 || (latest && latest !== ready)) return
+    await disposeCurrent(ctx, ready)
+  }
+  await (insideChange ? cleanup() : change(directory, cleanup))
+}
+
+async function runInstance<R>(input: InstanceInput<R>, scoped: boolean): Promise<R> {
+  const directory = Filesystem.resolve(input.directory)
+  if (cleanupContext.peek() === directory) throw shuttingDownError(directory)
+  const current = context.peek()
+  // Initializers may use their own instance while boot is pending. Other
+  // callers wait for lifecycle changes instead of entering a closing generation.
+  while (changes.pending(directory)) {
+    const own = current && generations.get(current)
+    if (own && initializing.has(own) && cache.get(directory) === own && !closingGenerations.has(own)) break
+    await changes.pending(directory)?.catch(() => undefined)
+  }
+  let ready = cache.get(directory)
+  if (!ready) {
+    Log.Default.info("creating instance", { directory })
+    ready = create({ directory, init: input.init }, scoped)
+  }
+  if (closingGenerations.has(ready)) throw shuttingDownError(directory)
+  const owner = scopes.get(ready)
+  if (owner) owner.users++ // @scan-suppress race_scan - Synchronous reservation; the counter update never spans an await.
+  try {
+    const ctx = current && generations.get(current) === ready ? current : await ready
+    return await context.provide(ctx, input.fn)
+  } finally {
+    if (owner) await release(directory, owner)
+  }
+}
+
+async function disposeCurrent(ctx: Shape, expected: Promise<Shape>): Promise<void> {
+  const current = cache.get(ctx.directory) // @scan-suppress race_scan - The directory lifecycle queue is held through cleanup.
+  // Legacy callers can rebuild state in their context after explicit disposal.
+  // Only a distinct cached generation belongs to an independent replacement.
+  if ((current && current !== expected) || activeDisposals.has(expected)) return // @scan-suppress race_scan - The same lifecycle queue owns this disposal flag.
+  activeDisposals.add(expected)
+  closingGenerations.add(expected)
+  return context.provide(ctx, async () => {
+    const directory = ctx.directory
+    Log.Default.info("disposing instance", { directory })
+    snapshot({
+      trigger: "shutdown",
+      directory,
+      worktree: Instance.worktree,
+      projectID: Instance.project.id,
     })
+    disposal.directories.add(directory)
+    emitLifecycle({
+      kind: "dispose.start",
+      directory,
+      worktree: Instance.worktree,
+      projectID: Instance.project.id,
+    })
+    try {
+      Instance.runtime().abortAll()
+      await Promise.allSettled([cleanupContext.provide(directory, () => State.dispose(directory))])
+      if (cache.get(directory) === expected) cache.delete(directory)
+      emit(directory)
+      ServiceManager.clear(directory)
+      emitLifecycle({
+        kind: "dispose.ready",
+        directory,
+      })
+    } catch (error) {
+      emitLifecycle({
+        kind: "dispose.failed",
+        directory,
+        ...errorMetadata(error),
+      })
+      throw error
+    } finally {
+      activeDisposals.delete(expected)
+      disposal.directories.delete(directory)
+    }
+  })
+}
+
+export const Instance = {
+  ShuttingDownError,
+  InitializingError,
+  /** Provide a persistent instance, or borrow the lifetime of an existing scoped instance. */
+  async provide<R>(input: InstanceInput<R>): Promise<R> {
+    return runInstance(input, false)
+  },
+  /** Release an instance created by scoped callers only after its last user leaves. */
+  async provideScoped<R>(input: InstanceInput<R>): Promise<R> {
+    return runInstance(input, true)
   },
   /** Run maintenance against an existing context without bootstrapping a directory. */
   async withExisting<R>(directory: string, fn: () => R): Promise<R | undefined> {
     const key = Filesystem.resolve(directory)
-    if (disposal.directories.has(key)) return undefined
+    if (disposal.directories.has(key) || changes.pending(key)) return undefined
     const existing = cache.get(key)
     if (!existing) return undefined
     let current: Shape
@@ -233,8 +395,14 @@ export const Instance = {
       // rejected cache entry abort maintenance after storage was committed.
       return undefined
     }
-    if (disposal.directories.has(key) || cache.get(key) !== existing) return undefined
-    return context.provide(current, fn)
+    if (disposal.directories.has(key) || changes.pending(key) || cache.get(key) !== existing) return undefined
+    const owner = scopes.get(existing)
+    if (owner) owner.users++ // @scan-suppress race_scan - Synchronous reservation; the counter update never spans an await.
+    try {
+      return await context.provide(current, fn)
+    } finally {
+      if (owner) await release(key, owner)
+    }
   },
   get current() {
     return context.use()
@@ -295,81 +463,52 @@ export const Instance = {
   }) {
     return snapshot(input)
   },
-  async reload(input: { directory: string; init?: () => Promise<any>; project?: Project.Info; worktree?: string }) {
+  async reload(input: BootstrapInput): Promise<Shape> {
     const directory = Filesystem.resolve(input.directory)
-    Log.Default.info("reloading instance", { directory })
-    snapshot({
-      trigger: "reload",
-      directory,
-      worktree: input.worktree,
-      projectID: input.project?.id,
+    if (cleanupContext.peek() === directory) throw shuttingDownError(directory)
+    const current = context.peek()
+    const own = current && generations.get(current)
+    if (current?.directory === directory && own && initializing.has(own)) throw initializingError(directory)
+    return change(directory, async () => {
+      const previous = cache.get(directory)
+      const owner = previous && scopes.get(previous)
+      // Reload itself holds the scoped lifetime while its initializer can
+      // borrow the replacement, even if the last earlier caller leaves.
+      if (owner) owner.users++ // @scan-suppress race_scan - Synchronous reservation; the counter update never spans an await.
+      if (previous) closingGenerations.add(previous)
+      Log.Default.info("reloading instance", { directory })
+      snapshot({ trigger: "reload", directory, worktree: input.worktree, projectID: input.project?.id })
+      disposal.directories.add(directory)
+      emitLifecycle({ kind: "reload.start", directory })
+      try {
+        ServiceManager.peek(directory)?.abortAll()
+        await Promise.allSettled([cleanupContext.provide(directory, () => State.dispose(directory))])
+        if (cache.get(directory) === previous) cache.delete(directory)
+        const next = create({ ...input, directory }, owner !== undefined, owner, true)
+        emit(directory)
+        const result = await next
+        emitLifecycle({
+          kind: "reload.ready",
+          directory: result.directory,
+          worktree: result.worktree,
+          projectID: result.project.id,
+        })
+        return result
+      } catch (error) {
+        emitLifecycle({ kind: "reload.failed", directory, ...errorMetadata(error) })
+        throw error
+      } finally {
+        disposal.directories.delete(directory)
+        if (owner) await release(directory, owner, true)
+      }
     })
-    disposal.directories.add(directory)
-    emitLifecycle({
-      kind: "reload.start",
-      directory,
-    })
-    try {
-      ServiceManager.peek(directory)?.abortAll()
-      await Promise.allSettled([State.dispose(directory)])
-      cache.delete(directory)
-      const next = track(directory, boot({ ...input, directory }))
-      emit(directory)
-      const result = await next
-      emitLifecycle({
-        kind: "reload.ready",
-        directory: result.directory,
-        worktree: result.worktree,
-        projectID: result.project.id,
-      })
-      return result
-    } catch (error) {
-      emitLifecycle({
-        kind: "reload.failed",
-        directory,
-        ...errorMetadata(error),
-      })
-      throw error
-    } finally {
-      disposal.directories.delete(directory)
-    }
   },
-  async dispose() {
-    const directory = Instance.directory
-    Log.Default.info("disposing instance", { directory })
-    snapshot({
-      trigger: "shutdown",
-      directory,
-      worktree: Instance.worktree,
-      projectID: Instance.project.id,
-    })
-    disposal.directories.add(directory)
-    emitLifecycle({
-      kind: "dispose.start",
-      directory,
-      worktree: Instance.worktree,
-      projectID: Instance.project.id,
-    })
-    try {
-      Instance.runtime().abortAll()
-      await Promise.allSettled([State.dispose(directory)])
-      cache.delete(directory)
-      emit(directory)
-      ServiceManager.clear(directory)
-      emitLifecycle({
-        kind: "dispose.ready",
-        directory,
-      })
-    } catch (error) {
-      emitLifecycle({
-        kind: "dispose.failed",
-        directory,
-        ...errorMetadata(error),
-      })
-      throw error
-    } finally {
-      disposal.directories.delete(directory)
-    }
+  async dispose(): Promise<void> {
+    const ctx = context.use()
+    const expected = generations.get(ctx)
+    if (!expected || activeDisposals.has(expected) || cleanupContext.peek() === ctx.directory) return
+    if (initializing.has(expected)) throw initializingError(ctx.directory)
+    await change(ctx.directory, () => disposeCurrent(ctx, expected))
   },
   async disposeAll() {
     if (disposal.all) return disposal.all

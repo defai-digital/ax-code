@@ -1,18 +1,7 @@
 import { Instance } from "./instance"
 
 async function runWithInit<T>(directory: string, init: () => Promise<unknown>, cb: () => Promise<T>): Promise<T> {
-  return Instance.provide({
-    directory,
-    init,
-    fn: async () => {
-      try {
-        const result = await cb()
-        return result
-      } finally {
-        await Instance.dispose()
-      }
-    },
-  })
+  return Instance.provideScoped({ directory, init, fn: cb })
 }
 
 // Load project services on use so CLI help and embedded API imports do not

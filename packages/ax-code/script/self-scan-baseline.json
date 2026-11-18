@@ -2577,7 +2577,7 @@
       ]
     },
     "security_scan": {
-      "count": 572,
+      "count": 571,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -5671,14 +5671,6 @@
           "fingerprint": "d3f98629a03fc8c73d0cafdd4390bb6fe9907163a59006fb6fb4a464b96a8f32",
           "file": "src/runtime/runtime-registry.ts",
           "line": 248,
-          "severity": "high",
-          "kind": "ssrf",
-          "summary": "ssrf"
-        },
-        {
-          "fingerprint": "0547f4c93508d10a4020a8a465a0c26829c7519fed1dead4e35c4234ba0af1eb",
-          "file": "src/sdk/programmatic-impl.ts",
-          "line": 573,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
