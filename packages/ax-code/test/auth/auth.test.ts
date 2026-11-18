@@ -425,3 +425,67 @@ test("set keeps lock polling timers referenced while waiting for an active holde
     nowSpy.mockRestore()
   }
 })
+
+test("API key rollback preserves a peer write of the same plaintext", async () => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const rollback = await Auth.setApiKeyWithRollback("provider", "new-value")
+  await Auth.set("provider", { type: "api", key: "new-value" })
+  expect(await rollback()).toBe(false)
+  expect(await Auth.get("provider")).toEqual({ type: "api", key: "new-value" })
+})
+
+test("API key rollback restores its predecessor and preserves unrelated provider changes", async () => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const rollback = await Auth.setApiKeyWithRollback("provider/", "new-value")
+  await Auth.set("other", { type: "api", key: "other-value" })
+  expect(await rollback()).toBe(true)
+  expect(await Auth.get("provider")).toEqual({ type: "api", key: "old-value" })
+  expect(await Auth.get("other")).toEqual({ type: "api", key: "other-value" })
+  await Auth.set("provider", { type: "api", key: "later-value" })
+  await rollback()
+  expect(await Auth.get("provider")).toEqual({ type: "api", key: "later-value" })
+})
+
+test("API key rollback does not recreate a provider removed by a peer", async () => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const rollback = await Auth.setApiKeyWithRollback("provider", "new-value")
+  await Auth.remove("provider")
+  expect(await rollback()).toBe(false)
+  expect(await Auth.get("provider")).toBeUndefined()
+})
+
+test("API key rollback re-encrypts a legacy plaintext predecessor", async () => {
+  await fs.writeFile(file, JSON.stringify({ __canary: createCanary(), provider: { type: "api", key: "legacy-value" } }))
+  const rollback = await Auth.setApiKeyWithRollback("provider", "new-value")
+  expect(await rollback()).toBe(true)
+  expect(await fs.readFile(file, "utf8")).not.toContain("legacy-value")
+  expect(await Auth.get("provider")).toEqual({ type: "api", key: "legacy-value" })
+})
+
+test("API key rollback preserves an undecodable predecessor for recovery", async () => {
+  const previous = { type: "api", key: { encrypted: "corrupted", iv: "", salt: "", tag: "", version: 2 } }
+  await fs.writeFile(file, JSON.stringify({ __canary: createCanary(), provider: previous }))
+  const rollback = await Auth.setApiKeyWithRollback("provider", "new-value")
+  expect(await rollback()).toBe(true)
+  const stored = await Filesystem.readJson<Record<string, unknown>>(file)
+  expect(stored.provider).toEqual(previous)
+})
+
+test("API key rollback setup rejects an empty key without changing credentials", async () => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  await expect(Auth.setApiKeyWithRollback("provider", "")).rejects.toMatchObject({ name: "AuthError" })
+  expect(await Auth.get("provider")).toEqual({ type: "api", key: "old-value" })
+})
+
+test("auth writes recreate their data directory before acquiring the file lock", async () => {
+  await Auth.set("seed", { type: "api", key: "seed-value" })
+  const moved = `${Global.Path.data}.before-lock`
+  await fs.rename(Global.Path.data, moved)
+  try {
+    await Auth.set("provider", { type: "api", key: "new-value" })
+    expect(await Auth.get("provider")).toEqual({ type: "api", key: "new-value" })
+  } finally {
+    await fs.rm(Global.Path.data, { recursive: true, force: true })
+    await fs.rename(moved, Global.Path.data)
+  }
+})

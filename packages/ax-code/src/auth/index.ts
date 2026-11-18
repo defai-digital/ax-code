@@ -109,6 +109,9 @@ function makeAuthLockDisposable(ownToken: string): Disposable {
 }
 
 async function acquireFileLock(): Promise<Disposable> {
+  // Global directory preparation runs in the background. A first write
+  // must create the lock parent itself before attempting an exclusive open.
+  await fsPromises.mkdir(path.dirname(lockFile), { recursive: true })
   const body: AuthLockBody = { ...createProcessLockBody(), token: randomUUID() }
 
   async function tryCreate() {
@@ -477,32 +480,12 @@ export namespace Auth {
     return pending
   }
 
-  async function writeEntry(
-    key: string,
-    info: Info | undefined,
-    options: { overwrite: boolean; expected?: Info },
-  ): Promise<boolean> {
-    const norm = normalizeProviderID(key)
-    if (!isCanonicalProviderID(norm)) throw new AuthError({ message: "Invalid provider ID" })
+  async function updateStoredData(update: (data: Record<string, unknown>) => boolean): Promise<boolean> {
     try {
       using _crossProcess = await acquireFileLock()
       using _inProcess = await Lock.write("auth")
       const data = await readAuthData()
-      // Import checks existence under the same locks as the write. A
-      // connection created after planning or reading auth must win.
-      if (!options.overwrite && (Object.hasOwn(data, norm) || Object.hasOwn(data, norm + "/"))) return false
-      if (options.expected) {
-        const current = Info.safeParse(decryptEntry(data[norm] ?? data[norm + "/"]))
-        if (!current.success || !isDeepStrictEqual(current.data, options.expected)) return false
-      }
-      if (norm !== key) delete data[key]
-      delete data[norm + "/"]
-      if (info) {
-        if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
-        data[norm] = encryptEntry(info)
-      } else {
-        delete data[norm]
-      }
+      if (!update(data)) return false
       await Filesystem.writeJson(file, data, 0o600)
     } catch (cause) {
       if (cause instanceof AuthError) throw cause
@@ -513,30 +496,74 @@ export namespace Auth {
     return true
   }
 
+  async function updateEntry(
+    key: string,
+    update: (current: unknown) => { value: unknown } | undefined,
+  ): Promise<boolean> {
+    const norm = normalizeProviderID(key)
+    if (!isCanonicalProviderID(norm)) throw new AuthError({ message: "Invalid provider ID" })
+    return updateStoredData((data) => {
+      const current = Object.hasOwn(data, norm)
+        ? data[norm]
+        : Object.hasOwn(data, norm + "/")
+          ? data[norm + "/"]
+          : undefined
+      const change = update(current)
+      if (!change) return false
+      if (norm !== key) delete data[key]
+      delete data[norm + "/"]
+      if (change.value === undefined) {
+        delete data[norm]
+      } else {
+        if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
+        data[norm] = change.value
+      }
+      return true
+    })
+  }
+
+  async function writeEntry(key: string, info: Info, options: { overwrite: boolean }): Promise<boolean> {
+    return updateEntry(key, (current) => {
+      // Check under the write locks: a connection created after import
+      // planning must win even if another process wrote it meanwhile.
+      if (!options.overwrite && current !== undefined) return
+      return { value: encryptEntry(info) }
+    })
+  }
+
   export async function set(key: string, info: Info): Promise<void> {
     await writeEntry(key, info, { overwrite: true })
   }
 
-  /** Restore a failed operation without replacing credentials written by a peer. */
-  export async function replaceIfUnchanged(key: string, expected: Info, replacement?: Info): Promise<boolean> {
-    return writeEntry(key, replacement, { overwrite: true, expected })
+  /** Write a nonempty API key and return a rollback owned by that encrypted write. */
+  export async function setApiKeyWithRollback(key: string, apiKey: string): Promise<() => Promise<boolean>> {
+    if (!apiKey) throw new AuthError({ message: "API key must not be empty" })
+    let previous: unknown
+    let written: unknown
+    await updateEntry(key, (current) => {
+      previous = current
+      written = encryptEntry({ type: "api", key: apiKey })
+      return { value: written }
+    })
+    // Randomized encryption distinguishes peer writes of the same plaintext.
+    // Cache the operation so invoking this rollback again cannot undo later work.
+    let rollback: Promise<boolean> | undefined
+    return () =>
+      (rollback ??= updateEntry(key, (current) => {
+        if (!isDeepStrictEqual(current, written)) return
+        const parsed = Info.safeParse(decryptEntry(previous))
+        return { value: parsed.success ? encryptEntry(parsed.data) : previous }
+      }))
   }
 
-  export async function remove(key: string) {
+  export async function remove(key: string): Promise<void> {
     const norm = normalizeProviderID(key)
-    try {
-      using _crossProcess = await acquireFileLock()
-      using _inProcess = await Lock.write("auth")
-      const data = await readAuthData()
+    await updateStoredData((data) => {
       delete data[key]
       delete data[norm]
       delete data[norm + "/"]
-      await Filesystem.writeJson(file, data, 0o600)
-    } catch (cause) {
-      throw authError("Failed to write auth data", cause)
-    }
-    allPending = undefined
-    await invalidateProviderCacheAfterAuthChange()
+      return true
+    })
   }
 
   // ADR-246: a non-secret, shareable view of the auth store for

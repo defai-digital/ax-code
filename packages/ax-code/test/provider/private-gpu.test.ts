@@ -257,7 +257,7 @@ describe("private-gpu connect and disconnect", () => {
   })
 })
 
-test.each(["existing", "new", "concurrent", "rollback-failure"] as const)(
+test.each(["existing", "new", "concurrent", "concurrent-same", "rollback-failure"] as const)(
   "failed private GPU config save preserves the correct credential (%s)",
   async (mode) => {
     const providerID = "custom-private-gpu"
@@ -278,10 +278,19 @@ test.each(["existing", "new", "concurrent", "rollback-failure"] as const)(
         const failure = new Error("Configuration save failed")
         vi.spyOn(Config, "updateGlobal").mockImplementation(async () => {
           if (mode === "concurrent") await Auth.set(providerID, { type: "api", key: "newer-credential" })
+          if (mode === "concurrent-same") await Auth.set(providerID, { type: "api", key: "attempted-credential" })
           throw failure
         })
         const rollbackError = new Error("Credential restore failed")
-        if (mode === "rollback-failure") vi.spyOn(Auth, "replaceIfUnchanged").mockRejectedValueOnce(rollbackError)
+        if (mode === "rollback-failure") {
+          const setKey = Auth.setApiKeyWithRollback
+          vi.spyOn(Auth, "setApiKeyWithRollback").mockImplementationOnce(async (...args) => {
+            await setKey(...args)
+            return async () => {
+              throw rollbackError
+            }
+          })
+        }
         try {
           const attempt = connectPrivateGpu({
             providerID,
@@ -302,7 +311,12 @@ test.each(["existing", "new", "concurrent", "rollback-failure"] as const)(
               ? undefined
               : {
                   type: "api",
-                  key: mode === "concurrent" ? "newer-credential" : "previous-credential",
+                  key:
+                    mode === "concurrent"
+                      ? "newer-credential"
+                      : mode === "concurrent-same"
+                        ? "attempted-credential"
+                        : "previous-credential",
                 },
           )
         } finally {
