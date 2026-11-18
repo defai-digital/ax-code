@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process"
 import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-in-v4"
 import { exists, readText, scan, writeText } from "../packages/ax-code/script/fs-compat"
 import { extractImportSpecifiers } from "./import-specifiers"
-import { runtimeInterfaceImportAllowed } from "./runtime-boundary"
+import { requiredImplementationFacade, runtimeInterfaceImportAllowed } from "./runtime-boundary"
 import { INTERNAL_ONLY_ROOTS, unapprovedTrackedInternalPaths } from "./repository-policy"
 import {
   discoverWorkspacePackages,
@@ -137,23 +137,32 @@ function resolveAxCodeImport(file: string, name: string) {
   return undefined
 }
 
-async function runtimeInternalBoundaries() {
-  const out = [] as { file: string; spec: string }[]
+async function runtimeInternalBoundaries(): Promise<{
+  interfaces: { file: string; spec: string }[]
+  implementations: { file: string; spec: string; facade: string }[]
+}> {
+  const interfaces: { file: string; spec: string }[] = []
+  const implementations: { file: string; spec: string; facade: string }[] = []
+  const files = await list("packages/ax-code/src")
+  const sourceFiles = new Set(files.map((file) => rel(file).split(path.sep).join("/")))
   const seen = new Set<string>()
-  for (const file of await list("packages/ax-code/src")) {
+  for (const file of files) {
     const relative = rel(file).split(path.sep).join("/")
 
     const text = await readText(file)
     for (const name of spec(text, file)) {
-      const target = resolveAxCodeImport(file, name)
-      if (!target || runtimeInterfaceImportAllowed(relative, rel(target).split(path.sep).join("/"))) continue
       const key = `${relative}\0${name}`
       if (seen.has(key)) continue
       seen.add(key)
-      out.push({ file: relative, spec: name })
+      const resolved = resolveAxCodeImport(file, name)
+      if (!resolved) continue
+      const target = rel(resolved).split(path.sep).join("/")
+      if (!runtimeInterfaceImportAllowed(relative, target)) interfaces.push({ file: relative, spec: name })
+      const facade = requiredImplementationFacade(relative, target, sourceFiles)
+      if (facade) implementations.push({ file: relative, spec: name, facade })
     }
   }
-  return out
+  return { interfaces, implementations }
 }
 
 async function lines(dir: string) {
@@ -245,7 +254,7 @@ async function main() {
   const configuration = workspaceConfigurationProblems(root)
   const raw = workspaceBoundaryViolations(root, packages)
   const sdkRaw = await sdkSourceImports()
-  const runtimeBoundary = await runtimeInternalBoundaries()
+  const { interfaces: runtimeBoundary, implementations: implementationBoundary } = await runtimeInternalBoundaries()
   const cycles = workspaceDependencyCycles(packages)
   const v4 = await V4Guardrails.check(path.join(root, "packages/ax-code"))
   const all = await size()
@@ -291,6 +300,14 @@ async function main() {
     for (const row of runtimeBoundary) out.push(`- ${row.file} imports ${row.spec}`)
   } else {
     out.push("- ok: domain files do not import CLI or server interface modules directly")
+  }
+  out.push("")
+  out.push("## Implementation Facades")
+  if (implementationBoundary.length) {
+    out.push("- error: runtime consumers bypass existing public module facades")
+    for (const row of implementationBoundary) out.push(`- ${row.file} imports ${row.spec}; use ${row.facade}`)
+  } else {
+    out.push("- ok: implementation modules are accessed through their public facades")
   }
   out.push("")
   out.push("## Workspace Dependency Cycles")
@@ -360,6 +377,7 @@ async function main() {
     raw.length ||
     cycles.length ||
     runtimeBoundary.length ||
+    implementationBoundary.length ||
     v4.length ||
     stale.length ||
     drift.length ||

@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
-import { runtimeInterfaceImportAllowed } from "./runtime-boundary"
+import { extractImportSpecifiers } from "./import-specifiers"
+import { requiredImplementationFacade, runtimeInterfaceImportAllowed } from "./runtime-boundary"
 
 const root = "packages/ax-code/src/"
 
@@ -35,4 +36,55 @@ test.each([
 test("interface adapters retain access to other interface modules", () => {
   expect(runtimeInterfaceImportAllowed(root + "cli/bootstrap.ts", root + "server/server.ts")).toBe(true)
   expect(runtimeInterfaceImportAllowed(root + "server/routes/session.ts", root + "cli/boot.ts")).toBe(true)
+})
+
+test.each(["", ".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])(
+  "implementation imports using the %s extension must use an existing facade",
+  (extension) => {
+    const facade = root + "provider/provider.ts"
+    expect(
+      requiredImplementationFacade(
+        root + "visual/router.ts",
+        root + "provider/provider-impl" + extension,
+        new Set([facade]),
+      ),
+    ).toBe(facade)
+  },
+)
+
+test("facades may expose their implementations, including authored extension variants", () => {
+  const facades = [root + "provider/provider.ts", root + "provider/provider.js"]
+  for (const facade of facades) {
+    expect(requiredImplementationFacade(facade, root + "provider/provider-impl", new Set(facades))).toBeUndefined()
+  }
+})
+
+test("standalone implementations and ordinary helpers need no invented facade", () => {
+  const source = root + "cli/boot.ts"
+  const files = new Set([source, root + "cli/cmd/goal-impl.ts", root + "provider/provider.ts"])
+  expect(requiredImplementationFacade(source, root + "cli/cmd/goal-impl", files)).toBeUndefined()
+  expect(requiredImplementationFacade(source, root + "provider/provider", files)).toBeUndefined()
+  expect(requiredImplementationFacade(source, root + "provider/provider-impl-helper", files)).toBeUndefined()
+})
+
+test("the facade boundary covers runtime imports, type contracts, re-exports and dynamic imports", () => {
+  const target = "@/provider/provider-impl"
+  const code = [
+    `import { Provider } from "${target}"`,
+    `import type { Provider } from "${target}"`,
+    `type ProviderModule = typeof import("${target}")`,
+    `export { Provider } from "${target}"`,
+    `const load = () => import("${target}")`,
+    `const common = require("${target}")`,
+    `// import { Provider } from "${target}"`,
+    `const example = 'import("${target}")'`,
+  ].join("\n")
+  const imports = extractImportSpecifiers(code)
+  expect(imports).toHaveLength(6)
+  const facade = root + "provider/provider.ts"
+  for (const { specifier } of imports) {
+    expect(requiredImplementationFacade(root + "tool/task.ts", root + specifier.slice(2), new Set([facade]))).toBe(
+      facade,
+    )
+  }
 })

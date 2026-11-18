@@ -1,6 +1,6 @@
 import z from "zod"
-import type { ModelPool } from "../config/schema-impl"
-import type { ModelID, ProviderID } from "../provider/schema"
+import type { ModelPool } from "../config/schema"
+import { ModelID, ProviderID } from "../provider/schema"
 
 // ADR-218: resolve the task/task_parallel `model` parameter against the
 // user-configured agents.model_pool. Arbitrary model strings are rejected so
@@ -17,7 +17,7 @@ export function parseModelRef(model: string): PooledModelRef {
   if (slash <= 0 || slash === model.length - 1) {
     throw new Error(`Model pool entries must be "provider/model", got "${model}"`)
   }
-  return { providerID: model.slice(0, slash) as ProviderID, modelID: model.slice(slash + 1) as ModelID }
+  return { providerID: ProviderID.make(model.slice(0, slash)), modelID: ModelID.make(model.slice(slash + 1)) }
 }
 
 function entriesByAlias(pool: ModelPoolLike): Map<string, { model: string }> {

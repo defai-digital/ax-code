@@ -29,3 +29,20 @@ export function runtimeInterfaceImportAllowed(file: string, target: string): boo
   if (!layer || interfaceLayer(file)) return true
   return layer === "cli" ? cliEntries.has(file) : serverHosts.has(file)
 }
+
+const moduleExtensions = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"]
+
+/** Return the public facade bypassed by this import, when that facade exists. */
+export function requiredImplementationFacade(
+  file: string,
+  target: string,
+  sourceFiles: ReadonlySet<string>,
+): string | undefined {
+  const module = target.replace(/\.(?:ts|tsx|js|jsx|mts|cts)$/, "")
+  const suffix = "-impl"
+  if (!module.endsWith(suffix)) return
+  const base = module.slice(0, -suffix.length)
+  const facades = moduleExtensions.map((extension) => base + extension).filter((facade) => sourceFiles.has(facade))
+  if (facades.includes(file)) return
+  return facades[0]
+}

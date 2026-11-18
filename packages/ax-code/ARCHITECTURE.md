@@ -21,6 +21,7 @@
 - put domain logic in domain folders such as `session`, `project`, `provider`, `permission`, `tool`
 - keep interface layers in `cli`, server routes, and other entry surfaces
 - keep reusable low-level helpers in shared utility modules, not inside CLI or route files
+- when a module has a facade alongside its `*-impl` file, import the facade for values and types; only the facade may import that implementation (`check:structure` enforces this)
 - avoid adding new unrelated logic to `src/cli` when it belongs in a domain package
 - keep the TUI application in `src/cli/tui`, not under `src/cli/cmd`
 - group `src/cli/cmd` by concern (`doctor/`, `run/`, `providers/`, `mcp/`, `github-agent/`, `runtime/`, `storage/`); keep root command facades thin and put helpers inside the concern folder

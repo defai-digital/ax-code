@@ -21,6 +21,7 @@ describe("root structure script", () => {
     expect(result.stderr).toBe("")
     expect(result.stdout).toContain("## SDK Runtime Source Imports")
     expect(result.stdout).toContain("## Runtime Internal Boundaries")
+    expect(result.stdout).toContain("## Implementation Facades")
     expect(result.stdout).toContain("## Workspace Dependency Cycles")
     expect(result.stdout).toContain("## Internal Files")
     expect(result.stdout).toContain("## Hotspot Thresholds")
