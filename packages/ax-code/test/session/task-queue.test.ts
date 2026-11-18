@@ -3182,6 +3182,56 @@ describe("TaskQueue payload write atomicity", () => {
     })
   })
 
+  test("starting a task preserves a concurrent control claim", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const child = await Session.create({})
+        const item = await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "background task",
+          payload: { source: "task" },
+        })
+        const starting = TaskQueue.setStatus({ id: item.id, status: "running" })
+        const claim = await TaskQueue.claimControlDelivery({
+          id: item.id,
+          sessionID: child.id,
+          messageID: MessageID.ascending(),
+          partID: PartID.ascending(),
+          text: "check the next file",
+        })
+        expect(claim.claimed).toBe(true)
+        await starting
+
+        const latest = await TaskQueue.get(item.id)
+        expect(latest.status).toBe("running")
+        expect(TaskQueue.executorOwner(latest.payload)).toBeDefined()
+        expect(TaskQueue.controlDeliveries(latest)).toEqual([claim.entry])
+      },
+    })
+  })
+
+  test("retry preserves a payload edit committed while retry is being admitted", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const item = await TaskQueue.enqueue({ kind: "followup", title: "Follow up", payload: { text: "old body" } })
+        await TaskQueue.setStatus({ id: item.id, status: "failed" })
+
+        const edit = TaskQueue.edit({ id: item.id, payload: { text: "new body" } })
+        const retry = TaskQueue.retry(item.id)
+        await Promise.all([edit, retry])
+
+        const latest = await TaskQueue.get(item.id)
+        expect(latest.status).toBe("queued")
+        expect(latest.payload["text"]).toBe("new body")
+      },
+    })
+  })
+
   test("claimControlDelivery is atomic for concurrent same-text claims", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -3299,7 +3349,7 @@ describe("TaskQueue payload write atomicity", () => {
           payload: { source: "task", deliveryStatus: "pending" },
         })
         await TaskQueue.setStatus({ id: created.id, status: "failed", error: "first attempt failed" })
-        await TaskQueue.claimResultDelivery({
+        const prior = await TaskQueue.claimResultDelivery({
           id: created.id,
           claim: {
             owner: "waitfor",
@@ -3310,6 +3360,10 @@ describe("TaskQueue payload write atomicity", () => {
           },
           resultEmpty: true,
         })
+
+        const edited = await TaskQueue.edit({ id: created.id, payload: { source: "task", body: { parts: [] } } })
+        expect(TaskQueue.resultDeliveryClaim(edited)).toEqual(prior.claim)
+        expect(edited.payload["deliveryStatus"]).toBe("delivering")
 
         const retried = await TaskQueue.retry(created.id)
 

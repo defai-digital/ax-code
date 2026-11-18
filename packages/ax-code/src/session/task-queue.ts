@@ -5,7 +5,7 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { Database, NotFoundError, and, asc, desc, eq, gt, inArray, notInArray, sql } from "@/storage/db"
+import { Database, NotFoundError, and, asc, desc, eq, gt, inArray, sql } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
 import { SessionMetadata } from "./metadata"
@@ -191,20 +191,14 @@ export namespace TaskQueue {
     return row
   }
 
-  function writePayloadRow(
-    db: Database.TxOrDb,
-    id: TaskQueueID,
-    payload: Payload,
-    now: number,
-  ): typeof TaskQueueTable.$inferSelect {
-    const row = db
-      .update(TaskQueueTable)
-      .set({ payload, time_updated: now })
-      .where(eq(TaskQueueTable.id, id))
-      .returning()
-      .get()
+  function writeRow(db: Database.TxOrDb, id: TaskQueueID, updates: Partial<typeof TaskQueueTable.$inferInsert>): Info {
+    const row = db.update(TaskQueueTable).set(updates).where(eq(TaskQueueTable.id, id)).returning().get()
     if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
-    return row
+    return fromRow(row)
+  }
+
+  function writePayloadRow(db: Database.TxOrDb, id: TaskQueueID, payload: Payload, now: number): Info {
+    return writeRow(db, id, { payload, time_updated: now })
   }
 
   /**
@@ -575,45 +569,30 @@ export namespace TaskQueue {
      */
     onlyFromActive?: boolean
   }): Promise<Info> {
-    const current = await get(input.id)
-    const now = Date.now()
-    const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
-      status: input.status,
-      error: input.error,
-      time_updated: now,
-    }
-    if (input.status === "running" && current.time.started === undefined) updates.time_started = now
     const isTerminalTarget = isTerminalStatus(input.status)
-    if (isTerminalTarget) updates.time_completed = now
-    if (ownedStatuses.includes(input.status)) {
-      const payload = withExecutorOwner(current.payload, now)
-      if (payload) updates.payload = payload
-    }
-    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      // A non-terminal write must never resurrect a row a concurrent executor
-      // already settled to a terminal status. The get() above and this write
-      // are separated by an await boundary, so a stale block-status refresh can
-      // read "running" and then write "running"/"blocked_*" over an already
-      // "completed"/"failed" row, wedging the item until the next restart
-      // recovery sweep. Terminal writes are the authoritative outcome and skip
-      // the guard; a guarded no-op re-reads and returns the current row.
-      const conditions = [eq(TaskQueueTable.id, input.id)]
-      if (!isTerminalTarget || input.onlyFromActive) {
-        conditions.push(notInArray(TaskQueueTable.status, terminalStatuses))
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      const current = fromRow(readRow(db, input.id))
+      assertProjectItem(current)
+      // A stale blocker refresh must not reopen a terminal task. Guarded
+      // terminal mutations also preserve the outcome that settled first.
+      if (isTerminalStatus(current.status) && (!isTerminalTarget || input.onlyFromActive)) return current
+
+      // Read the latest payload under the same lock used by ledger writers.
+      // Stamping ownership must preserve concurrent message and result claims.
+      const now = Date.now()
+      const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
+        status: input.status,
+        error: input.error,
+        time_updated: now,
       }
-      const row = db
-        .update(TaskQueueTable)
-        .set(updates)
-        .where(and(...conditions))
-        .returning()
-        .get()
-      if (!row) {
-        const fresh = readRow(db, input.id)
-        return fromRow(fresh)
+      if (input.status === "running" && current.time.started === undefined) updates.time_started = now
+      if (isTerminalTarget) updates.time_completed = now
+      if (ownedStatuses.includes(input.status)) {
+        const payload = withExecutorOwner(current.payload, now)
+        if (payload) updates.payload = payload
       }
-      return fromRow(row)
+      return writeRow(db, input.id, updates)
     })
-    assertProjectItem(item)
     publishUpdated(item)
     await syncWorkflowStatusIfNeeded(item)
     // Terminal statuses must not leave the session pointing at a finished
@@ -701,8 +680,8 @@ export namespace TaskQueue {
       }
       delete payload["deliveryError"]
       if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
-      const row = writePayloadRow(db, input.id, payload, now)
-      return { item: fromRow(row), claim: input.claim, claimed: true, accepted: true }
+      const item = writePayloadRow(db, input.id, payload, now)
+      return { item, claim: input.claim, claimed: true, accepted: true }
     })
     assertProjectItem(result.item)
     if (result.claimed) publishUpdated(result.item)
@@ -731,8 +710,8 @@ export namespace TaskQueue {
       }
       delete payload["deliveryError"]
       if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
-      const row = writePayloadRow(db, input.id, payload, now)
-      return { item: fromRow(row), completed: true, changed: true }
+      const item = writePayloadRow(db, input.id, payload, now)
+      return { item, completed: true, changed: true }
     })
     assertProjectItem(result.item)
     if (result.changed) publishUpdated(result.item)
@@ -780,8 +759,8 @@ export namespace TaskQueue {
         deliveryStatus: "blocked",
         deliveryError: input.error,
       }
-      const row = writePayloadRow(db, input.id, payload, now)
-      return { item: fromRow(row), blocked: true, changed: true }
+      const item = writePayloadRow(db, input.id, payload, now)
+      return { item, blocked: true, changed: true }
     })
     assertProjectItem(result.item)
     if (result.changed) publishUpdated(result.item)
@@ -807,8 +786,8 @@ export namespace TaskQueue {
       delete payload["resultDelivery"]
       delete payload["deliveryError"]
       delete payload["deliveryEmpty"]
-      const row = writePayloadRow(db, input.id, payload, now)
-      return { item: fromRow(row), released: true, changed: true }
+      const item = writePayloadRow(db, input.id, payload, now)
+      return { item, released: true, changed: true }
     })
     assertProjectItem(result.item)
     if (result.changed) publishUpdated(result.item)
@@ -841,8 +820,8 @@ export namespace TaskQueue {
         delete payload["resultDelivery"]
         delete payload["deliveryEmpty"]
       }
-      const row = writePayloadRow(db, input.id, payload, now)
-      return fromRow(row)
+      const item = writePayloadRow(db, input.id, payload, now)
+      return item
     })
     assertProjectItem(item)
     publishUpdated(item)
@@ -908,8 +887,8 @@ export namespace TaskQueue {
         ...current.payload,
         controlDeliveries: entries.slice(-MAX_CONTROL_DELIVERIES),
       }
-      const row = writePayloadRow(db, input.id, payload, now)
-      return fromRow(row)
+      const item = writePayloadRow(db, input.id, payload, now)
+      return item
     })
     assertProjectItem(item)
     publishUpdated(item)
@@ -966,8 +945,8 @@ export namespace TaskQueue {
         ...current.payload,
         controlDeliveries: entries,
       }
-      const row = writePayloadRow(db, input.id, payload, now)
-      return { item: fromRow(row), entry, claimed: true }
+      const item = writePayloadRow(db, input.id, payload, now)
+      return { item, entry, claimed: true }
     })
     if (result.claimed) publishUpdated(result.item)
     return result
@@ -1548,55 +1527,35 @@ export namespace TaskQueue {
    * two transitions.
    */
   export async function retry(id: TaskQueueID, options: { paused?: boolean } = {}): Promise<Info> {
-    const current = await get(id)
-    assertActionStatus(current, "retry", ["failed", "cancelled"])
-    const now = Date.now()
-    const payload: Payload = { ...current.payload }
-    delete payload[EXECUTOR_OWNER_KEY]
-    delete payload[INTERRUPTION_REASON_KEY]
-    // A retried row is plain queue work again: drop every steer audit key so
-    // a row the user later cancels cannot match the restart sweep's
-    // admitted-but-never-applied steer shape (cancelled + steeredInto + no
-    // applied stamp — see recoverInterrupted) and be silently resurrected
-    // after the next backend restart.
-    delete payload["steeredInto"]
-    delete payload["steeredAt"]
-    delete payload["steeredAppliedAt"]
-    delete payload["steeredHeartbeatAt"]
-    if (current.kind === "subagent" && current.payload["source"] === "task") {
-      payload["deliveryStatus"] = "pending"
-      delete payload["resultDelivery"]
-      delete payload["deliveryError"]
-      delete payload["deliveryEmpty"]
-    }
-    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const row = db
-        .update(TaskQueueTable)
-        .set({
-          status: options.paused ? "paused" : "queued",
-          payload,
-          error: null,
-          time_started: null,
-          time_completed: null,
-          time_updated: now,
-        })
-        // Re-check the terminal status inside the write (ADR-106 D5): an
-        // edit or a competing retry landing between get() and this update
-        // must not be overwritten by the stale payload copied above.
-        .where(and(eq(TaskQueueTable.id, id), inArray(TaskQueueTable.status, ["failed", "cancelled"])))
-        .returning()
-        .get()
-      if (row) return { item: fromRow(row), raced: false as const }
-      const fresh = readRow(db, id)
-      return { item: fromRow(fresh), raced: true as const }
-    })
-    assertProjectItem(result.item)
-    if (result.raced) {
-      throw new HTTPException(409, {
-        message: `Cannot retry task queue item ${id} while it is ${result.item.status}.`,
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      const current = fromRow(readRow(db, id))
+      assertProjectItem(current)
+      assertActionStatus(current, "retry", ["failed", "cancelled"])
+
+      const payload: Payload = { ...current.payload }
+      delete payload[EXECUTOR_OWNER_KEY]
+      delete payload[INTERRUPTION_REASON_KEY]
+      // Clear steer audit keys so a later cancellation cannot be mistaken
+      // for an admitted steer that needs replay after a restart.
+      delete payload["steeredInto"]
+      delete payload["steeredAt"]
+      delete payload["steeredAppliedAt"]
+      delete payload["steeredHeartbeatAt"]
+      if (isTaskSubagent(current)) {
+        payload["deliveryStatus"] = "pending"
+        delete payload["resultDelivery"]
+        delete payload["deliveryError"]
+        delete payload["deliveryEmpty"]
+      }
+      return writeRow(db, id, {
+        status: options.paused ? "paused" : "queued",
+        payload,
+        error: null,
+        time_started: null,
+        time_completed: null,
+        time_updated: Date.now(),
       })
-    }
-    const item = result.item
+    })
     publishUpdated(item)
     await syncWorkflowStatusIfNeeded(item)
     return item
@@ -1901,72 +1860,59 @@ export namespace TaskQueue {
     )
   }
 
+  const serverOwnedEditFields = [
+    EXECUTOR_OWNER_KEY,
+    "controlDeliveries",
+    "resultDelivery",
+    "deliveryStatus",
+    "deliveryError",
+    "deliveryEmpty",
+  ] as const
+
   export async function edit(input: EditInput): Promise<Info> {
     const parsed = EditInput.parse(input)
-    const current = await get(parsed.id)
-    if (!isEditableStatus(current.status)) {
+    const snapshot = await get(parsed.id)
+    if (!isEditableStatus(snapshot.status)) {
       throw new HTTPException(409, {
-        message: `Task queue item ${parsed.id} cannot be edited while it is ${current.status}.`,
+        message: `Task queue item ${parsed.id} cannot be edited while it is ${snapshot.status}.`,
       })
     }
 
-    const now = Math.max(Date.now(), (current.time.updated ?? 0) + 1)
-    const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
-      time_updated: now,
-    }
-    if (parsed.title !== undefined) updates.title = parsed.title
-    if ("agent" in parsed) updates.agent = parsed.agent ?? null
-    if ("model" in parsed) updates.model = parsed.model ?? null
-    if (parsed.payload !== undefined) {
-      // Preserve the executor-ownership key across payload replacement.
-      // `waiting_for_idle` row liveness is derived solely from
-      // `payload.executorOwner` (see isLiveRow), so an API edit that echoes a
-      // payload without the key would make restart recovery treat a row still
-      // driven by a live backend as orphaned and re-queue it — the peer-clobber
-      // class fixed in 2026-08-28, leaking through the edit path.
-      const existingOwner = current.payload[EXECUTOR_OWNER_KEY]
-      updates.payload =
-        existingOwner !== undefined && parsed.payload[EXECUTOR_OWNER_KEY] === undefined
-          ? { ...parsed.payload, [EXECUTOR_OWNER_KEY]: existingOwner }
-          : parsed.payload
-    }
-    if (parsed.priority !== undefined) updates.priority = parsed.priority
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      const current = fromRow(readRow(db, parsed.id))
+      assertProjectItem(current)
+      if (
+        !isEditableStatus(current.status) ||
+        (parsed.expectedUpdatedAt !== undefined && parsed.expectedUpdatedAt !== current.time.updated)
+      ) {
+        throw new HTTPException(409, {
+          message: `Task queue item ${parsed.id} changed; reload it before editing (${current.status}).`,
+        })
+      }
 
-    // Re-check editability as part of the same write as the isEditableStatus
-    // guard above (ADR-106 D5: "editing cannot race into overwriting a
-    // running turn"). Without this, an executor claim landing in the gap
-    // between that read and this write would let the edit land silently on a
-    // row that has since started running, and the executor — already
-    // mid-flight on the pre-edit body — would never see it.
-    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const row = db
-        .update(TaskQueueTable)
-        .set(updates)
-        .where(
-          and(
-            eq(TaskQueueTable.id, parsed.id),
-            inArray(TaskQueueTable.status, EDITABLE_STATUSES),
-            parsed.expectedUpdatedAt === undefined
-              ? undefined
-              : eq(TaskQueueTable.time_updated, parsed.expectedUpdatedAt),
-          ),
-        )
-        .returning()
-        .get()
-      if (row) return { item: fromRow(row), raced: false }
-      const fresh = readRow(db, parsed.id)
-      return { item: fromRow(fresh), raced: true }
+      const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
+        time_updated: Math.max(Date.now(), (current.time.updated ?? 0) + 1),
+      }
+      if (parsed.title !== undefined) updates.title = parsed.title
+      if ("agent" in parsed) updates.agent = parsed.agent ?? null
+      if ("model" in parsed) updates.model = parsed.model ?? null
+      if (parsed.priority !== undefined) updates.priority = parsed.priority
+      if (parsed.payload !== undefined) {
+        const payload = { ...parsed.payload }
+        // Payload edits replace the caller's fields. Execution ownership
+        // and delivery records come from the live row, even for stale echoes.
+        for (const key of serverOwnedEditFields) {
+          if (Object.hasOwn(current.payload, key)) payload[key] = current.payload[key]
+          else delete payload[key]
+        }
+        updates.payload = payload
+      }
+      return writeRow(db, parsed.id, updates)
     })
-    if (result.raced) {
-      throw new HTTPException(409, {
-        message: `Task queue item ${parsed.id} changed; reload it before editing (${result.item.status}).`,
-      })
-    }
-    assertProjectItem(result.item)
-    publishUpdated(result.item)
-    await syncSessionQueueMetadata(result.item)
-    await syncWorkflowStatusIfNeeded(result.item)
-    return result.item
+    publishUpdated(item)
+    await syncSessionQueueMetadata(item)
+    await syncWorkflowStatusIfNeeded(item)
+    return item
   }
 
   export async function reorder(input: ReorderInput): Promise<Info> {

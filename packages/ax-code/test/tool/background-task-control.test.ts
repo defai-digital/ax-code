@@ -445,7 +445,7 @@ describe("tool.message_background_task", () => {
     },
   )
 
-  test("redelivery after a mid-flight crash converges to exactly one message", async () => {
+  test.each([false, true])("redelivers once after a crash (edited: %s)", async (edited) => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -455,7 +455,7 @@ describe("tool.message_background_task", () => {
         const parent = await Session.create({})
         const { child, item } = await enqueueBackgroundSubagent({
           parent: parent.id,
-          status: "running",
+          status: edited ? "queued" : "running",
           initialPrompt: "do the original task",
         })
 
@@ -484,6 +484,16 @@ describe("tool.message_background_task", () => {
         const afterCrash = controlTexts(await Session.messages({ sessionID: child.id }), "also cover the tests")
         expect(afterCrash).toHaveLength(1)
         const originalCreated = afterCrash[0]?.info.time.created
+
+        if (edited) {
+          const editedBody = { parts: [{ type: "text", text: "rewritten queued request" }] }
+          const updated = await TaskQueue.edit({
+            id: item.id,
+            payload: { ...item.payload, body: editedBody, controlDeliveries: [] },
+          })
+          expect(updated.payload["body"]).toEqual(editedBody)
+          expect(TaskQueue.controlDeliveries(updated)).toEqual([pendingEntry])
+        }
 
         const retry = await (
           await MessageBackgroundTaskTool.init()
