@@ -92,6 +92,7 @@ export default defineConfig({
   },
   test: {
     globals: false,
+    globalSetup: [path.join(dir, "test/support/worker-exits.ts")],
     // The group runners (test-groups.ts / test-ci.ts) pass an exact file list via
     // AX_TEST_FILES instead of vitest positional filters — vitest 4's positional
     // filter matches path segments opaquely and can't reliably target an exact
