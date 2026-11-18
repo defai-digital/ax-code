@@ -33,7 +33,7 @@ import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
 import { isFileUrl } from "../util/file-url"
 import { isNonEmptyRecord, recordCount } from "@/util/record"
-import { ensureLocalDispatcher, isLocalProviderHost, needsLocalDispatcher, selectDispatcher } from "./local-dispatcher"
+import { ensureLocalDispatcher, needsLocalDispatcher, selectDispatcher } from "./local-dispatcher"
 
 // Direct imports for bundled providers
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
@@ -1664,27 +1664,13 @@ export namespace Provider {
     }
   }
 
-  // A provider on loopback or the private network (a LAN Ollama box, a docker
-  // service name) is local for routing privacy, the same host test the local
-  // dispatcher uses.
-  function isLocalBaseURL(value: unknown) {
-    if (RoutePolicy.isLoopbackBaseURL(value)) return true
-    if (typeof value !== "string") return false
-    try {
-      const url = new URL(value)
-      return (url.protocol === "http:" || url.protocol === "https:") && isLocalProviderHost(url.hostname)
-    } catch {
-      return false
-    }
-  }
-
-  export async function isLocalProvider(providerID: ProviderID) {
+  export async function isLocalProvider(providerID: ProviderID): Promise<boolean> {
     if (providerID === AX_ENGINE_PROVIDER_ID) return true
-    const provider = (await state()).providers[providerID]
-    return (
-      isLocalBaseURL(provider?.options?.["baseURL"]) ||
-      isLocalBaseURL(Object.values(provider?.models ?? {})[0]?.api?.url)
-    )
+    const providers = (await state()).providers
+    const provider = Object.hasOwn(providers, providerID) ? providers[providerID] : undefined
+    if (RoutePolicy.hasLocalEndpoint(provider)) return true
+    const configured = RoutePolicy.configuredProvider((await Config.get()).provider, providerID)
+    return RoutePolicy.hasLocalEndpoint(configured)
   }
 
   export async function assertLocalRoute(primary: ProviderID, target: ProviderID) {

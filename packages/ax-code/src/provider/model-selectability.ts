@@ -3,6 +3,7 @@ import { CLI_PROVIDER_IDS } from "./cli/ids"
 import { modelIdFinalSegment, normalizeProviderModelId } from "./model-id"
 import { fixedTokensEstimateForProvider, usableInputTokens } from "../session/model-agent-fit"
 import { declaredCapabilityEvidence } from "./capability-evidence"
+import type { RoutePolicy } from "./route-policy"
 
 // Providers allowed to surface models that don't advertise tool calling. For
 // most providers a non-toolcall model is hidden from the picker because the
@@ -10,7 +11,7 @@ import { declaredCapabilityEvidence } from "./capability-evidence"
 // legitimately want anyway.
 const TOOLCALL_OPTIONAL_PROVIDER_IDS = new Set<string>(CLI_PROVIDER_IDS)
 
-export type SelectableModel = {
+export type SelectableModel = RoutePolicy.ModelEndpoints & {
   tool_call?: boolean
   capabilities?: {
     toolcall?: boolean
@@ -88,7 +89,10 @@ export function skuKey(modelID: string) {
   return normalizeProviderModelId(modelIdFinalSegment(modelID).replace(/\[\d+[mM]\]$/, ""))
 }
 
-export type SelectableProvider = { id: string; models: Record<string, SelectableModel | undefined> }
+export type SelectableProvider = Pick<RoutePolicy.ProviderEndpoints, "api" | "options"> & {
+  id: string
+  models: Record<string, SelectableModel | undefined>
+}
 
 export function findSelectableSkuID(provider: SelectableProvider, normalizedSku: string): string | undefined {
   if (!normalizedSku) return undefined

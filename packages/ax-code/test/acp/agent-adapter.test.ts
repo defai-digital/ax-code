@@ -156,6 +156,19 @@ describe("ACP agent adapter", () => {
     })
   })
 
+  test.each([
+    ["ax-engine", {}],
+    ["lmstudio", {}],
+    ["custom-lan", { "custom-lan": { options: { baseURL: "http://model-host.internal/v1" } } }],
+    ["model-local", { "model-local": { models: { chat: { provider: { api: "http://localhost:1234/v1" } } } } }],
+  ] as const)("keeps an unavailable local pin on %s", async (providerID, provider) => {
+    const config = configWithProviders([{ id: "gateway", models: { chat: { id: "chat", tool_call: true } } }], {
+      gateway: "chat",
+    })
+    config.sdk.config.get = async () => ({ data: { model: `${providerID}/chat`, provider } })
+    expect(await defaultModel(config)).toEqual({ providerID, modelID: "chat" })
+  })
+
   test("parses advertised models and variants", () => {
     const providers = [
       {

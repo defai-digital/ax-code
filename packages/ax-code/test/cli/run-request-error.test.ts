@@ -4,6 +4,7 @@ import path from "node:path"
 import { readFile, writeFile } from "node:fs/promises"
 import { expect, test, vi } from "vitest"
 import { RunCommand } from "../../src/cli/cmd/run"
+import { Provider } from "../../src/provider/provider"
 import { tmpdir } from "../fixture/fixture"
 
 test.each([false, "check"])(
@@ -87,6 +88,9 @@ async function runEventStream(input: {
   promptResponse?: { info?: Record<string, unknown>; parts?: Array<Record<string, unknown>> }
   messages?: unknown[]
   providers?: { all: Array<{ id: string; models: Record<string, unknown> }>; connected: string[] }
+  refreshedProviders?: { all: Array<{ id: string; models: Record<string, unknown> }>; connected: string[] }
+  config?: Record<string, unknown>
+  configStatus?: number
   timeout?: number
   holdMessage?: boolean
   afterSubmit?: () => void
@@ -119,6 +123,7 @@ async function runEventStream(input: {
   let heldMessageResponse: ServerResponse | undefined
   let abortCalled = false
   let capturedMessageBody: string | undefined
+  let configReads = 0
   let capturedMessageHeaders: NodeJS.Dict<string | string[]> | undefined
   const permissionReplies: string[] = []
   let beforeSessionFired = false
@@ -139,7 +144,15 @@ async function runEventStream(input: {
     const pathname = (request.url ?? "").split("?")[0]
     if (request.url === "/provider") {
       fireBeforeSession()
-      response.end(JSON.stringify(input.providers ?? { all: [], connected: [] }))
+      const refreshed =
+        request.headers[Provider.DISCOVERY_WAIT_HEADER] === "true" ? input.refreshedProviders : undefined
+      response.end(JSON.stringify(refreshed ?? input.providers ?? { all: [], connected: [] }))
+      return
+    }
+    if (pathname === "/config" && request.method === "GET") {
+      configReads++
+      response.statusCode = input.configStatus ?? 200
+      response.end(JSON.stringify(input.config ?? {}))
       return
     }
     if (request.url === "/session" && request.method === "POST") {
@@ -257,6 +270,7 @@ async function runEventStream(input: {
       rejected: settled.rejected,
       abortCalled,
       messageBody: capturedMessageBody,
+      configReads,
       messageHeaders: capturedMessageHeaders,
       permissionReplies,
     }
@@ -368,6 +382,77 @@ test("run --format json reports unknown provider as a structured error line and 
   // The early line carries exactly type + error, and no result follows it.
   expect(Object.keys(event)).toEqual(["type", "error"])
   expect(lines.some((line) => line.includes('"type":"result"'))).toBe(false)
+})
+
+test.each([
+  { providerID: "ax-engine", config: {}, reads: 0 },
+  { providerID: "ollama", config: {}, reads: 0 },
+  {
+    providerID: "lan-provider",
+    config: { provider: { "lan-provider": { options: { baseURL: "http://192.168.0.5/v1" } } } },
+    reads: 1,
+  },
+  {
+    providerID: "model-local",
+    config: {
+      provider: { "model-local": { models: { chat: { provider: { api: "http://[::ffff:127.0.0.1]/v1" } } } } },
+    },
+    reads: 1,
+  },
+])(
+  "run keeps a missing local pin on $providerID before submitting a request",
+  async ({ providerID, config, reads }) => {
+    const result = await runEventStream({
+      model: `${providerID}/chat`,
+      providers: { all: [{ id: "gateway", models: { chat: {} } }], connected: ["gateway"] },
+      config,
+      captureBody: true,
+      messageStatus: 400,
+    })
+    expect(result.lines).toHaveLength(1)
+    expect(JSON.parse(result.lines[0])).toMatchObject({
+      type: "error",
+      error: { code: "provider", message: expect.stringContaining(`Unknown provider "${providerID}"`) },
+    })
+    expect(result.messageBody).toBeUndefined()
+    expect(result.configReads).toBe(reads)
+  },
+)
+
+test.each([false, true])(
+  "run submits the exact local model on readiness (already listed=%s)",
+  async (alreadyListed) => {
+    const gateway = { id: "gateway", models: { chat: {} } }
+    const local = { id: "lan-provider", models: { chat: {} } }
+    const ready = { all: [gateway, local], connected: [gateway.id, local.id] }
+    const result = await runEventStream({
+      model: "lan-provider/chat",
+      providers: alreadyListed ? ready : { all: [gateway], connected: [gateway.id] },
+      refreshedProviders: ready,
+      config: { provider: { "lan-provider": { api: "http://10.0.0.2/v1" } } },
+      captureBody: true,
+      messageStatus: 400,
+    })
+    expect(JSON.parse(result.messageBody!)).toMatchObject({ model: { providerID: "lan-provider", modelID: "chat" } })
+    expect(result.configReads).toBe(alreadyListed ? 0 : 1)
+  },
+)
+
+test.each([200, 503])("run checks config before substituting a hosted provider (HTTP %s)", async (configStatus) => {
+  const result = await runEventStream({
+    model: "deepseek/chat",
+    providers: { all: [{ id: "gateway", models: { chat: {} } }], connected: ["gateway"] },
+    configStatus,
+    captureBody: true,
+    messageStatus: 400,
+  })
+  expect(result.configReads).toBe(1)
+  if (configStatus === 200) {
+    expect(JSON.parse(result.messageBody!)).toMatchObject({ model: { providerID: "gateway", modelID: "chat" } })
+  } else {
+    expect(result.messageBody).toBeUndefined()
+    expect(JSON.parse(result.lines[0])).toMatchObject({ type: "error", error: { code: "provider" } })
+  }
 })
 
 test.each(["constructor", "toString", "hasOwnProperty", "__proto__"])(

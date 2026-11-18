@@ -4,7 +4,7 @@ import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { providerModelKey } from "../provider/model-key"
 import { sameSkuOnConnectedProvider } from "../provider/model-selectability"
-import { CLI_PROVIDER_DEFINITIONS } from "../provider/cli/config"
+import { RoutePolicy } from "../provider/route-policy"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { Log } from "../util/log"
@@ -74,12 +74,12 @@ export async function defaultModel(
 
   const directory = cwd ?? process.cwd()
 
-  const specified = await sdk.config
+  const selection = await sdk.config
     .get({ directory }, { throwOnError: true })
     .then((resp) => {
       const cfg = resp.data
       if (!cfg || !cfg.model) return undefined
-      return Provider.parseModel(cfg.model)
+      return { target: Provider.parseModel(cfg.model), providers: cfg.provider }
     })
     .catch((error) => {
       log.error("failed to load user config for default model", { error })
@@ -94,16 +94,14 @@ export async function defaultModel(
       return undefined
     })
   const providers = catalog?.providers ?? []
+  const specified = selection?.target
 
   if (specified && providers.length) {
     const provider = providers.find((p) => p.id === specified.providerID)
     if (provider && Object.hasOwn(provider.models, specified.modelID) && provider.models[specified.modelID])
       return specified
-    // A CLI bridge is the user's own subscription, and it joins this list only
-    // after its discovery probe. Keep the pin: model resolution waits for
-    // discovery and reports a missing model or signed-out bridge itself,
-    // instead of the turn moving onto another provider.
-    if (Object.hasOwn(CLI_PROVIDER_DEFINITIONS, specified.providerID)) return specified
+    const configuredProvider = RoutePolicy.configuredProvider(selection?.providers, specified.providerID)
+    if (RoutePolicy.requiresExactProvider(specified, provider, configuredProvider)) return specified
     const moved = sameSkuOnConnectedProvider(providers, specified)
     if (moved) {
       return {

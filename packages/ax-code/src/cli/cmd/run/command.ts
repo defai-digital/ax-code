@@ -33,7 +33,7 @@ import type { BashTool } from "../../../tool/bash"
 import type { TodoWriteTool } from "../../../tool/todo"
 import { Locale } from "../../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../../util/internal-url"
-import { isNonEmptyRecord } from "../../../util/record"
+import { isNonEmptyRecord, isRecord } from "../../../util/record"
 import {
   accountToolCompletion,
   buildAddDirRules,
@@ -62,7 +62,8 @@ import { waitForRunBackground } from "./background-wait"
 import { printPendingScheduledTaskNotice } from "./schedule-notice"
 import { assertLoopbackHttpUrl } from "../../../util/listen-security"
 import { sameSkuOnConnectedProvider } from "../../../provider/model-selectability"
-import { CLI_PROVIDER_DEFINITIONS } from "../../../provider/cli/config"
+import { isKnownCliProviderID } from "../../../provider/cli/ids"
+import { RoutePolicy } from "../../../provider/route-policy"
 import { DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS, readNonTtyStdin } from "../../stdin"
 import { CLI_CONCISE_MAX_LINES, diffSummary, formatDiffSummary, tailLines } from "../../../util/tool-output"
 import { isRunEventStreamFormat } from "./format"
@@ -249,36 +250,27 @@ export function findRunModelErrorCode(input: {
   return provider ? "model" : "provider"
 }
 
+type RunModelLookup = RoutePolicy.Target & { providers: RunProviderList; connected?: readonly string[] }
+
 /**
  * The requested model when its provider lists it and is connected, else the
  * same model ID on a connected provider: config and docs keep naming a SKU by its native
  * provider (`deepseek/deepseek-v4-pro`) after that provider was disabled and
  * a custom gateway took over serving it. `connected` narrows the fallback to
  * providers that can actually serve a turn — the full list also carries
- * catalog-only providers. Undefined when neither exists, and for a CLI
- * provider that cannot serve the model itself.
+ * catalog-only providers. Local runtimes and CLI subscriptions retain their
+ * exact provider even if a gateway lists the same model.
  */
-export function resolveRunModel(input: {
-  providers: RunProviderList
-  connected?: readonly string[]
-  providerID: string
-  modelID: string
-}): { providerID: string; modelID: string } | undefined {
+export function resolveRunModel(input: RunModelLookup): RoutePolicy.Target | undefined {
   const exactIsConnected = !input.connected || input.connected.includes(input.providerID)
   if (!findRunModelError(input) && exactIsConnected) {
     return { providerID: input.providerID, modelID: input.modelID }
   }
-  // A CLI bridge is the user's own subscription: a model it does not list, or
-  // a bridge that is not connected, is an error to report, never a turn to
-  // move onto a gateway.
-  if (isRunCliProvider(input.providerID)) return undefined
+  const source = input.providers.find((provider) => provider.id === input.providerID)
+  if (RoutePolicy.requiresExactProvider(input, source)) return undefined
   const connected = input.connected
   const candidates = connected ? input.providers.filter((provider) => connected.includes(provider.id)) : input.providers
   return sameSkuOnConnectedProvider(candidates, input)
-}
-
-function isRunCliProvider(providerID: string) {
-  return Object.hasOwn(CLI_PROVIDER_DEFINITIONS, providerID)
 }
 
 /**
@@ -290,7 +282,7 @@ export function findRunCliProviderError(input: {
   connected?: readonly string[]
   providerID: string
 }): string | undefined {
-  if (!isRunCliProvider(input.providerID)) return undefined
+  if (!isKnownCliProviderID(input.providerID)) return undefined
   if (!input.connected || input.connected.includes(input.providerID)) return undefined
   return (
     `Provider "${input.providerID}" is not connected. Sign in with its CLI, then run ` +
@@ -298,14 +290,13 @@ export function findRunCliProviderError(input: {
   )
 }
 
-export async function refreshRunProvidersOnModelMiss(input: {
-  providers: RunProviderList
-  connected?: readonly string[]
-  providerID: string
-  modelID: string
-  refresh: () => Promise<RunProviderList | undefined>
-}) {
-  if (resolveRunModel(input)) return input.providers
+export async function refreshRunProvidersOnModelMiss(
+  input: RunModelLookup & {
+    refresh: () => Promise<RunProviderList | undefined>
+    resolve?: (input: RunModelLookup) => Promise<RoutePolicy.Target | undefined>
+  },
+) {
+  if (input.resolve ? await input.resolve(input) : resolveRunModel(input)) return input.providers
   return input.refresh()
 }
 
@@ -1636,12 +1627,38 @@ export const RunCommand = cmd({
                 })
             const initialProviders = await listProviders()
             let connected = initialProviders?.connected
+            const originalProvider = initialProviders?.all.find((provider) => provider.id === runModel!.providerID)
+            const keepOriginal = RoutePolicy.requiresExactProvider(runModel, originalProvider)
+            let routingConfig:
+              | Promise<{ provider?: Record<string, RoutePolicy.ProviderEndpoints> } | undefined>
+              | undefined
+            const resolveCheckedModel = async (input: RunModelLookup) => {
+              const resolved = resolveRunModel(input)
+              if (!resolved || resolved.providerID === input.providerID) return resolved
+              if (keepOriginal) return undefined
+              // A disabled provider can be absent from discovery while its
+              // configured address still establishes a local routing boundary.
+              routingConfig ??= sdk.config
+                .get(undefined, { throwOnError: true, signal: lifecycle.signal })
+                .then(({ data }) =>
+                  isRecord(data) && (data.provider === undefined || isRecord(data.provider)) ? data : undefined,
+                )
+                .catch((error: unknown) => {
+                  if (isAbortError(error)) throw error
+                  return undefined
+                })
+              const config = await routingConfig
+              const source = RoutePolicy.configuredProvider(config?.provider, input.providerID)
+              if (!config || RoutePolicy.requiresExactProvider(input, source)) return undefined
+              return resolved
+            }
             const providers = initialProviders
               ? await refreshRunProvidersOnModelMiss({
                   providers: initialProviders.all,
                   connected,
                   providerID: providerID!,
                   modelID: modelID!,
+                  resolve: resolveCheckedModel,
                   refresh: async () => {
                     // Keep discovery off the fast path for models already present
                     // in the snapshot. Only a miss waits for the complete local or
@@ -1656,7 +1673,12 @@ export const RunCommand = cmd({
             if (!providers) {
               warn(`failed to list providers; skipping validation for model "${args.model}"`)
             } else {
-              const resolved = resolveRunModel({ providers, connected, providerID: providerID!, modelID: modelID! })
+              const resolved = await resolveCheckedModel({
+                providers,
+                connected,
+                providerID: providerID!,
+                modelID: modelID!,
+              })
               if (!resolved) {
                 const cliError = findRunCliProviderError({ connected, providerID: providerID! })
                 if (cliError) exitEarly(cliError, "provider")
