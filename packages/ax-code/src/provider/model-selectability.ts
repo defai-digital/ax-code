@@ -94,10 +94,19 @@ export type SelectableProvider = Pick<RoutePolicy.ProviderEndpoints, "api" | "op
   models: Record<string, SelectableModel | undefined>
 }
 
+/** Managed catalog entries require explicit selection to use their runtime. */
+export function isAxEngineCatalogCandidate(providerID: string, model: SelectableModel | undefined): boolean {
+  return providerID === "ax-engine" && model?.options?.axEngineCandidate === true
+}
+
+function canMatchModelSku(providerID: string, model: SelectableModel | undefined): boolean {
+  return !isAxEngineCatalogCandidate(providerID, model) && modelSelectableForProvider(providerID, model)
+}
+
 export function findSelectableSkuID(provider: SelectableProvider, normalizedSku: string): string | undefined {
   if (!normalizedSku) return undefined
   return Object.keys(provider.models)
-    .filter((id) => skuKey(id) === normalizedSku && modelSelectableForProvider(provider.id, provider.models[id]))
+    .filter((id) => skuKey(id) === normalizedSku && canMatchModelSku(provider.id, provider.models[id]))
     .sort((left, right) => left.length - right.length || left.localeCompare(right))[0]
 }
 
@@ -118,10 +127,7 @@ export function sameSkuOnConnectedProvider(
     .filter((provider) => provider.id !== model.providerID)
     .sort((left, right) => left.id.localeCompare(right.id))
   for (const provider of candidates) {
-    if (
-      Object.hasOwn(provider.models, model.modelID) &&
-      modelSelectableForProvider(provider.id, provider.models[model.modelID])
-    )
+    if (Object.hasOwn(provider.models, model.modelID) && canMatchModelSku(provider.id, provider.models[model.modelID]))
       return { providerID: provider.id, modelID: model.modelID }
   }
   const needle = skuKey(model.modelID)
@@ -143,7 +149,7 @@ export function modelSelectableForProvider(providerID: string, model: Selectable
   if (providerID === "ax-engine" && model.capabilities?.input?.text === false) return false
   // Catalog candidates can be selected for explicit preparation. Their native
   // capabilities stay unverified until the AX Engine loader checks the live card.
-  if (providerID === "ax-engine" && model.options?.axEngineCandidate === true) return true
+  if (isAxEngineCatalogCandidate(providerID, model)) return true
   if (
     !TOOLCALL_OPTIONAL_PROVIDER_IDS.has(providerID) &&
     model.capabilities &&

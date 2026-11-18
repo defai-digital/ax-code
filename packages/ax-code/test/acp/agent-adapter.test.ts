@@ -169,6 +169,26 @@ describe("ACP agent adapter", () => {
     expect(await defaultModel(config)).toEqual({ providerID, modelID: "chat" })
   })
 
+  test("keeps managed AX Engine preparation an explicit selection", async () => {
+    const id = "tiel-coder-35b-axq-mxfp4"
+    const managed = {
+      id: "ax-engine",
+      models: { [id]: { id, capabilities: { toolcall: false }, options: { axEngineCandidate: true } } },
+    }
+    const gateway = { id: "gateway", models: { [id]: { id, tool_call: true } } }
+    const config = configWithProviders([managed, gateway], { [managed.id]: id, [gateway.id]: id })
+    expect(await defaultModel(config)).toEqual({ providerID: gateway.id, modelID: id })
+
+    config.sdk.config.get = async () => ({ data: { model: `missing-provider/${id}` } })
+    expect(await defaultModel(config)).toEqual({ providerID: gateway.id, modelID: id })
+
+    config.sdk.config.get = async () => ({ data: { model: `${managed.id}/${id}` } })
+    expect(await defaultModel(config)).toEqual({ providerID: managed.id, modelID: id })
+    await expect(defaultModel(configWithProviders([managed], { [managed.id]: id }))).rejects.toThrow(
+      "No connected provider has an available model",
+    )
+  })
+
   test("parses advertised models and variants", () => {
     const providers = [
       {

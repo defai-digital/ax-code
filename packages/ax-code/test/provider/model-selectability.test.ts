@@ -202,6 +202,25 @@ describe("sameSkuOnConnectedProvider", () => {
     })
   })
 
+  test("skips preparation candidates during exact and normalized SKU relocation", () => {
+    const modelID = AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID
+    const candidate = { capabilities: { toolcall: false }, options: { axEngineCandidate: true } }
+    const managed = { id: "ax-engine", models: { [modelID]: candidate } }
+    const hosted = { id: "gateway", models: { [modelID]: { tool_call: true } } }
+    expect(modelSelectableForProvider(managed.id, candidate)).toBe(true)
+    for (const requested of [modelID, `publisher/${modelID}[1m]`]) {
+      const pin = { providerID: "missing-provider", modelID: requested }
+      expect(sameSkuOnConnectedProvider([managed], pin)).toBeUndefined()
+      expect(sameSkuOnConnectedProvider([managed, hosted], pin)).toEqual({ providerID: hosted.id, modelID })
+    }
+
+    const attached = { id: "ax-engine", models: { [modelID]: { tool_call: true } } }
+    expect(sameSkuOnConnectedProvider([attached], { providerID: "missing-provider", modelID })).toEqual({
+      providerID: attached.id,
+      modelID,
+    })
+  })
+
   test("matches across reseller prefixes and [1m] suffixes", () => {
     expect(sameSkuOnConnectedProvider([gateway], { providerID: "zai-coding-plan", modelID: "glm-5.2" })).toEqual({
       providerID: "127-0-0-1",

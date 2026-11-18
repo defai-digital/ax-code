@@ -3,7 +3,7 @@ import { applyPatch } from "diff"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { providerModelKey } from "../provider/model-key"
-import { sameSkuOnConnectedProvider } from "../provider/model-selectability"
+import { isAxEngineCatalogCandidate, sameSkuOnConnectedProvider } from "../provider/model-selectability"
 import { RoutePolicy } from "../provider/route-policy"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
@@ -121,7 +121,9 @@ export async function defaultModel(
       defaults && Object.hasOwn(defaults, provider.id)
         ? defaults[provider.id]
         : Provider.connectedDefaultModelID(provider)
-    if (modelID && Object.hasOwn(provider.models, modelID) && provider.models[modelID]) {
+    if (!modelID || !Object.hasOwn(provider.models, modelID)) continue
+    const model = provider.models[modelID]
+    if (model && !isAxEngineCatalogCandidate(provider.id, model)) {
       return { providerID: ProviderID.make(provider.id), modelID: ModelID.make(modelID) }
     }
   }
