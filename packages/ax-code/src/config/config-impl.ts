@@ -49,7 +49,7 @@ import { CONFIG_SCHEMA_URL } from "@/constants/project"
 import { ProjectConfigTrust } from "./project-config-trust"
 import { isFileUrl } from "../util/file-url"
 import { mergeConfig, migrateDeprecatedModeIntoAgent } from "./merge-policy"
-import { editConfigFile, parseConfig } from "./file-update"
+import { editConfigFile, editConfigFileWithRollback, parseConfig } from "./file-update"
 import { restrictUntrustedAgent, restrictUntrustedConfig, tightenIsolationFloor } from "./untrusted-policy"
 
 const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
@@ -1678,22 +1678,62 @@ export namespace Config {
     return next
   }
 
-  /** Remove exactly one provider from the writable global config. */
-  export async function removeGlobalProvider(providerID: string) {
-    const filepath = globalConfigFile()
-    const removed = await editConfigFile(filepath, (before) => {
+  function providerRemoval(
+    filepath: string,
+    providerID: string,
+    guard?: (provider: Provider) => boolean,
+  ): (before: string | undefined) => string | undefined {
+    return (before) => {
       const text = before ?? "{}"
       const existing = parseConfig(text, filepath)
-      if (!Object.hasOwn(existing.provider ?? {}, providerID)) return
+      const providers = existing.provider
+      if (!providers || !Object.hasOwn(providers, providerID)) return
+      const provider = providers[providerID]
+      if (guard && !guard(provider)) return
       return applyEdits(
         text,
         modify(text, ["provider", providerID], undefined, {
           formattingOptions: { insertSpaces: true, tabSize: 2 },
         }),
       )
-    })
+    }
+  }
+
+  /** Remove exactly one provider from the writable global config. */
+  export async function removeGlobalProvider(providerID: string): Promise<boolean> {
+    const filepath = globalConfigFile()
+    const removed = await editConfigFile(filepath, providerRemoval(filepath, providerID))
     if (removed) await refreshAfterGlobalUpdate(false)
     return removed !== undefined
+  }
+
+  /** Restore the captured raw document only while this removal still owns it. */
+  export async function removeGlobalProviderWithRollback(
+    providerID: string,
+    guard?: (provider: Provider) => boolean,
+  ): Promise<(() => Promise<boolean>) | undefined> {
+    const filepath = globalConfigFile()
+    const removed = await editConfigFileWithRollback(filepath, providerRemoval(filepath, providerID, guard))
+    if (!removed) return
+    const restore = async (): Promise<boolean> => {
+      if (globalConfigFile() !== filepath) return false
+      const restored = await removed.rollback()
+      if (restored) await refreshAfterGlobalUpdate(false)
+      return restored
+    }
+    let pending: Promise<boolean> | undefined
+    const rollback = (): Promise<boolean> => (pending ??= restore())
+    try {
+      await refreshAfterGlobalUpdate(false)
+    } catch (error) {
+      try {
+        await rollback()
+      } catch (rollbackError) {
+        throw new AggregateError([error, rollbackError], "Failed to refresh provider removal and restore its config")
+      }
+      throw error
+    }
+    return rollback
   }
 
   export async function directories() {

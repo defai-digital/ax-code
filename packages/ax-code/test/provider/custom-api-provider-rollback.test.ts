@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest"
 import { Auth } from "../../src/auth"
 import { Config } from "../../src/config/config"
+import { GlobalBus } from "../../src/bus/global"
 import { Instance } from "../../src/project/instance"
 import { CustomApiProvider } from "../../src/provider/custom-api-provider"
 import { tmpdir } from "../fixture/fixture"
@@ -121,12 +122,126 @@ test("a failed custom API delete surfaces failed config restoration", async () =
       const failure = new Error("Auth remove failed")
       const rollbackFailure = new Error("Config restore failed")
       vi.spyOn(Auth, "remove").mockRejectedValueOnce(failure)
-      vi.spyOn(Config, "setGlobalProvider").mockRejectedValueOnce(rollbackFailure)
+      const removeConfig = Config.removeGlobalProviderWithRollback
+      vi.spyOn(Config, "removeGlobalProviderWithRollback").mockImplementationOnce(async (...args) => {
+        await removeConfig(...args)
+        return async () => {
+          throw rollbackFailure
+        }
+      })
       await expect(CustomApiProvider.remove(providerID)).rejects.toMatchObject({
         name: "AggregateError",
         errors: [failure, rollbackFailure],
       })
       expect(await Auth.get(providerID)).toEqual({ type: "api", key: "previous-credential" })
+    },
+  })
+})
+
+test("a failed custom API delete preserves a peer's newer provider config", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await CustomApiProvider.upsert(providerID, providerInput("previous-credential"))
+      const original = (await Config.getGlobal()).provider?.[providerID]
+      if (!original) throw new Error("Missing provider fixture")
+      const peer = { ...original, name: "Peer configuration" }
+      const failure = new Error("Auth removal failed")
+      vi.spyOn(Auth, "remove").mockImplementationOnce(async () => {
+        await Config.setGlobalProvider(providerID, peer)
+        throw failure
+      })
+      await expect(CustomApiProvider.remove(providerID)).rejects.toBe(failure)
+      expect((await Config.getGlobal()).provider?.[providerID]).toEqual(peer)
+      expect(await Auth.get(providerID)).toEqual({ type: "api", key: "previous-credential" })
+    },
+  })
+})
+
+test.each(["managed", "unmanaged"] as const)(
+  "delete rechecks a peer's %s provider under the config lock",
+  async (kind) => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await CustomApiProvider.upsert(providerID, providerInput("previous-credential"))
+        const getGlobal = Config.getGlobal
+        const failure = new Error("Auth removal failed")
+        let peer: Config.Provider | undefined
+        vi.spyOn(Config, "getGlobal").mockImplementationOnce(async () => {
+          const original = await getGlobal()
+          const provider = original.provider?.[providerID]
+          if (!provider) throw new Error("Missing provider fixture")
+          peer = { ...provider, name: "Newer before delete", management: kind === "managed" ? "custom-api" : undefined }
+          await Config.setGlobalProvider(providerID, peer)
+          return original
+        })
+        const removeAuth = vi.spyOn(Auth, "remove").mockRejectedValueOnce(failure)
+        if (kind === "unmanaged") {
+          expect(await CustomApiProvider.remove(providerID)).toBe(false)
+          expect(removeAuth).not.toHaveBeenCalled()
+        } else {
+          await expect(CustomApiProvider.remove(providerID)).rejects.toBe(failure)
+          expect(removeAuth).toHaveBeenCalledOnce()
+        }
+        expect((await Config.getGlobal()).provider?.[providerID]).toEqual(peer)
+      },
+    })
+  },
+)
+
+test("provider config rollback refreshes runtime state only once", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await CustomApiProvider.upsert(providerID, providerInput("previous-credential"))
+      const rollback = await Config.removeGlobalProviderWithRollback(providerID)
+      if (!rollback) throw new Error("Missing provider rollback")
+      const dispose = vi.spyOn(Instance, "disposeAll")
+      expect(await rollback()).toBe(true)
+      expect(dispose).toHaveBeenCalledOnce()
+      expect(await rollback()).toBe(true)
+      expect(dispose).toHaveBeenCalledOnce()
+    },
+  })
+})
+
+test("failed initial config refresh restores the document before losing its rollback", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await CustomApiProvider.upsert(providerID, providerInput("previous-credential"))
+      const original = (await Config.getGlobal()).provider?.[providerID]
+      const failure = new Error("Runtime refresh failed")
+      const emit = GlobalBus.emit.bind(GlobalBus)
+      let pending = true
+      vi.spyOn(GlobalBus, "emit").mockImplementation((name, event, payload) => {
+        if (pending && event.directory === "global") {
+          pending = false
+          throw failure
+        }
+        return emit(name, event, payload)
+      })
+      await expect(Config.removeGlobalProviderWithRollback(providerID)).rejects.toBe(failure)
+      expect((await Config.getGlobal()).provider?.[providerID]).toEqual(original)
+    },
+  })
+})
+
+test("removing an inherited property name does not edit global config", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await CustomApiProvider.upsert(providerID, providerInput("previous-credential"))
+      const original = await Config.getGlobal()
+      expect(await Config.removeGlobalProvider("toString")).toBe(false)
+      expect(await Config.removeGlobalProviderWithRollback("toString")).toBeUndefined()
+      expect(await Config.getGlobal()).toEqual(original)
     },
   })
 })

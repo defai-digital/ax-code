@@ -1,6 +1,12 @@
 import { ConfigPaths } from "./paths"
 import { Info } from "./schema"
-import { transactConfigFile, type ConfigFileEditOptions } from "./file-transaction"
+import {
+  transactConfigFile,
+  transactConfigFileWithRollback,
+  type ConfigFileEdit,
+  type ConfigFileEditOptions,
+  type ConfigFileRollback,
+} from "./file-transaction"
 
 /** Validate raw JSONC without evaluating environment or file references. */
 export function parseConfig(text: string, filepath: string): Info {
@@ -8,6 +14,17 @@ export function parseConfig(text: string, filepath: string): Info {
   const parsed = Info.safeParse(data)
   if (parsed.success) return parsed.data
   throw new ConfigPaths.InvalidError({ path: filepath, issues: parsed.error.issues })
+}
+
+function validatedEdit(
+  filepath: string,
+  edit: (before: string | undefined) => string | undefined,
+): (before: string | undefined) => ConfigFileEdit<Info> | undefined {
+  return (before) => {
+    const updated = edit(before)
+    if (updated === undefined) return
+    return { text: updated, value: parseConfig(updated, filepath) }
+  }
 }
 
 export function editConfigFile(
@@ -30,13 +47,14 @@ export async function editConfigFile(
   edit: (before: string | undefined) => string | undefined,
   options: ConfigFileEditOptions = {},
 ): Promise<Info | undefined> {
-  return transactConfigFile(
-    filepath,
-    (before) => {
-      const updated = edit(before)
-      if (updated === undefined) return
-      return { text: updated, value: parseConfig(updated, filepath) }
-    },
-    options,
-  )
+  return transactConfigFile(filepath, validatedEdit(filepath, edit), options)
+}
+
+/** Keep raw JSONC restoration and its ownership check inside the file transaction. */
+export async function editConfigFileWithRollback(
+  filepath: string,
+  edit: (before: string | undefined) => string | undefined,
+  options: ConfigFileEditOptions = {},
+): Promise<ConfigFileRollback<Info> | undefined> {
+  return transactConfigFileWithRollback(filepath, validatedEdit(filepath, edit), options)
 }

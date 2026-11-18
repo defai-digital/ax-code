@@ -721,15 +721,15 @@ export namespace CustomApiProvider {
     if (!previousProvider) return false
     if (!isManaged(previousProvider))
       throw new Error({ message: `Provider ID '${providerID}' is not managed by the custom API provider editor` })
-    const removed = await Config.removeGlobalProvider(providerID)
-    if (!removed) return false
+    const rollback = await Config.removeGlobalProviderWithRollback(providerID, isManaged)
+    if (!rollback) return false
     try {
       await Auth.remove(providerID)
     } catch (cause) {
       // Auth.remove publishes atomically. Failure leaves auth untouched;
       // rewriting its earlier value could erase a peer's newer credential.
       try {
-        await Config.setGlobalProvider(providerID, previousProvider)
+        await rollback()
       } catch (rollbackError) {
         throw new AggregateError([cause, rollbackError], "Failed to remove custom API provider and restore its config")
       }
