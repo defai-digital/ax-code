@@ -172,6 +172,42 @@ describe("ax-engine probe contracts", () => {
     expect(evaluateAxEngineCapability(probe.models, ["image-only"]).toolcall).toBe(false)
   })
 
+  test.each([false, true])("uses the first valid card for a duplicate model ID (%s)", async (toolcall) => {
+    const id = "duplicate-local-model"
+    const payload = {
+      data: [toolcall, !toolcall].map((supported) => ({
+        id,
+        limit: { context: 65_536 },
+        capabilities: { toolcall: supported },
+      })),
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(payload)),
+    )
+    const configured = provider(managed)
+    const loader = await axEngineLoader()(configured)
+    const models = await loader.discoverModels!(configured)
+    const connection = probeAxEngineConnection({ baseURL: managed })
+    const runtime = loader.getModel!({ languageModel: (name: string) => name }, id)
+    const [connectionResult, runtimeResult] = await Promise.allSettled([connection, runtime])
+
+    expect(modelSelectableForProvider(configured.id, models[id])).toBe(toolcall)
+    if (toolcall) {
+      expect(connectionResult).toMatchObject({ status: "fulfilled", value: { models: [{ id }] } })
+      expect(runtimeResult).toEqual({ status: "fulfilled", value: id })
+    } else {
+      expect(connectionResult).toMatchObject({
+        status: "rejected",
+        reason: { message: expect.stringContaining("AX_ENGINE_TOOLCALL_UNSUPPORTED") },
+      })
+      expect(runtimeResult).toMatchObject({
+        status: "rejected",
+        reason: { message: expect.stringContaining("AX_ENGINE_TOOLCALL_UNSUPPORTED") },
+      })
+    }
+  })
+
   test("applies the live contract to catalog models behind an attached server", async () => {
     const id = AX_ENGINE_DEFAULT_MODEL_ID
     vi.stubGlobal(

@@ -92,10 +92,15 @@ export function parseAxEngineModelContracts(payload: unknown): AxEngineLiveModel
   const parsed = AxEngineModelsResponse.safeParse(payload)
   if (!parsed.success) return []
   const contracts: AxEngineLiveModelContract[] = []
+  const seen = new Set<string>()
   for (const item of parsed.data.data) {
     const validated = AxEngineModelCard.safeParse(item)
     if (!validated.success) continue
     const card = validated.data
+    // Requests address models by ID. Keep the first valid card for each ID,
+    // matching the order used by model resolution.
+    if (seen.has(card.id)) continue
+    seen.add(card.id)
     const context = card.limit?.context ?? card.context_length
     const advertisedOutput = card.limit?.output ?? card.max_output_tokens
     const output = context && advertisedOutput ? Math.min(context, advertisedOutput) : advertisedOutput
