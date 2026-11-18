@@ -1,5 +1,5 @@
 import { MessageV2 } from "../message-v2"
-import type { SessionID } from "../schema"
+import type { MessageID, SessionID } from "../schema"
 
 export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
   let lastUser: MessageV2.User | undefined
@@ -51,6 +51,26 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
     lastFinishedStepTokens,
     tasks,
   }
+}
+
+export function hasNewUserRequestAfter(
+  messages: readonly MessageV2.WithParts[],
+  previous: MessageV2.User,
+  continuationIDs: ReadonlySet<MessageID>,
+): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const { info, parts } = messages[i]
+    if (info.role !== "user") continue
+    // Use the history's order because compaction may have hidden the previous user message.
+    if (
+      info.time.created < previous.time.created ||
+      (info.time.created === previous.time.created && info.id <= previous.id)
+    ) {
+      return false
+    }
+    if (!continuationIDs.has(info.id) && !parts.some((part) => part.type === "compaction")) return true
+  }
+  return false
 }
 
 export function remindQueuedMessages(msgs: MessageV2.WithParts[], lastFinished?: MessageV2.Assistant) {

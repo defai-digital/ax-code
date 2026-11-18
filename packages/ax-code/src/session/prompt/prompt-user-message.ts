@@ -34,16 +34,19 @@ export type CreateUserMessageInput = {
   parts: PromptPartInput[]
 }
 
-export async function createAutonomousUserContinuation(args: {
+export async function createAutonomousTextContinuation(args: {
   sessionID: SessionID
   messages: readonly MessageV2.WithParts[]
-  parts: CreateUserMessageInput["parts"]
-}) {
+  text: string
+}): Promise<MessageV2.WithParts> {
+  // Loop injections (wrap-up, checkpoint, recovery) must reach the model but
+  // must not render as a user turn. `toModelMessages` keeps synthetic text;
+  // the TUI UserMessage path hides it.
   const lastUserInfo = getLastUserInfo(args.messages)
-  await createUserMessage({
+  return createUserMessage({
     sessionID: args.sessionID,
     agentRouting: "preserve",
-    parts: args.parts,
+    parts: [{ type: "text", text: args.text, synthetic: true }],
     agent: lastUserInfo?.agent,
     model: lastUserInfo?.model,
     // Loop-generated turns continue the same request, including its restrictions
@@ -54,21 +57,6 @@ export async function createAutonomousUserContinuation(args: {
     system: lastUserInfo?.system,
     variant: lastUserInfo?.variant,
     requestedDepth: lastUserInfo?.requestedDepth,
-  })
-}
-
-export async function createAutonomousTextContinuation(args: {
-  sessionID: SessionID
-  messages: readonly MessageV2.WithParts[]
-  text: string
-}) {
-  // Loop injections (wrap-up, checkpoint, recovery) must reach the model but
-  // must not render as a user turn. `toModelMessages` keeps synthetic text;
-  // the TUI UserMessage path hides it.
-  await createAutonomousUserContinuation({
-    sessionID: args.sessionID,
-    messages: args.messages,
-    parts: [{ type: "text", text: args.text, synthetic: true }],
   })
 }
 

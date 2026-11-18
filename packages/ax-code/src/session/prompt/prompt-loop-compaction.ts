@@ -16,7 +16,7 @@ import { estimateRegistryToolSchemaTokens } from "./prompt-tools"
 import { SessionRetry } from "../retry"
 import { TokenLedger } from "../../provider/token-ledger"
 import { zeroTokenUsage } from "./prompt-message-builders"
-import type { SessionID } from "../schema"
+import type { MessageID, SessionID } from "../schema"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -41,6 +41,7 @@ export async function processPendingCompaction(input: {
   sessionID: SessionID
   busyRetries: number
   fallbackCandidates: readonly RoutePolicy.Target[]
+  onContinuationCommitted?: (id: MessageID) => void
 }): Promise<PendingCompactionResult> {
   const result = await SessionCompaction.process({
     messages: input.messages,
@@ -53,6 +54,7 @@ export async function processPendingCompaction(input: {
     focus: input.task.focus,
     keep: input.task.keep,
     fallbackCandidates: input.fallbackCandidates,
+    onContinuationCommitted: input.onContinuationCommitted,
   })
   const decision = pendingCompactionDecision({
     result,

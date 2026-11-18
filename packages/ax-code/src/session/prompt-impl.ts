@@ -49,7 +49,13 @@ import {
 } from "./prompt/prompt-loop-truncated-turn"
 import { handlePromptLoopTodoConvergence } from "./prompt/prompt-loop-todo-convergence"
 import { handlePromptLoopTodoContinuation } from "./prompt/prompt-loop-todo-continuation"
-import { appendNewerMessages, goalWindowMessages, loopMessages, scanLoopMessages } from "./prompt/prompt-loop-messages"
+import {
+  appendNewerMessages,
+  goalWindowMessages,
+  hasNewUserRequestAfter,
+  loopMessages,
+  scanLoopMessages,
+} from "./prompt/prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt/prompt-loop-queue"
 import {
   beginPromptLoopRecording,
@@ -499,6 +505,7 @@ export namespace SessionPrompt {
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
+    let fallbackCandidates = structuredClone(cfg.llm_routing?.fallback ?? [])
     // Seed the budget wrap-up state from the durable goal status (see the
     // declaration comment). A transient read failure seeds "none", which at
     // worst repeats one wrap-up turn — never silently drops a goal.
@@ -639,7 +646,8 @@ export namespace SessionPrompt {
     let cachedAgent: PromptCacheEntry<Agent.Info>
     let cachedModel: PromptCacheEntry<Provider.Model>
     let fallbackModelOverride: MessageV2.User["model"] | undefined
-    let fallbackUserID: MessageID | undefined
+    let previousRecoveryUser: MessageV2.User | undefined
+    const recoveryContinuationIDs = new Set<MessageID>()
     // Pending user-facing notice for an automatic provider fallback (#394,
     // #415). Only the ORIGINALLY requested provider is recorded here; the
     // single clean notice persisted on the fallback turn's assistant message
@@ -653,12 +661,16 @@ export namespace SessionPrompt {
     let fallbackNoticeOrigin: ProviderID | undefined
     let fallbackNoticePart: { messageID: MessageID; partID: PartID } | undefined
     const failedFallbackModelKeys = new Set<string>()
-    let fallbackCandidates = structuredClone(cfg.llm_routing?.fallback ?? [])
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
     // Hoisted so continueAutonomousLoop can reuse the latest in-memory list
     // without a full Session.messages() reload (PERF-01).
     let msgs: MessageV2.WithParts[] = []
+
+    async function continueWithText(text: string, messages = msgs): Promise<void> {
+      const message = await createAutonomousTextContinuation({ sessionID, messages, text })
+      recoveryContinuationIDs.add(message.info.id)
+    }
 
     async function continueAutonomousLoop({
       text,
@@ -739,14 +751,10 @@ export namespace SessionPrompt {
         maxContinuations,
         ...logExtras,
       })
-      // Reuse the in-loop message list: createAutonomousTextContinuation only
+      // Reuse the in-loop message list: continueWithText only
       // needs the last user execution settings. Avoid a full Session.messages()
       // reload of the entire history on every auto-continuation.
-      await createAutonomousTextContinuation({
-        sessionID,
-        messages: msgs,
-        text,
-      })
+      await continueWithText(text)
     }
 
     // Counter for consecutive compaction "busy" returns. Reset on any
@@ -855,13 +863,16 @@ export namespace SessionPrompt {
         mediaProjectionUserID = lastUser.id
         mediaProjection = "normal"
       }
-      if (fallbackUserID !== lastUser.id) {
-        fallbackUserID = lastUser.id
-        fallbackCandidates = structuredClone((await Config.get()).llm_routing?.fallback ?? [])
-        fallbackModelOverride = undefined
-        failedFallbackModelKeys.clear()
-        fallbackNoticeOrigin = undefined
-        fallbackNoticePart = undefined
+      if (previousRecoveryUser?.id !== lastUser.id) {
+        if (previousRecoveryUser && hasNewUserRequestAfter(msgs, previousRecoveryUser, recoveryContinuationIDs)) {
+          fallbackCandidates = structuredClone((await Config.get()).llm_routing?.fallback ?? [])
+          fallbackModelOverride = undefined
+          failedFallbackModelKeys.clear()
+          fallbackNoticeOrigin = undefined
+          fallbackNoticePart = undefined
+        }
+        previousRecoveryUser = lastUser
+        recoveryContinuationIDs.clear()
       }
       if (fallbackModelOverride) {
         lastUser = {
@@ -1025,15 +1036,13 @@ export namespace SessionPrompt {
             remainingTotalSteps,
             totalStepLimit: totalStepCeiling,
           })
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: msgs,
-            text: AutonomousContinuationPrompt.goalCeilingApproach({
+          await continueWithText(
+            AutonomousContinuationPrompt.goalCeilingApproach({
               objective: activeGoal.objective,
               remainingTotalSteps,
               totalStepLimit: totalStepCeiling,
             }),
-          })
+          )
           continue
         }
       }
@@ -1079,14 +1088,12 @@ export namespace SessionPrompt {
           remainingModelTurns: ordinaryCeilingWarning.remainingModelTurns,
           totalModelTurnLimit: totalStepCeiling,
         })
-        await createAutonomousTextContinuation({
-          sessionID,
-          messages: msgs,
-          text: AutonomousContinuationPrompt.ordinaryRunCeilingApproach({
+        await continueWithText(
+          AutonomousContinuationPrompt.ordinaryRunCeilingApproach({
             remainingModelTurns: ordinaryCeilingWarning.remainingModelTurns,
             totalModelTurnLimit: totalStepCeiling,
           }),
-        })
+        )
         continue
       }
 
@@ -1140,6 +1147,9 @@ export namespace SessionPrompt {
           sessionID,
           busyRetries: compactionRetries.busy,
           fallbackCandidates,
+          onContinuationCommitted: (id) => {
+            recoveryContinuationIDs.add(id)
+          },
         })
         if (compaction.action === "break") {
           reason = compaction.reason
@@ -1584,11 +1594,7 @@ export namespace SessionPrompt {
             axEngineReadOnly.hasEvidence = true
             if (modelFinished) {
               pendingAxEngineTurnInstruction = undefined
-              await createAutonomousTextContinuation({
-                sessionID,
-                messages: msgs,
-                text: AutonomousContinuationPrompt.localSynthesisRetry(),
-              })
+              await continueWithText(AutonomousContinuationPrompt.localSynthesisRetry())
             }
             continue
           }
@@ -1749,7 +1755,7 @@ export namespace SessionPrompt {
             messageID: processor.message.id,
             attempt: retries.structuredOutput,
           })
-          await createAutonomousTextContinuation({ sessionID, messages: msgs, text: STRUCTURED_OUTPUT_RECOVERY })
+          await continueWithText(STRUCTURED_OUTPUT_RECOVERY)
           continue
         }
         if (await structuredOutput.failIfMissing(processor.message, retries.structuredOutput)) {
@@ -1788,7 +1794,7 @@ export namespace SessionPrompt {
         })
         // A failed forced summary must not regain tools through this path.
         if (lastTurnWasForceTextOnly) armForceTextOnlyTurn(lastTurnForceTextReason ?? "other")
-        await createAutonomousTextContinuation({ sessionID, messages: msgs, text: MISSING_ANSWER_RECOVERY })
+        await continueWithText(MISSING_ANSWER_RECOVERY)
         continue
       }
 
@@ -1874,11 +1880,7 @@ export namespace SessionPrompt {
         }
 
         if (emptyTurnTransition.action === "recover") {
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: latestMessages,
-            text: emptyTurnTransition.text,
-          })
+          await continueWithText(emptyTurnTransition.text, latestMessages)
           continue
         }
 
@@ -1980,11 +1982,7 @@ export namespace SessionPrompt {
               maxAttempts: effectiveMaxTruncatedModelTurnRetries,
             })
           } else {
-            await createAutonomousTextContinuation({
-              sessionID,
-              messages: latestMessages,
-              text: truncatedTurnTransition.text,
-            })
+            await continueWithText(truncatedTurnTransition.text, latestMessages)
           }
           continue
         }
@@ -2033,11 +2031,10 @@ export namespace SessionPrompt {
               recoveries: retries.unexecutableToolText,
               maxRecoveries: MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
             })
-            await createAutonomousTextContinuation({
-              sessionID,
-              messages: latestMessages,
-              text: AutonomousContinuationPrompt.unexecutableToolTextRecovery(wasForcedTextOnly),
-            })
+            await continueWithText(
+              AutonomousContinuationPrompt.unexecutableToolTextRecovery(wasForcedTextOnly),
+              latestMessages,
+            )
             continue
           }
           log.warn("autonomous completion gate stopped session", {
@@ -2073,11 +2070,7 @@ export namespace SessionPrompt {
             status: "resume",
             sessionID,
           })
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: latestMessages,
-            text: AutonomousContinuationPrompt.toolCallingBackstopResume(),
-          })
+          await continueWithText(AutonomousContinuationPrompt.toolCallingBackstopResume(), latestMessages)
           continue
         }
 
@@ -2099,11 +2092,7 @@ export namespace SessionPrompt {
 
           lastCompletionGateSignature = gateRetryTransition.signature
           completionGateRetries = gateRetryTransition.retries
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: latestMessages,
-            text: gateRetryTransition.text,
-          })
+          await continueWithText(gateRetryTransition.text, latestMessages)
           continue
         }
 
@@ -2140,11 +2129,7 @@ export namespace SessionPrompt {
         lastTodoContextSignature = todoConvergence.lastTodoContextSignature
         lastTodoDeadlineSignature = todoConvergence.lastTodoDeadlineSignature
         if (todoConvergence.action === "continue") {
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: latestMessages,
-            text: todoConvergence.text,
-          })
+          await continueWithText(todoConvergence.text, latestMessages)
           continue
         }
 
@@ -2169,11 +2154,7 @@ export namespace SessionPrompt {
           lastPendingTodoSignature = todoContinuation.lastPendingTodoSignature
           todoRetries = todoContinuation.todoRetries
           retries.stagnantTodo = todoContinuation.stagnantTodoRetries
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: latestMessages,
-            text: todoContinuation.text,
-          })
+          await continueWithText(todoContinuation.text, latestMessages)
           continue
         }
 
@@ -2308,11 +2289,7 @@ export namespace SessionPrompt {
             status: "force_text",
             sessionID,
           })
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: msgs,
-            text: AutonomousContinuationPrompt.goalCompleteForceText(),
-          })
+          await continueWithText(AutonomousContinuationPrompt.goalCompleteForceText())
           continue
         }
 
@@ -2426,15 +2403,13 @@ export namespace SessionPrompt {
             consecutiveFailedToolTurns,
             forced: failedToolTransition.forced,
           })
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: msgs,
-            text: AutonomousContinuationPrompt.failedToolTurnNudge({
+          await continueWithText(
+            AutonomousContinuationPrompt.failedToolTurnNudge({
               consecutiveFailedToolTurns,
               maxFailedToolTurns: MAX_FAILED_TOOL_TURNS,
               forced: failedToolTransition.forced,
             }),
-          })
+          )
           failedToolNudges += 1
           continue
         }
@@ -2504,17 +2479,15 @@ export namespace SessionPrompt {
             forced: toolOnlyTransition.forced,
             recentProgress: recentMutatingTurnsRemaining > 0,
           })
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: msgs,
-            text: AutonomousContinuationPrompt.toolOnlyTurnNudge({
+          await continueWithText(
+            AutonomousContinuationPrompt.toolOnlyTurnNudge({
               consecutiveToolOnlyTurns,
               maxToolOnlyTurns,
               final: toolOnlyTransition.final,
               forced: toolOnlyTransition.forced,
               repeat: repeatForced,
             }),
-          })
+          )
           toolOnlyNudges += 1
           continue
         }
@@ -2550,15 +2523,13 @@ export namespace SessionPrompt {
             consecutiveToolCallingTurns,
             maxToolOnlyTurns,
           })
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: msgs,
-            text: AutonomousContinuationPrompt.toolCallingBackstopNudge({
+          await continueWithText(
+            AutonomousContinuationPrompt.toolCallingBackstopNudge({
               consecutiveToolCallingTurns,
               maxToolOnlyTurns,
               repeat: wrapUp.repeat,
             }),
-          })
+          )
           // Reset AFTER rendering the checkpoint (which reports the triggering
           // count): the forced wrap-up interrupts the streak, so it must not
           // re-fire immediately even if the forced text-only turn ends without
@@ -2618,11 +2589,7 @@ export namespace SessionPrompt {
             status: "nudge",
             sessionID,
           })
-          await createAutonomousTextContinuation({
-            sessionID,
-            messages: msgs,
-            text: AutonomousContinuationPrompt.outputLoopRecovery(),
-          })
+          await continueWithText(AutonomousContinuationPrompt.outputLoopRecovery())
         }
         const delay = SessionRetry.delay(Math.max(1, consecutiveErrors))
         log.info("backing off before outer prompt retry", {

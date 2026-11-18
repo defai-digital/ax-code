@@ -6,7 +6,8 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { tmpdir } from "../fixture/fixture"
 import { MessageV2 } from "../../src/session/message-v2"
 import { Session } from "../../src/session"
-import { MessageID } from "../../src/session/schema"
+import { MessageID, PartID, SessionID } from "../../src/session/schema"
+import { hasNewUserRequestAfter } from "../../src/session/prompt/prompt-loop-messages"
 import {
   agentInfo,
   appendShellOutputChunk,
@@ -585,6 +586,34 @@ describe("session.prompt helpers", () => {
     expect(result.lastFinishedStepTokens).toBeUndefined()
     expect(result.lastUserParts as any).toEqual(msgs[3].parts)
     expect(result.tasks as any).toEqual(msgs[2].parts)
+  })
+
+  test("detects a newly submitted request behind an internal continuation after history compaction", () => {
+    const sessionID = SessionID.make("ses_route")
+    const user = (id: string, created: number) => ({
+      role: "user" as const,
+      id: MessageID.make(id),
+      sessionID,
+      time: { created },
+      agent: "build",
+      model: { providerID: ProviderID.make("test"), modelID: ModelID.make("primary") },
+    })
+    const previous = user("msg_002", 2)
+    const older = { info: user("msg_001", 1), parts: [] }
+    const submitted = { info: user("msg_003", 2), parts: [] }
+    const marker: MessageV2.WithParts = { info: user("msg_004", 3), parts: [] }
+    marker.parts.push({
+      id: PartID.make("prt_marker"),
+      sessionID,
+      messageID: marker.info.id,
+      type: "compaction",
+      auto: true,
+    })
+    const replay = { info: user("msg_005", 4), parts: [] }
+    const continuations = new Set([replay.info.id])
+
+    expect(hasNewUserRequestAfter([older, marker, replay], previous, continuations)).toBe(false)
+    expect(hasNewUserRequestAfter([older, submitted, marker, replay], previous, continuations)).toBe(true)
   })
 
   test("scanLoopMessages returns the last step-finish tokens of the finished turn", () => {

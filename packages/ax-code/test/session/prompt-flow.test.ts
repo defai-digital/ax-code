@@ -13,6 +13,7 @@ import { Session } from "../../src/session"
 import type { SessionID } from "../../src/session/schema"
 import { LLM } from "../../src/session/llm"
 import { SessionPrompt } from "../../src/session/prompt"
+import { SessionCompaction } from "../../src/session/compaction"
 import { MAX_TRUNCATED_MODEL_TURN_RETRIES } from "../../src/session/prompt/prompt-loop-config"
 import { SessionStatus } from "../../src/session/status"
 import { SessionSummary } from "../../src/session/summary"
@@ -590,6 +591,120 @@ describe("session.prompt flow", () => {
       },
     })
   })
+
+  test.each(["compaction", "automatic continuation", "steering"] as const)(
+    "uses the admitted fallback route during %s and refreshes it on the next user turn",
+    async (continuation) => {
+      await using tmp = await tmpdir({ git: true })
+      const original = { providerID: ProviderID.make("original"), modelID: ModelID.make("original-fallback") }
+      const edited = { providerID: ProviderID.make("edited"), modelID: ModelID.make("edited-fallback") }
+      const primary = { providerID: model.providerID, modelID: model.id }
+      modelSpy = vi.spyOn(Provider, "getModel").mockImplementation(async (providerID, modelID) => ({
+        ...model,
+        providerID,
+        id: modelID,
+        api: { ...model.api, id: modelID },
+      }))
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      const compaction = vi.spyOn(SessionCompaction, "process")
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const config = await Config.get()
+            config.llm_routing = { fallback: [original] }
+            const session = await Session.create({ title: "Turn recovery route" })
+            const targets: Array<{ providerID: ProviderID; modelID: ModelID }> = []
+            let phase: "seed" | "trigger" | "retry" | "next" = "seed"
+            const response = (text?: string) =>
+              ({
+                fullStream: (async function* () {
+                  yield { type: "start" }
+                  yield { type: "start-step" }
+                  if (text) {
+                    yield { type: "text-start", id: "response" }
+                    yield { type: "text-delta", id: "response", text }
+                    yield { type: "text-end", id: "response" }
+                  }
+                  yield {
+                    type: "finish-step",
+                    finishReason: "stop",
+                    usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+                  }
+                  yield { type: "finish" }
+                })(),
+              }) as unknown as Awaited<ReturnType<typeof LLM.stream>>
+            streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+              if (input.small || input.agent.name === "compaction") return response("Earlier work summarized")
+              targets.push({ providerID: input.model.providerID, modelID: input.model.id })
+              if (phase === "seed" || input.model.id !== primary.modelID) return response("Answer")
+              if (phase === "trigger") {
+                phase = "retry"
+                config.llm_routing = { fallback: [edited] }
+                if (continuation === "steering") {
+                  const generation = SessionPrompt.steeringState(session.id).generation
+                  if (!generation) throw new Error("Expected active steering generation")
+                  const receipt = await SessionPrompt.steer(session.id, {
+                    clientID: "recovery-route-steer",
+                    expectedGeneration: generation,
+                    text: "Use these new instructions.",
+                  })
+                  expect(receipt.status).toBe("accepted")
+                  return response()
+                }
+                if (continuation === "automatic continuation") return response()
+                throw new APICallError({
+                  message: "Request exceeds the model context length",
+                  url: "https://example.com/v1/chat/completions",
+                  requestBodyValues: {},
+                  statusCode: 400,
+                  responseBody: JSON.stringify({ error: { code: "context_length_exceeded" } }),
+                  isRetryable: false,
+                })
+              }
+              throw new MessageV2.APIError({
+                message: "Primary unavailable",
+                statusCode: 503,
+                isRetryable: false,
+                metadata: { retryExhausted: "true" },
+              })
+            })
+            const prompt = (text: string) =>
+              SessionPrompt.prompt({
+                sessionID: session.id,
+                model: primary,
+                agent: "build",
+                parts: [{ type: "text", text }],
+              })
+            await prompt("Establish conversation history.")
+            targets.length = 0
+            phase = "trigger"
+            await prompt("Continue the same request through recovery.")
+            if (continuation === "compaction") {
+              expect(compaction).toHaveBeenCalledTimes(1)
+              expect(compaction.mock.calls[0]?.[0].fallbackCandidates).toEqual([original])
+            } else {
+              expect(compaction).not.toHaveBeenCalled()
+            }
+            expect(targets).toEqual([primary, primary, continuation === "steering" ? edited : original])
+            if (continuation === "steering") {
+              expect(SessionPrompt.steeringState(session.id).receipts).toContainEqual(
+                expect.objectContaining({ clientID: "recovery-route-steer", status: "applied" }),
+              )
+            }
+
+            targets.length = 0
+            phase = "next"
+            await prompt("Start a new request.")
+            expect(targets).toEqual([primary, edited])
+            await Session.remove(session.id)
+          },
+        })
+      } finally {
+        compaction.mockRestore()
+      }
+    },
+  )
 
   test("stops repeated context overflow after compaction instead of looping", async () => {
     await using tmp = await tmpdir({ git: true })

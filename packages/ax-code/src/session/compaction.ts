@@ -760,11 +760,12 @@ export namespace SessionCompaction {
     overflow?: boolean
     triggerReason?: TriggerReason
     fallbackCandidates?: readonly RoutePolicy.Target[]
+    onContinuationCommitted?: (id: MessageID) => void
     /** ADR-215: manual compaction focus, quoted into the compaction prompt. */
     focus?: string
     /** ADR-225: keep the last N messages verbatim outside the summary. */
     keep?: number
-  }) {
+  }): Promise<"busy" | "stop" | "continue"> {
     if (inFlight.has(input.sessionID)) {
       log.info("compaction already in-flight", {
         command: "session.compaction.process",
@@ -1155,10 +1156,11 @@ When constructing the summary, try to stick to this template:
       }
 
       if (input.auto) {
+        const continuationID = MessageID.ascending()
         if (replay) {
           const original = replay.info as MessageV2.User
           const replayMsg: MessageV2.User = {
-            id: MessageID.ascending(),
+            id: continuationID,
             role: "user",
             sessionID: input.sessionID,
             time: { created: Date.now() },
@@ -1213,7 +1215,7 @@ When constructing the summary, try to stick to this template:
           // structured output, tool overrides, the per-turn system prompt,
           // or the user-selected effort variant.
           const continueMsg: MessageV2.User = {
-            id: MessageID.ascending(),
+            id: continuationID,
             role: "user",
             sessionID: input.sessionID,
             time: { created: Date.now() },
@@ -1273,6 +1275,7 @@ When constructing the summary, try to stick to this template:
             Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
           })
         }
+        input.onContinuationCommitted?.(continuationID)
       }
       if (processor.message.error) return "stop"
       // ADR-141: a compaction must carry the session's live working plan.
