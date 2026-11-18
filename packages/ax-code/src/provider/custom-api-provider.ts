@@ -7,13 +7,13 @@ import { exactCatalogFallbackModels } from "@/provider/ax-trust-catalog"
 import { isAxTrustProviderID } from "@/mode/provider-category"
 import { findRegisteredModelCapabilities } from "@/provider/model-capabilities"
 import { isRetiredProviderID } from "@/provider/retired-providers"
-import { isLocalHostname } from "@/util/local-host"
 import { isNonChatModelID, skuKey } from "@/provider/model-selectability"
 import { isRecord } from "@/util/record"
 import { withRollback } from "@/util/rollback"
-import { Ssrf } from "@/util/ssrf"
+import { toErrorMessage } from "@/util/error-message"
 import { firstDeclaredBoolean, resolveCapabilityEvidence, withCapabilityEvidence } from "./capability-evidence"
 import { removeProviderConnection } from "./disconnect"
+import { modelListBearerHeaders, requestModelList } from "./model-list-http"
 
 export namespace CustomApiProvider {
   export const Management = z.enum(["custom-api", "ax-trust"])
@@ -408,17 +408,6 @@ export namespace CustomApiProvider {
     return models
   }
 
-  function modelsURL(baseURL: string) {
-    return `${baseURL.replace(/\/+$/, "")}/models`
-  }
-
-  function authorizationHeaders(apiKey: string) {
-    const token = apiKey.trim()
-    return {
-      Authorization: token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`,
-    }
-  }
-
   export async function discoverModels(input: {
     baseURL: string
     apiKey: string
@@ -429,33 +418,16 @@ export namespace CustomApiProvider {
   }): Promise<Model[]> {
     const token = input.apiKey.trim()
     if (!token) throw new Error({ message: "API token is required to discover models" })
-    const url = modelsURL(input.baseURL)
-    const hostname = new URL(input.baseURL).hostname
-    const fetcher = input.fetcher ?? (isLocalHostname(hostname) ? fetch : Ssrf.pinnedFetch)
-    let response: Response
-    try {
-      response = await fetcher(url, {
-        method: "GET",
-        headers: authorizationHeaders(token),
-        redirect: "error",
-        signal: AbortSignal.timeout(input.timeoutMs ?? DISCOVERY_TIMEOUT_MS),
-      })
-    } catch (cause) {
-      // Surface connection refused / DNS / timeout as a provider error so the
-      // route answers 400 with the reason instead of a generic 500.
-      const reason = cause instanceof globalThis.Error ? cause.message : String(cause)
-      throw new Error({ message: `GET ${url} failed: ${reason}` })
-    }
-    if (!response.ok) {
-      await response.arrayBuffer().catch(() => undefined)
-      throw new Error({ message: `GET ${url} returned HTTP ${response.status}` })
-    }
-    let payload: unknown
-    try {
-      payload = await response.json()
-    } catch {
-      throw new Error({ message: `GET ${url} returned invalid JSON` })
-    }
+    const url = `${input.baseURL.replace(/\/+$/, "")}/models`
+    const payload = await requestModelList({
+      url,
+      label: `GET ${url}`,
+      headers: modelListBearerHeaders(token),
+      timeoutMs: input.timeoutMs ?? DISCOVERY_TIMEOUT_MS,
+      fetcher: input.fetcher,
+    }).catch((cause) => {
+      throw new Error({ message: toErrorMessage(cause) })
+    })
     const models = parseDiscoveredModels(payload, input.requireComplete, input.fallbackModels)
     if (models.length === 0) throw new Error({ message: `GET ${url} returned no models` })
     return models

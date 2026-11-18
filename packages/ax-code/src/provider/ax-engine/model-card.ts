@@ -1,5 +1,6 @@
 import z from "zod"
 import type { Provider } from "../provider"
+import { requestModelList } from "../model-list-http"
 import { AX_ENGINE_ERROR, resolveAxEngineApiKey } from "./constants"
 
 const Modalities = z
@@ -142,16 +143,15 @@ export async function fetchAxEngineModelContracts(input: {
   timeoutMs?: number
 }): Promise<AxEngineLiveModelContract[]> {
   const baseURL = input.baseURL.replace(/\/+$/, "")
-  const response = await fetch(`${baseURL}/models`, {
-    signal: AbortSignal.any([...(input.signal ? [input.signal] : []), AbortSignal.timeout(input.timeoutMs ?? 2_000)]),
+  const payload = await requestModelList({
+    url: `${baseURL}/models`,
+    label: "ax-engine /v1/models",
     headers: { authorization: `Bearer ${input.apiKey ?? resolveAxEngineApiKey()}` },
-    redirect: "error",
+    timeoutMs: input.timeoutMs ?? 2_000,
+    signal: input.signal,
+    fetcher: fetch,
   })
-  if (!response.ok) {
-    await response.body?.cancel()
-    throw new Error(`ax-engine /v1/models returned HTTP ${response.status}`)
-  }
-  const contracts = parseAxEngineModelContracts(await response.json())
+  const contracts = parseAxEngineModelContracts(payload)
   if (contracts.length === 0) throw new Error("ax-engine /v1/models returned no valid model cards")
   return contracts
 }

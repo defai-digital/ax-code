@@ -29,6 +29,7 @@ import { museDisplayName, museFallbackLatest, museFamilyId, latestMuseFamilyMode
 import { codexDisplayName, codexFallbackModels, codexFamilyId, latestCodexFamilyModels } from "./codex-families"
 import { LOCAL_LLM_RUNTIMES, normalizeLocalRuntimeBaseURL } from "./local-runtime"
 import { withCapabilityEvidence } from "./capability-evidence"
+import { requestModelList, type ModelListFetcher } from "./model-list-http"
 
 const log = Log.create({ service: "provider.loaders" })
 
@@ -66,11 +67,6 @@ type OpenAICompatibleModelItem = {
   max_context_length?: number
   max_output_tokens?: number
 }
-
-type ModelListFetcher = (
-  input: string,
-  init?: { signal?: AbortSignal; headers?: Record<string, string> },
-) => Promise<Response>
 
 function asOpenAICompatibleModelList(input: unknown): { data: OpenAICompatibleModelItem[] } | null {
   if (!input || typeof input !== "object") return null
@@ -161,27 +157,17 @@ async function fetchOpenAICompatibleModels(
   endpoint: LocalProviderEndpoint,
   headers?: Record<string, string>,
 ) {
-  return fetcher(`${endpoint.inferenceBaseURL}/models`, {
-    signal: AbortSignal.timeout(5000),
-    ...(headers ? { headers } : {}),
+  return requestModelList({
+    url: `${endpoint.inferenceBaseURL}/models`,
+    label: "OpenAI-compatible model list",
+    timeoutMs: 5_000,
+    headers,
+    redirect: "follow",
+    fetcher,
   })
-    .then(async (r) => {
-      if (!r.ok) {
-        // Drain the body so the underlying connection can be reused/closed
-        // instead of being left open until GC (socket leak on non-OK).
-        await r.arrayBuffer().catch(() => undefined)
-        log.debug("OpenAI-compatible model list fetch returned non-OK", {
-          host: endpoint.discoveryHost,
-          status: r.status,
-        })
-        return null
-      }
-      const parsed = asOpenAICompatibleModelList(await r.json())
-      if (!parsed) {
-        log.debug("OpenAI-compatible model list returned invalid schema", {
-          host: endpoint.discoveryHost,
-        })
-      }
+    .then((payload) => {
+      const parsed = asOpenAICompatibleModelList(payload)
+      if (!parsed) log.debug("OpenAI-compatible model list returned invalid schema", { host: endpoint.discoveryHost })
       return parsed
     })
     .catch((error) => {

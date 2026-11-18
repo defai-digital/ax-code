@@ -43,10 +43,10 @@ describe("alibaba-pai endpoint", () => {
 
 describe("alibaba-pai discovery", () => {
   test("maps /v1/models including max_model_len and sends Bearer token", async () => {
-    const calls: Array<{ url: string; authorization: string | null }> = []
+    const calls: Array<{ url: string; authorization: string | null; redirect?: RequestRedirect }> = []
     const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
       const headers = new Headers(init?.headers)
-      calls.push({ url: String(input), authorization: headers.get("authorization") })
+      calls.push({ url: String(input), authorization: headers.get("authorization"), redirect: init?.redirect })
       return new Response(
         JSON.stringify({
           object: "list",
@@ -81,7 +81,7 @@ describe("alibaba-pai discovery", () => {
         temperature: false,
       },
     ])
-    expect(calls).toEqual([{ url: `${EAS_URL}/v1/models`, authorization: "Bearer eas-token" }])
+    expect(calls).toEqual([{ url: `${EAS_URL}/v1/models`, authorization: "Bearer eas-token", redirect: "error" }])
 
     const records = alibabaPaiModelRecords(discovered.models, discovered.baseURL)
     const model = records[ModelID.make("GLM-5.2-FP8")]

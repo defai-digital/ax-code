@@ -1,12 +1,11 @@
-import { isLocalHostname } from "@/util/local-host"
-import { Ssrf } from "@/util/ssrf"
 import { isRecord } from "@/util/record"
 import { isNonChatModelID } from "@/provider/model-selectability"
 import type { Provider } from "../provider"
 import { ModelID, ProviderID } from "../schema"
 import { PRIVATE_GPU_DISCOVERY_TIMEOUT_MS, type PrivateGpuVendor } from "./presets"
-import { normalizeVendorBaseURL, privateGpuModelsURL } from "./endpoint"
+import { normalizeVendorBaseURL } from "./endpoint"
 import { declaredCapabilityEvidence, firstDeclaredBoolean, withCapabilityEvidence } from "../capability-evidence"
+import { modelListBearerHeaders, requestModelList } from "../model-list-http"
 
 export type PrivateGpuDiscoveredModel = {
   id: string
@@ -29,13 +28,6 @@ type ModelLimitFields = {
 
 function numberValue(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback
-}
-
-function authorizationHeaders(apiKey: string) {
-  const token = apiKey.trim()
-  return {
-    Authorization: token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`,
-  }
 }
 
 function contextLimit(item: ModelLimitFields) {
@@ -142,11 +134,6 @@ export function privateGpuModelRecords(
   return result
 }
 
-function fetcherFor(baseURL: string, vendor: PrivateGpuVendor) {
-  const hostname = new URL(normalizeVendorBaseURL(baseURL, vendor)).hostname
-  return isLocalHostname(hostname) ? fetch : Ssrf.pinnedFetch
-}
-
 export async function discoverPrivateGpuModels(input: {
   vendor: PrivateGpuVendor
   baseURL: string
@@ -156,27 +143,18 @@ export async function discoverPrivateGpuModels(input: {
 }) {
   const token = input.apiKey.trim()
   if (!token) throw new Error(`${input.vendor.name} token is required`)
-  const modelsURL = privateGpuModelsURL(input.baseURL, input.vendor)
-  const fetcher = input.fetcher ?? fetcherFor(input.baseURL, input.vendor)
-  const response = await fetcher(modelsURL, {
-    method: "GET",
-    headers: authorizationHeaders(token),
-    signal: AbortSignal.timeout(input.timeoutMs ?? PRIVATE_GPU_DISCOVERY_TIMEOUT_MS),
+  const baseURL = normalizeVendorBaseURL(input.baseURL, input.vendor)
+  const parsed = await requestModelList({
+    url: `${baseURL}/models`,
+    label: `${input.vendor.name} /models`,
+    headers: modelListBearerHeaders(token),
+    timeoutMs: input.timeoutMs ?? PRIVATE_GPU_DISCOVERY_TIMEOUT_MS,
+    fetcher: input.fetcher,
   })
-  if (!response.ok) {
-    await response.arrayBuffer().catch(() => undefined)
-    throw new Error(`${input.vendor.name} /models returned HTTP ${response.status}`)
-  }
-  let parsed: unknown
-  try {
-    parsed = await response.json()
-  } catch {
-    throw new Error(`${input.vendor.name} /models returned invalid JSON`)
-  }
   const models = parseModelList(parsed)
   if (models.length === 0) throw new Error(`${input.vendor.name} /models returned no models`)
   return {
-    baseURL: normalizeVendorBaseURL(input.baseURL, input.vendor),
+    baseURL,
     models,
   }
 }
