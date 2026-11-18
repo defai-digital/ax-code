@@ -116,7 +116,9 @@ or the plugin is retired. Register timers, watchers, and subscriptions with `lif
 function unregisters that cleanup. Registrations run at most once; registering after disposal starts cleanup immediately.
 Cleanup callbacks start in reverse registration order, each with a one-second budget, and may finish concurrently.
 During instance teardown, release resources through handles captured during setup. Entering or reloading that closing
-instance fails with a lifecycle error.
+instance fails with a lifecycle error. Global disposal requested by cleanup is scheduled after its enclosing teardown;
+recursive requests during global disposal return immediately so cleanup can finish. Ordinary callers still await the
+complete shutdown. Initializers must finish before requesting instance reload or disposal.
 
 Transform hooks receive an optional third argument, `{ signal }`; config and event hooks receive it as their second
 argument. This signal cancels work while the callback is pending; use `lifecycle.signal` for work owned by the plugin

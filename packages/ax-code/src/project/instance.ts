@@ -213,7 +213,7 @@ const closingGenerations = new WeakSet<Promise<Shape>>()
 const activeDisposals = new WeakSet<Promise<Shape>>()
 const changes = new KeyedSerialQueue()
 const initializing = new WeakSet<Promise<Shape>>()
-const cleanupContext = Context.create<string>("instance cleanup")
+const cleanupContext = Context.create<string | undefined>("instance cleanup")
 const ShuttingDownError = NamedError.create(
   "InstanceShuttingDownError",
   z.object({ directory: z.string(), message: z.string() }),
@@ -510,66 +510,86 @@ export const Instance = {
     if (initializing.has(expected)) throw initializingError(ctx.directory)
     await change(ctx.directory, () => disposeCurrent(ctx, expected))
   },
-  async disposeAll() {
-    if (disposal.all) return disposal.all
+  async disposeAll(): Promise<void> {
+    const cleaning = cleanupContext.peek()
+    const current = context.peek()
+    const own = current && generations.get(current)
+    if (!cleaning && current && own && initializing.has(own)) throw initializingError(current.directory)
+    if (disposal.all) {
+      if (cleaning) return
+      return disposal.all
+    }
 
-    emitLifecycle({
-      kind: "dispose_all.start",
-    })
-    disposal.all = iife(async () => {
-      Log.Default.info("disposing all instances")
-      const entries = [...cache.entries()]
-      const errors: unknown[] = []
-      for (const [key, value] of entries) {
-        if (cache.get(key) !== value) continue
+    // Cleanup cannot wait on its enclosing lifecycle change. Schedule the
+    // request after that change, while ordinary callers join the full shutdown.
+    const parent = cleaning ? changes.pending(cleaning) : undefined
+    disposal.all = cleanupContext.provide(undefined, () =>
+      Promise.resolve()
+        .then(async () => {
+          emitLifecycle({ kind: "dispose_all.start" })
+          await parent
+          Log.Default.info("disposing all instances")
+          const entries = [...cache.entries()]
+          const errors: unknown[] = []
+          for (const [key, value] of entries) {
+            if (cache.get(key) !== value) continue
 
-        const ctx = await value.catch((error) => {
-          Log.Default.warn("instance dispose failed", { key, error })
-          ServiceManager.clear(key)
-          return undefined
-        })
-
-        if (!ctx) {
-          if (cache.get(key) === value) cache.delete(key)
-          continue
-        }
-
-        if (cache.get(key) !== value) continue
-        try {
-          await context
-            .provide(ctx, async () => {
-              await Instance.dispose()
+            const ctx = await value.catch((error) => {
+              Log.Default.warn("instance dispose failed", { key, error })
+              ServiceManager.clear(key)
+              return undefined
             })
-            .catch((error) => {
-              if (isHarmlessInterrupt(error)) return
-              throw error
-            })
-        } catch (error) {
-          errors.push(error)
-        }
-      }
-      if (errors.length > 0) {
-        throw errors[0]
-      }
-    })
-      .catch((error) => {
-        if (isHarmlessInterrupt(error)) return
-        emitLifecycle({
-          kind: "dispose_all.failed",
-          ...errorMetadata(error),
-        })
-        throw error
-      })
-      .then((result) => {
-        emitLifecycle({
-          kind: "dispose_all.ready",
-        })
-        return result
-      })
-      .finally(() => {
-        disposal.all = undefined
-      })
 
+            if (!ctx) {
+              if (cache.get(key) === value) cache.delete(key)
+              continue
+            }
+
+            if (cache.get(key) !== value) continue
+            try {
+              await context
+                .provide(ctx, async () => {
+                  await Instance.dispose()
+                })
+                .catch((error) => {
+                  if (isHarmlessInterrupt(error)) return
+                  throw error
+                })
+            } catch (error) {
+              errors.push(error)
+            }
+          }
+          if (errors.length > 0) {
+            throw errors[0]
+          }
+        })
+        .catch((error) => {
+          if (isHarmlessInterrupt(error)) return
+          emitLifecycle({
+            kind: "dispose_all.failed",
+            ...errorMetadata(error),
+          })
+          throw error
+        })
+        .then((result) => {
+          emitLifecycle({
+            kind: "dispose_all.ready",
+          })
+          return result
+        })
+        .finally(() => {
+          disposal.all = undefined
+        }),
+    )
+
+    if (cleaning) {
+      // The cleanup caller returns before this operation; retain reporting even
+      // when no ordinary caller subsequently joins its rejection.
+      void disposal.all.catch((error) => {
+        Log.Default.warn("deferred instance shutdown failed", { error: toErrorMessage(error) })
+      })
+      return
+    }
     return disposal.all
   },
 }
