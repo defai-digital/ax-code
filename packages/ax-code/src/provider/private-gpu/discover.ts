@@ -6,7 +6,7 @@ import type { Provider } from "../provider"
 import { ModelID, ProviderID } from "../schema"
 import { PRIVATE_GPU_DISCOVERY_TIMEOUT_MS, type PrivateGpuVendor } from "./presets"
 import { normalizeVendorBaseURL, privateGpuModelsURL } from "./endpoint"
-import { declaredCapabilityEvidence, withCapabilityEvidence } from "../capability-evidence"
+import { declaredCapabilityEvidence, firstDeclaredBoolean, withCapabilityEvidence } from "../capability-evidence"
 
 export type PrivateGpuDiscoveredModel = {
   id: string
@@ -19,18 +19,12 @@ export type PrivateGpuDiscoveredModel = {
   temperature: boolean
 }
 
-type ModelListItem = {
-  id?: unknown
+type ModelLimitFields = {
   max_model_len?: unknown
   context_length?: unknown
   max_context_length?: unknown
   max_output_tokens?: unknown
   limit?: unknown
-  capabilities?: unknown
-  tool_call?: unknown
-  reasoning?: unknown
-  attachment?: unknown
-  temperature?: unknown
 }
 
 function numberValue(value: unknown, fallback: number) {
@@ -44,7 +38,7 @@ function authorizationHeaders(apiKey: string) {
   }
 }
 
-function contextLimit(item: ModelListItem) {
+function contextLimit(item: ModelLimitFields) {
   const limit = isRecord(item.limit) ? item.limit : {}
   return numberValue(
     limit.context,
@@ -52,25 +46,10 @@ function contextLimit(item: ModelListItem) {
   )
 }
 
-function advertisedOutput(item: ModelListItem) {
+function advertisedOutput(item: ModelLimitFields) {
   const limit = isRecord(item.limit) ? item.limit : {}
   const explicit = numberValue(limit.output, numberValue(item.max_output_tokens, 0))
   return explicit > 0 ? explicit : undefined
-}
-
-function advertisedCapabilities(item: ModelListItem) {
-  const capabilities = isRecord(item.capabilities) ? item.capabilities : {}
-  const bool = (key: "toolcall" | "reasoning" | "attachment" | "temperature", fallback: unknown) =>
-    typeof capabilities[key] === "boolean" ? capabilities[key] : typeof fallback === "boolean" ? fallback : false
-  // A standard OpenAI /models response does not prove that a model accepts
-  // tools or exposes reasoning. Keep discovery conservative until the endpoint
-  // explicitly advertises those features (or a later runtime qualification does).
-  return {
-    toolCall: bool("toolcall", item.tool_call),
-    reasoning: bool("reasoning", item.reasoning),
-    attachment: bool("attachment", item.attachment),
-    temperature: bool("temperature", item.temperature),
-  }
 }
 
 /** Prefer advertised output, else 32k or 25% of context. Never reserve more than half the window. */
@@ -93,6 +72,13 @@ function parseModelList(input: unknown): PrivateGpuDiscoveredModel[] {
     const context = contextLimit(raw)
     const output = reservedOutputTokens(context, advertisedOutput(raw))
     const capabilities = isRecord(raw.capabilities) ? raw.capabilities : {}
+    const declared = {
+      toolCalling: firstDeclaredBoolean(capabilities.toolcall, raw.tool_call),
+      thinking: firstDeclaredBoolean(capabilities.reasoning, raw.reasoning),
+      temperature: firstDeclaredBoolean(capabilities.temperature, raw.temperature),
+      attachment: firstDeclaredBoolean(capabilities.attachment, raw.attachment),
+    }
+    // Sparse cards do not qualify tools or reasoning on dedicated endpoints.
     models.push(
       withCapabilityEvidence(
         {
@@ -100,14 +86,12 @@ function parseModelList(input: unknown): PrivateGpuDiscoveredModel[] {
           name: id,
           context,
           output,
-          ...advertisedCapabilities(raw),
+          toolCall: declared.toolCalling ?? false,
+          reasoning: declared.thinking ?? false,
+          temperature: declared.temperature ?? false,
+          attachment: declared.attachment ?? false,
         },
-        {
-          toolCalling: capabilities.toolcall ?? raw.tool_call,
-          thinking: capabilities.reasoning ?? raw.reasoning,
-          temperature: capabilities.temperature ?? raw.temperature,
-          attachment: capabilities.attachment ?? raw.attachment,
-        },
+        declared,
         "deployment",
       ),
     )

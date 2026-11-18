@@ -20,6 +20,8 @@ import {
   reservedOutputTokens,
   requireDedicatedPrivateGpuVendor,
 } from "../../src/provider/private-gpu"
+import { declaredCapabilityEvidence } from "../../src/provider/capability-evidence"
+import { modelSelectableForProvider } from "../../src/provider/model-selectability"
 import { DEFAULT_SETUP_PROVIDER_IDS } from "../../src/provider/default-setup-providers"
 
 const originalFetch = globalThis.fetch
@@ -132,6 +134,32 @@ describe("private-gpu model discovery", () => {
       interleaved: false,
     })
   })
+})
+
+test("dedicated GPU discovery qualifies a valid top-level declaration despite malformed nested metadata", async () => {
+  const vendor = requireDedicatedPrivateGpuVendor("custom-private-gpu")
+  const discovered = await discoverPrivateGpuModels({
+    vendor,
+    baseURL: "http://127.0.0.1:18110/v1",
+    apiKey: "fixture-key",
+    fetcher: async () =>
+      Response.json({
+        data: [
+          { id: "qualified", capabilities: { toolcall: "unknown" }, tool_call: true },
+          { id: "explicit-deny", capabilities: { toolcall: false }, tool_call: true },
+          { id: "undeclared", capabilities: { toolcall: "unknown" } },
+        ],
+      }),
+  })
+  const models = privateGpuModelRecords(discovered.models, discovered.baseURL, vendor)
+  expect(models.qualified.capabilities.toolcall).toBe(true)
+  expect(declaredCapabilityEvidence(models.qualified.capabilities)?.toolCalling).toEqual({
+    state: "supported",
+    source: "deployment",
+  })
+  expect(modelSelectableForProvider(vendor.id, models.qualified)).toBe(true)
+  expect(modelSelectableForProvider(vendor.id, models["explicit-deny"])).toBe(false)
+  expect(declaredCapabilityEvidence(models.undeclared.capabilities)?.toolCalling.state).toBe("unknown")
 })
 
 describe("private-gpu connect and disconnect", () => {

@@ -12,7 +12,7 @@ import { isNonChatModelID, skuKey } from "@/provider/model-selectability"
 import { isRecord } from "@/util/record"
 import { withRollback } from "@/util/rollback"
 import { Ssrf } from "@/util/ssrf"
-import { resolveCapabilityEvidence, withCapabilityEvidence } from "./capability-evidence"
+import { firstDeclaredBoolean, resolveCapabilityEvidence, withCapabilityEvidence } from "./capability-evidence"
 import { removeProviderConnection } from "./disconnect"
 
 export namespace CustomApiProvider {
@@ -289,10 +289,6 @@ export namespace CustomApiProvider {
     return { context, output }
   }
 
-  function firstBoolean(...values: unknown[]): boolean | undefined {
-    return values.find((value): value is boolean => typeof value === "boolean")
-  }
-
   function deploymentCapabilities(raw: Record<string, unknown> | undefined) {
     const capabilities = isRecord(raw?.capabilities) ? raw.capabilities : undefined
     const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
@@ -300,17 +296,22 @@ export namespace CustomApiProvider {
     const modalities = Array.isArray(input) && input.length > 0 ? input : undefined
 
     return {
-      toolCalling: firstBoolean(capabilities?.toolcall, capabilities?.tool_call, abilities?.tool_call, raw?.tool_call),
-      thinking: firstBoolean(capabilities?.reasoning),
-      temperature: firstBoolean(capabilities?.temperature),
+      toolCalling: firstDeclaredBoolean(
+        capabilities?.toolcall,
+        capabilities?.tool_call,
+        abilities?.tool_call,
+        raw?.tool_call,
+      ),
+      thinking: firstDeclaredBoolean(capabilities?.reasoning),
+      temperature: firstDeclaredBoolean(capabilities?.temperature),
       // An explicit vision flag or input list outranks the coarse attachment flag.
       attachment:
-        firstBoolean(capabilities?.vision, abilities?.vision) ??
+        firstDeclaredBoolean(capabilities?.vision, abilities?.vision) ??
         modalities?.includes("image") ??
-        firstBoolean(capabilities?.attachment),
-      webSearch: firstBoolean(capabilities?.web_search, abilities?.web_search),
+        firstDeclaredBoolean(capabilities?.attachment),
+      webSearch: firstDeclaredBoolean(capabilities?.web_search, abilities?.web_search),
       // PDF support belongs to the gateway route. An undeclared card keeps the text fallback.
-      pdf: firstBoolean(capabilities?.pdf, abilities?.pdf) ?? modalities?.includes("pdf"),
+      pdf: firstDeclaredBoolean(capabilities?.pdf, abilities?.pdf) ?? modalities?.includes("pdf"),
     }
   }
 

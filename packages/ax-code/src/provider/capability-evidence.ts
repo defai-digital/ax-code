@@ -23,6 +23,11 @@ const names: CapabilityName[] = [
   "webSearch",
 ]
 
+/** Select the first valid declaration without discarding an explicit false. */
+export function firstDeclaredBoolean(...values: unknown[]): boolean | undefined {
+  return values.find((value): value is boolean => typeof value === "boolean")
+}
+
 export function resolveCapabilityEvidence(
   declared: CapabilityDeclarations,
   source: CapabilitySource,
