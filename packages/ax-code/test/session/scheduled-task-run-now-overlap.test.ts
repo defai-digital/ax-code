@@ -6,7 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { ScheduledTask } from "../../src/session/scheduled-task"
-import { TaskQueueID } from "../../src/session/schema"
+import { ScheduledTaskID, TaskQueueID } from "../../src/session/schema"
 import { TaskQueueTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { eq } from "../../src/storage/db"
@@ -121,6 +121,34 @@ describe("ScheduledTask run-now overlap protection", () => {
         expect(replacement.nextRunAt).toBe(runAt)
         expect(await tick).toHaveLength(1)
         expect((await ScheduledTask.get(task.id)).nextRunAt).toBe(runAt + 60 * minute)
+      },
+    })
+  })
+
+  test("a short-gap cron occurrence fires within its own jitter limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        vi.spyOn(ScheduledTaskID, "ascending").mockReturnValueOnce(ScheduledTaskID.make("sch_test_a"))
+        const minute = 60_000
+        const first = (Math.floor(Date.now() / minute) + 1) * minute
+        const startMinute = new Date(first).getUTCMinutes()
+        const task = await ScheduledTask.create({
+          title: "Burst cron",
+          prompt: "Check the build.",
+          schedule: { type: "cron", expression: `${startMinute},${(startMinute + 1) % 60} * * * *`, timezone: "UTC" },
+        })
+        expect(task.nextRunAt).toBe(first)
+        const pollAt = first + minute / 10
+        const clock = vi.spyOn(Date, "now").mockReturnValue(pollAt)
+        try {
+          expect(await ScheduledTask.runDue(pollAt)).toHaveLength(1)
+          expect((await ScheduledTask.get(task.id)).nextRunAt).toBe(first + minute)
+        } finally {
+          clock.mockRestore()
+        }
       },
     })
   })

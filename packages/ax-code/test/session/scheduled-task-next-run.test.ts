@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 
 describe("ScheduledTask.nextRunAt", () => {
@@ -241,9 +241,7 @@ describe("ScheduledTask.nextRunAt", () => {
     )
     // Number() would accept these as 10, 16, and 5; cron fields are decimal.
     for (const expression of ["1e1 * * * *", "0x10 * * * *", "+5 * * * *"]) {
-      expect(() => ScheduledTask.validateSchedule({ type: "cron", expression })).toThrow(
-        ScheduledTask.InvalidSchedule,
-      )
+      expect(() => ScheduledTask.validateSchedule({ type: "cron", expression })).toThrow(ScheduledTask.InvalidSchedule)
     }
     // a valid, realizable expression passes
     expect(() => ScheduledTask.validateSchedule({ type: "cron", expression: "0 9 1 * *" })).not.toThrow()
@@ -251,14 +249,33 @@ describe("ScheduledTask.nextRunAt", () => {
 
   test("jitter is deterministic per id and never applied to one-time tasks", () => {
     const schedule: ScheduledTask.Schedule = { type: "daily", time: "09:00" }
-    const a = ScheduledTask.jitterOffsetMs({ id: "sch_test_a" as never, schedule })
-    const b = ScheduledTask.jitterOffsetMs({ id: "sch_test_a" as never, schedule })
-    const c = ScheduledTask.jitterOffsetMs({ id: "sch_test_c" as never, schedule })
+    const a = ScheduledTask.jitterOffsetMs({ id: "sch_test_a", schedule })
+    const b = ScheduledTask.jitterOffsetMs({ id: "sch_test_a", schedule })
+    const c = ScheduledTask.jitterOffsetMs({ id: "sch_test_c", schedule })
     expect(a).toBe(b) // stable across calls
     expect(a).toBeGreaterThanOrEqual(0)
     expect(c).toBeGreaterThanOrEqual(0)
     // one-time schedules are never jittered
-    expect(ScheduledTask.jitterOffsetMs({ id: "sch_test_a" as never, schedule: { type: "once", runAt: 1 } })).toBe(0)
+    expect(ScheduledTask.jitterOffsetMs({ id: "sch_test_a", schedule: { type: "once", runAt: 1 } })).toBe(0)
+  })
+
+  test("jitter uses the gap after the nominal occurrence regardless of the polling clock", () => {
+    const task = {
+      id: "sch_test_a",
+      schedule: { type: "cron", expression: "0,1 * * * *", timezone: "UTC" } as const,
+    }
+    const minute = 60_000
+    const occurrence = Date.UTC(2026, 0, 10, 13, 0)
+    const clock = vi.spyOn(Date, "now").mockReturnValue(occurrence - 1)
+    try {
+      const shortGap = ScheduledTask.jitterOffsetMs(task, occurrence)
+      expect(shortGap).toBeLessThanOrEqual(minute / 10)
+      clock.mockReturnValue(occurrence + 1)
+      expect(ScheduledTask.jitterOffsetMs(task, occurrence)).toBe(shortGap)
+      expect(ScheduledTask.jitterOffsetMs(task, occurrence + minute)).toBeGreaterThan(shortGap)
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   test("countCoalesced counts missed occurrences up to now", () => {

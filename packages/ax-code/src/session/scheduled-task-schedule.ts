@@ -1,11 +1,150 @@
+import z from "zod"
+import { NamedError } from "@ax-code/util/error"
+import { JsonNumber } from "@/util/schema"
+
 // Full-cron search horizon. Day-skipping keeps this cheap; schedules with no
 // occurrence inside the window (e.g. `0 0 29 2 *` checked right after a leap
 // year) are rejected up front instead of persisting active-never-fires rows.
 const CRON_SEARCH_DAYS = 4 * 366
-export const MS_PER_DAY = 24 * 60 * 60 * 1_000
+const MS_PER_DAY = 24 * 60 * 60 * 1_000
 export const MS_PER_MINUTE = 60 * 1_000
 
-export function isValidTimeZone(timezone: string): boolean {
+const MAX_COALESCE_ITERATIONS = 10_000
+const JITTER_MAX_FRACTION = 0.1
+// Capped below MISSED_RUN_GRACE_MS (minus poll latency) so a jitter-delayed
+// on-time fire can never be misclassified as missed.
+const JITTER_MAX_MS = 3 * 60 * 1_000
+
+// Thrown when a schedule is syntactically shaped but semantically unusable
+// (bad time-of-day, unparseable cron, invalid timezone, or a one-time run
+// that is already in the past). Mapped to a 400 by the server error mapper
+// so clients can correct their input.
+export const InvalidSchedule = NamedError.create(
+  "ScheduledTaskInvalidSchedule",
+  z.object({ resource: z.string(), message: z.string() }),
+)
+
+const TimeOfDay = z.string().regex(/^\d{2}:\d{2}$/)
+export const Schedule = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("once"),
+    runAt: JsonNumber(z.number().int().positive()),
+  }),
+  z.object({
+    type: z.literal("daily"),
+    time: TimeOfDay,
+    timezone: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("weekly"),
+    day: JsonNumber(z.number().int().min(0).max(6)),
+    time: TimeOfDay,
+    timezone: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("cron"),
+    expression: z.string().trim().min(1).max(120),
+    timezone: z.string().optional(),
+  }),
+])
+export type Schedule = z.infer<typeof Schedule>
+
+// Reject schedules that parse structurally but can never produce a run, so the
+// API does not create "active" tasks that silently never fire.
+export function validateSchedule(schedule: Schedule, from = Date.now()): void {
+  const timezone = "timezone" in schedule ? schedule.timezone : undefined
+  if (timezone !== undefined && !isValidTimeZone(timezone)) {
+    throw new InvalidSchedule({ resource: "schedule.timezone", message: `Invalid timezone: ${timezone}` })
+  }
+  switch (schedule.type) {
+    case "once":
+      // nextRunAt() only returns future timestamps, so a past one-time run
+      // would persist as an active task that silently never fires.
+      if (schedule.runAt <= from) {
+        throw new InvalidSchedule({
+          resource: "schedule.runAt",
+          message: `One-time run timestamp is not in the future: ${schedule.runAt}`,
+        })
+      }
+      break
+    case "daily":
+    case "weekly":
+      if (!parseTimeOfDay(schedule.time)) {
+        throw new InvalidSchedule({ resource: "schedule.time", message: `Invalid time of day: ${schedule.time}` })
+      }
+      break
+    case "cron": {
+      const parsed = parseCronExpressionFull(schedule.expression)
+      if (!parsed) {
+        throw new InvalidSchedule({
+          resource: "schedule.cron",
+          message: `Invalid or unsupported cron expression: ${schedule.expression}`,
+        })
+      }
+      if (nextCronRun(parsed, from, schedule.timezone) === undefined) {
+        throw new InvalidSchedule({
+          resource: "schedule.cron",
+          message: `Cron expression has no occurrence within the search window: ${schedule.expression}`,
+        })
+      }
+      break
+    }
+  }
+}
+
+export function nextRunAt(schedule: Schedule, from = Date.now()): number | undefined {
+  switch (schedule.type) {
+    case "once":
+      return schedule.runAt > from ? schedule.runAt : undefined
+    case "daily":
+      return nextCalendarRun(schedule.time, from, schedule.timezone)
+    case "weekly":
+      return nextCalendarRun(schedule.time, from, schedule.timezone, schedule.day)
+    case "cron": {
+      const parsed = parseCronExpressionFull(schedule.expression)
+      return parsed ? nextCronRun(parsed, from, schedule.timezone) : undefined
+    }
+  }
+}
+
+// Use the gap following the stored due occurrence. An uneven cron cadence
+// must not switch to a different gap just because the polling clock advanced.
+export function jitterOffsetMs(task: { id: string; schedule: Schedule }, occurrenceAt?: number): number {
+  if (task.schedule.type === "once") return 0
+  const first = occurrenceAt ?? nextRunAt(task.schedule)
+  const period = first === undefined ? 0 : (nextRunAt(task.schedule, first) ?? first) - first
+  const interval = Number.isFinite(period) && period > 0 ? period : MS_PER_DAY
+  const cap = Math.min(interval * JITTER_MAX_FRACTION, JITTER_MAX_MS)
+  return Math.floor(cap * fractionFromId(task.id))
+}
+
+function fractionFromId(id: string): number {
+  let hash = 5381
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) + hash + id.charCodeAt(i)) | 0
+  }
+  return (hash >>> 0) / 0x1_0000_0000
+}
+
+// Count occurrences being coalesced into a single run: iterate forward from the
+// stored due occurrence while still <= now, bounded to avoid pathological loops.
+export function countCoalesced(
+  schedule: Schedule,
+  firstOccurrence: number,
+  now: number,
+): { count: number; lastOccurrence: number } {
+  let count = 1
+  let last = firstOccurrence
+  while (count < MAX_COALESCE_ITERATIONS) {
+    const next = nextRunAt(schedule, last)
+    if (next === undefined || next > now) break
+    count++
+    last = next
+  }
+  return { count, lastOccurrence: last }
+}
+
+function isValidTimeZone(timezone: string): boolean {
   if (!timezone.trim()) return false
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: timezone })
@@ -19,11 +158,7 @@ export function isValidTimeZone(timezone: string): boolean {
 // both day-of-month and day-of-week are restricted the match is OR (POSIX/Vixie);
 // otherwise both must match. A field is unrestricted when it begins with "*"
 // (so "*" and "*/step" both qualify). Month always ANDs.
-export function isValidCronExpression(expression: string): boolean {
-  return parseCronExpressionFull(expression) !== undefined
-}
-
-export interface ParsedCron {
+interface ParsedCron {
   minutes: Set<number>
   hours: Set<number>
   doms: Set<number>
@@ -33,7 +168,7 @@ export interface ParsedCron {
   dowRestricted: boolean
 }
 
-export function parseCronExpressionFull(expression: string): ParsedCron | undefined {
+function parseCronExpressionFull(expression: string): ParsedCron | undefined {
   const fields = expression.trim().split(/\s+/)
   if (fields.length !== 5) return undefined
   const minutes = parseCronField(fields[0]!, 0, 59)
@@ -55,7 +190,7 @@ export function parseCronExpressionFull(expression: string): ParsedCron | undefi
   }
 }
 
-export function parseCronDowField(value: string): Set<number> | undefined {
+function parseCronDowField(value: string): Set<number> | undefined {
   const set = parseCronField(value, 0, 7)
   if (!set) return undefined
   // cron allows 7 as an alias for Sunday (0)
@@ -66,7 +201,7 @@ export function parseCronDowField(value: string): Set<number> | undefined {
   return set
 }
 
-export function cronDayMatches(
+function cronDayMatches(
   day: number,
   weekday: number,
   parsed: Pick<ParsedCron, "doms" | "dows" | "domRestricted" | "dowRestricted">,
@@ -77,7 +212,7 @@ export function cronDayMatches(
   return domMatch && dowMatch
 }
 
-export function makeTzFormatter(timezone: string) {
+function makeTzFormatter(timezone: string) {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     year: "numeric",
@@ -90,9 +225,9 @@ export function makeTzFormatter(timezone: string) {
   })
 }
 
-export const TZ_WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+const TZ_WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
-export function tzComponents(ms: number, fmt: Intl.DateTimeFormat) {
+function tzComponents(ms: number, fmt: Intl.DateTimeFormat) {
   const parts = fmt.formatToParts(new Date(ms)).reduce<Record<string, string>>((acc, p) => {
     acc[p.type] = p.value
     return acc
@@ -107,20 +242,16 @@ export function tzComponents(ms: number, fmt: Intl.DateTimeFormat) {
   }
 }
 
-export type TzComponents = ReturnType<typeof tzComponents>
+type TzComponents = ReturnType<typeof tzComponents>
 
-export function tzDateKey(value: TzComponents) {
+function tzDateKey(value: TzComponents) {
   return `${value.year}-${value.month}-${value.day}`
 }
 
 // During a DST fall-back, a wall-clock minute can occur twice. Daily and
 // weekly schedules represent calendar occurrences, so once the requested
 // minute has happened on the current local date, ignore its repeated copy.
-export function tzOccurrenceAlreadyPassed(
-  from: number,
-  fmt: Intl.DateTimeFormat,
-  match: (value: TzComponents) => boolean,
-) {
+function tzOccurrenceAlreadyPassed(from: number, fmt: Intl.DateTimeFormat, match: (value: TzComponents) => boolean) {
   const currentDate = tzDateKey(tzComponents(from, fmt))
   let ms = from - (from % 60_000)
   for (let i = 0; i < 26 * 60; i++, ms -= 60_000) {
@@ -131,7 +262,7 @@ export function tzOccurrenceAlreadyPassed(
   return false
 }
 
-export function nextLocalCalendarRun(parts: { hour: number; minute: number }, from: number, weekday?: number) {
+function nextLocalCalendarRun(parts: { hour: number; minute: number }, from: number, weekday?: number) {
   const start = new Date(from)
   for (let offset = 0; offset < (weekday === undefined ? 3 : 15); offset++) {
     // Construct each calendar occurrence independently. Date normalizes a DST
@@ -150,51 +281,24 @@ export function nextLocalCalendarRun(parts: { hour: number; minute: number }, fr
   return undefined
 }
 
-export function nextDailyRun(time: string, from: number, timezone?: string) {
+function nextCalendarRun(time: string, from: number, timezone?: string, weekday?: number): number | undefined {
   const parts = parseTimeOfDay(time)
   if (!parts) return undefined
-  if (!timezone) {
-    return nextLocalCalendarRun(parts, from)
-  }
-  const fmt = makeTzFormatter(timezone)
-  const currentDate = tzDateKey(tzComponents(from, fmt))
-  const alreadyPassed = tzOccurrenceAlreadyPassed(
-    from,
-    fmt,
-    (value) => value.hour === parts.hour && value.minute === parts.minute,
-  )
-  let ms = from - (from % 60_000) + 60_000
-  for (let i = 0; i < 2 * 24 * 60; i++, ms += 60_000) {
-    const c = tzComponents(ms, fmt)
-    if (c.hour !== parts.hour || c.minute !== parts.minute) continue
-    if (alreadyPassed && tzDateKey(c) === currentDate) continue
-    return ms
-  }
-  return undefined
-}
+  if (!timezone) return nextLocalCalendarRun(parts, from, weekday)
 
-export function nextWeeklyRun(day: number, time: string, from: number, timezone?: string) {
-  if (!timezone) {
-    const parts = parseTimeOfDay(time)
-    if (!parts) return undefined
-    return nextLocalCalendarRun(parts, from, day)
-  }
-  const parts = parseTimeOfDay(time)
-  if (!parts) return undefined
   const fmt = makeTzFormatter(timezone)
   const currentDate = tzDateKey(tzComponents(from, fmt))
-  const alreadyPassed = tzOccurrenceAlreadyPassed(
-    from,
-    fmt,
-    (value) => value.weekday === day && value.hour === parts.hour && value.minute === parts.minute,
-  )
-  let ms = from - (from % 60_000) + 60_000
+  const matches = (value: TzComponents) =>
+    value.hour === parts.hour && value.minute === parts.minute && (weekday === undefined || value.weekday === weekday)
+  const alreadyPassed = tzOccurrenceAlreadyPassed(from, fmt, matches)
   // A missing spring-forward occurrence can put the next weekly run nearly
-  // fourteen days away. Keep searching instead of disabling future dispatch.
-  for (let i = 0; i < 15 * 24 * 60; i++, ms += 60_000) {
-    const c = tzComponents(ms, fmt)
-    if (c.weekday !== day || c.hour !== parts.hour || c.minute !== parts.minute) continue
-    if (alreadyPassed && tzDateKey(c) === currentDate) continue
+  // fourteen days away.
+  const days = weekday === undefined ? 2 : 15
+  let ms = from - (from % MS_PER_MINUTE) + MS_PER_MINUTE
+  for (let i = 0; i < days * 24 * 60; i++, ms += MS_PER_MINUTE) {
+    const candidate = tzComponents(ms, fmt)
+    if (!matches(candidate)) continue
+    if (alreadyPassed && tzDateKey(candidate) === currentDate) continue
     return ms
   }
   return undefined
@@ -205,9 +309,7 @@ export function nextWeeklyRun(day: number, time: string, from: number, timezone?
 // midnight without a timezone, or a coarse 6h step with one) and only matching
 // days are minute-scanned. The tz branch backs up to the local day start after a
 // coarse skip so early-in-day occurrences are never missed.
-export function nextCronRun(expression: string, from: number, timezone?: string): number | undefined {
-  const parsed = parseCronExpressionFull(expression)
-  if (!parsed) return undefined
+function nextCronRun(parsed: ParsedCron, from: number, timezone?: string): number | undefined {
   const horizonMs = CRON_SEARCH_DAYS * MS_PER_DAY
   const endMs = from + horizonMs
   const startMs = from - (from % MS_PER_MINUTE) + MS_PER_MINUTE
@@ -279,16 +381,16 @@ export function nextCronRun(expression: string, from: number, timezone?: string)
 // A repeat is only possible when the zone offset decreased within the last few
 // hours (every IANA fall-back shift is well under three), which gates the
 // precise backward scan off the common path.
-export const FALLBACK_REPEAT_WINDOW_MS = 3 * 60 * 60 * 1_000
-export const FALLBACK_REPEAT_WINDOW_MINUTES = FALLBACK_REPEAT_WINDOW_MS / MS_PER_MINUTE
+const FALLBACK_REPEAT_WINDOW_MS = 3 * 60 * 60 * 1_000
+const FALLBACK_REPEAT_WINDOW_MINUTES = FALLBACK_REPEAT_WINDOW_MS / MS_PER_MINUTE
 
-export function localOffsetMs(ms: number): number {
+function localOffsetMs(ms: number): number {
   const base = ms - (ms % MS_PER_MINUTE)
   const d = new Date(base)
   return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()) - base
 }
 
-export function isLocalRepeatedWallMinute(ms: number): boolean {
+function isLocalRepeatedWallMinute(ms: number): boolean {
   if (localOffsetMs(ms - FALLBACK_REPEAT_WINDOW_MS) <= localOffsetMs(ms)) return false
   const target = new Date(ms)
   const targetDay = target.getFullYear() * 10000 + (target.getMonth() + 1) * 100 + target.getDate()
@@ -301,13 +403,13 @@ export function isLocalRepeatedWallMinute(ms: number): boolean {
   return false
 }
 
-export function tzOffsetMs(ms: number, fmt: Intl.DateTimeFormat): number {
+function tzOffsetMs(ms: number, fmt: Intl.DateTimeFormat): number {
   const base = ms - (ms % MS_PER_MINUTE)
   const c = tzComponents(base, fmt)
   return Date.UTC(c.year, c.month - 1, c.day, c.hour, c.minute) - base
 }
 
-export function isTzRepeatedWallMinute(ms: number, fmt: Intl.DateTimeFormat, target: TzComponents): boolean {
+function isTzRepeatedWallMinute(ms: number, fmt: Intl.DateTimeFormat, target: TzComponents): boolean {
   if (tzOffsetMs(ms - FALLBACK_REPEAT_WINDOW_MS, fmt) <= tzOffsetMs(ms, fmt)) return false
   const key = tzDateKey(target)
   for (let back = 1; back <= FALLBACK_REPEAT_WINDOW_MINUTES; back++) {
@@ -318,7 +420,7 @@ export function isTzRepeatedWallMinute(ms: number, fmt: Intl.DateTimeFormat, tar
   return false
 }
 
-export function parseCronField(value: string, min: number, max: number): Set<number> | undefined {
+function parseCronField(value: string, min: number, max: number): Set<number> | undefined {
   if (value === "*") return rangeSet(min, max)
   const result = new Set<number>()
   for (const part of value.split(",")) {
@@ -350,18 +452,17 @@ export function parseCronField(value: string, min: number, max: number): Set<num
   return result.size > 0 ? result : undefined
 }
 
-export function rangeSet(min: number, max: number) {
+function rangeSet(min: number, max: number) {
   const result = new Set<number>()
   for (let value = min; value <= max; value++) result.add(value)
   return result
 }
 
-export function parseTimeOfDay(value: string) {
+function parseTimeOfDay(value: string) {
   const match = /^(\d{2}):(\d{2})$/.exec(value)
   if (!match) return undefined
   const hour = Number(match[1])
   const minute = Number(match[2])
-  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return undefined
   if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return undefined
   return { hour, minute }
 }

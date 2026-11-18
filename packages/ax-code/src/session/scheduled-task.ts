@@ -1,7 +1,6 @@
 import { isDeepStrictEqual } from "node:util"
 import z from "zod"
 import { HTTPException } from "hono/http-exception"
-import { NamedError } from "@ax-code/util/error"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
@@ -35,21 +34,20 @@ import { TaskQueue } from "./task-queue"
 import { ACTIVE_QUEUE_EXECUTION_STATUSES } from "./workflow-queue-admission"
 import { WorkflowRun as WorkflowRunState, type WorkflowRunDetail, type WorkflowRunID } from "@/workflow/state"
 import { WorkflowRunTable } from "@/workflow/workflow.sql"
-import {
-  MS_PER_DAY,
-  MS_PER_MINUTE,
-  isValidCronExpression,
-  isValidTimeZone,
-  nextCronRun,
-  nextDailyRun,
-  nextWeeklyRun,
-  parseTimeOfDay,
-} from "./scheduled-task-schedule"
+import * as Timing from "./scheduled-task-schedule"
 
 type WorkflowTemplateID = import("@/workflow/template").WorkflowTemplate.ID
 
 export namespace ScheduledTask {
   const log = Log.create({ service: "session.scheduled-task" })
+  export const Schedule = Timing.Schedule
+  export type Schedule = Timing.Schedule
+  export const InvalidSchedule = Timing.InvalidSchedule
+  export const validateSchedule = Timing.validateSchedule
+  export const nextRunAt = Timing.nextRunAt
+  export const jitterOffsetMs = Timing.jitterOffsetMs
+  export const countCoalesced = Timing.countCoalesced
+
   const MISSED_RUN_GRACE_MS = 5 * 60 * 1_000
 
   // ADR-059 tuning. Run history is bounded per task; overlap / backoff state is
@@ -64,7 +62,6 @@ export namespace ScheduledTask {
   const FAILURE_BACKOFF_BASE_MS = 60 * 1_000
   const FAILURE_BACKOFF_MAX_MS = 60 * 60 * 1_000
   export const MAX_PROJECT_ACTIVE_TASKS = 100
-  const MAX_COALESCE_ITERATIONS = 10_000
   const DEFAULT_RUN_DEADLINE_MS = 30 * 60 * 1_000
   const ORPHAN_GRACE_MS = 10 * 60 * 1_000
   // Marker for run rows failed by the orphan sweep (reconcileOrphanRuns) rather
@@ -72,14 +69,10 @@ export namespace ScheduledTask {
   // consecutive-failure auto-pause counter.
   const ORPHAN_RUN_ERROR_PREFIX = "orphaned:"
   const ONESHOT_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000
-  const JITTER_MAX_FRACTION = 0.1
-  // Capped below MISSED_RUN_GRACE_MS (minus poll latency) so a jitter-delayed
-  // on-time fire can never be misclassified as missed.
-  const JITTER_MAX_MS = 3 * 60 * 1_000
   const TOAST_DURATION_MS = 8 * 1_000
   // After an overlap skip, a one-time task re-arms for the next poll instead of
   // being disabled: it is disabled only by successful completion (PRD-2026-09-12).
-  const ONESHOT_OVERLAP_RETRY_MS = MS_PER_MINUTE
+  const ONESHOT_OVERLAP_RETRY_MS = Timing.MS_PER_MINUTE
 
   export const Status = z.enum(["active", "paused", "disabled"])
   export type Status = z.infer<typeof Status>
@@ -90,15 +83,6 @@ export namespace ScheduledTask {
   export type RunStatus = z.infer<typeof RunStatus>
   export const RunTrigger = z.enum(["scheduled", "manual"])
   export type RunTrigger = z.infer<typeof RunTrigger>
-
-  // Thrown when a schedule is syntactically shaped but semantically unusable
-  // (bad time-of-day, unparseable cron, invalid timezone, or a one-time run
-  // that is already in the past). Mapped to a 400 by the server error mapper
-  // so clients can correct their input.
-  export const InvalidSchedule = NamedError.create(
-    "ScheduledTaskInvalidSchedule",
-    z.object({ resource: z.string(), message: z.string() }),
-  )
 
   const WorkflowTemplateIDSchema = z
     .string()
@@ -119,31 +103,6 @@ export namespace ScheduledTask {
       error: z.string().optional(),
     })
     .passthrough()
-
-  const TimeOfDay = z.string().regex(/^\d{2}:\d{2}$/)
-  export const Schedule = z.discriminatedUnion("type", [
-    z.object({
-      type: z.literal("once"),
-      runAt: JsonNumber(z.number().int().positive()),
-    }),
-    z.object({
-      type: z.literal("daily"),
-      time: TimeOfDay,
-      timezone: z.string().optional(),
-    }),
-    z.object({
-      type: z.literal("weekly"),
-      day: JsonNumber(z.number().int().min(0).max(6)),
-      time: TimeOfDay,
-      timezone: z.string().optional(),
-    }),
-    z.object({
-      type: z.literal("cron"),
-      expression: z.string().trim().min(1).max(120),
-      timezone: z.string().optional(),
-    }),
-  ])
-  export type Schedule = z.infer<typeof Schedule>
 
   export const Info = z.object({
     id: ScheduledTaskID.zod,
@@ -1044,7 +1003,7 @@ export namespace ScheduledTask {
     // runAt. Catch-up policy must not treat them as missed calendar events.
     const oneShotRetry = task.schedule.type === "once" && occurrenceAt !== task.schedule.runAt
     const missed = !oneShotRetry && now - occurrenceAt > MISSED_RUN_GRACE_MS
-    if (!missed && now < occurrenceAt + jitterOffsetMs(task)) return undefined
+    if (!missed && now < occurrenceAt + jitterOffsetMs(task, occurrenceAt)) return undefined
     const coalesced = countCoalesced(task.schedule, occurrenceAt, now)
     return {
       next: nextRunAt(task.schedule, coalesced.lastOccurrence),
@@ -1888,110 +1847,5 @@ export namespace ScheduledTask {
       }
       return removed
     })
-  }
-
-  // Reject schedules that parse structurally but can never produce a run, so the
-  // API does not create "active" tasks that silently never fire.
-  export function validateSchedule(schedule: Schedule, from = Date.now()): void {
-    const timezone = "timezone" in schedule ? schedule.timezone : undefined
-    if (timezone !== undefined && !isValidTimeZone(timezone)) {
-      throw new InvalidSchedule({ resource: "schedule.timezone", message: `Invalid timezone: ${timezone}` })
-    }
-    switch (schedule.type) {
-      case "once":
-        // nextRunAt() only returns future timestamps, so a past one-time run
-        // would persist as an active task that silently never fires.
-        if (schedule.runAt <= from) {
-          throw new InvalidSchedule({
-            resource: "schedule.runAt",
-            message: `One-time run timestamp is not in the future: ${schedule.runAt}`,
-          })
-        }
-        break
-      case "daily":
-      case "weekly":
-        if (!parseTimeOfDay(schedule.time)) {
-          throw new InvalidSchedule({ resource: "schedule.time", message: `Invalid time of day: ${schedule.time}` })
-        }
-        break
-      case "cron":
-        if (!isValidCronExpression(schedule.expression)) {
-          throw new InvalidSchedule({
-            resource: "schedule.cron",
-            message: `Invalid or unsupported cron expression: ${schedule.expression}`,
-          })
-        }
-        if (nextCronRun(schedule.expression, from, schedule.timezone) === undefined) {
-          throw new InvalidSchedule({
-            resource: "schedule.cron",
-            message: `Cron expression has no occurrence within the search window: ${schedule.expression}`,
-          })
-        }
-        break
-    }
-  }
-
-  export function nextRunAt(schedule: Schedule, from = Date.now()): number | undefined {
-    switch (schedule.type) {
-      case "once":
-        return schedule.runAt > from ? schedule.runAt : undefined
-      case "daily":
-        return nextDailyRun(schedule.time, from, schedule.timezone)
-      case "weekly":
-        return nextWeeklyRun(schedule.day, schedule.time, from, schedule.timezone)
-      case "cron":
-        return nextCronRun(schedule.expression, from, schedule.timezone)
-    }
-  }
-
-  // Deterministic anti-herd offset derived from the task id (kimi-style), applied
-  // at eligibility time only — never persisted, so `next_run_at` stays the
-  // canonical nominal schedule. One-time runs are never jittered.
-  export function jitterOffsetMs(task: Pick<Info, "id" | "schedule">): number {
-    if (task.schedule.type === "once") return 0
-    let period = cronPeriodMs(task.schedule)
-    if (!period || !Number.isFinite(period) || period <= 0) {
-      period = task.schedule.type === "weekly" ? 7 * MS_PER_DAY : MS_PER_DAY
-    }
-    const cap = Math.min(period * JITTER_MAX_FRACTION, JITTER_MAX_MS)
-    if (!(cap > 0)) return 0
-    return Math.floor(cap * fractionFromId(task.id))
-  }
-
-  function cronPeriodMs(schedule: Schedule): number | undefined {
-    const base = Date.now()
-    const a = nextRunAt(schedule, base)
-    if (a === undefined) return undefined
-    const b = nextRunAt(schedule, a)
-    if (b === undefined) return undefined
-    return b - a
-  }
-
-  function fractionFromId(id: string): number {
-    let hash = 5381
-    for (let i = 0; i < id.length; i++) {
-      hash = ((hash << 5) + hash + id.charCodeAt(i)) | 0
-    }
-    return (hash >>> 0) / 0x1_0000_0000
-  }
-
-  // Count occurrences being coalesced into a single run: iterate forward from the
-  // stored due occurrence while still <= now, bounded to avoid pathological loops.
-  export function countCoalesced(
-    schedule: Schedule,
-    firstOccurrence: number,
-    now: number,
-  ): { count: number; lastOccurrence: number } {
-    let count = 1
-    let cursor = firstOccurrence
-    let last = firstOccurrence
-    while (count < MAX_COALESCE_ITERATIONS) {
-      const next = nextRunAt(schedule, cursor)
-      if (next === undefined || next > now) break
-      count++
-      cursor = next
-      last = next
-    }
-    return { count, lastOccurrence: last }
   }
 }
