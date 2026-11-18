@@ -373,6 +373,45 @@ describe("ScheduledTask workflow outcome recording", () => {
     })
   })
 
+  test("recovers the persisted workflow outcome after its queue carrier completes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+        try {
+          vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const task = await createWorkflowTask()
+          if (!task.nextRunAt) throw new Error("Expected a due time")
+          const now = task.nextRunAt + 6 * 60_000
+          const [fired] = await ScheduledTask.runDue(now)
+          if (!fired?.queueItem) throw new Error("Expected a queued scheduled workflow")
+          const run = await WorkflowTemplate.createRun({ templateID: "builtin:noop-dry-run", sourceTaskID: task.id })
+          await WorkflowRun.setStatus({ id: run.id, status: "running" })
+          await TaskQueue.setStatus({ id: fired.queueItem.id, status: "completed" })
+
+          await ScheduledTask.reconcileAllOrphanRuns(now)
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "running" }])
+          await ScheduledTask.recordWorkflowRun(task.id, run.id)
+          await ScheduledTask.reconcileAllOrphanRuns(now)
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "running" }])
+
+          await WorkflowRun.setStatus({ id: run.id, status: "failed", error: "Persisted workflow failure" })
+          await ScheduledTask.reconcileAllOrphanRuns(now)
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+            { status: "failed", error: "Persisted workflow failure" },
+          ])
+          expect(await ScheduledTask.get(task.id)).toMatchObject({
+            status: "active",
+            error: "Persisted workflow failure",
+          })
+        } finally {
+          vi.unstubAllEnvs()
+        }
+      },
+    })
+  })
+
   test("deleting a scheduled dispatch stops both its queue carrier and its linked workflow", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

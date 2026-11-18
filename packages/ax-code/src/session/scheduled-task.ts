@@ -5,7 +5,21 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { NotFoundError, and, asc, desc, eq, like, lte, notInArray, sql } from "@/storage/db"
+import {
+  NotFoundError,
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from "@/storage/db"
 import type { Database } from "@/storage/db"
 import { NotificationEvent } from "@/notification/events"
 import { toErrorMessage } from "@/util/error-message"
@@ -1372,6 +1386,7 @@ export namespace ScheduledTask {
   // the tasks that have an open run — one query when none does — and announces
   // the closed rows, since nothing else tells a client that "running" ended.
   export async function reconcileAllOrphanRuns(now = Date.now()): Promise<void> {
+    await reconcilePersistedOutcomes(now)
     const open = SessionShard.storeForProject(Instance.project.id).use((db) =>
       db
         .select({ taskID: ScheduledTaskRunTable.task_id })
@@ -1465,6 +1480,9 @@ export namespace ScheduledTask {
 
   type OutcomeSource = { queueID: TaskQueueID } | { workflowRunID?: string }
   type OutcomeStatus = "completed" | "failed" | "timeout"
+  type Outcome = { status: OutcomeStatus; error?: string }
+  const terminalDispatchStatuses = ["completed", "failed", "cancelled"] as const
+  type TerminalDispatchStatus = (typeof terminalDispatchStatuses)[number]
   type TaskRow = typeof ScheduledTaskTable.$inferSelect
   type RecordedOutcome = { run: RunInfo; row?: TaskRow; pausedAfter?: number }
 
@@ -1474,73 +1492,81 @@ export namespace ScheduledTask {
     error: unknown,
     queueID: TaskQueueID,
   ): Promise<Info> {
-    const message = status === "failed" ? toErrorMessage(error) : undefined
-    const runStatus = message?.toLowerCase().includes("timed out") ? "timeout" : status
-    return recordOutcome(id, { queueID }, runStatus, message)
+    return recordOutcome(id, { queueID }, queueOutcome(status, error))
   }
 
-  async function recordOutcome(
+  function queueOutcome(status: "completed" | "failed", error: unknown): Outcome {
+    const message = status === "failed" ? toErrorMessage(error) : undefined
+    return { status: message?.toLowerCase().includes("timed out") ? "timeout" : status, error: message }
+  }
+
+  async function recordOutcome(id: ScheduledTaskID, source: OutcomeSource, result: Outcome): Promise<Info> {
+    const now = Date.now()
+    const outcome = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) =>
+      recordOutcomeIn(db, id, source, result, now),
+    )
+    return publishOutcome(id, outcome)
+  }
+
+  function recordOutcomeIn(
+    db: Database.TxOrDb,
     id: ScheduledTaskID,
     source: OutcomeSource,
-    status: OutcomeStatus,
-    error: string | undefined,
-  ): Promise<Info> {
+    { status, error }: Outcome,
+    now: number,
+  ): RecordedOutcome | undefined {
     const projectID = Instance.project.id
-    const now = Date.now()
-    const outcome = SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
-      let run: RunInfo | undefined
-      if ("queueID" in source) {
-        const row = db
-          .update(ScheduledTaskRunTable)
-          .set({ status, error: error ?? null, time_completed: now, time_updated: now })
-          .where(
-            and(
-              eq(ScheduledTaskRunTable.task_id, id),
-              eq(ScheduledTaskRunTable.project_id, projectID),
-              eq(ScheduledTaskRunTable.queue_id, source.queueID),
-              eq(ScheduledTaskRunTable.status, "running"),
-            ),
-          )
-          .returning()
-          .get()
-        if (row) run = runFromRow(row)
-      } else {
-        run = claimWorkflowOutcomeRun(db, id, status, error, source.workflowRunID, now)
-      }
-      // Only the callback that settles the run may update the schedule.
-      if (!run) return undefined
-
-      // A superseded callback can close its own run. Its retry policy and
-      // summary belong to the schedule only while it is the latest run.
-      const conditions = [eq(ScheduledTaskTable.id, id), eq(ScheduledTaskTable.project_id, projectID)]
-      if ("queueID" in source) conditions.push(eq(ScheduledTaskTable.last_queue_id, source.queueID))
-      else if (source.workflowRunID) conditions.push(eq(ScheduledTaskTable.last_workflow_run_id, source.workflowRunID))
-
-      const current = db
-        .select({ schedule: ScheduledTaskTable.schedule, status: ScheduledTaskTable.status })
-        .from(ScheduledTaskTable)
-        .where(and(...conditions))
-        .get()
-      if (!current) return { run }
-      const schedule = Schedule.safeParse(current.schedule)
-      const disableOneShot =
-        status === "completed" && current.status !== "disabled" && schedule.success && schedule.data.type === "once"
+    let run: RunInfo | undefined
+    if ("queueID" in source) {
       const row = db
-        .update(ScheduledTaskTable)
-        .set({
-          error: error ?? null,
-          time_updated: now,
-          ...(disableOneShot ? { status: "disabled" as const, next_run_at: null } : {}),
-        })
-        .where(and(...conditions))
+        .update(ScheduledTaskRunTable)
+        .set({ status, error: error ?? null, time_completed: now, time_updated: now })
+        .where(
+          and(
+            eq(ScheduledTaskRunTable.task_id, id),
+            eq(ScheduledTaskRunTable.project_id, projectID),
+            eq(ScheduledTaskRunTable.queue_id, source.queueID),
+            unrecordedOutcome(),
+          ),
+        )
         .returning()
         .get()
+      if (row) run = runFromRow(row)
+    } else {
+      run = claimWorkflowOutcomeRun(db, id, status, error, source.workflowRunID, now)
+    }
+    // Only the callback that settles the run may update the schedule.
+    if (!run) return undefined
 
-      // Keep run history, the summary, and backoff in the same transaction.
-      // A failed write must leave the outcome available for another callback.
-      return row && status !== "completed" ? { run, ...applyFailurePolicy(db, row, now) } : { run, row }
-    })
-    return publishOutcome(id, outcome)
+    // A superseded callback can close its own run. Its retry policy and
+    // summary belong to the schedule only while it is the latest run.
+    const conditions = [eq(ScheduledTaskTable.id, id), eq(ScheduledTaskTable.project_id, projectID)]
+    if ("queueID" in source) conditions.push(eq(ScheduledTaskTable.last_queue_id, source.queueID))
+    else if (source.workflowRunID) conditions.push(eq(ScheduledTaskTable.last_workflow_run_id, source.workflowRunID))
+
+    const current = db
+      .select({ schedule: ScheduledTaskTable.schedule, status: ScheduledTaskTable.status })
+      .from(ScheduledTaskTable)
+      .where(and(...conditions))
+      .get()
+    if (!current) return { run }
+    const schedule = Schedule.safeParse(current.schedule)
+    const disableOneShot =
+      status === "completed" && current.status !== "disabled" && schedule.success && schedule.data.type === "once"
+    const row = db
+      .update(ScheduledTaskTable)
+      .set({
+        error: error ?? null,
+        time_updated: now,
+        ...(disableOneShot ? { status: "disabled" as const, next_run_at: null } : {}),
+      })
+      .where(and(...conditions))
+      .returning()
+      .get()
+
+    // Keep run history, the summary, and backoff in the same transaction.
+    // A failed write must leave the outcome available for another callback.
+    return row && status !== "completed" ? { run, ...applyFailurePolicy(db, row, now) } : { run, row }
   }
 
   async function publishOutcome(id: ScheduledTaskID, outcome?: RecordedOutcome): Promise<Info> {
@@ -1662,14 +1688,102 @@ export namespace ScheduledTask {
 
   export async function recordWorkflowOutcome(
     id: ScheduledTaskID,
-    status: "completed" | "failed" | "cancelled",
+    status: TerminalDispatchStatus,
     error?: unknown,
     workflowRunID?: string,
   ): Promise<Info> {
+    return recordOutcome(id, { workflowRunID }, workflowOutcome(status, error))
+  }
+
+  function workflowOutcome(status: TerminalDispatchStatus, error?: unknown): Outcome {
+    if (status === "completed") return { status }
     const fallback = status === "cancelled" ? "Scheduled workflow was cancelled." : "Scheduled workflow failed."
-    const runStatus = status === "completed" ? "completed" : "failed"
-    const message = status === "completed" ? undefined : toErrorMessage(error ?? fallback)
-    return recordOutcome(id, { workflowRunID }, runStatus, message)
+    return { status: "failed", error: toErrorMessage(error ?? fallback) }
+  }
+
+  function unrecordedOutcome() {
+    return or(
+      eq(ScheduledTaskRunTable.status, "running"),
+      and(eq(ScheduledTaskRunTable.status, "failed"), like(ScheduledTaskRunTable.error, `${ORPHAN_RUN_ERROR_PREFIX}%`)),
+    )
+  }
+
+  function persistedOutcomes(db: Database.TxOrDb, id?: ScheduledTaskRunID) {
+    return db
+      .select({
+        id: ScheduledTaskRunTable.id,
+        taskID: ScheduledTaskRunTable.task_id,
+        queue: {
+          id: TaskQueueTable.id,
+          kind: TaskQueueTable.kind,
+          payload: TaskQueueTable.payload,
+          status: TaskQueueTable.status,
+          error: TaskQueueTable.error,
+        },
+        workflow: {
+          id: WorkflowRunTable.id,
+          status: WorkflowRunTable.status,
+          error: WorkflowRunTable.error,
+        },
+      })
+      .from(ScheduledTaskRunTable)
+      .leftJoin(
+        TaskQueueTable,
+        and(
+          eq(TaskQueueTable.id, ScheduledTaskRunTable.queue_id),
+          eq(TaskQueueTable.project_id, ScheduledTaskRunTable.project_id),
+          isNull(ScheduledTaskRunTable.workflow_run_id),
+          inArray(TaskQueueTable.status, terminalDispatchStatuses),
+        ),
+      )
+      .leftJoin(
+        WorkflowRunTable,
+        and(
+          eq(WorkflowRunTable.id, ScheduledTaskRunTable.workflow_run_id),
+          eq(WorkflowRunTable.project_id, ScheduledTaskRunTable.project_id),
+          inArray(WorkflowRunTable.status, terminalDispatchStatuses),
+        ),
+      )
+      .where(
+        and(
+          eq(ScheduledTaskRunTable.project_id, Instance.project.id),
+          id ? eq(ScheduledTaskRunTable.id, id) : undefined,
+          unrecordedOutcome(),
+          or(isNotNull(TaskQueueTable.id), isNotNull(WorkflowRunTable.id)),
+        ),
+      )
+  }
+
+  async function reconcilePersistedOutcomes(now: number): Promise<void> {
+    const store = SessionShard.storeForProject(Instance.project.id)
+    const candidates = store.use((db) => persistedOutcomes(db).all())
+    for (const { id } of candidates) {
+      try {
+        const outcome = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+          // Re-read inside the write transaction: a queue or workflow retry
+          // can change the persisted state after candidate discovery.
+          const run = persistedOutcomes(db, id).get()
+          if (!run) return undefined
+          const { queue, workflow, taskID } = run
+          if (workflow) {
+            const { status, error } = workflow
+            if (status !== "completed" && status !== "failed" && status !== "cancelled") return undefined
+            return recordOutcomeIn(db, taskID, { workflowRunID: workflow.id }, workflowOutcome(status, error), now)
+          }
+          if (!queue) return undefined
+          const automation = TaskQueue.readScheduledAutomation(queue)
+          if (automation?.taskID !== taskID) return undefined
+          // A successful workflow dispatch only starts its workflow.
+          if (queue.status === "completed" && automation.workflowTemplateID) return undefined
+          const status = queue.status === "completed" ? "completed" : "failed"
+          const result = queueOutcome(status, queue.error ?? `Task ended with status ${queue.status}.`)
+          return recordOutcomeIn(db, taskID, { queueID: queue.id }, result, now)
+        })
+        if (outcome) await publishOutcome(outcome.run.taskID, outcome)
+      } catch (error) {
+        log.warn("failed to reconcile persisted scheduled task outcome", { runID: id, error: toErrorMessage(error) })
+      }
+    }
   }
 
   function normalizeSchedulerPollMs(value: number | undefined) {

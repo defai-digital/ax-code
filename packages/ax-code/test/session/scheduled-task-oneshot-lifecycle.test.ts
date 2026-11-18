@@ -5,7 +5,7 @@ import { NotificationEvent } from "../../src/notification/events"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import type { ScheduledTaskID } from "../../src/session/schema"
-import { ScheduledTaskTable, TaskQueueTable } from "../../src/session/session.sql"
+import { ScheduledTaskRunTable, ScheduledTaskTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { TaskQueue } from "../../src/session/task-queue"
 import { NotFoundError, eq, sql } from "../../src/storage/db"
@@ -768,6 +768,54 @@ describe("ScheduledTask one-shot lifecycle", () => {
     })
   })
 
+  test.each([
+    { status: "completed", orphaned: false },
+    { status: "failed", orphaned: false },
+    { status: "completed", orphaned: true },
+  ] as const)(
+    "the sweep recovers a persisted $status queue outcome (orphaned=$orphaned)",
+    async ({ status, orphaned }) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const now = Date.now()
+          const task = await ScheduledTask.create({
+            title: "Durable one-shot result",
+            prompt: "Run once.",
+            schedule: { type: "once", runAt: now + 1_000 },
+          })
+          const { queueItem } = await claimOnce(task.id, now + 2_000)
+          if (!queueItem) throw new Error("Expected a scheduled queue item")
+          const error = status === "failed" ? "Persisted queue failure" : undefined
+          await TaskQueue.setStatus({ id: queueItem.id, status, error })
+          if (orphaned) {
+            SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+              db.update(ScheduledTaskRunTable)
+                .set({ status: "failed", error: "orphaned: no outcome was recorded" })
+                .where(eq(ScheduledTaskRunTable.queue_id, queueItem.id))
+                .run()
+            })
+          }
+
+          const sweepAt = now + 3_000
+          await ScheduledTask.reconcileAllOrphanRuns(sweepAt)
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status, error }])
+          const settled = await ScheduledTask.get(task.id)
+          if (status === "completed") {
+            expect(settled).toMatchObject({ status: "disabled", nextRunAt: undefined })
+          } else {
+            expect(settled).toMatchObject({ status: "active", error })
+            expect(settled.nextRunAt).toBeGreaterThan(sweepAt)
+          }
+          await ScheduledTask.reconcileAllOrphanRuns(sweepAt + 10_000)
+          expect(await ScheduledTask.get(task.id)).toEqual(settled)
+        },
+      })
+    },
+  )
+
   test("the scheduler sweep closes an orphaned run of a paused task and announces it", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -782,16 +830,9 @@ describe("ScheduledTask one-shot lifecycle", () => {
         })
         const claimed = await claimOnce(task.id, now + 2_000)
         await ScheduledTask.pause(task.id)
-        // The queue item finished but its outcome callback never arrived (a
-        // restart in the gap). The queue's own restart recovery skips a
-        // terminal item, and a paused task is never due and never run-now'd
-        // by the scheduler, so only the sweep can close the row.
-        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-          db.update(TaskQueueTable)
-            .set({ status: "completed" })
-            .where(eq(TaskQueueTable.id, claimed.queueItem!.id))
-            .run()
-        })
+        // Without a surviving queue item, the sweep must wait out the
+        // grace period before treating the open history row as abandoned.
+        await TaskQueue.remove(claimed.queueItem!.id)
         const updated: string[] = []
         const off = Bus.subscribe(ScheduledTask.Event.Updated, (event) => {
           updated.push(event.properties.task.id)
