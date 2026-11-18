@@ -275,7 +275,7 @@ export function axEngineLoader(): CustomLoader {
           apiModelID: def.apiModelID,
           quantization: def.defaultQuantization,
           minMemoryBytes: def.minMemoryBytes,
-          ...(def.revision ? { axEngineCandidate: true, revision: def.revision } : {}),
+          ...(def.revision ? { axEngineCandidate: !live, revision: def.revision } : {}),
         },
         headers: {},
         release_date: def.releaseDate,

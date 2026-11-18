@@ -14,6 +14,7 @@ type SelectableModel = {
   tool_call?: boolean
   capabilities?: {
     toolcall?: boolean
+    input?: { text?: boolean }
     output?: { text?: boolean }
   }
   options?: { minMemoryBytes?: unknown; axEngineCandidate?: unknown }
@@ -129,6 +130,7 @@ export function modelSelectableForProvider(providerID: string, model: Selectable
   // explicitly advertise image-only (or other non-text) output cannot produce
   // a usable coding turn, even when they accept tool schemas.
   if (model.capabilities?.output?.text === false) return false
+  if (providerID === "ax-engine" && model.capabilities?.input?.text === false) return false
   // Catalog candidates can be selected for explicit preparation. Their native
   // capabilities stay unverified until the AX Engine loader checks the live card.
   if (providerID === "ax-engine" && model.options?.axEngineCandidate === true) return true

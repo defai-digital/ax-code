@@ -48,7 +48,7 @@ const AxEngineModelCard = z.object({
 })
 
 const AxEngineModelsResponse = z.object({
-  data: z.array(AxEngineModelCard).default([]),
+  data: z.array(z.unknown()).default([]),
 })
 
 export type AxEngineLiveModelContract = {
@@ -64,6 +64,15 @@ export type AxEngineLiveModelContract = {
   codingOnly?: boolean
 }
 
+export function supportsAxEngineCoding(contract: AxEngineLiveModelContract, requireText = false): boolean {
+  const inputText = contract.capabilities.input?.text
+  const outputText = contract.capabilities.output?.text
+  return (
+    contract.toolcall &&
+    (requireText ? inputText === true && outputText === true : inputText !== false && outputText !== false)
+  )
+}
+
 export function requireAxEngineCodingContract(
   contracts: AxEngineLiveModelContract[],
   apiModelID: string,
@@ -71,12 +80,7 @@ export function requireAxEngineCodingContract(
 ) {
   const contract = contracts.find((item) => item.id === apiModelID)
   if (!contract) throw new Error(`ax-engine server does not advertise model ${apiModelID}`)
-  if (
-    !contract.toolcall ||
-    contract.capabilities.input?.text === false ||
-    contract.capabilities.output?.text === false ||
-    (options.requireText && (contract.capabilities.input?.text !== true || contract.capabilities.output?.text !== true))
-  ) {
+  if (!supportsAxEngineCoding(contract, options.requireText)) {
     throw new Error(
       `${AX_ENGINE_ERROR.ToolcallUnsupported}: ax-engine model ${apiModelID} does not advertise OpenAI structured tool calling with text input and output`,
     )
@@ -87,7 +91,11 @@ export function requireAxEngineCodingContract(
 export function parseAxEngineModelContracts(payload: unknown): AxEngineLiveModelContract[] {
   const parsed = AxEngineModelsResponse.safeParse(payload)
   if (!parsed.success) return []
-  return parsed.data.data.map((card) => {
+  const contracts: AxEngineLiveModelContract[] = []
+  for (const item of parsed.data.data) {
+    const validated = AxEngineModelCard.safeParse(item)
+    if (!validated.success) continue
+    const card = validated.data
     const context = card.limit?.context ?? card.context_length
     const advertisedOutput = card.limit?.output ?? card.max_output_tokens
     const output = context && advertisedOutput ? Math.min(context, advertisedOutput) : advertisedOutput
@@ -97,7 +105,7 @@ export function parseAxEngineModelContracts(payload: unknown): AxEngineLiveModel
       card.ax_engine?.native_multimodal_input_supported ??
       card.capabilities?.attachment ??
       false
-    return {
+    contracts.push({
       id: card.id,
       context,
       output,
@@ -132,8 +140,9 @@ export function parseAxEngineModelContracts(payload: unknown): AxEngineLiveModel
       chatDefault: card.ax_engine?.chat_default,
       codingSupported: card.ax_engine?.coding_supported,
       codingOnly: card.ax_engine?.coding_only,
-    }
-  })
+    })
+  }
+  return contracts
 }
 
 export async function fetchAxEngineModelContracts(input: {

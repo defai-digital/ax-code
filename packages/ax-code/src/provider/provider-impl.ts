@@ -485,6 +485,12 @@ export namespace Provider {
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
     const axEngineSupported = await isAxEngineSupportedHost().catch(() => false)
     const axEngineAttached = resolveAxEngineConnectMode(config.provider?.[AX_ENGINE_PROVIDER_ID]?.options) === "attach"
+    const attachedEngineCatalog = axEngineAttached ? database[AX_ENGINE_PROVIDER_ID] : undefined
+    if (attachedEngineCatalog) {
+      // An attached server owns its inventory. Keep catalog metadata available
+      // for explicitly configured aliases without offering managed candidates.
+      database[AX_ENGINE_PROVIDER_ID] = { ...attachedEngineCatalog, models: {} }
+    }
 
     function isProviderAllowed(providerID: ProviderID): boolean {
       return shouldAllowProviderInCore({ providerID, disabled, enabled, axEngineSupported, axEngineAttached })
@@ -660,6 +666,7 @@ export namespace Provider {
     for (const [rawProviderID, provider] of configProviders) {
       const providerID = ProviderID.make(rawProviderID)
       const existing = database[providerID]
+      const attachedEngine = axEngineAttached && providerID === AX_ENGINE_PROVIDER_ID
       const parsed: Info = {
         id: ProviderID.make(providerID),
         name: provider.name ?? existing?.name ?? providerID,
@@ -679,7 +686,8 @@ export namespace Provider {
           )
           continue
         }
-        const existingModel = parsed.models[model.id ?? modelID]
+        const existingModel =
+          parsed.models[nextID] ?? (attachedEngine ? attachedEngineCatalog?.models[nextID] : undefined)
         const name = iife(() => {
           if (model.name) return model.name
           if (model.id && model.id !== modelID) return modelID
@@ -772,6 +780,7 @@ export namespace Provider {
           release_date: model.release_date ?? existingModel?.release_date ?? "",
           variants: {},
         }
+        if (attachedEngine) delete parsedModel.options.axEngineCandidate
         const merged = mergeDeep(ProviderTransform.variants(parsedModel), model.variants ?? {})
         parsedModel.variants = mapValues(
           pickBy(merged, (v) => !v.disabled),

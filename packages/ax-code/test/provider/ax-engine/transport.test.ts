@@ -5,9 +5,11 @@ import type { Provider } from "../../../src/provider/provider"
 import { ProviderID } from "../../../src/provider/schema"
 import { AX_ENGINE_DEFAULT_MODEL_ID } from "../../../src/provider/ax-engine/constants"
 import { probeAxEngineConnection } from "../../../src/provider/ax-engine/connection"
-import { fetchAxEngineModelContracts } from "../../../src/provider/ax-engine/model-card"
+import { fetchAxEngineModelContracts, parseAxEngineModelContracts } from "../../../src/provider/ax-engine/model-card"
 import { axEngineLoader, noteActiveAxEngineServer } from "../../../src/provider/ax-engine/provider-loader"
 import { isServerReady } from "../../../src/provider/ax-engine/server"
+import { evaluateAxEngineCapability } from "../../../src/provider/ax-engine/status"
+import { modelSelectableForProvider } from "../../../src/provider/model-selectability"
 
 const managed = "http://127.0.0.1:31418/v1"
 
@@ -131,6 +133,60 @@ describe("ax-engine transport isolation", () => {
 })
 
 describe("ax-engine probe contracts", () => {
+  test.each(["input", "output"])("requires text %s during attach and model resolution", async (modality) => {
+    const id = "local-model"
+    const payload = {
+      data: [{ id, limit: { context: 65_536 }, capabilities: { toolcall: true, [modality]: { text: false } } }],
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(payload)),
+    )
+    const configured = provider(managed)
+    const loader = await axEngineLoader()(configured)
+    const models = await loader.discoverModels!(configured)
+    const sdk = { languageModel: vi.fn() }
+
+    await expect(loader.getModel!(sdk, id)).rejects.toThrow("AX_ENGINE_TOOLCALL_UNSUPPORTED")
+    expect(sdk.languageModel).not.toHaveBeenCalled()
+    await expect(probeAxEngineConnection({ baseURL: managed })).rejects.toThrow("AX_ENGINE_TOOLCALL_UNSUPPORTED")
+    expect(evaluateAxEngineCapability(parseAxEngineModelContracts(payload)).toolcall).toBe(false)
+    expect(modelSelectableForProvider(configured.id, models[id])).toBe(false)
+  })
+
+  test("keeps a legacy coding model available beside an invalid card", async () => {
+    const payload = {
+      data: [
+        { id: "invalid-card", capabilities: { toolcall: "true" } },
+        { id: "image-only", capabilities: { toolcall: true, attachment: true, output: { text: false } } },
+        { id: "legacy-chat", capabilities: { toolcall: true } },
+      ],
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(payload)),
+    )
+    const probe = await probeAxEngineConnection({ baseURL: managed })
+    expect(probe.models.map((model) => model.id)).toEqual(["image-only", "legacy-chat"])
+    expect(evaluateAxEngineCapability(probe.models)).toMatchObject({ toolcall: true, attachment: false })
+    expect(evaluateAxEngineCapability(probe.models, ["image-only"]).toolcall).toBe(false)
+  })
+
+  test("applies the live contract to catalog models behind an attached server", async () => {
+    const id = AX_ENGINE_DEFAULT_MODEL_ID
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ data: [{ id, capabilities: { toolcall: false } }] })),
+    )
+    const configured = provider(managed)
+    const loader = await axEngineLoader()(configured)
+    const model = (await loader.discoverModels!(configured))[id]
+    expect(model.options.axEngineCandidate).not.toBe(true)
+    expect(
+      modelSelectableForProvider(configured.id, { ...model, options: { ...model.options, minMemoryBytes: 0 } }),
+    ).toBe(false)
+  })
+
   test("model resolution forwards caller cancellation to the live contract probe", async () => {
     const controller = new AbortController()
     let requestSignal: AbortSignal | null | undefined

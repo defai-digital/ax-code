@@ -14,7 +14,7 @@ import {
 import { axEngineConnectionShadowWarnings } from "./connection"
 import { resolveAxEngineMtpPolicy } from "./mtp"
 import { toErrorMessage } from "../../util/error-message"
-import { parseAxEngineModelContracts } from "./model-card"
+import { fetchAxEngineModelContracts, supportsAxEngineCoding, type AxEngineLiveModelContract } from "./model-card"
 import {
   AX_CODE_LOCAL_ENGINE_BACKEND,
   mapAxEngineStatusToLifecycle,
@@ -59,22 +59,18 @@ export type AxEngineRuntimeOptions = {
   [key: string]: unknown
 }
 
-export function evaluateAxEngineCapabilityFromModels(
-  payload: unknown,
+export function evaluateAxEngineCapability(
+  contracts: readonly AxEngineLiveModelContract[],
   preferredModelIDs: string[] = [],
 ): AxEngineCapabilityStatus {
-  const contracts = parseAxEngineModelContracts(payload)
   const preferred = preferredModelIDs.map((id) => id.trim()).filter(Boolean)
+  // An active model's card takes precedence. If it is missing, report a model
+  // that can run the coding agent before falling back to the first card.
   const model =
-    preferred.length > 0
-      ? (contracts.find((contract) => preferred.includes(contract.id)) ??
-        // Prefer any card that advertises tool calling when the active id is
-        // missing from the list — better than treating the first non-toolcall
-        // card as authoritative after a multi-model / model-switch response.
-        contracts.find((contract) => contract.toolcall) ??
-        contracts[0])
-      : (contracts.find((contract) => contract.toolcall) ?? contracts[0])
-  const toolcall = model?.toolcall ?? false
+    contracts.find((contract) => preferred.includes(contract.id)) ??
+    contracts.find((contract) => supportsAxEngineCoding(contract)) ??
+    contracts[0]
+  const toolcall = model ? supportsAxEngineCoding(model) : false
   const attachment = model?.attachment ?? false
 
   return {
@@ -82,7 +78,7 @@ export function evaluateAxEngineCapabilityFromModels(
     attachment,
     reason: toolcall
       ? undefined
-      : `${AX_ENGINE_ERROR.ToolcallUnsupported}: ax-engine server does not advertise OpenAI structured tool calling`,
+      : `${AX_ENGINE_ERROR.ToolcallUnsupported}: ax-engine server does not advertise OpenAI structured tool calling with text input and output`,
   }
 }
 
@@ -103,20 +99,11 @@ async function getCapabilityStatus(
   }
 
   try {
-    const baseURL = server.state.baseURL.replace(/\/+$/, "")
-    const response = await fetch(`${baseURL}/models`, {
-      signal: AbortSignal.timeout(2000),
-      headers: { authorization: `Bearer ${apiKey}` },
-      redirect: "error",
-    })
-    if (!response.ok) {
-      await response.body?.cancel()
-      throw new Error(`HTTP ${response.status}`)
-    }
+    const contracts = await fetchAxEngineModelContracts({ baseURL: server.state.baseURL, apiKey })
     const preferred = [server.state.apiModelID, server.state.modelID].filter(
       (id): id is string => typeof id === "string" && id.length > 0,
     )
-    return evaluateAxEngineCapabilityFromModels(await response.json(), preferred)
+    return evaluateAxEngineCapability(contracts, preferred)
   } catch (error) {
     return {
       toolcall: false,

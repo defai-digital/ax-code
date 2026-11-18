@@ -38,7 +38,8 @@ import {
   commandLooksLikeAxEngineServer,
   evaluateDiskStatus,
   evaluateAxEngineModelFit,
-  evaluateAxEngineCapabilityFromModels,
+  evaluateAxEngineCapability,
+  parseAxEngineModelContracts,
   evaluatePlatformEligibility,
   formatAxEngineCapabilityInspectionFailureReason,
   ensureServer,
@@ -2124,6 +2125,42 @@ describe("ax-engine provider integration", () => {
     expect(requested).toEqual(["qwen3"])
   })
 
+  test("attached discovery lists live models and explicitly configured aliases", async () => {
+    const endpoint = "http://127.0.0.1:31418/v1"
+    const fetch = globalThis.fetch
+    globalThis.fetch = async (input, init) => {
+      if (String(input) !== `${endpoint}/models`) return fetch(input, init)
+      return Response.json({ data: [liveCard("attached-chat", { limit: { context: 65_536, output: 8_192 } })] })
+    }
+    await using tmp = await tmpdir()
+    vi.stubEnv(
+      "AX_CODE_CONFIG_CONTENT",
+      JSON.stringify({
+        enabled_providers: [AX_ENGINE_PROVIDER_ID],
+        provider: {
+          [AX_ENGINE_PROVIDER_ID]: {
+            options: { connectionMode: "attach", baseURL: endpoint },
+            models: { "my-alias": { id: "attached-chat", tool_call: true } },
+          },
+        },
+      }),
+    )
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await Provider.ready()
+          const provider = (await Provider.list())[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
+          expect(provider.options.connectionMode).toBe("attach")
+          expect(Object.keys(provider.models).sort()).toEqual(["attached-chat", "my-alias"])
+          expect(provider.models[ModelID.make("my-alias")].api.id).toBe("attached-chat")
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   test("does not replace an unreachable attached endpoint with managed catalog models", async () => {
     const provider = {
       id: AX_ENGINE_PROVIDER_ID,
@@ -2367,6 +2404,10 @@ describe("ax-engine provider integration", () => {
 })
 
 describe("ax-engine doctor status", () => {
+  function evaluateAxEngineCapabilityFromModels(payload: unknown, preferredModelIDs?: string[]) {
+    return evaluateAxEngineCapability(parseAxEngineModelContracts(payload), preferredModelIDs)
+  }
+
   test("reads tool-call capability from ax-engine model metadata", () => {
     expect(
       evaluateAxEngineCapabilityFromModels({

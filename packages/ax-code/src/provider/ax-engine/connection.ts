@@ -6,7 +6,7 @@ import {
   noteAxEngineOnce,
   resolveAxEngineApiKey,
 } from "./constants"
-import { fetchAxEngineModelContracts, type AxEngineLiveModelContract } from "./model-card"
+import { fetchAxEngineModelContracts, supportsAxEngineCoding, type AxEngineLiveModelContract } from "./model-card"
 
 export const AX_ENGINE_CONNECTION_MODES = ["managed", "attach"] as const
 export type AxEngineConnectMode = (typeof AX_ENGINE_CONNECTION_MODES)[number]
@@ -158,9 +158,9 @@ export async function probeAxEngineConnection(input: {
     signal: input.signal,
     timeoutMs: 5_000,
   })
-  if (!models.some((model) => model.toolcall)) {
+  if (!models.some((model) => supportsAxEngineCoding(model))) {
     throw new Error(
-      `${AX_ENGINE_ERROR.ToolcallUnsupported}: attached ax-engine server has no model with OpenAI structured tool calling`,
+      `${AX_ENGINE_ERROR.ToolcallUnsupported}: attached ax-engine server has no model with OpenAI structured tool calling and text input and output`,
     )
   }
   return {
