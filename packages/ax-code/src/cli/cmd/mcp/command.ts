@@ -6,10 +6,7 @@ import type { Config } from "../../../config/config"
 import { Installation } from "../../../installation"
 import path from "path"
 import { Global } from "../../../global"
-import { modify, applyEdits, parse as parseJsonc, type ParseError } from "jsonc-parser"
 import { Filesystem } from "../../../util/filesystem"
-import { FileLock } from "../../../util/filelock"
-import { Lock } from "../../../util/lock"
 import { isRecord } from "../../../util/record"
 
 async function loadMcp() {
@@ -745,49 +742,6 @@ async function resolveConfigPath(baseDir: string, global = false) {
   return candidates[1]!
 }
 
-async function addMcpToConfig(name: string, mcpConfig: McpConfig, configPath: string) {
-  using _process = await Lock.write(configPath)
-  using _crossProcess = await FileLock.acquire(configPath)
-  let text = "{}"
-  if (await Filesystem.exists(configPath)) {
-    text = await Filesystem.readText(configPath)
-  }
-
-  // Use jsonc-parser to modify while preserving comments
-  const edits = modify(text, ["mcp", name], mcpConfig, {
-    formattingOptions: { tabSize: 2, insertSpaces: true },
-  })
-  const result = applyEdits(text, edits)
-
-  await Filesystem.write(configPath, result)
-
-  return configPath
-}
-
-function hasMcpName(text: string, name: string, configPath: string): boolean {
-  const errors: ParseError[] = []
-  const parsed = parseJsonc(text, errors, { allowTrailingComma: true })
-  if (errors.length > 0 || !isRecord(parsed)) throw new Error(`Invalid config file: ${configPath}`)
-  return isRecord(parsed.mcp) && Object.hasOwn(parsed.mcp, name)
-}
-
-async function removeMcpFromConfig(name: string, configPath: string) {
-  using _process = await Lock.write(configPath)
-  using _crossProcess = await FileLock.acquire(configPath)
-  if (!(await Filesystem.exists(configPath))) {
-    throw new Error(`Config file not found: ${configPath}`)
-  }
-  const text = await Filesystem.readText(configPath)
-  if (!hasMcpName(text, name, configPath)) {
-    throw new Error(`MCP server "${name}" is not configured in ${configPath}`)
-  }
-  const edits = modify(text, ["mcp", name], undefined, {
-    formattingOptions: { tabSize: 2, insertSpaces: true },
-  })
-  await Filesystem.write(configPath, applyEdits(text, edits))
-  return configPath
-}
-
 export const McpRemoveCommand = cmd({
   command: "remove <name>",
   aliases: ["rm"],
@@ -811,6 +765,7 @@ export const McpRemoveCommand = cmd({
       }),
   async handler(args) {
     const { Instance } = await loadMcp()
+    const { hasMcpName, removeMcpFromConfig } = await import("../../../config/mcp-file")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -867,6 +822,7 @@ export const McpAddCommand = cmd({
   describe: "add an MCP server",
   async handler() {
     const { Instance } = await loadMcp()
+    const { addMcpToConfig } = await import("../../../config/mcp-file")
     const McpTemplates = await import("../../../mcp/templates")
     await Instance.provide({
       directory: process.cwd(),

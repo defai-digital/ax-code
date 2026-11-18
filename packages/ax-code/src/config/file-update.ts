@@ -1,8 +1,6 @@
-import { FileLock } from "../util/filelock"
-import { Filesystem } from "../util/filesystem"
-import { Lock } from "../util/lock"
 import { ConfigPaths } from "./paths"
 import { Info } from "./schema"
+import { transactConfigFile, type ConfigFileEditOptions } from "./file-transaction"
 
 /** Validate raw JSONC without evaluating environment or file references. */
 export function parseConfig(text: string, filepath: string): Info {
@@ -12,17 +10,15 @@ export function parseConfig(text: string, filepath: string): Info {
   throw new ConfigPaths.InvalidError({ path: filepath, issues: parsed.error.issues })
 }
 
-type EditOptions = { skipUnchanged?: boolean }
-
 export function editConfigFile(
   filepath: string,
   edit: (before: string | undefined) => string,
-  options?: EditOptions,
+  options?: ConfigFileEditOptions,
 ): Promise<Info>
 export function editConfigFile(
   filepath: string,
   edit: (before: string | undefined) => string | undefined,
-  options?: EditOptions,
+  options?: ConfigFileEditOptions,
 ): Promise<Info | undefined>
 /**
  * Serialize raw JSONC edits and validate before writing. Returning undefined
@@ -32,14 +28,15 @@ export function editConfigFile(
 export async function editConfigFile(
   filepath: string,
   edit: (before: string | undefined) => string | undefined,
-  options: EditOptions = {},
+  options: ConfigFileEditOptions = {},
 ): Promise<Info | undefined> {
-  using _inProcess = await Lock.write(filepath)
-  using _crossProcess = await FileLock.acquire(filepath)
-  const before = await ConfigPaths.readFile(filepath)
-  const updated = edit(before)
-  if (updated === undefined) return
-  const config = parseConfig(updated, filepath)
-  if (!options.skipUnchanged || updated !== before) await Filesystem.write(filepath, updated)
-  return config
+  return transactConfigFile(
+    filepath,
+    (before) => {
+      const updated = edit(before)
+      if (updated === undefined) return
+      return { text: updated, value: parseConfig(updated, filepath) }
+    },
+    options,
+  )
 }
