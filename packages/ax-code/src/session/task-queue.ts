@@ -913,6 +913,9 @@ export namespace TaskQueue {
       const pending = entries.filter((entry) => entry.status === "pending")
       const existing = pending.filter((entry) => entry.text === input.text).sort((a, b) => a.time - b.time)[0]
       if (existing) return { item: current, entry: existing, claimed: false }
+      if (entries.some((entry) => entry.messageID === input.messageID || entry.partID === input.partID)) {
+        throw new HTTPException(409, { message: "Follow-up delivery ids are already reserved." })
+      }
       if (pending.length >= MAX_CONTROL_DELIVERIES) {
         throw new HTTPException(409, {
           message: "Too many unfinished follow-up deliveries for this task. Retry an existing follow-up first.",

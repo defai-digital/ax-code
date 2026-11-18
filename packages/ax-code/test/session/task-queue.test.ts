@@ -3327,6 +3327,21 @@ describe("TaskQueue payload write atomicity", () => {
         })
         expect(retry.claimed).toBe(false)
         expect(retry.entry?.messageID).toBe(a.entry.messageID)
+
+        for (const ids of [
+          { messageID: a.entry.messageID, partID: PartID.ascending() },
+          { messageID: MessageID.ascending(), partID: a.entry.partID },
+        ]) {
+          await expect(
+            TaskQueue.claimControlDelivery({
+              id: created.id,
+              sessionID: session.id,
+              text: "different follow-up",
+              ...ids,
+            }),
+          ).rejects.toThrow("Follow-up delivery ids are already reserved")
+        }
+        expect(TaskQueue.controlDeliveries(await TaskQueue.get(created.id))).toEqual([a.entry])
       },
     })
   })
