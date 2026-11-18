@@ -4,6 +4,7 @@ import {
   WorkflowFixtureSpecs,
   WorkflowRoutineDisabledError,
   WorkflowRoutineNotFoundError,
+  WorkflowRoutineScheduleError,
   WorkflowRoutineTrigger,
   WorkflowTemplate,
   WorkflowTemplateNotFoundError,
@@ -152,6 +153,46 @@ describe("WorkflowRoutineTrigger", () => {
         await expect(WorkflowRoutineTrigger.run({ route: "workflow/noop-dry-run" })).rejects.toThrow(
           WorkflowRoutineNotFoundError,
         )
+      },
+    })
+  })
+
+  test.each([
+    { name: "invalid cron", schedule: "not a cron expression" },
+    { name: "invalid timezone", timezone: "Mars/Olympus" },
+    { name: "oversized cron", schedule: `${"1,".repeat(61)}1 9 * * *` },
+  ])("rejects $name before writing the routine or its task", async ({ name: _, ...invalid }) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ScheduledTask } = await import("../../src/session/scheduled-task")
+        const input = {
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          trust: "trusted",
+          mode: "scheduled",
+          schedule: "0 9 * * *",
+          timezone: "America/Toronto",
+          enabled: true,
+        } as const
+        const id = "project:noop-dry-run"
+        await expect(WorkflowRoutineTrigger.create({ ...input, ...invalid })).rejects.toThrow(
+          WorkflowRoutineScheduleError,
+        )
+        await expect(WorkflowTemplate.get(id)).rejects.toThrow(WorkflowTemplateNotFoundError)
+        expect(await ScheduledTask.list()).toEqual([])
+
+        await WorkflowRoutineTrigger.create(input)
+        const template = await WorkflowTemplate.get(id)
+        const tasks = await ScheduledTask.list()
+        expect(tasks).toHaveLength(1)
+
+        await expect(WorkflowRoutineTrigger.create({ ...input, ...invalid })).rejects.toThrow(
+          WorkflowRoutineScheduleError,
+        )
+        expect(await WorkflowTemplate.get(id)).toEqual(template)
+        expect(await ScheduledTask.list()).toEqual(tasks)
       },
     })
   })

@@ -1,6 +1,7 @@
 import z from "zod"
 import { JsonBoolean } from "@/util/schema"
 import { SessionID } from "../session/schema"
+import type { ScheduledTask } from "../session/scheduled-task"
 import { WorkflowScheduler } from "./scheduler"
 import { WorkflowInputValues, WorkflowModelPolicyOverride } from "./spec"
 import { WorkflowTemplate, WorkflowTemplateRemovalError } from "./template"
@@ -120,6 +121,7 @@ export namespace WorkflowRoutineTrigger {
     const parsed = CreateInput.parse(input)
     const template = await WorkflowTemplate.get(parsed.templateID)
     const route = parsed.route ?? `workflow/${template.spec.id}`
+    const schedule = await validateRoutineSchedule(parsed, route)
     const securityGate = parsed.mode === "webhook" ? "required" : "local-only"
     const saved = await WorkflowTemplate.save({
       scope: parsed.scope,
@@ -139,13 +141,7 @@ export namespace WorkflowRoutineTrigger {
         },
       },
     })
-    const scheduledTask = await maybeSyncScheduledTask({
-      template: saved,
-      route,
-      schedule: parsed.schedule,
-      timezone: parsed.timezone,
-      enabled: parsed.enabled,
-    })
+    const scheduledTask = schedule ? await syncScheduledTask(saved, route, schedule) : undefined
     const routine = routineInfo(saved, scheduledTask)
     if (!routine) throw new WorkflowRoutineNotFoundError(route)
     return routine
@@ -276,48 +272,47 @@ export namespace WorkflowRoutineTrigger {
     lastWorkflowRunID?: string
   }
 
-  async function maybeSyncScheduledTask(input: {
-    template: WorkflowTemplate.Info
-    route: string
-    schedule?: string
-    timezone?: string
-    enabled: boolean
-  }): Promise<ScheduledTaskInfo | undefined> {
-    if (input.template.spec.routine?.mode !== "scheduled") return undefined
+  async function validateRoutineSchedule(
+    input: z.output<typeof CreateInput>,
+    route: string,
+  ): Promise<ScheduledTask.Schedule | undefined> {
+    if (input.mode !== "scheduled") return undefined
     const { ScheduledTask } = await import("../session/scheduled-task")
-    const schedule = ScheduledTask.Schedule.parse({
+    const parsed = ScheduledTask.Schedule.safeParse({
       type: "cron",
       expression: input.schedule,
       timezone: input.timezone,
     })
-    if (ScheduledTask.nextRunAt(schedule) === undefined) throw new WorkflowRoutineScheduleError(input.route)
-    const active = input.enabled && input.template.trust === "trusted"
-    const existing = (await ScheduledTask.list()).find((task) => task.workflowTemplateID === input.template.id)
-    if (existing) {
-      return ScheduledTask.update({
-        id: existing.id,
-        title: `Workflow: ${input.template.name}`,
-        prompt: `Run scheduled workflow routine ${input.route}.`,
-        schedule,
-        status: active ? "active" : "paused",
-        workflowTemplateID: input.template.id,
-        workflowStartOptions: {
-          durableChildren: true,
-          enqueueChildren: true,
-        },
-      })
+    if (!parsed.success) throw new WorkflowRoutineScheduleError(route, parsed.error.issues[0]?.message)
+    try {
+      ScheduledTask.validateSchedule(parsed.data)
+    } catch (error) {
+      if (!ScheduledTask.InvalidSchedule.isInstance(error)) throw error
+      throw new WorkflowRoutineScheduleError(route, error.data.message)
     }
-    if (!active) return undefined
-    return ScheduledTask.create({
-      title: `Workflow: ${input.template.name}`,
-      prompt: `Run scheduled workflow routine ${input.route}.`,
+    return parsed.data
+  }
+
+  async function syncScheduledTask(
+    template: WorkflowTemplate.Info,
+    route: string,
+    schedule: ScheduledTask.Schedule,
+  ): Promise<ScheduledTaskInfo | undefined> {
+    const { ScheduledTask } = await import("../session/scheduled-task")
+    const active = template.spec.routine?.enabled === true && template.trust === "trusted"
+    const existing = (await ScheduledTask.list()).find((task) => task.workflowTemplateID === template.id)
+    const input = {
+      title: `Workflow: ${template.name}`,
+      prompt: `Run scheduled workflow routine ${route}.`,
       schedule,
-      workflowTemplateID: input.template.id,
+      workflowTemplateID: template.id,
       workflowStartOptions: {
         durableChildren: true,
         enqueueChildren: true,
       },
-    })
+    }
+    if (existing) return ScheduledTask.update({ ...input, id: existing.id, status: active ? "active" : "paused" })
+    if (active) return ScheduledTask.create(input)
   }
 
   async function scheduledTasksByTemplateID(): Promise<Map<WorkflowTemplate.ID, ScheduledTaskInfo>> {
@@ -347,8 +342,8 @@ export class WorkflowRoutineDisabledError extends Error {
 }
 
 export class WorkflowRoutineScheduleError extends Error {
-  constructor(route: string) {
-    super(`Workflow routine schedule cannot produce a next run time: ${route}`)
+  constructor(route: string, reason?: string) {
+    super(`Workflow routine schedule cannot produce a next run time: ${route}${reason ? `. ${reason}` : ""}`)
     this.name = "WorkflowRoutineScheduleError"
   }
 }
