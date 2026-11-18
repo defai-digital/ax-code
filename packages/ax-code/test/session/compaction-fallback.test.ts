@@ -1,3 +1,4 @@
+import { setImmediate } from "node:timers/promises"
 import { Config } from "../../src/config/config"
 import { describe, expect, test, vi } from "vitest"
 import { NamedError } from "@ax-code/util/error"
@@ -299,6 +300,58 @@ describe("session.compaction model fallback (C9)", () => {
           expect(result).toBe("stop")
           expect(processor.models).toEqual([{ providerID: "test", modelID: "test-model" }])
           expect(getModel).not.toHaveBeenCalledWith("test", "second")
+        } finally {
+          processor.spy.mockRestore()
+          getModel.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("stops compaction while fallback discovery is still pending", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const abort = new AbortController()
+        const started = Promise.withResolvers<void>()
+        const discovery = Promise.withResolvers<Provider.Model>()
+        const primary = createModel({ providerID: "test", modelID: "test-model" })
+        const next = createModel({ providerID: "test", modelID: "second" })
+        const config = await Config.get()
+        config.llm_routing = { fallback: [{ providerID: next.providerID, modelID: next.id }] }
+        const getModel = vi.spyOn(Provider, "getModel").mockImplementation(async (providerID, modelID) => {
+          if (providerID === primary.providerID && modelID === primary.id) return primary
+          if (providerID === next.providerID && modelID === next.id) {
+            started.resolve()
+            return discovery.promise
+          }
+          throw new Error(`Unexpected model request ${providerID}/${modelID}`)
+        })
+        const processor = mockProcessor([
+          { type: "fail", error: apiError({ message: "Service Unavailable", statusCode: 503, isRetryable: true }) },
+        ])
+        try {
+          const { session, user } = await seedSession()
+          const result = SessionCompaction.process({
+            parentID: user.id,
+            messages: await Session.messages({ sessionID: session.id }),
+            sessionID: session.id,
+            abort: abort.signal,
+            auto: true,
+          })
+          try {
+            await expect(Promise.race([started.promise, result])).resolves.toBeUndefined()
+            abort.abort()
+            await expect(Promise.race([result, setImmediate("pending")])).resolves.toBe("stop")
+          } finally {
+            discovery.resolve(next)
+            await result
+          }
+          expect(processor.models).toEqual([{ providerID: primary.providerID, modelID: primary.id }])
+          const assistants = await compactionAssistantMessages(session.id)
+          expect(assistants).toHaveLength(1)
+          expect(assistants[0]?.error).toMatchObject({ data: { message: "Service Unavailable" } })
         } finally {
           processor.spy.mockRestore()
           getModel.mockRestore()

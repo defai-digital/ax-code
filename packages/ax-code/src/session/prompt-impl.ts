@@ -2573,6 +2573,7 @@ export namespace SessionPrompt {
         sessionID,
         currentModel: lastUser.model,
         currentEndpoint: model.api.url,
+        abort,
         error: processor.message.error,
         consecutiveErrors,
         fallbackModelOverride,

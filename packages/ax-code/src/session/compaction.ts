@@ -5,6 +5,7 @@ import { Bus } from "@/bus"
 import { Session } from "."
 import { SessionID, MessageID, PartID } from "./schema"
 import { Provider } from "../provider/provider"
+import { waitForSharedModelWork } from "../provider/shared-model-work"
 import { MessageV2 } from "./message-v2"
 import { Todo } from "./todo"
 import z from "zod"
@@ -1108,7 +1109,8 @@ When constructing the summary, try to stick to this template:
           failure.class !== "model_unsupported" &&
           attempt < CompactionFallback.MAX_ATTEMPTS
         ) {
-          const next = await resolveNextRung(model).catch((error: unknown) => {
+          const next = await waitForSharedModelWork(resolveNextRung(model), input.abort).catch((error: unknown) => {
+            if (input.abort.aborted) return undefined
             log.warn("compaction fallback unavailable", {
               sessionID: input.sessionID,
               providerID: model.providerID,

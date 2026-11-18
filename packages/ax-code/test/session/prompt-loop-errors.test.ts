@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
+import { setImmediate } from "node:timers/promises"
 import type { NamedError } from "@ax-code/util/error"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../src/session/prompt/prompt-loop-errors"
@@ -828,6 +829,65 @@ describe("prompt loop error transitions", () => {
       resetCachedModel: false,
     })
   })
+
+  test.each(["local classification", "fallback discovery"] as const)(
+    "stops promptly when cancelled during %s",
+    async (phase) => {
+      const abort = new AbortController()
+      const started = Promise.withResolvers<void>()
+      const discovery = Promise.withResolvers<void>()
+      const warn = vi.fn()
+      const publishError = vi.fn()
+      const findFallback = vi.fn(async () => {
+        started.resolve()
+        await discovery.promise
+        return fallbackModel
+      })
+      const result = resolvePromptLoopErrorTransition(
+        {
+          sessionID: SessionID.descending(),
+          currentModel: primaryModel,
+          abort: abort.signal,
+          error: { name: "APIError", data: { statusCode: 503, message: "Service Unavailable" } },
+          consecutiveErrors: 1,
+          fallbackModelOverride: primaryModel,
+          step: 2,
+        },
+        {
+          handleError: (input) =>
+            handlePromptLoopError(input, {
+              async isLocal() {
+                if (phase === "local classification") {
+                  started.resolve()
+                  await discovery.promise
+                }
+                return false
+              },
+              findFallback,
+              warn,
+              publishError,
+            }),
+        },
+      )
+      try {
+        await expect(Promise.race([started.promise, result])).resolves.toBeUndefined()
+        abort.abort()
+        await expect(Promise.race([result, setImmediate("pending")])).resolves.toEqual({
+          action: "stop",
+          reason: "aborted",
+          consecutiveErrors: 1,
+          fallbackModelOverride: primaryModel,
+          resetCachedModel: false,
+        })
+      } finally {
+        discovery.resolve()
+        await result
+      }
+      expect(findFallback).toHaveBeenCalledTimes(phase === "local classification" ? 0 : 1)
+      expect(warn).not.toHaveBeenCalled()
+      expect(publishError).not.toHaveBeenCalled()
+    },
+  )
 
   test("clears fallback override when no fallback was active", async () => {
     const transition = await resolvePromptLoopErrorTransition({

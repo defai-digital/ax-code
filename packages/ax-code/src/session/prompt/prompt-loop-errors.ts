@@ -1,5 +1,6 @@
 import { providerFailureIsPermanent } from "./prompt-loop-decisions"
 import { MAX_CONSECUTIVE_ERRORS } from "@/constants/session"
+import { waitForSharedModelWork } from "@/provider/shared-model-work"
 import { Log } from "../../util/log"
 import { Session } from ".."
 import { MessageV2 } from "../message-v2"
@@ -177,6 +178,7 @@ export async function handlePromptLoopError(
     sessionID: SessionID
     currentModel: MessageV2.User["model"]
     currentEndpoint?: string
+    abort?: AbortSignal
     error: unknown
     consecutiveErrors: number
     step: number
@@ -292,7 +294,13 @@ export async function handlePromptLoopError(
     // chose local inference to keep prompts and code on this machine, so
     // silently retrying against a remote provider would leak their data.
     // Same-target processor retries have already run; local recovery stops here.
-    if (await (deps.isLocal ?? isLocalRecoveryProvider)(input.currentModel.providerID, input.currentEndpoint)) {
+    input.abort?.throwIfAborted()
+    const local = await waitForSharedModelWork(
+      (deps.isLocal ?? isLocalRecoveryProvider)(input.currentModel.providerID, input.currentEndpoint),
+      input.abort,
+    )
+    input.abort?.throwIfAborted()
+    if (local) {
       if (fallbackLookup.stopWithoutFallback) {
         const reason = fallbackLookup.errorMessage?.trim() || "unknown error"
         const punctuation = /[.!?]$/.test(reason) ? "" : "."
@@ -324,7 +332,11 @@ export async function handlePromptLoopError(
       const pendingFallback =
         deps.findFallback?.(input.currentModel, input.fallbackOptions) ??
         resolveFallbackModel(input.currentModel, input.fallbackOptions).then((resolution) => resolution?.target)
-      const fallback = await pendingFallback.catch(() => undefined)
+      const fallback = await waitForSharedModelWork(
+        pendingFallback.catch(() => undefined),
+        input.abort,
+      )
+      input.abort?.throwIfAborted()
       if (fallback) {
         const fallbackSwitch = providerFallbackSwitchState({
           current: input.currentModel,
@@ -438,6 +450,7 @@ export async function resolvePromptLoopErrorTransition(
     sessionID: SessionID
     currentModel: MessageV2.User["model"]
     currentEndpoint?: string
+    abort?: AbortSignal
     error: unknown
     consecutiveErrors: number
     fallbackModelOverride: MessageV2.User["model"] | undefined
@@ -465,28 +478,32 @@ export async function resolvePromptLoopErrorTransition(
   // (observed 2026-08-29: a cancelled goal plan writer turn logged
   // CONSECUTIVE_ERROR + "backing off before outer prompt retry" and only
   // the abort-aware retry sleep kept it from re-entering the loop).
-  if (MessageV2.AbortedError.isInstance(input.error)) {
-    return {
-      action: "stop",
-      reason: "aborted",
-      consecutiveErrors: input.consecutiveErrors,
-      fallbackModelOverride: input.fallbackModelOverride,
-      resetCachedModel: false,
-    }
-  }
+  const stopAborted = (): PromptLoopErrorTransition => ({
+    action: "stop",
+    reason: "aborted",
+    consecutiveErrors: input.consecutiveErrors,
+    fallbackModelOverride: input.fallbackModelOverride,
+    resetCachedModel: false,
+  })
+  if (input.abort?.aborted || MessageV2.AbortedError.isInstance(input.error)) return stopAborted()
 
   const errorResult = await (deps.handleError ?? handlePromptLoopError)({
     sessionID: input.sessionID,
     currentModel: input.currentModel,
     currentEndpoint: input.currentEndpoint,
+    abort: input.abort,
     error: input.error,
     consecutiveErrors: input.consecutiveErrors + 1,
     step: input.step,
     fallbackOptions: input.fallbackOptions,
     recoverySafe: input.recoverySafe,
     maxConsecutiveErrors: input.maxConsecutiveErrors,
+  }).catch((error: unknown) => {
+    if (!input.abort?.aborted || !Object.is(error, input.abort.reason)) throw error
+    return undefined
   })
 
+  if (!errorResult || input.abort?.aborted) return stopAborted()
   if (errorResult.action === "fallback") {
     return {
       action: "retry",
