@@ -664,37 +664,41 @@ export namespace ScheduledTask {
 
   export async function remove(id: ScheduledTaskID): Promise<boolean> {
     const task = await get(id)
-    // Deleting must also stop the in-flight run: without an interrupt the
-    // executing queue item or workflow would keep running after the task is
-    // gone, and its outcome would be discarded against a deleted task.
-    const openRun = SessionShard.storeForProject(Instance.project.id).use((db) => {
-      const row = db
-        .select({ queueID: ScheduledTaskRunTable.queue_id, workflowRunID: ScheduledTaskRunTable.workflow_run_id })
-        .from(ScheduledTaskRunTable)
-        .where(and(eq(ScheduledTaskRunTable.task_id, id), eq(ScheduledTaskRunTable.status, "running")))
-        .get()
-      return row
-    })
-    if (openRun?.queueID) {
-      await TaskQueue.stop(TaskQueueID.make(openRun.queueID)).catch((error) => {
-        log.warn("scheduled task in-flight run stop failed during delete", { taskID: id, error: toErrorMessage(error) })
-      })
-    } else if (openRun?.workflowRunID) {
-      // Workflow-backed runs carry no queue id. Without this branch their
-      // workflow (and its children) keeps executing after the task is gone.
-      const { WorkflowScheduler } = await import("@/workflow/scheduler")
-      await WorkflowScheduler.cancel(openRun.workflowRunID as WorkflowRunID).catch((error) => {
-        log.warn("scheduled task in-flight workflow cancel failed during delete", {
-          taskID: id,
-          workflowRunID: openRun.workflowRunID,
-          error: toErrorMessage(error),
-        })
+    const projectID = task.projectID
+    const dispatches = SessionShard.storeForProject(projectID).use((db) => readLiveDispatches(db, task))
+    for (const queueID of dispatches.queueIDs) {
+      await TaskQueue.stop(TaskQueueID.make(queueID)).catch((error) => {
+        log.warn("scheduled task in-flight run stop failed during delete", { taskID: id, queueID, error })
       })
     }
-    SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    if (dispatches.workflowRunIDs.length > 0) {
+      const { WorkflowScheduler } = await import("@/workflow/scheduler")
+      for (const workflowRunID of dispatches.workflowRunIDs) {
+        await WorkflowScheduler.cancel(workflowRunID as WorkflowRunID).catch((error) => {
+          log.warn("scheduled task in-flight workflow cancel failed during delete", {
+            taskID: id,
+            workflowRunID,
+            error,
+          })
+        })
+      }
+    }
+    const deleted = SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
+      const row = db.select().from(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, id)).get()
+      if (!row) return undefined
+      const current = fromRow(row)
+      assertProjectTask(current)
+      // The stop can race an outcome, a retry, or a new dispatch. Check the
+      // actual carriers atomically with deletion, under the same write lock
+      // used to claim a run.
+      const live = readLiveDispatches(db, current)
+      if (live.queueIDs.length > 0 || live.workflowRunIDs.length > 0) {
+        throw new HTTPException(409, { message: `Cannot delete scheduled task ${id} while a run is active.` })
+      }
       db.delete(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, id)).run()
+      return current
     })
-    publishDeleted(task)
+    if (deleted) publishDeleted(deleted)
     return true
   }
 
@@ -1194,16 +1198,9 @@ export namespace ScheduledTask {
     return SessionShard.storeForProject(Instance.project.id).use((db) => hasOpenRunIn(db, taskID, now, deadlineMs))
   }
 
-  // Transaction-local variant. Callers that insert a new `running` row must run
-  // this authoritative check inside the SAME synchronous transaction as the
-  // insert: the standalone hasOpenRun read can be overtaken by a concurrent
-  // claim across an await boundary (check-then-act), which let a manual
-  // run-now and a scheduler tick double-fire the same occurrence.
-  function hasOpenRunIn(db: Database.TxOrDb, taskID: ScheduledTaskID, now: number, deadlineMs: number): boolean {
-    const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
-    const rows = db
+  function readOpenRuns(db: Database.TxOrDb, taskID: ScheduledTaskID) {
+    return db
       .select({
-        id: ScheduledTaskRunTable.id,
         timeStarted: ScheduledTaskRunTable.time_started,
         queueID: ScheduledTaskRunTable.queue_id,
         workflowRunID: ScheduledTaskRunTable.workflow_run_id,
@@ -1211,7 +1208,32 @@ export namespace ScheduledTask {
       .from(ScheduledTaskRunTable)
       .where(and(eq(ScheduledTaskRunTable.task_id, taskID), eq(ScheduledTaskRunTable.status, "running")))
       .all()
-    for (const row of rows) {
+  }
+
+  function readLiveDispatches(
+    db: Database.TxOrDb,
+    task: Pick<Info, "id" | "lastQueueID" | "lastWorkflowRunID">,
+  ): { queueIDs: string[]; workflowRunIDs: string[] } {
+    const runs = readOpenRuns(db, task.id)
+    // The last dispatch can be retried even after its history row has
+    // recorded a terminal outcome.
+    const queueIDs = new Set([task.lastQueueID, ...runs.map((run) => run.queueID)])
+    const workflowRunIDs = new Set([task.lastWorkflowRunID, ...runs.map((run) => run.workflowRunID)])
+    return {
+      queueIDs: [...queueIDs].filter((id): id is string => !!id && isTaskQueueRunLive(db, id)),
+      workflowRunIDs: [...workflowRunIDs].filter(
+        (id): id is string => !!id && isWorkflowRunLive(db, id, { includeQueued: true }),
+      ),
+    }
+  }
+
+  // Transaction-local variant. Callers that insert a new `running` row must run
+  // this authoritative check inside the SAME synchronous transaction as the
+  // insert: the standalone hasOpenRun read can be overtaken by a concurrent
+  // claim across an await boundary (check-then-act).
+  function hasOpenRunIn(db: Database.TxOrDb, taskID: ScheduledTaskID, now: number, deadlineMs: number): boolean {
+    const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
+    for (const row of readOpenRuns(db, taskID)) {
       if (row.timeStarted !== null && row.timeStarted > staleBefore) return true
       // The execution deadline starts when the queue executor claims an item,
       // not when the scheduler enqueues it. A stale run can therefore still
@@ -1233,7 +1255,11 @@ export namespace ScheduledTask {
   // genuine orphan; a `queued` run stale past deadline+grace is abandoned too
   // (the scheduler never started it — restart recovery only sweeps running
   // runs), so it must not hold the task's overlap lock forever.
-  function isWorkflowRunLive(db: Database.TxOrDb, workflowRunID: string): boolean {
+  function isWorkflowRunLive(
+    db: Database.TxOrDb,
+    workflowRunID: string,
+    options: { includeQueued?: boolean } = {},
+  ): boolean {
     const workflowRun = db
       .select({ status: WorkflowRunTable.status })
       .from(WorkflowRunTable)
@@ -1241,7 +1267,10 @@ export namespace ScheduledTask {
       .get()
     return (
       workflowRun !== undefined &&
-      (workflowRun.status === "running" || workflowRun.status === "blocked" || workflowRun.status === "paused")
+      (workflowRun.status === "running" ||
+        workflowRun.status === "blocked" ||
+        workflowRun.status === "paused" ||
+        (options.includeQueued === true && workflowRun.status === "queued"))
     )
   }
 
@@ -1253,7 +1282,7 @@ export namespace ScheduledTask {
       .where(eq(TaskQueueTable.id, queueID as TaskQueueID))
       .get()
     const status = TaskQueue.Status.safeParse(row?.status)
-    return status.success && !["failed", "completed", "cancelled"].includes(status.data)
+    return status.success && !TaskQueue.isTerminalStatus(status.data)
   }
 
   function reconcileOrphanRuns(taskID: ScheduledTaskID, now: number, deadlineMs: number): number {

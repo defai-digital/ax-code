@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
@@ -109,6 +111,104 @@ describe("ScheduledTask run-now overlap protection", () => {
 
         await expect(ScheduledTask.get(task.id)).rejects.toThrow()
         expect((await TaskQueue.get(queueItem!.id)).status).toBe("cancelled")
+      },
+    })
+  })
+
+  test.each(["open", "settled"] as const)(
+    "delete retains the schedule when a retry replaces its attempt and history is %s",
+    async (history) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const task = await ScheduledTask.create({
+            title: "Retried automation",
+            prompt: "Run the scheduled fixture.",
+            schedule: { type: "cron", expression: "* * * * *" },
+          })
+          const { queueItem } = await ScheduledTask.runNow(task.id)
+          if (!queueItem) throw new Error("Expected a queued automation")
+          const claim = await TaskQueue.claimForExecution(queueItem.id)
+          if (claim.kind !== "claimed") throw new Error("Expected the automation to start")
+          const session = await Session.create({})
+          await TaskQueue.attachSession(claim.attempt, session.id)
+          vi.spyOn(SessionPrompt, "cancel").mockImplementationOnce(async () => {
+            await TaskQueue.finishExecution(claim.attempt, { status: "failed" })
+            if (history === "settled") {
+              await ScheduledTask.recordQueueOutcome(task.id, "failed", "Original attempt settled.", queueItem.id)
+            }
+            await TaskQueue.retry(queueItem.id)
+            expect((await TaskQueue.claimForExecution(queueItem.id)).kind).toBe("claimed")
+          })
+
+          await expect(ScheduledTask.remove(task.id)).rejects.toMatchObject({ status: 409 })
+
+          expect(await ScheduledTask.get(task.id)).toMatchObject({ id: task.id })
+          expect(await TaskQueue.get(queueItem.id)).toMatchObject({ status: "running" })
+        },
+      })
+    },
+  )
+
+  test("delete retains the schedule when a new run is admitted while the previous run stops", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const task = await ScheduledTask.create({
+          title: "Concurrently dispatched automation",
+          prompt: "Run the scheduled fixture.",
+          schedule: { type: "cron", expression: "* * * * *" },
+        })
+        const first = await ScheduledTask.runNow(task.id)
+        if (!first.queueItem) throw new Error("Expected a queued automation")
+        const stop = TaskQueue.stop
+        vi.spyOn(TaskQueue, "stop").mockImplementationOnce(async (queueID) => {
+          const stopped = await stop(queueID)
+          await ScheduledTask.recordQueueOutcome(task.id, "failed", "Stopped for test.", queueID)
+          const next = await ScheduledTask.runNow(task.id)
+          expect(next.queueItem?.id).not.toBe(queueID)
+          return stopped
+        })
+
+        await expect(ScheduledTask.remove(task.id)).rejects.toMatchObject({ status: 409 })
+
+        const open = (await ScheduledTask.listRuns({ taskID: task.id })).filter((run) => run.status === "running")
+        expect(open).toHaveLength(1)
+        expect(open[0]?.queueID).not.toBe(first.queueItem.id)
+      },
+    })
+  })
+
+  test("delete retains the schedule if a claimed workflow cannot be cancelled before dispatch", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+        try {
+          vi.spyOn(WorkflowScheduler, "start").mockImplementation((id) => WorkflowRun.getDetail(id))
+          const task = await ScheduledTask.create({
+            title: "Pending workflow",
+            prompt: "Run the scheduled workflow fixture.",
+            schedule: { type: "cron", expression: "* * * * *" },
+            workflowTemplateID: "builtin:noop-dry-run",
+          })
+          const { workflowRun } = await ScheduledTask.runNow(task.id)
+          if (!workflowRun) throw new Error("Expected a claimed workflow")
+          expect(workflowRun.status).toBe("queued")
+          vi.spyOn(WorkflowScheduler, "cancel").mockRejectedValueOnce(new Error("Stop failed"))
+
+          await expect(ScheduledTask.remove(task.id)).rejects.toMatchObject({ status: 409 })
+
+          expect(await ScheduledTask.get(task.id)).toMatchObject({ id: task.id })
+          expect((await WorkflowRun.get(workflowRun.id)).status).toBe("queued")
+        } finally {
+          vi.unstubAllEnvs()
+        }
       },
     })
   })

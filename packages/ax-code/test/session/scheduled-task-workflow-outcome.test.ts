@@ -4,6 +4,8 @@ import { ScheduledTask } from "../../src/session/scheduled-task"
 import { ScheduledTaskRunID, type ScheduledTaskID } from "../../src/session/schema"
 import { ScheduledTaskRunTable, ScheduledTaskTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
+import { TaskQueue } from "../../src/session/task-queue"
+import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { and, eq } from "../../src/storage/db"
 import { WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
@@ -314,18 +316,50 @@ describe("ScheduledTask workflow outcome recording", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { createRun } = await mockWorkflowDispatch("wfr_delete_cancel")
-        const cancel = vi.spyOn(WorkflowScheduler, "cancel").mockResolvedValue({} as never)
+        vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+        try {
+          vi.spyOn(WorkflowScheduler, "start").mockImplementation(async (id) => {
+            await WorkflowRun.setStatus({ id, status: "running" })
+            return WorkflowRun.getDetail(id)
+          })
+          const task = await createWorkflowTask()
+          const { workflowRun } = await ScheduledTask.runNow(task.id)
+          if (!workflowRun) throw new Error("Expected a claimed workflow")
+          expect(workflowRun.status).toBe("running")
 
-        const task = await createWorkflowTask()
-        await ScheduledTask.runNow(task.id)
-        expect(createRun).toHaveBeenCalledOnce()
+          expect(await ScheduledTask.remove(task.id)).toBe(true)
+          expect((await WorkflowRun.get(workflowRun.id)).status).toBe("cancelled")
+          await expect(ScheduledTask.get(task.id)).rejects.toThrow()
+        } finally {
+          vi.unstubAllEnvs()
+        }
+      },
+    })
+  })
 
-        // Workflow-backed runs carry a workflow_run_id, not a queue_id. The
-        // delete path must cancel the workflow or it keeps executing after the
-        // task row is gone.
-        expect(await ScheduledTask.remove(task.id)).toBe(true)
-        expect(cancel).toHaveBeenCalledWith("wfr_delete_cancel")
+  test("deleting a scheduled dispatch stops both its queue carrier and its linked workflow", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+        try {
+          vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const task = await createWorkflowTask()
+          if (!task.nextRunAt) throw new Error("Expected a due time")
+          const [fired] = await ScheduledTask.runDue(task.nextRunAt + 6 * 60_000)
+          if (!fired?.queueItem) throw new Error("Expected a queued scheduled workflow")
+          const run = await WorkflowTemplate.createRun({ templateID: "builtin:noop-dry-run", sourceTaskID: task.id })
+          await WorkflowRun.setStatus({ id: run.id, status: "running" })
+          await ScheduledTask.recordWorkflowRun(task.id, run.id)
+
+          expect(await ScheduledTask.remove(task.id)).toBe(true)
+
+          expect((await TaskQueue.get(fired.queueItem.id)).status).toBe("cancelled")
+          expect((await WorkflowRun.get(run.id)).status).toBe("cancelled")
+        } finally {
+          vi.unstubAllEnvs()
+        }
       },
     })
   })
