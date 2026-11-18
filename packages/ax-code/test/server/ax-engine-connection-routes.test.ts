@@ -36,13 +36,26 @@ function fixture() {
     },
   }
   const getConfig = vi.spyOn(Config, "get").mockImplementation(async () => config)
-  const updateConfig = vi.spyOn(Config, "updateGlobal").mockImplementation(async (patch) => {
+  const updateConfig = vi.fn(async (patch: Config.Info) => {
     config = { ...config, ...patch }
     return config
+  })
+  vi.spyOn(Config, "updateGlobal").mockImplementation(updateConfig)
+  const restoreConfig = vi.fn<() => Promise<boolean>>()
+  vi.spyOn(Config, "updateGlobalWithRollback").mockImplementation(async (patch) => {
+    const previous = config
+    const written = await updateConfig(patch)
+    restoreConfig.mockImplementation(async () => {
+      if (config !== written) return false
+      config = previous
+      return true
+    })
+    return restoreConfig
   })
   return {
     getConfig,
     updateConfig,
+    restoreConfig,
     request(body: object, directory = "/project-a") {
       // Global auth must be protected even across separate route mounts and directories.
       const app = new Hono().route("/provider", ProviderRoutes())
@@ -122,7 +135,9 @@ describe("AX Engine connection guard cleanup", () => {
         await resume.promise
         throw new Error("Snapshot read failed")
       })
-      const first = f.request({ mode: "managed" })
+      const first = f.request(
+        read === "config" ? { mode: "managed" } : { mode: "attach", baseURL: "http://127.0.0.1:31419" },
+      )
       try {
         await reading.promise
         const concurrent = await f.request({ mode: "managed" }, "/project-b")
@@ -139,20 +154,21 @@ describe("AX Engine connection guard cleanup", () => {
   )
 
   test.each([false, true])(
-    "keeps the guard until auth rollback settles (rollback fails: %s)",
+    "keeps the guard until config rollback settles (rollback fails: %s)",
     async (rollbackFails) => {
       const f = fixture()
       const previousAuth = { type: "api" as const, key: "previous-key" }
       await Auth.set(AX_ENGINE_PROVIDER_ID, previousAuth)
-      f.updateConfig.mockRejectedValueOnce(new Error("Config write failed"))
+      vi.spyOn(Auth, "prepareRemoval").mockResolvedValueOnce(async () => {
+        throw new Error("Auth removal failed")
+      })
       const restoring = Promise.withResolvers<void>()
       const resume = Promise.withResolvers<void>()
-      const setAuth = Auth.set
-      vi.spyOn(Auth, "set").mockImplementationOnce(async (providerID, auth) => {
+      f.restoreConfig.mockImplementationOnce(async () => {
         restoring.resolve()
         await resume.promise
-        if (rollbackFails) throw new Error("Auth restore failed")
-        await setAuth(providerID, auth)
+        if (rollbackFails) throw new Error("Config restore failed")
+        return true
       })
       const first = f.request({ mode: "managed" })
       const attach = { mode: "attach", baseURL: "http://127.0.0.1:31419", apiKey: "replacement-key" }
@@ -166,11 +182,65 @@ describe("AX Engine connection guard cleanup", () => {
         await first
       }
       expect((await first).status).toBe(400)
-      expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toEqual(rollbackFails ? undefined : previousAuth)
+      expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toEqual(previousAuth)
       expect((await f.request(attach)).status).toBe(200)
       expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toEqual({ type: "api", key: "replacement-key" })
       expect((await f.request({ mode: "managed" })).status).toBe(200)
       expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toBeUndefined()
     },
   )
+})
+
+test.each(["managed", "attach"] as const)("failed %s save preserves a credential saved by a peer", async (mode) => {
+  const f = fixture()
+  await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: "previous-key" })
+  f.updateConfig.mockImplementationOnce(async () => {
+    await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: "peer-key" })
+    throw new Error("Config write failed")
+  })
+  const response = await f.request(
+    mode === "managed" ? { mode } : { mode, baseURL: "http://127.0.0.1:31419", apiKey: "pending-key" },
+  )
+  expect(response.status).toBe(400)
+  expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toEqual({ type: "api", key: "peer-key" })
+})
+
+test("managed save restores its config and reports a conflict when the credential changes", async () => {
+  const f = fixture()
+  await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: "previous-key" })
+  const update = Config.updateGlobalWithRollback
+  vi.spyOn(Config, "updateGlobalWithRollback").mockImplementationOnce(async (patch) => {
+    const restore = await update(patch)
+    await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: "peer-key" })
+    return restore
+  })
+
+  const response = await f.request({ mode: "managed" })
+  expect(response.status).toBe(409)
+  expect(await response.json()).toMatchObject({ status: 409, retryable: true })
+  expect(f.restoreConfig).toHaveBeenCalledOnce()
+  expect((await f.getConfig()).provider?.[AX_ENGINE_PROVIDER_ID]?.options?.connectionMode).toBe("attach")
+  expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toEqual({ type: "api", key: "peer-key" })
+})
+
+test.each([false, true])("managed save compensates for a failed credential write (peer config: %s)", async (peer) => {
+  const update = Config.updateGlobal
+  const withRollback = Config.updateGlobalWithRollback
+  await update({ username: "before-managed-update", snapshot: true })
+  const f = fixture()
+  vi.spyOn(Config, "updateGlobalWithRollback").mockImplementation(withRollback)
+  await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: "previous-key" })
+  vi.spyOn(Auth, "prepareRemoval").mockResolvedValueOnce(async () => {
+    if (peer) await update({ username: "peer-edit" })
+    throw new Error("Credential write failed")
+  })
+  const response = await f.request({ mode: "managed" })
+  expect(response.status).toBe(400)
+  expect(await response.json()).toMatchObject({ message: "Credential write failed" })
+  const config = await Config.getGlobal()
+  expect(config.username).toBe(peer ? "peer-edit" : "before-managed-update")
+  expect(config.snapshot).toBe(true)
+  expect(config.provider?.[AX_ENGINE_PROVIDER_ID]?.options?.connectionMode).toBe(peer ? "managed" : undefined)
+  expect(await Auth.get(AX_ENGINE_PROVIDER_ID)).toEqual({ type: "api", key: "previous-key" })
+  if (peer) await Config.removeGlobalProvider(AX_ENGINE_PROVIDER_ID)
 })

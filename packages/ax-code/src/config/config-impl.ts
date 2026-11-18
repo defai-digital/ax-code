@@ -1619,17 +1619,26 @@ export namespace Config {
     })
   }
 
+  function globalPatch(config: Info): (before: string | undefined) => string {
+    // Patch raw JSONC in place to retain comments and unevaluated references.
+    return (before) => patchJsonc(before ?? "{}", config)
+  }
+
   export async function updateGlobal(config: Info) {
     const filepath = globalConfigFile()
-    const next = await editConfigFile(filepath, (before) => {
-      // Both extensions can contain comments; patch in place rather than
-      // rewriting with JSON.stringify and losing them.
-      return patchJsonc(before ?? "{}", config)
-    })
+    const next = await editConfigFile(filepath, globalPatch(config))
 
     await refreshAfterGlobalUpdate(isProviderEnablementUpdate(config))
 
     return next
+  }
+
+  /** Patch global config and retain a restore operation for that exact write. */
+  export async function updateGlobalWithRollback(config: Info): Promise<() => Promise<boolean>> {
+    const filepath = globalConfigFile()
+    const updated = await editConfigFileWithRollback(filepath, globalPatch(config))
+    if (!updated) throw new Error("Global config patch produced no edit")
+    return refreshGlobalEdit(filepath, updated.rollback, isProviderEnablementUpdate(config))
   }
 
   /**
@@ -1707,6 +1716,35 @@ export namespace Config {
     return removed !== undefined
   }
 
+  async function refreshGlobalEdit(
+    filepath: string,
+    restoreFile: () => Promise<boolean>,
+    enablementOnly: boolean,
+  ): Promise<() => Promise<boolean>> {
+    const restore = async (): Promise<boolean> => {
+      if (globalConfigFile() !== filepath) return false
+      const restored = await restoreFile()
+      if (restored) await refreshAfterGlobalUpdate(enablementOnly)
+      return restored
+    }
+    let pending: Promise<boolean> | undefined
+    const rollback = (): Promise<boolean> => (pending ??= restore())
+    try {
+      await refreshAfterGlobalUpdate(enablementOnly)
+    } catch (error) {
+      try {
+        await rollback()
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          "Failed to refresh global config and restore its previous revision",
+        )
+      }
+      throw error
+    }
+    return rollback
+  }
+
   /** Restore the captured raw document only while this removal still owns it. */
   export async function removeGlobalProviderWithRollback(
     providerID: string,
@@ -1715,25 +1753,7 @@ export namespace Config {
     const filepath = globalConfigFile()
     const removed = await editConfigFileWithRollback(filepath, providerRemoval(filepath, providerID, guard))
     if (!removed) return
-    const restore = async (): Promise<boolean> => {
-      if (globalConfigFile() !== filepath) return false
-      const restored = await removed.rollback()
-      if (restored) await refreshAfterGlobalUpdate(false)
-      return restored
-    }
-    let pending: Promise<boolean> | undefined
-    const rollback = (): Promise<boolean> => (pending ??= restore())
-    try {
-      await refreshAfterGlobalUpdate(false)
-    } catch (error) {
-      try {
-        await rollback()
-      } catch (rollbackError) {
-        throw new AggregateError([error, rollbackError], "Failed to refresh provider removal and restore its config")
-      }
-      throw error
-    }
-    return rollback
+    return refreshGlobalEdit(filepath, removed.rollback, false)
   }
 
   export async function directories() {

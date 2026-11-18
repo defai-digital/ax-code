@@ -480,6 +480,11 @@ export namespace Auth {
     return pending
   }
 
+  async function invalidateAuthState(): Promise<void> {
+    allPending = undefined
+    await invalidateProviderCacheAfterAuthChange()
+  }
+
   async function updateStoredData(update: (data: Record<string, unknown>) => boolean): Promise<boolean> {
     try {
       using _crossProcess = await acquireFileLock()
@@ -491,8 +496,7 @@ export namespace Auth {
       if (cause instanceof AuthError) throw cause
       throw authError("Failed to write auth data", cause)
     }
-    allPending = undefined
-    await invalidateProviderCacheAfterAuthChange()
+    await invalidateAuthState()
     return true
   }
 
@@ -576,7 +580,7 @@ export namespace Auth {
     })
     const remove = async (): Promise<boolean> => {
       let matched = false
-      await updateStoredData((data) => {
+      const written = await updateStoredData((data) => {
         // Another disconnect may already have completed. There is no newer
         // credential to protect, so config cleanup should still go through.
         if (keys.every((alias) => !Object.hasOwn(data, alias))) {
@@ -595,6 +599,9 @@ export namespace Auth {
         clearEntries(data, keys)
         return true
       })
+      // A peer can replace or remove the credential without touching this
+      // process's cached provider state or in-flight auth read.
+      if (!written) await invalidateAuthState()
       return matched
     }
     let pending: Promise<boolean> | undefined

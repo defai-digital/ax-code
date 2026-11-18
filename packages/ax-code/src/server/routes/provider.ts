@@ -260,12 +260,20 @@ async function axEngineConnectionView() {
   }
 }
 
-async function restoreAxEngineAuth(previous: Awaited<ReturnType<typeof Auth.get>>) {
-  if (previous) {
-    await Auth.set(AX_ENGINE_PROVIDER_ID, previous)
-    return
+async function restoreAxEngineConnection(
+  rollback: () => Promise<boolean>,
+  cause: unknown,
+  operation: "configuration" | "credential",
+): Promise<never> {
+  try {
+    await rollback()
+  } catch (restoreError) {
+    throw new AggregateError(
+      [cause, restoreError],
+      `Failed to update AX Engine connection and restore its ${operation}`,
+    )
   }
-  await Auth.remove(AX_ENGINE_PROVIDER_ID)
+  throw cause
 }
 
 export const ProviderRoutes = lazy(() =>
@@ -518,18 +526,25 @@ export const ProviderRoutes = lazy(() =>
         try {
           const config = await Config.get()
           const providerName = config.provider?.[AX_ENGINE_PROVIDER_ID]?.name ?? "AX Engine (Local)"
-          const previousAuth = await Auth.get(AX_ENGINE_PROVIDER_ID)
-
+          const previousAuth = body.mode === "attach" ? await Auth.get(AX_ENGINE_PROVIDER_ID) : undefined
           try {
             if (body.mode === "managed") {
-              await Auth.remove(AX_ENGINE_PROVIDER_ID)
+              const removeAuth = await Auth.prepareRemoval(AX_ENGINE_PROVIDER_ID)
+              const rollback = await Config.updateGlobalWithRollback({
+                provider: axEngineManagedProviderConfig(providerName),
+              })
+              let removed: boolean
               try {
-                await Config.updateGlobal({
-                  provider: axEngineManagedProviderConfig(providerName),
-                })
+                removed = await removeAuth()
               } catch (error) {
-                await restoreAxEngineAuth(previousAuth)
-                throw error
+                return await restoreAxEngineConnection(rollback, error, "configuration")
+              }
+              if (!removed) {
+                await rollback()
+                return serviceUnavailable(c, {
+                  message: "AX Engine credentials changed during the connection update",
+                  details: { resource: "axEngineConnection", providerID: AX_ENGINE_PROVIDER_ID },
+                })
               }
               return c.json(await axEngineConnectionView())
             }
@@ -563,7 +578,7 @@ export const ProviderRoutes = lazy(() =>
               apiKey,
             })
 
-            await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: apiKey })
+            const rollback = await Auth.setApiKeyWithRollback(AX_ENGINE_PROVIDER_ID, apiKey)
             try {
               await Config.updateGlobal({
                 provider: axEngineAttachProviderConfig({
@@ -572,8 +587,7 @@ export const ProviderRoutes = lazy(() =>
                 }),
               })
             } catch (error) {
-              await restoreAxEngineAuth(previousAuth)
-              throw error
+              return await restoreAxEngineConnection(rollback, error, "credential")
             }
 
             // Attach mode never owns the external process. Release any managed

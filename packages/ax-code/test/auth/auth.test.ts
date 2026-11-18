@@ -531,6 +531,36 @@ test("a peer's completed removal satisfies a prepared removal", async () => {
   expect(await Auth.get("provider")).toBeUndefined()
 })
 
+test("prepared removal drops an in-flight read of a credential a peer has already removed", async () => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const remove = await Auth.prepareRemoval("provider")
+  const read = Filesystem.readJson
+  const reading = Promise.withResolvers<void>()
+  const resume = Promise.withResolvers<void>()
+  const readSpy = vi.spyOn(Filesystem, "readJson").mockImplementationOnce(async (target) => {
+    const data = await read(target)
+    reading.resolve()
+    await resume.promise
+    return data
+  })
+  const stale = Auth.all()
+  let fresh: Promise<Auth.Info | undefined>
+  try {
+    await reading.promise
+    const data = await read<Record<string, unknown>>(file)
+    delete data.provider
+    // Simulate a peer's atomic write without invalidating this process's cache.
+    await Filesystem.writeJson(file, data, 0o600)
+    expect(await remove()).toBe(true)
+    fresh = Auth.get("provider")
+  } finally {
+    resume.resolve()
+    readSpy.mockRestore()
+    await stale
+  }
+  expect(await fresh).toBeUndefined()
+})
+
 test.each(["", "__canary"])("prepared removal rejects a reserved or empty provider ID (%s)", async (providerID) => {
   await Auth.set("provider", { type: "api", key: "old-value" })
   const before = await fs.readFile(file, "utf8")
