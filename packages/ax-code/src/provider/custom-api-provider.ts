@@ -608,11 +608,6 @@ export namespace CustomApiProvider {
     return parsed.data
   }
 
-  async function restoreAuth(providerID: string, previous: Auth.Info | undefined) {
-    if (previous) await Auth.set(providerID, previous)
-    else await Auth.remove(providerID)
-  }
-
   async function assertAvailableProviderID(providerID: string, existingGlobal?: Config.Provider) {
     if (isRetiredProviderID(providerID))
       throw new Error({ message: `Provider ID '${providerID}' is retired and cannot be reused` })
@@ -644,20 +639,28 @@ export namespace CustomApiProvider {
     await assertAvailableProviderID(providerID, previousProvider)
     const previousAuth = await Auth.get(providerID)
     const models = await resolveModels(providerID, input, previousProvider, previousAuth)
-    const credentialChanged = input.apiKey !== undefined
-    if (credentialChanged) await Auth.set(providerID, { type: "api", key: input.apiKey! })
     const nextProvider = providerConfig({
       ...input,
       management: input.management ?? previousProvider?.management,
       models,
     })
+    const rollback = input.apiKey !== undefined ? await Auth.setApiKeyWithRollback(providerID, input.apiKey) : undefined
     try {
       await Config.setGlobalProvider(providerID, nextProvider)
     } catch (cause) {
-      if (credentialChanged) await restoreAuth(providerID, previousAuth).catch(() => undefined)
+      if (rollback) {
+        try {
+          await rollback()
+        } catch (rollbackError) {
+          throw new AggregateError(
+            [cause, rollbackError],
+            "Failed to save custom API provider and restore its credential",
+          )
+        }
+      }
       throw cause
     }
-    return viewFromProvider(providerID, nextProvider, credentialChanged || previousAuth?.type === "api")
+    return viewFromProvider(providerID, nextProvider, rollback !== undefined || previousAuth?.type === "api")
   }
 
   async function resolveModels(
@@ -718,14 +721,18 @@ export namespace CustomApiProvider {
     if (!previousProvider) return false
     if (!isManaged(previousProvider))
       throw new Error({ message: `Provider ID '${providerID}' is not managed by the custom API provider editor` })
-    const previousAuth = await Auth.get(providerID)
     const removed = await Config.removeGlobalProvider(providerID)
     if (!removed) return false
     try {
       await Auth.remove(providerID)
     } catch (cause) {
-      await Config.setGlobalProvider(providerID, previousProvider).catch(() => undefined)
-      await restoreAuth(providerID, previousAuth).catch(() => undefined)
+      // Auth.remove publishes atomically. Failure leaves auth untouched;
+      // rewriting its earlier value could erase a peer's newer credential.
+      try {
+        await Config.setGlobalProvider(providerID, previousProvider)
+      } catch (rollbackError) {
+        throw new AggregateError([cause, rollbackError], "Failed to remove custom API provider and restore its config")
+      }
       throw cause
     }
     return true
