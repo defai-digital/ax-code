@@ -34,6 +34,15 @@ test("changes only the repository URI in active legacy source lines", () => {
   )
 })
 
+test("normalizes mirror-list targets while preserving priorities, restrictions, comments, and CRLF", () => {
+  const before = `# ${regional}\r\n${regional}\tpriority:1 arch:amd64\r\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\r\n`
+  expect(usePrimaryUbuntuArchive(before, "mirrors")).toBe(
+    `# ${regional}\r\n${primary}\tpriority:1 arch:amd64\r\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\r\n`,
+  )
+  const indirection = sources("mirror+file:/etc/apt/apt-mirrors.txt")
+  expect(usePrimaryUbuntuArchive(indirection, "sources")).toBe(indirection)
+})
+
 test.each([
   "https://packages.example/ubuntu",
   "http://us-east-2.ec2.archive.ubuntu.com.example/ubuntu",
@@ -46,6 +55,7 @@ test.each([
   "http://archive.ubuntu.com/ubuntu",
 ])("preserves non-target or customized repository URI %s", (uri) => {
   expect(usePrimaryUbuntuArchive(sources(uri), "sources")).toBe(sources(uri))
+  expect(usePrimaryUbuntuArchive(`${uri}\tpriority:1\n`, "mirrors")).toBe(`${uri}\tpriority:1\n`)
 })
 
 test("repeated source normalization is unchanged", () => {
@@ -75,9 +85,29 @@ test("the CLI rejects a non-APT target without changing it", async () => {
     const file = path.join(directory, "keep.txt")
     await fs.writeFile(file, sources(regional))
     await expect(promisify(execFile)(process.execPath, ["--import", "tsx", helper, file])).rejects.toThrow(
-      "Expected an absolute APT .sources or .list path",
+      "Expected an absolute APT .sources, .list, or apt-mirrors.txt path",
     )
     expect(await fs.readFile(file, "utf8")).toBe(sources(regional))
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("the CLI rewrites the runner mirror list instead of changing its source indirection", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-ubuntu-mirrorlist-"))
+  try {
+    const source = path.join(directory, "ubuntu.sources")
+    const mirror = path.join(directory, "apt-mirrors.txt")
+    const indirection = sources("mirror+file:/etc/apt/apt-mirrors.txt")
+    await fs.writeFile(source, indirection)
+    await fs.writeFile(mirror, `${regional}\tpriority:1\nhttp://archive.ubuntu.com/ubuntu/\tpriority:2\n`)
+    const { stdout } = await promisify(execFile)(process.execPath, ["--import", "tsx", helper, source, mirror])
+    expect(await fs.readFile(source, "utf8")).toBe(indirection)
+    expect(await fs.readFile(mirror, "utf8")).toBe(
+      `${primary}\tpriority:1\nhttp://archive.ubuntu.com/ubuntu/\tpriority:2\n`,
+    )
+    expect(stdout).toContain(`Use primary Ubuntu archive: ${mirror}`)
+    expect(stdout).toContain(`No regional EC2 archive to replace: ${source}`)
   } finally {
     await fs.rm(directory, { recursive: true, force: true })
   }

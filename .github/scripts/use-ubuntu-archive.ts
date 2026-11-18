@@ -3,7 +3,7 @@ import path from "node:path"
 
 const PRIMARY_ARCHIVE = "https://archive.ubuntu.com/ubuntu"
 const REGIONAL_EC2_ARCHIVE = /^[a-z0-9-]+\.ec2\.archive\.ubuntu\.com$/i
-const DEFAULT_SOURCES = ["/etc/apt/sources.list.d/ubuntu.sources", "/etc/apt/sources.list"]
+const DEFAULT_SOURCES = ["/etc/apt/sources.list.d/ubuntu.sources", "/etc/apt/sources.list", "/etc/apt/apt-mirrors.txt"]
 
 function rewriteUri(token: string): string {
   if (!/^https?:\/\//i.test(token)) return token
@@ -27,11 +27,16 @@ function rewriteUri(token: string): string {
 }
 
 /** Replace only active EC2 Ubuntu archive URIs; retain suites, components and signing keys. */
-export function usePrimaryUbuntuArchive(text: string, format: "sources" | "list"): string {
+export function usePrimaryUbuntuArchive(text: string, format: "sources" | "list" | "mirrors"): string {
   let uriContinuation = false
   return text
     .split(/(?<=\n)/)
     .map((line) => {
+      if (format === "mirrors") {
+        return line.replace(/^([ \t]*)(https?:\/\/\S+)/i, (_match: string, prefix: string, uri: string) => {
+          return prefix + rewriteUri(uri)
+        })
+      }
       if (format === "list") {
         return line.replace(
           /^(\s*deb(?:-src)?\s+(?:\[[^\]]*\]\s+)?)(\S+)/,
@@ -54,8 +59,16 @@ export function usePrimaryUbuntuArchive(text: string, format: "sources" | "list"
 
 async function rewriteSources(file: string): Promise<void> {
   const extension = path.extname(file)
-  if (!path.isAbsolute(file) || (extension !== ".sources" && extension !== ".list")) {
-    throw new Error("Expected an absolute APT .sources or .list path")
+  const format =
+    extension === ".sources"
+      ? "sources"
+      : extension === ".list"
+        ? "list"
+        : path.basename(file) === "apt-mirrors.txt"
+          ? "mirrors"
+          : undefined
+  if (!path.isAbsolute(file) || !format) {
+    throw new Error("Expected an absolute APT .sources, .list, or apt-mirrors.txt path")
   }
   const entry = await fs.lstat(file).catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") return
@@ -64,8 +77,11 @@ async function rewriteSources(file: string): Promise<void> {
   if (!entry) return
   if (!entry.isFile()) throw new Error("APT source must be a regular file")
   const before = await fs.readFile(file, "utf8")
-  const after = usePrimaryUbuntuArchive(before, extension === ".sources" ? "sources" : "list")
-  if (after === before) return
+  const after = usePrimaryUbuntuArchive(before, format)
+  if (after === before) {
+    process.stdout.write(`No regional EC2 archive to replace: ${file}\n`)
+    return
+  }
   // This setup step runs before APT in an ephemeral CI runner. Updating the
   // existing file retains its mode and owner without changing signing policy.
   await fs.writeFile(file, after)
