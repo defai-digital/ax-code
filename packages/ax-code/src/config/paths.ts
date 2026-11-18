@@ -111,9 +111,9 @@ export namespace ConfigPaths {
   )
 
   /** Read a config file, returning undefined for missing files and throwing JsonError for other failures. */
-  export async function readFile(filepath: string) {
+  export async function readFile(filepath: string): Promise<string | undefined> {
     return Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
-      if (err.code === "ENOENT") return
+      if (err.code === "ENOENT") return undefined
       throw new JsonError({ path: filepath }, { cause: err })
     })
   }

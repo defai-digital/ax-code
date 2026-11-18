@@ -34,7 +34,6 @@ import { Filesystem } from "@/util/filesystem"
 import { Ssrf } from "@/util/ssrf"
 import { Process } from "@/util/process"
 import { Lock } from "@/util/lock"
-import { FileLock } from "@/util/filelock"
 import { withTimeout } from "@/util/timeout"
 import * as ConfigSchema from "./schema"
 import { isRecord } from "../util/record"
@@ -50,6 +49,7 @@ import { CONFIG_SCHEMA_URL } from "@/constants/project"
 import { ProjectConfigTrust } from "./project-config-trust"
 import { isFileUrl } from "../util/file-url"
 import { mergeConfig, migrateDeprecatedModeIntoAgent } from "./merge-policy"
+import { editConfigFile, parseConfig } from "./file-update"
 import { restrictUntrustedAgent, restrictUntrustedConfig, tightenIsolationFloor } from "./untrusted-policy"
 
 const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
@@ -1569,19 +1569,19 @@ export namespace Config {
 
   export async function update(config: Info) {
     const filepath = projectConfigFile()
-    using _inProcess = await Lock.write(filepath)
-    using _crossProcess = await FileLock.acquire(filepath)
-    // This is a read-modify-write operation, not a config evaluation. Parsing
-    // the raw JSONC avoids materializing {file:} or {env:} references from a
-    // repository-controlled file back into that file as literal secrets.
-    const before = await readFile(filepath)
-    const text = before?.trim() ? before : "{}"
-    const existing = before ? parseConfig(before, filepath) : {}
-    const merged = mergeConfig(existing, withoutInjectedWebMcpDefault(config, existing))
-    const patch = changedJsoncPatch(existing, merged)
-    const updated = patch === JSONC_UNCHANGED ? text : patchJsonc(text, patch)
-    parseConfig(updated, filepath)
-    if (updated !== before) await Filesystem.write(filepath, updated)
+    await editConfigFile(
+      filepath,
+      (before) => {
+        // This is a raw JSONC edit, not config evaluation: never materialize
+        // repository-controlled {file:} or {env:} references into literal secrets.
+        const text = before?.trim() ? before : "{}"
+        const existing = before ? parseConfig(before, filepath) : {}
+        const merged = mergeConfig(existing, withoutInjectedWebMcpDefault(config, existing))
+        const patch = changedJsoncPatch(existing, merged)
+        return patch === JSONC_UNCHANGED ? text : patchJsonc(text, patch)
+      },
+      { skipUnchanged: true },
+    )
     await Instance.reload({
       directory: Instance.directory,
     })
@@ -1607,18 +1607,6 @@ export namespace Config {
       if (existsSync(file)) return file
     }
     return candidates[0]
-  }
-
-  function parseConfig(text: string, filepath: string): Info {
-    const data = ConfigPaths.parseJsoncOrThrow(text, filepath)
-
-    const parsed = Info.safeParse(data)
-    if (parsed.success) return parsed.data
-
-    throw new InvalidError({
-      path: filepath,
-      issues: parsed.error.issues,
-    })
   }
 
   function isProviderEnablementUpdate(config: Info) {
@@ -1658,22 +1646,11 @@ export namespace Config {
 
   export async function updateGlobal(config: Info) {
     const filepath = globalConfigFile()
-    using _inProcess = await Lock.write(filepath)
-    using _crossProcess = await FileLock.acquire(filepath)
-    const before = await Filesystem.readText(filepath).catch((err: any) => {
-      if (err.code === "ENOENT") return "{}"
-      throw new JsonError({ path: filepath }, { cause: err })
+    const next = await editConfigFile(filepath, (before) => {
+      // Both extensions can contain comments; patch in place rather than
+      // rewriting with JSON.stringify and losing them.
+      return patchJsonc(before ?? "{}", config)
     })
-
-    const next = await (async () => {
-      // Patch JSONC in place for both `.json` and `.jsonc`. Project/user
-      // ax-code.json files commonly contain comments; rewriting them with
-      // JSON.stringify made isolation/settings persist fail or strip comments.
-      const updated = patchJsonc(before, config)
-      const merged = parseConfig(updated, filepath)
-      await Filesystem.write(filepath, updated)
-      return merged
-    })()
 
     await refreshAfterGlobalUpdate(isProviderEnablementUpdate(config))
 
@@ -1690,22 +1667,15 @@ export namespace Config {
    */
   export async function persistWebMcpToggle(name: string, entry: NonNullable<Info["mcp"]>[string], enabled: boolean) {
     const filepath = globalConfigFile()
-    using _inProcess = await Lock.write(filepath)
-    using _crossProcess = await FileLock.acquire(filepath)
-    const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
-      if (err.code === "ENOENT") return "{}"
-      throw new JsonError({ path: filepath }, { cause: err })
+    await editConfigFile(filepath, (before) => {
+      // ADR-173: regenerate profiled entries so drifted stored commands
+      // cannot survive the toggle.
+      const normalized =
+        "webmcp" in entry && entry.webmcp !== undefined && entry.type === "local"
+          ? WebMcpLaunch.config(entry.webmcp, enabled)
+          : { ...entry, enabled }
+      return patchJsonc(before ?? "{}", { mcp: { [name]: normalized } })
     })
-    // ADR-173: normalize webmcp-profiled entries to the regenerated form so a
-    // drifted or hand-edited stored command does not survive the toggle.
-    const normalized =
-      "webmcp" in entry && entry.webmcp !== undefined && entry.type === "local"
-        ? WebMcpLaunch.config(entry.webmcp, enabled)
-        : { ...entry, enabled }
-    const updated = patchJsonc(before, { mcp: { [name]: normalized } })
-    // Validate before writing: a malformed result must never replace the file.
-    parseConfig(updated, filepath)
-    await Filesystem.write(filepath, updated)
     // The runtime connection state already reflects the toggle, so live
     // instances are not disposed; just drop the memoized global config so the
     // next load (another instance or the next process start) sees the choice.
@@ -1715,24 +1685,20 @@ export namespace Config {
   /** Replace one global provider without retaining stale nested model entries. */
   export async function setGlobalProvider(providerID: string, provider: Provider) {
     const filepath = globalConfigFile()
-    const next = await (async () => {
-      using _inProcess = await Lock.write(filepath)
-      using _crossProcess = await FileLock.acquire(filepath)
-      const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
-        if (err.code === "ENOENT") return "{}"
-        throw new JsonError({ path: filepath }, { cause: err })
-      })
-      parseConfig(before, filepath)
-      const updated = applyEdits(
-        before,
-        modify(before, ["provider", providerID], provider, {
-          formattingOptions: { insertSpaces: true, tabSize: 2 },
-        }),
-      )
-      const merged = parseConfig(updated, filepath)
-      if (updated !== before) await Filesystem.write(filepath, updated)
-      return merged
-    })()
+    const next = await editConfigFile(
+      filepath,
+      (before) => {
+        const text = before ?? "{}"
+        parseConfig(text, filepath)
+        return applyEdits(
+          text,
+          modify(text, ["provider", providerID], provider, {
+            formattingOptions: { insertSpaces: true, tabSize: 2 },
+          }),
+        )
+      },
+      { skipUnchanged: true },
+    )
     await refreshAfterGlobalUpdate(false)
     return next
   }
@@ -1740,27 +1706,19 @@ export namespace Config {
   /** Remove exactly one provider from the writable global config. */
   export async function removeGlobalProvider(providerID: string) {
     const filepath = globalConfigFile()
-    const removed = await (async () => {
-      using _inProcess = await Lock.write(filepath)
-      using _crossProcess = await FileLock.acquire(filepath)
-      const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
-        if (err.code === "ENOENT") return "{}"
-        throw new JsonError({ path: filepath }, { cause: err })
-      })
-      const existing = parseConfig(before, filepath)
-      if (!Object.prototype.hasOwnProperty.call(existing.provider ?? {}, providerID)) return false
-      const updated = applyEdits(
-        before,
-        modify(before, ["provider", providerID], undefined, {
+    const removed = await editConfigFile(filepath, (before) => {
+      const text = before ?? "{}"
+      const existing = parseConfig(text, filepath)
+      if (!Object.hasOwn(existing.provider ?? {}, providerID)) return
+      return applyEdits(
+        text,
+        modify(text, ["provider", providerID], undefined, {
           formattingOptions: { insertSpaces: true, tabSize: 2 },
         }),
       )
-      parseConfig(updated, filepath)
-      await Filesystem.write(filepath, updated)
-      return true
-    })()
+    })
     if (removed) await refreshAfterGlobalUpdate(false)
-    return removed
+    return removed !== undefined
   }
 
   export async function directories() {
