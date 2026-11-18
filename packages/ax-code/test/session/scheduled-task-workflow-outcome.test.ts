@@ -8,6 +8,7 @@ import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { and, eq } from "../../src/storage/db"
 import { WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
+import { WorkflowRunID } from "../../src/workflow/state"
 import { tmpdir } from "../fixture/fixture"
 
 // The workflow bridge re-reports a terminal run's outcome on every later
@@ -373,7 +374,59 @@ describe("ScheduledTask workflow outcome recording", () => {
     })
   })
 
-  test("recovers the persisted workflow outcome after its queue carrier completes", async () => {
+  test("a workflow can only link to the occurrence claimed by its queue item", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const task = await createWorkflowTask()
+        if (!task.nextRunAt) throw new Error("Expected a due time")
+        const older = await TaskQueue.enqueue({
+          kind: "automation",
+          title: "Older dispatch",
+          sourceTaskID: task.id,
+          payload: { scheduledTaskID: task.id, workflowTemplateID: task.workflowTemplateID },
+        })
+        const [fired] = await ScheduledTask.runDue(task.nextRunAt + 6 * 60_000)
+        if (!fired?.queueItem) throw new Error("Expected a queued scheduled workflow")
+        const olderClaim = await TaskQueue.claimForExecution(older.id)
+        if (olderClaim.kind !== "claimed") throw new Error("Expected the older carrier claim")
+
+        await ScheduledTask.recordWorkflowRun(task.id, WorkflowRunID.ascending(), olderClaim.attempt)
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+          { queueID: fired.queueItem.id, workflowRunID: undefined },
+        ])
+        expect((await ScheduledTask.get(task.id)).lastWorkflowRunID).toBeUndefined()
+
+        const claim = await TaskQueue.claimForExecution(fired.queueItem.id)
+        if (claim.kind !== "claimed") throw new Error("Expected the current carrier claim")
+        const workflowRunID = WorkflowRunID.ascending()
+        await ScheduledTask.recordWorkflowRun(task.id, workflowRunID, claim.attempt)
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+          { queueID: claim.item.id, workflowRunID },
+        ])
+        expect((await ScheduledTask.get(task.id)).lastWorkflowRunID).toBe(workflowRunID)
+
+        await TaskQueue.finishExecution(claim.attempt, { status: "failed" })
+        await ScheduledTask.recordQueueOutcome(task.id, "failed", "Original dispatch failed", claim.item.id)
+        await TaskQueue.retry(claim.item.id)
+        const retry = await TaskQueue.claimForExecution(claim.item.id)
+        if (retry.kind !== "claimed") throw new Error("Expected the retry claim")
+        await expect(
+          ScheduledTask.recordWorkflowRun(task.id, WorkflowRunID.ascending(), claim.attempt),
+        ).rejects.toThrow("Scheduled automation stopped before execution")
+        expect((await ScheduledTask.get(task.id)).lastWorkflowRunID).toBe(workflowRunID)
+
+        const retriedWorkflowID = WorkflowRunID.ascending()
+        await ScheduledTask.recordWorkflowRun(task.id, retriedWorkflowID, retry.attempt)
+        expect((await ScheduledTask.get(task.id)).lastWorkflowRunID).toBe(retriedWorkflowID)
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "failed", workflowRunID }])
+      },
+    })
+  })
+
+  test.each([true, false])("a saved workflow outcome requires its link (linked=%s)", async (linked) => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -388,23 +441,21 @@ describe("ScheduledTask workflow outcome recording", () => {
           if (!fired?.queueItem) throw new Error("Expected a queued scheduled workflow")
           const run = await WorkflowTemplate.createRun({ templateID: "builtin:noop-dry-run", sourceTaskID: task.id })
           await WorkflowRun.setStatus({ id: run.id, status: "running" })
-          await TaskQueue.setStatus({ id: fired.queueItem.id, status: "completed" })
+          const carrier = await TaskQueue.claimForExecution(fired.queueItem.id)
+          if (carrier.kind !== "claimed") throw new Error("Expected the carrier claim")
+          if (linked) await ScheduledTask.recordWorkflowRun(task.id, run.id, carrier.attempt)
+          await TaskQueue.finishExecution(carrier.attempt, { status: "completed" })
 
-          await ScheduledTask.reconcileAllOrphanRuns(now)
-          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "running" }])
-          await ScheduledTask.recordWorkflowRun(task.id, run.id)
           await ScheduledTask.reconcileAllOrphanRuns(now)
           expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "running" }])
 
           await WorkflowRun.setStatus({ id: run.id, status: "failed", error: "Persisted workflow failure" })
           await ScheduledTask.reconcileAllOrphanRuns(now)
-          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
-            { status: "failed", error: "Persisted workflow failure" },
-          ])
-          expect(await ScheduledTask.get(task.id)).toMatchObject({
-            status: "active",
-            error: "Persisted workflow failure",
-          })
+          const outcome = linked
+            ? { status: "failed", error: "Persisted workflow failure" }
+            : { status: "running", error: undefined }
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([outcome])
+          expect(await ScheduledTask.get(task.id)).toMatchObject({ status: "active", error: outcome.error })
         } finally {
           vi.unstubAllEnvs()
         }
@@ -426,7 +477,9 @@ describe("ScheduledTask workflow outcome recording", () => {
           if (!fired?.queueItem) throw new Error("Expected a queued scheduled workflow")
           const run = await WorkflowTemplate.createRun({ templateID: "builtin:noop-dry-run", sourceTaskID: task.id })
           await WorkflowRun.setStatus({ id: run.id, status: "running" })
-          await ScheduledTask.recordWorkflowRun(task.id, run.id)
+          const carrier = await TaskQueue.claimForExecution(fired.queueItem.id)
+          if (carrier.kind !== "claimed") throw new Error("Expected the carrier claim")
+          await ScheduledTask.recordWorkflowRun(task.id, run.id, carrier.attempt)
 
           expect(await ScheduledTask.remove(task.id)).toBe(true)
 

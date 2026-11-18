@@ -33,6 +33,7 @@ import type {
   WorkflowChildID,
   WorkflowEvidenceRef,
   WorkflowPhaseID,
+  WorkflowRunDetail,
   WorkflowRunID,
 } from "../workflow/state"
 
@@ -892,11 +893,16 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
             sourceTaskID: scheduledTaskID,
           })
           workflowRunID = run.id
+          let detail: WorkflowRunDetail
           try {
+            await ScheduledTask.recordWorkflowRun(scheduledTaskID, run.id, attempt)
             requireActiveQueueItem(attempt)
+            detail = await WorkflowScheduler.start(run.id, item.payload["workflowStartOptions"] ?? {})
           } catch (error) {
+            // Either the link or the start can fail while the workflow is
+            // still queued. Leave it terminal in that case.
             await WorkflowScheduler.cancelUnstarted(run.id).catch((cancelError) => {
-              log.warn("failed to cancel timed-out scheduled workflow run", {
+              log.warn("failed to cancel an unstarted scheduled workflow", {
                 taskID: item.id,
                 runID: run.id,
                 error: cancelError,
@@ -904,21 +910,6 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
             })
             throw error
           }
-          await ScheduledTask.recordWorkflowRun(scheduledTaskID, run.id)
-          const detail = await WorkflowScheduler.start(run.id, item.payload["workflowStartOptions"] ?? {}).catch(
-            async (error) => {
-              // start() can throw before it flips the run to `running`; cancel the
-              // never-started run so it does not linger `queued` and unrecoverable.
-              await WorkflowScheduler.cancelUnstarted(run.id).catch((cancelError) => {
-                log.warn("failed to cancel scheduled workflow run after a start failure", {
-                  taskID: item.id,
-                  runID: run.id,
-                  error: cancelError,
-                })
-              })
-              throw error
-            },
-          )
           if (detail.status === "failed" || detail.status === "cancelled") {
             throw new Error(detail.error ?? `Scheduled workflow ended with status ${detail.status}`)
           }

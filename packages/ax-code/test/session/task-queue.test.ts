@@ -1875,7 +1875,7 @@ describe("TaskQueue", () => {
     })
   })
 
-  test("cancels the pre-created workflow run when a scheduled workflow start fails", async () => {
+  test.each(["link", "start"] as const)("cancels an unstarted scheduled workflow if %s fails", async (step) => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -1888,6 +1888,8 @@ describe("TaskQueue", () => {
         // start() throws before flipping the run to `running` (runtime-disabled
         // guard or unsupported merge strategy).
         const start = vi.spyOn(WorkflowScheduler, "start").mockRejectedValue(new Error("start failed"))
+        if (step === "link")
+          vi.spyOn(ScheduledTask, "recordWorkflowRun").mockRejectedValueOnce(new Error("link failed"))
         const cancel = vi.spyOn(WorkflowScheduler, "cancelUnstarted").mockResolvedValue(undefined as never)
         try {
           const scheduled = await ScheduledTask.create({
@@ -1908,6 +1910,7 @@ describe("TaskQueue", () => {
           await TaskQueueExecutor.start(item)
           await waitForQueueStatus(item.id, "failed")
           // The never-started run must be cancelled, not left `queued` forever.
+          expect(start).toHaveBeenCalledTimes(step === "link" ? 0 : 1)
           expect(cancel).toHaveBeenCalledWith("wfr_start_fail_scheduled")
         } finally {
           createRun.mockRestore()

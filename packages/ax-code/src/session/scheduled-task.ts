@@ -30,6 +30,7 @@ import { ScheduledTaskID, ScheduledTaskRunID, TaskQueueID, type SessionID } from
 import { ScheduledTaskTable, ScheduledTaskRunTable, TaskQueueTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { TaskQueue } from "./task-queue"
+import { ACTIVE_QUEUE_EXECUTION_STATUSES } from "./workflow-queue-admission"
 import { WorkflowRun as WorkflowRunState, type WorkflowRunDetail, type WorkflowRunID } from "@/workflow/state"
 import { WorkflowRunTable } from "@/workflow/workflow.sql"
 import {
@@ -1604,31 +1605,59 @@ export namespace ScheduledTask {
     return updated ? { row: updated, pausedAfter: pause ? failures : undefined } : { row }
   }
 
-  export async function recordWorkflowRun(id: ScheduledTaskID, workflowRunID: string): Promise<Info> {
+  export async function recordWorkflowRun(
+    id: ScheduledTaskID,
+    workflowRunID: WorkflowRunID,
+    attempt: TaskQueue.ExecutionAttempt,
+  ): Promise<void> {
     const now = Date.now()
-    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      // A scheduler tick stamps its dispatch row at claim time, before the
-      // workflow exists, so that row carries no workflow id. Link it here, where
-      // the executor reports the run it just created. hasOpenRunIn and
-      // reconcileOrphanRuns read the ROW (not the task) to keep a still-executing
-      // workflow open past deadline+grace; without the link the next occurrence
-      // double-fires and the live outcome loses its row. A manual run-now stamps
-      // the row at claim and never reaches this path.
-      db.update(ScheduledTaskRunTable)
+    const projectID = Instance.project.id
+    const task = SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
+      const active = TaskQueue.executionItem(attempt)
+      if (
+        !active ||
+        !ACTIVE_QUEUE_EXECUTION_STATUSES.some((status) => status === active.status) ||
+        TaskQueue.readScheduledAutomation(active)?.taskID !== id
+      ) {
+        throw new Error("Scheduled automation stopped before execution")
+      }
+
+      const conditions = and(eq(ScheduledTaskTable.id, id), eq(ScheduledTaskTable.project_id, projectID))
+      const current = db
+        .select({ queueID: ScheduledTaskTable.last_queue_id })
+        .from(ScheduledTaskTable)
+        .where(conditions)
+        .get()
+      if (!current) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+      // The queue attempt owns one occurrence. Its workflow can outlive
+      // the carrier, so the history link keeps overlap protection active.
+      const occurrence = db
+        .update(ScheduledTaskRunTable)
         .set({ workflow_run_id: workflowRunID, time_updated: now })
-        .where(and(eq(ScheduledTaskRunTable.task_id, id), eq(ScheduledTaskRunTable.status, "running")))
-        .run()
+        .where(
+          and(
+            eq(ScheduledTaskRunTable.task_id, id),
+            eq(ScheduledTaskRunTable.project_id, projectID),
+            eq(ScheduledTaskRunTable.queue_id, attempt.id),
+            eq(ScheduledTaskRunTable.status, "running"),
+          ),
+        )
+        .returning({ id: ScheduledTaskRunTable.id })
+        .get()
+
+      if (current.queueID !== attempt.id) return undefined
+      // A queue retry can outlive its terminal history. Track the new run
+      // for cancellation unless another occurrence already owns the task.
+      if (!occurrence && readOpenRuns(db, id).length > 0) return undefined
       const row = db
         .update(ScheduledTaskTable)
         .set({ last_workflow_run_id: workflowRunID, time_updated: now })
-        .where(eq(ScheduledTaskTable.id, id))
+        .where(conditions)
         .returning()
         .get()
-      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
-      return fromRow(row)
+      return row ? fromRow(row) : undefined
     })
-    publishUpdated(task)
-    return task
+    if (task) publishUpdated(task)
   }
 
   // Claim the terminal transition for a workflow outcome. Returns the run row

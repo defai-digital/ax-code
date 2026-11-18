@@ -221,7 +221,12 @@ describe("ScheduledTask execution deadline", () => {
             sourceTaskID: task.id,
           })
           await WorkflowRun.setStatus({ id: workflowRun.id, status: "running" })
-          await ScheduledTask.recordWorkflowRun(task.id, workflowRun.id)
+          const queueItem = first.find((result) => result.task.id === task.id)?.queueItem
+          if (!queueItem) throw new Error("Expected a workflow queue item")
+          const carrier = await TaskQueue.claimForExecution(queueItem.id)
+          if (carrier.kind !== "claimed") throw new Error("Expected the carrier claim")
+          await ScheduledTask.recordWorkflowRun(task.id, workflowRun.id, carrier.attempt)
+          await TaskQueue.finishExecution(carrier.attempt, { status: "completed" })
 
           // Backdate the dispatch row past deadline+grace instead of waiting.
           const next = await ScheduledTask.get(task.id)
