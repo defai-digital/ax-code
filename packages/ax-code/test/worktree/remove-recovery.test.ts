@@ -5,6 +5,7 @@ import { afterEach, expect, test, vi } from "vitest"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Worktree } from "@/worktree"
+import { Filesystem } from "@/util/filesystem"
 import * as GitUtil from "@/util/git"
 import { tmpdir } from "../fixture/fixture"
 
@@ -289,4 +290,69 @@ test.skipIf(process.platform === "win32").each([
   } finally {
     spy?.mockRestore()
   }
+})
+
+test("keeps case-distinct worktrees separate on a case-sensitive volume", async (context) => {
+  await using tmp = await tmpdir({ git: true })
+  await using external = await tmpdir()
+  const upper = path.join(external.path, "Sandbox")
+  const lower = path.join(external.path, "sandbox")
+  await fs.mkdir(upper)
+  if (await Filesystem.isDir(lower)) context.skip()
+
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: tmp.path, encoding: "utf8", stdio: "pipe" })
+  git("worktree", "add", "-b", "ax-code/upper-case", upper)
+  git("worktree", "add", "-b", "ax-code/lower-case", lower)
+  const upperFile = path.join(upper, "keep.txt")
+  const lowerFile = path.join(lower, "reset.txt")
+  await fs.writeFile(upperFile, "upper checkout")
+  await fs.writeFile(lowerFile, "lower checkout")
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Project.addSandbox(Instance.project.id, upper)
+      await Project.addSandbox(Instance.project.id, lower)
+      expect(await Worktree.list()).toEqual([
+        { directory: upper, name: "Sandbox", branch: "ax-code/upper-case" },
+        { directory: lower, name: "sandbox", branch: "ax-code/lower-case" },
+      ])
+
+      await Worktree.prune(upper, [path.relative(upper, lowerFile)])
+      expect(await fs.readFile(lowerFile, "utf8")).toBe("lower checkout")
+
+      await expect(Worktree.reset({ directory: lower })).resolves.toBe(true)
+      await expect(fs.stat(lowerFile)).rejects.toMatchObject({ code: "ENOENT" })
+      await expect(Worktree.remove({ directory: lower })).resolves.toBe(true)
+      expect(await fs.readFile(upperFile, "utf8")).toBe("upper checkout")
+      expect(await Worktree.list()).toEqual([{ directory: upper, name: "Sandbox", branch: "ax-code/upper-case" }])
+      expect(git("branch", "--list", "ax-code/lower-case")).toBe("")
+    },
+  })
+})
+
+test("accepts a casing alias for an existing checkout on a case-insensitive volume", async (context) => {
+  await using tmp = await tmpdir({ git: true })
+  await using external = await tmpdir()
+  const actual = path.join(external.path, "Sandbox")
+  const alias = path.join(external.path, "sandbox")
+  await fs.mkdir(actual)
+  if (!(await Filesystem.isDir(alias))) context.skip()
+
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: tmp.path, encoding: "utf8", stdio: "pipe" })
+  git("worktree", "add", "-b", "ax-code/alias-case", actual)
+  const dirty = path.join(actual, "reset.txt")
+  await fs.writeFile(dirty, "checkout file")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Project.addSandbox(Instance.project.id, alias)
+      expect(await Worktree.list()).toEqual([{ directory: actual, name: "Sandbox", branch: "ax-code/alias-case" }])
+      await expect(Worktree.reset({ directory: alias })).resolves.toBe(true)
+      await expect(fs.stat(dirty)).rejects.toMatchObject({ code: "ENOENT" })
+      await expect(Worktree.remove({ directory: alias })).resolves.toBe(true)
+      expect(await Worktree.list()).toEqual([])
+      expect(git("branch", "--list", "ax-code/alias-case")).toBe("")
+    },
+  })
 })

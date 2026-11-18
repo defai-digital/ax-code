@@ -283,18 +283,18 @@ export namespace Worktree {
 
   /** Exported for tests: delete leftovers `git clean` reported it could not remove. */
   export async function prune(root: string, entries: string[]) {
-    const base = await canonical(root)
+    const base = await resolveWorktreePath(root)
     await Promise.all(
       entries.map(async (entry) => {
         // Contain by the canonical parent but delete the entry's own path:
         // canonicalizing the entry itself follows a symlink, and removing the
         // resolved target would recursively delete the tree it points at.
         const target = path.resolve(root, entry)
-        const parent = await canonical(path.dirname(target))
-        if (parent !== base && !parent.startsWith(`${base}${path.sep}`)) return
+        const parent = await resolveWorktreePath(path.dirname(target))
+        if (!containsPath(base, parent)) return
         if (path.basename(target) === "" || target === path.resolve(root)) return
         await fs
-          .rm(path.join(await realOnDiskPath(path.dirname(target)), path.basename(target)), {
+          .rm(path.join(parent, path.basename(target)), {
             recursive: true,
             force: true,
           })
@@ -329,20 +329,14 @@ export namespace Worktree {
     return path.join(await realpathAllowMissing(parent), path.basename(abs))
   }
 
-  async function canonical(input: string) {
-    const real = await realpathAllowMissing(path.resolve(input))
-    const normalized = path.normalize(real)
-    return process.platform === "win32" || process.platform === "darwin" ? normalized.toLowerCase() : normalized
+  async function resolveWorktreePath(input: string): Promise<string> {
+    return path.normalize(await realpathAllowMissing(path.resolve(Filesystem.windowsPath(input))))
   }
 
-  /**
-   * Realpath WITHOUT the case folding `canonical()` applies. Instance cache keys
-   * come from `Filesystem.resolve` (case-preserving), so only this spelling can
-   * match them; the lowercased form is for comparison keys (git, sandboxes).
-   */
-  async function realOnDiskPath(input: string) {
-    const real = await realpathAllowMissing(path.resolve(input))
-    return path.normalize(real)
+  /** The inputs are filesystem-resolved, so keep their literal casing. */
+  function containsPath(root: string, directory: string): boolean {
+    const prefix = root.endsWith(path.sep) ? root : root + path.sep
+    return directory === root || directory.startsWith(prefix)
   }
 
   function worktreeName(directory: string) {
@@ -390,7 +384,7 @@ export namespace Worktree {
 
   async function findGitWorktree(cwd: string, directoryKey: string): Promise<GitWorktree | undefined> {
     for (const entry of await readGitWorktrees(cwd)) {
-      if ((await canonical(entry.path)) === directoryKey) return entry
+      if ((await resolveWorktreePath(entry.path)) === directoryKey) return entry
     }
   }
 
@@ -405,15 +399,12 @@ export namespace Worktree {
         : []
     const branches = new Map<string, string>()
     for (const entry of entries) {
-      if (entry.branch) branches.set(await canonical(entry.path), entry.branch)
+      if (entry.branch) branches.set(await resolveWorktreePath(entry.path), entry.branch)
     }
     const items = await Promise.all(
       sandboxes.map(async (sandbox) => {
-        // Compare against the branch map by the case-folded key, but RETURN the
-        // recorded spelling: clients send it back as `x-ax-code-directory`, and
-        // Instance keys on the case-preserving Filesystem.resolve, so a
-        // lowercased value boots a second Instance for the same directory.
-        const branch = branches.get(await canonical(sandbox))
+        // Keep the registry spelling for clients and use on-disk identity to find the branch.
+        const branch = branches.get(await resolveWorktreePath(sandbox))
         return ListItem.parse({
           directory: sandbox,
           name: worktreeName(sandbox),
@@ -661,7 +652,7 @@ export namespace Worktree {
     const created = await withBranchLock(async () => {
       if (
         resumable &&
-        (await findGitWorktree(Instance.worktree, await canonical(info.directory)))?.branch === info.branch
+        (await findGitWorktree(Instance.worktree, await resolveWorktreePath(info.directory)))?.branch === info.branch
       ) {
         if (
           (await branchFlag(info.branch, OWNED_KEY)) !== "set" ||
@@ -873,10 +864,10 @@ export namespace Worktree {
   }
 
   async function forgetOperationsFor(directory: string) {
-    const key = await canonical(directory)
+    const key = await resolveWorktreePath(directory)
     for (const [id, entry] of operations) {
       const info = await entry.pending.catch(() => undefined)
-      if (info && (await canonical(info.directory)) === key) {
+      if (info && (await resolveWorktreePath(info.directory)) === key) {
         operations.delete(id)
         settledOperations.delete(id)
       }
@@ -889,7 +880,7 @@ export namespace Worktree {
     // project share a project ID but must not share created worktrees.
     const common = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: Instance.worktree })
     const repository =
-      common.exitCode === 0 ? await realOnDiskPath(outputText(common.stdout).trim()) : Instance.worktree
+      common.exitCode === 0 ? await resolveWorktreePath(outputText(common.stdout).trim()) : Instance.worktree
     const key = `${repository}\u0000${input.operationId}`
     const request = operationRequest(input)
     const known = operations.get(key)
@@ -961,10 +952,7 @@ export namespace Worktree {
     // A removed worktree must not be returned again for its operation ID.
     await forgetOperationsFor(input.directory)
 
-    const directory = await canonical(input.directory)
-    // Case-preserving spelling for the Instance cache, which keys on
-    // Filesystem.resolve and does not fold case on macOS/Windows.
-    const realDirectory = await realOnDiskPath(input.directory)
+    const directory = await resolveWorktreePath(input.directory)
     // Git calls in this removal need a cwd that survives it. Instance.worktree
     // is the CURRENT checkout, which is the very directory being removed when
     // the caller runs inside its own worktree: after `git worktree remove`
@@ -977,21 +965,19 @@ export namespace Worktree {
     // git dir, captured while it still exists — its parent would be the
     // checkout being removed.
     const repository = await (async () => {
-      const primary = await realOnDiskPath(Instance.project.worktree)
-      if ((await canonical(primary)) !== directory) return primary
+      const primary = await resolveWorktreePath(Instance.project.worktree)
+      if (primary !== directory) return primary
       const common = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"], {
         cwd: Instance.worktree,
       })
-      if (common.exitCode === 0 && outputText(common.stdout)) return realOnDiskPath(outputText(common.stdout))
+      if (common.exitCode === 0 && outputText(common.stdout)) return resolveWorktreePath(outputText(common.stdout))
       return Instance.worktree
     })()
-    // Capture the recorded spellings before Git or filesystem cleanup removes
-    // the paths. Canonical comparison keys may change case on macOS/Windows
-    // and cannot replace the original database keys after the directory is gone.
+    // Resolve registry paths before removing the checkout so aliases still refer to it.
     const recordedDirectories = (
       await Promise.all(
         (await Project.sandboxes(Instance.project.id)).map(async (sandbox) =>
-          (await canonical(sandbox)) === directory ? sandbox : undefined,
+          (await resolveWorktreePath(sandbox)) === directory ? sandbox : undefined,
         ),
       )
     ).filter((sandbox): sandbox is string => sandbox !== undefined)
@@ -1014,15 +1000,15 @@ export namespace Worktree {
     }
 
     const cleanupInstance = async () => {
-      if (Instance.list().includes(realDirectory)) {
+      if (Instance.list().includes(directory)) {
         await Instance.provide({
-          directory: realDirectory,
+          directory,
           fn: async () => {
             await Instance.dispose()
           },
         }).catch((error) => {
           log.warn("failed to dispose removed worktree instance", {
-            directory: realDirectory,
+            directory,
             error: toErrorMessage(error),
           })
         })
@@ -1051,13 +1037,13 @@ export namespace Worktree {
       // under the per-project worktree root. A missing git entry must not
       // recursively delete an arbitrary existing folder (including paths
       // inside the primary workspace).
-      const primary = await canonical(Instance.worktree)
-      if (directory === primary || Filesystem.contains(primary, directory)) {
+      const primary = await resolveWorktreePath(Instance.worktree)
+      if (containsPath(primary, directory)) {
         throw new RemoveFailedError({ message: "Worktree not found" })
       }
-      const managedRoot = await canonical(path.join(Global.Path.data, "worktree", Instance.project.id))
+      const managedRoot = await resolveWorktreePath(path.join(Global.Path.data, "worktree", Instance.project.id))
       const recorded = recordedDirectories.length > 0
-      if (!recorded && (directory === managedRoot || !Filesystem.contains(managedRoot, directory))) {
+      if (!recorded && (directory === managedRoot || !containsPath(managedRoot, directory))) {
         throw new RemoveFailedError({ message: "Worktree not found" })
       }
       const directoryExists = await exists(directory)
@@ -1137,12 +1123,12 @@ export namespace Worktree {
 
     cancelPendingStartScripts(input.directory)
 
-    const directory = await canonical(input.directory)
+    const directory = await resolveWorktreePath(input.directory)
     // Instance.worktree is the CURRENT checkout (a sandbox when the instance
     // runs inside a linked worktree), so it must not stand in for the primary
     // checkout: reset({directory: <main repo>}) from a sandbox would otherwise
     // reset the user's main worktree. Use the project's recorded worktree.
-    const primary = await canonical(Instance.project.worktree)
+    const primary = await resolveWorktreePath(Instance.project.worktree)
     if (directory === primary) {
       throw new ResetFailedError({ message: "Cannot reset the primary workspace" })
     }
