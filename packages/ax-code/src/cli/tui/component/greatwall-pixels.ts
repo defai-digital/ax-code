@@ -1,5 +1,5 @@
 import { clamp01, hash, vnoise } from "./atmos-paint"
-import { blendPixelUnclamped } from "./scene-art-kit"
+import { blendPixelUnclamped, glowUnclamped } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   GREATWALL_BRAZIERS,
@@ -65,18 +65,7 @@ export function renderGreatwallPixels(width: number, height: number, style: Grea
     for (let y = Math.max(0, Math.floor(y0)); y < Math.min(h, Math.ceil(y1)); y++)
       for (let x = Math.max(0, Math.floor(x0)); x < Math.min(w, Math.ceil(x1)); x++) blend(x, y, color, a)
   }
-  const glow = (gx: number, gy: number, r: number, color: RGB, peak: number) => {
-    const xa = Math.max(0, Math.floor(gx - r))
-    const xb = Math.min(w - 1, Math.ceil(gx + r))
-    const ya = Math.max(0, Math.floor(gy - r))
-    const yb = Math.min(h - 1, Math.ceil(gy + r))
-    for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot(x + 0.5 - gx, y + 0.5 - gy) / r
-        if (d < 1) blend(x, y, color, peak * (1 - d) * (1 - d))
-      }
-    }
-  }
+  const glow = glowUnclamped.bind(undefined, hd)
   /** Light from the sun side: 1 facing the sun, 0 facing away. */
   const sunward = (x: number) => clamp01(0.5 + ((x - w * 0.45) / w) * 1.2)
 

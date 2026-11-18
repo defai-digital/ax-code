@@ -1,4 +1,4 @@
-import { blendPixelAt } from "./scene-art-kit"
+import { blendPixelAt, softBlob as paintSoftBlob } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   BIGBEN_ABBEY,
@@ -63,14 +63,7 @@ export function renderBigbenPixels(width: number, height: number, style: BigbenS
   const unit = Math.min(cw, ch)
 
   const blend = (i: number, color: RGB, alpha: number) => blendPixelAt(hd, i, color, alpha)
-  const softBlob = (cx: number, cy: number, rx: number, ry: number, color: RGB, alpha: number, pow = 1) => {
-    for (let y = Math.max(0, Math.floor(cy - ry)); y < Math.min(h, Math.ceil(cy + ry)); y++) {
-      for (let x = Math.max(0, Math.floor(cx - rx)); x < Math.min(w, Math.ceil(cx + rx)); x++) {
-        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
-        if (d < 1) blend((y * w + x) * 3, color, alpha * Math.pow(1 - smooth(0, 1, d), pow))
-      }
-    }
-  }
+  const softBlob = paintSoftBlob.bind(undefined, hd)
   /** Floodlit stone: warm from below at night, sunlit from the left by day. */
   const lit = (base: RGB, x: number, y: number, side: number): RGB => {
     const course = 1 + 0.035 * Math.sin(y * 0.55)

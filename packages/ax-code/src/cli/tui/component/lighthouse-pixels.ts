@@ -1,4 +1,4 @@
-import { blendPixelUnclamped } from "./scene-art-kit"
+import { blendPixelUnclamped, glowUnclamped } from "./scene-art-kit"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
 import {
   LIGHTHOUSE_CLIFF_TOP,
@@ -63,18 +63,7 @@ export function renderLighthousePixels(
   const seaTop = Y(LIGHTHOUSE_SEA_TOP)
 
   const tint = (x: number, y: number, color: RGB, a: number) => blendPixelUnclamped(hd, x, y, color, a)
-  const glow = (cx: number, cy: number, radius: number, color: RGB, strength: number, floor = h) => {
-    const xa = Math.max(0, Math.floor(cx - radius)),
-      xb = Math.min(w - 1, Math.ceil(cx + radius))
-    const ya = Math.max(0, Math.floor(cy - radius)),
-      yb = Math.min(floor - 1, Math.ceil(cy + radius))
-    for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius
-        if (d < 1) tint(x, y, color, strength * (1 - d) * (1 - d))
-      }
-    }
-  }
+  const glow = glowUnclamped.bind(undefined, hd)
   /** Volumetric cone: bright at the origin, widening and fading along `angle`. */
   const cone = (
     ox: number,

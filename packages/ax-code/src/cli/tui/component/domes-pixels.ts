@@ -1,5 +1,5 @@
 import { clamp01, hash, vnoise } from "./atmos-paint"
-import { blendPixelUnclamped } from "./scene-art-kit"
+import { blendPixelUnclamped, glowUnclamped } from "./scene-art-kit"
 import {
   DOMES_BASE_BOTTOM,
   DOMES_BASE_TOP,
@@ -54,18 +54,7 @@ export function renderDomesPixels(width: number, height: number, style: DomesSty
       for (let x = Math.max(0, Math.floor(x0)); x < Math.min(w, Math.ceil(x1)); x++) blend(x, y, color, a)
     }
   }
-  const glow = (gx: number, gy: number, r: number, color: RGB, peak: number) => {
-    const xa = Math.max(0, Math.floor(gx - r))
-    const xb = Math.min(w - 1, Math.ceil(gx + r))
-    const ya = Math.max(0, Math.floor(gy - r))
-    const yb = Math.min(h - 1, Math.ceil(gy + r))
-    for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot(x + 0.5 - gx, y + 0.5 - gy) / r
-        if (d < 1) blend(x, y, color, peak * (1 - d) * (1 - d))
-      }
-    }
-  }
+  const glow = glowUnclamped.bind(undefined, hd)
 
   hd.sky((v) => domesSkyRgb(style, v))
   const haze = hdMix(skyAt(horizonY), [255, 255, 255], 0.35)

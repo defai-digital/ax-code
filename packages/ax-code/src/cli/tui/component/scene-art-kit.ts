@@ -65,6 +65,47 @@ export function glow(hd: HdCanvas, cx: number, cy: number, radius: number, color
   }
 }
 
+/** Quadratic circular light without an alpha clamp, clipped above `floor`. */
+export function glowUnclamped(
+  hd: HdCanvas,
+  cx: number,
+  cy: number,
+  radius: number,
+  color: RGB,
+  strength: number,
+  floor = hd.h,
+): void {
+  const xa = Math.max(0, Math.floor(cx - radius))
+  const xb = Math.min(hd.w - 1, Math.ceil(cx + radius))
+  const ya = Math.max(0, Math.floor(cy - radius))
+  const yb = Math.min(hd.h - 1, floor - 1, Math.ceil(cy + radius))
+  for (let y = ya; y <= yb; y++) {
+    for (let x = xa; x <= xb; x++) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius
+      if (d < 1) blendPixelUnclamped(hd, x, y, color, strength * (1 - d) * (1 - d))
+    }
+  }
+}
+
+/** Elliptical smoothstep falloff with a configurable power and clamped alpha. */
+export function softBlob(
+  hd: HdCanvas,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  color: RGB,
+  alpha: number,
+  power = 1,
+): void {
+  for (let y = Math.max(0, Math.floor(cy - ry)); y < Math.min(hd.h, Math.ceil(cy + ry)); y++) {
+    for (let x = Math.max(0, Math.floor(cx - rx)); x < Math.min(hd.w, Math.ceil(cx + rx)); x++) {
+      const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
+      if (d < 1) blendPixelAt(hd, (y * hd.w + x) * 3, color, alpha * Math.pow(1 - d * d * (3 - 2 * d), power))
+    }
+  }
+}
+
 /** Disk with a one-pixel soft edge. */
 export function softDisk(hd: HdCanvas, cx: number, cy: number, r: number, color: RGB, alpha = 1) {
   if (r <= 0) return

@@ -1,4 +1,4 @@
-import { blendPixelAt } from "./scene-art-kit"
+import { blendPixelAt, softBlob as paintSoftBlob } from "./scene-art-kit"
 import {
   BOROBUDUR_COLUMNS,
   BOROBUDUR_GROUND_TOP,
@@ -55,14 +55,7 @@ export function renderBorobudurPixels(width: number, height: number, style: Boro
   const warm: RGB = misty ? [255, 240, 214] : [255, 226, 170]
 
   const blend = (i: number, color: RGB, alpha: number) => blendPixelAt(hd, i, color, alpha)
-  const softBlob = (cx: number, cy: number, rx: number, ry: number, color: RGB, alpha: number, pow = 1) => {
-    for (let y = Math.max(0, Math.floor(cy - ry)); y < Math.min(h, Math.ceil(cy + ry)); y++) {
-      for (let x = Math.max(0, Math.floor(cx - rx)); x < Math.min(w, Math.ceil(cx + rx)); x++) {
-        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
-        if (d < 1) blend((y * w + x) * 3, color, alpha * Math.pow(1 - smooth(0, 1, d), pow))
-      }
-    }
-  }
+  const softBlob = paintSoftBlob.bind(undefined, hd)
 
   // Sky, sun bloom, and (noon) cumulus.
   hd.sky((v) => borobudurSkyRgb(style, v))
