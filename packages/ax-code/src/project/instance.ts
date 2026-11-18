@@ -261,13 +261,13 @@ function create(input: BootstrapInput, scoped: boolean, inherited?: ScopeOwner, 
     started
       .finally(() => initializing.delete(ready))
       .catch(async (error) => {
-        if (owner && ctx) {
+        if (ctx) {
           const failed = ctx
           const cleanup = () => disposeCurrent(failed, ready)
           await (insideChange ? cleanup() : change(input.directory, cleanup)).catch((cleanupError) => {
             Log.Default.warn("failed instance cleanup failed", { error: toErrorMessage(cleanupError) })
           })
-        } else if (owner && cache.get(input.directory) === ready) {
+        } else if (cache.get(input.directory) === ready) {
           ServiceManager.clear(input.directory)
         }
         throw error
