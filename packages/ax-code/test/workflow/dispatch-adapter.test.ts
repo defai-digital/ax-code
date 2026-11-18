@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import type { DispatchExecutor } from "../../src/dispatch"
 import { Instance } from "../../src/project/instance"
 import { WorkflowFixtureSpecs, WorkflowRun, WorkflowScheduler, parseWorkflowSpecV1 } from "../../src/workflow"
-import { WorkflowDispatchWritePolicyError } from "../../src/workflow/dispatch-adapter"
+import {
+  WorkflowDispatchExecutorMissingError,
+  WorkflowDispatchWritePolicyError,
+} from "../../src/workflow/dispatch-adapter"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -73,6 +76,114 @@ describe("WorkflowDispatchAdapter", () => {
     }
   })
 
+  test("rejects missing inline dispatch before recording workflow progress", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          const before = await WorkflowRun.getDetail(run.id)
+          await expect(
+            WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, enqueueChildren: false }),
+          ).rejects.toBeInstanceOf(WorkflowDispatchExecutorMissingError)
+          expect(await WorkflowRun.getDetail(run.id)).toEqual(before)
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("starts a noop-only workflow without an inline dispatcher", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "inline-noop",
+              name: "Inline Noop",
+              description: "No work requires an inline dispatcher.",
+              phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+            }),
+          })
+          const done = await WorkflowScheduler.start(run.id, { enqueueChildren: false })
+          expect(done.status).toBe("completed")
+          expect(done.children).toEqual([])
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test.each(["operator", "caller"] as const)("stops an inline dispatcher on %s cancellation", async (source) => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "inline-cancellation",
+              name: "Inline Cancellation",
+              description: "Abort an active child and stop before the next phase.",
+              budget: { maxConcurrentAgents: 1, maxTotalAgents: 2 },
+              phases: [
+                { id: "work", name: "Work", kind: "sequential", prompt: "Offline fixture." },
+                { id: "next", name: "Next", kind: "sequential", prompt: "Stay queued.", dependsOn: ["work"] },
+              ],
+            }),
+          })
+          const admitted = Promise.withResolvers<AbortSignal>()
+          const complete = Promise.withResolvers<void>()
+          const controller = new AbortController()
+          const executor = vi.fn<DispatchExecutor>(async (_spec, signal) => {
+            admitted.resolve(signal)
+            await complete.promise
+            return { output: "Late output", tokensUsed: 2 }
+          })
+          const start = WorkflowScheduler.start(run.id, {
+            enqueueChildren: false,
+            dispatchExecutor: executor,
+            signal: controller.signal,
+          })
+          try {
+            const signal = await Promise.race([
+              admitted.promise,
+              start.then(() => {
+                throw new Error("Workflow ended before dispatch")
+              }),
+            ])
+            if (source === "operator") expect((await WorkflowScheduler.cancel(run.id)).status).toBe("cancelled")
+            else controller.abort()
+            expect(signal.aborted).toBe(true)
+          } finally {
+            complete.resolve()
+            await start
+          }
+
+          const result = await WorkflowRun.getDetail(run.id)
+          expect(result.status).toBe("cancelled")
+          expect(result.phases.map((phase) => phase.status)).toEqual(["cancelled", "cancelled"])
+          expect(result.children.map((child) => child.status)).toEqual(["cancelled"])
+          expect(result.artifacts.some((artifact) => artifact.childID)).toBe(false)
+          expect(result.budgetUsage.totalTokens).toBe(0)
+          expect(executor).toHaveBeenCalledTimes(1)
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   test("rejects direct dispatcher execution for write workflows", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
@@ -91,6 +202,7 @@ describe("WorkflowDispatchAdapter", () => {
           })
           const run = await WorkflowRun.create({ spec })
 
+          const before = await WorkflowRun.getDetail(run.id)
           await expect(
             WorkflowScheduler.start(run.id, {
               allowWriteWorkflows: true,
@@ -98,6 +210,7 @@ describe("WorkflowDispatchAdapter", () => {
               dispatchExecutor: async () => ({ output: "should not run" }),
             }),
           ).rejects.toThrow(WorkflowDispatchWritePolicyError)
+          expect(await WorkflowRun.getDetail(run.id)).toEqual(before)
         },
       })
     } finally {

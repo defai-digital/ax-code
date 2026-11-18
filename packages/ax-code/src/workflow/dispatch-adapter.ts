@@ -1,3 +1,4 @@
+import { HTTPException } from "hono/http-exception"
 import {
   dispatch,
   type DispatchExecutor,
@@ -22,16 +23,16 @@ export namespace WorkflowDispatchAdapter {
     signal?: AbortSignal
   }
 
-  export type ExecutePhaseResult = {
-    phase: WorkflowPhaseRecord
-    results: DispatchResult[]
+  export function assertReadOnly(spec: WorkflowSpecV1): void {
+    if (spec.permissions.writePolicy === "read-only") return
+    throw new WorkflowDispatchWritePolicyError(spec.permissions.writePolicy)
   }
 
-  export async function executePhase(input: ExecutePhaseInput): Promise<ExecutePhaseResult> {
+  export async function executePhase(input: ExecutePhaseInput): Promise<WorkflowPhaseRecord | undefined> {
     assertReadOnly(input.spec)
-
     const children: Awaited<ReturnType<typeof WorkflowRun.appendChild>>[] = []
     for (const childPlan of input.phasePlan.children) {
+      if (input.signal?.aborted) return undefined
       const child = await WorkflowRun.appendChild({
         runID: input.runID,
         phaseID: input.phase.id,
@@ -40,6 +41,7 @@ export namespace WorkflowDispatchAdapter {
         budgetSlice: childPlan.budgetSlice,
       })
       children.push(child)
+      if (input.signal?.aborted) return undefined
       await WorkflowRun.appendBudgetUsage({
         runID: input.runID,
         phaseID: input.phase.id,
@@ -58,8 +60,13 @@ export namespace WorkflowDispatchAdapter {
     const results = await dispatch(
       specs,
       async (spec, signal) => {
+        signal.throwIfAborted()
         const child = childBySpec.get(spec)
-        if (child) await WorkflowRun.setChildStatus({ id: child.id, status: "running" })
+        if (child) {
+          const admitted = await WorkflowRun.setChildStatus({ id: child.id, status: "running" })
+          if (admitted.status !== "running") throw new DOMException("Workflow child was stopped.", "AbortError")
+        }
+        signal.throwIfAborted()
         return input.executor(spec, signal)
       },
       {
@@ -69,7 +76,9 @@ export namespace WorkflowDispatchAdapter {
       },
     )
 
+    if (input.signal?.aborted || (await WorkflowRun.get(input.runID)).status === "cancelled") return undefined
     for (const [index, result] of results.entries()) {
+      if (input.signal?.aborted) return undefined
       const child = children[index]
       if (!child) continue
 
@@ -93,6 +102,7 @@ export namespace WorkflowDispatchAdapter {
           outputTokens: result.outputTokens,
         },
       })
+      if (input.signal?.aborted) return undefined
       await WorkflowRun.appendBudgetUsage({
         runID: input.runID,
         phaseID: input.phase.id,
@@ -120,8 +130,7 @@ export namespace WorkflowDispatchAdapter {
             error: stopError,
           })
         }
-        const failedPhase = budgetChecked.phases.find((candidate) => candidate.id === input.phase.id) ?? input.phase
-        return { phase: failedPhase, results }
+        return budgetChecked.phases.find((candidate) => candidate.id === input.phase.id) ?? input.phase
       }
       await WorkflowRun.setChildStatus({
         id: child.id,
@@ -133,6 +142,7 @@ export namespace WorkflowDispatchAdapter {
       })
     }
 
+    if (input.signal?.aborted) return undefined
     await WorkflowRun.appendArtifact({
       runID: input.runID,
       phaseID: input.phase.id,
@@ -150,26 +160,26 @@ export namespace WorkflowDispatchAdapter {
     })
 
     const phaseStatus = phaseStatusFromResults(input.phaseSpec.mergeStrategy, results)
-    const phase = await WorkflowRun.setPhaseStatus({
+    return WorkflowRun.setPhaseStatus({
       id: input.phase.id,
       status: phaseStatus,
       error: phaseStatus === "failed" ? failedSummary(results) : undefined,
     })
-
-    return { phase, results }
   }
 }
 
-export class WorkflowDispatchWritePolicyError extends Error {
+export class WorkflowDispatchWritePolicyError extends HTTPException {
   constructor(writePolicy: string) {
-    super(`Workflow dispatch adapter only supports read-only workflows; got writePolicy ${writePolicy}.`)
+    super(400, {
+      message: `Workflow dispatch adapter only supports read-only workflows. Got writePolicy ${writePolicy}.`,
+    })
     this.name = "WorkflowDispatchWritePolicyError"
   }
 }
 
-export class WorkflowDispatchExecutorMissingError extends Error {
+export class WorkflowDispatchExecutorMissingError extends HTTPException {
   constructor() {
-    super("Workflow direct dispatch requires an injected DispatchExecutor.")
+    super(400, { message: "Workflow direct dispatch requires an injected DispatchExecutor." })
     this.name = "WorkflowDispatchExecutorMissingError"
   }
 }
@@ -179,11 +189,6 @@ export class WorkflowDispatchUnsupportedMergeStrategyError extends Error {
     super(`Workflow direct dispatch does not support mergeStrategy ${strategy}.`)
     this.name = "WorkflowDispatchUnsupportedMergeStrategyError"
   }
-}
-
-function assertReadOnly(spec: WorkflowSpecV1) {
-  if (spec.permissions.writePolicy === "read-only") return
-  throw new WorkflowDispatchWritePolicyError(spec.permissions.writePolicy)
 }
 
 function dispatchMergeStrategy(strategy: WorkflowPhase["mergeStrategy"]): MergeStrategy {

@@ -107,6 +107,18 @@ describe("workflow routes", () => {
         allowedProviders: ["anthropic", "openai"],
       })
 
+      const inline = await app.request(`/workflow-runs/${created.id}/start?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ allowScaleBeyondDefaults: true, enqueueChildren: false }),
+      })
+      expect(inline.status).toBe(400)
+      expect(await inline.json()).toMatchObject({
+        message: expect.stringContaining("requires an injected DispatchExecutor"),
+      })
+      const unstarted = await app.request(`/workflow-runs/${created.id}?${directoryQuery}`)
+      expect(await unstarted.json()).toMatchObject({ status: "queued", artifacts: [], children: [] })
+
       const startResponse = await app.request(`/workflow-runs/${created.id}/start?${directoryQuery}`, {
         method: "POST",
         headers: { "content-type": "application/json" },

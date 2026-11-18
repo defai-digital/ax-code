@@ -1,4 +1,6 @@
+import { HTTPException } from "hono/http-exception"
 import z from "zod"
+import type { DispatchExecutor } from "../dispatch"
 import { Instance } from "../project/instance"
 import { Session } from "../session"
 import type { TaskQueue } from "../session/task-queue"
@@ -11,24 +13,27 @@ import { planWorkflowDryRun, type WorkflowDryRunPhase } from "./planner"
 import { WorkflowRun } from "./run"
 import { WorkflowPhaseID, type WorkflowRunDetail, WorkflowRunID } from "./state"
 
-type WorkflowDispatchExecutor = (
-  spec: { agent: string; prompt: string; constraints?: string[]; timeoutMs?: number },
-  signal: AbortSignal,
-) => Promise<{
-  output?: string
-  filesModified?: string[]
-  filesProposed?: string[]
-  tokensUsed?: number
-  inputTokens?: number
-  outputTokens?: number
-}>
+type InlineDispatch = {
+  executePhase: typeof import("./dispatch-adapter").WorkflowDispatchAdapter.executePhase
+  executor: DispatchExecutor
+  signal: AbortSignal
+}
+
+const inlineExecutions = new Map<string, { owner: KeyedSerialQueue; controller: AbortController }>()
 
 const startLocks = Instance.state(
   () => new KeyedSerialQueue(),
   async (queue) => {
     queue.clear()
+    for (const execution of inlineExecutions.values()) {
+      if (execution.owner === queue) execution.controller.abort()
+    }
   },
 )
+
+function runKey(runID: WorkflowRunID): string {
+  return `workflow-run:${Instance.project.id}:${runID}`
+}
 
 export namespace WorkflowScheduler {
   export const StartOptions = z.object({
@@ -39,7 +44,7 @@ export namespace WorkflowScheduler {
     autoStartChildren: JsonBoolean.default(true),
   })
   export type StartOptions = z.input<typeof StartOptions> & {
-    dispatchExecutor?: WorkflowDispatchExecutor
+    dispatchExecutor?: DispatchExecutor
     signal?: AbortSignal
   }
 
@@ -53,12 +58,15 @@ export namespace WorkflowScheduler {
       }
       await assertEnabledForSpec(specID)
     }
-    return startLocks().run(`workflow-run:${Instance.project.id}:${runID}`, () => startUnlocked(runID, options))
+    const owner = startLocks()
+    return owner.run(runKey(runID), () => startUnlocked(runID, options, owner))
   }
 
-  async function startUnlocked(runID: WorkflowRunID, options: StartOptions = {}) {
-    const dispatchExecutor = options.dispatchExecutor
-    const signal = options.signal
+  async function startUnlocked(
+    runID: WorkflowRunID,
+    options: StartOptions,
+    owner: KeyedSerialQueue,
+  ): Promise<WorkflowRunDetail> {
     const parsed = StartOptions.parse(options)
     const initial = await WorkflowRun.getDetail(runID)
     await assertEnabledForSpec(initial.spec.id)
@@ -79,9 +87,53 @@ export namespace WorkflowScheduler {
       allowWriteWorkflows: parsed.allowWriteWorkflows,
       durableChildren: parsed.durableChildren,
     })
-    const started = await WorkflowRun.setStatus({ id: runID, status: "running" })
-    if (started.status === "cancelled") return WorkflowRun.getDetail(runID)
+    const inlineRequired =
+      !parsed.enqueueChildren && initial.phases.some((phase) => phase.status !== "completed" && phase.kind !== "noop")
+    const adapter = inlineRequired ? await import("./dispatch-adapter") : undefined
+    const key = runKey(runID)
+    if (inlineExecutions.has(key)) {
+      throw new HTTPException(409, { message: `Workflow run ${runID} already has an active inline dispatch.` })
+    }
+    if (!adapter) return startPhases(initial, parsed, plan)
+
+    const { WorkflowDispatchAdapter, WorkflowDispatchExecutorMissingError } = adapter
+    const executor = options.dispatchExecutor
+    if (!executor) throw new WorkflowDispatchExecutorMissingError()
+    WorkflowDispatchAdapter.assertReadOnly(initial.spec)
+
+    const controller = new AbortController()
+    inlineExecutions.set(key, { owner, controller })
+    const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal
+    try {
+      const result = await startPhases(initial, parsed, plan, {
+        executePhase: WorkflowDispatchAdapter.executePhase,
+        executor,
+        signal,
+      }).catch(async (error) => {
+        if (!(signal.aborted && error instanceof HTTPException && error.status === 409)) throw error
+        return WorkflowRun.getDetail(runID)
+      })
+      if (options.signal?.aborted && !controller.signal.aborted && !WorkflowRun.isTerminalRunStatus(result.status)) {
+        return await terminateRun(runID)
+      }
+      return result
+    } finally {
+      inlineExecutions.delete(key)
+    }
+  }
+
+  async function startPhases(
+    initial: WorkflowRunDetail,
+    parsed: z.output<typeof StartOptions>,
+    plan: ReturnType<typeof planWorkflowDryRun>,
+    inline?: InlineDispatch,
+  ): Promise<WorkflowRunDetail> {
+    const runID = initial.id
+    if (inline?.signal.aborted) return WorkflowRun.getDetail(runID)
+    const started = await WorkflowRun.setStatus({ id: runID, status: "running" }, { signal: inline?.signal })
+    if (started.status !== "running") return WorkflowRun.getDetail(runID)
     for (const phase of initial.phases) {
+      if (inline?.signal.aborted) return WorkflowRun.getDetail(runID)
       const stopped = await stopIfWallTimeExceeded(runID)
       if (stopped) return stopped
       if (phase.status === "completed") continue
@@ -175,22 +227,24 @@ export namespace WorkflowScheduler {
             await TaskQueueExecutor.start(task)
           }
         }
-      } else {
-        const { WorkflowDispatchAdapter, WorkflowDispatchExecutorMissingError } = await import("./dispatch-adapter")
-        if (!dispatchExecutor) throw new WorkflowDispatchExecutorMissingError()
+      } else if (inline) {
         const phaseSpec = initial.spec.phases.find((item) => item.id === phase.specPhaseID)
         if (!phaseSpec) throw new Error(`No workflow phase spec for ${phase.specPhaseID}`)
-        const executed = await WorkflowDispatchAdapter.executePhase({
+        const executed = await inline.executePhase({
           runID,
           spec: initial.spec,
           phase,
           phaseSpec,
           phasePlan,
-          executor: dispatchExecutor,
-          signal,
+          executor: inline.executor,
+          signal: inline.signal,
         })
-        if (executed.phase.status === "failed" || executed.phase.status === "cancelled") {
-          await WorkflowRun.setStatus({ id: runID, status: executed.phase.status, error: executed.phase.error })
+        if (!executed || inline.signal.aborted) return WorkflowRun.getDetail(runID)
+        if (executed.status === "failed" || executed.status === "cancelled") {
+          await WorkflowRun.setStatus(
+            { id: runID, status: executed.status, error: executed.error },
+            { signal: inline.signal },
+          )
           return WorkflowRun.getDetail(runID)
         }
         continue
@@ -199,7 +253,8 @@ export namespace WorkflowScheduler {
       return WorkflowRun.getDetail(runID)
     }
 
-    const completed = await WorkflowRun.setStatus({ id: runID, status: "completed" })
+    if (inline?.signal.aborted) return WorkflowRun.getDetail(runID)
+    const completed = await WorkflowRun.setStatus({ id: runID, status: "completed" }, { signal: inline?.signal })
     if (completed.status === "completed") await WorkflowRun.ensureFinalReportArtifact(runID)
     return WorkflowRun.getDetail(runID)
   }
@@ -233,7 +288,9 @@ export namespace WorkflowScheduler {
         if (!NotFoundError.isInstance(error)) throw error
       }
     }
-    return WorkflowRun.finishCancellation(runID)
+    WorkflowRun.finishCancellation(runID)
+    inlineExecutions.get(runKey(runID))?.controller.abort()
+    return WorkflowRun.getDetail(runID)
   }
 
   export async function pause(runID: WorkflowRunID) {

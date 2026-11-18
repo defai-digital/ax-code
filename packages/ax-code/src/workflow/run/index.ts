@@ -197,7 +197,7 @@ export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
 
 async function setStatus(
   input: WorkflowRunState.SetStatusInput,
-  options: { reopenCancelled?: boolean } = {},
+  options: { reopenCancelled?: boolean; signal?: AbortSignal } = {},
 ): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.SetStatusInput.parse(input)
   const completionGate =
@@ -205,6 +205,7 @@ async function setStatus(
   const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const current = readRunRow(db, parsed.id)
     if (
+      options.signal?.aborted ||
       (current.status === "cancelled" && !options.reopenCancelled) ||
       (parsed.status === "cancelled" && TaskQueue.hasLiveWorkflowChildren(db, parsed.id))
     )
@@ -225,7 +226,7 @@ async function setStatus(
   return result.run
 }
 
-async function finishCancellation(runID: WorkflowRunID): Promise<WorkflowRunDetail> {
+function finishCancellation(runID: WorkflowRunID): void {
   const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const current = readRunRow(db, runID)
     if (TaskQueue.hasLiveWorkflowChildren(db, runID)) {
@@ -263,7 +264,6 @@ async function finishCancellation(runID: WorkflowRunID): Promise<WorkflowRunDeta
   for (const phase of result.phases) publishPhaseUpdated(phase, result.oldPhases.get(phase.id))
   for (const child of result.children) publishChildUpdated(child, result.oldChildren.get(child.id))
   if (result.run) publishUpdated(result.run, result.previous)
-  return getDetail(runID)
 }
 
 async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Promise<WorkflowPhaseRecord> {
