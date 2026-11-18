@@ -5,19 +5,6 @@ import { ModelID } from "./schema"
 import { ModelsDev } from "./models"
 import { exactCatalogFallbackModels } from "./ax-trust-catalog"
 
-// The fallback table and its first-party catalog list live in
-// ./ax-trust-catalog so the editor's connect/refresh path
-// (CustomApiProvider.upsert) can share them without an import cycle.
-export { exactCatalogFallbackModels, FIRST_PARTY_CATALOG_IDS } from "./ax-trust-catalog"
-
-function previousAxTrustModel(provider: ProviderInfo, remoteId: string) {
-  const direct = provider.models[remoteId]
-  if (direct) return { key: remoteId, model: direct }
-  const aliased = Object.entries(provider.models).find(([, model]) => model.api.id === remoteId)
-  if (!aliased) return undefined
-  return { key: aliased[0], model: aliased[1] }
-}
-
 // AX Trust model cards declare image support through `vision`, the input
 // modality list, or the generic `attachment` flag, in that order; discoveredModel
 // resolves that order into the single image/attachment value mapped below.
@@ -28,9 +15,16 @@ export async function discoverAxTrustModels(
 ): Promise<Record<string, ProviderModel>> {
   const fallbackModels = exactCatalogFallbackModels(await ModelsDev.get())
   const models = await CustomApiProvider.discoverModels({ ...connection, requireComplete: true, fallbackModels })
-  const discovered = Object.fromEntries(
+  const saved = new Map(Object.entries(provider.models))
+  const firstAliasByTarget = new Map<string, ProviderModel>()
+  for (const [localKey, model] of saved) {
+    if (localKey !== model.api.id && !firstAliasByTarget.has(model.api.id)) {
+      firstAliasByTarget.set(model.api.id, model)
+    }
+  }
+  const canonical = new Map(
     models.map((model) => {
-      const previous = previousAxTrustModel(provider, model.id)?.model
+      const previous = saved.get(model.id) ?? firstAliasByTarget.get(model.id)
       const fallback = fallbackModels[model.id]
       const next: ProviderModel = {
         id: ModelID.make(model.id),
@@ -68,18 +62,21 @@ export async function discoverAxTrustModels(
       return [model.id, next]
     }),
   )
-  for (const [localKey, previous] of Object.entries(provider.models)) {
+  // Resolve every saved alias against the gateway rows. A local alias can
+  // occupy the same key as a gateway row without changing other aliases.
+  const discovered = new Map(canonical)
+  for (const [localKey, previous] of saved) {
     const remoteId = previous.api.id
     if (localKey === remoteId) continue
-    const canonical = discovered[remoteId]
-    if (!canonical) continue
-    discovered[localKey] = {
-      ...canonical,
+    const target = canonical.get(remoteId)
+    if (!target) continue
+    discovered.set(localKey, {
+      ...target,
       id: ModelID.make(localKey),
-      name: previous.name || canonical.name,
-      options: previous.options ?? canonical.options,
-      headers: previous.headers ?? canonical.headers,
-    }
+      name: previous.name || target.name,
+      options: previous.options ?? target.options,
+      headers: previous.headers ?? target.headers,
+    })
   }
-  return discovered
+  return Object.fromEntries(discovered)
 }

@@ -10,7 +10,8 @@ import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Auth } from "../../src/auth"
 import { Bus } from "../../src/bus"
 import { CustomApiProvider } from "../../src/provider/custom-api-provider"
-import { exactCatalogFallbackModels, FIRST_PARTY_CATALOG_IDS } from "../../src/provider/ax-trust-discovery"
+import { discoverAxTrustModels } from "../../src/provider/ax-trust-discovery"
+import { exactCatalogFallbackModels, FIRST_PARTY_CATALOG_IDS } from "../../src/provider/ax-trust-catalog"
 import { modelDisplayInfo } from "../../src/cli/tui/component/model-vision-label"
 import { modelCapabilityEvidence } from "../../src/provider/capability-evidence"
 import { ModelsDev } from "../../src/provider/models"
@@ -260,6 +261,45 @@ test("preserves configured aliases and local options after authoritative discove
   } finally {
     await Auth.remove(id)
   }
+})
+
+test("discovery resolves configured model aliases against gateway rows only", async () => {
+  await using api = await endpoint((_req, res) => {
+    res.setHeader("Content-Type", "application/json")
+    res.end(JSON.stringify({ data: [{ id: "gateway-model" }, { id: "gateway-slot" }] }))
+  })
+  const savedModel = (target: string): ModelsDev.Model => ({
+    id: target,
+    name: target,
+    release_date: "",
+    attachment: false,
+    reasoning: false,
+    temperature: false,
+    tool_call: true,
+    limit: { context: 8_000, output: 2_000 },
+  })
+  const provider = Provider.fromModelsDevProvider({
+    id: "test-gateway",
+    name: "Test gateway",
+    env: [],
+    models: {
+      "local-alias": savedModel("gateway-model"),
+      "absent-gateway-target": savedModel("local-alias"),
+      "gateway-slot": savedModel("gateway-model"),
+      "alias-of-real-slot": savedModel("gateway-slot"),
+    },
+  })
+  if (!provider) throw new Error("Missing provider fixture")
+
+  const models = await discoverAxTrustModels(provider, {
+    baseURL: api.url,
+    apiKey: "test-token",
+    npm: "@ai-sdk/openai-compatible",
+  })
+  expect(models["local-alias"]?.api.id).toBe("gateway-model")
+  expect(models["absent-gateway-target"]).toBeUndefined()
+  expect(models["gateway-slot"]?.api.id).toBe("gateway-model")
+  expect(models["alias-of-real-slot"]?.api.id).toBe("gateway-slot")
 })
 
 test.each([

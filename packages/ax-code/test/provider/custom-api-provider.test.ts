@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "vitest"
 import { declaredCapabilityEvidence } from "../../src/provider/capability-evidence"
 import { CustomApiProvider } from "../../src/provider/custom-api-provider"
+import type { ModelsDev } from "../../src/provider/models"
 
 const originalFetch = globalThis.fetch
 
@@ -74,6 +75,38 @@ describe("custom API provider model discovery", () => {
     )
     expect(restricted).toMatchObject({ toolCall: false, reasoning: false, temperature: false })
     expect(declaredCapabilityEvidence(restricted)?.toolCalling).toEqual({ state: "unsupported", source: "deployment" })
+  })
+
+  test("emits image and search evidence from the same declarations as the model flags", () => {
+    const fallback: ModelsDev.Model = {
+      id: "fixture",
+      name: "Fixture",
+      release_date: "",
+      attachment: true,
+      reasoning: false,
+      temperature: false,
+      tool_call: true,
+      limit: { context: 8_000, output: 2_000 },
+      modalities: { input: ["text", "image"], output: ["text"] },
+    }
+    const sparse = CustomApiProvider.discoveredModel("fixture", undefined, {}, fallback)
+    expect(sparse).toMatchObject({ attachment: true, websearch: undefined, pdf: undefined })
+    expect(declaredCapabilityEvidence(sparse)?.attachment).toEqual({ state: "supported", source: "catalog" })
+    expect(declaredCapabilityEvidence(sparse)?.webSearch).toEqual({ state: "unknown", source: "unknown" })
+
+    const restricted = CustomApiProvider.discoveredModel(
+      "fixture",
+      undefined,
+      {
+        capabilities: { vision: false, attachment: true, web_search: false },
+        abilities: { vision: true, web_search: true },
+        modalities: { input: ["text", "image", "pdf"] },
+      },
+      fallback,
+    )
+    expect(restricted).toMatchObject({ attachment: false, websearch: false, pdf: true })
+    expect(declaredCapabilityEvidence(restricted)?.attachment).toEqual({ state: "unsupported", source: "deployment" })
+    expect(declaredCapabilityEvidence(restricted)?.webSearch).toEqual({ state: "unsupported", source: "deployment" })
   })
 
   test("parses OpenAI-compatible /models payloads", () => {

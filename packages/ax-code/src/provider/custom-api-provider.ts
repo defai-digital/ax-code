@@ -289,71 +289,29 @@ export namespace CustomApiProvider {
     return { context, output }
   }
 
-  // A gateway card carries up to three statements about image input. An
-  // explicit `vision` flag wins, then the model's own input modality list (the
-  // shape `fromModelsDevModel` already reads for models.dev cards), then the
-  // generic `attachment` flag. `attachment` alone is too coarse: AX Trust
-  // reports attachment=true alongside vision=false for text-only deployments,
-  // and this value is read as image support by the TUI vision marker and the
-  // visual router, so a coarse true sends images to a model that cannot read
-  // them. A first-party catalog row is the last resort for sparse cards.
-  // `vision` is read from `capabilities` or the top-level `abilities` block,
-  // the same dual shape the gateway uses for its other declared abilities.
-  function imageCapable(
-    capabilities: Record<string, unknown> | undefined,
-    raw: Record<string, unknown> | undefined,
-    fallback: ModelsDev.Model | undefined,
-  ): boolean {
-    if (typeof capabilities?.vision === "boolean") return capabilities.vision
-    const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
-    if (typeof abilities?.vision === "boolean") return abilities.vision
-    const declared = isRecord(raw?.modalities) && Array.isArray(raw.modalities.input) ? raw.modalities.input : undefined
-    if (declared && declared.length > 0) return declared.some((modality) => modality === "image")
-    if (typeof capabilities?.attachment === "boolean") return capabilities.attachment
-    // A catalog row is a trust boundary (bundled snapshot / AX_CODE_MODELS_PATH
-    // / AX_CODE_MODELS_URL), so the fallback list must be validated as an array
-    // before it is read, exactly like the gateway's `raw.modalities.input`
-    // above. A row whose `modalities` is present without `input` — or carries a
-    // non-array `input` — must resolve to "not capable" instead of throwing
-    // (`undefined.includes(...)`). `fromModelsDevModel` guards the same shape as
-    // `modalities?.input?.includes(...)`.
-    const fallbackInput = fallback?.modalities?.input
-    return Array.isArray(fallbackInput) ? fallbackInput.includes("image") : false
+  function firstBoolean(...values: unknown[]): boolean | undefined {
+    return values.find((value): value is boolean => typeof value === "boolean")
   }
 
-  // A gateway card declares server-side web search as a boolean either under
-  // `capabilities.web_search` (the OpenAI-compatible discovery shape) or under
-  // a top-level `abilities.web_search`. AX Trust emits both, and some resellers
-  // emit only one. Anything that is not a boolean — including a missing field —
-  // stays undefined, so the TUI marker never claims a capability the card did
-  // not declare.
-  function webSearchCapable(
-    capabilities: Record<string, unknown> | undefined,
-    raw: Record<string, unknown> | undefined,
-  ): boolean | undefined {
-    if (typeof capabilities?.web_search === "boolean") return capabilities.web_search
+  function deploymentCapabilities(raw: Record<string, unknown> | undefined) {
+    const capabilities = isRecord(raw?.capabilities) ? raw.capabilities : undefined
     const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
-    if (typeof abilities?.web_search === "boolean") return abilities.web_search
-    return undefined
-  }
+    const input = isRecord(raw?.modalities) ? raw.modalities.input : undefined
+    const modalities = Array.isArray(input) && input.length > 0 ? input : undefined
 
-  // A gateway card states PDF input the same three ways it states image
-  // input: an explicit `pdf` flag under `capabilities` or `abilities`, then
-  // the input modality list. Unlike images, a catalog row is never consulted:
-  // whether a PDF can reach the model is a property of the gateway route (AX
-  // Trust advertises it only when every binding can carry the bytes, its
-  // ADR-115), so a card that says nothing leaves the flag undeclared and the
-  // runtime keeps extracting text for that model.
-  function pdfCapable(
-    capabilities: Record<string, unknown> | undefined,
-    raw: Record<string, unknown> | undefined,
-  ): boolean | undefined {
-    if (typeof capabilities?.pdf === "boolean") return capabilities.pdf
-    const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
-    if (typeof abilities?.pdf === "boolean") return abilities.pdf
-    const declared = isRecord(raw?.modalities) && Array.isArray(raw.modalities.input) ? raw.modalities.input : undefined
-    if (declared && declared.length > 0) return declared.some((modality) => modality === "pdf")
-    return undefined
+    return {
+      toolCalling: firstBoolean(capabilities?.toolcall, capabilities?.tool_call, abilities?.tool_call, raw?.tool_call),
+      thinking: firstBoolean(capabilities?.reasoning),
+      temperature: firstBoolean(capabilities?.temperature),
+      // An explicit vision flag or input list outranks the coarse attachment flag.
+      attachment:
+        firstBoolean(capabilities?.vision, abilities?.vision) ??
+        modalities?.includes("image") ??
+        firstBoolean(capabilities?.attachment),
+      webSearch: firstBoolean(capabilities?.web_search, abilities?.web_search),
+      // PDF support belongs to the gateway route. An undeclared card keeps the text fallback.
+      pdf: firstBoolean(capabilities?.pdf, abilities?.pdf) ?? modalities?.includes("pdf"),
+    }
   }
 
   export function discoveredModel(
@@ -366,42 +324,23 @@ export namespace CustomApiProvider {
     const inherited = inheritCustomApiModelLimit({
       modelID: id,
       limit: {
-        // `limit` is required on a validated catalog row but the fallback table
-        // is a trust boundary (bundled snapshot / AX_CODE_MODELS_PATH / URL), so
-        // a drifted row without `limit` must fall back to the defaults instead
-        // of throwing on `undefined.context`. Same optional-chain shape as the
-        // `imageCapable` fallback below.
         context: payload.context ?? fallback?.limit?.context,
         output: payload.output ?? fallback?.limit?.output,
       },
     })
-    const capabilities = isRecord(raw?.capabilities) ? raw.capabilities : undefined
-    const abilities = isRecord(raw?.abilities) ? raw.abilities : undefined
-    const declaredToolCall = [
-      capabilities?.toolcall,
-      capabilities?.tool_call,
-      abilities?.tool_call,
-      raw?.tool_call,
-    ].find((value): value is boolean => typeof value === "boolean")
-    const declaredImage =
-      typeof capabilities?.vision === "boolean" ||
-      typeof abilities?.vision === "boolean" ||
-      (isRecord(raw?.modalities) && Array.isArray(raw.modalities.input) && raw.modalities.input.length > 0) ||
-      typeof capabilities?.attachment === "boolean"
+    const { pdf, ...deployment } = deploymentCapabilities(raw)
+    const catalogInput = fallback?.modalities?.input
+    const catalog = {
+      toolCalling: fallback?.tool_call,
+      thinking: fallback?.reasoning,
+      temperature: fallback?.temperature,
+      attachment: Array.isArray(catalogInput) ? catalogInput.includes("image") : undefined,
+    }
+    // Sparse /models rows allow tool requests by default for compatibility.
+    // Keep that distinct from an explicit declaration by the gateway or catalog.
     const catalogEvidence = resolveCapabilityEvidence(
-      {
-        toolCalling: fallback?.tool_call,
-        thinking: fallback?.reasoning,
-        temperature: fallback?.temperature,
-        attachment: Array.isArray(fallback?.modalities?.input)
-          ? fallback.modalities.input.includes("image")
-          : undefined,
-      },
+      catalog,
       "catalog",
-      // Standard /models responses often contain only IDs. Like OpenCode's
-      // custom-provider default, allow chat tool requests unless the gateway
-      // or exact catalog row explicitly opts out. Mark this as a heuristic,
-      // not a deployment declaration; other capabilities stay unknown.
       resolveCapabilityEvidence({ toolCalling: true }, "heuristic"),
     )
     return withCapabilityEvidence(
@@ -410,22 +349,14 @@ export namespace CustomApiProvider {
         name: name && name !== id ? name : fallback?.name || name || id,
         contextWindow: inherited.context,
         outputLimit: inherited.output,
-        toolCall: declaredToolCall ?? fallback?.tool_call ?? true,
-        reasoning:
-          typeof capabilities?.reasoning === "boolean" ? capabilities.reasoning : (fallback?.reasoning ?? false),
-        attachment: imageCapable(capabilities, raw, fallback),
-        temperature:
-          typeof capabilities?.temperature === "boolean" ? capabilities.temperature : (fallback?.temperature ?? false),
-        websearch: webSearchCapable(capabilities, raw),
-        pdf: pdfCapable(capabilities, raw),
+        toolCall: deployment.toolCalling ?? catalog.toolCalling ?? true,
+        reasoning: deployment.thinking ?? catalog.thinking ?? false,
+        attachment: deployment.attachment ?? catalog.attachment ?? false,
+        temperature: deployment.temperature ?? catalog.temperature ?? false,
+        websearch: deployment.webSearch,
+        pdf,
       },
-      {
-        toolCalling: declaredToolCall,
-        thinking: capabilities?.reasoning,
-        temperature: capabilities?.temperature,
-        attachment: declaredImage ? imageCapable(capabilities, raw, undefined) : undefined,
-        webSearch: webSearchCapable(capabilities, raw),
-      },
+      deployment,
       "deployment",
       catalogEvidence,
     )

@@ -36,7 +36,7 @@ export const FIRST_PARTY_CATALOG_IDS = [
 // First-party rows for vendor-documented models the bundled models.dev
 // snapshot does not carry yet (the snapshot ships generated and lags vendor
 // launches). A published snapshot row always wins; see the merge below.
-export const SUPPLEMENTAL_FIRST_PARTY_MODELS: Record<string, ModelsDev.Model> = {
+const SUPPLEMENTAL_FIRST_PARTY_MODELS: Record<string, ModelsDev.Model> = {
   "qwen4-max-preview": {
     id: "qwen4-max-preview",
     name: "Qwen4 Max Preview",
