@@ -128,6 +128,15 @@ describe("durable follow-up projection", () => {
   test("an in-flight snapshot cannot resurrect a deleted task", () => {
     expect(mergeFollowUpSnapshot([], [row("deleted")], "ses_one", new Map(), new Set(["deleted"]))).toEqual([])
   })
+  test.each([null, { id: "a", kind: "followup", sessionID: "ses_one", status: "invalid" }])(
+    "a malformed snapshot row cannot silently remove cached follow-ups: %j",
+    (malformed) => {
+      const current = [row("a"), row("b")]
+      const before = new Map(current.map((item) => [item.id, JSON.stringify(item)]))
+      expect(() => mergeFollowUpSnapshot(current, [row("b"), malformed], "ses_one", before)).toThrow()
+      expect(current.map((item) => item.id)).toEqual(["a", "b"])
+    },
+  )
   test("command rows parse, list, and show the derived /goal label", () => {
     const items = durableFollowUps([row("a"), commandRow("cmd_1")], "ses_one")
     expect(items.map((item) => item.id)).toEqual(["a", "cmd_1"])
@@ -161,6 +170,14 @@ describe("durable follow-up projection", () => {
     // Unknown kinds stay opaque passthrough entries.
     const automation = { ...queued, id: "auto_1", kind: "automation" }
     expect(mergeFollowUpSnapshot([automation], [], "ses_one", new Map())).toEqual([automation])
+    expect(
+      mergeFollowUpSnapshot(
+        [automation],
+        [automation, row("fresh"), { ...row("foreign"), sessionID: "ses_two" }],
+        "ses_one",
+        new Map(),
+      ).map((item) => item.id),
+    ).toEqual(["auto_1", "fresh"])
   })
 })
 

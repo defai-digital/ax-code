@@ -27,7 +27,6 @@ import {
   Show,
   on,
   onCleanup,
-  untrack,
 } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
@@ -79,7 +78,7 @@ import { navigationLayout } from "./navigation/navigation-layout"
 import { SessionNavigation } from "./component/session-navigation"
 import { NavigationBar } from "./component/navigation-bar"
 import { sidebarRestoreVisible } from "./sidebar-restore-view-model"
-import { mergeFollowUpSnapshot } from "./component/prompt/durable-follow-up"
+import { createFollowUpRefresh } from "./util/follow-up-refresh"
 import { DialogFollowUps } from "./component/dialog-follow-ups"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
@@ -343,10 +342,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const tuiConfig = useTuiConfig()
   const exit = useExit()
   const args = useArgs()
-  const [queueRefresh, refreshQueue] = createSignal(0)
-  for (const event of ["server.connected", "server.resync_required"] as const) {
-    onCleanup(sdk.event.on(event, () => refreshQueue((value) => value + 1)))
-  }
   command.register(() => [
     {
       title: t("language.title"),
@@ -377,37 +372,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
   ])
-  createEffect(() => {
-    queueRefresh()
-    const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
-    const directory = sdk.directory
-    if (!sessionID || !sdk.sseConnected || sync.data.status === "loading") return
-    const abort = new AbortController()
-    const deleted = new Set<string>()
-    const unsubscribe = sdk.event.on("task.queue.deleted", (event) => deleted.add(event.properties.id))
-    onCleanup(unsubscribe)
-    onCleanup(() => abort.abort())
-    untrack(() => {
-      const before = new Map(sync.data.task_queue.map((item) => [item.id, JSON.stringify(item)]))
-      void sdk
-        .fetch(`${sdk.url.replace(/\/$/, "")}/task-queue?sessionID=${encodeURIComponent(sessionID)}`, {
-          headers: directoryRequestHeaders({ directory }),
-          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10_000)]),
-        })
-        .then(async (response) => {
-          if (!response.ok) throw new Error("Unable to refresh saved follow-ups")
-          const rows: unknown = await response.json()
-          if (!Array.isArray(rows)) throw new Error("Invalid saved follow-up response")
-          if (abort.signal.aborted || sdk.directory !== directory) return
-          sync.set("task_queue", (current) => mergeFollowUpSnapshot(current, rows, sessionID, before, deleted))
-        })
-        .catch((error) => {
-          if (abort.signal.aborted) return
-          Log.Default.warn("follow-up refresh failed", { error })
-          toast.show({ message: uiText("ui.savedFollowUpsCouldNotBeRefreshedReconnectToRetry"), variant: "warning" })
-        })
-        .finally(unsubscribe)
-    })
+  createFollowUpRefresh({
+    sdk,
+    state: sync.data,
+    sessionID: () => (route.data.type === "session" ? route.data.sessionID : undefined),
+    update: (merge) => sync.set("task_queue", merge),
+    onError: (error) => {
+      Log.Default.warn("follow-up refresh failed", { error })
+      toast.show({ message: uiText("ui.savedFollowUpsCouldNotBeRefreshedReconnectToRetry"), variant: "warning" })
+    },
   })
   createEffect(() => {
     const pressure = sync.data.memory_pressure

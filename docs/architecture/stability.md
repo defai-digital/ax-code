@@ -18,6 +18,13 @@ How AX Code stays reliable for long interactive sessions and headless runs.
 | **Permissions**    | Double-submit latch + reply timeout                                                    | `permission-submit-latch`, permission prompt                 |
 | **Repo wiki**      | Path containment, atomic manifest-last writes, protected content, pre-write validation | `packages/ax-wiki`; `src/wiki/*`                             |
 
+## Saved follow-up refresh
+
+Full-screen and inline TUI modes share `cli/tui/util/follow-up-refresh.ts`. Requests are scoped to the selected session
+and directory, cancelled on lifecycle changes, and reconciled with live updates and deletion events. Malformed known
+queue rows reject the refresh before cached rows are replaced; unknown queue kinds remain opaque. The shared helper
+owns request and listener cleanup, while each presentation owns its existing error feedback.
+
 ## Verification evidence
 
 `session/verifications.ts` derives verification evidence from existing completed tool results. Each envelope citation

@@ -1,4 +1,3 @@
-import z from "zod"
 import {
   createEffect,
   createMemo,
@@ -45,8 +44,7 @@ import { InlineFooter } from "./footer"
 import { singleLine, type TranscriptBlock } from "./block-format"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
-import { mergeFollowUpSnapshot } from "../component/prompt/durable-follow-up"
-import { directoryRequestHeaders } from "../util/request-headers"
+import { createFollowUpRefresh } from "../util/follow-up-refresh"
 import { unknownErrorMessage } from "../util/error-message"
 
 export function InlineRoot(props: { input: TuiInput; profile: TuiRenderProfile; onExit: () => Promise<void> }) {
@@ -147,10 +145,6 @@ function InlineSession(props: {
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
   const local = useLocal()
-  const [queueRefresh, refreshQueue] = createSignal(0)
-  for (const event of ["server.connected", "server.resync_required"] as const) {
-    onCleanup(sdk.event.on(event, () => refreshQueue((value) => value + 1)))
-  }
   const t = useLanguage().t
   const commands = useCommandDialog()
   const dialogs = createTuiDialogLoaders({
@@ -208,34 +202,12 @@ function InlineSession(props: {
     return inlineFooterHeight(footerRows(), renderer.terminalHeight, expanded())
   })
   // Reconnect/attach needs the durable snapshot as well as live queue events.
-  createEffect(() => {
-    queueRefresh()
-    const id = sessionID()
-    const directory = sdk.directory
-    if (!id || !sdk.sseConnected || sync.data.status === "loading") return
-    const abort = new AbortController()
-    const deleted = new Set<string>()
-    const unsubscribe = sdk.event.on("task.queue.deleted", (event) => deleted.add(event.properties.id))
-    onCleanup(unsubscribe)
-    onCleanup(() => abort.abort())
-    untrack(() => {
-      const before = new Map(sync.data.task_queue.map((item) => [item.id, JSON.stringify(item)]))
-      void sdk
-        .fetch(`${sdk.url.replace(/\/$/, "")}/task-queue?sessionID=${encodeURIComponent(id)}`, {
-          headers: directoryRequestHeaders({ directory }),
-          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10_000)]),
-        })
-        .then(async (response) => {
-          if (!response.ok) throw new Error("Unable to refresh saved follow-ups")
-          const rows = z.array(z.unknown()).parse(await response.json())
-          if (abort.signal.aborted || sdk.directory !== directory) return
-          sync.set("task_queue", (current) => mergeFollowUpSnapshot(current, rows, id, before, deleted))
-        })
-        .catch((error) => {
-          if (!abort.signal.aborted) Log.Default.warn("inline follow-up refresh failed", { error })
-        })
-        .finally(unsubscribe)
-    })
+  createFollowUpRefresh({
+    sdk,
+    state: sync.data,
+    sessionID,
+    update: (merge) => sync.set("task_queue", merge),
+    onError: (error) => Log.Default.warn("inline follow-up refresh failed", { error }),
   })
   let prompt: PromptRef | undefined
   let launched = false

@@ -3,6 +3,7 @@ import type { FollowUpInput } from "./follow-up-queue"
 import type { useSDK } from "@tui/context/sdk"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { responseErrorMessage } from "@tui/util/error-message"
+import { isRecord } from "@/util/record"
 
 /**
  * Queue row kinds the busy-session async submission routes create: text
@@ -52,9 +53,13 @@ export function mergeFollowUpSnapshot<T extends { id: string; sessionID?: string
   before: Map<string, string>,
   deleted = new Set<string>(),
 ): Array<T | DurableFollowUp> {
-  const fresh = snapshot
-    .map((row) => FollowUpRow.safeParse(row))
-    .flatMap((row) => (row.success && row.data.sessionID === sessionID ? [row.data] : []))
+  // An invalid known row is not evidence of deletion. Validate the complete
+  // snapshot before replacing cached rows; unrelated queue kinds stay opaque.
+  const fresh = snapshot.flatMap((row) => {
+    if (isRecord(row) && typeof row.kind === "string" && !FOLLOW_UP_KIND_SET.has(row.kind)) return []
+    const parsed = FollowUpRow.parse(row)
+    return parsed.sessionID === sessionID ? [parsed] : []
+  })
   const byID = new Map<string, T | DurableFollowUp>(fresh.map((row) => [row.id, row]))
   for (const id of deleted) byID.delete(id)
   const other: T[] = []
