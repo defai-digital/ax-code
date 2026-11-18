@@ -5,6 +5,11 @@ export interface DownloadResult {
 }
 /** Grammar asset URLs are https and never carry userinfo. */
 export declare function grammarDownloadUrl(source: string): string;
+export interface PinnedGrammarQuery {
+    url: string;
+    sha256: string;
+}
+export declare function fetchPinnedGrammarQuery(source: PinnedGrammarQuery): Promise<string>;
 export declare class DownloadUtils {
     private static hashUrl;
     /**

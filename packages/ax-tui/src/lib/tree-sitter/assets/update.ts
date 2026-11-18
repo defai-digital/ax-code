@@ -1,18 +1,21 @@
 #!/usr/bin/env bun
 
-import { readFile, writeFile, mkdir } from "fs/promises"
+import { readFile, writeFile, mkdir, readdir } from "fs/promises"
 import * as path from "path"
-import { DownloadUtils, grammarDownloadUrl } from "../download-utils.js"
+import { DownloadUtils, fetchPinnedGrammarQuery, type PinnedGrammarQuery } from "../download-utils.js"
 import { parseArgs } from "util"
 import type { FiletypeParserOptions } from "../types.js"
-import { readdir } from "fs/promises"
 import { fileURLToPath } from "node:url"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+type QuerySource = string | PinnedGrammarQuery
+
 interface ParsersConfig {
-  parsers: FiletypeParserOptions[]
+  parsers: (Omit<FiletypeParserOptions, "queries"> & {
+    queries: { highlights: QuerySource[]; injections?: QuerySource[] }
+  })[]
 }
 
 interface GeneratedParser {
@@ -90,7 +93,7 @@ async function downloadLanguage(
 
 async function downloadAndCombineQueries(
   filetype: string,
-  queryUrls: string[],
+  sources: QuerySource[],
   assetsDir: string,
   outputPath: string,
   queryType: "highlights" | "injections",
@@ -101,51 +104,22 @@ async function downloadAndCombineQueries(
 
   const queryContents: string[] = []
 
-  for (let i = 0; i < queryUrls.length; i++) {
-    const queryUrl = queryUrls[i]
-
-    if (queryUrl.startsWith("./")) {
-      console.log(`    Using local query ${i + 1}/${queryUrls.length}: ${queryUrl}`)
-
-      try {
-        const localPath = path.resolve(path.dirname(configPath), queryUrl)
-        const content = await readFile(localPath, "utf-8")
-
-        if (content.trim()) {
-          queryContents.push(content)
-          console.log(`    ✓ Loaded ${content.split("\n").length} lines from local file`)
-        }
-      } catch (error) {
-        console.warn(`Failed to read local query from ${queryUrl}: ${error}`)
-        continue
-      }
-    } else {
-      console.log(`    Downloading query ${i + 1}/${queryUrls.length}: ${queryUrl}`)
-
-      try {
-        // The URL comes from parsers-config. Local query files are read on the other branch.
-        // codeql[js/file-access-to-http]
-        const response = await fetch(grammarDownloadUrl(queryUrl))
-        if (!response.ok) {
-          console.warn(`Failed to download query from ${queryUrl}: ${response.statusText}`)
-          continue
-        }
-
-        const content = await response.text()
-        if (content.trim()) {
-          queryContents.push(`; Query from: ${queryUrl}\n${content}`)
-          console.log(`    ✓ Downloaded ${content.split("\n").length} lines`)
-        }
-      } catch (error) {
-        console.warn(`Failed to download query from ${queryUrl}: ${error}`)
-        continue
-      }
+  for (const source of sources) {
+    if (typeof source === "string") {
+      if (!source.startsWith("./")) throw new Error("Use { url, sha256 } for remote grammar queries")
+      console.log(`    Using local query: ${source}`)
+      const content = await readFile(path.resolve(path.dirname(configPath), source), "utf-8")
+      if (content.trim()) queryContents.push(content)
+      continue
     }
+
+    console.log("    Downloading pinned query...")
+    const content = await fetchPinnedGrammarQuery(source)
+    if (content.trim()) queryContents.push(`; Query from: ${source.url}\n${content}`)
   }
 
   const combinedContent = queryContents.join("\n\n")
-  // Combined highlight queries are the downloaded grammar assets for this updater.
-  // codeql[js/http-to-file-access]
+  // Remote query bytes have been verified against the digest in the local parser config.
   await writeFile(queryPath, combinedContent, "utf-8")
 
   console.log(`  Combined ${queryContents.length} queries into ${queryPath}`)
@@ -328,6 +302,9 @@ Options:
   --assets <path>  Directory where .wasm and .scm files will be downloaded
   --output <path>  Path where the generated TypeScript file will be written
   --help           Show this help message
+
+Remote query entries use { "url": "https://...", "sha256": "<64 lowercase hex characters>" }.
+Local query entries are paths beginning with ./.
 
 Examples:
   # Use default paths (for AX TUI core development)

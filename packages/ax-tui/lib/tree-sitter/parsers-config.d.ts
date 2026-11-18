@@ -9,7 +9,10 @@ declare const _default: {
         aliases: string[];
         wasm: string;
         queries: {
-            highlights: string[];
+            highlights: {
+                url: string;
+                sha256: string;
+            }[];
             injections?: undefined;
         };
         injectionMapping?: undefined;
@@ -19,7 +22,10 @@ declare const _default: {
         wasm: string;
         queries: {
             highlights: string[];
-            injections: string[];
+            injections: {
+                url: string;
+                sha256: string;
+            }[];
         };
         injectionMapping: {
             nodeTypes: {

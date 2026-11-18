@@ -2,7 +2,7 @@ import { guardLocalSynthesisTools } from "../../src/session/prompt/local-synthes
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
-import { tool, convertToModelMessages, type ModelMessage } from "ai"
+import { APICallError, tool, convertToModelMessages, type ModelMessage } from "ai"
 import z from "zod"
 import { LLM } from "../../src/session/llm"
 import { Instance } from "../../src/project/instance"
@@ -13,7 +13,7 @@ import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import type { Agent } from "../../src/agent/agent"
-import type { MessageV2 } from "../../src/session/message-v2"
+import { MessageV2 } from "../../src/session/message-v2"
 import { SessionID, MessageID, PartID } from "../../src/session/schema"
 import { createStructuredOutputTool } from "../../src/session/prompt/prompt-helpers"
 import { SuperLongRuntime } from "../../src/session/super-long-runtime"
@@ -4686,6 +4686,87 @@ describe("session.llm.streamIdleWatchdog", () => {
 })
 
 describe("session.llm gateway robustness integration", () => {
+  test.each(["http", "deferred", "mid-stream"] as const)("classifies AX Trust %s timeouts", async (kind) => {
+    const providerID = ProviderID.make("test-trust")
+    const modelID = ModelID.make("test-chat")
+    await using tmp = await tmpdir({
+      config: {
+        enabled_providers: [providerID],
+        provider: {
+          [providerID]: {
+            npm: "@ai-sdk/openai-compatible",
+            options: { apiKey: "test", axTrust: true, baseURL: `${state.server.url.origin}/v1` },
+            models: { [modelID]: { name: "Test Chat", limit: { context: 16384, output: 1024 } } },
+          },
+        },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const code = kind === "mid-stream" ? "stream_timeout" : "upstream_timeout"
+        const error = { type: "api_error", code, message: "gateway timed out" }
+        const response =
+          kind === "http"
+            ? new Response(JSON.stringify({ error }), {
+                status: 504,
+                headers: { "Content-Type": "application/json", "Retry-After": "12" },
+              })
+            : new Response(
+                ": keepalive\r\n\r\n" +
+                  (kind === "mid-stream"
+                    ? 'data: {"id":"test","choices":[{"index":0,"delta":{"content":"partial"}}]}\n\n'
+                    : "") +
+                  `data: ${JSON.stringify({ error: kind === "deferred" ? { ...error, status: 504, retry_after: 12 } : error })}\n\n`,
+                { headers: { "Content-Type": "text/event-stream" } },
+              )
+        const request = waitRequest("/chat/completions", response)
+        const sessionID = SessionID.make("session-trust-timeout")
+        const stream = await LLM.stream({
+          sessionID,
+          model: await Provider.getModel(providerID, modelID),
+          user: {
+            id: MessageID.make("user-trust-timeout"),
+            sessionID,
+            role: "user",
+            time: { created: 1 },
+            agent: "test",
+            model: { providerID, modelID },
+          },
+          agent: { name: "test", mode: "primary", options: {}, permission: [] },
+          messages: [{ role: "user", content: "Say hi" }],
+          system: [],
+          abort: new AbortController().signal,
+          tools: {},
+        })
+        const text: string[] = []
+        let failure: unknown
+        try {
+          for await (const part of stream.fullStream) {
+            if (part.type === "text-delta") text.push(part.text)
+            if (part.type === "error") failure = part.error
+          }
+        } catch (error) {
+          failure = error
+        }
+        expect(text.join("")).toBe(kind === "mid-stream" ? "partial" : "")
+        expect(APICallError.isInstance(failure)).toBe(true)
+        const classified = MessageV2.fromError(failure, { providerID })
+        expect(classified).toMatchObject({
+          name: "APIError",
+          data: {
+            statusCode: 504,
+            isRetryable: true,
+            message: expect.stringContaining("AX Trust upstream timed out"),
+            metadata: { errorCode: code },
+          },
+        })
+        if (kind !== "mid-stream") expect(classified.data).toMatchObject({ responseHeaders: { "retry-after": "12" } })
+        expect((await request).headers.get("x-ax-stream-keepalive")).toBe("1")
+      },
+    })
+  })
+
   test("extracts MiniMax reasoning and returns unavailable-tool suggestions without running a substitute", async () => {
     const providerID = ProviderID.make("robustness-gateway")
     const modelID = ModelID.make("MiniMax-M3")

@@ -426,6 +426,21 @@ export namespace ProviderError {
 
     const metadata = input.error.url ? { url: input.error.url } : undefined
 
+    if (
+      input.error.statusCode === 504 &&
+      (bodyError?.code === "upstream_timeout" || bodyError?.code === "stream_timeout")
+    ) {
+      return {
+        type: "api_error",
+        message: "HTTP 504: AX Trust upstream timed out.",
+        statusCode: 504,
+        isRetryable: true,
+        responseHeaders: sanitizeResponseHeaders(input.error.responseHeaders),
+        responseBody: sanitizeResponseBody(input.error.responseBody),
+        metadata: { ...metadata, errorCode: bodyError.code },
+      }
+    }
+
     if (input.error.statusCode === 403 && bodyError?.code === "upstream_permission_error") {
       const rawRequestID = Object.entries(input.error.responseHeaders ?? {}).find(
         ([name]) => name.toLowerCase() === "x-request-id",

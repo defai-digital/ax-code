@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 // src/lib/tree-sitter/assets/update.ts
-import { readFile as readFile2, writeFile as writeFile2, mkdir as mkdir2 } from "fs/promises";
+import { readFile as readFile2, writeFile as writeFile2, mkdir as mkdir2, readdir } from "fs/promises";
 import * as path2 from "path";
 
 // src/lib/tree-sitter/download-utils.ts
@@ -54,6 +54,16 @@ async function fetchContent(source) {
     if (!complete) await reader.cancel();
     reader.releaseLock();
   }
+}
+async function fetchPinnedGrammarQuery(source) {
+  if (typeof source.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(source.sha256)) {
+    throw new Error("Remote grammar queries require a SHA-256 digest");
+  }
+  const content = await fetchContent(source.url);
+  if (createHash("sha256").update(content).digest("hex") !== source.sha256) {
+    throw new Error("Grammar query SHA-256 mismatch");
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(content);
 }
 async function writeAtomic(target, content) {
   const temporary = `${target}.${randomUUID()}.tmp`;
@@ -186,7 +196,6 @@ var DownloadUtils = class {
 
 // src/lib/tree-sitter/assets/update.ts
 import { parseArgs } from "util";
-import { readdir } from "fs/promises";
 import { fileURLToPath } from "node:url";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path2.dirname(__filename);
@@ -230,44 +239,22 @@ async function downloadLanguage(filetype, languageUrl, assetsDir, outputPath) {
   }
   return "./" + path2.relative(path2.dirname(outputPath), languagePath);
 }
-async function downloadAndCombineQueries(filetype, queryUrls, assetsDir, outputPath, queryType, configPath) {
+async function downloadAndCombineQueries(filetype, sources, assetsDir, outputPath, queryType, configPath) {
   const queriesDir = path2.join(assetsDir, filetype);
   const queryPath = path2.join(queriesDir, `${queryType}.scm`);
   const queryContents = [];
-  for (let i = 0; i < queryUrls.length; i++) {
-    const queryUrl = queryUrls[i];
-    if (queryUrl.startsWith("./")) {
-      console.log(`    Using local query ${i + 1}/${queryUrls.length}: ${queryUrl}`);
-      try {
-        const localPath = path2.resolve(path2.dirname(configPath), queryUrl);
-        const content = await readFile2(localPath, "utf-8");
-        if (content.trim()) {
-          queryContents.push(content);
-          console.log(`    \u2713 Loaded ${content.split("\n").length} lines from local file`);
-        }
-      } catch (error) {
-        console.warn(`Failed to read local query from ${queryUrl}: ${error}`);
-        continue;
-      }
-    } else {
-      console.log(`    Downloading query ${i + 1}/${queryUrls.length}: ${queryUrl}`);
-      try {
-        const response = await fetch(grammarDownloadUrl(queryUrl));
-        if (!response.ok) {
-          console.warn(`Failed to download query from ${queryUrl}: ${response.statusText}`);
-          continue;
-        }
-        const content = await response.text();
-        if (content.trim()) {
-          queryContents.push(`; Query from: ${queryUrl}
-${content}`);
-          console.log(`    \u2713 Downloaded ${content.split("\n").length} lines`);
-        }
-      } catch (error) {
-        console.warn(`Failed to download query from ${queryUrl}: ${error}`);
-        continue;
-      }
+  for (const source of sources) {
+    if (typeof source === "string") {
+      if (!source.startsWith("./")) throw new Error("Use { url, sha256 } for remote grammar queries");
+      console.log(`    Using local query: ${source}`);
+      const content2 = await readFile2(path2.resolve(path2.dirname(configPath), source), "utf-8");
+      if (content2.trim()) queryContents.push(content2);
+      continue;
     }
+    console.log("    Downloading pinned query...");
+    const content = await fetchPinnedGrammarQuery(source);
+    if (content.trim()) queryContents.push(`; Query from: ${source.url}
+${content}`);
   }
   const combinedContent = queryContents.join("\n\n");
   await writeFile2(queryPath, combinedContent, "utf-8");
@@ -419,6 +406,9 @@ Options:
   --assets <path>  Directory where .wasm and .scm files will be downloaded
   --output <path>  Path where the generated TypeScript file will be written
   --help           Show this help message
+
+Remote query entries use { "url": "https://...", "sha256": "<64 lowercase hex characters>" }.
+Local query entries are paths beginning with ./.
 
 Examples:
   # Use default paths (for AX TUI core development)

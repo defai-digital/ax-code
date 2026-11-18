@@ -1,3 +1,4 @@
+import { constants } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
 
@@ -70,21 +71,31 @@ async function rewriteSources(file: string): Promise<void> {
   if (!path.isAbsolute(file) || !format) {
     throw new Error("Expected an absolute APT .sources, .list, or apt-mirrors.txt path")
   }
-  const entry = await fs.lstat(file).catch((error: NodeJS.ErrnoException) => {
-    if (error.code === "ENOENT") return
-    throw error
-  })
+  await using entry = await fs
+    .open(file, constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return undefined
+      if (error.code === "ELOOP" || error.code === "EISDIR") throw new Error("APT source must be a regular file")
+      throw error
+    })
   if (!entry) return
-  if (!entry.isFile()) throw new Error("APT source must be a regular file")
-  const before = await fs.readFile(file, "utf8")
+  if (!(await entry.stat()).isFile()) throw new Error("APT source must be a regular file")
+  const before = await entry.readFile("utf8")
   const after = usePrimaryUbuntuArchive(before, format)
   if (after === before) {
     process.stdout.write(`No regional EC2 archive to replace: ${file}\n`)
     return
   }
-  // This setup step runs before APT in an ephemeral CI runner. Updating the
-  // existing file retains its mode and owner without changing signing policy.
-  await fs.writeFile(file, after)
+  // Keep the checked inode, its ownership and permissions. Positional writes
+  // start at the beginning even though readFile advanced the handle's cursor.
+  const content = Buffer.from(after)
+  let offset = 0
+  while (offset < content.length) {
+    const { bytesWritten } = await entry.write(content, offset, content.length - offset, offset)
+    if (bytesWritten === 0) throw new Error("Could not write APT source")
+    offset += bytesWritten
+  }
+  await entry.truncate(content.length)
   process.stdout.write(`Use primary Ubuntu archive: ${file}\n`)
 }
 

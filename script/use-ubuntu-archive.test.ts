@@ -93,6 +93,23 @@ test("the CLI rejects a non-APT target without changing it", async () => {
   }
 })
 
+test.skipIf(process.platform === "win32")("the CLI leaves a symbolic link and its target untouched", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-ubuntu-link-"))
+  try {
+    const target = path.join(directory, "original.sources")
+    const link = path.join(directory, "ubuntu.sources")
+    await fs.writeFile(target, sources(regional))
+    await fs.symlink(target, link)
+    await expect(promisify(execFile)(process.execPath, ["--import", "tsx", helper, link])).rejects.toThrow(
+      "APT source must be a regular file",
+    )
+    expect(await fs.readlink(link)).toBe(target)
+    expect(await fs.readFile(target, "utf8")).toBe(sources(regional))
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("the CLI rewrites the runner mirror list instead of changing its source indirection", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-ubuntu-mirrorlist-"))
   try {

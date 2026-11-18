@@ -51,6 +51,7 @@ import { resolveAxEngineSetup } from "@/provider/ax-engine/setup"
 import { attachThinkTagStream } from "@/provider/think-tags"
 import { isCliProviderID as sharedIsCliProviderID, isKnownCliProviderID } from "@/provider/cli/ids"
 import { provideCliIsolationMode } from "@/provider/cli/isolation"
+import { AX_TRUST_STREAM_KEEPALIVE_HEADER } from "@/provider/ax-trust-stream"
 import { applyAxTrustPromptCacheHeader, shouldSendAxTrustPromptCacheKey } from "@/provider/ax-trust-cache"
 import { isLocalInferenceConnection } from "@/provider/local-runtime"
 
@@ -762,6 +763,9 @@ export namespace LLM {
       })
     ) {
       requestHeaders = applyAxTrustPromptCacheHeader(requestHeaders, input.sessionID)
+      if (!Object.keys(requestHeaders).some((name) => name.toLowerCase() === AX_TRUST_STREAM_KEEPALIVE_HEADER)) {
+        requestHeaders[AX_TRUST_STREAM_KEEPALIVE_HEADER] = "1"
+      }
     }
     const streamErrorHolder: { error?: unknown } = {}
     // Stream watchdog: providers can either stop producing chunks without
