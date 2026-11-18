@@ -1,6 +1,4 @@
 import { describe, expect, test, vi } from "vitest"
-import path from "node:path"
-import { readFile } from "node:fs/promises"
 import { setImmediate } from "node:timers/promises"
 import type { NamedError } from "@ax-code/util/error"
 import { ModelID, ProviderID } from "../../src/provider/schema"
@@ -189,7 +187,6 @@ describe("prompt loop error transitions", () => {
     expect(result).toEqual({
       action: "fallback",
       fallbackModel,
-      notice: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
       consecutiveErrors: 1,
     })
     expect(warnings).toEqual([
@@ -949,7 +946,6 @@ describe("prompt loop error transitions", () => {
           return {
             action: "fallback",
             fallbackModel,
-            notice: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
             consecutiveErrors: 1,
           }
         },
@@ -960,7 +956,6 @@ describe("prompt loop error transitions", () => {
       action: "retry",
       consecutiveErrors: 1,
       fallbackModelOverride: fallbackModel,
-      fallbackNotice: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
       resetCachedModel: true,
     })
   })
@@ -1023,7 +1018,57 @@ describe("local provider fallback privacy guard", () => {
     expect(findFallback).not.toHaveBeenCalled()
   })
 
-  test("never looks up a remote fallback for a local provider; transient errors fall through to retry", async () => {
+  test("preserves the provider failure when locality cannot be established", async () => {
+    const sessionID = SessionID.descending()
+    const findFallback = vi.fn(async () => fallbackModel)
+    const publishError = vi.fn()
+    const warn = vi.fn()
+    const result = await resolvePromptLoopErrorTransition(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        currentEndpoint: "https://primary.example/v1",
+        error: new MessageV2.APIError({
+          message: "Upstream unavailable",
+          statusCode: 503,
+          isRetryable: false,
+          metadata: { retryExhausted: "true" },
+        }).toObject(),
+        consecutiveErrors: 0,
+        fallbackModelOverride: undefined,
+        step: 1,
+      },
+      {
+        handleError: (input) =>
+          handlePromptLoopError(input, {
+            isLocal: async () => {
+              throw new Error("Provider registry unavailable")
+            },
+            findFallback,
+            publishError,
+            warn,
+          }),
+      },
+    )
+    expect(result).toEqual({
+      action: "stop",
+      reason: "error",
+      consecutiveErrors: 1,
+      fallbackModelOverride: undefined,
+      resetCachedModel: false,
+    })
+    expect(findFallback).not.toHaveBeenCalled()
+    expect(publishError).toHaveBeenCalledExactlyOnceWith({
+      sessionID,
+      message: "Provider primary (model primary-model) failed: Upstream unavailable. No fallback provider available.",
+    })
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      "no fallback provider available",
+      expect.objectContaining({ errorCode: "PROVIDER_FALLBACK_UNAVAILABLE", locality: "unavailable" }),
+    )
+  })
+
+  test("stops transient recovery before selecting a fallback for a local provider", async () => {
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []
     const published: { sessionID: SessionID; message: string }[] = []
@@ -1126,7 +1171,6 @@ describe("local provider fallback privacy guard", () => {
     expect(result).toEqual({
       action: "fallback",
       fallbackModel,
-      notice: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
       consecutiveErrors: 1,
     })
   })
@@ -1161,23 +1205,5 @@ describe("isLoopbackBaseURL", () => {
     expect(RoutePolicy.isLoopbackBaseURL("not a url")).toBe(false)
     expect(RoutePolicy.isLoopbackBaseURL(undefined)).toBe(false)
     expect(RoutePolicy.isLoopbackBaseURL("")).toBe(false)
-  })
-})
-
-describe("fallback notice rendering (#415)", () => {
-  test("per-hop failure messages are log-only; the loop persists one clean notice", async () => {
-    const src = await readFile(path.join(import.meta.dirname, "../../src/session/prompt-impl.ts"), "utf-8")
-    // The loop builds the user-facing line from the shared helper instead of
-    // accumulating each hop's raw "Provider ... failed" switch message.
-    expect(src).toContain("providerFallbackNotice({")
-    expect(src).not.toContain("pendingFallbackNotice")
-    expect(src).toContain("fallbackNoticeOrigin ??= lastUser.model.providerID")
-    // The transition still carries the per-hop switch message, but only for
-    // logging — handlePromptLoopError emits it at WARN via deps.warn.
-    const errorsSrc = await readFile(
-      path.join(import.meta.dirname, "../../src/session/prompt/prompt-loop-errors.ts"),
-      "utf-8",
-    )
-    expect(errorsSrc).toContain('log.warn)("switching to fallback provider"')
   })
 })

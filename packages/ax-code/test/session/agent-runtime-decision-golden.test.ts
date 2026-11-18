@@ -431,7 +431,7 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", statusCode: 500, message: "broken" },
         }),
       ),
-    ).toEqual({ action: "lookup", errorMessage: "broken", stopWithoutFallback: true })
+    ).toEqual({ action: "lookup", errorMessage: "broken" })
     expect(
       AgentRuntimeGlue.toFallbackLookup(
         providerFallbackLookupDecision({
@@ -447,7 +447,7 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", statusCode: 429, message: "slow" },
         }),
       ),
-    ).toEqual({ action: "lookup", errorMessage: "slow", stopWithoutFallback: true })
+    ).toEqual({ action: "lookup", errorMessage: "slow" })
   })
 
   test("auth failures stop without waiting for repetition", () => {
@@ -469,7 +469,7 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", data: { statusCode: 429, message: "nested" } },
         }),
       ),
-    ).toEqual({ action: "lookup", errorMessage: "nested", stopWithoutFallback: true })
+    ).toEqual({ action: "lookup", errorMessage: "nested" })
     expect(
       AgentRuntimeGlue.toFallbackLookup(
         providerFallbackLookupDecision({
@@ -488,10 +488,10 @@ describe("provider fallback goldens", () => {
           error: { name: "APIError", statusCode: 429, responseBody: `{"message":"rb"}` },
         }),
       ),
-    ).toEqual({ action: "lookup", errorMessage: "rb", stopWithoutFallback: true })
+    ).toEqual({ action: "lookup", errorMessage: "rb" })
   })
 
-  test("switch state halves errors and formats the notice", () => {
+  test("switch state halves errors and preserves structured log details", () => {
     expect(
       AgentRuntimeGlue.toFallbackSwitch(
         providerFallbackSwitchState({ current, fallback, errorMessage: "boom", consecutiveErrors: 5 }),
@@ -500,7 +500,6 @@ describe("provider fallback goldens", () => {
       from: "anthropic/m1",
       to: "openai/m2",
       reason: "boom",
-      message: "Provider anthropic failed: boom. Switching to openai/m2.",
       nextConsecutiveErrors: 2,
     })
     expect(
@@ -511,7 +510,6 @@ describe("provider fallback goldens", () => {
       from: "anthropic/m1",
       to: "openai/m2",
       reason: "boom!",
-      message: "Provider anthropic failed: boom! Switching to openai/m2.",
       nextConsecutiveErrors: 0,
     })
     expect(providerFallbackNotice({ origin: "anthropic" as ProviderID, serving: fallback })).toBe(

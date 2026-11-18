@@ -39,8 +39,8 @@ describe("turn decision DTOs", () => {
     ]
     const breakReason: TurnDecision.CompactionBreakReason = "aborted"
     const err: TurnDecision.ConsecutiveErrorDecision = { action: "stop", reason: "error", message: "m" }
-    const lookup: TurnDecision.FallbackLookup = { action: "lookup", errorMessage: undefined, stopWithoutFallback: true }
-    const sw: TurnDecision.FallbackSwitch = { from: "a", to: "b", reason: "r", message: "m", nextConsecutiveErrors: 1 }
+    const lookup: TurnDecision.FallbackLookup = { action: "lookup", errorMessage: undefined }
+    const sw: TurnDecision.FallbackSwitch = { from: "a", to: "b", reason: "r", nextConsecutiveErrors: 1 }
     expect(pending).toHaveLength(3)
     expect([breakReason, err.action, lookup.action, sw.to]).toEqual(["aborted", "stop", "lookup", "b"])
   })

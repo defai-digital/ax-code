@@ -1,4 +1,3 @@
-import { providerFailureIsPermanent } from "./prompt-loop-decisions"
 import { MAX_CONSECUTIVE_ERRORS } from "@/constants/session"
 import { waitForSharedModelWork } from "@/provider/shared-model-work"
 import { Log } from "../../util/log"
@@ -8,6 +7,7 @@ import { SessionRetry } from "../retry"
 import { isLocalRecoveryProvider, resolveFallbackModel, type FallbackOptions } from "../model-recovery"
 import {
   consecutiveErrorDecision,
+  providerFailureIsPermanent,
   providerFallbackLookupDecision,
   providerFallbackSwitchState,
 } from "./prompt-loop-decisions"
@@ -24,8 +24,6 @@ type PromptLoopErrorResult =
   | {
       action: "fallback"
       fallbackModel: MessageV2.User["model"]
-      /** User-facing explanation of the provider switch, persisted by the caller as a synthetic text part. */
-      notice: string
       consecutiveErrors: number
     }
   | { action: "stop"; reason: "error"; consecutiveErrors: number; stopCode?: SessionStop.Code }
@@ -41,7 +39,6 @@ type PromptLoopErrorTransition =
       action: "retry"
       consecutiveErrors: number
       fallbackModelOverride: MessageV2.User["model"]
-      fallbackNotice: string
       resetCachedModel: true
     }
   | {
@@ -295,40 +292,32 @@ export async function handlePromptLoopError(
     // silently retrying against a remote provider would leak their data.
     // Same-target processor retries have already run; local recovery stops here.
     input.abort?.throwIfAborted()
-    const local = await waitForSharedModelWork(
+    const locality = await waitForSharedModelWork(
       (deps.isLocal ?? isLocalRecoveryProvider)(input.currentModel.providerID, input.currentEndpoint),
       input.abort,
-    )
+    ).catch(() => undefined)
     input.abort?.throwIfAborted()
-    if (local) {
-      if (fallbackLookup.stopWithoutFallback) {
-        const reason = fallbackLookup.errorMessage?.trim() || "unknown error"
-        const punctuation = /[.!?]$/.test(reason) ? "" : "."
-        const message =
-          `Provider ${input.currentModel.providerID} failed: ${reason}${punctuation} ` +
-          "No fallback was attempted because this is a local provider — switching to a remote " +
-          "provider would send your prompts and code off this machine. Resolve the local issue " +
-          "or pick a different model explicitly and try again."
-        ;(deps.warn ?? log.warn)("local provider failed, no fallback attempted (data privacy)", {
-          command: "session.prompt.loop",
-          status: "error",
-          errorCode: "LOCAL_PROVIDER_NO_FALLBACK",
-          providerID: input.currentModel.providerID,
-          reason: fallbackLookup.errorMessage ?? "unknown error",
-        })
-        ;(deps.publishError ?? Session.publishError)({
-          sessionID: input.sessionID,
-          message,
-        })
-        return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
-      }
-      ;(deps.warn ?? log.warn)("local provider failed, skipping remote fallback (data privacy)", {
+    if (locality === true) {
+      const reason = fallbackLookup.errorMessage?.trim() || "unknown error"
+      const punctuation = /[.!?]$/.test(reason) ? "" : "."
+      const message =
+        `Provider ${input.currentModel.providerID} failed: ${reason}${punctuation} ` +
+        "No fallback was attempted because this is a local provider — switching to a remote " +
+        "provider would send your prompts and code off this machine. Resolve the local issue " +
+        "or pick a different model explicitly and try again."
+      ;(deps.warn ?? log.warn)("local provider failed, no fallback attempted (data privacy)", {
         command: "session.prompt.loop",
+        status: "error",
+        errorCode: "LOCAL_PROVIDER_NO_FALLBACK",
         providerID: input.currentModel.providerID,
         reason: fallbackLookup.errorMessage ?? "unknown error",
-        consecutiveErrors: input.consecutiveErrors,
       })
-    } else {
+      ;(deps.publishError ?? Session.publishError)({ sessionID: input.sessionID, message })
+      return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+    }
+
+    // The locality check must succeed before an automatic request can change providers.
+    if (locality === false) {
       const pendingFallback =
         deps.findFallback?.(input.currentModel, input.fallbackOptions) ??
         resolveFallbackModel(input.currentModel, input.fallbackOptions).then((resolution) => resolution?.target)
@@ -350,41 +339,30 @@ export async function handlePromptLoopError(
           to: fallbackSwitch.to,
           reason: fallbackSwitch.reason,
         })
-        // The request is continuing automatically. Publishing a session.error
-        // here makes every client show a terminal failure even when the
-        // fallback returns a successful response in the same turn. The switch
-        // is still surfaced: the caller persists `notice` as a synthetic text
-        // part on the fallback turn's assistant message (same mechanism as
-        // publishPromptFailure), so both the TUI transcript and `ax-code run`
-        // show which model actually answered without any terminal semantics.
+        // The prompt loop persists a notice for the selected fallback model.
         return {
           action: "fallback",
           fallbackModel: fallback,
-          notice: fallbackSwitch.message,
           consecutiveErrors: fallbackSwitch.nextConsecutiveErrors,
         }
       }
-
-      if (fallbackLookup.stopWithoutFallback) {
-        const message = providerFallbackUnavailableMessage({
-          providerID: input.currentModel.providerID,
-          modelID: input.currentModel.modelID,
-          errorMessage: fallbackLookup.errorMessage,
-        })
-        ;(deps.warn ?? log.warn)("no fallback provider available", {
-          command: "session.prompt.loop",
-          status: "error",
-          errorCode: "PROVIDER_FALLBACK_UNAVAILABLE",
-          providerID: input.currentModel.providerID,
-          reason: fallbackLookup.errorMessage ?? "unknown error",
-        })
-        ;(deps.publishError ?? Session.publishError)({
-          sessionID: input.sessionID,
-          message,
-        })
-        return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
-      }
     }
+
+    const message = providerFallbackUnavailableMessage({
+      providerID: input.currentModel.providerID,
+      modelID: input.currentModel.modelID,
+      errorMessage: fallbackLookup.errorMessage,
+    })
+    ;(deps.warn ?? log.warn)("no fallback provider available", {
+      command: "session.prompt.loop",
+      status: "error",
+      errorCode: "PROVIDER_FALLBACK_UNAVAILABLE",
+      providerID: input.currentModel.providerID,
+      reason: fallbackLookup.errorMessage ?? "unknown error",
+      ...(locality === undefined ? { locality: "unavailable" } : {}),
+    })
+    ;(deps.publishError ?? Session.publishError)({ sessionID: input.sessionID, message })
+    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
   }
 
   if (nonRetryableProviderError(input.error)) {
@@ -509,7 +487,6 @@ export async function resolvePromptLoopErrorTransition(
       action: "retry",
       consecutiveErrors: errorResult.consecutiveErrors,
       fallbackModelOverride: errorResult.fallbackModel,
-      fallbackNotice: errorResult.notice,
       resetCachedModel: true,
     }
   }

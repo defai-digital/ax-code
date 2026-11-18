@@ -755,7 +755,7 @@ describe("session.prompt helpers", () => {
           consecutiveErrors: 2,
           error: { name: "APIError", data: { statusCode, message: "temporary failure" } },
         }),
-      ).toEqual({ action: "lookup", errorMessage: "temporary failure", stopWithoutFallback: true })
+      ).toEqual({ action: "lookup", errorMessage: "temporary failure" })
     }
     expect(
       providerFallbackLookupDecision({
@@ -777,7 +777,6 @@ describe("session.prompt helpers", () => {
       from: "anthropic/claude-opus",
       to: "openai/gpt-5",
       reason: "quota exceeded",
-      message: "Provider anthropic failed: quota exceeded. Switching to openai/gpt-5.",
       nextConsecutiveErrors: 2,
     })
 
@@ -788,7 +787,6 @@ describe("session.prompt helpers", () => {
       consecutiveErrors: 2,
     })
     expect(unknownReasonSwitch.reason).toBe("unknown error")
-    expect(unknownReasonSwitch.message).toBe("Provider anthropic failed: unknown error. Switching to openai/gpt-5.")
 
     const blankReasonSwitch = providerFallbackSwitchState({
       current: { providerID: ProviderID.make("anthropic"), modelID: ModelID.make("claude-opus") },
@@ -797,14 +795,10 @@ describe("session.prompt helpers", () => {
       consecutiveErrors: 2,
     })
     expect(blankReasonSwitch.reason).toBe("unknown error")
-    expect(blankReasonSwitch.message).toBe("Provider anthropic failed: unknown error. Switching to openai/gpt-5.")
   })
 
   test("builds the single clean user-facing fallback notice (#415)", () => {
-    // The per-hop switch messages ("Provider X failed: ... Switching to Y.")
-    // are log-only; the notice rendered in the response names the originally
-    // requested provider and the provider actually serving — one line, no
-    // raw failure text, even across a multi-hop chain.
+    // The transcript notice names the origin and serving providers even across multiple hops.
     const notice = providerFallbackNotice({
       origin: ProviderID.make("zai-coding-plan"),
       serving: { providerID: ProviderID.make("ax-trust-defai-digital"), modelID: ModelID.make("glm-5.3") },

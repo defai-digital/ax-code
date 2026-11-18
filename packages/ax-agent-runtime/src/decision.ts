@@ -53,15 +53,12 @@ export namespace TurnDecision {
   export type ConsecutiveErrorDecision = { action: "continue" } | { action: "stop"; reason: "error"; message: string }
 
   // ─── Provider fallback ───
-  export type FallbackLookup =
-    | { action: "skip" }
-    | { action: "lookup"; errorMessage: string | undefined; stopWithoutFallback: boolean }
+  export type FallbackLookup = { action: "skip" } | { action: "lookup"; errorMessage: string | undefined }
 
   export type FallbackSwitch = {
     from: string
     to: string
     reason: string
-    message: string
     nextConsecutiveErrors: number
   }
 }

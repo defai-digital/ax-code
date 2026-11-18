@@ -42,7 +42,6 @@ type ProviderFallbackLookupDecision =
   | {
       action: "lookup"
       errorMessage: string | undefined
-      stopWithoutFallback: boolean
     }
 
 type ProviderModelIdentity = {
@@ -54,7 +53,6 @@ type ProviderFallbackSwitchState = {
   from: string
   to: string
   reason: string
-  message: string
   nextConsecutiveErrors: number
 }
 
@@ -225,11 +223,6 @@ function fallbackErrorReason(message: string | undefined) {
   return reason ? reason : "unknown error"
 }
 
-function fallbackSwitchMessage(input: { providerID: ProviderID; reason: string; to: string }) {
-  const punctuation = /[.!?]$/.test(input.reason) ? "" : "."
-  return `Provider ${input.providerID} failed: ${input.reason}${punctuation} Switching to ${input.to}.`
-}
-
 export function providerFailureIsPermanent(error: unknown): boolean {
   // An unsupported CLI isolation mode is a configuration failure, not a
   // provider/transport condition: the same spawn is rejected every time, so
@@ -272,7 +265,7 @@ export function providerFallbackLookupDecision(input: {
   const retryable = data?.isRetryable ?? (input.error as { isRetryable?: boolean }).isRetryable
   if (data?.metadata?.replayUnsafe === true || (retryable === false && !exhausted)) return { action: "skip" }
   if (!exhausted && !hasRepeatedErrors(input.consecutiveErrors, 2)) return { action: "skip" }
-  return { action: "lookup", errorMessage, stopWithoutFallback: true }
+  return { action: "lookup", errorMessage }
 }
 
 function providerErrorName(error: object) {
@@ -368,14 +361,10 @@ export function providerFallbackSwitchState(input: {
   errorMessage: string | undefined
   consecutiveErrors: number
 }): ProviderFallbackSwitchState {
-  const from = providerModelKey(input.current)
-  const to = providerModelKey(input.fallback)
-  const reason = fallbackErrorReason(input.errorMessage)
   return {
-    from,
-    to,
-    reason,
-    message: fallbackSwitchMessage({ providerID: input.current.providerID, reason, to }),
+    from: providerModelKey(input.current),
+    to: providerModelKey(input.fallback),
+    reason: fallbackErrorReason(input.errorMessage),
     nextConsecutiveErrors: reduceFallbackConsecutiveErrors(input.consecutiveErrors),
   }
 }

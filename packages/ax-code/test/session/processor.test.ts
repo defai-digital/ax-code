@@ -941,7 +941,6 @@ describe("session.processor", () => {
           return {
             action: "fallback",
             fallbackModel: { providerID: "fallback" as any, modelID: "model-b" as any },
-            notice: fallbackSwitch.message,
             consecutiveErrors: fallbackSwitch.nextConsecutiveErrors,
           }
         },
