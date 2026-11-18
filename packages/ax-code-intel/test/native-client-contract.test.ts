@@ -260,9 +260,23 @@ test("workspace changes prevent sharing an older in-flight native pull", async (
     })
     const listener = client.connection.onNotification("test/pullStarted", start)
     const old = expect(client.waitForDiagnostics({ path: source })).rejects.toThrow("incomplete")
-    await withTimeout(started, 3000)
-    listener.dispose()
-    await client.notify.open({ path: other })
+    // Wait for the background refresh to queue behind the held pull before
+    // starting the foreground wait. Leave the server responses under test control.
+    const backgroundQueued = Promise.withResolvers<void>()
+    const write = Lock.write
+    const acquire = vi.spyOn(Lock, "write").mockImplementation((key, options) => {
+      const result = write(key, options)
+      if (key.endsWith(path.sep + "source.ts")) backgroundQueued.resolve()
+      return result
+    })
+    try {
+      await withTimeout(started, 3000)
+      await client.notify.open({ path: other })
+      await withTimeout(backgroundQueued.promise, 3000)
+    } finally {
+      acquire.mockRestore()
+      listener.dispose()
+    }
     const current = client.waitForDiagnostics({ path: source })
     await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] } })
     await Promise.all([old, current])

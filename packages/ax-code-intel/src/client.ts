@@ -601,6 +601,11 @@ export namespace LSPClient {
         return null
       })
     }
+    function diagnosticsRefreshedSince(filePath: string, previous: Diagnostic[] | undefined): boolean {
+      const current = diagnostics.get(filePath)
+      return current !== undefined && current !== previous && !staleDiagnostics.has(filePath)
+    }
+
     async function refreshDiagnostics(filePath: string, timeoutMs = 15_000) {
       if (!pullsDiagnostics || files[filePath] === undefined) return
       diagnosticTargets.delete(filePath)
@@ -831,12 +836,7 @@ export namespace LSPClient {
                 // Another overlapping open may have completed a current pull
                 // while this call waited for the path lock. Reuse only that
                 // fresh response; a sequential open still refreshes explicitly.
-                if (
-                  input.waitForDiagnostics &&
-                  (staleDiagnostics.has(normalized) ||
-                    !diagnostics.has(normalized) ||
-                    diagnostics.get(normalized) === priorDiagnostics)
-                )
+                if (input.waitForDiagnostics && !diagnosticsRefreshedSince(normalized, priorDiagnostics))
                   await refreshDiagnostics(normalized)
                 return false
               }
@@ -1062,10 +1062,12 @@ export namespace LSPClient {
           if (existing?.generation === diagnosticGeneration) return existing.promise
           // Share only overlapping waits within this workspace generation.
           // Sequential explicit requests still ask the server for fresh results.
+          const priorDiagnostics = diagnostics.get(normalizedPath)
           const entry = {
             generation: diagnosticGeneration,
             promise: withPathLock(normalizedPath, async () => {
-              await refreshDiagnostics(normalizedPath)
+              // A background refresh can complete while this call waits for the path lock.
+              if (!diagnosticsRefreshedSince(normalizedPath, priorDiagnostics)) await refreshDiagnostics(normalizedPath)
               if (closing || files[normalizedPath] === undefined || staleDiagnostics.has(normalizedPath)) {
                 throw new Error("Native diagnostics are incomplete; retry after the workspace settles")
               }
