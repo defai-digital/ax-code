@@ -9,6 +9,7 @@ import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { TaskQueue } from "../../src/session/task-queue"
 import { Database, eq } from "../../src/storage/db"
+import { FileLock } from "../../src/util/filelock"
 import { Worktree } from "../../src/worktree"
 import {
   WorkflowFixtureSpecs,
@@ -975,6 +976,65 @@ describe("WorkflowScheduler", () => {
       vi.unstubAllEnvs()
       await Instance.disposeAll()
       execFileSync("git", ["worktree", "remove", linked], { cwd: tmp.path })
+    }
+  })
+
+  test("advances a workflow while another run in the same project prepares a phase", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "independent-phase-setup",
+            name: "Independent phase setup",
+            description: "A preparation in one run must not block another run from advancing.",
+            phases: [
+              { id: "first", name: "First", kind: "sequential", prompt: "Offline fixture." },
+              { id: "next", name: "Next", kind: "sequential", dependsOn: ["first"], prompt: "Offline fixture." },
+            ],
+          })
+          const advancing = await WorkflowRun.create({ spec })
+          const blocked = await WorkflowRun.create({ spec })
+          const started = await WorkflowScheduler.start(advancing.id, { autoStartChildren: false })
+          const taskID = started.children[0]?.taskQueueID
+          if (!taskID) throw new Error("Expected a task in the first phase.")
+
+          const entered = Promise.withResolvers<void>()
+          const release = Promise.withResolvers<void>()
+          const createSession = Session.create
+          vi.spyOn(Session, "create").mockImplementationOnce(async (input) => {
+            entered.resolve()
+            await release.promise
+            return createSession(input)
+          })
+          const acquire = FileLock.acquire
+          vi.spyOn(FileLock, "acquire").mockImplementation((file, options) =>
+            acquire(file, { ...options, timeoutMs: 100 }),
+          )
+          const preparation = WorkflowScheduler.start(blocked.id, { autoStartChildren: false })
+          try {
+            await Promise.race([
+              entered.promise,
+              preparation.then(() => {
+                throw new Error("Expected the other run to wait during session creation.")
+              }),
+            ])
+            await TaskQueue.setStatus({ id: taskID, status: "completed" })
+            const advanced = await WorkflowRun.getDetail(advancing.id)
+            expect(advanced.phases.map((phase) => phase.status)).toEqual(["completed", "running"])
+            expect(advanced.children).toHaveLength(2)
+          } finally {
+            release.resolve()
+            await preparation
+          }
+        },
+      })
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
     }
   })
 

@@ -202,14 +202,13 @@ export namespace WorkflowScheduler {
     options: z.output<typeof StartOptions>,
   ): Promise<{ kind: "advance" | "stop" } | { kind: "queued"; tasks: TaskQueue.Info[] }> {
     const runID = initial.id
-    // Serialize filesystem and session preparation across worktrees and
-    // processes. Keep one lock per project so phase history does not grow
-    // the number of lock files. The database transaction owns admission.
-    // @scan-suppress security_scan Hash.fast encodes the project ID as hex without path separators.
-    const lockPath = path.join(Global.Path.state, "workflow-phase-setup", Hash.fast(Instance.project.id))
+    // Serialize preparation of this run across worktrees and processes.
+    // A run's phases share one lock, and the database owns admission.
+    // @scan-suppress security_scan Hash.fast encodes the run key as hex without path separators.
+    const lockPath = path.join(Global.Path.state, "workflow-phase-setup", Hash.fast(runKey(runID)))
     using _lock = await FileLock.acquire(lockPath).catch((error) => {
       if (!(error instanceof FileLock.TimeoutError)) throw error
-      throw new HTTPException(409, { message: "Another workflow phase is preparing in this project." })
+      throw new HTTPException(409, { message: `Workflow run ${runID} is already preparing a phase.` })
     })
     const current = await WorkflowRun.getDetail(runID)
     if (current.status !== "running" && current.status !== "blocked") return { kind: "stop" }
