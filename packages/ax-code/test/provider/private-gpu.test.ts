@@ -1,6 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
@@ -25,6 +25,7 @@ import { DEFAULT_SETUP_PROVIDER_IDS } from "../../src/provider/default-setup-pro
 const originalFetch = globalThis.fetch
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   globalThis.fetch = originalFetch
   await Instance.disposeAll()
 })
@@ -255,3 +256,59 @@ describe("private-gpu connect and disconnect", () => {
     })
   })
 })
+
+test.each(["existing", "new", "concurrent", "rollback-failure"] as const)(
+  "failed private GPU config save preserves the correct credential (%s)",
+  async (mode) => {
+    const providerID = "custom-private-gpu"
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      if (String(input) === "http://127.0.0.1:18110/v1/models") {
+        return new Response(JSON.stringify({ data: [{ id: "model" }] }), {
+          headers: { "content-type": "application/json" },
+        })
+      }
+      return originalFetch(input)
+    }) as typeof fetch
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Auth.remove(providerID)
+        if (mode !== "new") await Auth.set(providerID, { type: "api", key: "previous-credential" })
+        const failure = new Error("Configuration save failed")
+        vi.spyOn(Config, "updateGlobal").mockImplementation(async () => {
+          if (mode === "concurrent") await Auth.set(providerID, { type: "api", key: "newer-credential" })
+          throw failure
+        })
+        const rollbackError = new Error("Credential restore failed")
+        if (mode === "rollback-failure") vi.spyOn(Auth, "replaceIfUnchanged").mockRejectedValueOnce(rollbackError)
+        try {
+          const attempt = connectPrivateGpu({
+            providerID,
+            baseURL: "http://127.0.0.1:18110",
+            apiKey: "attempted-credential",
+          })
+          if (mode === "rollback-failure") {
+            await expect(attempt).rejects.toMatchObject({
+              name: "AggregateError",
+              errors: [failure, rollbackError],
+            })
+            expect(await Auth.get(providerID)).toEqual({ type: "api", key: "attempted-credential" })
+            return
+          }
+          await expect(attempt).rejects.toBe(failure)
+          expect(await Auth.get(providerID)).toEqual(
+            mode === "new"
+              ? undefined
+              : {
+                  type: "api",
+                  key: mode === "concurrent" ? "newer-credential" : "previous-credential",
+                },
+          )
+        } finally {
+          await Auth.remove(providerID)
+        }
+      },
+    })
+  },
+)

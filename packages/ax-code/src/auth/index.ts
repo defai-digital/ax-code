@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util"
 import path from "path"
 import fsPromises from "fs/promises"
 import { unlinkSync, readFileSync } from "fs"
@@ -476,7 +477,11 @@ export namespace Auth {
     return pending
   }
 
-  async function writeEntry(key: string, info: Info, options: { overwrite: boolean }): Promise<boolean> {
+  async function writeEntry(
+    key: string,
+    info: Info | undefined,
+    options: { overwrite: boolean; expected?: Info },
+  ): Promise<boolean> {
     const norm = normalizeProviderID(key)
     if (!isCanonicalProviderID(norm)) throw new AuthError({ message: "Invalid provider ID" })
     try {
@@ -486,10 +491,19 @@ export namespace Auth {
       // Import checks existence under the same locks as the write. A
       // connection created after planning or reading auth must win.
       if (!options.overwrite && (Object.hasOwn(data, norm) || Object.hasOwn(data, norm + "/"))) return false
+      if (options.expected) {
+        const current = Info.safeParse(decryptEntry(data[norm] ?? data[norm + "/"]))
+        if (!current.success || !isDeepStrictEqual(current.data, options.expected)) return false
+      }
       if (norm !== key) delete data[key]
       delete data[norm + "/"]
-      if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
-      await Filesystem.writeJson(file, { ...data, [norm]: encryptEntry(info) }, 0o600)
+      if (info) {
+        if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
+        data[norm] = encryptEntry(info)
+      } else {
+        delete data[norm]
+      }
+      await Filesystem.writeJson(file, data, 0o600)
     } catch (cause) {
       if (cause instanceof AuthError) throw cause
       throw authError("Failed to write auth data", cause)
@@ -501,6 +515,11 @@ export namespace Auth {
 
   export async function set(key: string, info: Info): Promise<void> {
     await writeEntry(key, info, { overwrite: true })
+  }
+
+  /** Restore a failed operation without replacing credentials written by a peer. */
+  export async function replaceIfUnchanged(key: string, expected: Info, replacement?: Info): Promise<boolean> {
+    return writeEntry(key, replacement, { overwrite: true, expected })
   }
 
   export async function remove(key: string) {

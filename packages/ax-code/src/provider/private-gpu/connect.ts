@@ -74,16 +74,19 @@ export async function connectPrivateGpu(input: {
     baseURL: input.baseURL,
     apiKey: input.apiKey,
   })
-  await Auth.set(vendor.id, {
-    type: "api",
-    key: input.apiKey.trim(),
-  })
+  const previous = await Auth.get(vendor.id)
+  const credential: Auth.Info = { type: "api", key: input.apiKey.trim() }
+  await Auth.set(vendor.id, credential)
   try {
     await Config.updateGlobal({
       provider: privateGpuProviderConfig(vendor, discovered.baseURL, discovered.models),
     })
   } catch (error) {
-    await Auth.remove(vendor.id).catch(() => undefined)
+    try {
+      await Auth.replaceIfUnchanged(vendor.id, credential, previous)
+    } catch (rollbackError) {
+      throw new AggregateError([error, rollbackError], "Failed to save private GPU config and restore its credential")
+    }
     throw error
   }
   return {
