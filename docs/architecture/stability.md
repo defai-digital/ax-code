@@ -18,6 +18,16 @@ How AX Code stays reliable for long interactive sessions and headless runs.
 | **Permissions**    | Double-submit latch + reply timeout                                                    | `permission-submit-latch`, permission prompt                 |
 | **Repo wiki**      | Path containment, atomic manifest-last writes, protected content, pre-write validation | `packages/ax-wiki`; `src/wiki/*`                             |
 
+## Verification evidence
+
+`session/verifications.ts` derives verification evidence from existing completed tool results. Each envelope citation
+belongs to its latest run, so re-emitted evidence uses the latest source fingerprint and counts once. Each owning run
+also retains its original validated verification set. Debug tools classify outcomes using that original set, and
+applying verification checks every member's freshness. Deduplicating citations must not turn a mixed result into a
+passing run or replace an original sibling's stale fingerprint with a later one.
+The loader owns citation resolution for debug application and repair. Envelope identities and recorded events stay
+unchanged.
+
 ## Blessed TUI path
 
 The supported runtime stack is:

@@ -59,7 +59,7 @@ function validateConfirmedStatus(input: {
     referencedRuns.every(
       (run) =>
         !SessionVerifications.runPolicyFailed(run) &&
-        classifyEnvelopeSet(run.envelopes.map((item) => item.envelope)) === "confirmed",
+        classifyEnvelopeSet(run.verificationSet.map((item) => item.envelope)) === "confirmed",
     )
   ) {
     return

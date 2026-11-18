@@ -545,6 +545,28 @@ describe("DebugProposeHypothesisTool", () => {
           ),
         ).rejects.toThrow(/without a successful VerificationEnvelope evidence set/)
 
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "verify_project",
+          callID: "call-repeat-failure",
+          status: "completed",
+          metadata: { verificationEnvelopes: [failedEnvelope] },
+          durationMs: 1,
+        })
+        Recorder.flushAll()
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "repeating a failed sibling must not make the earlier passed check confirm",
+              evidenceRefs: [passedEnvelopeId],
+              status: "confirmed",
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/without a successful VerificationEnvelope evidence set/)
+
         const policyPassedEnvelope: VerificationEnvelope = {
           ...passedEnvelope,
           command: { runner: "typecheck", argv: ["bun", "run", "typecheck"], cwd: "/tmp" },

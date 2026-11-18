@@ -39,18 +39,9 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
       )
     }
 
-    const verificationRun = SessionVerifications.loadRunsWithIds(sessionID).find((run) =>
-      run.envelopes.some((item) => item.envelopeId === args.envelopeId),
-    )
-    const verification = verificationRun?.envelopes.find((item) => item.envelopeId === args.envelopeId)
-    if (!verificationRun || !verification) {
-      throw new Error(
-        `envelopeId references an unknown VerificationEnvelope: ${args.envelopeId} (no envelope with this id exists in session ${ctx.sessionID})`,
-      )
-    }
-
-    const verificationSet = verificationRun.envelopes.map((item) => item.envelope)
-    const verificationEnvelopeIds = verificationRun.envelopes.map((item) => item.envelopeId)
+    const { run: verificationRun, verification } = SessionVerifications.resolveEnvelope(sessionID, args.envelopeId)
+    const verificationSet = verificationRun.verificationSet.map((item) => item.envelope)
+    const verificationEnvelopeIds = verificationRun.verificationSet.map((item) => item.envelopeId)
     const verificationPolicyFailed = SessionVerifications.runPolicyFailed(verificationRun)
 
     // Phase 1 (PRD D3): applying a verification to a hypothesis is an
@@ -59,7 +50,7 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
     // stays inconclusive (hypothesis untouched, like the policy-failed path)
     // and reports needs_verification instead of confirming/refuting.
     const current = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
-    const verificationFreshness = verificationRun.envelopes.map((item) => ({
+    const verificationFreshness = verificationRun.verificationSet.map((item) => ({
       envelopeId: item.envelopeId,
       ...classifyEnvelopeFreshness(item.envelope, current),
     }))

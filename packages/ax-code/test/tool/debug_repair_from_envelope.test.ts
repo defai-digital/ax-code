@@ -1,21 +1,23 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { SessionVerifications } from "../../src/session/verifications"
+import { EventQuery } from "../../src/replay/query"
 import { DebugRepairFromEnvelopeTool } from "../../src/tool/debug_repair_from_envelope"
-import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
+import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
+import { SessionID, MessageID } from "../../src/session/schema"
+import type { Tool } from "../../src/tool/tool"
 
-const envelopeId = "1234567890abcdef"
+const envelopeId = computeEnvelopeId(envelope())
 
-function ctx() {
+function ctx(): Tool.Context {
   return {
-    sessionID: "ses_debug_repair",
-    messageID: "msg_test" as any,
+    sessionID: SessionID.make("ses_debug_repair"),
+    messageID: MessageID.make("msg_test"),
     agent: "test-agent",
     abort: new AbortController().signal,
     callID: "call_debug_repair",
     messages: [],
     metadata() {},
     ask: async () => {},
-  } as any
+  }
 }
 
 function envelope(overrides: Partial<VerificationEnvelope> = {}): VerificationEnvelope {
@@ -49,13 +51,16 @@ function envelope(overrides: Partial<VerificationEnvelope> = {}): VerificationEn
   }
 }
 
-function mockRun(candidate: VerificationEnvelope) {
+function mockEvents(candidate: VerificationEnvelope): ReturnType<typeof EventQuery.bySession> {
   return [
     {
+      type: "tool.result",
+      sessionID: "ses_debug_repair",
       tool: "verify_project",
       callID: "call_verify",
-      metadata: {},
-      envelopes: [{ envelopeId, envelope: candidate }],
+      status: "completed",
+      metadata: { verificationEnvelopes: [candidate] },
+      durationMs: 1,
     },
   ]
 }
@@ -68,7 +73,7 @@ describe("DebugRepairFromEnvelopeTool", () => {
   })
 
   test("creates a bounded repair brief for localized structured failures", async () => {
-    spies.push(vi.spyOn(SessionVerifications, "loadRunsWithIds").mockReturnValue(mockRun(envelope()) as any))
+    spies.push(vi.spyOn(EventQuery, "bySession").mockReturnValue(mockEvents(envelope())))
 
     const tool = await DebugRepairFromEnvelopeTool.init()
     const result = await tool.execute({ envelopeId }, ctx())
@@ -82,18 +87,11 @@ describe("DebugRepairFromEnvelopeTool", () => {
   })
 
   test("rejects envelopes that are not localized repair candidates", async () => {
-    spies.push(
-      vi.spyOn(SessionVerifications, "loadRunsWithIds").mockReturnValue(
-        mockRun(
-          envelope({
-            structuredFailures: [],
-          }),
-        ) as any,
-      ),
-    )
+    const candidate = envelope({ structuredFailures: [] })
+    spies.push(vi.spyOn(EventQuery, "bySession").mockReturnValue(mockEvents(candidate)))
 
     const tool = await DebugRepairFromEnvelopeTool.init()
-    const result = await tool.execute({ envelopeId }, ctx())
+    const result = await tool.execute({ envelopeId: computeEnvelopeId(candidate) }, ctx())
 
     expect(result.title).toContain("rejected")
     expect(result.metadata.decision).toMatchObject({ handoff: false })
@@ -103,7 +101,7 @@ describe("DebugRepairFromEnvelopeTool", () => {
   })
 
   test("rejects fabricated envelope ids", async () => {
-    spies.push(vi.spyOn(SessionVerifications, "loadRunsWithIds").mockReturnValue(mockRun(envelope()) as any))
+    spies.push(vi.spyOn(EventQuery, "bySession").mockReturnValue(mockEvents(envelope())))
 
     const tool = await DebugRepairFromEnvelopeTool.init()
 

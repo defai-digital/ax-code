@@ -1,9 +1,11 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { Recorder } from "../../src/replay/recorder"
+import { EventQuery } from "../../src/replay/query"
 import { Session } from "../../src/session"
 import { SessionVerifications } from "../../src/session/verifications"
+import { SessionID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 
 function buildEnvelope(overrides: Partial<VerificationEnvelope> = {}): VerificationEnvelope {
@@ -28,6 +30,59 @@ function buildEnvelope(overrides: Partial<VerificationEnvelope> = {}): Verificat
 }
 
 describe("SessionVerifications.load", () => {
+  test("overlapping runs retain original siblings while each citation resolves to its latest owner", () => {
+    const sessionID = SessionID.make("ses_overlapping_verifications")
+    const a = buildEnvelope()
+    const b = buildEnvelope({
+      command: { runner: "lint", argv: [], cwd: "/tmp/work" },
+      sourceState: { available: true, commit: "a", dirtyDigest: "old" },
+    })
+    const newerB = { ...b, sourceState: { available: true, commit: "a", dirtyDigest: "new" } }
+    const aId = computeEnvelopeId(a)
+    const bId = computeEnvelopeId(b)
+    const originalMembers = [a, b, b]
+    const events: ReturnType<typeof EventQuery.bySession> = [
+      {
+        type: "tool.result",
+        sessionID,
+        tool: "verify_project",
+        callID: "original",
+        status: "completed",
+        metadata: { verificationEnvelopes: originalMembers, policy: { requiredChecksPassed: false } },
+        durationMs: 1,
+      },
+      {
+        type: "tool.result",
+        sessionID,
+        tool: "verify_project",
+        callID: "latest",
+        status: "completed",
+        metadata: { verificationEnvelopes: [newerB], policy: { requiredChecksPassed: true } },
+        durationMs: 1,
+      },
+    ]
+    const query = vi.spyOn(EventQuery, "bySession").mockReturnValue(events)
+    try {
+      const original = SessionVerifications.resolveEnvelope(sessionID, aId)
+      expect(original.run.callID).toBe("original")
+      expect(original.run.envelopes.map((item) => item.envelopeId)).toEqual([aId])
+      expect(original.run.verificationSet.map((item) => item.envelopeId)).toEqual([aId, bId])
+      expect(original.run.verificationSet[1].envelope.sourceState?.dirtyDigest).toBe("old")
+      expect(SessionVerifications.runPolicyFailed(original.run)).toBe(true)
+      const latest = SessionVerifications.resolveEnvelope(sessionID, bId)
+      expect(latest.run.callID).toBe("latest")
+      expect(latest.verification.envelope.sourceState?.dirtyDigest).toBe("new")
+      expect(SessionVerifications.runPolicyFailed(latest.run)).toBe(false)
+      expect(SessionVerifications.loadWithIds(sessionID).map((item) => item.envelopeId)).toEqual([aId, bId])
+      expect(originalMembers).toHaveLength(3)
+      expect(() => SessionVerifications.resolveEnvelope(sessionID, "0000000000000000")).toThrow(
+        `no envelope with this id exists in session ${sessionID}`,
+      )
+    } finally {
+      query.mockRestore()
+    }
+  })
+
   test("detects policy failures only from explicit requiredChecksPassed false metadata", () => {
     expect(
       SessionVerifications.runPolicyFailed({

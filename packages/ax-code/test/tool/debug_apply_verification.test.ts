@@ -232,42 +232,74 @@ describe("DebugApplyVerificationTool", () => {
     })
   })
 
-  test("applies the whole verification set so a sibling failure cannot be hidden by one passed envelope", async () => {
+  test.each([false, true])(
+    "applies the whole verification set even when the failed sibling is repeated: %s",
+    async (repeatSibling) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
+          const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+          const passedTypecheck = verificationEnvelope(session.id, "passed", [], sourceState)
+          const failedTests = verificationEnvelope(
+            session.id,
+            "failed",
+            [
+              {
+                kind: "test",
+                testName: "worker pool recovers",
+                framework: "bun",
+                file: "test/worker.test.ts",
+              },
+            ],
+            sourceState,
+          )
+          const [passedEnvelopeId, failedEnvelopeId] = await emitVerificationSet(session.id, [
+            passedTypecheck,
+            failedTests,
+          ])
+          if (repeatSibling) await emitVerification(session.id, failedTests)
+
+          const tool = await DebugApplyVerificationTool.init()
+          const result = await tool.execute({ hypothesisId, envelopeId: passedEnvelopeId }, fakeCtx(session.id))
+
+          expect(result.metadata.verificationOutcome).toBe("refuted")
+          expect(result.metadata.effectiveCaseStatus).toBe("unresolved")
+          expect(result.metadata.verificationEnvelopeIds).toEqual([passedEnvelopeId, failedEnvelopeId])
+          expect(result.metadata.debugHypothesis.status).toBe("refuted")
+          expect(result.metadata.debugHypothesis.evidenceRefs).toContain(passedEnvelopeId)
+          expect(result.metadata.debugHypothesis.evidenceRefs).toContain(failedEnvelopeId)
+        },
+      })
+    },
+  )
+
+  test("a later fresh copy of a sibling does not replace its original stale source state", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
         const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
-        const sourceState = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
-        const passedTypecheck = verificationEnvelope(session.id, "passed", [], sourceState)
-        const failedTests = verificationEnvelope(
-          session.id,
-          "failed",
-          [
-            {
-              kind: "test",
-              testName: "worker pool recovers",
-              framework: "bun",
-              file: "test/worker.test.ts",
-            },
-          ],
-          sourceState,
-        )
-        const [passedEnvelopeId, failedEnvelopeId] = await emitVerificationSet(session.id, [
-          passedTypecheck,
-          failedTests,
-        ])
-
+        const current = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+        const passed = verificationEnvelope(session.id, "passed", [], current)
+        const staleSibling = {
+          ...passed,
+          command: { runner: "lint", argv: [], cwd: "/tmp/project" },
+          sourceState: { available: true, commit: "old-commit", dirtyDigest: "old-digest" },
+        }
+        const [passedId, siblingId] = await emitVerificationSet(session.id, [passed, staleSibling])
+        await emitVerification(session.id, { ...staleSibling, sourceState: current })
         const tool = await DebugApplyVerificationTool.init()
-        const result = await tool.execute({ hypothesisId, envelopeId: passedEnvelopeId }, fakeCtx(session.id))
-
-        expect(result.metadata.verificationOutcome).toBe("refuted")
-        expect(result.metadata.effectiveCaseStatus).toBe("unresolved")
-        expect(result.metadata.verificationEnvelopeIds).toEqual([passedEnvelopeId, failedEnvelopeId])
-        expect(result.metadata.debugHypothesis.status).toBe("refuted")
-        expect(result.metadata.debugHypothesis.evidenceRefs).toContain(passedEnvelopeId)
-        expect(result.metadata.debugHypothesis.evidenceRefs).toContain(failedEnvelopeId)
+        const result = await tool.execute({ hypothesisId, envelopeId: passedId }, fakeCtx(session.id))
+        expect(result.metadata.verificationOutcome).toBe("inconclusive")
+        expect(result.metadata.debugHypothesis.status).toBe("active")
+        expect(result.metadata.verificationEnvelopeIds).toEqual([passedId, siblingId])
+        expect(result.metadata.verificationFreshness).toEqual([
+          { envelopeId: siblingId, status: "stale", reason: "commit-moved" },
+        ])
       },
     })
   })

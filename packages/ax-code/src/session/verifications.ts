@@ -12,9 +12,8 @@ export namespace SessionVerifications {
   const log = Log.create({ service: "session-verifications" })
 
   // Walks the session event log and rebuilds the VerificationEnvelope[]
-  // emitted by tools that record verification runs. Currently the only
-  // producer is refactor_apply (which writes metadata.verificationEnvelopes
-  // alongside its legacy result.checks), but the loader is intentionally
+  // emitted by tools that record verification runs, including verify_project
+  // and refactor_apply. The loader is intentionally
   // tool-name agnostic: any tool.result whose metadata carries a
   // verificationEnvelopes array of validated envelopes is included.
   //
@@ -26,7 +25,10 @@ export namespace SessionVerifications {
     tool: string
     callID: string
     metadata?: Record<string, unknown>
+    /** Latest-owned citations; unique across runs for counts and selection. */
     envelopes: LoadedEnvelope[]
+    /** All validated members of the original run, including re-emitted siblings. */
+    verificationSet: LoadedEnvelope[]
   }
 
   export function runPolicyFailed(run: Pick<LoadedEnvelopeRun, "metadata">): boolean {
@@ -43,7 +45,9 @@ export namespace SessionVerifications {
     // don't double-count the same verification run. Keep the LATEST copy:
     // sourceState is not part of the id, and the freshness check of a cited
     // envelope must see the source state of the most recent run, not one
-    // taken before later edits. Walk newest-first, then restore event order.
+    // taken before later edits. Keep each owning run's full verification set
+    // separately: deduplication must never hide a failed or stale sibling.
+    // Walk newest-first, then restore event order.
     const seen = new Set<string>()
     const runs: LoadedEnvelopeRun[] = []
     for (const event of [...events].reverse()) {
@@ -52,6 +56,7 @@ export namespace SessionVerifications {
       const candidate = event.metadata?.verificationEnvelopes
       if (!Array.isArray(candidate)) continue
       const envelopes: LoadedEnvelope[] = []
+      const localIds = new Set<string>()
       for (let i = 0; i < candidate.length; i++) {
         const parsed = VerificationEnvelopeSchema.safeParse(candidate[i])
         if (!parsed.success) {
@@ -65,19 +70,36 @@ export namespace SessionVerifications {
           continue
         }
         const id = computeEnvelopeId(parsed.data)
-        if (seen.has(id)) continue
+        if (localIds.has(id)) continue
+        localIds.add(id)
         envelopes.push({ envelope: parsed.data, envelopeId: id })
       }
-      // Mark ids only after the whole run, so duplicates inside one run are
-      // still collapsed below while an older run cannot claim them.
-      const unique = envelopes.filter(
-        (item, index) => envelopes.findIndex((other) => other.envelopeId === item.envelopeId) === index,
-      )
-      for (const item of unique) seen.add(item.envelopeId)
-      if (unique.length > 0)
-        runs.push({ tool: event.tool, callID: event.callID, metadata: event.metadata, envelopes: unique })
+      const owned = envelopes.filter((item) => !seen.has(item.envelopeId))
+      for (const item of envelopes) seen.add(item.envelopeId)
+      if (owned.length > 0)
+        runs.push({
+          tool: event.tool,
+          callID: event.callID,
+          metadata: event.metadata,
+          envelopes: owned,
+          verificationSet: envelopes,
+        })
     }
     return runs.reverse()
+  }
+
+  /** Resolve a citation to its latest owner while retaining the original run's siblings. */
+  export function resolveEnvelope(
+    sessionID: SessionID,
+    envelopeId: string,
+  ): { run: LoadedEnvelopeRun; verification: LoadedEnvelope } {
+    for (const run of loadRunsWithIds(sessionID)) {
+      const verification = run.envelopes.find((item) => item.envelopeId === envelopeId)
+      if (verification) return { run, verification }
+    }
+    throw new Error(
+      `envelopeId references an unknown VerificationEnvelope: ${envelopeId} (no envelope with this id exists in session ${sessionID})`,
+    )
   }
 
   export function load(sessionID: SessionID): VerificationEnvelope[] {

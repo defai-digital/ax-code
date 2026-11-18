@@ -17,15 +17,7 @@ export const DebugRepairFromEnvelopeTool = Tool.define("debug_repair_from_envelo
   }),
   execute: async (args, ctx) => {
     const sessionID = ctx.sessionID as SessionID
-    const verificationRun = SessionVerifications.loadRunsWithIds(sessionID).find((run) =>
-      run.envelopes.some((item) => item.envelopeId === args.envelopeId),
-    )
-    const verification = verificationRun?.envelopes.find((item) => item.envelopeId === args.envelopeId)
-    if (!verificationRun || !verification) {
-      throw new Error(
-        `envelopeId references an unknown VerificationEnvelope: ${args.envelopeId} (no envelope with this id exists in session ${ctx.sessionID})`,
-      )
-    }
+    const { run: verificationRun, verification } = SessionVerifications.resolveEnvelope(sessionID, args.envelopeId)
 
     const decision = shouldHandoff(verification.envelope, {
       ...(args.maxFailures ? { maxFailures: args.maxFailures } : {}),
