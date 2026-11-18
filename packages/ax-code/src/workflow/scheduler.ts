@@ -4,7 +4,6 @@ import z from "zod"
 import type { DispatchExecutor } from "../dispatch"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
-import { Session } from "../session"
 import type { TaskQueue } from "../session/task-queue"
 import { NotFoundError } from "../storage/db"
 import { FileLock } from "../util/filelock"
@@ -13,6 +12,7 @@ import { KeyedSerialQueue } from "../util/queue"
 import { JsonBoolean } from "../util/schema"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import { isWorkflowRuntimeEnabled, isWorkflowStartAllowed, type WorkflowSpecV1 } from "./spec"
+import { loadPhasePreparation, prepareWorkflowChildSession } from "./phase-preparation"
 import { planWorkflowDryRun, type WorkflowDryRunPhase } from "./planner"
 import { WorkflowRun } from "./run"
 import { WorkflowPhaseID, type WorkflowRunDetail, WorkflowRunID } from "./state"
@@ -246,13 +246,19 @@ export namespace WorkflowScheduler {
       return { kind: "advance" }
     }
 
+    if (!WorkflowRun.canPreparePhaseChildren(runID, phase.id, plan.children.length)) return { kind: "stop" }
+
+    const preparation = await loadPhasePreparation(runID, phase)
     const prepared: Awaited<ReturnType<typeof WorkflowRun.prepareQueuedChild>>[] = []
     for (const childPlan of plan.children) {
-      const target = await prepareChildRuntimeTarget(runID, phase, childPlan)
+      const { target, sessionID } = await preparation.reserve(childPlan.index, childPlan.writePolicy)
       const child = await Instance.provide({
         directory: target.directory,
         fn: async () => {
-          const session = await Session.create({
+          if (Instance.project.id !== initial.projectID) {
+            throw new HTTPException(409, { message: "A prepared workflow target belongs to another project." })
+          }
+          const session = await prepareWorkflowChildSession(sessionID, {
             parentID: initial.parentSessionID,
             title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1} (@${childPlan.agent ?? "workflow"} workflow child)`,
           })
@@ -290,7 +296,9 @@ export namespace WorkflowScheduler {
       prepared.push(child)
     }
     await ensurePhasePromptArtifact(runID, initial.spec, phase, plan)
-    return { kind: "queued", tasks: await WorkflowRun.enqueuePhaseChildren(runID, phase.id, prepared) }
+    const tasks = await WorkflowRun.enqueuePhaseChildren(runID, phase.id, prepared)
+    if (tasks.length > 0) await preparation.clear()
+    return { kind: "queued", tasks }
   }
 
   export async function cancel(runID: WorkflowRunID) {
@@ -424,46 +432,6 @@ export namespace WorkflowScheduler {
     const detail = await WorkflowRun.getDetail(runID)
     await assertEnabledForSpec(detail.spec.id)
     return retryChildren(runID, phaseID)
-  }
-}
-
-type WorkflowChildRuntimeTarget = {
-  directory: string
-  payload: {
-    mode: "current" | "dedicated"
-    directory: string
-    name?: string
-    branch?: string
-  }
-}
-
-async function prepareChildRuntimeTarget(
-  runID: WorkflowRunID,
-  phase: WorkflowRunDetail["phases"][number],
-  childPlan: WorkflowDryRunPhase["children"][number],
-): Promise<WorkflowChildRuntimeTarget> {
-  if (childPlan.writePolicy !== "worktree-required") {
-    return {
-      directory: Instance.directory,
-      payload: {
-        mode: "current",
-        directory: Instance.worktree,
-      },
-    }
-  }
-
-  const { Worktree } = await import("../worktree")
-  const info = await Worktree.makeWorktreeInfo(`workflow-${runID}-${phase.specPhaseID}-${childPlan.index + 1}`)
-  const bootstrap = await Worktree.createFromInfo(info)
-  await bootstrap()
-  return {
-    directory: info.directory,
-    payload: {
-      mode: "dedicated",
-      directory: info.directory,
-      name: info.name,
-      branch: info.branch,
-    },
   }
 }
 

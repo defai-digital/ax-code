@@ -4,7 +4,13 @@ import { ScheduledTaskID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { WorkflowRun } from "./run"
 import { WorkflowPacing, WorkflowPermissions, WorkflowPhaseBudget } from "./spec"
-import { WorkflowChildID, WorkflowPhaseID, WorkflowRunID, type WorkflowChildRecord } from "./state"
+import {
+  WorkflowChildID,
+  WorkflowChildWorktree,
+  WorkflowPhaseID,
+  WorkflowRunID,
+  type WorkflowChildRecord,
+} from "./state"
 import { WorkflowScheduler } from "./scheduler"
 
 export namespace WorkflowTaskQueue {
@@ -17,14 +23,7 @@ export namespace WorkflowTaskQueue {
       startOptions: WorkflowScheduler.StartOptions.partial().optional(),
     }),
     artifactRefs: z.array(z.string()).default([]),
-    worktree: z
-      .object({
-        mode: z.enum(["current", "dedicated"]),
-        directory: z.string().min(1),
-        name: z.string().optional(),
-        branch: z.string().optional(),
-      })
-      .optional(),
+    worktree: WorkflowChildWorktree.optional(),
     budgetSlice: WorkflowPhaseBudget.optional(),
     pacing: WorkflowPacing.optional(),
     maxParallel: z.number().int().positive().optional(),

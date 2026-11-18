@@ -42,6 +42,13 @@ export const WorkflowBudgetLedgerID = {
   ascending: (id?: string) => Identifier.ascending("workflow_budget", id) as WorkflowBudgetLedgerID,
 }
 
+export const WorkflowChildWorktree = z.object({
+  mode: z.enum(["current", "dedicated"]),
+  directory: z.string().min(1),
+  name: z.string().optional(),
+  branch: z.string().optional(),
+})
+
 const TimestampInfo = z.object({
   created: z.number(),
   updated: z.number(),

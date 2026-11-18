@@ -1038,48 +1038,66 @@ describe("WorkflowScheduler", () => {
     }
   })
 
-  test("retries durable phase setup after preparation fails without publishing a partial batch", async () => {
-    await using tmp = await tmpdir({ git: true })
-    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
-    try {
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const run = await WorkflowRun.create({
-            spec: parseWorkflowSpecV1({
-              schemaVersion: 1,
-              id: "interrupted-phase-setup",
-              name: "Interrupted setup",
-              description: "Child preparation may fail before a phase is admitted.",
-              phases: [{ id: "read", name: "Read", kind: "fanout", inputs: ["a", "b"], maxParallel: 2 }],
-            }),
-          })
-          const create = Session.create
-          const spy = vi
-            .spyOn(Session, "create")
-            .mockImplementationOnce(create)
-            .mockRejectedValueOnce(new Error("preparation interrupted"))
-          await expect(WorkflowScheduler.start(run.id, { autoStartChildren: false })).rejects.toThrow(
-            "preparation interrupted",
-          )
-          spy.mockRestore()
-          const partial = await WorkflowRun.getDetail(run.id)
-          expect(partial.phases[0]?.status).toBe("queued")
-          expect(partial.children).toHaveLength(0)
-          expect(partial.budgetUsage.childAgents).toBe(0)
-          expect(await TaskQueue.list()).toHaveLength(0)
+  test.each(["read-only", "worktree-required"] as const)(
+    "retries %s phase setup without duplicating prepared resources",
+    async (writePolicy) => {
+      await using tmp = await tmpdir({ git: true })
+      vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const run = await WorkflowRun.create({
+              spec: parseWorkflowSpecV1({
+                schemaVersion: 1,
+                id: "interrupted-phase-setup",
+                name: "Interrupted setup",
+                description: "Child preparation may fail before a phase is admitted.",
+                permissions: { writePolicy },
+                phases: [{ id: "read", name: "Read", kind: "fanout", inputs: ["a", "b"], maxParallel: 2 }],
+              }),
+            })
+            const startOptions = { allowWriteWorkflows: true, autoStartChildren: false }
+            const create = Session.create
+            const spy = vi
+              .spyOn(Session, "create")
+              .mockImplementationOnce(create)
+              .mockRejectedValueOnce(new Error("preparation interrupted"))
+            await expect(WorkflowScheduler.start(run.id, startOptions)).rejects.toThrow("preparation interrupted")
+            spy.mockRestore()
+            const partial = await WorkflowRun.getDetail(run.id)
+            expect(partial.phases[0]?.status).toBe("queued")
+            expect(partial.children).toHaveLength(0)
+            expect(partial.budgetUsage.childAgents).toBe(0)
+            expect(await TaskQueue.list()).toHaveLength(0)
 
-          const retried = await WorkflowScheduler.start(run.id, { autoStartChildren: false })
-          expect(retried.children).toHaveLength(2)
-          expect(retried.budgetUsage.childAgents).toBe(2)
-          expect(await TaskQueue.list()).toHaveLength(2)
-        },
-      })
-    } finally {
-      vi.restoreAllMocks()
-      vi.unstubAllEnvs()
-    }
-  })
+            const worktree = (await Worktree.list())[0]
+            const note = worktree ? path.join(worktree.directory, "local-notes.txt") : undefined
+            if (note) await fs.writeFile(note, "Notes added after interruption")
+
+            const retried = await WorkflowScheduler.start(run.id, startOptions)
+            expect(retried.children).toHaveLength(2)
+            expect(retried.budgetUsage.childAgents).toBe(2)
+            expect(await TaskQueue.list()).toHaveLength(2)
+            expect([...Session.list()].map((session) => session.id).sort()).toEqual(
+              retried.children.map((child) => child.sessionID).sort(),
+            )
+            expect(await Worktree.list()).toHaveLength(writePolicy === "worktree-required" ? 2 : 0)
+            if (note) expect(await fs.readFile(note, "utf8")).toBe("Notes added after interruption")
+          },
+        })
+      } finally {
+        vi.restoreAllMocks()
+        vi.unstubAllEnvs()
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            for (const worktree of await Worktree.list()) await Worktree.remove({ directory: worktree.directory })
+          },
+        })
+      }
+    },
+  )
 
   test("rejects a phase that exceeds the remaining child budget without charging the rejected batch", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -1105,6 +1123,7 @@ describe("WorkflowScheduler", () => {
           expect(stopped.phases[0]?.status).toBe("failed")
           expect(stopped.children).toHaveLength(0)
           expect(await TaskQueue.list()).toHaveLength(0)
+          expect([...Session.list()]).toHaveLength(0)
           expect(stopped.budgetUsage.childAgents).toBe(2)
           expect(stopped.budgetLedger).toContainEqual(
             expect.objectContaining({

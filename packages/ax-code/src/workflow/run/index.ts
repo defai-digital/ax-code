@@ -389,6 +389,60 @@ async function prepareQueuedChild(
   }
 }
 
+function rejectPhaseBudget(
+  db: Database.TxOrDb,
+  run: ReturnType<typeof readRunRow>,
+  phaseID: WorkflowPhaseID,
+  childCount: number,
+  now: number,
+): ReturnType<typeof writeBudgetUsage> | undefined {
+  const budget = evaluateWorkflowBudget({
+    budget: run.budget,
+    usage: addWorkflowBudgetUsage(run.budget_usage, { childAgents: childCount }),
+    elapsedMs: now - (run.time_started ?? run.time_created),
+  })
+  if (budget.exceeded.length === 0) return undefined
+  return writeBudgetUsage(
+    db,
+    {
+      runID: run.id,
+      phaseID,
+      kind: "exceeded",
+      usageDelta: EmptyWorkflowBudgetUsage,
+      message: `Workflow phase admission exceeded budget: ${budget.exceeded.join("; ")}`,
+    },
+    now,
+    budget,
+  )
+}
+
+function readAdmissiblePhase(
+  db: Database.TxOrDb,
+  run: ReturnType<typeof readRunRow>,
+  phaseID: WorkflowPhaseID,
+): typeof WorkflowPhaseTable.$inferSelect | undefined {
+  if (run.status !== "running" && run.status !== "blocked") return undefined
+  const phase = db
+    .select()
+    .from(WorkflowPhaseTable)
+    .where(and(eq(WorkflowPhaseTable.id, phaseID), eq(WorkflowPhaseTable.run_id, run.id)))
+    .get()
+  if (!phase) throw new NotFoundError({ message: `Workflow phase not found: ${phaseID}` })
+  if (isTerminalPhaseStatus(phase.status) || phase.status === "paused") return undefined
+  return phase
+}
+
+function canPreparePhaseChildren(runID: WorkflowRunID, phaseID: WorkflowPhaseID, childCount: number): boolean {
+  const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+    const run = readRunRow(db, runID)
+    if (!readAdmissiblePhase(db, run, phaseID)) return { allowed: false }
+    const failed = rejectPhaseBudget(db, run, phaseID, childCount, Date.now())
+    return { allowed: !failed, failed }
+  })
+  if (result.failed) publishBudgetUsage(result.failed)
+  return result.allowed
+}
+
 async function enqueuePhaseChildren(
   runID: WorkflowRunID,
   phaseID: WorkflowPhaseID,
@@ -400,14 +454,8 @@ async function enqueuePhaseChildren(
   }
   const result = SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
     const run = readRunRow(db, runID)
-    if (run.status !== "running" && run.status !== "blocked") return undefined
-    const current = db
-      .select()
-      .from(WorkflowPhaseTable)
-      .where(and(eq(WorkflowPhaseTable.id, phaseID), eq(WorkflowPhaseTable.run_id, runID)))
-      .get()
-    if (!current) throw new NotFoundError({ message: `Workflow phase not found: ${phaseID}` })
-    if (isTerminalPhaseStatus(current.status) || current.status === "paused") return undefined
+    const current = readAdmissiblePhase(db, run, phaseID)
+    if (!current) return undefined
     const existing = db
       .select({ id: WorkflowChildTable.id })
       .from(WorkflowChildTable)
@@ -416,28 +464,8 @@ async function enqueuePhaseChildren(
     if (existing) return undefined
 
     const now = Date.now()
-    const reservation = { ...EmptyWorkflowBudgetUsage, childAgents: prepared.length }
-    const requested = addWorkflowBudgetUsage(run.budget_usage, reservation)
-    const budget = evaluateWorkflowBudget({
-      budget: run.budget,
-      usage: requested,
-      elapsedMs: now - (run.time_started ?? run.time_created),
-    })
-    if (budget.exceeded.length > 0) {
-      const failed = writeBudgetUsage(
-        db,
-        {
-          runID,
-          phaseID,
-          kind: "exceeded",
-          usageDelta: EmptyWorkflowBudgetUsage,
-          message: `Workflow phase admission exceeded budget: ${budget.exceeded.join("; ")}`,
-        },
-        now,
-        budget,
-      )
-      return { kind: "budget" as const, failed }
-    }
+    const failed = rejectPhaseBudget(db, run, phaseID, prepared.length, now)
+    if (failed) return { kind: "budget" as const, failed }
 
     const phaseRow = db
       .update(WorkflowPhaseTable)
@@ -650,6 +678,7 @@ export const WorkflowRun = {
   setStatus,
   setPhaseStatus,
   appendChild,
+  canPreparePhaseChildren,
   prepareQueuedChild,
   enqueuePhaseChildren,
   finishCancellation,
