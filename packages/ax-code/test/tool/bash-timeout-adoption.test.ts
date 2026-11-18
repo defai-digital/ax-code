@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { writeFile } from "node:fs/promises"
+import path from "node:path"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { BashTool } from "../../src/tool/bash"
 import { BackgroundShell } from "../../src/tool/bash-background"
 import { Instance } from "../../src/project/instance"
@@ -50,19 +52,57 @@ describe("tool.bash timeout adoption", () => {
         directory: tmp.path,
         fn: async () => {
           const bash = await BashTool.init()
-          const script = "process.stdout.write('adoption-seed-proof\\n'); setTimeout(() => {}, 30000)"
-          const result = await bash.execute(
+          const before = "adoption-seed-proof\n"
+          const script = `
+            const { existsSync } = require("node:fs")
+            process.stdout.write(Buffer.concat([Buffer.from(${JSON.stringify(before)}), Buffer.from([0xe2])]))
+            const poll = setInterval(() => {
+              if (!existsSync("release-output")) return
+              process.stdout.write(Buffer.from([0x82, 0xac]))
+              clearInterval(poll)
+              setInterval(() => {}, 1000)
+            }, 20)
+          `
+          const timeout = 60_000
+          const schedule = globalThis.setTimeout
+          let expire: (() => void) | undefined
+          let receivedPrefix = false
+          const controller = new AbortController()
+          const timer = vi.spyOn(globalThis, "setTimeout").mockImplementation((callback, delay, ...args) => {
+            if (delay === timeout) expire = () => callback(...args)
+            return schedule(callback, delay, ...args)
+          })
+          const execution = bash.execute(
             {
               command: `${shellQuote(process.execPath)} -e ${shellQuote(script)}`,
-              timeout: 300,
+              timeout,
               description: "Outlive the timeout",
             },
-            ctx,
+            {
+              ...ctx,
+              abort: controller.signal,
+              metadata({ metadata }) {
+                if (metadata?.output === before && metadata.hang?.outputBytes === Buffer.byteLength(before) + 1) {
+                  receivedPrefix = true
+                }
+              },
+            },
           )
+
+          let result: Awaited<typeof execution>
+          try {
+            await vi.waitFor(() => expect(expire && receivedPrefix).toBe(true), { timeout: 10_000 })
+            expire?.()
+            result = await execution
+          } finally {
+            timer.mockRestore()
+            controller.abort()
+            await execution.catch(() => undefined)
+          }
 
           expect(result.metadata.exit).toBeNull()
           expect((result.metadata.hang as Record<string, unknown>)["timedOut"]).toBe(true)
-          const background = (result.metadata as Record<string, any>)["background"] as {
+          const background = (result.metadata as Record<string, unknown>)["background"] as {
             shellID: string
             adopted: boolean
           }
@@ -77,7 +117,11 @@ describe("tool.bash timeout adoption", () => {
           // running, and the output captured before the timeout was seeded.
           expect(BackgroundShell.get(background.shellID, sessionID)?.status).toBe("running")
           const read = BackgroundShell.read(background.shellID, sessionID)
-          expect(read?.output).toContain("adoption-seed-proof")
+          expect(read?.output).toBe(before)
+
+          await writeFile(path.join(tmp.path, "release-output"), "")
+          const next = await BackgroundShell.waitAndRead(background.shellID, sessionID, { timeoutMs: 10_000 })
+          expect(next?.output).toBe("€")
 
           // The adopted shell joins the normal background lifecycle.
           const killed = await BackgroundShell.kill(background.shellID, sessionID)

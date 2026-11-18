@@ -143,6 +143,8 @@ export namespace BackgroundShell {
     proc: ChildProcess
     /** Output captured before adoption (foreground timeout path); seeds the spool. */
     seedOutput?: string
+    /** Decoders handed off with the streams so partial UTF-8 sequences survive adoption. */
+    outputDecoders?: Record<OutputStream, StringDecoder>
     onExited?: () => void
   }): Info {
     const proc = input.proc
@@ -222,8 +224,8 @@ export namespace BackgroundShell {
     // Per-stream decoders: a 'data' chunk can split a multi-byte UTF-8
     // character, and Buffer#toString would emit replacement characters at
     // the boundary. StringDecoder buffers the partial sequence instead.
-    const stdoutDecoder = new StringDecoder("utf8")
-    const stderrDecoder = new StringDecoder("utf8")
+    const stdoutDecoder = input.outputDecoders?.stdout ?? new StringDecoder("utf8")
+    const stderrDecoder = input.outputDecoders?.stderr ?? new StringDecoder("utf8")
     proc.stdout?.on("data", (chunk: Buffer) => appendText("stdout", stdoutDecoder.write(chunk)))
     proc.stderr?.on("data", (chunk: Buffer) => appendText("stderr", stderrDecoder.write(chunk)))
 

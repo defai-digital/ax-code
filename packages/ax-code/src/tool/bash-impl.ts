@@ -1942,8 +1942,15 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
 
         const appendStdout = (chunk: Buffer) => append(chunk, stdoutDecoder)
         const appendStderr = (chunk: Buffer) => append(chunk, stderrDecoder)
-        proc.stdout?.on("data", appendStdout)
-        proc.stderr?.on("data", appendStderr)
+        const attachOutput = () => {
+          proc.stdout?.on("data", appendStdout)
+          proc.stderr?.on("data", appendStderr)
+        }
+        const detachOutput = () => {
+          proc.stdout?.off("data", appendStdout)
+          proc.stderr?.off("data", appendStderr)
+        }
+        attachOutput()
 
         const kill = async () => {
           if (killStartedAt !== undefined) return
@@ -1976,6 +1983,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               description,
               proc,
               seedOutput: output,
+              outputDecoders: truncated ? undefined : { stdout: stdoutDecoder, stderr: stderrDecoder },
               onExited: () => {
                 if (proc.pid) forgetTrackedPID(proc.pid)
               },
@@ -1986,14 +1994,6 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             log.warn("bash timeout adoption failed; killing instead", { pid: proc.pid, error })
             return undefined
           }
-          // Ownership transfer to the registry: the foreground listeners stop
-          // capturing (and stop growing `output`), and the turn's abort
-          // signal releases the process — the same rule as run_in_background
-          // shells. These detachments are synchronous with register(), so no
-          // stream chunk can reach both listener sets.
-          proc.stdout?.off("data", appendStdout)
-          proc.stderr?.off("data", appendStderr)
-          ctx.abort.removeEventListener("abort", abortHandler)
           log.info("bash command adopted into background on timeout", {
             shellID: info.id,
             pid: proc.pid,
@@ -2003,38 +2003,24 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         }
 
         let adoptedInfo: BackgroundShell.Info | undefined
-        let settleWait: (() => void) | undefined
-
-        const timeoutTimer = setTimeout(() => {
-          timedOut = true
-          if (autoBackgroundOnTimeout && !ctx.abort.aborted) {
-            adoptedInfo = adoptIntoBackground()
-            if (adoptedInfo) {
-              settleWait?.()
-              return
-            }
-          }
-          void kill().catch((error) => {
-            log.warn("bash timeout kill failed", {
-              timeout,
-              error,
-            })
-          })
-        }, timeout)
-
         let procExitCode: number | null = null
 
         await new Promise<void>((resolve, reject) => {
-          settleWait = resolve
-          const cleanup = () => {
+          const detachForeground = () => {
             clearTimeout(timeoutTimer)
             ctx.abort.removeEventListener("abort", abortHandler)
-            proc.stdout?.off("data", appendStdout)
-            proc.stderr?.off("data", appendStderr)
+            proc.off("exit", onExit)
+            proc.off("close", onClose)
+            proc.off("error", onError)
+          }
+
+          const cleanup = () => {
+            detachOutput()
+            detachForeground()
             if (proc.pid) forgetTrackedPID(proc.pid)
           }
 
-          proc.once("exit", () => {
+          const onExit = () => {
             exited = true
             procExitCode = proc.exitCode
             // Background processes spawned by the command (e.g. `cmd &`) inherit
@@ -2046,21 +2032,46 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               proc.stdout?.destroy()
               proc.stderr?.destroy()
             })
-          })
+          }
 
-          proc.once("close", () => {
+          const onClose = () => {
             cleanup()
             // Flush tails only when output was retained in full. A hard-cap
             // cutoff discards pending bytes instead of adding replacement text.
             if (!truncated) output += stdoutDecoder.end() + stderrDecoder.end()
             resolve()
-          })
+          }
 
-          proc.once("error", (error) => {
+          const onError = (error: Error) => {
             exited = true
             cleanup()
             reject(error)
-          })
+          }
+
+          const timeoutTimer = setTimeout(() => {
+            // A received exit already scheduled the pipe drain and closure.
+            if (exited) return
+            timedOut = true
+            if (autoBackgroundOnTimeout && !ctx.abort.aborted) {
+              detachOutput()
+              adoptedInfo = adoptIntoBackground()
+              if (adoptedInfo) {
+                // The registry now owns decoding, drain, and PID cleanup.
+                detachForeground()
+                resolve()
+                return
+              }
+              attachOutput()
+            }
+            void kill().catch((error) => {
+              log.warn("bash timeout kill failed", { timeout, error })
+            })
+          }, timeout)
+
+          // These are attached synchronously on the newly spawned child.
+          proc.once("exit", onExit) // @scan-suppress race_scan
+          proc.once("close", onClose) // @scan-suppress race_scan
+          proc.once("error", onError) // @scan-suppress race_scan
 
           if (ctx.abort.aborted) {
             aborted = true
