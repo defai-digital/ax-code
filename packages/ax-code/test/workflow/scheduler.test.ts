@@ -4,6 +4,8 @@ import { Instance } from "../../src/project/instance"
 import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
+import { TaskQueue } from "../../src/session/task-queue"
 import { Database, eq } from "../../src/storage/db"
 import { Worktree } from "../../src/worktree"
 import {
@@ -1706,6 +1708,172 @@ describe("WorkflowScheduler", () => {
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("workflow cancellation preserves a concurrent replacement child attempt", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          const started = await WorkflowScheduler.start(run.id, {
+            allowScaleBeyondDefaults: true,
+            autoStartChildren: false,
+          })
+          const id = started.children[0]?.taskQueueID
+          if (!id) throw new Error("Expected a workflow child queue item")
+          const first = await TaskQueue.claimForExecution(id)
+          if (first.kind !== "claimed") throw new Error("Expected to claim the workflow child")
+          vi.spyOn(SessionPrompt, "cancel").mockImplementationOnce(async () => {
+            await TaskQueue.finishExecution(first.attempt, { status: "failed" })
+            await TaskQueue.retry(id)
+            expect((await TaskQueue.claimForExecution(id)).kind).toBe("claimed")
+          })
+
+          const stopped = await WorkflowScheduler.cancel(run.id).then(
+            () => undefined,
+            (error: unknown) => error,
+          )
+
+          expect(stopped).toMatchObject({ status: 409 })
+          expect((await TaskQueue.get(id)).status).toBe("running")
+          expect((await WorkflowRun.get(run.id)).status).toBe("running")
+        },
+      })
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("workflow cancellation sees the first queue item before startup publishes its session metadata", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          const published = Promise.withResolvers<void>()
+          const resume = Promise.withResolvers<void>()
+          const setMetadata = Session.setProductMetadata
+          vi.spyOn(Session, "setProductMetadata").mockImplementationOnce(async (input) => {
+            const result = await setMetadata(input)
+            published.resolve()
+            await resume.promise
+            return result
+          })
+          const start = WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
+          try {
+            await Promise.race([
+              published.promise,
+              start.then(() => {
+                throw new Error("Startup skipped queue metadata")
+              }),
+            ])
+            expect((await WorkflowScheduler.cancel(run.id)).status).toBe("cancelled")
+          } finally {
+            resume.resolve()
+            await start
+          }
+
+          const rows = await TaskQueue.list()
+          expect(rows.map((item) => item.status)).toEqual(["cancelled"])
+          const first = rows[0]
+          if (!first) throw new Error("Expected the cancelled queue item to remain visible")
+          await expect(TaskQueue.retry(first.id)).rejects.toMatchObject({ status: 409 })
+          const legacy = await TaskQueue.enqueue({
+            sessionID: first.sessionID,
+            kind: first.kind,
+            title: "Legacy workflow dispatch",
+            payload: first.payload,
+          })
+          expect((await TaskQueue.claimForExecution(legacy.id)).kind).toBe("unavailable")
+          expect((await WorkflowRun.get(run.id)).status).toBe("cancelled")
+        },
+      })
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("workflow cancellation rechecks for children before recording the terminal status", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
+          const [first] = await TaskQueue.list()
+          if (!first) throw new Error("Expected a queued workflow child")
+          const setMetadata = Session.setProductMetadata
+          vi.spyOn(Session, "setProductMetadata").mockImplementationOnce(async (input) => {
+            await TaskQueue.enqueue({
+              sessionID: first.sessionID,
+              kind: first.kind,
+              title: "Concurrent legacy dispatch",
+              payload: first.payload,
+            })
+            return setMetadata(input)
+          })
+
+          await expect(WorkflowScheduler.cancel(run.id)).rejects.toMatchObject({ status: 409 })
+
+          expect((await WorkflowRun.get(run.id)).status).toBe("running")
+          expect((await TaskQueue.list()).filter((item) => item.status === "queued").map((item) => item.title)).toEqual(
+            ["Concurrent legacy dispatch"],
+          )
+        },
+      })
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("workflow cancellation wins over a pending startup status write", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          const writing = Promise.withResolvers<void>()
+          const resume = Promise.withResolvers<void>()
+          const setStatus = WorkflowRun.setStatus
+          vi.spyOn(WorkflowRun, "setStatus").mockImplementationOnce(async (...args) => {
+            writing.resolve()
+            await resume.promise
+            return setStatus(...args)
+          })
+          const start = WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
+          try {
+            await Promise.race([
+              writing.promise,
+              start.then(() => {
+                throw new Error("Startup skipped status write")
+              }),
+            ])
+            expect((await WorkflowScheduler.cancel(run.id)).status).toBe("cancelled")
+          } finally {
+            resume.resolve()
+            await start
+          }
+
+          expect((await WorkflowRun.get(run.id)).status).toBe("cancelled")
+          expect(await TaskQueue.list()).toHaveLength(0)
+        },
+      })
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
     }
   })
 

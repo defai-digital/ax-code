@@ -370,7 +370,7 @@ describe("WorkflowRun state", () => {
         // Run: cancel, then re-activate to running.
         const cancelledRun = await WorkflowRun.setStatus({ id: run.id, status: "cancelled" })
         expect(cancelledRun.time.completed).toBeDefined()
-        const rerunRun = await WorkflowRun.setStatus({ id: run.id, status: "running" })
+        const rerunRun = await WorkflowRun.setStatus({ id: run.id, status: "running" }, { reopenCancelled: true })
         expect(rerunRun.time.completed).toBeUndefined()
       },
     })

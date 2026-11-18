@@ -165,14 +165,17 @@ export function parseWorkflowDetailRows<TRow extends { id: string }, TInfo>(
 
 // --- Assertions ---
 
+export function readRunRow(db: Database.TxOrDb, id: WorkflowRunID): typeof WorkflowRunTable.$inferSelect {
+  const row = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, id)).get()
+  if (!row) throw new NotFoundError({ message: `Workflow run not found: ${id}` })
+  if (row.project_id !== Instance.project.id) {
+    throw new HTTPException(409, { message: `Workflow run ${id} belongs to a different project.` })
+  }
+  return row
+}
+
 export async function getRun(id: WorkflowRunID): Promise<WorkflowRunState.Info> {
-  const run = SessionShard.storeForProject(Instance.project.id).use((db) => {
-    const row = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, id)).get()
-    if (!row) throw new NotFoundError({ message: `Workflow run not found: ${id}` })
-    return fromRunRow(row)
-  })
-  assertProjectRun(run)
-  return run
+  return SessionShard.storeForProject(Instance.project.id).use((db) => fromRunRow(readRunRow(db, id)))
 }
 
 export async function assertSessionCompatible(sessionID: import("../../session/schema").SessionID) {
@@ -180,13 +183,6 @@ export async function assertSessionCompatible(sessionID: import("../../session/s
   if (Session.isCompatibleWithCurrentProject(session)) return session
   throw new HTTPException(409, {
     message: `Session ${sessionID} belongs to a different project directory; create the workflow from that project instead.`,
-  })
-}
-
-export function assertProjectRun(run: WorkflowRunState.Info) {
-  if (run.projectID === Instance.project.id) return
-  throw new HTTPException(409, {
-    message: `Workflow run ${run.id} belongs to a different project.`,
   })
 }
 

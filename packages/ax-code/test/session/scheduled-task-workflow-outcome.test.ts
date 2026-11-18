@@ -311,6 +311,36 @@ describe("ScheduledTask workflow outcome recording", () => {
     })
   })
 
+  test("cancelling a running workflow releases its scheduled dispatch", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+        try {
+          vi.spyOn(WorkflowScheduler, "start").mockImplementation(async (id) => {
+            await WorkflowRun.setStatus({ id, status: "running" })
+            return WorkflowRun.getDetail(id)
+          })
+          const task = await createWorkflowTask()
+          const first = (await ScheduledTask.runNow(task.id)).workflowRun
+          if (!first) throw new Error("Expected the first workflow dispatch")
+
+          expect((await WorkflowScheduler.cancel(first.id)).status).toBe("cancelled")
+
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+            { workflowRunID: first.id, status: "failed", error: "Scheduled workflow was cancelled." },
+          ])
+          const second = (await ScheduledTask.runNow(task.id)).workflowRun
+          expect(second?.id).toBeDefined()
+          expect(second?.id).not.toBe(first.id)
+        } finally {
+          vi.unstubAllEnvs()
+        }
+      },
+    })
+  })
+
   test("deleting a task cancels its running workflow run", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

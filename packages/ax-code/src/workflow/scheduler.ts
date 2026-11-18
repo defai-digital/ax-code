@@ -2,7 +2,7 @@ import z from "zod"
 import { Instance } from "../project/instance"
 import { Session } from "../session"
 import type { TaskQueue } from "../session/task-queue"
-import type { TaskQueueID } from "../session/schema"
+import { NotFoundError } from "../storage/db"
 import { KeyedSerialQueue } from "../util/queue"
 import { JsonBoolean } from "../util/schema"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
@@ -79,9 +79,8 @@ export namespace WorkflowScheduler {
       allowWriteWorkflows: parsed.allowWriteWorkflows,
       durableChildren: parsed.durableChildren,
     })
-    const TaskQueue = await loadTaskQueue()
-
-    await WorkflowRun.setStatus({ id: runID, status: "running" })
+    const started = await WorkflowRun.setStatus({ id: runID, status: "running" })
+    if (started.status === "cancelled") return WorkflowRun.getDetail(runID)
     for (const phase of initial.phases) {
       const stopped = await stopIfWallTimeExceeded(runID)
       if (stopped) return stopped
@@ -93,10 +92,11 @@ export namespace WorkflowScheduler {
       if (parsed.enqueueChildren) {
         const current = await WorkflowRun.getDetail(runID)
         const existingChildren = current.children.filter((child) => child.phaseID === phase.id)
-        if (existingChildren.length > 0) return current
+        if (WorkflowRun.isTerminalRunStatus(current.status) || existingChildren.length > 0) return current
       }
 
-      await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+      const advanced = await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+      if (advanced.status !== "running") return WorkflowRun.getDetail(runID)
 
       if (phase.kind === "noop") {
         await WorkflowRun.appendArtifact({
@@ -112,56 +112,49 @@ export namespace WorkflowScheduler {
       }
 
       if (parsed.enqueueChildren) {
-        const enqueuedTasks: Array<{ task: Awaited<ReturnType<typeof TaskQueue.enqueue>> }> = []
+        const enqueuedTasks: TaskQueue.Info[] = []
         for (const childPlan of phasePlan.children) {
           const target = await prepareChildRuntimeTarget(runID, phase, childPlan)
-          const { child, task } = await Instance.provide({
+          const enqueued = await Instance.provide({
             directory: target.directory,
             fn: async () => {
               const session = await Session.create({
                 parentID: initial.parentSessionID,
                 title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1} (@${childPlan.agent ?? "workflow"} workflow child)`,
               })
-              const child = await WorkflowRun.appendChild({
-                runID,
-                phaseID: phase.id,
-                sessionID: session.id,
-                agent: childPlan.agent,
-                model: childPlan.model,
-                budgetSlice: childPlan.budgetSlice,
-              })
-              const task = await TaskQueue.enqueue({
-                sessionID: session.id,
-                kind: "subagent",
-                title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
-                agent: childPlan.agent,
-                model: childPlan.model,
-                sourceTaskID: initial.sourceTaskID,
-                payload: {
-                  workflow: {
-                    runID,
-                    phaseID: phase.id,
-                    childID: child.id,
-                    specPhaseID: phase.specPhaseID,
-                    startOptions: parsed,
-                  },
-                  worktree: target.payload,
-                  prompt: childPlan.prompt,
-                  artifactRefs: childPlan.artifactRefs,
+              return WorkflowRun.enqueueChild(
+                {
+                  runID,
+                  phaseID: phase.id,
+                  sessionID: session.id,
+                  agent: childPlan.agent,
+                  model: childPlan.model,
                   budgetSlice: childPlan.budgetSlice,
-                  pacing: childPlan.pacing,
-                  maxParallel: phasePlan.maxParallel,
-                  allowedTools: childPlan.allowedTools,
-                  writePolicy: childPlan.writePolicy,
-                  networkPolicy: childPlan.networkPolicy,
-                  escalationPolicy: childPlan.escalationPolicy,
-                  effort: childPlan.effort,
                 },
-              })
-              return { child, task }
+                {
+                  title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
+                  specPhaseID: phase.specPhaseID,
+                  startOptions: parsed,
+                  sourceTaskID: initial.sourceTaskID,
+                  payload: {
+                    worktree: target.payload,
+                    prompt: childPlan.prompt,
+                    artifactRefs: childPlan.artifactRefs,
+                    budgetSlice: childPlan.budgetSlice,
+                    pacing: childPlan.pacing,
+                    maxParallel: phasePlan.maxParallel,
+                    allowedTools: childPlan.allowedTools,
+                    writePolicy: childPlan.writePolicy,
+                    networkPolicy: childPlan.networkPolicy,
+                    escalationPolicy: childPlan.escalationPolicy,
+                    effort: childPlan.effort,
+                  },
+                },
+              )
             },
           })
-          await WorkflowRun.attachChildTaskQueueID({ id: child.id, taskQueueID: task.id })
+          if (!enqueued) return WorkflowRun.getDetail(runID)
+          const { child, task } = enqueued
           await WorkflowRun.appendBudgetUsage({
             runID,
             phaseID: phase.id,
@@ -169,7 +162,7 @@ export namespace WorkflowScheduler {
             kind: "reserve",
             usageDelta: { childAgents: 1 },
           })
-          enqueuedTasks.push({ task })
+          enqueuedTasks.push(task)
         }
 
         if (parsed.autoStartChildren) {
@@ -178,7 +171,7 @@ export namespace WorkflowScheduler {
           // drainNextWorkflowPhaseItem() only fires after a child completes,
           // so the first batch never gets picked up.
           const TaskQueueExecutor = await loadTaskQueueExecutor()
-          for (const { task } of enqueuedTasks) {
+          for (const task of enqueuedTasks) {
             await TaskQueueExecutor.start(task)
           }
         }
@@ -214,7 +207,10 @@ export namespace WorkflowScheduler {
   export async function cancel(runID: WorkflowRunID) {
     const detail = await WorkflowRun.getDetail(runID)
     await assertEnabledForSpec(detail.spec.id)
-    return terminateRun(runID, detail)
+    const cancelled = await terminateRun(runID)
+    const { reportScheduledOutcome } = await import("./task-queue")
+    await reportScheduledOutcome(cancelled)
+    return cancelled
   }
 
   /**
@@ -225,25 +221,19 @@ export namespace WorkflowScheduler {
    * sweeps only `running` rows and there is no run retention.
    */
   export async function cancelUnstarted(runID: WorkflowRunID) {
-    return terminateRun(runID, await WorkflowRun.getDetail(runID))
+    return terminateRun(runID)
   }
 
-  async function terminateRun(runID: WorkflowRunID, detail: Awaited<ReturnType<typeof WorkflowRun.getDetail>>) {
-    for (const child of detail.children) {
-      if (child.taskQueueID) {
-        await cancelWorkflowQueueItem(child.taskQueueID).catch(() => undefined)
-      }
-      if (!WorkflowRun.isTerminalChildStatus(child.status)) {
-        await WorkflowRun.setChildStatus({ id: child.id, status: "cancelled" })
-      }
-    }
-    for (const phase of detail.phases) {
-      if (!WorkflowRun.isTerminalPhaseStatus(phase.status)) {
-        await WorkflowRun.setPhaseStatus({ id: phase.id, status: "cancelled" })
+  async function terminateRun(runID: WorkflowRunID): Promise<WorkflowRunDetail> {
+    const TaskQueue = await loadTaskQueue()
+    for (const child of TaskQueue.captureWorkflowCancellation(runID)) {
+      try {
+        await TaskQueue.stopWorkflowChild(child)
+      } catch (error) {
+        if (!NotFoundError.isInstance(error)) throw error
       }
     }
-    await WorkflowRun.setStatus({ id: runID, status: "cancelled" })
-    return WorkflowRun.getDetail(runID)
+    return WorkflowRun.finishCancellation(runID)
   }
 
   export async function pause(runID: WorkflowRunID) {
@@ -270,11 +260,7 @@ export namespace WorkflowScheduler {
           item?.status === "blocked_permission" ||
           item?.status === "blocked_question"
         ) {
-          if (item.sessionID) {
-            const { SessionPrompt } = await import("../session/prompt")
-            await SessionPrompt.cancel(item.sessionID).catch(() => undefined)
-          }
-          await TaskQueue.pause(child.taskQueueID).catch(() => undefined)
+          await TaskQueue.stopWorkflowChild(item)
           await WorkflowRun.setChildStatus({ id: child.id, status: "paused" })
           continue
         }
@@ -413,27 +399,6 @@ async function stopIfWallTimeExceeded(runID: WorkflowRunID, inputDetail?: Workfl
   return WorkflowRun.getDetail(runID)
 }
 
-async function cancelWorkflowQueueItem(taskQueueID: TaskQueueID) {
-  const TaskQueue = await loadTaskQueue()
-  const item = await TaskQueue.get(taskQueueID)
-  if (item.status === "cancelled") return item
-  if (item.status === "queued" || item.status === "waiting_for_idle" || item.status === "paused") {
-    return TaskQueue.cancel(taskQueueID)
-  }
-  if (item.status === "running" || item.status === "blocked_permission" || item.status === "blocked_question") {
-    if (item.sessionID) {
-      const { SessionPrompt } = await import("../session/prompt")
-      await SessionPrompt.cancel(item.sessionID).catch(() => undefined)
-    }
-    return TaskQueue.setStatus({
-      id: taskQueueID,
-      status: "cancelled",
-      error: "Workflow run cancelled.",
-    })
-  }
-  return item
-}
-
 async function ensurePhasePromptArtifact(
   runID: WorkflowRunID,
   spec: WorkflowSpecV1,
@@ -511,7 +476,9 @@ async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {
 
   // An explicit, budget-admitted retry reopens cancellation before queue
   // notifications arrive. Ordinary late notifications remain ignored.
-  if (detail.status === "cancelled") await WorkflowRun.setStatus({ id: runID, status: "running" })
+  if (detail.status === "cancelled") {
+    await WorkflowRun.setStatus({ id: runID, status: "running" }, { reopenCancelled: true })
+  }
 
   for (const child of retryableChildren) {
     if (child.taskQueueID) {

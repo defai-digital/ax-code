@@ -8,6 +8,8 @@ import { ProjectID } from "@/project/schema"
 import { Database, NotFoundError, and, asc, desc, eq, gt, gte, inArray, ne, or, sql, type SQL } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
+import { WorkflowChildTable, WorkflowRunTable } from "@/workflow/workflow.sql"
+import type { WorkflowRunID } from "@/workflow/state"
 import { SessionMetadata } from "./metadata"
 import { MessageID, PartID, ScheduledTaskID, SessionID, TaskQueueID } from "./schema"
 import { MessageTable, TaskQueueTable } from "./session.sql"
@@ -272,12 +274,9 @@ export namespace TaskQueue {
     }
   }
 
-  function publishCreated(item: Info) {
+  export async function publishEnqueued(item: Info): Promise<void> {
     Bus.publishDetached(Event.Created, { item })
-  }
-
-  export function publishEnqueued(item: Info) {
-    publishCreated(item)
+    if (item.sessionID) await syncSessionQueueMetadata(item)
   }
 
   function publishUpdated(item: Info) {
@@ -371,16 +370,35 @@ export namespace TaskQueue {
     options: { now?: number; id?: TaskQueueID } = {},
   ): Info {
     const parsed = EnqueueInput.parse(input)
-    if (parsed.sessionID) {
-      throw new Error("enqueueInTransaction requires callers to validate session compatibility before the transaction")
-    }
-    const now = options.now ?? Date.now()
+    if (parsed.sessionID) throw new Error("Session queue writes require prepareEnqueue before the transaction")
+    return insertEnqueued(db, parsed, options.now ?? Date.now(), options.id)
+  }
+
+  async function parseEnqueue(input: EnqueueInput): Promise<z.output<typeof EnqueueInput>> {
+    const parsed = EnqueueInput.parse(input)
+    if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
+    return parsed
+  }
+
+  /** Validate session ownership before opening a transaction with another domain. */
+  export async function prepareEnqueue(input: EnqueueInput): Promise<(db: Database.TxOrDb, now: number) => Info> {
+    const parsed = await parseEnqueue(input)
+    return (db, now) => insertEnqueued(db, parsed, now)
+  }
+
+  function insertEnqueued(
+    db: Database.TxOrDb,
+    parsed: z.output<typeof EnqueueInput>,
+    now: number,
+    id = TaskQueueID.ascending(),
+  ): Info {
     const projectID = Instance.project.id
     const row = db
       .insert(TaskQueueTable)
       .values({
-        id: options.id ?? TaskQueueID.ascending(),
+        id,
         project_id: projectID,
+        session_id: parsed.sessionID,
         directory: Instance.directory,
         kind: parsed.kind,
         status: "queued",
@@ -465,6 +483,33 @@ export namespace TaskQueue {
       )
     }
     return readQueueItems(db, projectID, conditions)
+  }
+
+  function workflowCancellationScope(db: Database.TxOrDb, runID: WorkflowRunID): SQL[] {
+    const linked = db
+      .select({ id: WorkflowChildTable.task_queue_id })
+      .from(WorkflowChildTable)
+      .where(eq(WorkflowChildTable.run_id, runID))
+    return [
+      inArray(TaskQueueTable.status, nonterminalStatuses),
+      or(inArray(TaskQueueTable.id, linked), sql`json_extract(${queuePayloadJson}, '$.workflow.runID') = ${runID}`)!,
+    ]
+  }
+
+  /** Include linked legacy rows and rows from older, split workflow inserts. */
+  export function captureWorkflowCancellation(runID: WorkflowRunID): Info[] {
+    const projectID = Instance.project.id
+    return SessionShard.storeForProject(projectID).use((db) =>
+      readQueueItems(db, projectID, workflowCancellationScope(db, runID)),
+    )
+  }
+
+  export function hasLiveWorkflowChildren(db: Database.TxOrDb, runID: WorkflowRunID): boolean {
+    return !!db
+      .select({ id: TaskQueueTable.id })
+      .from(TaskQueueTable)
+      .where(and(eq(TaskQueueTable.project_id, Instance.project.id), ...workflowCancellationScope(db, runID)))
+      .get()
   }
 
   /**
@@ -628,8 +673,7 @@ export namespace TaskQueue {
   }
 
   async function enqueueInternal(input: EnqueueInput, idempotent: boolean): Promise<Info> {
-    const parsed = EnqueueInput.parse(input)
-    if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
+    const parsed = await parseEnqueue(input)
 
     const now = Date.now()
     const projectID = Instance.project.id
@@ -692,33 +736,10 @@ export namespace TaskQueue {
         }
       }
 
-      const values: typeof TaskQueueTable.$inferInsert = {
-        id: TaskQueueID.ascending(),
-        project_id: projectID,
-        session_id: parsed.sessionID,
-        directory: Instance.directory,
-        kind: parsed.kind,
-        status: "queued",
-        priority: parsed.priority,
-        position: nextPosition(projectID, db),
-        title: parsed.title,
-        agent: parsed.agent,
-        model: parsed.model,
-        source_message_id: parsed.sourceMessageID,
-        source_task_id: parsed.sourceTaskID,
-        payload: enqueuePayload(parsed.payload),
-        execution_timeout_ms: parsed.executionTimeoutMs,
-        time_created: now,
-        time_updated: now,
-      }
-      const row = db.insert(TaskQueueTable).values(values).returning().get()
       created = true
-      return fromRow(row)
+      return insertEnqueued(db, parsed, now)
     })
-    if (created) {
-      publishCreated(item)
-      await syncSessionQueueMetadata(item)
-    }
+    if (created) await publishEnqueued(item)
     return item
   }
 
@@ -760,9 +781,9 @@ export namespace TaskQueue {
     return writeRow(db, current.id, updates)
   }
 
-  async function publishStatus(item: Info): Promise<void> {
+  async function publishStatus(item: Info, childOnly?: boolean): Promise<void> {
     publishUpdated(item)
-    await syncWorkflowStatusIfNeeded(item)
+    await syncWorkflowStatusIfNeeded(item, childOnly)
     if (isTerminalStatus(item.status)) await clearSessionQueueMetadataIfCurrent(item)
   }
 
@@ -1207,6 +1228,7 @@ export namespace TaskQueue {
       if (current.status !== "queued" && current.status !== "waiting_for_idle") {
         return { kind: "unavailable", item: current }
       }
+      if (workflowRunCancelled(db, current)) return { kind: "unavailable", item: current }
       const now = Date.now()
       const wait = workflowAdmissionWait(db, current, now)
       if (wait) return { kind: "waiting", item: current, ...wait }
@@ -1249,6 +1271,22 @@ export namespace TaskQueue {
       await syncWorkflowStatusIfNeeded(claim.item)
     }
     return claim
+  }
+
+  function workflowRunCancelled(db: Database.TxOrDb, item: Info): boolean {
+    const workflow = workflowChild(item)
+    if (!workflow) return false
+    return !!db
+      .select({ id: WorkflowRunTable.id })
+      .from(WorkflowRunTable)
+      .where(
+        and(
+          eq(WorkflowRunTable.id, workflow.runID as WorkflowRunID),
+          eq(WorkflowRunTable.project_id, item.projectID),
+          eq(WorkflowRunTable.status, "cancelled"),
+        ),
+      )
+      .get()
   }
 
   function workflowAdmissionWait(db: Database.TxOrDb, item: Info, now: number): { retryAfterMs?: number } | undefined {
@@ -1738,7 +1776,7 @@ export namespace TaskQueue {
 
   async function cancelObserved(
     observed: Info,
-    options: { allowed: readonly Status[]; error?: string; preservePausedFollowups?: boolean },
+    options: { allowed: readonly Status[]; error?: string; preservePausedFollowups?: boolean; childOnly?: boolean },
   ): Promise<{ item: Info; changed: boolean; sameAttempt: boolean } | undefined> {
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const current = findProjectItem(db, observed.id)
@@ -1757,7 +1795,7 @@ export namespace TaskQueue {
         sameAttempt,
       }
     })
-    if (result?.changed) await publishStatus(result.item)
+    if (result?.changed) await publishStatus(result.item, options.childOnly)
     return result
   }
 
@@ -1767,19 +1805,37 @@ export namespace TaskQueue {
     return stopObserved(observed)
   }
 
-  async function stopObserved(observed: Info): Promise<Info> {
+  export async function stopWorkflowChild(observed: Info): Promise<Info> {
+    assertProjectItem(observed)
+    return stopObserved(observed, "workflow")
+  }
+
+  async function stopObserved(observed: Info, kind: "operator" | "workflow" = "operator"): Promise<Info> {
+    const interrupt = kind === "operator"
     const active = ACTIVE_QUEUE_EXECUTION_STATUSES.some((status) => status === observed.status)
     if (observed.sessionID && active) {
       const { SessionPrompt } = await import("./prompt")
-      const shouldInterrupt = () => matchesCancellation(observed)
-      if (shouldInterrupt()) await SessionPrompt.cancel(observed.sessionID, { interrupt: true, shouldInterrupt })
+      const sessionID = observed.sessionID
+      const cancel = async (): Promise<void> => {
+        if (Instance.project.id !== observed.projectID) return
+        const shouldInterrupt = () => matchesCancellation(observed)
+        if (shouldInterrupt())
+          await SessionPrompt.cancel(sessionID, {
+            interrupt,
+            shouldInterrupt,
+            ...(kind === "workflow" ? { cancelQueueItems: false } : {}),
+          })
+      }
+      if (observed.directory === Instance.directory) await cancel()
+      else await Instance.withExisting(observed.directory, cancel)
     }
     // The interrupt can await descendant cleanup and session metadata. Settle
     // only the attempt observed before it started, preserving a terminal
     // outcome the executor already recorded for that attempt.
     const result = await cancelObserved(observed, {
       allowed: nonterminalStatuses,
-      error: active ? "Stopped by operator." : undefined,
+      error: active ? (interrupt ? "Stopped by operator." : "Workflow child stopped.") : undefined,
+      childOnly: kind === "workflow",
     })
     if (!result) throw queueItemNotFound(observed.id)
     if (!result.sameAttempt) throw changedExecutionError(observed.id, "stop")
@@ -1856,6 +1912,9 @@ export namespace TaskQueue {
       const current = fromRow(readRow(db, id))
       assertProjectItem(current)
       assertActionStatus(current, "retry", ["failed", "cancelled"])
+      if (workflowRunCancelled(db, current)) {
+        throw new HTTPException(409, { message: "Retry the cancelled workflow to restart its children." })
+      }
 
       const payload = requeuedPayload(current.payload)
       delete payload[INTERRUPTION_REASON_KEY]
@@ -2373,11 +2432,11 @@ export namespace TaskQueue {
     })
   }
 
-  async function syncWorkflowStatusIfNeeded(item: Info) {
+  async function syncWorkflowStatusIfNeeded(item: Info, childOnly?: boolean) {
     const workflow = item.payload["workflow"]
     if (!workflow || typeof workflow !== "object") return
     await import("../workflow/task-queue")
-      .then((mod) => mod.WorkflowTaskQueue.syncItem(item))
+      .then((mod) => mod.WorkflowTaskQueue.syncItem(item, { childOnly }))
       .catch((error) => {
         log.warn("failed to sync workflow status from task queue item", {
           taskID: item.id,

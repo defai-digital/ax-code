@@ -1,7 +1,9 @@
 import { HTTPException } from "hono/http-exception"
 import { Instance } from "../../project/instance"
 import { SessionShard } from "../../session/shard"
-import { NotFoundError, and, asc, desc, eq, inArray } from "../../storage/db"
+import { TaskQueue } from "../../session/task-queue"
+import type { SessionID } from "../../session/schema"
+import { type Database, NotFoundError, and, asc, desc, eq, inArray, notInArray } from "../../storage/db"
 import { Log } from "../../util/log"
 import { defaultWorkflowArtifactRedaction } from "../artifact"
 import { WorkflowInputValidationError, resolveWorkflowInputValues } from "../spec"
@@ -29,7 +31,6 @@ import { ensureFinalReportArtifact, WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID } fro
 import {
   assertChildBelongsToRun,
   assertPhaseBelongsToRun,
-  assertProjectRun,
   assertSessionCompatible,
   evaluateCompletionGate,
   fromArtifactRow,
@@ -51,6 +52,7 @@ import {
   publishPhaseUpdated,
   publishUpdated,
   publishVerificationAttached,
+  readRunRow,
   touchRun,
   unique,
   uniqueEvidenceRefs,
@@ -193,32 +195,75 @@ export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
   return WorkflowRunDetail.parse(detail)
 }
 
-async function setStatus(input: WorkflowRunState.SetStatusInput): Promise<WorkflowRunState.Info> {
+async function setStatus(
+  input: WorkflowRunState.SetStatusInput,
+  options: { reopenCancelled?: boolean } = {},
+): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.SetStatusInput.parse(input)
   const completionGate =
     parsed.status === "completed" ? evaluateCompletionGate(await getDetail(parsed.id)) : { ok: true as const }
-  const current = await get(parsed.id)
-  const now = Date.now()
-  const status = completionGate.ok ? parsed.status : "blocked"
-  const updates: Partial<typeof WorkflowRunTable.$inferInsert> = {
-    status,
-    // Coerce a missing error to null: drizzle drops undefined keys, so the old
-    // failure text would otherwise survive a re-enable and be reported as a
-    // blocker even after the run completes.
-    error: completionGate.ok ? (parsed.error ?? null) : completionGate.message,
-    time_updated: now,
-  }
-  if (status === "running" && current.time.started === undefined) updates.time_started = now
-  updates.time_completed = isTerminalRunStatus(status) ? now : null
-
-  const run = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+  const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+    const current = readRunRow(db, parsed.id)
+    if (
+      (current.status === "cancelled" && !options.reopenCancelled) ||
+      (parsed.status === "cancelled" && TaskQueue.hasLiveWorkflowChildren(db, parsed.id))
+    )
+      return { run: fromRunRow(current) }
+    const now = Date.now()
+    const status = completionGate.ok ? parsed.status : "blocked"
+    const updates: Partial<typeof WorkflowRunTable.$inferInsert> = {
+      status,
+      error: completionGate.ok ? (parsed.error ?? null) : completionGate.message,
+      time_updated: now,
+      time_completed: isTerminalRunStatus(status) ? now : null,
+    }
+    if (status === "running" && current.time_started === null) updates.time_started = now
     const row = db.update(WorkflowRunTable).set(updates).where(eq(WorkflowRunTable.id, parsed.id)).returning().get()
-    if (!row) throw new NotFoundError({ message: `Workflow run not found: ${parsed.id}` })
-    return fromRunRow(row)
+    return { run: fromRunRow(row), previous: current.status }
   })
-  assertProjectRun(run)
-  publishUpdated(run, current.status)
-  return run
+  if (result.previous) publishUpdated(result.run, result.previous)
+  return result.run
+}
+
+async function finishCancellation(runID: WorkflowRunID): Promise<WorkflowRunDetail> {
+  const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+    const current = readRunRow(db, runID)
+    if (TaskQueue.hasLiveWorkflowChildren(db, runID)) {
+      throw new HTTPException(409, { message: `Cannot cancel workflow run ${runID} while a child is active.` })
+    }
+    const now = Date.now()
+    const terminal: Array<"completed" | "failed" | "cancelled"> = ["completed", "failed", "cancelled"]
+    const phaseScope = and(eq(WorkflowPhaseTable.run_id, runID), notInArray(WorkflowPhaseTable.status, terminal))
+    const childScope = and(eq(WorkflowChildTable.run_id, runID), notInArray(WorkflowChildTable.status, terminal))
+    const oldPhases = new Map(
+      db
+        .select({ id: WorkflowPhaseTable.id, status: WorkflowPhaseTable.status })
+        .from(WorkflowPhaseTable)
+        .where(phaseScope)
+        .all()
+        .map((row) => [row.id, row.status]),
+    )
+    const oldChildren = new Map(
+      db
+        .select({ id: WorkflowChildTable.id, status: WorkflowChildTable.status })
+        .from(WorkflowChildTable)
+        .where(childScope)
+        .all()
+        .map((row) => [row.id, row.status]),
+    )
+    const updates = { status: "cancelled" as const, error: null, time_completed: now, time_updated: now }
+    const phases = db.update(WorkflowPhaseTable).set(updates).where(phaseScope).returning().all().map(fromPhaseRow)
+    const children = db.update(WorkflowChildTable).set(updates).where(childScope).returning().all().map(fromChildRow)
+    const run =
+      current.status === "cancelled" && phases.length === 0 && children.length === 0
+        ? undefined
+        : fromRunRow(db.update(WorkflowRunTable).set(updates).where(eq(WorkflowRunTable.id, runID)).returning().get())
+    return { run, previous: current.status, phases, children, oldPhases, oldChildren }
+  })
+  for (const phase of result.phases) publishPhaseUpdated(phase, result.oldPhases.get(phase.id))
+  for (const child of result.children) publishChildUpdated(child, result.oldChildren.get(child.id))
+  if (result.run) publishUpdated(result.run, result.previous)
+  return getDetail(runID)
 }
 
 async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Promise<WorkflowPhaseRecord> {
@@ -235,6 +280,7 @@ async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Prom
   updates.time_completed = isTerminalPhaseStatus(parsed.status) ? now : null
 
   const phase = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+    if (readRunRow(db, current.runID).status === "cancelled") return undefined
     const row = db.update(WorkflowPhaseTable).set(updates).where(eq(WorkflowPhaseTable.id, parsed.id)).returning().get()
     if (!row) throw new NotFoundError({ message: `Workflow phase not found: ${parsed.id}` })
     db.update(WorkflowRunTable)
@@ -243,48 +289,100 @@ async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Prom
       .run()
     return fromPhaseRow(row)
   })
-  assertProjectRun(await get(phase.runID))
+  if (!phase) return getPhase(parsed.id)
   publishPhaseUpdated(phase, current.status)
   return phase
+}
+
+function insertChild(
+  db: Database.TxOrDb,
+  input: WorkflowRunState.AppendChildInput,
+  id: WorkflowChildID,
+  now: number,
+): WorkflowChildRecord {
+  const row = db
+    .insert(WorkflowChildTable)
+    .values({
+      id,
+      run_id: input.runID,
+      phase_id: input.phaseID,
+      task_queue_id: input.taskQueueID,
+      session_id: input.sessionID,
+      status: "queued",
+      agent: input.agent,
+      model: input.model,
+      budget_slice: input.budgetSlice,
+      artifact_ids: [],
+      evidence_refs: [],
+      time_created: now,
+      time_updated: now,
+    })
+    .returning()
+    .get()
+  touchRun(db, input.runID, now)
+  return fromChildRow(row)
 }
 
 async function appendChild(input: WorkflowRunState.AppendChildInput): Promise<WorkflowChildRecord> {
   const parsed = WorkflowRunState.AppendChildInput.parse(input)
   if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
-  await get(parsed.runID)
   await assertPhaseBelongsToRun(parsed.phaseID, parsed.runID)
-  const now = Date.now()
   const child = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-    const row = db
-      .insert(WorkflowChildTable)
-      .values({
-        id: WorkflowChildID.ascending(),
-        run_id: parsed.runID,
-        phase_id: parsed.phaseID,
-        task_queue_id: parsed.taskQueueID,
-        session_id: parsed.sessionID,
-        status: "queued",
-        agent: parsed.agent,
-        model: parsed.model,
-        budget_slice: parsed.budgetSlice,
-        artifact_ids: [],
-        evidence_refs: [],
-        time_created: now,
-        time_updated: now,
-      })
-      .returning()
-      .get()
-    touchRun(db, parsed.runID, now)
-    return fromChildRow(row)
+    if (readRunRow(db, parsed.runID).status === "cancelled") {
+      throw new HTTPException(409, { message: `Workflow run ${parsed.runID} is cancelled.` })
+    }
+    return insertChild(db, parsed, WorkflowChildID.ascending(), Date.now())
   })
   publishChildCreated(child)
   return child
 }
 
+async function enqueueChild(
+  input: Omit<WorkflowRunState.AppendChildInput, "taskQueueID"> & { sessionID: SessionID },
+  queue: Pick<TaskQueue.EnqueueInput, "title" | "payload" | "sourceTaskID"> & {
+    specPhaseID: string
+    startOptions: unknown
+  },
+): Promise<{ child: WorkflowChildRecord; task: TaskQueue.Info } | undefined> {
+  const parsed = WorkflowRunState.AppendChildInput.parse(input)
+  await assertPhaseBelongsToRun(parsed.phaseID, parsed.runID)
+  const id = WorkflowChildID.ascending()
+  const insert = await TaskQueue.prepareEnqueue({
+    sessionID: input.sessionID,
+    kind: "subagent",
+    title: queue.title,
+    agent: parsed.agent,
+    model: parsed.model,
+    sourceTaskID: queue.sourceTaskID,
+    payload: {
+      ...queue.payload,
+      workflow: {
+        runID: parsed.runID,
+        phaseID: parsed.phaseID,
+        childID: id,
+        specPhaseID: queue.specPhaseID,
+        startOptions: queue.startOptions,
+      },
+    },
+  })
+  const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+    const run = readRunRow(db, parsed.runID)
+    if (run.status !== "running" && run.status !== "blocked") return undefined
+    const now = Date.now()
+    const task = insert(db, now)
+    const child = insertChild(db, { ...parsed, taskQueueID: task.id }, id, now)
+    return { child, task }
+  })
+  if (result) {
+    publishChildCreated(result.child)
+    await TaskQueue.publishEnqueued(result.task)
+  }
+  return result
+}
+
 async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Promise<WorkflowChildRecord> {
   const parsed = WorkflowRunState.SetChildStatusInput.parse(input)
   const current = await getChild(parsed.id)
-  await get(current.runID)
   const now = Date.now()
   const updates: Partial<typeof WorkflowChildTable.$inferInsert> = {
     status: parsed.status,
@@ -299,35 +397,14 @@ async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Prom
   updates.time_completed = isTerminalChildStatus(parsed.status) ? now : null
 
   const child = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+    if (readRunRow(db, current.runID).status === "cancelled") return undefined
     const row = db.update(WorkflowChildTable).set(updates).where(eq(WorkflowChildTable.id, parsed.id)).returning().get()
     if (!row) throw new NotFoundError({ message: `Workflow child not found: ${parsed.id}` })
     touchRun(db, row.run_id, now)
     return fromChildRow(row)
   })
+  if (!child) return getChild(parsed.id)
   publishChildUpdated(child, current.status)
-  return child
-}
-
-async function attachChildTaskQueueID(input: WorkflowRunState.AttachChildTaskQueueInput): Promise<WorkflowChildRecord> {
-  const parsed = WorkflowRunState.AttachChildTaskQueueInput.parse(input)
-  const current = await getChild(parsed.id)
-  await get(current.runID)
-  const now = Date.now()
-  const child = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-    const row = db
-      .update(WorkflowChildTable)
-      .set({
-        task_queue_id: parsed.taskQueueID,
-        time_updated: now,
-      })
-      .where(eq(WorkflowChildTable.id, parsed.id))
-      .returning()
-      .get()
-    if (!row) throw new NotFoundError({ message: `Workflow child not found: ${parsed.id}` })
-    touchRun(db, row.run_id, now)
-    return fromChildRow(row)
-  })
-  publishChildUpdated(child)
   return child
 }
 
@@ -465,8 +542,9 @@ export const WorkflowRun = {
   setStatus,
   setPhaseStatus,
   appendChild,
+  enqueueChild,
+  finishCancellation,
   setChildStatus,
-  attachChildTaskQueueID,
   appendArtifact,
   appendBudgetUsage,
   isBudgetExceeded,
@@ -492,7 +570,6 @@ export namespace WorkflowRun {
   export type SetPhaseStatusInput = WorkflowRunState.SetPhaseStatusInput
   export type AppendChildInput = WorkflowRunState.AppendChildInput
   export type SetChildStatusInput = WorkflowRunState.SetChildStatusInput
-  export type AttachChildTaskQueueInput = WorkflowRunState.AttachChildTaskQueueInput
   export type AppendArtifactInput = WorkflowRunState.AppendArtifactInput
   export type AppendBudgetUsageInput = WorkflowRunState.AppendBudgetUsageInput
   export type AttachVerificationInput = WorkflowRunState.AttachVerificationInput

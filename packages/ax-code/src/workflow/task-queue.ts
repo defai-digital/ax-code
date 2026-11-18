@@ -1,6 +1,7 @@
 import z from "zod"
 import type { TaskQueue } from "../session/task-queue"
 import { ScheduledTaskID } from "../session/schema"
+import { NotFoundError } from "../storage/db"
 import { WorkflowRun } from "./run"
 import { WorkflowPacing, WorkflowPermissions, WorkflowPhaseBudget } from "./spec"
 import { WorkflowChildID, WorkflowPhaseID, WorkflowRunID, type WorkflowChildRecord } from "./state"
@@ -39,7 +40,10 @@ export namespace WorkflowTaskQueue {
     return parsed.success ? parsed.data : undefined
   }
 
-  export async function syncItem(item: TaskQueue.Info): Promise<WorkflowRun.Info | undefined> {
+  export async function syncItem(
+    item: TaskQueue.Info,
+    options: { childOnly?: boolean } = {},
+  ): Promise<WorkflowRun.Info | undefined> {
     const payload = readPayload(item.payload)
     if (!payload) return undefined
 
@@ -67,6 +71,10 @@ export namespace WorkflowTaskQueue {
         error: item.error,
       })
     }
+
+    // Explicit workflow cancellation settles siblings before writing the
+    // phase and run together. Per-child outcomes must not advance the run.
+    if (options.childOnly) return detail
 
     // The child write above is the only mutation so far. A no-op sync (status
     // unchanged) can keep reusing `detail` instead of rebuilding it with 5
@@ -123,19 +131,25 @@ export namespace WorkflowTaskQueue {
       await cancelSupersededPhaseChildren(latest.children, "Workflow budget exceeded.")
     }
     if (run.status === "completed") await WorkflowRun.ensureFinalReportArtifact(latest.id)
-    if (run.status === "completed" || run.status === "failed" || run.status === "cancelled") {
-      const sourceTaskID = run.sourceTaskID
-      if (sourceTaskID?.startsWith("sch_")) {
-        const { ScheduledTask } = await import("../session/scheduled-task")
-        await ScheduledTask.recordWorkflowOutcome(ScheduledTaskID.make(sourceTaskID), run.status, run.error, run.id)
-      }
-    }
+    await reportScheduledOutcome(run)
 
     if (effectivePhaseStatus === "completed" && effectiveRunStatus === "running") {
       return WorkflowScheduler.start(latest.id, payload.workflow.startOptions)
     }
 
     return run
+  }
+}
+
+export async function reportScheduledOutcome(run: WorkflowRun.Info): Promise<void> {
+  const { status, sourceTaskID } = run
+  if ((status !== "completed" && status !== "failed" && status !== "cancelled") || !sourceTaskID?.startsWith("sch_"))
+    return
+  const { ScheduledTask } = await import("../session/scheduled-task")
+  try {
+    await ScheduledTask.recordWorkflowOutcome(ScheduledTaskID.make(sourceTaskID), status, run.error, run.id)
+  } catch (error) {
+    if (!NotFoundError.isInstance(error)) throw error
   }
 }
 

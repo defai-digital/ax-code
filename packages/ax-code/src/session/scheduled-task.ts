@@ -766,7 +766,7 @@ export namespace ScheduledTask {
         },
       )
       claimedQueueID = queued.id
-      TaskQueue.publishEnqueued(queued)
+      await TaskQueue.publishEnqueued(queued)
       publishUpdated(task)
       publishFired(task, run)
       // Commit the relationship before detached execution begins. Otherwise a
@@ -982,7 +982,7 @@ export namespace ScheduledTask {
       publishUpdated(claimed.task)
       publishFired(claimed.task, claimed.run)
       if (!claimed.queueItem) continue
-      TaskQueue.publishEnqueued(claimed.queueItem)
+      await TaskQueue.publishEnqueued(claimed.queueItem)
       try {
         const { TaskQueueExecutor } = await import("./task-queue-executor")
         const queueItem = await TaskQueueExecutor.start(claimed.queueItem)
