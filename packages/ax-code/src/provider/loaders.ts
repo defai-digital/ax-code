@@ -28,7 +28,12 @@ import { kimiDisplayName, kimiFallbackModels, kimiFamilyId, latestKimiFamilyMode
 import { museDisplayName, museFallbackLatest, museFamilyId, latestMuseFamilyModels } from "./muse-families"
 import { codexDisplayName, codexFallbackModels, codexFamilyId, latestCodexFamilyModels } from "./codex-families"
 import { LOCAL_LLM_RUNTIMES, normalizeLocalRuntimeBaseURL } from "./local-runtime"
-import { withCapabilityEvidence } from "./capability-evidence"
+import {
+  declaredCapabilityEvidence,
+  firstDeclaredBoolean,
+  resolveCapabilityEvidence,
+  withCapabilityEvidence,
+} from "./capability-evidence"
 import { requestModelList, type ModelListFetcher } from "./model-list-http"
 
 const log = Log.create({ service: "provider.loaders" })
@@ -106,20 +111,43 @@ function interleavedValue(value: unknown): Provider.Model["capabilities"]["inter
   return false
 }
 
-function openAICompatibleCapabilities(item: OpenAICompatibleModelItem): Provider.Model["capabilities"] {
+function openAICompatibleCapabilities(
+  item: OpenAICompatibleModelItem,
+  nativeChat: boolean,
+  saved?: Provider.Model["capabilities"],
+): Provider.Model["capabilities"] {
   const capabilities: Record<string, unknown> = isRecord(item.capabilities) ? item.capabilities : {}
   const input: Record<string, unknown> = isRecord(capabilities.input) ? capabilities.input : {}
   const output: Record<string, unknown> = isRecord(capabilities.output) ? capabilities.output : {}
+  const advertisedTools = firstDeclaredBoolean(capabilities.toolcall)
+  // Native MTPLX chat supports tools even on sparse cards. Generic local
+  // listings do not qualify tools. A saved local choice takes precedence.
+  const toolcall = saved?.toolcall ?? (nativeChat && (advertisedTools ?? true))
+  const evidence = resolveCapabilityEvidence(
+    {
+      thinking: capabilities.reasoning,
+      temperature: capabilities.temperature,
+      attachment: capabilities.attachment,
+      webSearch: capabilities.web_search,
+    },
+    "deployment",
+  )
+  const savedTools = saved ? declaredCapabilityEvidence(saved)?.toolCalling : undefined
+  const savedSource = savedTools?.state === (toolcall ? "supported" : "unsupported") ? savedTools.source : undefined
+  const toolSource = savedSource ?? (!saved && advertisedTools === toolcall ? "deployment" : "heuristic")
+  // Leave sparse, unqualified cards unknown. Capture even a conservative
+  // override when the card explicitly advertised a different value.
+  const declaredTools = saved || nativeChat || advertisedTools !== undefined ? toolcall : undefined
   return withCapabilityEvidence(
     {
       temperature: booleanValue(capabilities.temperature, true),
       reasoning: booleanValue(capabilities.reasoning, false),
       attachment: booleanValue(capabilities.attachment, false),
-      toolcall: booleanValue(capabilities.toolcall, false),
+      toolcall,
       input: {
         text: booleanValue(input.text, true),
         audio: booleanValue(input.audio, false),
-        image: booleanValue(input.image, false),
+        image: firstDeclaredBoolean(nativeChat ? item.supports_vision : undefined, input.image) ?? false,
         video: booleanValue(input.video, false),
         pdf: booleanValue(input.pdf, false),
       },
@@ -133,14 +161,9 @@ function openAICompatibleCapabilities(item: OpenAICompatibleModelItem): Provider
       interleaved: interleavedValue(capabilities.interleaved),
       websearch: booleanValue(capabilities.web_search, false),
     },
-    {
-      thinking: capabilities.reasoning,
-      toolCalling: capabilities.toolcall,
-      temperature: capabilities.temperature,
-      attachment: capabilities.attachment,
-      webSearch: capabilities.web_search,
-    },
-    "deployment",
+    { toolCalling: declaredTools },
+    toolSource,
+    evidence,
   )
 }
 
@@ -337,22 +360,11 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
         for (const item of discovered.data ?? []) {
           if (typeof item.id !== "string" || !item.id.trim()) continue
           const id = ModelID.make(item.id)
-          const caps = openAICompatibleCapabilities(item)
-          // External local inference endpoints serve models with inconsistent
-          // tool-calling support. Override to false so discovered models don't
-          // silently get selected for agent workflows that need tools.
-          caps.toolcall = false
-          // MTPLX's native chat listing is separate from its retrieval models
-          // and its chat transport supports tools. Generic listings and oMLX
-          // do not establish model tool support; keep explicit opt-in there.
-          if (providerID === "mtplx" && item.owned_by === "mtplx" && item.capability === "chat") {
-            caps.toolcall = booleanValue(item.capabilities?.toolcall, true)
-            caps.input.image = booleanValue(item.supports_vision, caps.input.image)
-          }
-          if (nativeMlx && provider.models[id]) {
-            // Discovery must not erase the user's coding-model tool choice.
-            caps.toolcall = provider.models[id].capabilities.toolcall
-          }
+          const caps = openAICompatibleCapabilities(
+            item,
+            providerID === "mtplx" && item.owned_by === "mtplx" && item.capability === "chat",
+            nativeMlx && Object.hasOwn(provider.models, id) ? provider.models[id].capabilities : undefined,
+          )
           const limit = openAICompatibleLimit(item)
           if (providerID === "omlx" && item.owned_by === "omlx") {
             limit.context = numberValue(item.max_model_len, limit.context)

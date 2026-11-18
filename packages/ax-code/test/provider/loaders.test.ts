@@ -13,6 +13,8 @@ import { CUSTOM_LOADERS, resolveCliBinary } from "../../src/provider/loaders"
 import { Config } from "../../src/config/config"
 import { Global } from "../../src/global"
 import { ModelsDev } from "../../src/provider/models"
+import { declaredCapabilityEvidence } from "../../src/provider/capability-evidence"
+import { modelSelectableForProvider } from "../../src/provider/model-selectability"
 
 const originalFetch = globalThis.fetch
 
@@ -1323,7 +1325,13 @@ describe("native MLX runtime metadata", () => {
               max_model_len: 32768,
               context_length: 8192,
             },
-            { id: "unknown", owned_by: "generic", capability: "chat", max_model_len: 512 },
+            {
+              id: "unknown",
+              owned_by: "generic",
+              capability: "chat",
+              max_model_len: 512,
+              capabilities: { toolcall: true },
+            },
             { id: "retrieval", owned_by: providerID, capability: "embedding" },
             { id: "explicit-no-tools", owned_by: providerID, capability: "chat", capabilities: { toolcall: false } },
           ],
@@ -1346,6 +1354,15 @@ describe("native MLX runtime metadata", () => {
       expect(models[ModelID.make("native-chat")].limit.context).toBe(providerID === "omlx" ? 32768 : 8192)
       expect(models[ModelID.make("native-chat")].capabilities.toolcall).toBe(providerID === "mtplx")
       expect(models[ModelID.make("native-chat")].capabilities.input.image).toBe(providerID === "mtplx")
+      expect(modelSelectableForProvider(providerID, models[ModelID.make("native-chat")])).toBe(providerID === "mtplx")
+      expect(declaredCapabilityEvidence(models[ModelID.make("unknown")].capabilities)?.toolCalling).toEqual({
+        state: "unsupported",
+        source: "heuristic",
+      })
+      expect(declaredCapabilityEvidence(models[ModelID.make("explicit-no-tools")].capabilities)?.toolCalling).toEqual({
+        state: "unsupported",
+        source: "deployment",
+      })
       for (const id of ["unknown", "retrieval", "explicit-no-tools"])
         expect(models[ModelID.make(id)].capabilities.toolcall).toBe(false)
       expect(models[ModelID.make("unknown")].limit.context).toBe(128000)
@@ -1400,6 +1417,7 @@ describe("native MLX runtime metadata", () => {
         await Provider.ready()
         const runtime = (await Provider.list())[ProviderID.make("omlx")]
         expect(runtime.models[ModelID.make("coding-model")].capabilities.toolcall).toBe(true)
+        expect(modelSelectableForProvider("omlx", runtime.models[ModelID.make("coding-model")])).toBe(true)
         expect(runtime.models[ModelID.make("coding-model")].limit.context).toBe(32768)
         expect(runtime.models[ModelID.make("embedding-model")]).toBeUndefined()
       },
