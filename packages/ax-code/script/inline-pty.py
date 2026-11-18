@@ -93,6 +93,8 @@ def assert_cursor_below(data, last_record, height):
 def run(width, height, storm=False, terminate=False, prefix=None, logfile=None, full=False):
     pid, fd = pty.fork()
     if pid == 0:
+        if not os.environ.get("TERM"):
+            os.environ["TERM"] = "xterm-256color"
         os.execvp((prefix or COMMAND)[0], prefix or COMMAND)
     def size(w, h):
         fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", h, w, 0, 0))
