@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
+import { execFileSync } from "node:child_process"
+import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { Recorder } from "../../src/replay/recorder"
@@ -918,6 +920,182 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("registers a durable phase once across linked worktrees", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const linked = path.join(tmp.path, "linked")
+    execFileSync("git", ["worktree", "add", "--detach", linked], { cwd: tmp.path })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const projectID = Instance.project.id
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "parallel-start",
+              name: "Parallel startup",
+              description: "A durable phase is registered only once.",
+              phases: [{ id: "read", name: "Read", kind: "sequential", prompt: "Offline fixture." }],
+            }),
+          })
+          const setStatus = WorkflowRun.setStatus
+          const rendezvous = Promise.withResolvers<void>()
+          let arrivals = 0
+          vi.spyOn(WorkflowRun, "setStatus").mockImplementation(async (...args) => {
+            if (args[0].status === "running") {
+              if (++arrivals === 2) rendezvous.resolve()
+              await rendezvous.promise
+            }
+            return setStatus(...args)
+          })
+          const first = WorkflowScheduler.start(run.id, { autoStartChildren: false })
+          const second = Instance.provide({
+            directory: linked,
+            fn: async () => {
+              expect(Instance.project.id).toBe(projectID)
+              return WorkflowScheduler.start(run.id, { autoStartChildren: false })
+            },
+          })
+          const results = await Promise.all([first, second])
+
+          const detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.children).toHaveLength(1)
+          expect(await TaskQueue.list()).toHaveLength(1)
+          expect(detail.budgetUsage.childAgents).toBe(1)
+          expect(detail.artifacts.filter((artifact) => artifact.specArtifactID === "phase-prompt-read")).toHaveLength(1)
+          expect(results.map((result) => result.children.map((child) => child.id))).toEqual([
+            [detail.children[0]?.id],
+            [detail.children[0]?.id],
+          ])
+        },
+      })
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
+      await Instance.disposeAll()
+      execFileSync("git", ["worktree", "remove", linked], { cwd: tmp.path })
+    }
+  })
+
+  test("retries durable phase setup after preparation fails without publishing a partial batch", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "interrupted-phase-setup",
+              name: "Interrupted setup",
+              description: "Child preparation may fail before a phase is admitted.",
+              phases: [{ id: "read", name: "Read", kind: "fanout", inputs: ["a", "b"], maxParallel: 2 }],
+            }),
+          })
+          const create = Session.create
+          const spy = vi
+            .spyOn(Session, "create")
+            .mockImplementationOnce(create)
+            .mockRejectedValueOnce(new Error("preparation interrupted"))
+          await expect(WorkflowScheduler.start(run.id, { autoStartChildren: false })).rejects.toThrow(
+            "preparation interrupted",
+          )
+          spy.mockRestore()
+          const partial = await WorkflowRun.getDetail(run.id)
+          expect(partial.phases[0]?.status).toBe("queued")
+          expect(partial.children).toHaveLength(0)
+          expect(partial.budgetUsage.childAgents).toBe(0)
+          expect(await TaskQueue.list()).toHaveLength(0)
+
+          const retried = await WorkflowScheduler.start(run.id, { autoStartChildren: false })
+          expect(retried.children).toHaveLength(2)
+          expect(retried.budgetUsage.childAgents).toBe(2)
+          expect(await TaskQueue.list()).toHaveLength(2)
+        },
+      })
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("rejects a phase that exceeds the remaining child budget without charging the rejected batch", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "phase-admission-budget",
+              name: "Phase admission budget",
+              description: "Admission charges only committed child reservations.",
+              budget: { maxTotalAgents: 3 },
+              phases: [{ id: "read", name: "Read", kind: "fanout", inputs: ["a", "b"], maxParallel: 2 }],
+            }),
+          })
+          await WorkflowRun.appendBudgetUsage({ runID: run.id, kind: "reserve", usageDelta: { childAgents: 2 } })
+
+          const stopped = await WorkflowScheduler.start(run.id, { autoStartChildren: false })
+          expect(stopped.status).toBe("failed")
+          expect(stopped.phases[0]?.status).toBe("failed")
+          expect(stopped.children).toHaveLength(0)
+          expect(await TaskQueue.list()).toHaveLength(0)
+          expect(stopped.budgetUsage.childAgents).toBe(2)
+          expect(stopped.budgetLedger).toContainEqual(
+            expect.objectContaining({
+              kind: "exceeded",
+              message: expect.stringContaining("child agents 4/3"),
+              usageDelta: expect.objectContaining({ childAgents: 0 }),
+            }),
+          )
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("dispatches an admitted batch after the original starter exits before starting it", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "interrupted-dispatch",
+              name: "Interrupted dispatch",
+              description: "Resume dispatch from the committed phase batch.",
+              phases: [{ id: "read", name: "Read", kind: "fanout", inputs: ["a", "b"], maxParallel: 2 }],
+            }),
+          })
+          const { TaskQueueExecutor } = await import("../../src/session/task-queue-executor")
+          const start = vi.spyOn(TaskQueueExecutor, "start").mockRejectedValueOnce(new Error("dispatch interrupted"))
+          await expect(WorkflowScheduler.start(run.id)).rejects.toThrow("dispatch interrupted")
+
+          const queued = await TaskQueue.list()
+          expect(queued).toHaveLength(2)
+          expect(queued.every((item) => item.status === "queued")).toBe(true)
+          start.mockClear().mockImplementation(async (item) => item)
+          const recovered = await WorkflowScheduler.start(run.id)
+          expect(start.mock.calls.map(([item]) => item.id)).toEqual(queued.map((item) => item.id))
+          expect(recovered.budgetUsage.childAgents).toBe(2)
+          expect(recovered.children).toHaveLength(2)
+        },
+      })
+    } finally {
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
+    }
+  })
+
   test("does not duplicate children when starting the same queued phase concurrently", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
@@ -1182,7 +1360,7 @@ describe("WorkflowScheduler", () => {
             ],
           })
           const run = await WorkflowRun.create({ spec })
-          const started = await WorkflowScheduler.start(run.id)
+          const started = await WorkflowScheduler.start(run.id, { autoStartChildren: false })
           const firstPhase = started.phases[0]
           const secondPhase = started.phases[1]
           if (!firstPhase || !secondPhase) throw new Error("expected two workflow phases")
@@ -1192,10 +1370,8 @@ describe("WorkflowScheduler", () => {
           expect(firstPhaseQueue).toHaveLength(3)
 
           await TaskQueue.setStatus({ id: firstPhaseQueue[0]!.id, status: "completed" })
-          const detail = await waitForValue("first-success phase advance", async () => {
-            const current = await WorkflowRun.getDetail(run.id)
-            return current.phases[1]?.status === "running" ? current : undefined
-          })
+          const detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.phases[1]?.status).toBe("running")
 
           expect(detail.phases[0]?.status).toBe("completed")
           const firstPhaseChildren = detail.children.filter((child) => child.phaseID === firstPhase.id)
@@ -1781,7 +1957,8 @@ describe("WorkflowScheduler", () => {
           }
 
           const rows = await TaskQueue.list()
-          expect(rows.map((item) => item.status)).toEqual(["cancelled"])
+          expect(rows).toHaveLength(8)
+          expect(rows.every((item) => item.status === "cancelled")).toBe(true)
           const first = rows[0]
           if (!first) throw new Error("Expected the cancelled queue item to remain visible")
           await expect(TaskQueue.retry(first.id)).rejects.toMatchObject({ status: 409 })

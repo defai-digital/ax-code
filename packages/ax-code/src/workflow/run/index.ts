@@ -6,6 +6,7 @@ import type { SessionID } from "../../session/schema"
 import { type Database, NotFoundError, and, asc, desc, eq, inArray, notInArray } from "../../storage/db"
 import { Log } from "../../util/log"
 import { defaultWorkflowArtifactRedaction } from "../artifact"
+import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "../budget"
 import { WorkflowInputValidationError, resolveWorkflowInputValues } from "../spec"
 import {
   EmptyWorkflowBudgetUsage,
@@ -26,7 +27,7 @@ import {
   WorkflowPhaseTable,
   WorkflowRunTable,
 } from "../workflow.sql"
-import { appendBudgetUsage, isBudgetExceeded } from "./budget"
+import { appendBudgetUsage, isBudgetExceeded, publishBudgetUsage, writeBudgetUsage } from "./budget"
 import { ensureFinalReportArtifact, WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID } from "./final-report"
 import {
   assertChildBelongsToRun,
@@ -197,7 +198,7 @@ export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
 
 async function setStatus(
   input: WorkflowRunState.SetStatusInput,
-  options: { reopenCancelled?: boolean; signal?: AbortSignal } = {},
+  options: { reopenCancelled?: boolean; signal?: AbortSignal; preserveTerminal?: boolean } = {},
 ): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.SetStatusInput.parse(input)
   const completionGate =
@@ -206,6 +207,7 @@ async function setStatus(
     const current = readRunRow(db, parsed.id)
     if (
       options.signal?.aborted ||
+      (options.preserveTerminal && isTerminalRunStatus(current.status)) ||
       (current.status === "cancelled" && !options.reopenCancelled) ||
       (parsed.status === "cancelled" && TaskQueue.hasLiveWorkflowChildren(db, parsed.id))
     )
@@ -337,15 +339,22 @@ async function appendChild(input: WorkflowRunState.AppendChildInput): Promise<Wo
   return child
 }
 
-async function enqueueChild(
+type PreparedWorkflowChild = {
+  projectID: WorkflowRunState.Info["projectID"]
+  runID: WorkflowRunID
+  phaseID: WorkflowPhaseID
+  insert: (db: Database.TxOrDb, now: number) => { child: WorkflowChildRecord; task: TaskQueue.Info }
+  publish: (created: { child: WorkflowChildRecord; task: TaskQueue.Info }) => Promise<void>
+}
+
+async function prepareQueuedChild(
   input: Omit<WorkflowRunState.AppendChildInput, "taskQueueID"> & { sessionID: SessionID },
   queue: Pick<TaskQueue.EnqueueInput, "title" | "payload" | "sourceTaskID"> & {
     specPhaseID: string
     startOptions: unknown
   },
-): Promise<{ child: WorkflowChildRecord; task: TaskQueue.Info } | undefined> {
+): Promise<PreparedWorkflowChild> {
   const parsed = WorkflowRunState.AppendChildInput.parse(input)
-  await assertPhaseBelongsToRun(parsed.phaseID, parsed.runID)
   const id = WorkflowChildID.ascending()
   const insert = await TaskQueue.prepareEnqueue({
     sessionID: input.sessionID,
@@ -365,19 +374,118 @@ async function enqueueChild(
       },
     },
   })
-  const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-    const run = readRunRow(db, parsed.runID)
-    if (run.status !== "running" && run.status !== "blocked") return undefined
-    const now = Date.now()
-    const task = insert(db, now)
-    const child = insertChild(db, { ...parsed, taskQueueID: task.id }, id, now)
-    return { child, task }
-  })
-  if (result) {
-    publishChildCreated(result.child)
-    await TaskQueue.publishEnqueued(result.task)
+  return {
+    projectID: Instance.project.id,
+    runID: parsed.runID,
+    phaseID: parsed.phaseID,
+    insert: Instance.bind((db: Database.TxOrDb, now: number) => {
+      const task = insert(db, now)
+      return { child: insertChild(db, { ...parsed, taskQueueID: task.id }, id, now), task }
+    }),
+    publish: Instance.bind(async ({ child, task }: { child: WorkflowChildRecord; task: TaskQueue.Info }) => {
+      publishChildCreated(child)
+      await TaskQueue.publishEnqueued(task)
+    }),
   }
-  return result
+}
+
+async function enqueuePhaseChildren(
+  runID: WorkflowRunID,
+  phaseID: WorkflowPhaseID,
+  prepared: readonly PreparedWorkflowChild[],
+): Promise<TaskQueue.Info[]> {
+  const projectID = Instance.project.id
+  if (prepared.some((child) => child.runID !== runID || child.phaseID !== phaseID || child.projectID !== projectID)) {
+    throw new Error("Prepared workflow children belong to another phase or project.")
+  }
+  const result = SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
+    const run = readRunRow(db, runID)
+    if (run.status !== "running" && run.status !== "blocked") return undefined
+    const current = db
+      .select()
+      .from(WorkflowPhaseTable)
+      .where(and(eq(WorkflowPhaseTable.id, phaseID), eq(WorkflowPhaseTable.run_id, runID)))
+      .get()
+    if (!current) throw new NotFoundError({ message: `Workflow phase not found: ${phaseID}` })
+    if (isTerminalPhaseStatus(current.status) || current.status === "paused") return undefined
+    const existing = db
+      .select({ id: WorkflowChildTable.id })
+      .from(WorkflowChildTable)
+      .where(and(eq(WorkflowChildTable.run_id, runID), eq(WorkflowChildTable.phase_id, phaseID)))
+      .get()
+    if (existing) return undefined
+
+    const now = Date.now()
+    const reservation = { ...EmptyWorkflowBudgetUsage, childAgents: prepared.length }
+    const requested = addWorkflowBudgetUsage(run.budget_usage, reservation)
+    const budget = evaluateWorkflowBudget({
+      budget: run.budget,
+      usage: requested,
+      elapsedMs: now - (run.time_started ?? run.time_created),
+    })
+    if (budget.exceeded.length > 0) {
+      const failed = writeBudgetUsage(
+        db,
+        {
+          runID,
+          phaseID,
+          kind: "exceeded",
+          usageDelta: EmptyWorkflowBudgetUsage,
+          message: `Workflow phase admission exceeded budget: ${budget.exceeded.join("; ")}`,
+        },
+        now,
+        budget,
+      )
+      return { kind: "budget" as const, failed }
+    }
+
+    const phaseRow = db
+      .update(WorkflowPhaseTable)
+      .set({
+        status: "running",
+        error: null,
+        time_started: current.time_started ?? now,
+        time_updated: now,
+        time_completed: null,
+      })
+      .where(eq(WorkflowPhaseTable.id, phaseID))
+      .returning()
+      .get()
+    db.update(WorkflowRunTable)
+      .set({ current_phase_id: phaseID, time_updated: now })
+      .where(eq(WorkflowRunTable.id, runID))
+      .run()
+
+    const children = prepared.map((candidate) => {
+      const created = candidate.insert(db, now)
+      const accounting = writeBudgetUsage(
+        db,
+        {
+          runID,
+          phaseID,
+          childID: created.child.id,
+          kind: "reserve",
+          usageDelta: { ...EmptyWorkflowBudgetUsage, childAgents: 1 },
+        },
+        now,
+      )
+      return { created, accounting, publish: candidate.publish }
+    })
+    return { kind: "queued" as const, phase: fromPhaseRow(phaseRow), previous: current.status, children }
+  })
+  if (!result) return []
+  if (result.kind === "budget") {
+    publishBudgetUsage(result.failed)
+    return []
+  }
+  publishPhaseUpdated(result.phase, result.previous)
+  await Promise.all(
+    result.children.map(({ accounting, publish, created }) => {
+      publishBudgetUsage(accounting)
+      return publish(created)
+    }),
+  )
+  return result.children.map(({ created }) => created.task)
 }
 
 async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Promise<WorkflowChildRecord> {
@@ -542,7 +650,8 @@ export const WorkflowRun = {
   setStatus,
   setPhaseStatus,
   appendChild,
-  enqueueChild,
+  prepareQueuedChild,
+  enqueuePhaseChildren,
   finishCancellation,
   setChildStatus,
   appendArtifact,

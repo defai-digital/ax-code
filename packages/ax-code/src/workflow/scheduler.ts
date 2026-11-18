@@ -1,10 +1,14 @@
+import path from "node:path"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import type { DispatchExecutor } from "../dispatch"
+import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Session } from "../session"
 import type { TaskQueue } from "../session/task-queue"
 import { NotFoundError } from "../storage/db"
+import { FileLock } from "../util/filelock"
+import { Hash } from "../util/hash"
 import { KeyedSerialQueue } from "../util/queue"
 import { JsonBoolean } from "../util/schema"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
@@ -130,7 +134,10 @@ export namespace WorkflowScheduler {
   ): Promise<WorkflowRunDetail> {
     const runID = initial.id
     if (inline?.signal.aborted) return WorkflowRun.getDetail(runID)
-    const started = await WorkflowRun.setStatus({ id: runID, status: "running" }, { signal: inline?.signal })
+    const started = await WorkflowRun.setStatus(
+      { id: runID, status: "running" },
+      { signal: inline?.signal, preserveTerminal: true },
+    )
     if (started.status !== "running") return WorkflowRun.getDetail(runID)
     for (const phase of initial.phases) {
       if (inline?.signal.aborted) return WorkflowRun.getDetail(runID)
@@ -139,95 +146,24 @@ export namespace WorkflowScheduler {
       if (phase.status === "completed") continue
       const phasePlan = plan.phases.find((item) => item.specPhaseID === phase.specPhaseID)
       if (!phasePlan) throw new Error(`No dry-run phase plan for workflow phase ${phase.specPhaseID}`)
-      await ensurePhasePromptArtifact(runID, initial.spec, phase, phasePlan)
-
-      if (parsed.enqueueChildren) {
-        const current = await WorkflowRun.getDetail(runID)
-        const existingChildren = current.children.filter((child) => child.phaseID === phase.id)
-        if (WorkflowRun.isTerminalRunStatus(current.status) || existingChildren.length > 0) return current
-      }
-
-      const advanced = await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
-      if (advanced.status !== "running") return WorkflowRun.getDetail(runID)
-
-      if (phase.kind === "noop") {
-        await WorkflowRun.appendArtifact({
-          runID,
-          phaseID: phase.id,
-          kind: "summary",
-          retention: "session",
-          summary: `Noop phase completed: ${phase.name}`,
-          payload: { phaseID: phase.id, specPhaseID: phase.specPhaseID },
-        })
-        await WorkflowRun.setPhaseStatus({ id: phase.id, status: "completed" })
-        continue
-      }
-
-      if (parsed.enqueueChildren) {
-        const enqueuedTasks: TaskQueue.Info[] = []
-        for (const childPlan of phasePlan.children) {
-          const target = await prepareChildRuntimeTarget(runID, phase, childPlan)
-          const enqueued = await Instance.provide({
-            directory: target.directory,
-            fn: async () => {
-              const session = await Session.create({
-                parentID: initial.parentSessionID,
-                title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1} (@${childPlan.agent ?? "workflow"} workflow child)`,
-              })
-              return WorkflowRun.enqueueChild(
-                {
-                  runID,
-                  phaseID: phase.id,
-                  sessionID: session.id,
-                  agent: childPlan.agent,
-                  model: childPlan.model,
-                  budgetSlice: childPlan.budgetSlice,
-                },
-                {
-                  title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
-                  specPhaseID: phase.specPhaseID,
-                  startOptions: parsed,
-                  sourceTaskID: initial.sourceTaskID,
-                  payload: {
-                    worktree: target.payload,
-                    prompt: childPlan.prompt,
-                    artifactRefs: childPlan.artifactRefs,
-                    budgetSlice: childPlan.budgetSlice,
-                    pacing: childPlan.pacing,
-                    maxParallel: phasePlan.maxParallel,
-                    allowedTools: childPlan.allowedTools,
-                    writePolicy: childPlan.writePolicy,
-                    networkPolicy: childPlan.networkPolicy,
-                    escalationPolicy: childPlan.escalationPolicy,
-                    effort: childPlan.effort,
-                  },
-                },
-              )
-            },
-          })
-          if (!enqueued) return WorkflowRun.getDetail(runID)
-          const { child, task } = enqueued
-          await WorkflowRun.appendBudgetUsage({
-            runID,
-            phaseID: phase.id,
-            childID: child.id,
-            kind: "reserve",
-            usageDelta: { childAgents: 1 },
-          })
-          enqueuedTasks.push(task)
-        }
-
-        if (parsed.autoStartChildren) {
-          // Enqueue creates the queue items but does not start them. Without
-          // this explicit start, workflow children sit in "queued" forever -
-          // drainNextWorkflowPhaseItem() only fires after a child completes,
-          // so the first batch never gets picked up.
+      if (parsed.enqueueChildren || phase.kind === "noop") {
+        const admitted = await admitDurablePhase(initial, phase, phasePlan, parsed)
+        if (admitted.kind === "advance") continue
+        if (admitted.kind === "queued" && parsed.autoStartChildren && admitted.tasks.length > 0) {
+          // Dispatch after releasing the lock. Starting a child synchronizes
+          // the workflow and can request another phase admission.
           const TaskQueueExecutor = await loadTaskQueueExecutor()
-          for (const task of enqueuedTasks) {
-            await TaskQueueExecutor.start(task)
+          for (const task of admitted.tasks) {
+            if (shouldAutoStartWorkflowQueueItem(task)) await TaskQueueExecutor.start(task)
           }
         }
-      } else if (inline) {
+        return WorkflowRun.getDetail(runID)
+      }
+
+      if (inline) {
+        await ensurePhasePromptArtifact(runID, initial.spec, phase, phasePlan)
+        const advanced = await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+        if (advanced.status !== "running") return WorkflowRun.getDetail(runID)
         const phaseSpec = initial.spec.phases.find((item) => item.id === phase.specPhaseID)
         if (!phaseSpec) throw new Error(`No workflow phase spec for ${phase.specPhaseID}`)
         const executed = await inline.executePhase({
@@ -257,6 +193,105 @@ export namespace WorkflowScheduler {
     const completed = await WorkflowRun.setStatus({ id: runID, status: "completed" }, { signal: inline?.signal })
     if (completed.status === "completed") await WorkflowRun.ensureFinalReportArtifact(runID)
     return WorkflowRun.getDetail(runID)
+  }
+
+  async function admitDurablePhase(
+    initial: WorkflowRunDetail,
+    phase: WorkflowRunDetail["phases"][number],
+    plan: WorkflowDryRunPhase,
+    options: z.output<typeof StartOptions>,
+  ): Promise<{ kind: "advance" | "stop" } | { kind: "queued"; tasks: TaskQueue.Info[] }> {
+    const runID = initial.id
+    // Serialize filesystem and session preparation across worktrees and
+    // processes. Keep one lock per project so phase history does not grow
+    // the number of lock files. The database transaction owns admission.
+    // @scan-suppress security_scan Hash.fast encodes the project ID as hex without path separators.
+    const lockPath = path.join(Global.Path.state, "workflow-phase-setup", Hash.fast(Instance.project.id))
+    using _lock = await FileLock.acquire(lockPath).catch((error) => {
+      if (!(error instanceof FileLock.TimeoutError)) throw error
+      throw new HTTPException(409, { message: "Another workflow phase is preparing in this project." })
+    })
+    const current = await WorkflowRun.getDetail(runID)
+    if (current.status !== "running" && current.status !== "blocked") return { kind: "stop" }
+    const latestPhase = current.phases.find((item) => item.id === phase.id)
+    if (!latestPhase) throw new Error(`Missing workflow phase ${phase.id}`)
+    if (latestPhase.status === "completed") return { kind: "advance" }
+    if (WorkflowRun.isTerminalPhaseStatus(latestPhase.status) || latestPhase.status === "paused") {
+      return { kind: "stop" }
+    }
+
+    const existingChildren = current.children.some((child) => child.phaseID === phase.id)
+    if (existingChildren) {
+      // A process can exit after admission but before dispatch. The saved
+      // queue policy still decides which of those items may be auto-started.
+      const TaskQueue = await loadTaskQueue()
+      const tasks = options.autoStartChildren
+        ? await TaskQueue.listWorkflowChildren({ runID, phaseID: phase.id, statuses: ["queued", "waiting_for_idle"] })
+        : []
+      return { kind: "queued", tasks }
+    }
+
+    if (phase.kind === "noop") {
+      await ensurePhasePromptArtifact(runID, initial.spec, phase, plan)
+      const advanced = await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+      if (advanced.status !== "running") return { kind: "stop" }
+      await WorkflowRun.appendArtifact({
+        runID,
+        phaseID: phase.id,
+        kind: "summary",
+        retention: "session",
+        summary: `Noop phase completed: ${phase.name}`,
+        payload: { phaseID: phase.id, specPhaseID: phase.specPhaseID },
+      })
+      await WorkflowRun.setPhaseStatus({ id: phase.id, status: "completed" })
+      return { kind: "advance" }
+    }
+
+    const prepared: Awaited<ReturnType<typeof WorkflowRun.prepareQueuedChild>>[] = []
+    for (const childPlan of plan.children) {
+      const target = await prepareChildRuntimeTarget(runID, phase, childPlan)
+      const child = await Instance.provide({
+        directory: target.directory,
+        fn: async () => {
+          const session = await Session.create({
+            parentID: initial.parentSessionID,
+            title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1} (@${childPlan.agent ?? "workflow"} workflow child)`,
+          })
+          return WorkflowRun.prepareQueuedChild(
+            {
+              runID,
+              phaseID: phase.id,
+              sessionID: session.id,
+              agent: childPlan.agent,
+              model: childPlan.model,
+              budgetSlice: childPlan.budgetSlice,
+            },
+            {
+              title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
+              specPhaseID: phase.specPhaseID,
+              startOptions: options,
+              sourceTaskID: initial.sourceTaskID,
+              payload: {
+                worktree: target.payload,
+                prompt: childPlan.prompt,
+                artifactRefs: childPlan.artifactRefs,
+                budgetSlice: childPlan.budgetSlice,
+                pacing: childPlan.pacing,
+                maxParallel: plan.maxParallel,
+                allowedTools: childPlan.allowedTools,
+                writePolicy: childPlan.writePolicy,
+                networkPolicy: childPlan.networkPolicy,
+                escalationPolicy: childPlan.escalationPolicy,
+                effort: childPlan.effort,
+              },
+            },
+          )
+        },
+      })
+      prepared.push(child)
+    }
+    await ensurePhasePromptArtifact(runID, initial.spec, phase, plan)
+    return { kind: "queued", tasks: await WorkflowRun.enqueuePhaseChildren(runID, phase.id, prepared) }
   }
 
   export async function cancel(runID: WorkflowRunID) {
