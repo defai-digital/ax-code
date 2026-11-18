@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { afterEach, expect, test, vi } from "vitest"
 import { DownloadUtils } from "../src/lib/tree-sitter/download-utils.js"
+import { updateAssets } from "../src/lib/tree-sitter/assets/update.js"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -107,6 +108,58 @@ test("unadvertised oversized streams are cancelled and leave no partial files", 
     expect(result.error).toMatch(/size limit/i)
     expect(cancel).toHaveBeenCalledOnce()
     expect(await readdir(directory)).toEqual([])
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("the asset updater writes only queries matching the configured SHA-256 digest", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "ax-tui-query-update-"))
+  vi.spyOn(console, "log").mockImplementation(() => {})
+  const logError = vi.spyOn(console, "error").mockImplementation(() => {})
+  const exit = new Error("asset updater failed")
+  vi.spyOn(process, "exit").mockImplementation(() => {
+    throw exit
+  })
+
+  try {
+    const content = "(identifier) @variable\n"
+    const sha256 = createHash("sha256").update(content).digest("hex")
+    const url = "https://example.test/highlights.scm"
+    const configPath = path.join(directory, "parsers.json")
+    const assetsDir = path.join(directory, "assets")
+    const outputPath = path.join(directory, "default-parsers.ts")
+    const wasm = path.join(directory, "fixture.wasm")
+    const query = path.join(assetsDir, "fixture", "highlights.scm")
+    const input = { configPath, assetsDir, outputPath }
+    const writeConfig = (source: string | { url: string; sha256: string }) =>
+      writeFile(
+        configPath,
+        JSON.stringify({ parsers: [{ filetype: "fixture", wasm, queries: { highlights: [source] } }] }),
+      )
+    await writeFile(wasm, "fixture")
+    await writeConfig({ url, sha256 })
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(content))
+      .mockResolvedValueOnce(new Response("(identifier) @other"))
+    vi.stubGlobal("fetch", fetcher)
+
+    await updateAssets(input)
+    const saved = await readFile(query, "utf8")
+    expect(saved).toContain(content)
+
+    await expect(updateAssets(input)).rejects.toBe(exit)
+    expect(logError).toHaveBeenCalledWith(
+      "❌ Update failed:",
+      expect.objectContaining({ message: "Grammar query SHA-256 mismatch" }),
+    )
+    expect(await readFile(query, "utf8")).toBe(saved)
+
+    await writeConfig(url)
+    await expect(updateAssets(input)).rejects.toBe(exit)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(await readFile(query, "utf8")).toBe(saved)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

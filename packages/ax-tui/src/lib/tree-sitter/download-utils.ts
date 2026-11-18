@@ -61,6 +61,22 @@ async function fetchContent(source: string): Promise<Buffer> {
   }
 }
 
+export interface PinnedGrammarQuery {
+  url: string
+  sha256: string
+}
+
+export async function fetchPinnedGrammarQuery(source: PinnedGrammarQuery): Promise<string> {
+  if (typeof source.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(source.sha256)) {
+    throw new Error("Remote grammar queries require a SHA-256 digest")
+  }
+  const content = await fetchContent(source.url)
+  if (createHash("sha256").update(content).digest("hex") !== source.sha256) {
+    throw new Error("Grammar query SHA-256 mismatch")
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(content)
+}
+
 async function writeAtomic(target: string, content: Buffer): Promise<void> {
   const temporary = `${target}.${randomUUID()}.tmp`
   try {
