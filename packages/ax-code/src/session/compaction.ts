@@ -1,4 +1,5 @@
-import { findFallbackModel } from "./prompt/prompt-provider-fallback"
+import { isLocalRecoveryProvider, resolveFallbackModel } from "./model-recovery"
+import type { RoutePolicy } from "../provider/route-policy"
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Session } from "."
@@ -25,7 +26,6 @@ import { TokenLedger } from "@/provider/token-ledger"
 import { ContextTier } from "./context-tier"
 import { SessionExecutionContext } from "./execution-context"
 import { CompactionFallback } from "./compaction-fallback"
-import { isLocalProvider } from "./prompt/prompt-provider-fallback"
 import { sessionAssistantPath, zeroTokenUsage } from "./prompt/prompt-message-builders"
 import { estimateRequestTokens } from "./prompt/prompt-request"
 import { SystemPrompt } from "./system"
@@ -758,6 +758,7 @@ export namespace SessionCompaction {
     auto: boolean
     overflow?: boolean
     triggerReason?: TriggerReason
+    fallbackCandidates?: readonly RoutePolicy.Target[]
     /** ADR-215: manual compaction focus, quoted into the compaction prompt. */
     focus?: string
     /** ADR-225: keep the last N messages verbatim outside the summary. */
@@ -773,6 +774,9 @@ export namespace SessionCompaction {
     }
     inFlight.add(input.sessionID)
     try {
+      const fallbackCandidates = structuredClone(
+        input.fallbackCandidates ?? (await Config.get()).llm_routing?.fallback ?? [],
+      )
       // User lifecycle hooks (PreCompact) — observational only; hook
       // failures never block compaction.
       try {
@@ -785,7 +789,7 @@ export namespace SessionCompaction {
       } catch (error) {
         log.warn("PreCompact lifecycle hooks failed", { sessionID: input.sessionID, error })
       }
-      const result = await processInner(input)
+      const result = await processInner(input, fallbackCandidates)
       // User lifecycle hooks (PostCompact) — observational only, fired after
       // compaction completes. A "stop" result means compaction BAILED (e.g.
       // the context-overflow paths in processInner) — nothing was compacted,
@@ -814,7 +818,7 @@ export namespace SessionCompaction {
     }
   }
 
-  async function processInner(input: Parameters<typeof process>[0]) {
+  async function processInner(input: Parameters<typeof process>[0], fallbackCandidates: readonly RoutePolicy.Target[]) {
     const parent = input.messages.findLast((m) => m.info.id === input.parentID)
     if (!parent) throw new Error(`Compaction failed: parent message ${input.parentID} not found`)
     const userMessage = parent.info as MessageV2.User
@@ -861,13 +865,15 @@ export namespace SessionCompaction {
       (await overrideModel(agent, userModel.providerID)) ??
       (await Provider.getModel(userModel.providerID, userModel.modelID))
     // Resolve the next explicit recovery target only after a transient failure.
-    const resolveNextRung = async (
-      current: Provider.Model,
-      sessionOnly = false,
-    ): Promise<Provider.Model | undefined> => {
-      if (sessionOnly || (await isLocalProvider(current.providerID))) return undefined
-      const next = await findFallbackModel(current.providerID, current.id)
-      return next ? Provider.getModel(next.providerID, next.modelID) : undefined
+    const resolveNextRung = async (current: Provider.Model): Promise<Provider.Model | undefined> => {
+      if (!fallbackCandidates.length) return undefined
+      if (await isLocalRecoveryProvider(current.providerID, current.api.url)) return undefined
+      if (input.abort.aborted) return undefined
+      const fallback = await resolveFallbackModel(
+        { providerID: current.providerID, modelID: current.id },
+        { candidates: fallbackCandidates },
+      )
+      return fallback?.model
     }
     // A transient failure may use one explicit recovery target (at most two
     // attempts). Invalid requests and context overflow never change models.
@@ -1095,32 +1101,31 @@ When constructing the summary, try to stick to this template:
         const failure = CompactionFallback.classify(error)
         CompactionFallback.annotate(error, { retryAttempt: attempt, failureClass: failure.class })
         await Session.updateMessage(processor.message)
-        if (processor.recoverySafe !== false && failure.retryable && attempt < CompactionFallback.MAX_ATTEMPTS) {
-          const next = await resolveNextRung(model, failure.class === "model_unsupported")
-          if (next) {
-            // Privacy guard (same rule as the prompt loop's provider
-            // fallback): a session on a local provider must never silently
-            // migrate to a remote one — that would leak prompts and code off
-            // this machine.
-            const refused = next.providerID !== model.providerID && (await isLocalProvider(model.providerID))
-            if (refused) {
-              log.warn("compaction fallback refused: would migrate off a local provider", {
-                sessionID: input.sessionID,
-                providerID: model.providerID,
-                candidateProviderID: next.providerID,
-                failureClass: failure.class,
-              })
-            } else {
-              log.warn("compaction failed, retrying with the next fallback model", {
-                sessionID: input.sessionID,
-                attempt,
-                failureClass: failure.class,
-                from: `${model.providerID}/${model.id}`,
-                to: `${next.providerID}/${next.id}`,
-              })
-              model = next
-              continue
-            }
+        if (
+          !input.abort.aborted &&
+          processor.recoverySafe !== false &&
+          failure.retryable &&
+          failure.class !== "model_unsupported" &&
+          attempt < CompactionFallback.MAX_ATTEMPTS
+        ) {
+          const next = await resolveNextRung(model).catch((error: unknown) => {
+            log.warn("compaction fallback unavailable", {
+              sessionID: input.sessionID,
+              providerID: model.providerID,
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            })
+            return undefined
+          })
+          if (next && !input.abort.aborted) {
+            log.warn("compaction failed, retrying with the next fallback model", {
+              sessionID: input.sessionID,
+              attempt,
+              failureClass: failure.class,
+              from: `${model.providerID}/${model.id}`,
+              to: `${next.providerID}/${next.id}`,
+            })
+            model = next
+            continue
           }
         }
         return "stop"

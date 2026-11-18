@@ -1,6 +1,7 @@
 import type { ModelMessage } from "ai"
 import { Log } from "../../util/log"
 import type { Agent } from "../../agent/agent"
+import type { RoutePolicy } from "../../provider/route-policy"
 import type { Provider } from "../../provider/provider"
 import type { Permission } from "@/permission"
 import { SessionCompaction } from "../compaction"
@@ -39,6 +40,7 @@ export async function processPendingCompaction(input: {
   abort: AbortSignal
   sessionID: SessionID
   busyRetries: number
+  fallbackCandidates: readonly RoutePolicy.Target[]
 }): Promise<PendingCompactionResult> {
   const result = await SessionCompaction.process({
     messages: input.messages,
@@ -50,6 +52,7 @@ export async function processPendingCompaction(input: {
     triggerReason: input.task.triggerReason,
     focus: input.task.focus,
     keep: input.task.keep,
+    fallbackCandidates: input.fallbackCandidates,
   })
   const decision = pendingCompactionDecision({
     result,

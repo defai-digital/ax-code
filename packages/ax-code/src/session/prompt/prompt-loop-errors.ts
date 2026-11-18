@@ -1,11 +1,10 @@
 import { providerFailureIsPermanent } from "./prompt-loop-decisions"
-import type { FallbackOptions } from "./prompt-provider-fallback"
 import { MAX_CONSECUTIVE_ERRORS } from "@/constants/session"
 import { Log } from "../../util/log"
 import { Session } from ".."
 import { MessageV2 } from "../message-v2"
 import { SessionRetry } from "../retry"
-import { findFallbackModel, isLocalProvider } from "./prompt-provider-fallback"
+import { isLocalRecoveryProvider, resolveFallbackModel, type FallbackOptions } from "../model-recovery"
 import {
   consecutiveErrorDecision,
   providerFallbackLookupDecision,
@@ -59,12 +58,10 @@ type PromptLoopErrorTransitionDeps = {
 
 type PromptLoopErrorDeps = {
   findFallback?: (
-    providerID: MessageV2.User["model"]["providerID"],
-    preferredModelID?: MessageV2.User["model"]["modelID"],
-    excludedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>,
+    current: MessageV2.User["model"],
     options?: FallbackOptions,
   ) => Promise<MessageV2.User["model"] | undefined>
-  isLocal?: (providerID: MessageV2.User["model"]["providerID"]) => Promise<boolean>
+  isLocal?: (providerID: MessageV2.User["model"]["providerID"], endpoint?: string) => Promise<boolean>
   warn?: (message: string, fields: Record<string, unknown>) => void
   publishError?: (input: { sessionID: SessionID; message: string; code?: SessionStop.Code }) => void
 }
@@ -179,10 +176,10 @@ export async function handlePromptLoopError(
   input: {
     sessionID: SessionID
     currentModel: MessageV2.User["model"]
+    currentEndpoint?: string
     error: unknown
     consecutiveErrors: number
     step: number
-    failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
     fallbackOptions?: FallbackOptions
     recoverySafe?: boolean
     /** Override for autonomy.stall.max_consecutive_errors; defaults to the shipped constant. */
@@ -295,7 +292,7 @@ export async function handlePromptLoopError(
     // chose local inference to keep prompts and code on this machine, so
     // silently retrying against a remote provider would leak their data.
     // Same-target processor retries have already run; local recovery stops here.
-    if (await (deps.isLocal ?? isLocalProvider)(input.currentModel.providerID)) {
+    if (await (deps.isLocal ?? isLocalRecoveryProvider)(input.currentModel.providerID, input.currentEndpoint)) {
       if (fallbackLookup.stopWithoutFallback) {
         const reason = fallbackLookup.errorMessage?.trim() || "unknown error"
         const punctuation = /[.!?]$/.test(reason) ? "" : "."
@@ -324,12 +321,10 @@ export async function handlePromptLoopError(
         consecutiveErrors: input.consecutiveErrors,
       })
     } else {
-      const fallback = await (deps.findFallback ?? findFallbackModel)(
-        input.currentModel.providerID,
-        input.currentModel.modelID,
-        input.failedProviderIDs,
-        input.fallbackOptions,
-      ).catch(() => undefined)
+      const pendingFallback =
+        deps.findFallback?.(input.currentModel, input.fallbackOptions) ??
+        resolveFallbackModel(input.currentModel, input.fallbackOptions).then((resolution) => resolution?.target)
+      const fallback = await pendingFallback.catch(() => undefined)
       if (fallback) {
         const fallbackSwitch = providerFallbackSwitchState({
           current: input.currentModel,
@@ -442,11 +437,11 @@ export async function resolvePromptLoopErrorTransition(
   input: {
     sessionID: SessionID
     currentModel: MessageV2.User["model"]
+    currentEndpoint?: string
     error: unknown
     consecutiveErrors: number
     fallbackModelOverride: MessageV2.User["model"] | undefined
     step: number
-    failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
     fallbackOptions?: FallbackOptions
     recoverySafe?: boolean
     /** Override for autonomy.stall.max_consecutive_errors; defaults to the shipped constant. */
@@ -483,10 +478,10 @@ export async function resolvePromptLoopErrorTransition(
   const errorResult = await (deps.handleError ?? handlePromptLoopError)({
     sessionID: input.sessionID,
     currentModel: input.currentModel,
+    currentEndpoint: input.currentEndpoint,
     error: input.error,
     consecutiveErrors: input.consecutiveErrors + 1,
     step: input.step,
-    failedProviderIDs: input.failedProviderIDs,
     fallbackOptions: input.fallbackOptions,
     recoverySafe: input.recoverySafe,
     maxConsecutiveErrors: input.maxConsecutiveErrors,

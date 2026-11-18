@@ -3,7 +3,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { Provider } from "../../src/provider/provider"
 import { RoutePolicy } from "../../src/provider/route-policy"
-import { chooseFallbackModel } from "../../src/session/prompt/prompt-provider-fallback"
+import { resolveFallbackModel } from "../../src/session/model-recovery"
 import { providerFallbackLookupDecision } from "../../src/session/prompt/prompt-loop-decisions"
 import { handlePromptLoopError } from "../../src/session/prompt/prompt-loop-errors"
 import { ProviderID, ModelID } from "../../src/provider/schema"
@@ -61,35 +61,28 @@ describe("explicit model recovery policy", () => {
     expect(RoutePolicy.narrow({ fallback: [primary] }, { fallback: [] })).toEqual({ fallback: [] })
   })
 
-  test("catalog ordering cannot grant or reorder recovery targets", () => {
-    const entries = [
-      [
-        "gateway",
-        {
-          id: "gateway",
-          models: { [primary.modelID]: { id: primary.modelID }, [second.modelID]: { id: second.modelID } },
-        },
-      ],
-      ["other", { id: "other", models: { third: { id: third.modelID } } }],
-    ] as const
-    for (const ordered of [entries, [...entries].reverse()]) {
-      const providers = Object.fromEntries(ordered) as Parameters<typeof chooseFallbackModel>[0]
-      expect(
-        chooseFallbackModel(providers, { failedProviderID: primary.providerID, preferredModelID: primary.modelID }),
-      ).toBeUndefined()
-      expect(
-        chooseFallbackModel(providers, {
-          failedProviderID: primary.providerID,
-          preferredModelID: primary.modelID,
-          candidates: [second, third],
+  test("resolves only the next configured model and tracks failed exact targets", async () => {
+    const model = { capabilities: { toolcall: true } } as Provider.Model
+    const lookup = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    try {
+      await expect(resolveFallbackModel(primary, { candidates: [] })).resolves.toBeUndefined()
+      expect(lookup).not.toHaveBeenCalled()
+      await expect(resolveFallbackModel(primary, { candidates: [primary, second, third] })).resolves.toEqual({
+        target: second,
+        model,
+      })
+      await expect(
+        resolveFallbackModel(primary, {
+          candidates: [primary, second, third],
+          failedModelKeys: new Set([RoutePolicy.key(second)]),
         }),
-      ).toEqual(second)
-      expect(
-        chooseFallbackModel(providers, {
-          failedProviderID: primary.providerID,
-          candidates: [{ providerID: "missing", modelID: "missing" }, third],
-        }),
-      ).toBeUndefined()
+      ).resolves.toEqual({ target: third, model })
+      expect(lookup.mock.calls).toEqual([
+        [second.providerID, second.modelID],
+        [third.providerID, third.modelID],
+      ])
+    } finally {
+      lookup.mockRestore()
     }
   })
 

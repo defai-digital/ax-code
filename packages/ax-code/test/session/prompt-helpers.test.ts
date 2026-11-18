@@ -24,7 +24,6 @@ import {
   modelInfo,
   pendingCompactionDecision,
   parseGoalArguments,
-  chooseFallbackModel,
   providerFallbackLookupDecision,
   providerFallbackNotice,
   providerFallbackSwitchState,
@@ -764,48 +763,6 @@ describe("session.prompt helpers", () => {
         error: { name: "APIError", data: { statusCode: 429, message: "insufficient_quota" } },
       }),
     ).toEqual({ action: "skip" })
-  })
-
-  test("never searches other providers without configured recovery targets", () => {
-    const providers = {
-      "alibaba-token-plan": {
-        id: ProviderID.make("alibaba-token-plan"),
-        name: "Alibaba Token Plan",
-        models: {
-          "glm-5.1": { id: ModelID.make("glm-5.1") },
-        },
-      } as any,
-      "zai-coding-plan": {
-        id: ProviderID.make("zai-coding-plan"),
-        name: "ZAI Coding Plan",
-        models: {
-          "zai-small": { id: ModelID.make("zai-small") },
-          "glm-5.1": { id: ModelID.make("glm-5.1") },
-        },
-      } as any,
-      openrouter: {
-        id: ProviderID.make("openrouter"),
-        name: "OpenRouter",
-        models: {
-          "z-model": { id: ModelID.make("z-model") },
-        },
-      } as any,
-    } as any
-
-    const result = chooseFallbackModel(providers, {
-      failedProviderID: ProviderID.make("alibaba-token-plan"),
-      preferredModelID: ModelID.make("glm-5.1"),
-    })
-
-    expect(result).toBeUndefined()
-
-    const excludedResult = chooseFallbackModel(providers, {
-      failedProviderID: ProviderID.make("alibaba-token-plan"),
-      preferredModelID: ModelID.make("glm-5.1"),
-      excludedProviderIDs: [ProviderID.make("zai-coding-plan")],
-    })
-
-    expect(excludedResult).toBeUndefined()
   })
 
   test("builds fallback provider switch state", () => {

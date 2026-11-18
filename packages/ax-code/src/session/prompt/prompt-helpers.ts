@@ -18,7 +18,6 @@ export { systemPrompt, COMPACT_MEMORY_TOKENS } from "./prompt-system"
 export { appendNewerMessages, loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
 export { createStructuredOutputTool, createStructuredOutputTurn } from "./prompt-structured-output"
 export { parseGoalArguments } from "./prompt-goal-arguments"
-export { chooseFallbackModel, findFallbackModel } from "./prompt-provider-fallback"
 export {
   assistantLoopExitDecision,
   assistantRespondedAfterUser,

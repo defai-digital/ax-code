@@ -1139,6 +1139,7 @@ export namespace SessionPrompt {
           abort,
           sessionID,
           busyRetries: compactionRetries.busy,
+          fallbackCandidates,
         })
         if (compaction.action === "break") {
           reason = compaction.reason
@@ -2571,6 +2572,7 @@ export namespace SessionPrompt {
       const errorTransition = await resolvePromptLoopErrorTransition({
         sessionID,
         currentModel: lastUser.model,
+        currentEndpoint: model.api.url,
         error: processor.message.error,
         consecutiveErrors,
         fallbackModelOverride,

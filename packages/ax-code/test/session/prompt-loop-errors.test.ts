@@ -1,11 +1,11 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
 import type { NamedError } from "@ax-code/util/error"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../src/session/prompt/prompt-loop-errors"
 import { providerFailureIsPermanent } from "../../src/session/prompt/prompt-loop-decisions"
-import { isLoopbackBaseURL } from "../../src/session/prompt/prompt-provider-fallback"
+import { RoutePolicy } from "../../src/provider/route-policy"
 import { SessionID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import { APICallError } from "ai"
@@ -172,10 +172,8 @@ describe("prompt loop error transitions", () => {
         async isLocal() {
           return false
         },
-        async findFallback(providerID, preferredModelID, excludedProviderIDs) {
-          expect(providerID).toBe(primaryModel.providerID)
-          expect(preferredModelID).toBe(primaryModel.modelID)
-          expect(Array.from(excludedProviderIDs ?? [])).toEqual([])
+        async findFallback(current) {
+          expect(current).toEqual(primaryModel)
           return fallbackModel
         },
         warn(message, fields) {
@@ -226,9 +224,8 @@ describe("prompt loop error transitions", () => {
         step: 1,
       },
       {
-        async findFallback(providerID, preferredModelID) {
-          expect(providerID).toBe(primaryModel.providerID)
-          expect(preferredModelID).toBe(primaryModel.modelID)
+        async findFallback(current) {
+          expect(current).toEqual(primaryModel)
           return fallbackModel
         },
         warn() {},
@@ -274,39 +271,38 @@ describe("prompt loop error transitions", () => {
     expect(published[0].message).not.toContain("Switching to")
   })
 
-  test("passes previously failed providers to fallback lookup", async () => {
-    const previousFallbackProvider = ProviderID.make("previous-fallback")
-    const sessionID = SessionID.descending()
-
+  test("passes failed exact model keys and the frozen route to recovery", async () => {
+    const findFallback = vi.fn(async () => undefined)
+    const fallbackOptions = {
+      candidates: [primaryModel, fallbackModel],
+      failedModelKeys: new Set([RoutePolicy.key(primaryModel)]),
+    }
     const result = await handlePromptLoopError(
       {
-        sessionID,
+        sessionID: SessionID.descending(),
         currentModel: fallbackModel,
         error: {
           name: "APIError",
-          data: { statusCode: 429, message: "Your token-plan quota has been exhausted." },
+          data: {
+            statusCode: 503,
+            message: "Service Unavailable",
+            isRetryable: false,
+            metadata: { retryExhausted: "true" },
+          },
         },
         consecutiveErrors: 1,
         step: 2,
-        failedProviderIDs: [primaryModel.providerID, previousFallbackProvider],
+        fallbackOptions,
       },
       {
-        async findFallback(providerID, preferredModelID, excludedProviderIDs) {
-          expect(providerID).toBe(fallbackModel.providerID)
-          expect(preferredModelID).toBe(fallbackModel.modelID)
-          expect(Array.from(excludedProviderIDs ?? [])).toEqual([primaryModel.providerID, previousFallbackProvider])
-          return undefined
-        },
+        isLocal: async () => false,
+        findFallback,
         warn() {},
         publishError() {},
       },
     )
-
-    expect(result).toEqual({
-      action: "stop",
-      reason: "error",
-      consecutiveErrors: 1,
-    })
+    expect(findFallback).toHaveBeenCalledExactlyOnceWith(fallbackModel, fallbackOptions)
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
   })
 
   test("stops immediately when account failure has no fallback provider", async () => {
@@ -942,6 +938,31 @@ describe("local provider fallback privacy guard", () => {
     modelID: "ornith-35b-axq-6bit" as ModelID,
   }
 
+  test("uses the failed request endpoint to protect a local pin", async () => {
+    const findFallback = vi.fn(async () => fallbackModel)
+    const result = await handlePromptLoopError(
+      {
+        sessionID: SessionID.descending(),
+        currentModel: primaryModel,
+        currentEndpoint: "http://[::ffff:127.0.0.1]:11434/v1",
+        error: {
+          name: "APIError",
+          data: {
+            statusCode: 503,
+            message: "Service Unavailable",
+            isRetryable: false,
+            metadata: { retryExhausted: "true" },
+          },
+        },
+        consecutiveErrors: 1,
+        step: 1,
+      },
+      { findFallback, warn() {}, publishError() {} },
+    )
+    expect(result.action).toBe("stop")
+    expect(findFallback).not.toHaveBeenCalled()
+  })
+
   test("never looks up a remote fallback for a local provider; transient errors fall through to retry", async () => {
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []
@@ -1053,33 +1074,33 @@ describe("local provider fallback privacy guard", () => {
 
 describe("isLoopbackBaseURL", () => {
   test("detects loopback URLs", () => {
-    expect(isLoopbackBaseURL("http://127.0.0.1:31418/v1")).toBe(true)
-    expect(isLoopbackBaseURL("http://localhost:11434/v1")).toBe(true)
-    expect(isLoopbackBaseURL("http://localhost.:11434/v1")).toBe(true)
-    expect(isLoopbackBaseURL("http://[::1]:8080")).toBe(true)
-    expect(isLoopbackBaseURL("http://127.1:8080/v1")).toBe(true)
-    expect(isLoopbackBaseURL("http://127.255.255.255:8080/v1")).toBe(true)
+    expect(RoutePolicy.isLoopbackBaseURL("http://127.0.0.1:31418/v1")).toBe(true)
+    expect(RoutePolicy.isLoopbackBaseURL("http://localhost:11434/v1")).toBe(true)
+    expect(RoutePolicy.isLoopbackBaseURL("http://localhost.:11434/v1")).toBe(true)
+    expect(RoutePolicy.isLoopbackBaseURL("http://[::1]:8080")).toBe(true)
+    expect(RoutePolicy.isLoopbackBaseURL("http://127.1:8080/v1")).toBe(true)
+    expect(RoutePolicy.isLoopbackBaseURL("http://127.255.255.255:8080/v1")).toBe(true)
   })
 
   test("detects IPv4-mapped IPv6 loopback endpoints", () => {
-    expect(isLoopbackBaseURL("http://[::ffff:127.0.0.1]:8080/v1")).toBe(true)
-    expect(isLoopbackBaseURL("http://[::ffff:7f05:607]:8080/v1")).toBe(true)
-    expect(isLoopbackBaseURL("http://[::ffff:126.255.255.255]:8080/v1")).toBe(false)
-    expect(isLoopbackBaseURL("http://[::ffff:128.0.0.1]:8080/v1")).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL("http://[::ffff:127.0.0.1]:8080/v1")).toBe(true)
+    expect(RoutePolicy.isLoopbackBaseURL("http://[::ffff:7f05:607]:8080/v1")).toBe(true)
+    expect(RoutePolicy.isLoopbackBaseURL("http://[::ffff:126.255.255.255]:8080/v1")).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL("http://[::ffff:128.0.0.1]:8080/v1")).toBe(false)
   })
 
   test("does not treat a DNS prefix or a non-HTTP URL as a local endpoint", () => {
-    expect(isLoopbackBaseURL("https://127.gateway.example/v1")).toBe(false)
-    expect(isLoopbackBaseURL("https://127.0.0.1.example/v1")).toBe(false)
-    expect(isLoopbackBaseURL("ftp://localhost/v1")).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL("https://127.gateway.example/v1")).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL("https://127.0.0.1.example/v1")).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL("ftp://localhost/v1")).toBe(false)
   })
 
   test("rejects remote and malformed URLs", () => {
-    expect(isLoopbackBaseURL("https://api.z.ai/api/coding/paas/v4")).toBe(false)
-    expect(isLoopbackBaseURL("https://api.openai.com/v1")).toBe(false)
-    expect(isLoopbackBaseURL("not a url")).toBe(false)
-    expect(isLoopbackBaseURL(undefined)).toBe(false)
-    expect(isLoopbackBaseURL("")).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL("https://api.z.ai/api/coding/paas/v4")).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL("https://api.openai.com/v1")).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL("not a url")).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL(undefined)).toBe(false)
+    expect(RoutePolicy.isLoopbackBaseURL("")).toBe(false)
   })
 })
 

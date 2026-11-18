@@ -42,7 +42,7 @@ function createModel(opts: { providerID: string; modelID: string }): Provider.Mo
 }
 
 type AttemptScript =
-  | { type: "fail"; error: () => NonNullable<MessageV2.Assistant["error"]> }
+  | { type: "fail"; error: () => NonNullable<MessageV2.Assistant["error"]>; onFailure?: () => void }
   | { type: "request_too_large" }
   | { type: "succeed" }
 
@@ -69,6 +69,7 @@ function mockProcessor(script: AttemptScript[]) {
       async process() {
         if (step.type === "fail") {
           input.assistantMessage.error = step.error()
+          step.onFailure?.()
           return "stop"
         }
         if (step.type === "request_too_large") return "compact_request_too_large"
@@ -164,6 +165,142 @@ describe("session.compaction model fallback (C9)", () => {
         } finally {
           processor.spy.mockRestore()
           smallSpy.mockRestore()
+          getModel.mockRestore()
+        }
+      },
+    })
+  })
+
+  test.each(["missing", "ineligible"])("preserves the original error when the next target is %s", async (reason) => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = createModel({ providerID: "test", modelID: "test-model" })
+        const unavailable = createModel({ providerID: "test", modelID: "unavailable" })
+        unavailable.capabilities.toolcall = false
+        const later = createModel({ providerID: "test", modelID: "later" })
+        const config = await Config.get()
+        config.llm_routing = {
+          fallback: [unavailable, later].map((model) => ({ providerID: model.providerID, modelID: model.id })),
+        }
+        const { getModel } = mockProviders({
+          "test/test-model": session,
+          "test/later": later,
+          ...(reason === "ineligible" ? { "test/unavailable": unavailable } : {}),
+        })
+        const processor = mockProcessor([
+          { type: "fail", error: apiError({ message: "Primary unavailable", statusCode: 503, isRetryable: true }) },
+        ])
+        try {
+          const { session: s, user } = await seedSession()
+          await expect(
+            SessionCompaction.process({
+              parentID: user.id,
+              messages: await Session.messages({ sessionID: s.id }),
+              sessionID: s.id,
+              abort: new AbortController().signal,
+              auto: true,
+            }),
+          ).resolves.toBe("stop")
+          expect(processor.models).toEqual([{ providerID: "test", modelID: "test-model" }])
+          expect(getModel).toHaveBeenCalledWith("test", "unavailable")
+          expect(getModel).not.toHaveBeenCalledWith("test", "later")
+          const [failed] = await compactionAssistantMessages(s.id)
+          expect(failed?.error).toMatchObject({
+            data: { message: "Primary unavailable", metadata: { retryAttempt: "1" } },
+          })
+        } finally {
+          processor.spy.mockRestore()
+          getModel.mockRestore()
+        }
+      },
+    })
+  })
+
+  test.each([false, true])("uses the captured fallback list (inherited=%s)", async (inherited) => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        const original = { providerID: "test", modelID: "original" }
+        config.llm_routing = { fallback: inherited ? [{ ...original, modelID: "edited" }] : [original] }
+        const { getModel } = mockProviders({
+          "test/test-model": createModel({ providerID: "test", modelID: "test-model" }),
+          "test/original": createModel(original),
+          "test/edited": createModel({ providerID: "test", modelID: "edited" }),
+        })
+        const processor = mockProcessor([
+          {
+            type: "fail",
+            error: apiError({ message: "Service Unavailable", statusCode: 503, isRetryable: true }),
+            onFailure: () => {
+              original.modelID = "edited"
+            },
+          },
+          { type: "succeed" },
+        ])
+        try {
+          const { session: s, user } = await seedSession()
+          const result = await SessionCompaction.process({
+            parentID: user.id,
+            messages: await Session.messages({ sessionID: s.id }),
+            sessionID: s.id,
+            abort: new AbortController().signal,
+            auto: true,
+            ...(inherited ? { fallbackCandidates: [original] } : {}),
+          })
+          expect(result).toBe("continue")
+          expect(processor.models).toEqual([
+            { providerID: "test", modelID: "test-model" },
+            { providerID: "test", modelID: "original" },
+          ])
+          expect(getModel.mock.calls.filter(([, id]) => id === "original")).toHaveLength(1)
+          expect(getModel).not.toHaveBeenCalledWith("test", "edited")
+        } finally {
+          processor.spy.mockRestore()
+          getModel.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("stops recovery when cancellation lands before fallback lookup", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const abort = new AbortController()
+        const next = { providerID: "test", modelID: "second" }
+        const config = await Config.get()
+        config.llm_routing = { fallback: [next] }
+        const { getModel } = mockProviders({
+          "test/test-model": createModel({ providerID: "test", modelID: "test-model" }),
+          "test/second": createModel(next),
+        })
+        const processor = mockProcessor([
+          {
+            type: "fail",
+            error: apiError({ message: "Service Unavailable", statusCode: 503, isRetryable: true }),
+            onFailure: () => abort.abort(),
+          },
+          { type: "succeed" },
+        ])
+        try {
+          const { session: s, user } = await seedSession()
+          const result = await SessionCompaction.process({
+            parentID: user.id,
+            messages: await Session.messages({ sessionID: s.id }),
+            sessionID: s.id,
+            abort: abort.signal,
+            auto: true,
+          })
+          expect(result).toBe("stop")
+          expect(processor.models).toEqual([{ providerID: "test", modelID: "test-model" }])
+          expect(getModel).not.toHaveBeenCalledWith("test", "second")
+        } finally {
+          processor.spy.mockRestore()
           getModel.mockRestore()
         }
       },
@@ -331,6 +468,9 @@ describe("session.compaction model fallback (C9)", () => {
       directory: tmp.path,
       fn: async () => {
         const local = createModel({ providerID: "local", modelID: "local-small" })
+        local.api.url = "http://localhost:11434/v1"
+        const config = await Config.get()
+        config.llm_routing = { fallback: [{ providerID: "cloud", modelID: "cloud-small" }] }
         const cloud = createModel({ providerID: "cloud", modelID: "cloud-big" })
         const cloudSmall = createModel({ providerID: "cloud", modelID: "cloud-small" })
         const { getModel } = mockProviders({
@@ -339,18 +479,6 @@ describe("session.compaction model fallback (C9)", () => {
           "cloud/cloud-small": cloudSmall,
         })
         const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(cloudSmall)
-        // isLocalProvider("local") resolves through Provider.list(): mark the
-        // local provider by its loopback baseURL.
-        const listSpy = vi.spyOn(Provider, "list").mockResolvedValue({
-          local: {
-            id: ProviderID.make("local"),
-            name: "Local",
-            source: "custom",
-            env: [],
-            options: { baseURL: "http://localhost:11434" },
-            models: {},
-          },
-        } as never)
         const processor = mockProcessor([
           { type: "fail", error: apiError({ message: "Internal Server Error", statusCode: 500, isRetryable: true }) },
           { type: "succeed" },
@@ -381,9 +509,9 @@ describe("session.compaction model fallback (C9)", () => {
           // second attempt happens.
           expect(result).toBe("stop")
           expect(processor.models).toEqual([{ providerID: "local", modelID: "local-small" }])
+          expect(getModel).not.toHaveBeenCalledWith("cloud", "cloud-small")
         } finally {
           processor.spy.mockRestore()
-          listSpy.mockRestore()
           smallSpy.mockRestore()
           getModel.mockRestore()
         }
