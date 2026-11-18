@@ -32,6 +32,29 @@ export namespace State {
     invalidate: () => Promise<void>
   }
 
+  export type Cache<S> = Getter<S> & {
+    invalidateAll: (beforeInvalidate?: (key: string) => void) => void
+  }
+
+  /** Data-only caches can be evicted without acquiring or waiting for their owners. */
+  export function createCache<S>(root: () => string, init: () => S): Cache<S> {
+    return Object.assign(create(root, init), {
+      invalidateAll(beforeInvalidate?: (key: string) => void): void {
+        const targets = [...recordsByKey].flatMap(([key, entries]) => {
+          const entry = entries.get(init)
+          // A disposable resource registered with the same initializer must
+          // retain its explicit lifecycle even if another getter shares it.
+          return entry && !entry.dispose ? [{ key, entries, entry }] : []
+        })
+        for (const { key, entries, entry } of targets) {
+          beforeInvalidate?.(key)
+          if (entries.get(init) === entry) entries.delete(init)
+          if (entries.size === 0 && recordsByKey.get(key) === entries) recordsByKey.delete(key)
+        }
+      },
+    })
+  }
+
   export function create<S>(
     root: () => string,
     init: () => S,

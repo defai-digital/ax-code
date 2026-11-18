@@ -6,7 +6,7 @@
  * pure (no Provider import) by handling the provider scan here.
  */
 
-import { Provider } from "@/provider/provider-impl"
+import { Provider } from "@/provider/provider"
 import type { ProviderModel } from "@/provider/model-info"
 import type { ProviderInfo } from "@/provider/model-info"
 import type { ProviderID, ModelID } from "@/provider/schema"

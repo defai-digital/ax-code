@@ -81,7 +81,7 @@ const mockProviders: Record<string, any> = {
   },
 }
 
-vi.mock("@/provider/provider-impl", () => ({
+vi.mock("@/provider/provider", () => ({
   Provider: {
     list: vi.fn(),
     defaultModel: vi.fn(),
@@ -90,7 +90,7 @@ vi.mock("@/provider/provider-impl", () => ({
   },
 }))
 
-import { Provider } from "@/provider/provider-impl"
+import { Provider } from "@/provider/provider"
 import {
   findVisionCapableModels,
   visualRoutingDiagnostic,

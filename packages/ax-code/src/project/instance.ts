@@ -451,6 +451,10 @@ export const Instance = {
   state<S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>): State.Getter<S> {
     return State.create(() => Instance.directory, init, dispose)
   },
+  /** Data-only cache with eviction across existing owners, including unfinished boots. */
+  cache<S>(init: () => S): State.Cache<S> {
+    return State.createCache(() => Instance.directory, init)
+  },
   runtime(directory?: string) {
     return ServiceManager.forDirectory(directory ? Filesystem.resolve(directory) : Instance.directory)
   },

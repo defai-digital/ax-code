@@ -185,7 +185,7 @@ export namespace Config {
     return managedConfigDir()
   }
 
-  export const state = Instance.state(() => NativePerf.runAsync("config.load", undefined, loadState))
+  export const state = Instance.cache(() => NativePerf.runAsync("config.load", undefined, loadState))
 
   async function loadState() {
     const auth = await NativePerf.runAsync("config.load.auth", undefined, () => Auth.all())
@@ -1467,35 +1467,10 @@ export namespace Config {
    * projects, so changing it must refresh every merged config snapshot while
    * preserving active sessions, LSP clients, MCP connections, and tools.
    */
-  export async function invalidateAll() {
+  export async function invalidateAll(): Promise<void> {
     peekedGeneration++
     peeked.clear()
-    let currentDirectory: string | undefined
-    try {
-      currentDirectory = Instance.directory
-    } catch {
-      currentDirectory = undefined
-    }
-
-    // Avoid re-entering Instance.provide for the active directory. A global
-    // update can run inside that directory's request context, and nested
-    // provide during boot would await the same in-flight Instance promise.
-    try {
-      await state.invalidate()
-    } catch {
-      // No active Instance context. The live directories below still need to
-      // be invalidated (Desktop can keep several projects open at once).
-    }
-
-    const peers = Instance.list().filter((directory) => directory !== currentDirectory)
-    await Promise.all(
-      peers.map((directory) =>
-        Instance.provide({
-          directory,
-          fn: () => state.invalidate(),
-        }),
-      ),
-    )
+    state.invalidateAll()
   }
 
   /**

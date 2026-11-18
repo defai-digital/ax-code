@@ -454,7 +454,7 @@ export namespace Provider {
     return result
   }
 
-  const state = Instance.state(async () => {
+  const state = Instance.cache(async () => {
     using _ = log.time("state")
     // Capture the cache generation at init START, not completion. An init that
     // begins before invalidateAll() bumps the generation must keep its original
@@ -1127,41 +1127,11 @@ export namespace Provider {
    * Auth credentials are global; each project keeps its own provider cache, so
    * a connect in project A must drop project B's cache too.
    *
-   * Must not re-enter Instance.provide for the active directory: Auth.set/remove
-   * often runs inside Instance boot `init`, and providing the same directory
-   * again awaits the in-flight boot promise → deadlock.
+   * Evict only cached entries, including pending boot state. Acquiring project
+   * runtimes here can wait on another initializer or recreate a closing peer.
    */
-  export async function invalidateAll() {
-    let currentDirectory: string | undefined
-    try {
-      currentDirectory = Instance.directory
-    } catch {
-      currentDirectory = undefined
-    }
-
-    // Bump the generation for the active directory, then drop its cache.
-    if (currentDirectory) bumpModelCacheGeneration(currentDirectory)
-    try {
-      await state.invalidate()
-    } catch {
-      // No active instance ALS context.
-    }
-
-    const peers = Instance.list().filter((directory) => directory !== currentDirectory)
-    await Promise.all(
-      peers.map((directory) =>
-        Instance.provide({
-          directory,
-          fn: async () => {
-            // Bump the generation and drop the directory entry only. Do not
-            // await state() first — that would re-run the full provider init
-            // pipeline just to discard it.
-            bumpModelCacheGeneration(directory)
-            await state.invalidate()
-          },
-        }),
-      ),
-    )
+  export async function invalidateAll(): Promise<void> {
+    state.invalidateAll(bumpModelCacheGeneration)
   }
 
   // Short-lived negative cache for provider install failures. Without it,
