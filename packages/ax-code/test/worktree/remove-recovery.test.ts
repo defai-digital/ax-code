@@ -231,3 +231,62 @@ test("removes a managed worktree whose directory vanished and was pruned", async
     },
   })
 })
+
+test.skipIf(process.platform === "win32").each([
+  ["trailing space", "sandbox ", false],
+  ["newline", "sandbox\nsecond line", false],
+  ["trailing space on legacy Git", "sandbox ", true],
+])("lists, resets, and removes worktrees with a %s in the path", async (_label, name, legacy) => {
+  await using tmp = await tmpdir({ git: true })
+  await using external = await tmpdir()
+  const directory = path.join(external.path, name)
+  const sibling = path.join(external.path, "sandbox")
+  const branch = "ax-code/literal-path"
+  const siblingBranch = "ax-code/plain-path"
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: tmp.path, encoding: "utf8", stdio: "pipe" })
+  git("worktree", "add", "-b", siblingBranch, sibling)
+  git("worktree", "add", "-b", branch, directory)
+  const siblingFile = path.join(sibling, "keep.txt")
+  await fs.writeFile(siblingFile, "plain checkout")
+  const resetFile = path.join(directory, "reset.txt")
+  await fs.writeFile(resetFile, "remove during reset")
+
+  const runGit = GitUtil.git
+  const spy = legacy
+    ? vi.spyOn(GitUtil, "git").mockImplementation((args, options) => {
+        if (args[0] === "worktree" && args[1] === "list" && args.includes("-z")) {
+          return Promise.resolve({
+            exitCode: 129,
+            stdout: Buffer.alloc(0),
+            stderr: Buffer.from("error: unknown switch `z'\n"),
+            text: () => "",
+          })
+        }
+        return runGit(args, options)
+      })
+    : undefined
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Project.addSandbox(Instance.project.id, sibling)
+        await Project.addSandbox(Instance.project.id, directory)
+        expect(await Worktree.list()).toEqual([
+          { directory: sibling, name: "sandbox", branch: siblingBranch },
+          { directory, name, branch },
+        ])
+
+        await expect(Worktree.reset({ directory })).resolves.toBe(true)
+        await expect(fs.stat(resetFile)).rejects.toMatchObject({ code: "ENOENT" })
+        await expect(Worktree.remove({ directory })).resolves.toBe(true)
+
+        expect(git("worktree", "list", "--porcelain", "-z")).not.toContain(`worktree ${directory}\0`)
+        expect(git("branch", "--list", branch)).toBe("")
+        expect(await Worktree.list()).toEqual([{ directory: sibling, name: "sandbox", branch: siblingBranch }])
+        expect(await fs.readFile(siblingFile, "utf8")).toBe("plain checkout")
+      },
+    })
+  } finally {
+    spy?.mockRestore()
+  }
+})

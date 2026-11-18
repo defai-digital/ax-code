@@ -349,44 +349,64 @@ export namespace Worktree {
     return path.basename(directory) || directory
   }
 
-  async function worktreeBranchMap() {
-    const result = await git(["worktree", "list", "--porcelain"], { cwd: Instance.worktree })
-    if (result.exitCode !== 0) {
-      log.warn("failed to read git worktree list", { message: errorText(result) })
-      return new Map<string, string>()
-    }
+  type GitWorktree = { path: string; branch?: string }
 
-    const map = new Map<string, string>()
-    const entries = outputText(result.stdout)
-      .split("\n")
-      .map((line) => line.trim())
-      .reduce<{ path?: string; branch?: string }[]>((acc, line) => {
-        if (!line) return acc
-        if (line.startsWith("worktree ")) {
-          acc.push({ path: line.slice("worktree ".length).trim() })
-          return acc
-        }
-        const current = acc[acc.length - 1]
-        if (!current) return acc
-        if (line.startsWith("branch ")) {
-          current.branch = line
-            .slice("branch ".length)
-            .trim()
-            .replace(/^refs\/heads\//, "")
-        }
-        return acc
-      }, [])
+  async function readGitWorktrees(cwd: string): Promise<GitWorktree[]> {
+    let result = await git(["worktree", "list", "--porcelain", "-z"], { cwd, env: { LC_ALL: "C" } })
+    // Git versions before 2.36 only provide the line-delimited format.
+    const legacy = result.exitCode !== 0 && result.stderr.toString().includes("unknown switch `z'")
+    if (legacy) result = await git(["worktree", "list", "--porcelain"], { cwd })
+    if (result.exitCode !== 0) throw new Error(errorText(result) || "Failed to read git worktrees")
 
-    for (const entry of entries) {
-      if (!entry.path || !entry.branch) continue
-      map.set(await canonical(entry.path), entry.branch)
+    const separator = legacy ? "\n" : "\0"
+    const endOfRecord = separator + separator
+    const output = result.stdout.toString()
+    if (!output.endsWith(endOfRecord)) throw new Error("Incomplete git worktree list")
+    const branchPrefix = "branch refs/heads/"
+    return output
+      .slice(0, -endOfRecord.length)
+      .split(endOfRecord)
+      .map((record) => {
+        const [first, ...attributes] = record.split(separator)
+        if (!first.startsWith("worktree ") || first.length === "worktree ".length) {
+          throw new Error("Invalid git worktree record")
+        }
+        if (legacy) {
+          const bare = attributes[0] === "bare"
+          const hasHead = /^HEAD [0-9a-f]+$/.test(attributes[0] ?? "")
+          const hasBranchOrDetached = /^(?:branch refs\/heads\/\S+|detached)$/.test(attributes[1] ?? "")
+          const details = attributes.slice(bare ? 1 : 2)
+          if (
+            (!bare && !(hasHead && hasBranchOrDetached)) ||
+            details.some((field) => !/^(?:locked|prunable)(?: .*)?$/.test(field))
+          ) {
+            throw new Error("Ambiguous git worktree path in line-delimited output")
+          }
+        }
+        const ref = attributes.find((attribute) => attribute.startsWith(branchPrefix))
+        return { path: first.slice("worktree ".length), branch: ref?.slice(branchPrefix.length) }
+      })
+  }
+
+  async function findGitWorktree(cwd: string, directoryKey: string): Promise<GitWorktree | undefined> {
+    for (const entry of await readGitWorktrees(cwd)) {
+      if ((await canonical(entry.path)) === directoryKey) return entry
     }
-    return map
   }
 
   export async function list(): Promise<ListItem[]> {
     const sandboxes = await Project.sandboxes(Instance.project.id)
-    const branches = Instance.project.vcs === "git" ? await worktreeBranchMap() : new Map<string, string>()
+    const entries =
+      Instance.project.vcs === "git"
+        ? await readGitWorktrees(Instance.worktree).catch((error) => {
+            log.warn("failed to read git worktree list", { message: toErrorMessage(error) })
+            return []
+          })
+        : []
+    const branches = new Map<string, string>()
+    for (const entry of entries) {
+      if (entry.branch) branches.set(await canonical(entry.path), entry.branch)
+    }
     const items = await Promise.all(
       sandboxes.map(async (sandbox) => {
         // Compare against the branch map by the case-folded key, but RETURN the
@@ -639,7 +659,10 @@ export namespace Worktree {
     // owned mark is written under the same lock, right after git creates the
     // branch.
     const created = await withBranchLock(async () => {
-      if (resumable && (await worktreeBranchMap()).get(await canonical(info.directory)) === info.branch) {
+      if (
+        resumable &&
+        (await findGitWorktree(Instance.worktree, await canonical(info.directory)))?.branch === info.branch
+      ) {
         if (
           (await branchFlag(info.branch, OWNED_KEY)) !== "set" ||
           (await branchFlag(info.branch, BORROWED_KEY)) !== "absent"
@@ -972,33 +995,6 @@ export namespace Worktree {
         ),
       )
     ).filter((sandbox): sandbox is string => sandbox !== undefined)
-    const locate = async (stdout: Uint8Array | undefined) => {
-      const lines = outputText(stdout)
-        .split("\n")
-        .map((line) => line.trim())
-      const entries = lines.reduce<{ path?: string; branch?: string }[]>((acc, line) => {
-        if (!line) return acc
-        if (line.startsWith("worktree ")) {
-          acc.push({ path: line.slice("worktree ".length).trim() })
-          return acc
-        }
-        const current = acc[acc.length - 1]
-        if (!current) return acc
-        if (line.startsWith("branch ")) {
-          current.branch = line.slice("branch ".length).trim()
-        }
-        return acc
-      }, [])
-
-      return (async () => {
-        for (const item of entries) {
-          if (!item.path) continue
-          const key = await canonical(item.path)
-          if (key === directory) return item
-        }
-      })()
-    }
-
     const clean = (target: string) =>
       fs
         .rm(target, {
@@ -1045,14 +1041,11 @@ export namespace Worktree {
       }
     }
 
-    const list = await git(["worktree", "list", "--porcelain"], { cwd: repository })
-    if (list.exitCode !== 0) {
-      throw new RemoveFailedError({ message: errorText(list) || "Failed to read git worktrees" })
-    }
+    const entry = await findGitWorktree(repository, directory).catch((error) => {
+      throw new RemoveFailedError({ message: toErrorMessage(error) })
+    })
 
-    const entry = await locate(list.stdout)
-
-    if (!entry?.path) {
+    if (!entry) {
       // Git no longer lists this path. Only delete leftovers we own: a
       // recorded sandbox for this project, or an unregistered directory
       // under the per-project worktree root. A missing git entry must not
@@ -1084,15 +1077,10 @@ export namespace Worktree {
       cwd: repository,
     })
     if (removed.exitCode !== 0) {
-      const next = await git(["worktree", "list", "--porcelain"], { cwd: repository })
-      if (next.exitCode !== 0) {
-        throw new RemoveFailedError({
-          message: errorText(removed) || errorText(next) || "Failed to remove git worktree",
-        })
-      }
-
-      const stale = await locate(next.stdout)
-      if (stale?.path) {
+      const stale = await findGitWorktree(repository, directory).catch((error) => {
+        throw new RemoveFailedError({ message: errorText(removed) || toErrorMessage(error) })
+      })
+      if (stale) {
         throw new RemoveFailedError({ message: errorText(removed) || "Failed to remove git worktree" })
       }
     }
@@ -1101,7 +1089,7 @@ export namespace Worktree {
 
     // ADR-260: delete only a branch AX Code owns; a borrowed or unknown branch
     // belongs to the user.
-    const checkedOut = entry.branch?.replace(/^refs\/heads\//, "")
+    const checkedOut = entry.branch
     let branch: string | undefined
     let cleanupError: unknown
     let branchError: unknown
@@ -1159,40 +1147,14 @@ export namespace Worktree {
       throw new ResetFailedError({ message: "Cannot reset the primary workspace" })
     }
 
-    const list = await git(["worktree", "list", "--porcelain"], { cwd: Instance.worktree })
-    if (list.exitCode !== 0) {
-      throw new ResetFailedError({ message: errorText(list) || "Failed to read git worktrees" })
-    }
-
-    const lines = outputText(list.stdout)
-      .split("\n")
-      .map((line) => line.trim())
-    const entries = lines.reduce<{ path?: string; branch?: string }[]>((acc, line) => {
-      if (!line) return acc
-      if (line.startsWith("worktree ")) {
-        acc.push({ path: line.slice("worktree ".length).trim() })
-        return acc
-      }
-      const current = acc[acc.length - 1]
-      if (!current) return acc
-      if (line.startsWith("branch ")) {
-        current.branch = line.slice("branch ".length).trim()
-      }
-      return acc
-    }, [])
-
-    const entry = await (async () => {
-      for (const item of entries) {
-        if (!item.path) continue
-        const key = await canonical(item.path)
-        if (key === directory) return item
-      }
-    })()
-    if (!entry?.path) {
+    const entry = await findGitWorktree(Instance.worktree, directory).catch((error) => {
+      throw new ResetFailedError({ message: toErrorMessage(error) })
+    })
+    if (!entry) {
       throw new ResetFailedError({ message: "Worktree not found" })
     }
     // ADR-260: resetting would overwrite a branch that is not AX Code's.
-    if (!(await ownsBranch(entry.branch?.replace(/^refs\/heads\//, "")))) {
+    if (!(await ownsBranch(entry.branch))) {
       throw new ResetFailedError({ message: "Cannot reset a worktree whose branch AX Code did not create" })
     }
 
@@ -1255,10 +1217,6 @@ export namespace Worktree {
       if (fetch.exitCode !== 0) {
         throw new ResetFailedError({ message: errorText(fetch) || `Failed to fetch ${target}` })
       }
-    }
-
-    if (!entry.path) {
-      throw new ResetFailedError({ message: "Worktree path not found" })
     }
 
     const worktreePath = entry.path
