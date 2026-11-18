@@ -62,6 +62,7 @@ describe("SessionVerifications.load", () => {
       },
     ]
     const query = vi.spyOn(EventQuery, "bySession").mockReturnValue(events)
+    const strictQuery = vi.spyOn(EventQuery, "bySessionStrict").mockReturnValue(events)
     try {
       const original = SessionVerifications.resolveEnvelope(sessionID, aId)
       expect(original.run.callID).toBe("original")
@@ -73,14 +74,53 @@ describe("SessionVerifications.load", () => {
       expect(latest.run.callID).toBe("latest")
       expect(latest.verification.envelope.sourceState?.dirtyDigest).toBe("new")
       expect(SessionVerifications.runPolicyFailed(latest.run)).toBe(false)
+      expect(() => SessionVerifications.assertRunComplete(original.run)).not.toThrow()
+      expect(() => SessionVerifications.assertRunComplete(latest.run)).not.toThrow()
       expect(SessionVerifications.loadWithIds(sessionID).map((item) => item.envelopeId)).toEqual([aId, bId])
       expect(originalMembers).toHaveLength(3)
       expect(() => SessionVerifications.resolveEnvelope(sessionID, "0000000000000000")).toThrow(
         `no envelope with this id exists in session ${sessionID}`,
       )
     } finally {
+      strictQuery.mockRestore()
       query.mockRestore()
     }
+  })
+
+  test("citation resolution rejects truncated history while diagnostic loading remains available", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const good = buildEnvelope()
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "verify_project",
+          callID: "first",
+          status: "completed",
+          metadata: { verificationEnvelopes: [good] },
+          durationMs: 1,
+        })
+        for (let i = 0; i < EventQuery.BY_SESSION_LIMIT; i++) {
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: session.id,
+            tool: "noop",
+            callID: `filler-${i}`,
+            status: "completed",
+            durationMs: 1,
+          })
+        }
+        await Recorder.end(session.id)
+        expect(SessionVerifications.loadWithIds(session.id)).toHaveLength(1)
+        expect(() => SessionVerifications.resolveEnvelope(session.id, computeEnvelopeId(good))).toThrow(
+          EventQuery.TruncatedError,
+        )
+      },
+    })
   })
 
   test("detects policy failures only from explicit requiredChecksPassed false metadata", () => {
@@ -286,6 +326,9 @@ describe("SessionVerifications.load", () => {
         const envs = SessionVerifications.load(session.id)
         expect(envs).toHaveLength(1)
         expect(envs[0].source.runId).toBe(session.id)
+        const [run] = SessionVerifications.loadRunsWithIdsStrict(session.id)
+        expect(run.invalidEnvelopeCount).toBe(1)
+        expect(() => SessionVerifications.assertRunComplete(run)).toThrow(SessionVerifications.IncompleteRunError)
       },
     })
   })

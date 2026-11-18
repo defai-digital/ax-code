@@ -40,6 +40,7 @@ export const DebugApplyVerificationTool = Tool.define("debug_apply_verification"
     }
 
     const { run: verificationRun, verification } = SessionVerifications.resolveEnvelope(sessionID, args.envelopeId)
+    SessionVerifications.assertRunComplete(verificationRun)
     const verificationSet = verificationRun.verificationSet.map((item) => item.envelope)
     const verificationEnvelopeIds = verificationRun.verificationSet.map((item) => item.envelopeId)
     const verificationPolicyFailed = SessionVerifications.runPolicyFailed(verificationRun)

@@ -192,6 +192,34 @@ describe("DebugApplyVerificationTool", () => {
     })
   })
 
+  test("rejects an incomplete verification run instead of confirming its valid passed sibling", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { hypothesisId } = await emitDebugHypothesis(session.id, tmp.path)
+        const current = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "")
+        const passed = verificationEnvelope(session.id, "passed", [], current)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "verify_project",
+          callID: "incomplete-verification",
+          status: "completed",
+          metadata: { verificationEnvelopes: [passed, { schemaVersion: 99 }] },
+          durationMs: 1,
+        })
+        Recorder.flushAll()
+        const tool = await DebugApplyVerificationTool.init()
+        await expect(
+          tool.execute({ hypothesisId, envelopeId: computeEnvelopeId(passed) }, fakeCtx(session.id)),
+        ).rejects.toThrow(/incomplete verification run/i)
+        expect(SessionDebug.load(session.id).hypotheses[0].status).toBe("active")
+      },
+    })
+  })
+
   test("passed verification confirms the hypothesis and appends the envelope ref", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

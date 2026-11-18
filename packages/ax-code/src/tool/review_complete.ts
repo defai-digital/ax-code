@@ -36,38 +36,34 @@ function selectFindings(sessionID: SessionID, ids: string[] | undefined) {
   })
 }
 
-function selectEnvelopes(sessionID: SessionID, ids: string[] | undefined): VerificationEnvelopeWithId[] {
-  const envelopes = SessionVerifications.loadWithIds(sessionID)
-  const byId = new Map(envelopes.map((item) => [item.envelopeId, item]))
-  if (!ids) {
-    return envelopes
-      .filter((item) => item.envelope.workflow === "review")
-      .map((item) => ({ envelopeId: item.envelopeId, envelope: item.envelope }))
+function selectVerification(
+  sessionID: SessionID,
+  ids: string[] | undefined,
+): { envelopes: VerificationEnvelopeWithId[]; policyFailed: boolean } {
+  if (ids?.length === 0) return { envelopes: [], policyFailed: false }
+  const entries = SessionVerifications.loadRunsWithIdsStrict(sessionID).flatMap((run) =>
+    run.envelopes.map((item) => ({ item, run })),
+  )
+  const byId = new Map(entries.map((entry) => [entry.item.envelopeId, entry]))
+  const selected = ids
+    ? [...new Set(ids)].map((id) => {
+        const entry = byId.get(id)
+        if (!entry) {
+          throw new Error(`verificationEnvelopeIds references an unknown verification envelope id: ${id}`)
+        }
+        if (entry.item.envelope.workflow !== "review") {
+          throw new Error(
+            `verificationEnvelopeIds references a ${entry.item.envelope.workflow} envelope id: ${id}. review_complete only accepts review workflow envelopes; run verify_project with workflow: "review".`,
+          )
+        }
+        return entry
+      })
+    : entries.filter(({ item }) => item.envelope.workflow === "review")
+  for (const { run } of selected) SessionVerifications.assertRunComplete(run)
+  return {
+    envelopes: selected.map(({ item }) => ({ envelopeId: item.envelopeId, envelope: item.envelope })),
+    policyFailed: selected.some(({ run }) => SessionVerifications.runPolicyFailed(run)),
   }
-  return [...new Set(ids)].map((id) => {
-    const item = byId.get(id)
-    if (!item) {
-      throw new Error(`verificationEnvelopeIds references an unknown verification envelope id: ${id}`)
-    }
-    if (item.envelope.workflow !== "review") {
-      throw new Error(
-        `verificationEnvelopeIds references a ${item.envelope.workflow} envelope id: ${id}. review_complete only accepts review workflow envelopes; run verify_project with workflow: "review".`,
-      )
-    }
-    return { envelopeId: item.envelopeId, envelope: item.envelope }
-  })
-}
-
-function selectedVerificationPolicyFailed(sessionID: SessionID, ids: string[] | undefined): boolean {
-  const selected = ids ? new Set(ids) : undefined
-  for (const run of SessionVerifications.loadRunsWithIds(sessionID)) {
-    const hasSelectedReviewEnvelope = run.envelopes.some((item) => {
-      if (item.envelope.workflow !== "review") return false
-      return !selected || selected.has(item.envelopeId)
-    })
-    if (hasSelectedReviewEnvelope && SessionVerifications.runPolicyFailed(run)) return true
-  }
-  return false
 }
 
 function validateDecision(input: {
@@ -166,8 +162,10 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
     const policyRules = await Policy.loadReviewRules({ worktree: Instance.worktree, cwd: Instance.directory })
     const policyFilter = applyPolicyFilter(selectedFindings, policyRules)
     const findings = policyFilter.kept
-    const verificationEnvelopes = selectEnvelopes(sessionID, args.verificationEnvelopeIds)
-    const verificationPolicyFailed = selectedVerificationPolicyFailed(sessionID, args.verificationEnvelopeIds)
+    const { envelopes: verificationEnvelopes, policyFailed: verificationPolicyFailed } = selectVerification(
+      sessionID,
+      args.verificationEnvelopeIds,
+    )
     const source = {
       tool: "review_complete",
       version: Installation.VERSION,

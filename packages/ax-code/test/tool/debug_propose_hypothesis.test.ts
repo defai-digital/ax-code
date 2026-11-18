@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
+import { EventQuery } from "../../src/replay/query"
 import { Instance } from "../../src/project/instance"
 import { DebugProposeHypothesisTool } from "../../src/tool/debug_propose_hypothesis"
 import {
@@ -447,6 +448,75 @@ describe("DebugProposeHypothesisTool", () => {
           fakeCtx(session.id),
         )
         expect(result.metadata.debugHypothesis.evidenceRefs).toContain(envelopeId)
+      },
+    })
+  })
+
+  test("an active hypothesis backed only by debug evidence does not require verification history", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId, evidenceId } = await emitCaseAndEvidence(session.id, tmp.path, "diagnostic", "log content")
+        const strict = vi.spyOn(EventQuery, "bySessionStrict").mockImplementation(() => {
+          throw new Error("verification history unavailable")
+        })
+        try {
+          const tool = await DebugProposeHypothesisTool.init()
+          const result = await tool.execute(
+            { caseId, claim: "Diagnostic hypothesis", evidenceRefs: [evidenceId] },
+            fakeCtx(session.id),
+          )
+          expect(result.metadata.debugHypothesis.status).toBe("active")
+          expect(strict).not.toHaveBeenCalled()
+        } finally {
+          strict.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("confirmation rejects a malformed sibling in the cited verification run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { caseId } = await emitCaseAndEvidence(session.id, tmp.path, "incomplete run", "log content")
+        const passed: VerificationEnvelope = {
+          schemaVersion: 1,
+          workflow: "debug",
+          scope: { kind: "workspace" },
+          command: { runner: "test", argv: [], cwd: tmp.path },
+          result: { name: "tests", type: "test", passed: true, status: "passed", issues: [], duration: 1 },
+          structuredFailures: [],
+          artifactRefs: [],
+          source: { tool: "verify_project", version: Installation.VERSION, runId: session.id },
+          sourceState: await currentSourceState(Instance.worktree, Instance.project.vcs ?? ""),
+        }
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "verify_project",
+          callID: "incomplete-verification",
+          status: "completed",
+          metadata: { verificationEnvelopes: [passed, { schemaVersion: 99 }] },
+          durationMs: 1,
+        })
+        Recorder.flushAll()
+        const tool = await DebugProposeHypothesisTool.init()
+        await expect(
+          tool.execute(
+            {
+              caseId,
+              claim: "Cannot confirm from incomplete evidence",
+              evidenceRefs: [computeEnvelopeId(passed)],
+              status: "confirmed",
+            },
+            fakeCtx(session.id),
+          ),
+        ).rejects.toThrow(/incomplete verification run/i)
       },
     })
   })

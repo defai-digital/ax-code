@@ -54,6 +54,7 @@ function validateConfirmedStatus(input: {
   const referencedRuns = input.verificationRuns.filter((run) =>
     run.envelopes.some((item) => input.evidenceRefs.includes(item.envelopeId)),
   )
+  for (const run of referencedRuns) SessionVerifications.assertRunComplete(run)
   if (
     referencedRuns.length > 0 &&
     referencedRuns.every(
@@ -138,7 +139,8 @@ export const DebugProposeHypothesisTool = Tool.define("debug_propose_hypothesis"
       debugAnalyzeReferences: SessionDebug.debugAnalyzeReferences(sessionID),
       sessionID,
     })
-    const verificationRuns = SessionVerifications.loadRunsWithIds(sessionID)
+    const needsVerificationLookup = args.status === "confirmed" || evidenceRefs.some((id) => !evidenceIds.has(id))
+    const verificationRuns = needsVerificationLookup ? SessionVerifications.loadRunsWithIdsStrict(sessionID) : []
     const verificationEnvelopes = verificationRuns.flatMap((run) => run.envelopes)
     if (evidenceRefs.length > 0) {
       const envelopeIds = new Set(verificationEnvelopes.map((item) => item.envelopeId))

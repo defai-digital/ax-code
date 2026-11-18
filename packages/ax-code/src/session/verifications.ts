@@ -1,9 +1,12 @@
+import { NamedError } from "@ax-code/util/error"
+import z from "zod"
 import {
   computeEnvelopeId,
   type VerificationEnvelope,
   VerificationEnvelopeSchema,
 } from "../quality/verification-envelope"
 import { EventQuery } from "../replay/query"
+import type { ReplayEvent } from "../replay/event"
 import { Log } from "../util/log"
 import type { SessionID } from "./schema"
 import { isRecord } from "./record"
@@ -29,6 +32,28 @@ export namespace SessionVerifications {
     envelopes: LoadedEnvelope[]
     /** All validated members of the original run, including re-emitted siblings. */
     verificationSet: LoadedEnvelope[]
+    invalidEnvelopeCount: number
+  }
+
+  export const IncompleteRunError = NamedError.create(
+    "VerificationRunIncompleteError",
+    z.object({
+      tool: z.string(),
+      callID: z.string(),
+      invalidEnvelopeCount: z.number().int().positive(),
+      message: z.string(),
+    }),
+  )
+
+  /** Diagnostic readers retain valid entries; authoritative consumers require the whole run. */
+  export function assertRunComplete(run: LoadedEnvelopeRun): void {
+    if (run.invalidEnvelopeCount === 0) return
+    throw new IncompleteRunError({
+      tool: run.tool,
+      callID: run.callID,
+      invalidEnvelopeCount: run.invalidEnvelopeCount,
+      message: `Incomplete verification run ${run.tool}/${run.callID}: ${run.invalidEnvelopeCount} malformed envelope(s). Run verify_project again before using this run as authoritative evidence.`,
+    })
   }
 
   export function runPolicyFailed(run: Pick<LoadedEnvelopeRun, "metadata">): boolean {
@@ -38,7 +63,15 @@ export namespace SessionVerifications {
   }
 
   export function loadRunsWithIds(sessionID: SessionID): LoadedEnvelopeRun[] {
-    const events = EventQuery.bySession(sessionID)
+    return parseRuns(sessionID, EventQuery.bySession(sessionID))
+  }
+
+  /** Refuse a capped history slice that could hide a newer run or its policy. */
+  export function loadRunsWithIdsStrict(sessionID: SessionID): LoadedEnvelopeRun[] {
+    return parseRuns(sessionID, EventQuery.bySessionStrict(sessionID))
+  }
+
+  function parseRuns(sessionID: SessionID, events: readonly ReplayEvent[]): LoadedEnvelopeRun[] {
     // Dedup by computeEnvelopeId (deterministic hash of envelope content).
     // Re-running refactor_apply on the same plan in the same session
     // produces identical envelopes; keep one so consumers and sidebar counts
@@ -57,9 +90,11 @@ export namespace SessionVerifications {
       if (!Array.isArray(candidate)) continue
       const envelopes: LoadedEnvelope[] = []
       const localIds = new Set<string>()
+      let invalidEnvelopeCount = 0
       for (let i = 0; i < candidate.length; i++) {
         const parsed = VerificationEnvelopeSchema.safeParse(candidate[i])
         if (!parsed.success) {
+          invalidEnvelopeCount++
           log.warn("dropping malformed verificationEnvelope metadata entry", {
             sessionID,
             tool: event.tool,
@@ -83,6 +118,7 @@ export namespace SessionVerifications {
           metadata: event.metadata,
           envelopes: owned,
           verificationSet: envelopes,
+          invalidEnvelopeCount,
         })
     }
     return runs.reverse()
@@ -93,7 +129,7 @@ export namespace SessionVerifications {
     sessionID: SessionID,
     envelopeId: string,
   ): { run: LoadedEnvelopeRun; verification: LoadedEnvelope } {
-    for (const run of loadRunsWithIds(sessionID)) {
+    for (const run of loadRunsWithIdsStrict(sessionID)) {
       const verification = run.envelopes.find((item) => item.envelopeId === envelopeId)
       if (verification) return { run, verification }
     }

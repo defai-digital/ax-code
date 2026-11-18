@@ -28,6 +28,13 @@ passing run or replace an original sibling's stale fingerprint with a later one.
 The loader owns citation resolution for debug application and repair. Envelope identities and recorded events stay
 unchanged.
 
+Diagnostic loading retains valid envelopes from a malformed run, and audit reports label those checks `INCOMPLETE`.
+Debug confirmation, verification application, and review completion reject selected runs with malformed members.
+Authoritative selection uses the strict replay query so a capped history cannot hide newer evidence or policy.
+Diagnostic reports disclose capped history. Active hypotheses based only on captured debug evidence and reviews with
+an explicitly empty verification selection do not require verification history; neither path confirms a fix or approves
+a review.
+
 ## Blessed TUI path
 
 The supported runtime stack is:

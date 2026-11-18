@@ -286,6 +286,7 @@ export namespace AuditReport {
       return run.envelopes.map(({ envelope }) => ({
         command: formatVerificationCommand(envelope),
         passed: envelope.result.passed && !policyFailed,
+        incomplete: run.invalidEnvelopeCount > 0,
       }))
     })
 
@@ -295,6 +296,10 @@ export namespace AuditReport {
     // Titles are usually generated from the first prompt, so redact them like the goal.
     lines.push(`# Audit Report: ${redactAuditText(info.title).replace(/\n/g, " ")}`)
     lines.push("")
+    if (EventQuery.count(sessionID) > EventQuery.BY_SESSION_LIMIT) {
+      lines.push("> Event history is truncated. This diagnostic report may omit newer events and verification results.")
+      lines.push("")
+    }
 
     // Goal
     lines.push("## Goal")
@@ -374,7 +379,7 @@ export namespace AuditReport {
       lines.push("## Validation")
       lines.push("")
       for (const v of validations) {
-        const icon = v.passed ? "PASS" : "FAIL"
+        const icon = v.incomplete ? "INCOMPLETE" : v.passed ? "PASS" : "FAIL"
         lines.push(`- **${icon}:** ${v.command}`)
       }
       lines.push("")

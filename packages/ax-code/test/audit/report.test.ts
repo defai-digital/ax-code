@@ -34,6 +34,74 @@ function envelope(input: {
 }
 
 describe("AuditReport.generate", () => {
+  test("discloses capped event history while keeping diagnostic verification entries available", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "verify_project",
+          callID: "old-check",
+          status: "completed",
+          metadata: {
+            verificationEnvelopes: [
+              envelope({ sessionID: session.id, name: "typecheck", type: "typecheck", passed: true }),
+            ],
+          },
+          durationMs: 1,
+        })
+        for (let i = 0; i < EventQuery.BY_SESSION_LIMIT; i++) {
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: session.id,
+            tool: "noop",
+            callID: `filler-${i}`,
+            status: "completed",
+            durationMs: 1,
+          })
+        }
+        await Recorder.end(session.id)
+        const report = await AuditReport.generate(session.id)
+        expect(report).toContain("Event history is truncated")
+        expect(report).toContain("may omit newer events and verification results")
+        expect(report).toContain("- **PASS:** typecheck: typecheck")
+      },
+    })
+  })
+
+  test("shows valid diagnostic checks from malformed runs as incomplete", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "verify_project",
+          callID: "incomplete",
+          status: "completed",
+          metadata: {
+            verificationEnvelopes: [
+              envelope({ sessionID: session.id, name: "typecheck", type: "typecheck", passed: true }),
+              { schemaVersion: 99 },
+            ],
+          },
+          durationMs: 1,
+        })
+        await Recorder.end(session.id)
+        const report = await AuditReport.generate(session.id)
+        expect(report).toContain("- **INCOMPLETE:** typecheck: typecheck")
+        expect(report).not.toContain("- **PASS:** typecheck: typecheck")
+      },
+    })
+  })
+
   test("formats malformed report timestamps without throwing", () => {
     expect(formatAuditReportTimestamp(Date.parse("2026-04-01T00:00:00Z"))).toBe("2026-04-01 00:00:00")
     expect(formatAuditReportTimestamp(Number.NaN)).toBe("1970-01-01 00:00:00")

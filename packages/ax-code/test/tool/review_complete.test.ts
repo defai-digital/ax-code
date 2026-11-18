@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
+import { EventQuery } from "../../src/replay/query"
 import * as fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -316,6 +317,68 @@ describe("ReviewCompleteTool", () => {
         if (!result.metadata.policy) throw new Error("missing policy metadata")
         expect(result.metadata.policy.warnings).toEqual(["required_categories missing from kept findings: security"])
         expect(result.output).toContain("Policy warning: required_categories missing from kept findings: security")
+      },
+    })
+  })
+
+  test("an explicitly empty verification selection remains inconclusive without reading verification history", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const strict = vi.spyOn(EventQuery, "bySessionStrict").mockImplementation(() => {
+          throw new Error("verification history unavailable")
+        })
+        try {
+          const tool = await ReviewCompleteTool.init()
+          const result = await tool.execute(
+            { summary: "Review without verification.", verificationEnvelopeIds: [] },
+            ctx(session.id),
+          )
+          expect(result.metadata.reviewResult.decision).toBe("needs_verification")
+          expect(result.metadata.reviewResult.verificationEnvelopeIds).toEqual([])
+          expect(strict).not.toHaveBeenCalled()
+        } finally {
+          strict.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("rejects an incomplete verification run instead of approving its valid passed sibling", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+        const passed = envelope(session.id)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "verify_project",
+          callID: "incomplete-verification",
+          status: "completed",
+          metadata: { verificationEnvelopes: [passed, { schemaVersion: 99 }] },
+          durationMs: 1,
+        })
+        Recorder.flushAll()
+        const tool = await ReviewCompleteTool.init()
+        await expect(
+          tool.execute(
+            { summary: "Review has incomplete evidence.", verificationEnvelopeIds: [computeEnvelopeId(passed)] },
+            ctx(session.id),
+          ),
+        ).rejects.toThrow(/incomplete verification run/i)
+        const healthy = { ...passed, command: { ...passed.command, argv: ["clean-check"] } }
+        emitEnvelope(session.id, healthy)
+        Recorder.flushAll()
+        const result = await tool.execute(
+          { summary: "Explicitly use a separate healthy run.", verificationEnvelopeIds: [computeEnvelopeId(healthy)] },
+          ctx(session.id),
+        )
+        expect(result.metadata.reviewResult.decision).toBe("approve")
       },
     })
   })

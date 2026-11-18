@@ -51,7 +51,10 @@ function envelope(overrides: Partial<VerificationEnvelope> = {}): VerificationEn
   }
 }
 
-function mockEvents(candidate: VerificationEnvelope): ReturnType<typeof EventQuery.bySession> {
+function mockEvents(
+  candidate: VerificationEnvelope,
+  siblings: readonly unknown[] = [],
+): ReturnType<typeof EventQuery.bySession> {
   return [
     {
       type: "tool.result",
@@ -59,7 +62,7 @@ function mockEvents(candidate: VerificationEnvelope): ReturnType<typeof EventQue
       tool: "verify_project",
       callID: "call_verify",
       status: "completed",
-      metadata: { verificationEnvelopes: [candidate] },
+      metadata: { verificationEnvelopes: [candidate, ...siblings] },
       durationMs: 1,
     },
   ]
@@ -73,7 +76,7 @@ describe("DebugRepairFromEnvelopeTool", () => {
   })
 
   test("creates a bounded repair brief for localized structured failures", async () => {
-    spies.push(vi.spyOn(EventQuery, "bySession").mockReturnValue(mockEvents(envelope())))
+    spies.push(vi.spyOn(EventQuery, "bySessionStrict").mockReturnValue(mockEvents(envelope())))
 
     const tool = await DebugRepairFromEnvelopeTool.init()
     const result = await tool.execute({ envelopeId }, ctx())
@@ -88,7 +91,7 @@ describe("DebugRepairFromEnvelopeTool", () => {
 
   test("rejects envelopes that are not localized repair candidates", async () => {
     const candidate = envelope({ structuredFailures: [] })
-    spies.push(vi.spyOn(EventQuery, "bySession").mockReturnValue(mockEvents(candidate)))
+    spies.push(vi.spyOn(EventQuery, "bySessionStrict").mockReturnValue(mockEvents(candidate)))
 
     const tool = await DebugRepairFromEnvelopeTool.init()
     const result = await tool.execute({ envelopeId: computeEnvelopeId(candidate) }, ctx())
@@ -101,12 +104,19 @@ describe("DebugRepairFromEnvelopeTool", () => {
   })
 
   test("rejects fabricated envelope ids", async () => {
-    spies.push(vi.spyOn(EventQuery, "bySession").mockReturnValue(mockEvents(envelope())))
+    spies.push(vi.spyOn(EventQuery, "bySessionStrict").mockReturnValue(mockEvents(envelope())))
 
     const tool = await DebugRepairFromEnvelopeTool.init()
 
     await expect(tool.execute({ envelopeId: "fedcba0987654321" }, ctx())).rejects.toThrow(
       /unknown VerificationEnvelope/,
     )
+  })
+  test("valid failure evidence remains available for diagnostic repair when a sibling is malformed", async () => {
+    spies.push(vi.spyOn(EventQuery, "bySessionStrict").mockReturnValue(mockEvents(envelope(), [{ schemaVersion: 99 }])))
+    const tool = await DebugRepairFromEnvelopeTool.init()
+    const result = await tool.execute({ envelopeId }, ctx())
+    expect(result.metadata.decision.handoff).toBe(true)
+    expect(result.metadata.brief).toContain("Repair brief: typecheck")
   })
 })
