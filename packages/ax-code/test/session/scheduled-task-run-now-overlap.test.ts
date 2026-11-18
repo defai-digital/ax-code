@@ -199,6 +199,59 @@ describe("ScheduledTask run-now overlap protection", () => {
     })
   })
 
+  test.each([
+    { trigger: "run-now", replace: false },
+    { trigger: "due", replace: false },
+    { trigger: "due", replace: true },
+  ])(
+    "settles a $trigger dispatch when the saved checkout is unavailable (replaced=$replace)",
+    async ({ trigger, replace }) => {
+      await using tmp = await tmpdir({ git: true })
+      await using linked = await tmpdir()
+      execFileSync("git", ["worktree", "add", "--detach", linked.path], { cwd: tmp.path, stdio: "pipe" })
+      const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue(undefined as never)
+      const now = Date.now()
+      const task = await Instance.provide({
+        directory: linked.path,
+        fn: () =>
+          ScheduledTask.create({
+            title: "Unavailable checkout",
+            prompt: "Use the saved workspace.",
+            schedule: { type: "once", runAt: now + 60_000 },
+          }),
+      })
+      await Instance.disposeAll()
+      execFileSync("git", ["worktree", "remove", linked.path], { cwd: tmp.path, stdio: "pipe" })
+      if (replace) await fs.mkdir(linked.path)
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          expect(Instance.project.id).toBe(task.projectID)
+          const dispatched =
+            trigger === "run-now"
+              ? await ScheduledTask.runNow(task.id)
+              : (await ScheduledTask.runDue(now + 7 * 60_000))[0]
+          const queueID = dispatched?.queueItem?.id
+          if (!queueID) throw new Error("Expected a scheduled queue item")
+          await vi.waitFor(async () => {
+            const item = await TaskQueue.get(queueID)
+            expect(item).toMatchObject({
+              status: "failed",
+              directory: linked.path,
+              error: expect.stringContaining("workspace"),
+            })
+            expect((await ScheduledTask.listRuns({ taskID: task.id }))[0]).toMatchObject({
+              status: "failed",
+              queueID,
+            })
+            expect(prompt).not.toHaveBeenCalled()
+          })
+        },
+      })
+    },
+  )
+
   test("rejects workflow run-now when the saved workspace is gone", async () => {
     await using tmp = await tmpdir({ git: true })
     const directory = path.join(tmp.path, "workspace")

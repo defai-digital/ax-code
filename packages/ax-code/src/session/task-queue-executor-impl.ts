@@ -5,6 +5,7 @@ import { Permission } from "@/permission"
 import { Instance } from "@/project/instance"
 import { Question } from "@/question"
 import { EventQuery } from "@/replay/query"
+import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { KeyedSerialQueue } from "@/util/queue"
 import { uniqueItems, uniqueStrings } from "@/util/string-list"
@@ -125,13 +126,23 @@ export namespace TaskQueueExecutor {
   export async function start(item: TaskQueue.Info): Promise<TaskQueue.Info> {
     const prepared = TaskQueue.repairScheduledWorkspace(item)
     if (prepared.directory === Instance.directory) return startInWorkspace(prepared)
-    return Instance.provide({
-      directory: prepared.directory,
-      fn: () => startInWorkspace(prepared),
-    })
+    const automation = prepared.kind === "automation"
+    if (!automation || (await Filesystem.isDir(prepared.directory))) {
+      const started = await Instance.provide({
+        directory: prepared.directory,
+        fn: () => {
+          if (automation && Instance.project.id !== prepared.projectID) return undefined
+          return startInWorkspace(prepared)
+        },
+      })
+      if (started) return started
+    }
+    // Keep the claim in the owning project so an unavailable automation
+    // workspace fails both the queue item and the scheduler's run record.
+    return startInWorkspace(prepared, false)
   }
 
-  async function startInWorkspace(item: TaskQueue.Info): Promise<TaskQueue.Info> {
+  async function startInWorkspace(item: TaskQueue.Info, workspaceAvailable = true): Promise<TaskQueue.Info> {
     ensureSessionBlockObservers()
     const execution = queueItemExecution(item)
     if (!execution) return item
@@ -146,6 +157,7 @@ export namespace TaskQueueExecutor {
       // A legacy automation may already be bound to a session in the wrong
       // checkout. Let execution record that failure without waiting on it.
       if (
+        workspaceAvailable &&
         sessionID &&
         (latest.kind !== "automation" || (await scheduledSessionMatchesWorkspace(sessionID))) &&
         (await shouldWaitForIdle(sessionID, latest.id))
