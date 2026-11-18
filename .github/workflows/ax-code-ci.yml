@@ -164,6 +164,8 @@ jobs:
       - run: pnpm --dir packages/ax-code-diff-wasm run build
       - run: pnpm --dir packages/ax-code-diff-wasm run typecheck
       - run: pnpm --dir packages/ax-code-diff-wasm test
+      - name: Use primary Ubuntu archive for browser dependencies
+        run: sudo -- "$(command -v node)" --import tsx .github/scripts/use-ubuntu-archive.ts
       - run: pnpm --dir packages/ax-code-diff-wasm exec playwright-core install --with-deps chromium firefox webkit
       - name: Verify offline tarball consumers and browser workers
         run: |
