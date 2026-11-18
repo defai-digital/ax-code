@@ -125,6 +125,7 @@ import { createAutonomousTextContinuation, createUserMessage } from "./prompt/pr
 import { permissionRulesetFromLegacyTools } from "./prompt/prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt/prompt-runtime-policy"
 import { createPromptRunState } from "./prompt/prompt-run-state"
+import { cancelPromptTree, type PromptCancelOptions } from "./prompt/prompt-cancellation"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt/prompt-cache"
 import { detectTurnExecutionProfile, type TurnExecutionProfile } from "./prompt/prompt-turn-profile"
 import { resolveTurnPromptPolicy, supportsCompactTurn } from "./prompt/prompt-turn-policy"
@@ -339,64 +340,17 @@ export namespace SessionPrompt {
   // the terminal outcome itself. Cancelling it here would race the executor
   // and turn every successful run into "cancelled".
   // Archived-history maintenance clears status without idle events or user hooks.
-  export async function cancel(
-    sessionID: SessionID,
-    opts?: { interrupt?: boolean; cancelQueueItems?: boolean; silent?: boolean },
-  ) {
+  export async function cancel(sessionID: SessionID, opts: PromptCancelOptions = {}): Promise<void> {
     log.info("cancel", { command: "session.prompt.cancel", status: "started", sessionID })
-    const isGenuineInterrupt = opts?.interrupt === true
-    // Pause remaining followup rows BEFORE runState.cancel marks the session
-    // idle (ADR-106 D5). Once idle is set, the queue executor's busy check
-    // (sessionPromptBusy -> SessionPrompt.assertNotBusy) sees the session as
-    // free to admit a waiting followup; pausing after that point would race a
-    // followup starting during the very abort meant to stop it.
-    if (isGenuineInterrupt) await pausePendingFollowups(sessionID)
-    await runState.cancel(sessionID, { interrupted: isGenuineInterrupt, silent: opts?.silent })
-    await cancelDescendantSessions(sessionID, {
-      cancelQueueItems: opts?.cancelQueueItems,
-      preservePausedFollowups: isGenuineInterrupt,
-    })
-    if (!isGenuineInterrupt) return
-    // User lifecycle hooks (Interrupt) — observational only, fire-and-forget:
-    // hook latency/failures must never delay or break cancellation.
+    const interrupted = await cancelPromptTree(sessionID, opts, runState)
+    if (!interrupted || !opts.interrupt) return
+    // User lifecycle hooks (Interrupt) are observational. Hook latency and
+    // failure must not delay cancellation.
     void import("@/hooks/lifecycle")
       .then(({ LifecycleHooks }) =>
         LifecycleHooks.runForWorkspace({ event: "Interrupt", sessionID, args: { sessionID } }),
       )
       .catch((error) => log.warn("Interrupt lifecycle hooks failed", { sessionID, error }))
-  }
-
-  async function pausePendingFollowups(sessionID: SessionID) {
-    const { TaskQueue } = await import("./task-queue")
-    await TaskQueue.pauseFollowupsForSession(sessionID).catch((error) => {
-      log.warn("failed to pause pending follow-ups before session abort", { sessionID, error })
-    })
-  }
-
-  async function cancelDescendantSessions(
-    sessionID: SessionID,
-    opts?: { cancelQueueItems?: boolean; preservePausedFollowups?: boolean },
-  ) {
-    const { Session } = await import(".")
-    const { TaskQueue } = await import("./task-queue")
-    const children = await Session.children(sessionID).catch((error) => {
-      log.warn("failed to list child sessions during cancel cascade", { sessionID, error })
-      return []
-    })
-    for (const child of children) {
-      await cancel(child.id).catch((error) => {
-        log.warn("failed to cancel child session", { sessionID, childID: child.id, error })
-      })
-    }
-    // Genuine stops only. Loop-completion cleanup passes cancelQueueItems:false
-    // because the session's active items belong to the queue executor driving
-    // that very loop — it settles them to their real outcome.
-    if (opts?.cancelQueueItems === false) return
-    await TaskQueue.cancelForSession(sessionID, "Cancelled because the parent session stopped.", {
-      preservePausedFollowups: opts?.preservePausedFollowups,
-    }).catch((error) => {
-      log.warn("failed to cancel task queue items during session abort", { sessionID, error })
-    })
   }
 
   export const LoopInput = LoopInputSchema

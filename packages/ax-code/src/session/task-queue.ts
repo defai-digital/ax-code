@@ -51,11 +51,13 @@ export namespace TaskQueue {
   }
 
   export const nonterminalStatuses: readonly Status[] = Status.options.filter((status) => !isTerminalStatus(status))
+  const PAUSABLE_FOLLOWUP_STATUSES = ["queued", "waiting_for_idle"] as const
 
   const taskToolSource = "task"
   const queuePayloadJson = sql`case when json_valid(${TaskQueueTable.payload}) then ${TaskQueueTable.payload} end`
   const pendingDeliveryStatuses = ["pending", "delivering"] as const
   const WORKFLOW_CLEANUP_KEY = "workflowTimeoutCleanup"
+  const RETRY_GENERATION_KEY = "retryGeneration"
 
   export function isTaskSubagent(item: Info): boolean {
     return item.kind === "subagent" && item.payload["source"] === taskToolSource
@@ -65,10 +67,13 @@ export namespace TaskQueue {
   export type Payload = z.infer<typeof Payload>
 
   function enqueuePayload(payload: Payload): Payload {
-    if (!Object.hasOwn(payload, WORKFLOW_CLEANUP_KEY) && !Object.hasOwn(payload, EXECUTOR_OWNER_KEY)) return payload
+    if (![WORKFLOW_CLEANUP_KEY, EXECUTOR_OWNER_KEY, RETRY_GENERATION_KEY].some((key) => Object.hasOwn(payload, key))) {
+      return payload
+    }
     const clean = { ...payload }
     delete clean[WORKFLOW_CLEANUP_KEY]
     delete clean[EXECUTOR_OWNER_KEY]
+    delete clean[RETRY_GENERATION_KEY]
     return clean
   }
 
@@ -214,17 +219,31 @@ export namespace TaskQueue {
     }
   }
 
-  // Every read and payload-write of a queue row funnels through these two
-  // helpers so the not-found message stays identical across callers.
+  function queueItemNotFound(id: TaskQueueID): InstanceType<typeof NotFoundError> {
+    return new NotFoundError({ message: `Task queue item not found: ${id}` })
+  }
+
+  function findRow(db: Database.TxOrDb, id: TaskQueueID): typeof TaskQueueTable.$inferSelect | undefined {
+    return db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+  }
+
   function readRow(db: Database.TxOrDb, id: TaskQueueID): typeof TaskQueueTable.$inferSelect {
-    const row = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
-    if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+    const row = findRow(db, id)
+    if (!row) throw queueItemNotFound(id)
     return row
+  }
+
+  function findProjectItem(db: Database.TxOrDb, id: TaskQueueID): Info | undefined {
+    const row = findRow(db, id)
+    if (!row) return undefined
+    const item = fromRow(row)
+    assertProjectItem(item)
+    return item
   }
 
   function writeRow(db: Database.TxOrDb, id: TaskQueueID, updates: Partial<typeof TaskQueueTable.$inferInsert>): Info {
     const row = db.update(TaskQueueTable).set(updates).where(eq(TaskQueueTable.id, id)).returning().get()
-    if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+    if (!row) throw queueItemNotFound(id)
     return fromRow(row)
   }
 
@@ -788,16 +807,7 @@ export namespace TaskQueue {
       if (current.status === status || !ACTIVE_QUEUE_EXECUTION_STATUSES.some((value) => value === current.status)) {
         return undefined
       }
-      const before = executorOwner(observed.payload)
-      const after = executorOwner(current.payload)
-      if (
-        before?.generation !== after?.generation ||
-        before?.pid !== after?.pid ||
-        before?.boot !== after?.boot ||
-        before?.time !== after?.time
-      ) {
-        return undefined
-      }
+      if (!sameQueueAttempt(observed, current)) return undefined
       return writeStatus(db, current, { status })
     })
     if (changed) await publishStatus(changed)
@@ -1532,19 +1542,13 @@ export namespace TaskQueue {
 
   export async function cancel(id: TaskQueueID): Promise<Info> {
     const current = await get(id)
-    assertActionStatus(current, "cancel", [
-      "queued",
-      "waiting_for_idle",
-      "paused",
-      "blocked_permission",
-      "blocked_question",
-    ])
-    return transitionStatus({
-      id,
-      action: "cancel",
-      fromStatuses: ["queued", "waiting_for_idle", "paused", "blocked_permission", "blocked_question"],
-      status: "cancelled",
-    })
+    const allowed = nonterminalStatuses.filter((status) => status !== "running")
+    assertActionStatus(current, "cancel", allowed)
+    const result = await cancelObserved(current, { allowed })
+    if (!result) throw queueItemNotFound(id)
+    if (!result.sameAttempt) throw changedExecutionError(id, "cancel")
+    if (result.item.status !== "cancelled") assertActionStatus(result.item, "cancel", allowed)
+    return result.item
   }
 
   /**
@@ -1704,108 +1708,141 @@ export namespace TaskQueue {
     return keepBeating
   }
 
-  export async function stop(id: TaskQueueID): Promise<Info> {
-    const current = await get(id)
-    if (current.status === "completed" || current.status === "failed" || current.status === "cancelled") {
-      throw new HTTPException(409, {
-        message: `Cannot stop task queue item ${id} while it is ${current.status}.`,
-      })
-    }
+  function sameQueueAttempt(observed: Info, current: Info): boolean {
     if (
-      current.sessionID &&
-      (current.status === "running" || current.status === "blocked_permission" || current.status === "blocked_question")
+      observed.sessionID !== current.sessionID ||
+      observed.time.started !== current.time.started ||
+      observed.payload[RETRY_GENERATION_KEY] !== current.payload[RETRY_GENERATION_KEY]
     ) {
-      const { SessionPrompt } = await import("./prompt")
-      await SessionPrompt.cancel(current.sessionID, { interrupt: true })
+      return false
     }
-    // Re-read after the interrupt and branch on the fresh status, not the stale
-    // pre-cancel read. The executor settles an interrupted item to a terminal
-    // status (failed via its catch block, or cancelled via the block observers);
-    // that outcome is authoritative. Blindly writing "cancelled" here would
-    // clobber a completed or already-recorded row and falsify its outcome.
-    const after = await get(id)
-    if (after.status === "completed" || after.status === "failed" || after.status === "cancelled") return after
-    if (after.status === "running") {
-      // The executor can still settle between the re-read above and this write.
-      // Guard the terminal target so a concurrent completion or failure wins
-      // over the operator cancel instead of being overwritten.
-      return setStatus({ id, status: "cancelled", error: "Stopped by operator.", onlyFromActive: true })
-    }
-    return cancel(id)
+    const before = executorOwner(observed.payload)
+    const after = executorOwner(current.payload)
+    if (before?.generation || after?.generation) return before?.generation === after?.generation
+    // Legacy executions can carry a backend stamp without an attempt UUID.
+    // Owner changes on waiting rows are bookkeeping until execution begins.
+    if (observed.time.started === undefined) return true
+    return before?.pid === after?.pid && before?.boot === after?.boot && before?.time === after?.time
   }
 
-  /**
-   * Pause queued/waiting-for-idle followup rows for a session (ADR-106 D5:
-   * "user interruption pauses remaining interactive follow-ups before the
-   * current session becomes idle"). Only the followup kind is affected —
-   * other queue kinds keep their existing interrupt behavior — and only rows
-   * that have not started yet; a followup already running or blocked is the
-   * turn being interrupted itself, not a "remaining" one.
-   */
-  export async function pauseFollowupsForSession(sessionID: SessionID): Promise<Info[]> {
-    const items = await list({ sessionID, statuses: ["queued", "waiting_for_idle"], limit: 500 })
+  function changedExecutionError(id: TaskQueueID, action: "stop" | "cancel" | "remove"): HTTPException {
+    return new HTTPException(409, { message: `Cannot ${action} task queue item ${id}: its execution changed.` })
+  }
+
+  function matchesCancellation(observed: Info): boolean {
+    return SessionShard.storeForProject(Instance.project.id).use((db) => {
+      const current = findProjectItem(db, observed.id)
+      return !!current && nonterminalStatuses.includes(current.status) && sameQueueAttempt(observed, current)
+    })
+  }
+
+  async function cancelObserved(
+    observed: Info,
+    options: { allowed: readonly Status[]; error?: string; preservePausedFollowups?: boolean },
+  ): Promise<{ item: Info; changed: boolean; sameAttempt: boolean } | undefined> {
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      const current = findProjectItem(db, observed.id)
+      if (!current) return undefined
+      const sameAttempt = sameQueueAttempt(observed, current)
+      if (
+        !sameAttempt ||
+        !options.allowed.includes(current.status) ||
+        (options.preservePausedFollowups && current.kind === "followup" && current.status === "paused")
+      ) {
+        return { item: current, changed: false, sameAttempt }
+      }
+      return {
+        item: writeStatus(db, current, { status: "cancelled", error: options.error }),
+        changed: true,
+        sameAttempt,
+      }
+    })
+    if (result?.changed) await publishStatus(result.item)
+    return result
+  }
+
+  export async function stop(id: TaskQueueID): Promise<Info> {
+    const observed = await get(id)
+    assertActionStatus(observed, "stop", nonterminalStatuses)
+    return stopObserved(observed)
+  }
+
+  async function stopObserved(observed: Info): Promise<Info> {
+    const active = ACTIVE_QUEUE_EXECUTION_STATUSES.some((status) => status === observed.status)
+    if (observed.sessionID && active) {
+      const { SessionPrompt } = await import("./prompt")
+      const shouldInterrupt = () => matchesCancellation(observed)
+      if (shouldInterrupt()) await SessionPrompt.cancel(observed.sessionID, { interrupt: true, shouldInterrupt })
+    }
+    // The interrupt can await descendant cleanup and session metadata. Settle
+    // only the attempt observed before it started, preserving a terminal
+    // outcome the executor already recorded for that attempt.
+    const result = await cancelObserved(observed, {
+      allowed: nonterminalStatuses,
+      error: active ? "Stopped by operator." : undefined,
+    })
+    if (!result) throw queueItemNotFound(observed.id)
+    if (!result.sameAttempt) throw changedExecutionError(observed.id, "stop")
+    return result.item
+  }
+
+  export async function captureSessionCancellation(sessionID: SessionID): Promise<Info[]> {
+    return list({ sessionID, statuses: [...nonterminalStatuses] })
+  }
+
+  /** Park the followups selected for interruption before publishing idle. */
+  export async function pauseFollowupsForSession(sessionID: SessionID, targets?: readonly Info[]): Promise<Info[]> {
+    const items = targets ?? (await list({ sessionID, kind: "followup", statuses: [...PAUSABLE_FOLLOWUP_STATUSES] }))
     const paused: Info[] = []
-    for (const item of items) {
-      if (item.kind !== "followup") continue
-      try {
-        // Best-effort bulk pause: a row the executor claimed in the gap
-        // between the list() read above and this write no longer matches its
-        // snapshotted status, and transitionStatus throws a 409 for that —
-        // skip it rather than aborting the rest of the batch.
-        paused.push(
-          await transitionStatus({ id: item.id, action: "pause", fromStatuses: [item.status], status: "paused" }),
-        )
-      } catch (error) {
-        if (!(error instanceof HTTPException)) throw error
-        log.warn("skipped pausing a followup that raced past its snapshotted status", {
-          taskQueueID: item.id,
-          sessionID,
-          error,
-        })
+    for (const observed of items) {
+      if (
+        observed.sessionID !== sessionID ||
+        observed.kind !== "followup" ||
+        !PAUSABLE_FOLLOWUP_STATUSES.some((status) => status === observed.status)
+      )
+        continue
+      const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+        const current = findProjectItem(db, observed.id)
+        if (
+          !current ||
+          !sameQueueAttempt(observed, current) ||
+          !PAUSABLE_FOLLOWUP_STATUSES.some((status) => status === current.status)
+        ) {
+          return undefined
+        }
+        return writeStatus(db, current, { status: "paused" })
+      })
+      if (changed) {
+        await publishStatus(changed)
+        paused.push(changed)
       }
     }
     return paused
   }
 
-  // Every status a cancellation may still need to stop. `list()` is capped and
-  // ordered by position, so a long-lived session's finished rows can outnumber
-  // active ones and fill the window; selecting by status keeps the cap on rows
-  // that can actually be cancelled.
-  const CANCELLABLE_STATUSES: readonly Status[] = [
-    "queued",
-    "waiting_for_idle",
-    "running",
-    "blocked_permission",
-    "blocked_question",
-    "paused",
-  ]
-
   export async function cancelForSession(
     sessionID: SessionID,
     error?: string,
-    options?: { preservePausedFollowups?: boolean },
+    options?: { preservePausedFollowups?: boolean; targets?: readonly Info[] },
   ): Promise<Info[]> {
-    const items = await list({ sessionID, statuses: [...CANCELLABLE_STATUSES], limit: 500 })
+    const targets = options?.targets ?? (await captureSessionCancellation(sessionID))
     const cancelled: Info[] = []
-    for (const item of items) {
-      if (item.status === "completed" || item.status === "failed" || item.status === "cancelled") continue
-      // A followup paused just now by pauseFollowupsForSession (or by an
-      // earlier explicit user pause) is preserved, not cancelled, when the
-      // caller is honoring the abort-pauses-followups contract: resume stays
-      // explicit, and the row must survive to be resumed later.
-      if (options?.preservePausedFollowups && item.kind === "followup" && item.status === "paused") continue
-      // The row may have settled between the list() snapshot and this write.
-      // onlyFromActive keeps a completed/failed outcome authoritative instead
-      // of rewriting it as cancelled.
-      const result = await setStatus({
-        id: item.id,
-        status: "cancelled",
+    for (const observed of targets) {
+      if (observed.sessionID !== sessionID) continue
+      const result = await cancelObserved(observed, {
+        allowed: nonterminalStatuses,
         error: error ?? "Cancelled because the parent session stopped.",
-        onlyFromActive: true,
+        preservePausedFollowups: options?.preservePausedFollowups,
       })
-      if (result.status === "cancelled") cancelled.push(result)
+      if (result?.changed) cancelled.push(result.item)
     }
     return cancelled
+  }
+
+  function requeuedPayload(payload: Payload): Payload {
+    const next: Payload = { ...payload, [RETRY_GENERATION_KEY]: randomUUID() }
+    delete next[EXECUTOR_OWNER_KEY]
+    return next
   }
 
   /**
@@ -1820,8 +1857,7 @@ export namespace TaskQueue {
       assertProjectItem(current)
       assertActionStatus(current, "retry", ["failed", "cancelled"])
 
-      const payload: Payload = { ...current.payload }
-      delete payload[EXECUTOR_OWNER_KEY]
+      const payload = requeuedPayload(current.payload)
       delete payload[INTERRUPTION_REASON_KEY]
       // Clear steer audit keys so a later cancellation cannot be mistaken
       // for an admitted steer that needs replay after a restart.
@@ -1930,6 +1966,7 @@ export namespace TaskQueue {
               .update(TaskQueueTable)
               .set({
                 status: "queued",
+                payload: requeuedPayload(row.payload),
                 error: null,
                 time_started: null,
                 time_completed: null,
@@ -2046,7 +2083,7 @@ export namespace TaskQueue {
               continue
             }
           }
-          const payload = { ...row.payload }
+          const payload = requeuedPayload(row.payload)
           delete payload["steeredInto"]
           delete payload["steeredAt"]
           delete payload["steeredAppliedAt"]
@@ -2150,6 +2187,7 @@ export namespace TaskQueue {
 
   const serverOwnedEditFields = [
     EXECUTOR_OWNER_KEY,
+    RETRY_GENERATION_KEY,
     WORKFLOW_CLEANUP_KEY,
     "controlDeliveries",
     "resultDelivery",
@@ -2287,7 +2325,7 @@ export namespace TaskQueue {
         .where(and(eq(TaskQueueTable.id, id), inArray(TaskQueueTable.status, SEND_NOW_STATUSES)))
         .returning()
         .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      if (!row) throw queueItemNotFound(id)
       return { item: fromRow(row), shifted }
     })
     if (raced) {
@@ -2302,18 +2340,23 @@ export namespace TaskQueue {
   }
 
   export async function remove(id: TaskQueueID): Promise<boolean> {
-    const item = await get(id)
-    // Deletion stays allowed for an executing row, but it must interrupt the
-    // work first: deleting the row alone reports success while the executor
-    // keeps running and can no longer record its outcome.
-    if (item.status === "running" || item.status === "blocked_permission" || item.status === "blocked_question") {
-      await stop(id)
+    const observed = await get(id)
+    if (ACTIVE_QUEUE_EXECUTION_STATUSES.some((status) => status === observed.status)) {
+      await stopObserved(observed)
     }
-    const removed = (await get(id).catch(() => item)) ?? item
-    SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+    const removed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      const current = findProjectItem(db, id)
+      if (!current) return undefined
+      if (
+        !sameQueueAttempt(observed, current) ||
+        ACTIVE_QUEUE_EXECUTION_STATUSES.some((status) => status === current.status)
+      ) {
+        throw changedExecutionError(id, "remove")
+      }
       db.delete(TaskQueueTable).where(eq(TaskQueueTable.id, id)).run()
+      return current
     })
-    publishDeleted(removed)
+    if (removed) publishDeleted(removed)
     return true
   }
 

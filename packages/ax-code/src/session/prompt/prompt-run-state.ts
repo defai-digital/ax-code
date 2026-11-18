@@ -78,6 +78,10 @@ export function createPromptRunState() {
       return s[sessionID].abort.signal
     },
 
+    cancellationSignal(sessionID: SessionID): AbortSignal | undefined {
+      return state()[sessionID]?.abort.signal
+    },
+
     enqueue(sessionID: SessionID, callback: PromptRunCallback) {
       const entry = state()[sessionID]
       if (!entry) return false

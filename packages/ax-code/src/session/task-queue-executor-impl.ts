@@ -54,7 +54,7 @@ type QueueExecution = {
   cancel?: (current: TaskQueue.Info | undefined, options?: CancelOptions) => Promise<unknown>
 }
 
-type CancelOptions = { cancelQueueItems?: boolean }
+type CancelOptions = { cancelQueueItems?: boolean; shouldInterrupt?: () => boolean }
 
 const DEFAULT_EXECUTION_TIMEOUT_MS = 72 * 60 * 60 * 1_000
 // How long a timed-out execution's cancellation may take to settle before the
@@ -328,7 +328,7 @@ async function runWithExecutionWatchdog(
         sessionID: item.sessionID,
       })
       void Promise.resolve()
-        .then(() => cancelAttempt(execution, TaskQueue.executionItem(attempt), { cancelQueueItems: false }))
+        .then(() => cancelAttempt(execution, attempt, TaskQueue.executionItem(attempt), { cancelQueueItems: false }))
         .catch((error) => {
           log.warn("failed to cancel abandoned task queue execution", {
             taskID: item.id,
@@ -364,7 +364,7 @@ async function runWithExecutionWatchdog(
       // Reject first: synchronous cancellation can resolve the original run.
       reject(error)
       if (!current) {
-        voidSafe(() => cancelAttempt(execution, undefined), "task-queue.retired-timeout")
+        voidSafe(() => cancelAttempt(execution, attempt, undefined), "task-queue.retired-timeout")
         return
       }
       const cleanup = timeoutCleanup()
@@ -377,7 +377,7 @@ async function runWithExecutionWatchdog(
           const current = TaskQueue.executionItem(attempt)
           const options =
             abandoned || !current || !isActiveQueueStatus(current.status) ? { cancelQueueItems: false } : undefined
-          return cancelAttempt(execution, current, options)
+          return cancelAttempt(execution, attempt, current, options)
         })
         .catch((error) => {
           log.warn("failed to cancel timed-out task queue execution", {
@@ -423,15 +423,21 @@ async function runWithExecutionWatchdog(
   }
 }
 
-async function cancelAttempt(execution: QueueExecution, current: TaskQueue.Info | undefined, options?: CancelOptions) {
-  if (execution.cancel) return execution.cancel(current, options)
-  return cancelSession(current, options)
+async function cancelAttempt(
+  execution: QueueExecution,
+  attempt: TaskQueue.ExecutionAttempt,
+  current: TaskQueue.Info | undefined,
+  options?: CancelOptions,
+) {
+  const scoped = current
+    ? { ...options, shouldInterrupt: () => TaskQueue.executionItem(attempt) !== undefined }
+    : options
+  if (execution.cancel) return execution.cancel(current, scoped)
+  return cancelSession(current, scoped)
 }
 
 async function cancelSession(current: TaskQueue.Info | undefined, options?: CancelOptions) {
-  if (!current?.sessionID) return
-  if (options) await SessionPrompt.cancel(current.sessionID, options)
-  else await SessionPrompt.cancel(current.sessionID)
+  if (current?.sessionID) await SessionPrompt.cancel(current.sessionID, options)
 }
 
 async function syncScheduledTaskOutcome(item: TaskQueue.Info, attempt: TaskQueue.ExecutionAttempt, error?: unknown) {

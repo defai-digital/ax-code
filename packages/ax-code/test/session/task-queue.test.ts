@@ -177,7 +177,7 @@ describe("TaskQueue", () => {
           })
           expect(edited.title).toBe("Run edited desktop follow-up")
           expect(edited.agent).toBe("review")
-          expect(edited.payload).toEqual({ prompt: "continue with the edited queue item" })
+          expect(edited.payload).toEqual({ ...retried.payload, prompt: "continue with the edited queue item" })
           expect(edited.priority).toBe(3)
 
           await TaskQueue.setStatus({ id: created.id, status: "running" })
@@ -186,7 +186,10 @@ describe("TaskQueue", () => {
           // Deleting a running row must interrupt the work before removing it.
           const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
           expect(await TaskQueue.remove(created.id)).toBe(true)
-          expect(cancel).toHaveBeenCalledWith(session.id, { interrupt: true })
+          expect(cancel).toHaveBeenCalledWith(
+            session.id,
+            expect.objectContaining({ interrupt: true, shouldInterrupt: expect.any(Function) }),
+          )
           expect(await TaskQueue.list({ sessionID: session.id })).toEqual([])
           await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -1395,7 +1398,7 @@ describe("TaskQueue", () => {
 
             await TaskQueue.cancel(item.id)
             await vi.advanceTimersByTimeAsync(30_000)
-            expect(cancel).toHaveBeenCalledWith(session.id, { cancelQueueItems: false })
+            expect(cancel).toHaveBeenCalledWith(session.id, expect.objectContaining({ cancelQueueItems: false }))
 
             release()
             await vi.advanceTimersByTimeAsync(0)
@@ -1449,7 +1452,7 @@ describe("TaskQueue", () => {
             await vi.advanceTimersByTimeAsync(30_000)
             // The automation has a cancel handler; it must receive the scoped
             // option instead of falling back to the session-wide cascade.
-            expect(cancel).toHaveBeenCalledWith(session.id, { cancelQueueItems: false })
+            expect(cancel).toHaveBeenCalledWith(session.id, expect.objectContaining({ cancelQueueItems: false }))
             expect((await TaskQueue.get(waiting.id)).status).toBe("queued")
 
             release()
@@ -1506,7 +1509,7 @@ describe("TaskQueue", () => {
               await vi.advanceTimersByTimeAsync(Math.min(timeoutMs, 30_000))
               // The automation has a cancel handler; it must receive the scoped
               // option instead of falling back to the session-wide cascade.
-              expect(cancel).toHaveBeenCalledWith(session.id, { cancelQueueItems: false })
+              expect(cancel).toHaveBeenCalledWith(session.id, expect.objectContaining({ cancelQueueItems: false }))
               expect(["queued", "waiting_for_idle"]).toContain((await TaskQueue.get(waiting.id)).status)
               await vi.advanceTimersByTimeAsync(Math.max(0, timeoutMs - 30_000))
               expect(cancel).toHaveBeenCalledTimes(timeoutMs > 30_000 ? 2 : 1)
@@ -1652,7 +1655,10 @@ describe("TaskQueue", () => {
           const failed = await TaskQueue.get(item.id)
           expect(failed.error).toContain("timed out after 1000 ms")
           expect(failed.time.completed).toBeDefined()
-          expect(cancel).toHaveBeenCalledWith(session.id)
+          expect(cancel).toHaveBeenCalledWith(
+            session.id,
+            expect.objectContaining({ shouldInterrupt: expect.any(Function) }),
+          )
           // The execution ignores cancellation, so cleanup waits out its grace;
           // that wait must not hold a one-shot process open.
           await vi.waitFor(() => expect(graceTimers.length).toBeGreaterThan(0))
@@ -1931,7 +1937,10 @@ describe("TaskQueue", () => {
           })
           await TaskQueueExecutor.start(first)
           await waitForQueueStatus(first.id, "failed")
-          expect(cancel).toHaveBeenCalledWith(session.id)
+          expect(cancel).toHaveBeenCalledWith(
+            session.id,
+            expect.objectContaining({ shouldInterrupt: expect.any(Function) }),
+          )
           successor = await TaskQueue.enqueue({
             sessionID: session.id,
             kind: "prompt",
@@ -1992,7 +2001,10 @@ describe("TaskQueue", () => {
           await waitForQueueStatus(first.id, "failed")
           const failed = await TaskQueue.get(first.id)
           expect(failed.sessionID).toBeDefined()
-          expect(cancel).toHaveBeenCalledWith(failed.sessionID)
+          expect(cancel).toHaveBeenCalledWith(
+            failed.sessionID,
+            expect.objectContaining({ shouldInterrupt: expect.any(Function) }),
+          )
           successor = await TaskQueue.enqueue({
             sessionID: failed.sessionID,
             kind: "prompt",
