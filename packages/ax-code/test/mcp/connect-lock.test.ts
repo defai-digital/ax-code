@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest"
-import { readFile, writeFile } from "node:fs/promises"
+import { writeFile } from "node:fs/promises"
 import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 
@@ -138,15 +138,36 @@ vi.mock("@modelcontextprotocol/client/stdio", () => ({
   },
 }))
 
+// Stdio transports in this suite never spawn. Their synthetic PIDs must stay
+// inside the mocks, including during teardown and registry cleanup.
+vi.mock("../../src/shell/shell", async (importOriginal) => {
+  const { Shell } = await importOriginal<typeof import("../../src/shell/shell")>()
+  return { Shell: { ...Shell, killTree: vi.fn(async () => undefined) } }
+})
+
+vi.mock("../../src/runtime/process-registry", async (importOriginal) => {
+  const { ProcessRegistry } = await importOriginal<typeof import("../../src/runtime/process-registry")>()
+  return {
+    ProcessRegistry: {
+      ...ProcessRegistry,
+      register: vi.fn(async () => undefined),
+      unregister: vi.fn(async () => undefined),
+    },
+  }
+})
+
 const { MCP } = await import("../../src/mcp/index")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
 const { Config } = await import("../../src/config/config")
 const { McpTrust } = await import("../../src/mcp/trust")
+const { Shell } = await import("../../src/shell/shell")
+const killTree = vi.mocked(Shell.killTree)
 
 afterEach(async () => {
   resetGate()
   await Instance.disposeAll()
+  killTree.mockReset()
 })
 
 test("disconnect waits for an in-flight connect before disabling the MCP server", async () => {
@@ -535,6 +556,9 @@ test("connect({ force: true }) replaces a connected client", async () => {
       await forced
 
       expect(first.closed).toBe(true)
+      expect(killTree).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ pid: (first.transport as { pid: number }).pid }),
+      )
       const replacement = (await MCP.clients()).reconnect!
       expect(replacement).not.toBe(first)
       expect((await MCP.status()).reconnect).toEqual({ status: "connected" })
@@ -549,12 +573,32 @@ test("connect({ force: true }) replaces a connected client", async () => {
 })
 
 test("MCP client teardown kills process trees before closing clients", async () => {
-  const source = await readFile(new URL("../../src/mcp/impl.ts", import.meta.url), "utf-8")
+  await using tmp = await tmpdir({ git: true })
 
-  expect(source).toContain("await killProcessTree(pid)")
-  expect(source).toContain("rememberClientTransport(client, transport)")
-  expect(source).toContain('await closeIfPossible(client, name, "disconnecting")')
-  expect(source).toContain('await closeIfPossible(existingClient, name, "replacing existing client")')
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const add = MCP.add("teardown", { type: "local", command: ["mock-mcp-server"] })
+      await connectStarted
+      releaseConnect()
+      await add
+
+      const client = createdClients[0]
+      if (!client) throw new Error("Expected an established MCP client")
+      let closedAtKill: boolean | undefined
+      killTree.mockImplementationOnce(async () => {
+        closedAtKill = client.closed
+      })
+
+      await MCP.disconnect("teardown")
+
+      expect(killTree).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ pid: (client.transport as { pid: number }).pid }),
+      )
+      expect(closedAtKill).toBe(false)
+      expect(client.closed).toBe(true)
+    },
+  })
 })
 
 test("clients added dynamically clear stale state when they close outside the instance context", async () => {
@@ -618,7 +662,6 @@ test("tool-change notifications retain owner context and no-op after disposal", 
 
 test("tools closes and kills MCP clients when listTools fails", async () => {
   await using tmp = await tmpdir({ git: true })
-  const source = await readFile(new URL("../../src/mcp/impl.ts", import.meta.url), "utf-8")
 
   await Instance.provide({
     directory: tmp.path,
@@ -637,7 +680,12 @@ test("tools closes and kills MCP clients when listTools fails", async () => {
 
       const clients = await MCP.clients()
       expect(clients["failing-tools"]).toBeUndefined()
-      expect(source).toContain('await closeIfPossible(client, clientName, "listTools failed")')
+      const client = createdClients[0]
+      if (!client) throw new Error("Expected an established MCP client")
+      expect(client.closed).toBe(true)
+      expect(killTree).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ pid: (client.transport as { pid: number }).pid }),
+      )
     },
   })
 })
