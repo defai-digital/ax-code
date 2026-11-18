@@ -594,36 +594,40 @@ describe("TaskQueue", () => {
     })
   })
 
-  test("requeues scheduled automation interrupted before session creation", async () => {
-    await using tmp = await tmpdir({ git: true })
+  test.each([undefined, true])(
+    "requeues an interrupted scheduled prompt with template metadata %s",
+    async (template) => {
+      await using tmp = await tmpdir({ git: true })
 
-    const item = await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const item = await TaskQueue.enqueue({
-          kind: "automation",
-          title: "Scheduled prompt",
-          sourceTaskID: "sch_restart_recovery",
-          payload: {
-            scheduledTaskID: "sch_restart_recovery",
-            prompt: "Continue after restart.",
-          },
-        })
-        await TaskQueue.setStatus({ id: item.id, status: "running" })
-        return item
-      },
-    })
+      const item = await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const item = await TaskQueue.enqueue({
+            kind: "automation",
+            title: "Scheduled prompt",
+            sourceTaskID: "sch_restart_recovery",
+            payload: {
+              scheduledTaskID: "sch_restart_recovery",
+              prompt: "Continue after restart.",
+              workflowTemplateID: template,
+            },
+          })
+          await TaskQueue.setStatus({ id: item.id, status: "running" })
+          return item
+        },
+      })
 
-    const recovered = await restartInstance(tmp.path)
+      const recovered = await restartInstance(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        expect(recovered.requeued.map((candidate) => candidate.id)).toContain(item.id)
-        expect((await TaskQueue.get(item.id)).status).toBe("queued")
-      },
-    })
-  })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          expect(recovered.requeued.map((candidate) => candidate.id)).toContain(item.id)
+          expect((await TaskQueue.get(item.id)).status).toBe("queued")
+        },
+      })
+    },
+  )
 
   // 2026-09-14: a payload edit must not erase executor ownership. waiting_for_idle
   // liveness is derived solely from payload.executorOwner, so an API edit that
@@ -1910,6 +1914,37 @@ describe("TaskQueue", () => {
           start.mockRestore()
           cancel.mockRestore()
         }
+      },
+    })
+  })
+
+  test("records prompt completion when legacy template metadata is malformed", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const task = await ScheduledTask.create({
+          title: "Legacy scheduled prompt",
+          prompt: "Check the build.",
+          schedule: { type: "once", runAt: Date.now() + 60_000 },
+        })
+        const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementationOnce(async (item) => item)
+        const { queueItem } = await ScheduledTask.runNow(task.id)
+        start.mockRestore()
+        if (!queueItem) throw new Error("Expected a scheduled queue item")
+        const legacy = await TaskQueue.edit({
+          id: queueItem.id,
+          payload: { ...queueItem.payload, workflowTemplateID: true },
+        })
+
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue(undefined as never)
+        await TaskQueueExecutor.start(legacy)
+        await waitForQueueStatus(legacy.id, "completed")
+        expect(prompt).toHaveBeenCalledTimes(1)
+        await vi.waitFor(async () => {
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "completed" }])
+          expect((await ScheduledTask.get(task.id)).status).toBe("disabled")
+        })
       },
     })
   })

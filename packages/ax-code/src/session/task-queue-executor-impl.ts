@@ -27,7 +27,7 @@ import {
 } from "./prompt/prompt-runtime-policy"
 import { TaskQueue } from "./task-queue"
 import { ACTIVE_QUEUE_EXECUTION_STATUSES as activeStatuses, workflowMaxParallel } from "./workflow-queue-admission"
-import { ScheduledTaskID, type SessionID, type TaskQueueID } from "./schema"
+import type { ScheduledTaskID, SessionID, TaskQueueID } from "./schema"
 import type {
   WorkflowArtifactID,
   WorkflowChildID,
@@ -462,16 +462,17 @@ async function cancelSession(current: TaskQueue.Info | undefined, options?: Canc
 }
 
 async function syncScheduledTaskOutcome(item: TaskQueue.Info, attempt: TaskQueue.ExecutionAttempt, error?: unknown) {
-  const scheduledTaskID = item.payload["scheduledTaskID"]
-  if (typeof scheduledTaskID !== "string" || !scheduledTaskID.startsWith("sch_")) return
+  const automation = TaskQueue.readScheduledAutomation(item)
+  if (!automation) return
+  const { taskID: scheduledTaskID, workflowTemplateID } = automation
   // Workflow dispatch completion is not workflow completion. The workflow
   // queue bridge records the terminal outcome after its children settle.
-  if (item.payload["workflowTemplateID"] && item.status === "completed") return
+  if (workflowTemplateID && item.status === "completed") return
   await import("./scheduled-task")
     .then(({ ScheduledTask }) => {
       if (!TaskQueue.executionItem(attempt)) return
       return ScheduledTask.recordQueueOutcome(
-        ScheduledTaskID.make(scheduledTaskID),
+        scheduledTaskID,
         item.status === "completed" ? "completed" : "failed",
         error,
         item.id,
@@ -869,8 +870,9 @@ async function runScheduledPromptAutomation(
 }
 
 function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | undefined {
-  const scheduledTaskID = item.payload["scheduledTaskID"]
-  if (typeof scheduledTaskID !== "string" || !scheduledTaskID.startsWith("sch_")) return undefined
+  const automation = TaskQueue.readScheduledAutomation(item)
+  if (!automation) return undefined
+  const { taskID: scheduledTaskID, workflowTemplateID } = automation
   let workflowRunID: WorkflowRunID | undefined
   const execution: QueueExecution = {
     sessionID: item.sessionID,
@@ -882,8 +884,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
     run: async (attempt) => {
       const { ScheduledTask } = await import("./scheduled-task")
       return ScheduledTask.runInWorkspace(item, async () => {
-        const workflowTemplateID = item.payload["workflowTemplateID"]
-        if (typeof workflowTemplateID === "string" && workflowTemplateID.length > 0) {
+        if (workflowTemplateID) {
           const { WorkflowTemplate } = await import("../workflow/template")
           const { WorkflowScheduler } = await import("../workflow/scheduler")
           const run = await WorkflowTemplate.createRun({
@@ -903,7 +904,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
             })
             throw error
           }
-          await ScheduledTask.recordWorkflowRun(ScheduledTaskID.make(scheduledTaskID), run.id)
+          await ScheduledTask.recordWorkflowRun(scheduledTaskID, run.id)
           const detail = await WorkflowScheduler.start(run.id, item.payload["workflowStartOptions"] ?? {}).catch(
             async (error) => {
               // start() can throw before it flips the run to `running`; cancel the
@@ -924,7 +925,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
           return detail
         }
 
-        return runScheduledPromptAutomation(item, ScheduledTaskID.make(scheduledTaskID), execution, attempt)
+        return runScheduledPromptAutomation(item, scheduledTaskID, execution, attempt)
       })
     },
   }

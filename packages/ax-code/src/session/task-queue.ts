@@ -374,11 +374,22 @@ export namespace TaskQueue {
     return insertEnqueued(db, parsed, options.now ?? Date.now(), options)
   }
 
+  export function readScheduledAutomation(item: {
+    kind: string
+    payload: Payload
+  }): { taskID: ScheduledTaskID; workflowTemplateID?: string } | undefined {
+    if (item.kind !== "automation") return undefined
+    const taskID = ScheduledTaskID.zod.safeParse(item.payload["scheduledTaskID"])
+    if (!taskID.success) return undefined
+    const template = item.payload["workflowTemplateID"]
+    return { taskID: taskID.data, workflowTemplateID: typeof template === "string" && template ? template : undefined }
+  }
+
   /** Repair the directory of pending items written before scheduled claims stored the task's workspace. */
   export function repairScheduledWorkspace(item: Info): Info {
-    if (item.kind !== "automation" || (item.status !== "queued" && item.status !== "waiting_for_idle")) return item
-    const taskID = ScheduledTaskID.zod.safeParse(item.payload["scheduledTaskID"])
-    if (!taskID.success || taskID.data !== item.sourceTaskID) return item
+    if (item.status !== "queued" && item.status !== "waiting_for_idle") return item
+    const taskID = readScheduledAutomation(item)?.taskID
+    if (!taskID || taskID !== item.sourceTaskID) return item
     assertProjectItem(item)
 
     // An item payload can name any task. Trust only the queue ID recorded
@@ -391,7 +402,7 @@ export namespace TaskQueue {
         .where(
           and(
             eq(ScheduledTaskRunTable.queue_id, item.id),
-            eq(ScheduledTaskRunTable.task_id, taskID.data),
+            eq(ScheduledTaskRunTable.task_id, taskID),
             eq(ScheduledTaskRunTable.project_id, item.projectID),
             eq(ScheduledTaskTable.project_id, item.projectID),
           ),
@@ -404,10 +415,9 @@ export namespace TaskQueue {
       const current = fromRow(readRow(db, item.id))
       assertProjectItem(current)
       if (
-        current.kind !== "automation" ||
         (current.status !== "queued" && current.status !== "waiting_for_idle") ||
-        current.sourceTaskID !== taskID.data ||
-        current.payload["scheduledTaskID"] !== taskID.data
+        current.sourceTaskID !== taskID ||
+        readScheduledAutomation(current)?.taskID !== taskID
       )
         return { item: current, changed: false }
       const saved = workspace(db)
@@ -2092,12 +2102,9 @@ export namespace TaskQueue {
           }
           const workflowItem = hasWorkflowPayload(row.payload)
           const liveTaskSubagent = isLiveTaskSubagentPayload(row.payload) && row.kind === "subagent"
+          const scheduled = readScheduledAutomation(row)
           const scheduledBeforePrompt =
-            row.status === "running" &&
-            row.kind === "automation" &&
-            row.session_id === null &&
-            typeof row.payload["scheduledTaskID"] === "string" &&
-            !row.payload["workflowTemplateID"]
+            row.status === "running" && row.session_id === null && scheduled && !scheduled.workflowTemplateID
           // Workflow children blocked on permission/question hold their pending
           // request only in memory, so a restart leaves them unresolvable. Requeue
           // them (like running children) rather than preserving a permanent wedge.
@@ -2287,12 +2294,12 @@ export namespace TaskQueue {
     // at claim. Recording the outcome lets the failure policy re-arm the task;
     // without it the task wedges active and never fires again.
     for (const item of changed.failed) {
-      const scheduledTaskID = item.kind === "automation" ? item.payload["scheduledTaskID"] : undefined
-      if (typeof scheduledTaskID !== "string" || !scheduledTaskID.startsWith("sch_")) continue
+      const scheduledTaskID = readScheduledAutomation(item)?.taskID
+      if (!scheduledTaskID) continue
       try {
         const { ScheduledTask } = await import("./scheduled-task")
         await ScheduledTask.recordQueueOutcome(
-          ScheduledTaskID.make(scheduledTaskID),
+          scheduledTaskID,
           "failed",
           new Error(item.error ?? "Task interrupted by backend restart"),
           item.id,
@@ -2324,12 +2331,7 @@ export namespace TaskQueue {
   }
 
   function resumesOnRestart(item: Info) {
-    return (
-      (item.kind === "automation" &&
-        typeof item.payload["scheduledTaskID"] === "string" &&
-        item.payload["scheduledTaskID"].startsWith("sch_")) ||
-      item.payload["resumeOnRestart"] === true
-    )
+    return readScheduledAutomation(item) !== undefined || item.payload["resumeOnRestart"] === true
   }
 
   const serverOwnedEditFields = [
