@@ -6,7 +6,6 @@ import { createRequire } from "module"
 import os from "os"
 import z from "zod"
 import { toErrorMessage } from "@/util/error-message"
-import { uniqueStrings } from "@/util/string-list"
 import { mergeDeep, pipe, unique } from "remeda"
 import { Global } from "../global"
 import fs from "fs/promises"
@@ -50,6 +49,8 @@ import * as WebMcpLaunch from "@/mcp/webmcp-launch"
 import { CONFIG_SCHEMA_URL } from "@/constants/project"
 import { ProjectConfigTrust } from "./project-config-trust"
 import { isFileUrl } from "../util/file-url"
+import { mergeConfig, migrateDeprecatedModeIntoAgent } from "./merge-policy"
+import { restrictUntrustedAgent, restrictUntrustedConfig, tightenIsolationFloor } from "./untrusted-policy"
 
 const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
 const UNIX_SYSTEM_CONFIG_DIR = "/etc/ax-code"
@@ -79,218 +80,6 @@ const DANGEROUS_WELLKNOWN_ENV_KEYS = new Set([
 export namespace Config {
   const log = Log.create({ service: "config" })
 
-  function denyOnlyPermission(value: unknown): unknown {
-    if (value === "deny") return value
-    if (!isRecord(value)) return undefined
-    const result: Record<string, unknown> = {}
-    for (const [permission, rule] of Object.entries(value)) {
-      if (rule === "deny") {
-        result[permission] = rule
-        continue
-      }
-      if (!isRecord(rule)) continue
-      const patterns = Object.fromEntries(Object.entries(rule).filter(([, action]) => action === "deny"))
-      if (Object.keys(patterns).length > 0) result[permission] = patterns
-    }
-    return Object.keys(result).length > 0 ? result : undefined
-  }
-
-  function denyOnlyLegacyTools(value: unknown): unknown {
-    if (!isRecord(value)) return undefined
-    const result = Object.fromEntries(Object.entries(value).filter(([, enabled]) => enabled === false))
-    return Object.keys(result).length > 0 ? result : undefined
-  }
-
-  function restrictUntrustedAgent(value: unknown): unknown {
-    if (!isRecord(value)) return value
-    const agent = { ...value }
-    const permission = denyOnlyPermission(agent.permission)
-    if (permission) agent.permission = permission
-    else delete agent.permission
-    const tools = denyOnlyLegacyTools(agent.tools)
-    if (tools) agent.tools = tools
-    else delete agent.tools
-    return agent
-  }
-
-  function isSafeProjectRelativePath(value: unknown): value is string {
-    if (typeof value !== "string" || value.length === 0) return false
-    if (path.isAbsolute(value) || path.win32.isAbsolute(value) || value.startsWith("~")) return false
-    try {
-      if (new URL(value).protocol) return false
-    } catch {}
-    return !value.split(/[\\/]+/).includes("..")
-  }
-
-  function restrictUntrustedProviders(value: unknown): unknown {
-    if (!isRecord(value)) return undefined
-    return Object.fromEntries(
-      Object.entries(value).map(([name, providerValue]) => {
-        if (!isRecord(providerValue)) return [name, providerValue]
-        const provider = { ...providerValue }
-        delete provider.api
-        delete provider.npm
-        delete provider.env
-        delete provider.management
-        if (isRecord(provider.options)) {
-          provider.options = Object.fromEntries(
-            Object.entries(provider.options).filter(([key]) =>
-              ["timeout", "chunkTimeout", "setCacheKey", "toolProfile"].includes(key),
-            ),
-          )
-        }
-        if (isRecord(provider.models)) {
-          provider.models = Object.fromEntries(
-            Object.entries(provider.models).map(([modelID, modelValue]) => {
-              if (!isRecord(modelValue)) return [modelID, modelValue]
-              const model = { ...modelValue }
-              delete model.provider
-              return [modelID, model]
-            }),
-          )
-        }
-        return [name, provider]
-      }),
-    )
-  }
-
-  function restrictUntrustedConfig(copy: Record<string, unknown>) {
-    delete copy.code_mode
-    delete copy.mcp_sampling
-    // Granting a plugin session administration is a user decision, never a repository one.
-    delete copy.plugin_trust
-    // These fields can execute a repository-selected binary, import a package,
-    // redirect provider credentials, or read arbitrary files from the user's
-    // home directory. Project config may use them only after the explicit
-    // out-of-repository trust opt-in.
-    delete copy.shell
-    delete copy.skills
-    const provider = restrictUntrustedProviders(copy.provider)
-    if (provider) copy.provider = provider
-    else delete copy.provider
-
-    if (Array.isArray(copy.instructions)) {
-      const instructions = copy.instructions.filter(isSafeProjectRelativePath)
-      if (instructions.length > 0) copy.instructions = instructions
-      else delete copy.instructions
-    }
-
-    if (isRecord(copy.command)) {
-      copy.command = Object.fromEntries(
-        Object.entries(copy.command).map(([name, value]) => [
-          name,
-          isRecord(value) ? { ...value, allowShell: false } : value,
-        ]),
-      )
-    }
-
-    if (isRecord(copy.lsp)) {
-      const lsp = Object.fromEntries(
-        Object.entries(copy.lsp).filter(([, value]) => isRecord(value) && !("command" in value) && !("env" in value)),
-      )
-      if (Object.keys(lsp).length > 0) copy.lsp = lsp
-      else delete copy.lsp
-    }
-
-    if (isRecord(copy.formatter)) {
-      const formatter = Object.fromEntries(
-        Object.entries(copy.formatter).filter(
-          ([, value]) => isRecord(value) && !("command" in value) && !("environment" in value),
-        ),
-      )
-      if (Object.keys(formatter).length > 0) copy.formatter = formatter
-      else delete copy.formatter
-    }
-
-    // `computer.command` is a repository-selected binary plus its arguments —
-    // the computer MCP client spawns it, and it falls back to
-    // AX_COMPUTER_COMMAND / PATH only when the config leaves it unset. Same
-    // class as `shell` and the lsp/formatter commands above, so an untrusted
-    // config may enable a provider but not choose the executable.
-    if (isRecord(copy.computer)) {
-      const computer = { ...copy.computer }
-      delete computer.command
-      delete computer.args
-      copy.computer = computer
-    }
-
-    // Every image provider posts to `options.baseURL` with the resolved
-    // credential (`options.apiKey` or the user's OPENAI_API_KEY /
-    // STABILITY_API_KEY), and the custom provider takes its endpoint and key
-    // from the same place — so an untrusted config could redirect the user's
-    // key to its own endpoint. Keep the provider choice and the model, drop the
-    // rest, and allowlist the option keys because the schema is a catchall.
-    if (isRecord(copy.image_generation)) {
-      const imageGeneration = { ...copy.image_generation }
-      const options = imageGeneration.options
-      if (isRecord(options)) {
-        const safe = Object.fromEntries(Object.entries(options).filter(([key]) => key === "model"))
-        if (Object.keys(safe).length > 0) imageGeneration.options = safe
-        else delete imageGeneration.options
-      }
-      copy.image_generation = imageGeneration
-    }
-
-    // `browser.cdpUrl` picks the browser endpoint the browser_* tools attach
-    // to, so a committed config could point them at its own server and both
-    // observe and invent every page and action. The documented shape is a local
-    // Chrome started with --remote-debugging-port, so an untrusted source may
-    // keep a loopback HTTP(S) URL and nothing else; a remote or ws:// endpoint
-    // must come from a trusted config.
-    if (isRecord(copy.browser) && copy.browser.cdpUrl !== undefined) {
-      const browser = { ...copy.browser }
-      try {
-        Ssrf.loopbackOrigin(browser.cdpUrl as string, "browser.cdpUrl")
-      } catch {
-        delete browser.cdpUrl
-      }
-      copy.browser = browser
-    }
-
-    // Untrusted project config must not loosen an explicit lower-precedence
-    // safety policy. A committed ax-code.json could otherwise override a
-    // managed or user setting with isolation.mode = full-access, enable
-    // network, or replace the blocked-path list (blocked_paths: []) with no
-    // agent write at all — a load-time privilege escalation. Project config
-    // may tighten (read-only, network off, additional blocked paths) but never
-    // loosen a user/managed floor. Mirrors Codex requirements.toml / Claude
-    // managed-settings behavior.
-    if (isRecord(copy.isolation)) {
-      const isolation = { ...copy.isolation }
-      if (isolation.mode === "full-access") delete isolation.mode
-      if (isolation.network === true) delete isolation.network
-      // backend "app"/"auto" can drop the kernel sandbox, loosening a user or
-      // managed floor; only the tightening "os" value may survive.
-      if (isolation.backend !== undefined && isolation.backend !== "os") delete isolation.backend
-      // `protected` itself is intentionally left alone here: it is a
-      // tightening-only, additive list (see mergeConfigConcatArrays, which
-      // concatenates it across sources instead of letting a later source
-      // replace it), so an untrusted config can only add protected paths,
-      // never drop ones a trusted lower-precedence source added.
-      copy.isolation = isolation
-    }
-    if (isRecord(copy.autonomy) && isRecord(copy.autonomy.budget) && isRecord(copy.autonomy.budget.changes)) {
-      const changes = { ...copy.autonomy.budget.changes }
-      delete changes.blocked_paths
-      copy.autonomy = { ...copy.autonomy, budget: { ...copy.autonomy.budget, changes } }
-    }
-    if (isRecord(copy.experimental) && isRecord(copy.experimental.autonomous_caps)) {
-      const caps = { ...copy.experimental.autonomous_caps }
-      delete caps.blockedPaths
-      copy.experimental = { ...copy.experimental, autonomous_caps: caps }
-    }
-    // Cloud-operations strict mode changes permission-layer enforcement
-    // behavior (it replaces the bash_destructive ask with a hard deny). Like
-    // the executable/credential fields above, an untrusted committed config
-    // may not flip it; projects opt in via the out-of-repository trust switch
-    // or trusted user/managed config.
-    if (isRecord(copy.ops)) {
-      const ops = { ...copy.ops }
-      delete ops.strict
-      if (Object.keys(ops).length > 0) copy.ops = ops
-      else delete copy.ops
-    }
-  }
   export const McpSourceKind = z.enum([
     "wellknown",
     "global",
@@ -396,149 +185,6 @@ export namespace Config {
     return managedConfigDir()
   }
 
-  function mergeUniqueStrings(target: string[] | undefined, source: string[] | undefined) {
-    return target && source ? uniqueStrings([...target, ...source]) : undefined
-  }
-
-  /**
-   * `permission.<tool>: "deny"` / `"ask"` is the blanket form of
-   * `{ "*": "deny" }` / `{ "*": "ask" }`, and mergeDeep replaces that scalar
-   * when a later source names the same tool with a pattern map. A committed
-   * project ax-code.json could then erase a user's blanket deny or ask by
-   * adding one pattern that never matches, falling back to the agent defaults
-   * (`"*": "allow"`). Keep the blanket entry and append the later patterns in
-   * the order evaluate() reads them (last match wins), so a source may still
-   * narrow the tool by pattern — an explicit `"*"` from the later source still
-   * wins.
-   */
-  function foldBlanketRules(target: unknown, merged: unknown) {
-    if (!isRecord(target) || !isRecord(merged)) return
-    for (const [tool, value] of Object.entries(target)) {
-      if (value !== "deny" && value !== "ask") continue
-      const incoming = merged[tool]
-      if (!isRecord(incoming) || "*" in incoming) continue
-      merged[tool] = { "*": value, ...incoming }
-    }
-  }
-
-  /** Same floor for the per-agent / per-mode permission surfaces. */
-  function foldNestedBlanketRules(target: Info, merged: Info) {
-    foldBlanketRules(target.permission, merged.permission)
-    for (const container of ["agent", "mode"] as const) {
-      const targetEntries = target[container] as unknown
-      const mergedEntries = merged[container] as unknown
-      if (!isRecord(targetEntries) || !isRecord(mergedEntries)) continue
-      for (const [name, entry] of Object.entries(targetEntries)) {
-        if (!isRecord(entry)) continue
-        const mergedEntry = mergedEntries[name]
-        if (!isRecord(mergedEntry)) continue
-        foldBlanketRules(entry["permission"], mergedEntry["permission"])
-      }
-    }
-  }
-
-  /**
-   * Permission pattern maps evaluate last-match-wins in key insertion
-   * order, but mergeDeep keeps the earlier source's key order for
-   * surviving keys. An admin blanket deny in an authority layer (managed
-   * config, AX_CODE_PERMISSION env) — `bash: { "*": "deny" }` — merged
-   * onto a lower layer's `{ "*": "ask", "curl *": "allow" }` would leave
-   * that `curl *` allow evaluated after the deny, so curl stays allowed
-   * despite the admin's blanket rule. Rebuild each tool's map so the
-   * authority layer's patterns come last and win. Scoped to the admin
-   * layers only: reordering for project/user/remote sources would let a
-   * lower-trust project override a user's specific deny by key order alone.
-   */
-  function reorderAuthorityPermissionMaps(target: unknown, incoming: unknown, merged: unknown) {
-    if (!isRecord(target) || !isRecord(incoming) || !isRecord(merged)) return
-    for (const tool of Object.keys(incoming)) {
-      const earlier = target[tool]
-      const later = incoming[tool]
-      const mergedTool = merged[tool]
-      // Scalar-vs-map pairs keep the existing merge behavior (see
-      // foldBlanketRules); only two pattern maps reorder.
-      if (!isRecord(earlier) || !isRecord(later) || !isRecord(mergedTool)) continue
-      const rebuilt: Record<string, unknown> = {}
-      for (const pattern of Object.keys(earlier)) {
-        if (!(pattern in later)) rebuilt[pattern] = mergedTool[pattern]
-      }
-      for (const pattern of Object.keys(later)) {
-        rebuilt[pattern] = mergedTool[pattern]
-      }
-      merged[tool] = rebuilt
-    }
-  }
-
-  /** Same authority ordering for the per-agent / per-mode permission surfaces. */
-  function reorderNestedAuthorityPermissionMaps(target: Info, incoming: Info, merged: Info) {
-    reorderAuthorityPermissionMaps(target.permission, incoming.permission, merged.permission)
-    for (const container of ["agent", "mode"] as const) {
-      const targetEntries = target[container] as unknown
-      const incomingEntries = incoming[container] as unknown
-      const mergedEntries = merged[container] as unknown
-      if (!isRecord(targetEntries) || !isRecord(incomingEntries) || !isRecord(mergedEntries)) continue
-      for (const [name, incomingEntry] of Object.entries(incomingEntries)) {
-        if (!isRecord(incomingEntry)) continue
-        const targetEntry = targetEntries[name]
-        const mergedEntry = mergedEntries[name]
-        if (!isRecord(targetEntry) || !isRecord(mergedEntry)) continue
-        reorderAuthorityPermissionMaps(
-          targetEntry["permission"],
-          incomingEntry["permission"],
-          mergedEntry["permission"],
-        )
-      }
-    }
-  }
-
-  // Custom merge function that concatenates array fields instead of replacing them
-  function mergeConfigConcatArrays(target: Info, source: Info, opts: { authority?: boolean } = {}): Info {
-    const merged = mergeDeep(target, source)
-    foldNestedBlanketRules(target, merged)
-    // Only admin-authority sources (managed config) reorder permission
-    // pattern maps so their patterns win; see reorderAuthorityPermissionMaps.
-    if (opts.authority) reorderNestedAuthorityPermissionMaps(target, source, merged)
-    const plugin = mergeUniqueStrings(target.plugin, source.plugin)
-    if (plugin) {
-      merged.plugin = plugin
-    }
-    const instructions = mergeUniqueStrings(target.instructions, source.instructions)
-    if (instructions) {
-      merged.instructions = instructions
-    }
-    // isolation.protected is a tightening-only safety list: entries only add
-    // extra protected paths, they never remove the caller's DEFAULT_PROTECTED
-    // set (see Isolation.resolve). mergeDeep treats arrays as opaque values
-    // and lets `source` replace `target` wholesale, which would let a
-    // higher-precedence-but-lower-trust source (e.g. a committed project
-    // ax-code.json) silently discard protected paths a trusted global/managed
-    // config added earlier. Concatenate instead, same as plugin/instructions.
-    const protectedPaths = mergeUniqueStrings(target.isolation?.protected, source.isolation?.protected)
-    if (protectedPaths) {
-      merged.isolation = { ...merged.isolation, protected: protectedPaths }
-    }
-    return merged
-  }
-
-  // Fold a single source's deprecated top-level `mode` field into its own
-  // `agent` field, tagging each entry `mode: "primary"`. This must run once
-  // per source, before that source is merged into the accumulated result —
-  // not once at the very end of loadState() against the fully-merged config.
-  // Doing it at the end let ANY source's `mode.<name>` unconditionally
-  // clobber `agent.<name>` set by a higher-precedence source, since the
-  // migration ignored where each value actually came from (e.g. a lower
-  // trust remote well-known config's `mode.build.model` could overwrite the
-  // user's own trusted `agent.build.model`). Folding per-source lets the
-  // normal precedence-ordered merge in mergeFromSource decide the winner.
-  function migrateDeprecatedModeIntoAgent(config: Info): Info {
-    if (!config.mode) return config
-    const patch: Record<string, Agent> = {}
-    for (const [name, mode] of Object.entries(config.mode)) {
-      patch[name] = { ...mode, mode: "primary" as const }
-    }
-    return { ...config, agent: mergeDeep(config.agent ?? {}, patch) }
-  }
-
   export const state = Instance.state(() => NativePerf.runAsync("config.load", undefined, loadState))
 
   async function loadState() {
@@ -582,13 +228,6 @@ export namespace Config {
       return copy
     }
 
-    // Isolation modes from strictest to loosest. `restrictUntrustedConfig`
-    // drops the absolute worst value ("full-access") per source, but it runs
-    // before any merging and cannot see the accumulated floor, so an untrusted
-    // repository config could still relax a user's `read-only` to
-    // `workspace-write`.
-    const ISOLATION_STRICTNESS = { "read-only": 2, "workspace-write": 1, "full-access": 0 } as const
-
     /**
      * Repository-controlled source kinds that the out-of-band project trust
      * opt-in promotes to trusted. Their descriptor stays `untrusted` so the
@@ -600,21 +239,6 @@ export namespace Config {
     function sourceTrustedForFloor(source: McpSource) {
       if (source.trustedByDefault) return true
       return OPT_IN_TRUSTED_KINDS.has(source.kind) && ProjectConfigTrust.enabled()
-    }
-
-    /** An untrusted source may tighten the isolation mode, never loosen it. */
-    function tightenIsolationFloor(target: Info, source: Info): Info {
-      if (!source.isolation) return source
-      const isolation = { ...source.isolation }
-      const incoming = isolation.mode
-      const floor = target.isolation?.mode
-      if (incoming && floor && ISOLATION_STRICTNESS[incoming] < ISOLATION_STRICTNESS[floor]) delete isolation.mode
-      // The object form turns network on (with an egress allowlist). It only
-      // narrows a floor that already allows all network; over a disabled or
-      // unset floor it would enable network, like the `true` the per-source
-      // filter already drops.
-      if (typeof isolation.network === "object" && target.isolation?.network !== true) delete isolation.network
-      return { ...source, isolation }
     }
 
     let managedCodeModeDisabled = false
@@ -670,7 +294,7 @@ export namespace Config {
       if (managedRewriteDisabled) scoped = { ...scoped, hooks: { ...scoped.hooks, allow_input_rewrite: false } }
       if (!sourceTrustedForFloor(source)) scoped = tightenIsolationFloor(result, scoped)
       if (scoped.permission) permissionLayers.push(scoped.permission)
-      result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(scoped), {
+      result = mergeConfig(result, migrateDeprecatedModeIntoAgent(scoped), {
         authority: source.kind === "managed",
       })
     }
@@ -1048,13 +672,11 @@ export namespace Config {
         // its patterns must be evaluated last (last match wins) inside each
         // merged pattern map, which mergeDeep alone does not give. The env
         // shape is a flat permission map, so no agent/mode nesting applies.
-        const earlier = result.permission ?? {}
-        const merged = mergeDeep(earlier, rules)
-        // Like every config source: a pattern map over a blanket deny/ask
-        // keeps the blanket as its "*" floor instead of replacing it.
-        foldBlanketRules(earlier, merged)
-        reorderAuthorityPermissionMaps(earlier, rules, merged)
-        result.permission = merged
+        result.permission = mergeConfig(
+          { permission: result.permission ?? {} },
+          { permission: rules },
+          { authority: true },
+        ).permission
       } else if (parsed.reason === "schema") {
         log.warn("AX_CODE_PERMISSION does not match permission schema, ignoring", {
           value: Flag.AX_CODE_PERMISSION,
@@ -1709,32 +1331,9 @@ export namespace Config {
         delete copy.tui
         log.warn("tui keys in ax-code config are deprecated; move them to tui.json", { path: source })
       }
-      if (!trusted) {
-        // Repository-controlled config must not grant itself tool access.
-        // Project `permission`/legacy `tools` rules used to merge after the
-        // safe defaults and could silently turn an `ask` into an `allow`.
-        // The same fields are supported per agent/mode, so remove them at
-        // every project-controlled permission surface.
-        const permission = denyOnlyPermission(copy.permission)
-        if (permission) copy.permission = permission
-        else delete copy.permission
-        const tools = denyOnlyLegacyTools(copy.tools)
-        if (tools) copy.tools = tools
-        else delete copy.tools
-        for (const key of ["agent", "mode"] as const) {
-          const entries = copy[key]
-          if (!isRecord(entries)) continue
-          copy[key] = Object.fromEntries(
-            Object.entries(entries).map(([name, value]) => [name, restrictUntrustedAgent(value)]),
-          )
-        }
-        // Every explicitly untrusted source gets the executable/credential
-        // restrictions. `projectTrust` controls only whether the out-of-band
-        // project opt-in can make a source trusted; remote sources never gain
-        // that trust merely because the project opt-in is enabled.
-        restrictUntrustedConfig(copy)
-      }
-      return copy
+      // Source trust is resolved by the loader; the policy only transforms data.
+      // Remote sources never gain trust from the out-of-band project opt-in.
+      return trusted ? copy : restrictUntrustedConfig(copy)
     })()
 
     const parsed = Info.safeParse(normalized)
@@ -1978,7 +1577,7 @@ export namespace Config {
     const before = await readFile(filepath)
     const text = before?.trim() ? before : "{}"
     const existing = before ? parseConfig(before, filepath) : {}
-    const merged = mergeConfigConcatArrays(existing, withoutInjectedWebMcpDefault(config, existing))
+    const merged = mergeConfig(existing, withoutInjectedWebMcpDefault(config, existing))
     const patch = changedJsoncPatch(existing, merged)
     const updated = patch === JSONC_UNCHANGED ? text : patchJsonc(text, patch)
     parseConfig(updated, filepath)
