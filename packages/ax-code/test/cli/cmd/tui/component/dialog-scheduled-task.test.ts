@@ -120,6 +120,7 @@ describe("dialog-scheduled-task view model", () => {
     expect(description).toContain("started ")
     expect(description).toContain("took 1m 1s")
     expect(description).toContain("covers 3 missed occurrences")
+    expect(runDescription({ ...value, coalescedCount: 10_000 })).toContain("covers 10000+ missed occurrences")
     expect(description).toContain("error: provider timeout")
   })
 

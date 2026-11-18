@@ -42,7 +42,10 @@ describe("cli.schedule formatters", () => {
     expect(output).toContain("paused")
   })
 
-  test("formatScheduleRunList renders aligned columns with coverage and errors", () => {
+  test.each([
+    [12, "12"],
+    [10_000, "10000+"],
+  ] as const)("renders run coverage %s and errors", (count, coverage) => {
     expect(formatScheduleRunList([])).toBe("No runs found.\n")
     const output = formatScheduleRunList([
       {
@@ -51,7 +54,7 @@ describe("cli.schedule formatters", () => {
         projectID: "prj_1",
         triggerType: "scheduled",
         status: "completed",
-        coalescedCount: 12,
+        coalescedCount: count,
         timeStarted: 1_700_000_000_100,
         timeCompleted: 1_700_000_000_200,
         time: { created: 1_700_000_000_300 },
@@ -78,7 +81,7 @@ describe("cli.schedule formatters", () => {
     expect(output).toContain("manual")
     expect(output).toContain("completed")
     expect(output).toContain("failed")
-    expect(output).toContain("12")
+    expect(output).toContain(coverage)
     expect(output).toContain("provider timed out")
   })
 

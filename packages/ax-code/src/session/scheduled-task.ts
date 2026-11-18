@@ -349,7 +349,10 @@ export namespace ScheduledTask {
     if (run.triggerType !== "scheduled") return
     toast({
       title: "Scheduled task started",
-      message: run.coalescedCount > 1 ? `${task.title} (covers ${run.coalescedCount} missed occurrences)` : task.title,
+      message:
+        run.coalescedCount > 1
+          ? `${task.title} (covers ${Timing.formatCoalescedCount(run.coalescedCount)} missed occurrences)`
+          : task.title,
       variant: "info",
     })
   }
@@ -375,7 +378,7 @@ export namespace ScheduledTask {
       message:
         run.status === "skipped_overlap"
           ? `${task.title}: previous run still in progress`
-          : `${task.title}: ${run.coalescedCount} missed occurrence(s) skipped after downtime`,
+          : `${task.title}: ${Timing.formatCoalescedCount(run.coalescedCount)} missed occurrence(s) skipped after downtime`,
       variant: "warning",
     })
   }
@@ -1004,10 +1007,11 @@ export namespace ScheduledTask {
     const oneShotRetry = task.schedule.type === "once" && occurrenceAt !== task.schedule.runAt
     const missed = !oneShotRetry && now - occurrenceAt > MISSED_RUN_GRACE_MS
     if (!missed && now < occurrenceAt + jitterOffsetMs(task, occurrenceAt)) return undefined
-    const coalesced = countCoalesced(task.schedule, occurrenceAt, now)
+    const { count } = countCoalesced(task.schedule, occurrenceAt, now)
     return {
-      next: nextRunAt(task.schedule, coalesced.lastOccurrence),
-      coalescedCount: coalesced.count,
+      // The count is bounded, but this decision handles the whole backlog.
+      next: nextRunAt(task.schedule, now),
+      coalescedCount: count,
       skip: task.catchUpPolicy === "skip" && missed,
     }
   }
@@ -1413,7 +1417,7 @@ export namespace ScheduledTask {
     const since = new Date(occurrenceAt).toISOString()
     const lastExec = lastRunAt ? new Date(lastRunAt).toISOString() : "never"
     return (
-      `[scheduled task] This run covers ${count} scheduled occurrences missed since ${since} ` +
+      `[scheduled task] This run covers ${Timing.formatCoalescedCount(count)} scheduled occurrences missed since ${since} ` +
       `(last executed ${lastExec}). Process it once; do not repeat the work for each occurrence.\n\n${prompt}`
     )
   }

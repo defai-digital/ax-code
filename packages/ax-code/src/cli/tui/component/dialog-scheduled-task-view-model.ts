@@ -1,4 +1,5 @@
 import type { ScheduledTaskListResponse, ScheduledTaskListRunsResponse } from "@ax-code/sdk/v2"
+import { formatCoalescedCount } from "@/session/scheduled-task-schedule"
 import { Locale } from "@/util/locale"
 
 // Pure view-model for the /schedule dialog (PRD-2026-09-12): all formatting and
@@ -89,7 +90,7 @@ export function runDescription(run: ScheduledTaskRunInfo): string {
   if (run.timeStarted !== undefined && run.timeCompleted !== undefined) {
     parts.push(`took ${Locale.duration(run.timeCompleted - run.timeStarted)}`)
   }
-  if (run.coalescedCount > 1) parts.push(`covers ${run.coalescedCount} missed occurrences`)
+  if (run.coalescedCount > 1) parts.push(`covers ${formatCoalescedCount(run.coalescedCount)} missed occurrences`)
   if (run.error) parts.push(`error: ${formatScheduleError(run.error)}`)
   return parts.join(" · ")
 }

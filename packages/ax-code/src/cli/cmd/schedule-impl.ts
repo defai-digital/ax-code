@@ -2,6 +2,7 @@ import { EOL } from "os"
 import type { Argv } from "yargs"
 import { cmd } from "./cmd"
 import type { ScheduledTask } from "../../session/scheduled-task"
+import { formatCoalescedCount } from "../../session/scheduled-task-schedule"
 
 async function loadSchedule() {
   const [{ ScheduledTask }, { ScheduledTaskID }, { bootstrapReadonly }] = await Promise.all([
@@ -62,7 +63,7 @@ export function formatScheduleRunList(runs: ScheduledTask.RunInfo[]) {
     "error",
   ].join(" ")
   const lines = runs.map((run) => {
-    const covered = run.coalescedCount > 1 ? String(run.coalescedCount) : "-"
+    const covered = run.coalescedCount > 1 ? formatCoalescedCount(run.coalescedCount) : "-"
     return `${run.status.padEnd(16)} ${run.triggerType.padEnd(9)} ${formatTime(run.timeStarted).padEnd(20)} ${formatTime(run.timeCompleted).padEnd(20)} ${covered.padEnd(7)} ${run.error ?? ""}`
   })
   return [header, ...lines].join(EOL) + EOL

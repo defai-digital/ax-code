@@ -666,6 +666,49 @@ describe("ScheduledTask one-shot lifecycle", () => {
     })
   })
 
+  test.each(["run_once", "skip"] as const)(
+    "%s advances beyond a backlog larger than the catch-up count limit",
+    async (catchUpPolicy) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const task = await ScheduledTask.create({
+            title: "Catch up after a long outage",
+            prompt: "Check the build.",
+            schedule: { type: "cron", expression: "* * * * *", timezone: "UTC" },
+            catchUpPolicy,
+          })
+          if (task.nextRunAt === undefined) throw new Error("Expected a due occurrence")
+          const minute = 60_000
+          const now = task.nextRunAt + 10_005 * minute
+          const dispatched = await ScheduledTask.runDue(now)
+          expect((await ScheduledTask.get(task.id)).nextRunAt).toBe(now + minute)
+          const runs = await ScheduledTask.listRuns({ taskID: task.id })
+          expect(runs).toMatchObject([
+            { status: catchUpPolicy === "skip" ? "missed_skip" : "running", coalescedCount: 10_000 },
+          ])
+
+          if (catchUpPolicy === "run_once") {
+            const queue = dispatched[0]?.queueItem
+            if (!queue) throw new Error("Expected a catch-up queue item")
+            expect(queue.payload.prompt).toContain("10000+ scheduled occurrences missed")
+            await TaskQueue.setStatus({ id: queue.id, status: "completed" })
+            await ScheduledTask.recordQueueOutcome(task.id, "completed", undefined, queue.id)
+          } else {
+            expect(dispatched).toEqual([])
+          }
+          expect(await ScheduledTask.runDue(now)).toEqual([])
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toHaveLength(1)
+          expect(start).toHaveBeenCalledTimes(catchUpPolicy === "skip" ? 0 : 1)
+
+          expect(await ScheduledTask.runDue(now + minute + minute / 10)).toHaveLength(1)
+        },
+      })
+    },
+  )
+
   test("recurring tasks are unaffected by the one-shot completion rule", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

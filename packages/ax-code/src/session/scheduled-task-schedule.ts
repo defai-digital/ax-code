@@ -74,14 +74,14 @@ export function validateSchedule(schedule: Schedule, from = Date.now()): void {
       }
       break
     case "cron": {
-      const parsed = parseCronExpressionFull(schedule.expression)
-      if (!parsed) {
+      const next = makeCronSearch(schedule.expression, schedule.timezone)
+      if (!next) {
         throw new InvalidSchedule({
           resource: "schedule.cron",
           message: `Invalid or unsupported cron expression: ${schedule.expression}`,
         })
       }
-      if (nextCronRun(parsed, from, schedule.timezone) === undefined) {
+      if (next(from) === undefined) {
         throw new InvalidSchedule({
           resource: "schedule.cron",
           message: `Cron expression has no occurrence within the search window: ${schedule.expression}`,
@@ -100,10 +100,8 @@ export function nextRunAt(schedule: Schedule, from = Date.now()): number | undef
       return nextCalendarRun(schedule.time, from, schedule.timezone)
     case "weekly":
       return nextCalendarRun(schedule.time, from, schedule.timezone, schedule.day)
-    case "cron": {
-      const parsed = parseCronExpressionFull(schedule.expression)
-      return parsed ? nextCronRun(parsed, from, schedule.timezone) : undefined
-    }
+    case "cron":
+      return makeCronSearch(schedule.expression, schedule.timezone)?.(from)
   }
 }
 
@@ -126,6 +124,10 @@ function fractionFromId(id: string): number {
   return (hash >>> 0) / 0x1_0000_0000
 }
 
+export function formatCoalescedCount(count: number): string {
+  return count >= MAX_COALESCE_ITERATIONS ? `${count}+` : String(count)
+}
+
 // Count occurrences being coalesced into a single run: iterate forward from the
 // stored due occurrence while still <= now, bounded to avoid pathological loops.
 export function countCoalesced(
@@ -133,13 +135,17 @@ export function countCoalesced(
   firstOccurrence: number,
   now: number,
 ): { count: number; lastOccurrence: number } {
+  const next =
+    schedule.type === "cron"
+      ? makeCronSearch(schedule.expression, schedule.timezone)
+      : (from: number) => nextRunAt(schedule, from)
   let count = 1
   let last = firstOccurrence
-  while (count < MAX_COALESCE_ITERATIONS) {
-    const next = nextRunAt(schedule, last)
-    if (next === undefined || next > now) break
+  while (next && count < MAX_COALESCE_ITERATIONS) {
+    const occurrence = next(last)
+    if (occurrence === undefined || occurrence > now) break
     count++
-    last = next
+    last = occurrence
   }
   return { count, lastOccurrence: last }
 }
@@ -304,18 +310,25 @@ function nextCalendarRun(time: string, from: number, timezone?: string, weekday?
   return undefined
 }
 
+function makeCronSearch(expression: string, timezone?: string): ((from: number) => number | undefined) | undefined {
+  const parsed = parseCronExpressionFull(expression)
+  if (!parsed) return undefined
+  const formatter = timezone ? makeTzFormatter(timezone) : undefined
+  return (from) => nextCronRun(parsed, from, formatter)
+}
+
 // Full-cron next occurrence. Day-skipping keeps the search cheap across the
 // multi-year horizon: non-matching month/day jumps forward (to the next local
 // midnight without a timezone, or a coarse 6h step with one) and only matching
 // days are minute-scanned. The tz branch backs up to the local day start after a
 // coarse skip so early-in-day occurrences are never missed.
-function nextCronRun(parsed: ParsedCron, from: number, timezone?: string): number | undefined {
+function nextCronRun(parsed: ParsedCron, from: number, fmt?: Intl.DateTimeFormat): number | undefined {
   const horizonMs = CRON_SEARCH_DAYS * MS_PER_DAY
   const endMs = from + horizonMs
   const startMs = from - (from % MS_PER_MINUTE) + MS_PER_MINUTE
   let ms = startMs
 
-  if (!timezone) {
+  if (!fmt) {
     while (ms < endMs) {
       const d = new Date(ms)
       const monthMatch = parsed.months.has(d.getMonth() + 1)
@@ -337,7 +350,6 @@ function nextCronRun(parsed: ParsedCron, from: number, timezone?: string): numbe
     return undefined
   }
 
-  const fmt = makeTzFormatter(timezone)
   while (ms < endMs) {
     const c = tzComponents(ms, fmt)
     if (!parsed.months.has(c.month) || !cronDayMatches(c.day, c.weekday, parsed)) {
@@ -348,8 +360,8 @@ function nextCronRun(parsed: ParsedCron, from: number, timezone?: string): numbe
     // Back up to the start of this local day (a coarse skip may have landed
     // mid-day); bounded by the maximum possible day length (~25h, DST fall-back).
     let scan = ms
-    for (let i = 0; i < 26 * 60; i++) {
-      const prev = scan - 60_000
+    for (let i = 0; i < 26 * 60 && scan > startMs; i++) {
+      const prev = scan - MS_PER_MINUTE
       if (tzDateKey(tzComponents(prev, fmt)) !== dateKey) break
       scan = prev
     }
@@ -361,12 +373,7 @@ function nextCronRun(parsed: ParsedCron, from: number, timezone?: string): numbe
         advanced = true
         break
       }
-      if (
-        cursor >= startMs &&
-        parsed.minutes.has(cc.minute) &&
-        parsed.hours.has(cc.hour) &&
-        !isTzRepeatedWallMinute(cursor, fmt, cc)
-      )
+      if (parsed.minutes.has(cc.minute) && parsed.hours.has(cc.hour) && !isTzRepeatedWallMinute(cursor, fmt, cc))
         return cursor
     }
     ms = advanced ? cursor : cursor + 60_000
