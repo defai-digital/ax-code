@@ -6,7 +6,7 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
-## [7.30.33] - 2026-11-17
+## [7.30.33] - 2026-11-18
 
 ### Changed
 
@@ -25,6 +25,10 @@ changes belong to AX Coder.
 - Preserve separate model input limits when calibrating context budgets.
 - Verify rendered request prefixes before reusing measured token counts, avoiding duplicate tool-output estimates and stale measurements.
 - Backport Picomatch repeated-extglob protections for runtime glob and watcher dependencies, with bounded-process regression checks.
+- Resume unanswered background handoffs after a restart, preserve the active turn's fallback route, and wake parent and child sessions in their own workspaces.
+- Keep pending follow-up message identities through queue edits, retries, and history trimming. Find background tasks even when unrelated queue rows fill the page.
+- Keep explicit local model pins and managed model choices on their intended providers, and preserve the original provider error when recovery fails.
+- Preserve UTF-8 shell output when a timed-out command moves to the background, and share refreshed LSP diagnostics across waiting requests.
 
 ## [7.30.32] - 2026-11-17
 
