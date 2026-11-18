@@ -350,7 +350,10 @@ test("accepts a casing alias for an existing checkout on a case-insensitive volu
       expect(await Worktree.list()).toEqual([{ directory: actual, name: "Sandbox", branch: "ax-code/alias-case" }])
       await expect(Worktree.reset({ directory: alias })).resolves.toBe(true)
       await expect(fs.stat(dirty)).rejects.toMatchObject({ code: "ENOENT" })
+      const key = await Instance.provide({ directory: actual, fn: () => Instance.directory })
+      expect(Instance.list()).toContain(key)
       await expect(Worktree.remove({ directory: alias })).resolves.toBe(true)
+      expect(Instance.list()).not.toContain(key)
       expect(await Worktree.list()).toEqual([])
       expect(git("branch", "--list", "ax-code/alias-case")).toBe("")
     },

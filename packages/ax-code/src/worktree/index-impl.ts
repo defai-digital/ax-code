@@ -1043,6 +1043,9 @@ export namespace Worktree {
     // is not keyed by the caller's spelling cancelled above.
     cancelPendingStartScripts(entry.path)
     await stop(entry.path)
+    // Git can delete the directory itself. Run the instance's disposers
+    // while it still exists, except for the primary checkout Git rejects.
+    if (!removingPrimary) await cleanupInstance()
     const removed = await git(["worktree", "remove", "--force", entry.path], {
       cwd: repository,
     })
@@ -1054,8 +1057,6 @@ export namespace Worktree {
         throw new RemoveFailedError({ message: errorText(removed) || "Failed to remove git worktree" })
       }
     }
-
-    await cleanupInstance()
 
     // ADR-260: delete only a branch AX Code owns; a borrowed or unknown branch
     // belongs to the user.
