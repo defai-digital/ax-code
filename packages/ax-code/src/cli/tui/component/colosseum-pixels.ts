@@ -20,7 +20,7 @@ import {
   type ColosseumStyle,
 } from "./colosseum-view-model"
 import { createHdCanvas, hdDarken, hdHex, hdMix, type RGB } from "./scene-hd"
-import { hash } from "./atmos-paint"
+import { glowEllipse, hash } from "./atmos-paint"
 
 /** Deterministic hash in [0, 1). */
 /** Bays across the visible front half of the ellipse, odd so the gate sits in the middle. */
@@ -57,18 +57,7 @@ export function renderColosseumPixels(width: number, height: number, style: Colo
   const coreR = Math.max(3, Math.min(cw, ch) * 0.9)
   const torchOn = colosseumTorch(t)
   const blend = (x: number, y: number, color: RGB, alpha: number) => blendPixel(hd, x, y, color, alpha)
-  const glow = (cx: number, cy: number, rx: number, ry: number, color: RGB, strength: number) => {
-    const xa = Math.max(0, Math.floor(cx - rx))
-    const xb = Math.min(w - 1, Math.ceil(cx + rx))
-    const ya = Math.max(0, Math.floor(cy - ry))
-    const yb = Math.min(h - 1, Math.ceil(cy + ry))
-    for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
-        if (d < 1) blend(x, y, color, strength * (1 - d) * (1 - d))
-      }
-    }
-  }
+  const glow = glowEllipse.bind(undefined, hd)
   const around = colosseumSkyRgb(style, 0.2)
   const warm = hdHex("#ffb25a")
   const uplight = night ? hdHex("#ffc070") : hdHex("#fff2cc")

@@ -20,7 +20,7 @@ import {
   cityWindows,
   type CityStyle,
 } from "./city-view-model"
-import { hash } from "./atmos-paint"
+import { glowEllipse, hash } from "./atmos-paint"
 
 /** Deterministic hash in [0, 1). */
 /**
@@ -40,18 +40,7 @@ export function renderCityPixels(width: number, height: number, style: CityStyle
   const { w, h, cw, ch, X, Y } = hd
   const t = Math.max(0, elapsedMs)
   const blend = (x: number, y: number, color: RGB, alpha: number) => blendPixel(hd, x, y, color, alpha)
-  const glow = (cx: number, cy: number, rx: number, ry: number, color: RGB, strength: number) => {
-    const xa = Math.max(0, Math.floor(cx - rx))
-    const xb = Math.min(w - 1, Math.ceil(cx + rx))
-    const ya = Math.max(0, Math.floor(cy - ry))
-    const yb = Math.min(h - 1, Math.ceil(cy + ry))
-    for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
-        if (d < 1) blend(x, y, color, strength * (1 - d) * (1 - d))
-      }
-    }
-  }
+  const glow = glowEllipse.bind(undefined, hd)
   const building = hdHex(c.building)
   const shade = hdHex(c.shade)
   const edge = hdHex(c.edge)

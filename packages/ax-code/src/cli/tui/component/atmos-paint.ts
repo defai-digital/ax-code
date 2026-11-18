@@ -2,21 +2,34 @@ import { hdMix, type HdCanvas, type RGB } from "./scene-hd"
 
 /** Pixel-space painters shared by the HD scene renderers. Everything is deterministic. */
 
-export function blendPx(hd: HdCanvas, x: number, y: number, color: RGB, alpha: number) {
-  if (alpha <= 0 || x < 0 || y < 0 || x >= hd.w || y >= hd.h) return
-  const a = Math.min(1, alpha)
-  const i = (y * hd.w + x) * 3
-  hd.pixels[i] = Math.round(hd.pixels[i]! + (color[0] - hd.pixels[i]!) * a)
-  hd.pixels[i + 1] = Math.round(hd.pixels[i + 1]! + (color[1] - hd.pixels[i + 1]!) * a)
-  hd.pixels[i + 2] = Math.round(hd.pixels[i + 2]! + (color[2] - hd.pixels[i + 2]!) * a)
-}
+export { blendPixel as blendPx } from "./scene-art-kit"
 
 /** Soft radial bloom blended over whatever is already painted. */
-export function glow(hd: HdCanvas, cx: number, cy: number, radius: number, color: RGB, strength: number, squash = 1) {
-  if (hd.w === 0 || hd.h === 0 || radius <= 0 || strength <= 0) return
-  const ry = radius * squash
-  const xa = Math.max(0, Math.floor(cx - radius))
-  const xb = Math.min(hd.w - 1, Math.ceil(cx + radius))
+export function glow(
+  hd: HdCanvas,
+  cx: number,
+  cy: number,
+  radius: number,
+  color: RGB,
+  strength: number,
+  squash = 1,
+): void {
+  glowEllipse(hd, cx, cy, radius, radius * squash, color, strength)
+}
+
+/** Soft bloom with independent pixel radii; degenerate ellipses do not paint. */
+export function glowEllipse(
+  hd: HdCanvas,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  color: RGB,
+  strength: number,
+): void {
+  if (hd.w === 0 || hd.h === 0 || rx <= 0 || ry <= 0 || strength <= 0) return
+  const xa = Math.max(0, Math.floor(cx - rx))
+  const xb = Math.min(hd.w - 1, Math.ceil(cx + rx))
   const ya = Math.max(0, Math.floor(cy - ry))
   const yb = Math.min(hd.h - 1, Math.ceil(cy + ry))
   // Inlined blendPx: the loop bounds are already clipped to the canvas, and a
@@ -28,7 +41,7 @@ export function glow(hd: HdCanvas, cx: number, cy: number, radius: number, color
     if (dy >= 1 || dy <= -1) continue
     let i = (y * w + xa) * 3
     for (let x = xa; x <= xb; x++, i += 3) {
-      const d = Math.hypot((x + 0.5 - cx) / radius, dy)
+      const d = Math.hypot((x + 0.5 - cx) / rx, dy)
       if (d >= 1) continue
       const f = 1 - d
       const alpha = strength * f * f

@@ -12,7 +12,7 @@ export function artHash(a: number, b = 0): number {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296
 }
 
-export function blendPixel(hd: HdCanvas, x: number, y: number, color: RGB, alpha: number) {
+export function blendPixel(hd: HdCanvas, x: number, y: number, color: RGB, alpha: number): void {
   if (x < 0 || y < 0 || x >= hd.w || y >= hd.h || alpha <= 0) return
   const a = Math.min(1, alpha)
   const i = (y * hd.w + x) * 3

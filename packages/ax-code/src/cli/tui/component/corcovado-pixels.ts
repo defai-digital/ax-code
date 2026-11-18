@@ -18,7 +18,7 @@ import {
   corcovadoSurf,
   type CorcovadoStyle,
 } from "./corcovado-view-model"
-import { hash } from "./atmos-paint"
+import { glowEllipse, hash } from "./atmos-paint"
 
 /** Deterministic hash in [0, 1). */
 /** Smooth 2D value noise. */
@@ -58,18 +58,7 @@ export function renderCorcovadoPixels(width: number, height: number, style: Corc
   const dot = Math.max(1.7, Math.min(cw, ch) * 0.4)
   const coreR = Math.max(3, Math.min(cw, ch) * 0.9)
   const blend = (x: number, y: number, color: RGB, alpha: number) => blendPixel(hd, x, y, color, alpha)
-  const glow = (cx: number, cy: number, rx: number, ry: number, color: RGB, strength: number) => {
-    const xa = Math.max(0, Math.floor(cx - rx))
-    const xb = Math.min(w - 1, Math.ceil(cx + rx))
-    const ya = Math.max(0, Math.floor(cy - ry))
-    const yb = Math.min(h - 1, Math.ceil(cy + ry))
-    for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
-        if (d < 1) blend(x, y, color, strength * (1 - d) * (1 - d))
-      }
-    }
-  }
+  const glow = glowEllipse.bind(undefined, hd)
   const skyAt = (sceneY: number): RGB => {
     if (h <= 1) return corcovadoSkyRgb(style, 0)
     const py = Math.max(0, Math.min(h - 1, Math.floor(Y(sceneY))))

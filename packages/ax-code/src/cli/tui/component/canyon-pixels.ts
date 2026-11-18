@@ -17,7 +17,7 @@ import {
   canyonTick,
   type CanyonStyle,
 } from "./canyon-view-model"
-import { hash } from "./atmos-paint"
+import { glowEllipse, hash } from "./atmos-paint"
 
 /** Deterministic hash in [0, 1). */
 /** Smooth 1D value noise. */
@@ -47,19 +47,7 @@ export function renderCanyonPixels(width: number, height: number, style: CanyonS
   const px = hd.pixels
   const blend = (x: number, y: number, color: RGB, alpha: number) => blendPixel(hd, x, y, color, alpha)
   /** Soft radial additive light in pixel space. */
-  const glow = (cx: number, cy: number, rx: number, ry: number, color: RGB, strength: number) => {
-    const xa = Math.max(0, Math.floor(cx - rx))
-    const xb = Math.min(w - 1, Math.ceil(cx + rx))
-    const ya = Math.max(0, Math.floor(cy - ry))
-    const yb = Math.min(h - 1, Math.ceil(cy + ry))
-    for (let y = ya; y <= yb; y++) {
-      for (let x = xa; x <= xb; x++) {
-        const d = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)
-        if (d >= 1) continue
-        blend(x, y, color, strength * (1 - d) * (1 - d))
-      }
-    }
-  }
+  const glow = glowEllipse.bind(undefined, hd)
   const strata = [hdHex(c.strata1), hdHex(c.strata2), hdHex(c.strata3)] as const
   const rim = hdHex(c.rim)
   const rimShade = hdHex(c.rimBg)
