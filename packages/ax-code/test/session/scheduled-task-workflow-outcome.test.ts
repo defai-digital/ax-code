@@ -374,6 +374,33 @@ describe("ScheduledTask workflow outcome recording", () => {
     })
   })
 
+  test("an inline workflow completing late preserves the replacement reminder", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const workflowRunID = "wfr_rescheduled"
+        await mockWorkflowDispatch(workflowRunID)
+        const task = await ScheduledTask.create({
+          title: "Rescheduled workflow",
+          prompt: "Run once.",
+          schedule: { type: "once", runAt: Date.now() + 60_000 },
+          workflowTemplateID: "builtin:noop-dry-run",
+        })
+        await ScheduledTask.runNow(task.id)
+        const runAt = Date.now() + 120_000
+        const replacement = await ScheduledTask.update({ id: task.id, schedule: { type: "once", runAt } })
+        expect(replacement.lastWorkflowRunID).toBe(workflowRunID)
+
+        await ScheduledTask.recordWorkflowOutcome(task.id, "completed", undefined, workflowRunID)
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+          { status: "completed", workflowRunID },
+        ])
+        expect(await ScheduledTask.get(task.id)).toEqual(replacement)
+      },
+    })
+  })
+
   test("a workflow can only link to the occurrence claimed by its queue item", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

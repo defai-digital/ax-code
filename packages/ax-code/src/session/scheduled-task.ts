@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util"
 import z from "zod"
 import { HTTPException } from "hono/http-exception"
 import { NamedError } from "@ax-code/util/error"
@@ -548,19 +549,29 @@ export namespace ScheduledTask {
     }
   }
 
-  export async function get(id: ScheduledTaskID): Promise<Info> {
-    const task = SessionShard.storeForProject(Instance.project.id).use((db) => {
-      const row = db.select().from(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, id)).get()
-      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
-      return fromRow(row)
-    })
+  function readTask(db: Database.TxOrDb, id: ScheduledTaskID): Info {
+    const row = db.select().from(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, id)).get()
+    if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+    const task = fromRow(row)
     assertProjectTask(task)
     return task
   }
 
+  export async function get(id: ScheduledTaskID): Promise<Info> {
+    return SessionShard.storeForProject(Instance.project.id).use((db) => readTask(db, id))
+  }
+
   export async function update(input: UpdateInput): Promise<Info> {
     const parsed = UpdateInput.parse(input)
-    const current = await get(parsed.id)
+    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) =>
+      updateIn(db, parsed),
+    )
+    publishUpdated(task)
+    return task
+  }
+
+  function updateIn(db: Database.TxOrDb, parsed: z.output<typeof UpdateInput>): Info {
+    const current = readTask(db, parsed.id)
     const now = Date.now()
     // Resuming an already-fired one-time task would re-run validateSchedule with
     // a now-past runAt and surface a confusing "not in the future" error. Give a
@@ -624,7 +635,7 @@ export namespace ScheduledTask {
       : current.maxRunDurationMs
     if (
       nextDeadline !== current.maxRunDurationMs &&
-      hasOpenRun(parsed.id, now, current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS)
+      hasOpenRunIn(db, parsed.id, now, current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS)
     ) {
       throw new HTTPException(409, {
         message: `Scheduled task ${parsed.id} has a run in progress; maxRunDurationMs cannot be changed until it finishes.`,
@@ -638,6 +649,9 @@ export namespace ScheduledTask {
     if (parsed.schedule !== undefined) {
       updates.schedule = parsed.schedule
       updates.next_run_at = nextRunAt(parsed.schedule, now) ?? null
+      // The new timing has no claimed occurrence. Keep the dispatch links
+      // for cancellation, but retire the old run's authority over this schedule.
+      if (!isDeepStrictEqual(parsed.schedule, current.schedule)) updates.last_run_at = null
     } else if (nextStatus === "active" && current.status !== "active") {
       updates.next_run_at = nextRunAt(nextSchedule, now) ?? null
     }
@@ -654,19 +668,9 @@ export namespace ScheduledTask {
     if (parsed.catchUpPolicy !== undefined) updates.catch_up_policy = parsed.catchUpPolicy
     if (Object.hasOwn(parsed, "maxRunDurationMs")) updates.max_run_duration_ms = parsed.maxRunDurationMs
 
-    const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const row = db
-        .update(ScheduledTaskTable)
-        .set(updates)
-        .where(eq(ScheduledTaskTable.id, parsed.id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${parsed.id}` })
-      return fromRow(row)
-    })
-    assertProjectTask(task)
-    publishUpdated(task)
-    return task
+    const row = db.update(ScheduledTaskTable).set(updates).where(eq(ScheduledTaskTable.id, parsed.id)).returning().get()
+    if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${parsed.id}` })
+    return fromRow(row)
   }
 
   export function pause(id: ScheduledTaskID): Promise<Info> {
@@ -1539,9 +1543,13 @@ export namespace ScheduledTask {
     // Only the callback that settles the run may update the schedule.
     if (!run) return undefined
 
-    // A superseded callback can close its own run. Its retry policy and
-    // summary belong to the schedule only while it is the latest run.
-    const conditions = [eq(ScheduledTaskTable.id, id), eq(ScheduledTaskTable.project_id, projectID)]
+    // A callback can close its own history. Only the occurrence claimed for
+    // the current timing may consume that schedule or apply its retry policy.
+    const conditions = [
+      eq(ScheduledTaskTable.id, id),
+      eq(ScheduledTaskTable.project_id, projectID),
+      eq(ScheduledTaskTable.last_run_at, run.time.created),
+    ]
     if ("queueID" in source) conditions.push(eq(ScheduledTaskTable.last_queue_id, source.queueID))
     else if (source.workflowRunID) conditions.push(eq(ScheduledTaskTable.last_workflow_run_id, source.workflowRunID))
 

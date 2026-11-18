@@ -195,6 +195,58 @@ describe("ScheduledTask one-shot lifecycle", () => {
     },
   )
 
+  test.each(["completed", "failed"] as const)(
+    "an in-flight one-shot's %s outcome preserves a replacement time",
+    async (status) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+          const now = Date.now()
+          const task = await ScheduledTask.create({
+            title: "Rescheduled reminder",
+            prompt: "Run once.",
+            schedule: { type: "once", runAt: now + 1_000 },
+          })
+          const { queueItem } = await claimOnce(task.id, now + 2_000)
+          if (!queueItem) throw new Error("Expected a scheduled queue item")
+          const runAt = now + 30_000
+          const replacement = await ScheduledTask.update({ id: task.id, schedule: { type: "once", runAt } })
+          expect(replacement.lastQueueID).toBe(queueItem.id)
+
+          await ScheduledTask.recordQueueOutcome(task.id, status, "Original dispatch failed", queueItem.id)
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status }])
+          expect(await ScheduledTask.get(task.id)).toEqual(replacement)
+
+          const next = await claimOnce(task.id, runAt + 1_000)
+          await ScheduledTask.recordQueueOutcome(task.id, "completed", undefined, next.queueItem!.id)
+          expect((await ScheduledTask.get(task.id)).status).toBe("disabled")
+        },
+      })
+    },
+  )
+
+  test("saving the same time keeps a manual one-shot's outcome attached", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const task = await ScheduledTask.create({
+          title: "Unchanged reminder",
+          prompt: "Run once.",
+          schedule: { type: "once", runAt: Date.now() + 60_000 },
+        })
+        const { queueItem } = await ScheduledTask.runNow(task.id)
+        if (!queueItem) throw new Error("Expected a scheduled queue item")
+        await ScheduledTask.update({ id: task.id, schedule: task.schedule })
+        await ScheduledTask.recordQueueOutcome(task.id, "completed", undefined, queueItem.id)
+        expect((await ScheduledTask.get(task.id)).status).toBe("disabled")
+      },
+    })
+  })
+
   test("a failed one-shot stays active and retries with backoff; success after failures disables it", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
