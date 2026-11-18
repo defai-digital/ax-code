@@ -2307,7 +2307,7 @@ describe("TaskQueue", () => {
     })
   })
 
-  test("holds workflow child execution when phase maxParallel is saturated", async () => {
+  test.each([0, 300])("holds workflow child execution at maxParallel with %i unrelated rows", async (history) => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -2316,6 +2316,7 @@ describe("TaskQueue", () => {
         const firstSession = await Session.create({})
         const secondSession = await Session.create({})
         const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
+        seedUnrelatedWorkflowRows(history, "running")
         const first = await TaskQueue.enqueue({
           sessionID: firstSession.id,
           kind: "subagent",
@@ -2442,7 +2443,11 @@ describe("TaskQueue", () => {
     })
   })
 
-  test("starts the next queued workflow child when a phase maxParallel slot opens", async () => {
+  test.each([
+    ["queued", 0],
+    ["queued", 500],
+    ["waiting_for_idle", 500],
+  ] as const)("starts a %s child when a phase slot opens with %i unrelated rows", async (status, history) => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -2451,6 +2456,7 @@ describe("TaskQueue", () => {
         const firstSession = await Session.create({})
         const secondSession = await Session.create({})
         const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
+        seedUnrelatedWorkflowRows(history, status)
         const first = await TaskQueue.enqueue({
           sessionID: firstSession.id,
           kind: "subagent",
@@ -2480,6 +2486,7 @@ describe("TaskQueue", () => {
           },
         })
 
+        await TaskQueue.setStatus({ id: second.id, status })
         await TaskQueueExecutor.start(first)
 
         await waitForQueueStatus(first.id, "completed")
@@ -2488,7 +2495,7 @@ describe("TaskQueue", () => {
     })
   })
 
-  test("holds workflow child execution when request pacing is saturated", async () => {
+  test.each([0, 500])("holds workflow child execution at the request limit with %i unrelated rows", async (history) => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -2497,6 +2504,7 @@ describe("TaskQueue", () => {
         const firstSession = await Session.create({})
         const secondSession = await Session.create({})
         const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
+        seedUnrelatedWorkflowRows(history, "completed")
         const first = await TaskQueue.enqueue({
           sessionID: firstSession.id,
           kind: "subagent",
@@ -2507,7 +2515,7 @@ describe("TaskQueue", () => {
           sessionID: secondSession.id,
           kind: "subagent",
           title: "Run second paced workflow child",
-          payload: pacedWorkflowPayload({ workflow: { ...workflow, childID: "wfc_second" } }),
+          payload: pacedWorkflowPayload({ workflow: { ...workflow, phaseID: "wfp_second", childID: "wfc_second" } }),
         })
 
         await TaskQueue.setStatus({ id: first.id, status: "running" })
@@ -3116,6 +3124,27 @@ async function waitForValue<T>(label: string, read: () => T | undefined | Promis
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
   throw new Error(`Timed out waiting for ${label}`)
+}
+
+function seedUnrelatedWorkflowRows(count: number, status: TaskQueue.Status): void {
+  const projectID = Instance.project.id
+  SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
+    for (let position = 0; position < count; position++) {
+      db.insert(TaskQueueTable)
+        .values({
+          id: TaskQueueID.ascending(),
+          project_id: projectID,
+          directory: Instance.directory,
+          kind: "subagent",
+          status,
+          position,
+          title: "unrelated workflow child",
+          payload: { workflow: { runID: "wfr_other", phaseID: "wfp_test", childID: `wfc_other_${position}` } },
+          time_started: status === "queued" || status === "waiting_for_idle" ? undefined : Date.now(),
+        })
+        .run()
+    }
+  })
 }
 
 function pacedWorkflowPayload(input: {

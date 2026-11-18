@@ -219,7 +219,7 @@ function startLockKeys(item: TaskQueue.Info, execution: QueueExecution): string[
   const keys = execution.sessionID
     ? [`session:${item.projectID}:${execution.sessionID}`]
     : [`task:${item.projectID}:${item.id}`]
-  const workflow = workflowPayload(item)
+  const workflow = TaskQueue.workflowChild(item)
   if (workflow) keys.push(`workflow-phase:${item.projectID}:${workflow.runID}:${workflow.phaseID}`)
   return uniqueSortedStrings(keys)
 }
@@ -488,54 +488,47 @@ async function shouldWaitForIdle(sessionID: SessionID, currentTaskID: TaskQueueI
 }
 
 async function shouldWaitForWorkflowPhaseSlot(item: TaskQueue.Info) {
-  const workflow = workflowPayload(item)
+  const workflow = TaskQueue.workflowChild(item)
   const maxParallel = workflowMaxParallel(item.payload)
   if (!workflow || maxParallel === undefined) return false
-  const active = await activeWorkflowPhaseItems(workflow, item.id)
-  const pending = [...timeoutCleanup().pending.values()].filter(
-    ({ item: predecessor }) =>
-      sameWorkflowPhase(predecessor, workflow) && !active.some((entry) => entry.id === predecessor.id),
-  )
-  return active.length + pending.length >= maxParallel
+  const { runID, phaseID } = workflow
+  const active = await TaskQueue.listWorkflowChildren({ runID, phaseID, statuses: activeStatuses, excludeID: item.id })
+  const occupied = new Set(active.map((entry) => entry.id))
+  for (const { item: predecessor } of timeoutCleanup().pending.values()) {
+    const owner = TaskQueue.workflowChild(predecessor)
+    if (owner?.runID === runID && owner.phaseID === phaseID) occupied.add(predecessor.id)
+  }
+  return occupied.size >= maxParallel
 }
 
 async function drainNextWorkflowPhaseItem(item: TaskQueue.Info) {
-  const workflow = workflowPayload(item)
-  const maxParallel = workflowMaxParallel(item.payload)
-  if (!workflow || maxParallel === undefined) return
+  const workflow = TaskQueue.workflowChild(item)
+  if (!workflow || workflowMaxParallel(item.payload) === undefined) return
   if (await shouldWaitForWorkflowPhaseSlot(item)) return
 
-  // Include waiting_for_idle items: a task that was blocked on idle when
-  // start() ran stays in waiting_for_idle, invisible to a queued-only query.
-  // When a phase slot opens it would never be retried otherwise.
-  // The 500 cap matches workflowPacingWaitMs: a 100 cap would leave a phase's
-  // children invisible to drain whenever another workflow floods the global
-  // queue, stalling the phase until its first 100 children settle.
-  const [queued, waitingForIdle] = await Promise.all([
-    TaskQueue.list({ status: "queued", limit: 500 }),
-    TaskQueue.list({ status: "waiting_for_idle", limit: 500 }),
-  ])
-  const next = [...queued, ...waitingForIdle]
-    .filter((candidate) => sameWorkflowPhase(candidate, workflow))
-    .sort(compareQueueItems)[0]
+  const { runID, phaseID } = workflow
+  const candidates = await TaskQueue.listWorkflowChildren({ runID, phaseID, statuses: ["queued", "waiting_for_idle"] })
+  const [next] = candidates.sort(compareQueueItems)
   if (!next) return
   await TaskQueueExecutor.start(next)
 }
 
 async function workflowPacingWaitMs(item: TaskQueue.Info, now = Date.now()) {
-  const workflow = workflowPayload(item)
+  const workflow = TaskQueue.workflowChild(item)
   const pacing = workflowPacing(item.payload)
   if (!workflow || !pacing) return 0
 
-  const started = (await TaskQueue.list({ limit: 500 }))
-    .filter((candidate) => candidate.id !== item.id && sameWorkflowRun(candidate, workflow))
-    .map((candidate) => ({
-      startedAt: candidate.time.started,
-      tokens: workflowEstimatedTokensForPacing(candidate.payload),
-    }))
-    .filter((candidate): candidate is { startedAt: number; tokens: number } => {
-      return candidate.startedAt !== undefined && candidate.startedAt > now - WORKFLOW_PACING_WINDOW_MS
-    })
+  const recent = await TaskQueue.listWorkflowChildren({
+    runID: workflow.runID,
+    startedAfter: now - WORKFLOW_PACING_WINDOW_MS,
+    excludeID: item.id,
+  })
+  const started = recent
+    .flatMap(({ time, payload }) =>
+      time.started === undefined
+        ? []
+        : [{ startedAt: time.started, tokens: workflowEstimatedTokensForPacing(payload) }],
+    )
     .sort((left, right) => left.startedAt - right.startedAt)
 
   const requestWaitMs =
@@ -594,13 +587,6 @@ function scheduleWorkflowPacingRetry(item: TaskQueue.Info, waitMs: number) {
   workflowPacingTimers.set(item.id, timer)
 }
 
-async function activeWorkflowPhaseItems(workflow: WorkflowQueuePayload, currentTaskID?: TaskQueueID) {
-  // One inArray query instead of one list() per active status (3 SELECTs + 3
-  // per-row Info parses). The 300 cap preserves the previous 3x100 capacity.
-  const items = await TaskQueue.list({ statuses: [...activeStatuses], limit: 300 })
-  return items.filter((candidate) => candidate.id !== currentTaskID && sameWorkflowPhase(candidate, workflow))
-}
-
 function sessionPromptBusy(sessionID: SessionID) {
   try {
     SessionPrompt.assertNotBusy(sessionID)
@@ -611,8 +597,6 @@ function sessionPromptBusy(sessionID: SessionID) {
 }
 
 async function pendingSessionItems(sessionID: SessionID) {
-  // list() orders by position asc, then time/id desc — the same total order the
-  // previous queued+waiting merge produced via compareQueueItems.
   return TaskQueue.list({ sessionID, statuses: ["queued", "waiting_for_idle"], limit: 200 })
 }
 
@@ -1021,30 +1005,29 @@ function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
     if (!body) throw new Error(`Subagent queue item ${item.id} has no executable prompt`)
     const next = await applyRestartContinuation(item, body)
     const executionStartedAt = Date.now()
-    const result = await SessionPrompt.prompt({ ...next, sessionID })
+    let result = await SessionPrompt.prompt({ ...next, sessionID })
     const work = assistantError(result) ? undefined : await inspectSubagentBackgroundWork(sessionID, executionStartedAt)
-    if (!work) {
-      if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, result)
-      return result
+    if (work) {
+      const background = await prepareSubagentBackgroundFinalization({
+        work,
+        startedAt: executionStartedAt,
+        executionBudgetMs: item.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS,
+        signal: controller.signal,
+        tools: next.tools,
+      })
+      result = await SessionPrompt.prompt({
+        ...next,
+        sessionID,
+        toolsScope: "turn",
+        tools: background.tools,
+        parts: [{ type: "text", text: background.text }],
+      })
     }
-    const background = await prepareSubagentBackgroundFinalization({
-      work,
-      startedAt: executionStartedAt,
-      executionBudgetMs: item.executionTimeoutMs ?? DEFAULT_EXECUTION_TIMEOUT_MS,
-      signal: controller.signal,
-      tools: next.tools,
-    })
-    const final = await SessionPrompt.prompt({
-      ...next,
-      sessionID,
-      toolsScope: "turn",
-      tools: background.tools,
-      parts: [{ type: "text", text: background.text }],
-    })
     // Only the final result is recorded for workflow usage; the interim
     // "work started" turn is not the child's deliverable.
-    if (isWorkflowQueueItem(item)) await recordWorkflowSubagentUsage(item, final)
-    return final
+    const workflow = TaskQueue.workflowChild(item)
+    if (workflow) await recordWorkflowSubagentUsage(workflow, result)
+    return result
   }
 }
 
@@ -1076,9 +1059,7 @@ async function runInQueueItemInstance<T>(item: TaskQueue.Info, run: () => Promis
   })
 }
 
-async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown) {
-  const workflow = workflowPayload(item)
-  if (!workflow) return
+async function recordWorkflowSubagentUsage(workflow: TaskQueue.WorkflowChild, result: unknown) {
   const usage = messageBudgetUsage(result)
 
   const { WorkflowRun } = await import("../workflow/run")
@@ -1407,40 +1388,6 @@ function workflowNetworkPolicy(value: unknown): "inherit" | "disabled" | "allowe
 
 function workflowEscalationPolicy(value: unknown): "inherit" | "ask" | "deny" | undefined {
   return value === "inherit" || value === "ask" || value === "deny" ? value : undefined
-}
-
-type WorkflowQueuePayload = {
-  runID: string
-  phaseID: string
-  childID: string
-}
-
-function isWorkflowQueueItem(item: TaskQueue.Info) {
-  const workflow = item.payload["workflow"]
-  return !!workflow && typeof workflow === "object"
-}
-
-function workflowPayload(item: TaskQueue.Info): WorkflowQueuePayload | undefined {
-  const workflow = item.payload["workflow"]
-  if (!workflow || typeof workflow !== "object") return undefined
-  const record = workflow as Record<string, unknown>
-  if (typeof record.runID !== "string" || typeof record.phaseID !== "string" || typeof record.childID !== "string") {
-    return undefined
-  }
-  return {
-    runID: record.runID,
-    phaseID: record.phaseID,
-    childID: record.childID,
-  }
-}
-
-function sameWorkflowPhase(item: TaskQueue.Info, workflow: WorkflowQueuePayload) {
-  const candidate = workflowPayload(item)
-  return candidate?.runID === workflow.runID && candidate.phaseID === workflow.phaseID
-}
-
-function sameWorkflowRun(item: TaskQueue.Info, workflow: WorkflowQueuePayload) {
-  return workflowPayload(item)?.runID === workflow.runID
 }
 
 function workflowMaxParallel(payload: TaskQueue.Payload) {

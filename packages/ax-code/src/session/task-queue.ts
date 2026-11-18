@@ -5,7 +5,7 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { Database, NotFoundError, and, asc, desc, eq, gt, gte, inArray, or, sql } from "@/storage/db"
+import { Database, NotFoundError, and, asc, desc, eq, gt, gte, inArray, ne, or, sql, type SQL } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
 import { SessionMetadata } from "./metadata"
@@ -55,6 +55,14 @@ export namespace TaskQueue {
 
   export const Payload = z.record(z.string(), z.unknown())
   export type Payload = z.infer<typeof Payload>
+
+  const WorkflowChild = z.object({ runID: z.string(), phaseID: z.string(), childID: z.string() })
+  export type WorkflowChild = z.infer<typeof WorkflowChild>
+
+  export function workflowChild(item: Info): WorkflowChild | undefined {
+    const parsed = WorkflowChild.safeParse(item.payload["workflow"])
+    return parsed.success ? parsed.data : undefined
+  }
 
   export const Info = z.object({
     id: TaskQueueID.zod,
@@ -361,27 +369,60 @@ export namespace TaskQueue {
   export async function list(input: Partial<ListInput> = {}): Promise<Info[]> {
     const parsed = ListInput.partial().parse(input)
     if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
-    const conditions = [eq(TaskQueueTable.project_id, Instance.project.id)]
+    const conditions: SQL[] = []
     if (parsed.sessionID) conditions.push(eq(TaskQueueTable.session_id, parsed.sessionID))
     if (parsed.kind) conditions.push(eq(TaskQueueTable.kind, parsed.kind))
     if (parsed.source) conditions.push(sql`json_extract(${queuePayloadJson}, '$.source') = ${parsed.source}`)
     if (parsed.status) conditions.push(eq(TaskQueueTable.status, parsed.status))
     if (parsed.statuses && parsed.statuses.length > 0) conditions.push(inArray(TaskQueueTable.status, parsed.statuses))
+    return readQueueItems(conditions, parsed)
+  }
+
+  function readQueueItems(conditions: SQL[], options: Pick<ListInput, "newestCreatedFirst" | "limit"> = {}): Info[] {
+    const projectID = Instance.project.id
     const order = [desc(TaskQueueTable.time_created), desc(TaskQueueTable.id)]
-    if (!parsed.newestCreatedFirst) order.unshift(asc(TaskQueueTable.position))
-    return SessionShard.storeForProject(Instance.project.id).use((db) => {
+    if (!options.newestCreatedFirst) order.unshift(asc(TaskQueueTable.position))
+    return SessionShard.storeForProject(projectID).use((db) => {
       let query = db
         .select()
         .from(TaskQueueTable)
-        .where(and(...conditions))
+        .where(and(eq(TaskQueueTable.project_id, projectID), ...conditions))
         .orderBy(...order)
         .$dynamic()
-      if (parsed.limit) query = query.limit(parsed.limit)
+      if (options.limit) query = query.limit(options.limit)
       return query
         .all()
         .map(readableQueueItem)
         .filter((item) => item !== undefined)
     })
+  }
+
+  /** Read only a phase's eligible children or a run's recent starts for pacing. */
+  export async function listWorkflowChildren(
+    input: { runID: string; excludeID?: TaskQueueID } & (
+      | { phaseID: string; statuses: readonly Status[] }
+      | { startedAfter: number }
+    ),
+  ): Promise<Info[]> {
+    // Validate the scheduling identity before reading rows. Full workflow
+    // specs and execution options are validated by the workflow runtime.
+    const conditions = [
+      sql`json_extract(${queuePayloadJson}, '$.workflow.runID') = ${input.runID}`,
+      sql`json_type(${queuePayloadJson}, '$.workflow.childID') = 'text'`,
+    ]
+    if (input.excludeID !== undefined) conditions.push(ne(TaskQueueTable.id, input.excludeID))
+    if ("phaseID" in input) {
+      conditions.push(
+        sql`json_extract(${queuePayloadJson}, '$.workflow.phaseID') = ${input.phaseID}`,
+        inArray(TaskQueueTable.status, input.statuses),
+      )
+    } else {
+      conditions.push(
+        sql`json_type(${queuePayloadJson}, '$.workflow.phaseID') = 'text'`,
+        gt(TaskQueueTable.time_started, input.startedAfter),
+      )
+    }
+    return readQueueItems(conditions)
   }
 
   /**
