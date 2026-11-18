@@ -2,6 +2,9 @@ import { afterEach, test, expect, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { pathToFileURL } from "url"
+import { createServer } from "node:http"
+import { once } from "node:events"
+import type { Socket } from "node:net"
 
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -14,6 +17,7 @@ import { latestAnthropicFamilyModels } from "../../src/provider/anthropic-famili
 import { CUSTOM_LOADERS, type CustomLoader } from "../../src/provider/loaders"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
+import { MessageV2 } from "../../src/session/message-v2"
 
 afterEach(() => vi.unstubAllEnvs())
 
@@ -653,6 +657,43 @@ test("wrapSSE removes the outer abort listener when the underlying reader fails"
   expect(chunkAbort.signal.aborted).toBe(false)
   expect(removed).toBe(1)
 })
+
+test.each([60_000, 0])(
+  "wrapSSE retains the gateway request ID on a real mid-stream socket reset (timeout %s)",
+  async (timeout) => {
+    const requestID = "01a1ecd2-739b-77cc-a8bf-8738dd876a1b"
+    let socket: Socket | undefined
+    const server = createServer((req, res) => {
+      socket = req.socket
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "X-Request-Id": requestID,
+        "X-Private-Header": "must-not-be-retained",
+      })
+      res.write("data: partial\n\n")
+    })
+    server.listen(0, "127.0.0.1")
+    await once(server, "listening")
+    try {
+      const address = server.address()
+      if (!address || typeof address === "string") throw new Error("Missing test listener")
+      const response = await fetch(`http://127.0.0.1:${address.port}`)
+      const wrapped = Provider.wrapSSE(response, timeout, new AbortController())
+      const reader = wrapped.body!.getReader()
+      expect(new TextDecoder().decode((await reader.read()).value)).toBe("data: partial\n\n")
+      socket!.resetAndDestroy()
+      const error = await reader.read().catch((error: unknown) => error)
+      expect(error).toBeInstanceOf(TypeError)
+      const normalized = MessageV2.fromError(error, { providerID: ProviderID.make("stream-regression") })
+      expect(normalized).toMatchObject({ name: "APIError", data: { isRetryable: true, metadata: { requestID } } })
+      expect(["ECONNRESET", "UND_ERR_SOCKET"]).toContain((normalized as MessageV2.APIError).data.metadata?.code)
+      expect(JSON.stringify(normalized)).not.toContain("must-not-be-retained")
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  },
+)
 
 test("provider loaded from config with apiKey option", async () => {
   await using tmp = await tmpdir({

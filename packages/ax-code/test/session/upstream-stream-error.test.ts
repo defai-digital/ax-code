@@ -43,6 +43,15 @@ describe("gateway stream interruption classification", () => {
     })
     expect(SessionRetry.retryable(result, providerID)).toBeDefined()
   })
+  test("retains the nested ECONNRESET code and syscall from the reported undici failure", () => {
+    const cause = Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET", syscall: "read" })
+    const result = MessageV2.fromError(new TypeError("terminated", { cause }), { providerID })
+    expect(result).toMatchObject({
+      name: "APIError",
+      data: { isRetryable: true, metadata: { code: "ECONNRESET", syscall: "read", message: "terminated" } },
+    })
+    expect(SessionRetry.retryable(result, providerID)).toBeDefined()
+  })
   for (const message of ["terminated", "other side closed"]) {
     test(`bare undici TypeError ${message} enters bounded provider retry`, () => {
       const result = MessageV2.fromError(new TypeError(message), { providerID })

@@ -2702,35 +2702,60 @@ test("local checkpoints preserve the system prefix and follow tool evidence in e
   })
 })
 
-test("partial output locks automatic replay even when the API error is transient", async () => {
-  await using tmp = await tmpdir({ git: true })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const stream = vi.fn(
-        async () =>
-          ({
-            fullStream: (async function* () {
-              yield { type: "start" }
-              yield { type: "start-step" }
-              yield { type: "text-start", id: "partial" }
-              yield { type: "text-delta", id: "partial", text: "Already published" }
-              throw new MessageV2.APIError({ message: "Service Unavailable", statusCode: 503, isRetryable: true })
-            })(),
-          }) as unknown as Awaited<ReturnType<typeof LLM.stream>>,
-      )
-      const sleep = vi.fn(async () => {})
-      const { processor, streamInput } = await createProcessorFixture(
-        tmp.path,
-        processorDependencies({ stream, sleep }),
-      )
-      expect(await processor.process(streamInput)).toBe("stop")
-      expect(processor.recoverySafe).toBe(false)
-      expect(stream).toHaveBeenCalledTimes(1)
-      expect(sleep).not.toHaveBeenCalled()
-    },
-  })
-})
+test.each(["api", "socket"])(
+  "partial output is preserved without replay after a transient %s failure",
+  async (kind) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const stream = vi.fn(
+          async () =>
+            ({
+              fullStream: (async function* () {
+                yield { type: "start" }
+                yield { type: "start-step" }
+                yield { type: "text-start", id: "partial" }
+                yield { type: "text-delta", id: "partial", text: "Already published" }
+                if (kind === "api") {
+                  throw new MessageV2.APIError({ message: "Service Unavailable", statusCode: 503, isRetryable: true })
+                }
+                throw new TypeError("terminated", {
+                  cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET", syscall: "read" }),
+                })
+              })(),
+            }) as unknown as Awaited<ReturnType<typeof LLM.stream>>,
+        )
+        const sleep = vi.fn(async () => {})
+        const { processor, streamInput } = await createProcessorFixture(
+          tmp.path,
+          processorDependencies({ stream, sleep }),
+        )
+        expect(await processor.process(streamInput)).toBe("stop")
+        expect(processor.recoverySafe).toBe(false)
+        expect(stream).toHaveBeenCalledTimes(1)
+        expect(sleep).not.toHaveBeenCalled()
+        if (kind === "socket") {
+          expect(processor.message.error).toMatchObject({
+            name: "APIError",
+            data: {
+              isRetryable: false,
+              metadata: {
+                code: "ECONNRESET",
+                syscall: "read",
+                partialResponse: "true",
+                errorCode: "stream_interrupted_after_output",
+              },
+            },
+          })
+          expect(processor.message.error?.data.message).toContain("Send a follow-up to continue")
+        }
+        const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+        expect(saved.parts.some((part) => part.type === "text" && part.text === "Already published")).toBe(true)
+      },
+    })
+  },
+)
 
 test.each(["open", "ended", "empty-delta"])(
   "retry discards empty parts before a transient failure (%s)",

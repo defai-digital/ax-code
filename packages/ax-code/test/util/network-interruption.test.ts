@@ -1,10 +1,27 @@
 import { describe, expect, test } from "vitest"
-import { isNetworkInterruption, networkInterruptionCause } from "../../src/util/network-interruption"
+import {
+  isNetworkInterruption,
+  networkInterruptionCause,
+  networkInterruptionRequestID,
+  rememberNetworkRequestID,
+} from "../../src/util/network-interruption"
 
 const http2Reset = () =>
   Object.assign(new Error("Stream closed with error code NGHTTP2_INTERNAL_ERROR"), { code: "ERR_HTTP2_STREAM_ERROR" })
 
 describe("network interruption", () => {
+  test("correlation survives a frozen error and a cause wrapper without retaining arbitrary headers", () => {
+    const error = Object.freeze(new TypeError("terminated"))
+    const id = "01a1ecd2-739b-77cc-a8bf-8738dd876a1b"
+    rememberNetworkRequestID(error, new Headers({ "x-request-id": id, authorization: "must-not-be-retained" }))
+    expect(networkInterruptionRequestID(new Error("wrapped", { cause: error }))).toBe(id)
+    for (const value of ["", "private-provider-text", "a".repeat(4096)]) {
+      const other = new TypeError("terminated")
+      rememberNetworkRequestID(other, new Headers({ "x-request-id": value }))
+      expect(networkInterruptionRequestID(other)).toBeUndefined()
+    }
+    expect(networkInterruptionRequestID(new TypeError("terminated"))).toBeUndefined()
+  })
   test("matches undici's bare terminated and other-side-closed TypeErrors", () => {
     expect(isNetworkInterruption(new TypeError("terminated"))).toBe(true)
     expect(isNetworkInterruption(new TypeError("other side closed"))).toBe(true)

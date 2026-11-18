@@ -2039,7 +2039,21 @@ export namespace SessionProcessor {
             if (replayUnsafe) {
               // Even compaction/media repair cannot replay a request that
               // already published output or started a tool.
-              input.assistantMessage.error ??= error
+              input.assistantMessage.error ??=
+                MessageV2.APIError.isInstance(error) &&
+                error.data.isRetryable &&
+                MessageV2.isReplayableNetworkError(e, input.model.providerID)
+                  ? new MessageV2.APIError({
+                      ...error.data,
+                      isRetryable: false,
+                      message: `${error.data.message}. Partial output was saved; automatic retry was stopped because output or tool execution already started. Send a follow-up to continue.${error.data.metadata?.requestID ? ` Request ID: ${error.data.metadata.requestID}` : ""}`,
+                      metadata: {
+                        ...error.data.metadata,
+                        errorCode: "stream_interrupted_after_output",
+                        partialResponse: "true",
+                      },
+                    }).toObject()
+                  : error
             } else if (MessageV2.RequestTooLargeError.isInstance(error)) {
               const recovery = options?.mediaRecovery
               let retryMedia = false

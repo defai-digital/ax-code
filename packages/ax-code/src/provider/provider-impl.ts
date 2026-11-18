@@ -8,6 +8,7 @@ import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
 import { NoSuchModelError, type LanguageModel } from "ai"
 import { Log } from "../util/log"
 import { toErrorMessage } from "@/util/error-message"
+import { rememberNetworkRequestID } from "@/util/network-interruption"
 import { BunProc } from "../bun"
 import { Plugin } from "../plugin"
 import { NamedError } from "@ax-code/util/error"
@@ -332,7 +333,6 @@ export namespace Provider {
   }
 
   export function wrapSSE(res: Response, ms: number, ctl: AbortController, signal?: AbortSignal) {
-    if (typeof ms !== "number" || ms <= 0) return res
     if (!res.body) return res
     if (!res.headers.get("content-type")?.includes("text/event-stream")) return res
 
@@ -370,14 +370,17 @@ export namespace Provider {
     const body = new ReadableStream<Uint8Array>({
       async pull(ctrl) {
         const part = await new Promise<Awaited<ReturnType<typeof reader.read>>>((resolve, reject) => {
-          const id = setTimeout(() => {
-            const err = new Error("SSE read timed out")
-            abortReader(err)
-            reject(err)
-          }, ms)
+          const id =
+            ms > 0
+              ? setTimeout(() => {
+                  const err = new Error("SSE read timed out")
+                  abortReader(err)
+                  reject(err)
+                }, ms)
+              : undefined
           // The timer's job is to fail a stalled stream, not keep the event loop
           // alive; an unref'd watchdog cannot hold a shut-down process open.
-          ;(id as { unref?: () => void }).unref?.()
+          id?.unref?.()
 
           reader.read().then(
             (part) => {
@@ -387,6 +390,7 @@ export namespace Provider {
             (err) => {
               clearTimeout(id)
               finish()
+              rememberNetworkRequestID(err, res.headers)
               reject(err)
             },
           )
@@ -1323,7 +1327,12 @@ export namespace Provider {
             if (firstByteTimer) clearTimeout(firstByteTimer)
           }
 
-          if (chunkAbortCtl) res = wrapSSE(res, chunkTimeout, chunkAbortCtl, (opts.signal as AbortSignal) ?? undefined)
+          res = wrapSSE(
+            res,
+            chunkTimeout,
+            chunkAbortCtl ?? new AbortController(),
+            (opts.signal as AbortSignal) ?? undefined,
+          )
           return normalizeMiniMaxReasoning(res, minimaxReasoning)
         }
 

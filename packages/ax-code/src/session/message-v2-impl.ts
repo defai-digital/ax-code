@@ -28,7 +28,11 @@ import { BlastRadius } from "./blast-radius"
 import { MediaProjection } from "./media-projection"
 import { evidenceCacheMode } from "../evidence/mode"
 import { projectToolEvidence } from "./evidence-projection"
-import { isNetworkInterruption, networkInterruptionCause } from "../util/network-interruption"
+import {
+  isNetworkInterruption,
+  networkInterruptionCause,
+  networkInterruptionRequestID,
+} from "../util/network-interruption"
 import {
   CLI_ISOLATION_UNSUPPORTED_ERROR_CODE,
   cliIsolationUnsupportedMessageOf,
@@ -1573,9 +1577,11 @@ export namespace MessageV2 {
             message: transientNetworkMessage(e),
             isRetryable: true,
             metadata: {
-              code: (e as SystemError)?.code ?? "",
-              syscall: (e as SystemError)?.syscall ?? "",
+              code: (e as SystemError)?.code ?? (networkInterruptionCause(e) as SystemError | undefined)?.code ?? "",
+              syscall:
+                (e as SystemError)?.syscall ?? (networkInterruptionCause(e) as SystemError | undefined)?.syscall ?? "",
               message: (e as SystemError)?.message ?? toErrorMessage(e),
+              ...(networkInterruptionRequestID(e) ? { requestID: networkInterruptionRequestID(e)! } : {}),
             },
           },
           { cause: e },

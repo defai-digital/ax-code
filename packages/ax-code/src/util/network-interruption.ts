@@ -23,6 +23,27 @@ const INTERRUPTION_CODES = new Set([
 // unclassified.
 const UNDICI_TERMINATED_MESSAGES = new Set(["terminated", "other side closed"])
 
+// Retain only the opaque gateway correlation ID, never the response headers.
+// A WeakMap preserves the original error identity, including frozen errors.
+const requestIDs = new WeakMap<Error, string>()
+
+export function rememberNetworkRequestID(error: unknown, headers: Headers): void {
+  const id = headers.get("x-request-id")
+  if (error instanceof Error && id && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
+    requestIDs.set(error, id)
+  }
+}
+
+export function networkInterruptionRequestID(error: unknown): string | undefined {
+  let current = error
+  for (let depth = 0; depth < 6 && current instanceof Error; depth++) {
+    const id = requestIDs.get(current)
+    if (id) return id
+    current = current.cause
+  }
+  return undefined
+}
+
 /** First error in the `cause` chain carrying a connection-interruption code. */
 export function networkInterruptionCause(error: unknown): Error | undefined {
   let cause = error instanceof Error ? error.cause : undefined
