@@ -3,7 +3,6 @@ import DESCRIPTION from "./list_background_tasks.txt"
 import z from "zod"
 import { Session } from "../session"
 import { TaskQueue } from "../session/task-queue"
-import { isLiveTaskSubagent } from "../session/background-subagent-delivery"
 
 const parameters = z.object({})
 
@@ -24,12 +23,14 @@ export const ListBackgroundTasksTool = Tool.define("list_background_tasks", {
     const children = await Session.children(ctx.sessionID)
     const tasks: TaskQueue.Info[] = []
     for (const child of children) {
-      // Newest-first: the default queue order is oldest-first, so limit:100 would
-      // keep the oldest rows of a busy child and hide the running task.
-      const items = await TaskQueue.list({ sessionID: child.id, limit: 100, descending: true })
-      for (const item of items) {
-        if (isLiveTaskSubagent(item)) tasks.push(item)
-      }
+      const items = await TaskQueue.list({
+        sessionID: child.id,
+        kind: "subagent",
+        source: "task",
+        newestCreatedFirst: true,
+        limit: 100,
+      })
+      tasks.push(...items)
     }
     tasks.sort((a, b) => a.time.created - b.time.created || a.id.localeCompare(b.id))
 

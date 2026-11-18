@@ -2,22 +2,18 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./waitfor.txt"
 import z from "zod"
 import { Session } from "../session"
-import { SessionID, TaskQueueID } from "../session/schema"
+import { SessionID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { TaskQueue } from "../session/task-queue"
 import { BackgroundShell } from "./bash-background"
+import { childResultText, resolveBackgroundTask } from "./background-task-target"
 import { BackgroundNotification } from "../session/background-notification"
-import { childVisibleText, isEmptySubagentResultText } from "../session/background-subagent-handoff"
+import { isEmptySubagentResultText } from "../session/background-subagent-handoff"
 import { Log } from "@/util/log"
 import { abortError } from "@/util/abort"
 import { sleep } from "@/util/timeout"
 
 const log = Log.create({ service: "waitfor-tool" })
-
-// Terminal statuses from TaskQueue.Status (task-queue.ts). `waiting_for_idle`
-// is handled separately below: waiting on it from the gating session would
-// deadlock by construction.
-const TERMINAL_STATUSES: TaskQueue.Status[] = ["completed", "failed", "cancelled"]
 
 // Test seam: tests shrink the poll interval instead of waiting a full second
 // per iteration.
@@ -42,39 +38,6 @@ const parameters = z.object({
     .describe("Maximum seconds to wait for the task to reach a terminal state (1-600)"),
 })
 
-// Exported for the background-task control tools (message_background_task),
-// which resolve and scope targets the same way.
-export async function resolveTarget(taskID: string): Promise<TaskQueue.Info | undefined> {
-  if (taskID.startsWith("tsk_")) {
-    return TaskQueue.get(TaskQueueID.make(taskID)).catch((e) => {
-      if (NotFoundError.isInstance(e)) return undefined
-      throw e
-    })
-  }
-  if (taskID.startsWith("ses_")) {
-    // Newest-first: the default queue order is oldest-first, so a bounded limit
-    // would keep the oldest rows and drop the live one for a busy child session.
-    const items = await TaskQueue.list({ sessionID: SessionID.make(taskID), limit: 100, descending: true }).catch(
-      (e) => {
-        if (NotFoundError.isInstance(e)) return [] as TaskQueue.Info[]
-        throw e
-      },
-    )
-    // A child session can hold multiple subagent queue items; list order is
-    // not creation order, so `.at(-1)` can return a stale row. Pick the item
-    // with the greatest time.created (tie-break: greatest id).
-    return items
-      .filter((item) => item.kind === "subagent")
-      .reduce<TaskQueue.Info | undefined>((latest, item) => {
-        if (!latest) return item
-        if (item.time.created > latest.time.created) return item
-        if (item.time.created === latest.time.created && item.id > latest.id) return item
-        return latest
-      }, undefined)
-  }
-  return undefined
-}
-
 // The target must belong to the caller's session tree: walk the item's child
 // session parent chain (same pattern as the depth walk in tool/task.ts) and
 // require ctx.sessionID to appear.
@@ -92,16 +55,6 @@ async function belongsToSessionTree(item: TaskQueue.Info, sessionID: SessionID) 
     current = session?.parentID
   }
   return false
-}
-
-export async function childResultText(item: TaskQueue.Info) {
-  if (!item.sessionID) return ""
-  const messages = await Session.messages({ sessionID: item.sessionID }).catch((e) => {
-    if (NotFoundError.isInstance(e)) return [] as Awaited<ReturnType<typeof Session.messages>>
-    throw e
-  })
-  const lastAssistant = messages.findLast((message) => message.info.role === "assistant")
-  return childVisibleText(lastAssistant)
 }
 
 // Parent-idle gating: the executor only starts a waiting_for_idle item once
@@ -226,7 +179,7 @@ export const WaitForTool = Tool.define("waitfor", async () => {
         return await waitForShell(params.task_id, params.timeout, ctx)
       }
 
-      const item = await resolveTarget(params.task_id)
+      const item = await resolveBackgroundTask(params.task_id)
       if (!item) {
         throw new Error(
           `No background task found for task_id=${params.task_id}. Use the task_id or queue_id returned by the background task call.`,
@@ -245,7 +198,7 @@ export const WaitForTool = Tool.define("waitfor", async () => {
 
       const deadline = Date.now() + params.timeout * 1000
       let current = item
-      while (!TERMINAL_STATUSES.includes(current.status)) {
+      while (!TaskQueue.isTerminalStatus(current.status)) {
         if (ctx.abort.aborted) throw abortError()
         const remaining = deadline - Date.now()
         if (remaining <= 0) break
@@ -264,7 +217,7 @@ export const WaitForTool = Tool.define("waitfor", async () => {
         }
       }
 
-      if (!TERMINAL_STATUSES.includes(current.status)) {
+      if (!TaskQueue.isTerminalStatus(current.status)) {
         return {
           title: `Waiting on ${item.title}`,
           metadata: {

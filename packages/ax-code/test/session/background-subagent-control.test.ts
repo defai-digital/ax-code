@@ -10,7 +10,7 @@ import { TaskQueue } from "../../src/session/task-queue"
 import { MessageID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import { MAX_BACKGROUND_SUBAGENTS, TaskTool } from "../../src/tool/task"
-import { resolveTarget } from "../../src/tool/waitfor"
+import { resolveBackgroundTask } from "../../src/tool/background-task-target"
 import { tmpdir } from "../fixture/fixture"
 
 const model: Provider.Model = {
@@ -273,7 +273,7 @@ describe("background subagent control", () => {
     })
   })
 
-  test("resolveTarget returns a live row buried behind 100 terminal rows", async () => {
+  test("session-id lookup returns a live row buried behind 100 terminal rows", async () => {
     await using tmp = await tmpdir({ git: true, config: { username: "testuser" } })
 
     await Instance.provide({
@@ -299,7 +299,7 @@ describe("background subagent control", () => {
 
         // An oldest-first page would return only the 100 completed rows and
         // report a stale outcome for a task that is still running.
-        expect((await resolveTarget(buried.id))?.id).toBe(live.id)
+        expect((await resolveBackgroundTask(buried.id))?.id).toBe(live.id)
       },
     })
   })

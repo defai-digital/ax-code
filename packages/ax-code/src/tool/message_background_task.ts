@@ -5,16 +5,11 @@ import { Session } from "../session"
 import { MessageID, PartID, SessionID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { TaskQueue } from "../session/task-queue"
-import { isLiveTaskSubagent } from "../session/background-subagent-delivery"
 import { wakeBackgroundSubagentSession, writeBackgroundSubagentMessage } from "../session/background-subagent-message"
-import { childResultText, resolveTarget } from "./waitfor"
+import { childResultText, resolveBackgroundTask } from "./background-task-target"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "message-background-task-tool" })
-
-// Same terminal set as waitfor: messaging a terminal task returns its status
-// instead of injecting.
-const TERMINAL_STATUSES: TaskQueue.Status[] = ["completed", "failed", "cancelled"]
 
 // Only a task that is already executing may be woken. Queued and
 // waiting-for-idle rows are owned by the task queue; nudging them would start
@@ -52,18 +47,47 @@ function controlResult(title: string, metadata: ControlMetadata, output: string)
   return { title, metadata, output }
 }
 
+async function finishedTask(item: TaskQueue.Info): Promise<ReturnType<typeof controlResult>> {
+  // Failed/cancelled items report the authoritative error, never a stale
+  // assistant answer left by an earlier run of the same child session.
+  const text =
+    item.status === "completed"
+      ? (await childResultText(item)) || item.error || `Task finished with status: ${item.status}.`
+      : item.error || `Task finished with status: ${item.status}.`
+  return controlResult(
+    item.title,
+    {
+      taskID: item.id,
+      sessionID: item.sessionID,
+      status: item.status,
+      delivered: false,
+    },
+    [
+      `task_id: ${item.id}`,
+      `session_id: ${item.sessionID}`,
+      `state: ${item.status}`,
+      "",
+      "The task already finished, so the message was NOT delivered.",
+      "",
+      "<task_result>",
+      text,
+      "</task_result>",
+    ].join("\n"),
+  )
+}
+
 export const MessageBackgroundTaskTool = Tool.define("message_background_task", {
   description: DESCRIPTION,
   parameters,
   async execute(params, ctx) {
-    const item = await resolveTarget(params.task_id)
+    const item = await resolveBackgroundTask(params.task_id, "task")
     if (!item) {
       throw new Error(
         `No background task found for task_id=${params.task_id}. Use the task_id or queue_id returned by the background task call.`,
       )
     }
 
-    if (!isLiveTaskSubagent(item) || !item.sessionID) {
+    if (!TaskQueue.isTaskSubagent(item) || !item.sessionID) {
       throw new Error(
         `Task ${item.id} is not a background task started via the task tool. message_background_task can only message background subagent tasks.`,
       )
@@ -81,42 +105,15 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
       )
     }
 
-    // Terminal tasks are never injected into — report the outcome instead.
-    if (TERMINAL_STATUSES.includes(item.status)) {
-      // Failed/cancelled items report the authoritative error, never a stale
-      // assistant answer left by an earlier run of the same child session.
-      const text =
-        item.status === "completed"
-          ? (await childResultText(item)) || item.error || `Task finished with status: ${item.status}.`
-          : item.error || `Task finished with status: ${item.status}.`
-      return controlResult(
-        item.title,
-        {
-          taskID: item.id,
-          sessionID: item.sessionID,
-          status: item.status,
-          delivered: false,
-        },
-        [
-          `task_id: ${item.id}`,
-          `session_id: ${item.sessionID}`,
-          `state: ${item.status}`,
-          "",
-          "The task already finished, so the message was NOT delivered.",
-          "",
-          "<task_result>",
-          text,
-          "</task_result>",
-        ].join("\n"),
-      )
-    }
+    if (TaskQueue.isTerminalStatus(item.status)) return finishedTask(item)
 
     if (!child) throw new NotFoundError({ message: `Session not found: ${item.sessionID}` })
     if (child.projectID !== item.projectID) {
       throw new Error("Background task child belongs to a different project.")
     }
 
-    // Exactly-once via the ADR-055 ledger (ADR-057 D3 guard pattern):
+    // Claim only while the task is nonterminal. The ledger then keeps stable ids
+    // across retries (ADR-055 and ADR-057 D3):
     // 1. atomically claim a "pending" control delivery slot (a same-text
     //    redelivery or concurrent duplicate reuses the recorded ids),
     // 2. persist the user message (upsert keyed on those ids),
@@ -126,13 +123,14 @@ export const MessageBackgroundTaskTool = Tool.define("message_background_task", 
     // reused, and the idempotent upsert converges to exactly one message.
     const claim = await TaskQueue.claimControlDelivery({
       id: item.id,
+      sessionID: child.id,
+      // Legacy rows may establish ownership through the session link alone.
+      expectedParentSessionID: child.parentID === ctx.sessionID ? undefined : ctx.sessionID,
       messageID: MessageID.ascending(),
       partID: PartID.ascending(),
       text: params.message,
     })
-    if (claim.item.sessionID !== child.id) {
-      throw new Error("Background task changed its child session before delivery.")
-    }
+    if (!claim.entry) return finishedTask(claim.item)
     const redelivered = !claim.claimed
     const messageID = MessageID.make(claim.entry.messageID)
     const partID = PartID.make(claim.entry.partID)

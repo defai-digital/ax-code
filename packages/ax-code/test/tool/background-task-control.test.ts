@@ -177,6 +177,35 @@ describe("tool.list_background_tasks", () => {
     })
   })
 
+  test("lists and messages a background task behind unrelated prompt and workflow rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const { child, item } = await enqueueBackgroundSubagent({ parent: parent.id, status: "running" })
+        for (let index = 0; index < 101; index++) {
+          await TaskQueue.enqueue({ sessionID: child.id, kind: "prompt", title: `unrelated prompt ${index}` })
+        }
+        await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "unrelated workflow child",
+          payload: { workflow: {} },
+        })
+        const listed = await (await ListBackgroundTasksTool.init()).execute({}, toolContext(parent.id))
+        expect(listed.metadata.tasks.map((task) => task.queueID)).toEqual([item.id])
+
+        const loop = stubNudge()
+        const result = await (
+          await MessageBackgroundTaskTool.init()
+        ).execute({ task_id: child.id, message: "check the next file" }, toolContext(parent.id))
+        expect(result.metadata).toMatchObject({ taskID: item.id, delivered: true })
+        await vi.waitFor(() => expect(loop).toHaveBeenCalledExactlyOnceWith({ sessionID: child.id }))
+      },
+    })
+  })
+
   test("lists a live task buried behind more than 100 terminal rows on its child", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -326,6 +355,37 @@ describe("tool.message_background_task", () => {
             turn: undefined,
           }),
         )
+      },
+    })
+  })
+
+  test("returns the outcome when the task finishes before the delivery claim", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const { child, item } = await enqueueBackgroundSubagent({
+          parent: parent.id,
+          status: "running",
+          initialPrompt: "check the first file",
+        })
+        const loop = stubNudge()
+        const claimControlDelivery = TaskQueue.claimControlDelivery
+        vi.spyOn(TaskQueue, "claimControlDelivery").mockImplementationOnce(async (input) => {
+          await writeAssistantResult(child.id, "finished checking the first file")
+          await TaskQueue.setStatus({ id: item.id, status: "completed" })
+          return claimControlDelivery(input)
+        })
+
+        const result = await (
+          await MessageBackgroundTaskTool.init()
+        ).execute({ task_id: item.id, message: "check the next file" }, toolContext(parent.id))
+        expect(result.metadata).toMatchObject({ delivered: false, status: "completed" })
+        expect(result.output).toContain("finished checking the first file")
+        expect(TaskQueue.controlDeliveries(await TaskQueue.get(item.id))).toEqual([])
+        expect(controlTexts(await Session.messages({ sessionID: child.id }), "check the next file")).toHaveLength(0)
+        expect(loop).not.toHaveBeenCalled()
       },
     })
   })

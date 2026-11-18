@@ -3199,12 +3199,25 @@ describe("TaskQueue payload write atomicity", () => {
         })
 
         const [a, b] = await Promise.all([
-          TaskQueue.claimControlDelivery({ id: created.id, messageID: "msg_a", partID: "prt_a", text: "same steer" }),
-          TaskQueue.claimControlDelivery({ id: created.id, messageID: "msg_b", partID: "prt_b", text: "same steer" }),
+          TaskQueue.claimControlDelivery({
+            id: created.id,
+            sessionID: session.id,
+            messageID: "msg_a",
+            partID: "prt_a",
+            text: "same steer",
+          }),
+          TaskQueue.claimControlDelivery({
+            id: created.id,
+            sessionID: session.id,
+            messageID: "msg_b",
+            partID: "prt_b",
+            text: "same steer",
+          }),
         ])
 
         // Exactly one caller claims; the other reuses the winner's ids.
         expect(a.claimed).not.toBe(b.claimed)
+        if (!a.entry || !b.entry) throw new Error("Expected both claims to return a delivery entry")
         expect(a.entry.messageID).toBe(b.entry.messageID)
         expect(a.entry.partID).toBe(b.entry.partID)
 
@@ -3215,12 +3228,13 @@ describe("TaskQueue payload write atomicity", () => {
         // A sequential crash-redelivery with the same text also reuses ids.
         const retry = await TaskQueue.claimControlDelivery({
           id: created.id,
+          sessionID: session.id,
           messageID: "msg_c",
           partID: "prt_c",
           text: "same steer",
         })
         expect(retry.claimed).toBe(false)
-        expect(retry.entry.messageID).toBe(a.entry.messageID)
+        expect(retry.entry?.messageID).toBe(a.entry.messageID)
       },
     })
   })

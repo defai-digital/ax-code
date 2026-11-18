@@ -37,6 +37,20 @@ export namespace TaskQueue {
   ])
   export type Status = z.infer<typeof Status>
 
+  const terminalStatuses: Status[] = ["completed", "failed", "cancelled"]
+
+  export function isTerminalStatus(status: Status): boolean {
+    return terminalStatuses.includes(status)
+  }
+
+  export const nonterminalStatuses: readonly Status[] = Status.options.filter((status) => !isTerminalStatus(status))
+
+  const taskToolSource = "task"
+
+  export function isTaskSubagent(item: Info): boolean {
+    return item.kind === "subagent" && item.payload["source"] === taskToolSource
+  }
+
   export const Payload = z.record(z.string(), z.unknown())
   export type Payload = z.infer<typeof Payload>
 
@@ -93,15 +107,16 @@ export namespace TaskQueue {
 
   export const ListInput = z.object({
     sessionID: SessionID.zod.optional(),
+    kind: Kind.optional(),
+    source: z.literal(taskToolSource).optional(),
+    parentSessionID: SessionID.zod.optional(),
     status: Status.optional(),
     statuses: z.array(Status).optional(),
     limit: z.number().int().positive().max(500).optional(),
-    /**
-     * Order newest-first instead of the default queue order (oldest-first by
-     * `position`). A bounded reader that wants a task's current row must set
-     * this, or the limit keeps the oldest rows and drops the live one.
-     */
+    /** Reverse queue position order. */
     descending: z.boolean().optional(),
+    /** Sort by descending creation time, overriding queue position ordering. */
+    newestCreatedFirst: z.boolean().optional(),
   })
   export type ListInput = z.infer<typeof ListInput>
 
@@ -347,18 +362,26 @@ export namespace TaskQueue {
     if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
     const conditions = [eq(TaskQueueTable.project_id, Instance.project.id)]
     if (parsed.sessionID) conditions.push(eq(TaskQueueTable.session_id, parsed.sessionID))
+    if (parsed.kind) conditions.push(eq(TaskQueueTable.kind, parsed.kind))
+    if (parsed.source || parsed.parentSessionID) {
+      const payload = sql`case when json_valid(${TaskQueueTable.payload}) then ${TaskQueueTable.payload} end`
+      if (parsed.source) conditions.push(sql`json_extract(${payload}, '$.source') = ${parsed.source}`)
+      if (parsed.parentSessionID) {
+        conditions.push(sql`json_extract(${payload}, '$.parentSessionID') = ${parsed.parentSessionID}`)
+      }
+    }
     if (parsed.status) conditions.push(eq(TaskQueueTable.status, parsed.status))
     if (parsed.statuses && parsed.statuses.length > 0) conditions.push(inArray(TaskQueueTable.status, parsed.statuses))
+    const order = [desc(TaskQueueTable.time_created), desc(TaskQueueTable.id)]
+    if (!parsed.newestCreatedFirst) {
+      order.unshift(parsed.descending ? desc(TaskQueueTable.position) : asc(TaskQueueTable.position))
+    }
     return SessionShard.storeForProject(Instance.project.id).use((db) => {
       let query = db
         .select()
         .from(TaskQueueTable)
         .where(and(...conditions))
-        .orderBy(
-          parsed.descending ? desc(TaskQueueTable.position) : asc(TaskQueueTable.position),
-          desc(TaskQueueTable.time_created),
-          desc(TaskQueueTable.id),
-        )
+        .orderBy(...order)
         .$dynamic()
       if (parsed.limit) query = query.limit(parsed.limit)
       return query.all().flatMap((row) => {
@@ -401,7 +424,7 @@ export namespace TaskQueue {
           and(
             eq(TaskQueueTable.project_id, Instance.project.id),
             eq(TaskQueueTable.kind, "subagent"),
-            inArray(TaskQueueTable.status, ["completed", "failed", "cancelled"]),
+            inArray(TaskQueueTable.status, terminalStatuses),
           ),
         )
         .orderBy(asc(TaskQueueTable.time_completed), asc(TaskQueueTable.id))
@@ -560,15 +583,12 @@ export namespace TaskQueue {
       time_updated: now,
     }
     if (input.status === "running" && current.time.started === undefined) updates.time_started = now
-    if (input.status === "completed" || input.status === "cancelled" || input.status === "failed") {
-      updates.time_completed = now
-    }
+    const isTerminalTarget = isTerminalStatus(input.status)
+    if (isTerminalTarget) updates.time_completed = now
     if (ownedStatuses.includes(input.status)) {
       const payload = withExecutorOwner(current.payload, now)
       if (payload) updates.payload = payload
     }
-    const terminalStatuses: Status[] = ["completed", "failed", "cancelled"]
-    const isTerminalTarget = terminalStatuses.includes(input.status)
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       // A non-terminal write must never resurrect a row a concurrent executor
       // already settled to a terminal status. The get() above and this write
@@ -598,7 +618,7 @@ export namespace TaskQueue {
     await syncWorkflowStatusIfNeeded(item)
     // Terminal statuses must not leave the session pointing at a finished
     // queue item (UI/session metadata otherwise looks permanently "queued").
-    if ((input.status === "completed" || input.status === "cancelled" || input.status === "failed") && item.sessionID) {
+    if (isTerminalTarget && item.sessionID) {
       await clearSessionQueueMetadataIfCurrent(item)
     }
     return item
@@ -907,14 +927,27 @@ export namespace TaskQueue {
    */
   export async function claimControlDelivery(input: {
     id: TaskQueueID
+    sessionID: SessionID
+    expectedParentSessionID?: SessionID
     messageID: string
     partID: string
     text: string
-  }): Promise<{ item: Info; entry: ControlDelivery; claimed: boolean }> {
+  }): Promise<{ item: Info; entry?: ControlDelivery; claimed: boolean }> {
     const now = Date.now()
     const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const currentRow = readRow(db, input.id)
       const current = fromRow(currentRow)
+      assertProjectItem(current)
+      if (
+        !isTaskSubagent(current) ||
+        current.sessionID !== input.sessionID ||
+        (input.expectedParentSessionID && current.payload["parentSessionID"] !== input.expectedParentSessionID)
+      ) {
+        throw new HTTPException(409, { message: "Background task target changed before delivery." })
+      }
+      // Completion and admission serialize on the queue row. A terminal
+      // task returns its outcome without claiming or replaying a delivery.
+      if (isTerminalStatus(current.status)) return { item: current, claimed: false }
       const existing = controlDeliveries(current)
         .filter((entry) => entry.status === "pending" && entry.text === input.text)
         .sort((a, b) => a.time - b.time)[0]
@@ -936,7 +969,6 @@ export namespace TaskQueue {
       const row = writePayloadRow(db, input.id, payload, now)
       return { item: fromRow(row), entry, claimed: true }
     })
-    assertProjectItem(result.item)
     if (result.claimed) publishUpdated(result.item)
     return result
   }
@@ -1857,7 +1889,7 @@ export namespace TaskQueue {
   }
 
   function isLiveTaskSubagentPayload(payload: Payload) {
-    return payload["source"] === "task" && payload["resumeOnRestart"] === true
+    return payload["source"] === taskToolSource && payload["resumeOnRestart"] === true
   }
 
   function resumesOnRestart(item: Info) {

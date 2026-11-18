@@ -16,14 +16,6 @@ import { childVisibleText, formatBackgroundTaskHandoff, isEmptySubagentResultTex
 
 const log = Log.create({ service: "session.background-subagent-delivery" })
 
-export function isLiveTaskSubagent(item: TaskQueue.Info) {
-  return item.kind === "subagent" && item.payload["source"] === "task"
-}
-
-const TERMINAL_QUEUE_STATUSES: readonly TaskQueue.Status[] = ["completed", "failed", "cancelled"]
-const ACTIVE_QUEUE_STATUSES: TaskQueue.Status[] = TaskQueue.Status.options.filter(
-  (status) => !TERMINAL_QUEUE_STATUSES.includes(status),
-)
 // A task's direct background subagents deliver their evidence into that
 // task's session. Until every such delivery settles, a final answer would be
 // written without their evidence, so both the direct task path and the queued
@@ -96,18 +88,18 @@ async function nestedSubagentRows(sessionID: SessionID) {
       children.map((child) =>
         TaskQueue.list({
           sessionID: child.id,
-          statuses: [...ACTIVE_QUEUE_STATUSES, ...TERMINAL_QUEUE_STATUSES],
+          kind: "subagent",
+          source: "task",
+          parentSessionID: sessionID,
           limit: 500,
           descending: true,
         }),
       ),
     )
-  )
-    .flat()
-    .filter((item) => isOwnedBackgroundSubagent(item, sessionID))
+  ).flat()
   return {
-    active: rows.filter((item) => !TERMINAL_QUEUE_STATUSES.includes(item.status)),
-    terminal: rows.filter((item) => TERMINAL_QUEUE_STATUSES.includes(item.status)),
+    active: rows.filter((item) => !TaskQueue.isTerminalStatus(item.status)),
+    terminal: rows.filter((item) => TaskQueue.isTerminalStatus(item.status)),
   }
 }
 
@@ -132,20 +124,15 @@ export async function waitForNestedSubagentResults(input: {
   }
 }
 
-function isOwnedBackgroundSubagent(item: TaskQueue.Info, parentSessionID: SessionID) {
-  return isLiveTaskSubagent(item) && item.payload["parentSessionID"] === parentSessionID
-}
-
-async function hasActiveQueueRow(sessionID: SessionID) {
-  // Filter by kind after the bounded read: an unrelated active prompt row must
-  // not hide the task-subagent row that owns the pending collection.
+async function hasActiveQueueRow(sessionID: SessionID): Promise<boolean> {
   const items = await TaskQueue.list({
     sessionID,
-    statuses: ACTIVE_QUEUE_STATUSES,
+    kind: "subagent",
+    source: "task",
+    statuses: [...TaskQueue.nonterminalStatuses],
     limit: 500,
-    descending: true,
   })
-  return items.some(isLiveTaskSubagent)
+  return items.length > 0
 }
 
 export const BackgroundSubagentDeliveryInternals = {
@@ -160,7 +147,7 @@ export async function deliverBackgroundSubagentHandoff(input: {
     | { status: "cancelled"; error: string }
 }) {
   const { outcome } = input
-  if (!isLiveTaskSubagent(input.item)) return input.item
+  if (!TaskQueue.isTaskSubagent(input.item)) return input.item
 
   const requestedClaim: TaskQueue.ResultDeliveryClaim = {
     owner: "handoff",
