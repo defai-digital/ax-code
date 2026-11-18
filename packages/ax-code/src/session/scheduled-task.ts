@@ -30,7 +30,6 @@ import {
 } from "./scheduled-task-schedule"
 
 type WorkflowTemplateID = import("@/workflow/template").WorkflowTemplate.ID
-type WorkflowStartOptions = import("@/workflow/scheduler").WorkflowScheduler.StartOptions
 
 export namespace ScheduledTask {
   const log = Log.create({ service: "session.scheduled-task" })
@@ -703,10 +702,36 @@ export namespace ScheduledTask {
     return true
   }
 
-  // Sentinel for the authoritative in-transaction overlap guard in runNow;
-  // translated to HTTP 409 outside the transaction so a rejected claim is
-  // never recorded as an execution failure.
-  class RunNowOverlapAborted extends Error {}
+  // Keep admission conflicts out of execution history.
+  class RunNowClaimRejected extends HTTPException {
+    constructor(message: string) {
+      super(409, { message })
+    }
+  }
+
+  function assertRunNowAvailable(task: Info, isRunOpen: () => boolean): void {
+    if (task.status === "disabled") throw new RunNowClaimRejected(`Scheduled task ${task.id} is disabled.`)
+    if (isRunOpen()) {
+      throw new RunNowClaimRejected(`Scheduled task ${task.id} already has a run in progress; wait for it to finish.`)
+    }
+  }
+
+  function readRunNowTask(db: Database.TxOrDb, requested: Info, now: number): Info {
+    const row = db
+      .select()
+      .from(ScheduledTaskTable)
+      .where(and(eq(ScheduledTaskTable.id, requested.id), eq(ScheduledTaskTable.project_id, requested.projectID)))
+      .get()
+    if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${requested.id}` })
+    const current = fromRow(row)
+    assertRunNowAvailable(current, () =>
+      hasOpenRunIn(db, current.id, now, current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS),
+    )
+    if (current.directory !== requested.directory || current.workflowTemplateID !== requested.workflowTemplateID) {
+      throw new RunNowClaimRejected(`Scheduled task ${current.id} changed while preparing to run. Try again.`)
+    }
+    return current
+  }
 
   // Marks a workflow dispatch failure whose run row and task state were
   // already finalized inside runWorkflowNow; runNow's catch unwraps and
@@ -738,31 +763,23 @@ export namespace ScheduledTask {
 
   export async function runNow(id: ScheduledTaskID): Promise<RunNowResult> {
     const current = await get(id)
-    if (current.status === "disabled") {
-      throw new HTTPException(409, { message: `Scheduled task ${id} is disabled.` })
-    }
     const now = Date.now()
     const deadlineMs = current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
-    reconcileOrphanRuns(id, now, deadlineMs)
-    // Run-now honors overlap protection: it must not bypass the one-open-run rule.
-    // This read is only a friendly pre-check; the authoritative guard runs
-    // inside the claim transaction below, because enqueueing and the executor
-    // import yield the event loop and a scheduler tick can claim the
-    // occurrence in the gap (check-then-act TOCTOU).
-    if (hasOpenRun(id, now, deadlineMs)) {
-      throw new HTTPException(409, {
-        message: `Scheduled task ${id} already has a run in progress; wait for it to finish.`,
-      })
-    }
+    // Recheck eligibility inside the claim transaction after workflow
+    // preparation. A tick or another process can change the task in between.
+    assertRunNowAvailable(current, () => {
+      reconcileOrphanRuns(id, now, deadlineMs)
+      return hasOpenRun(id, now, deadlineMs)
+    })
     let claimedQueueID: TaskQueueID | undefined
     try {
       if (current.workflowTemplateID) return await runInWorkspace(current, () => runWorkflowNow(current))
       const { task, run, queued } = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction(
         (db) => {
-          if (hasOpenRunIn(db, id, now, deadlineMs)) throw new RunNowOverlapAborted()
-          const queuedItem = TaskQueue.enqueueInTransaction(db, scheduledQueueInput(current, now, "manual"), {
+          const task = readRunNowTask(db, current, now)
+          const queuedItem = TaskQueue.enqueueInTransaction(db, scheduledQueueInput(task, now, "manual"), {
             now,
-            directory: current.directory,
+            directory: task.directory,
           })
           const runRow = insertRunRow(db, {
             taskID: id,
@@ -799,11 +816,7 @@ export namespace ScheduledTask {
       const queueItem = await TaskQueueExecutor.start(queued)
       return { task, queueItem }
     } catch (error) {
-      if (error instanceof RunNowOverlapAborted) {
-        throw new HTTPException(409, {
-          message: `Scheduled task ${id} already has a run in progress; wait for it to finish.`,
-        })
-      }
+      if (error instanceof RunNowClaimRejected) throw error
       if (error instanceof WorkflowDispatchRecorded) {
         // runWorkflowNow already finalized the run row and task state;
         // surface the original dispatch error without double-recording.
@@ -829,7 +842,6 @@ export namespace ScheduledTask {
   async function runWorkflowNow(current: Info): Promise<RunNowResult> {
     const { WorkflowTemplate } = await import("@/workflow/template")
     const { WorkflowScheduler } = await import("@/workflow/scheduler")
-    const startOptions = WorkflowStartOptionsSchema.parse(current.workflowStartOptions ?? {}) as WorkflowStartOptions
     // Create the inert (not-yet-started) workflow record BEFORE the claim so
     // the open-run guard is authoritative: if the guard aborts, nothing
     // observable ever starts. Starting first and claiming after would let a
@@ -840,11 +852,10 @@ export namespace ScheduledTask {
       sourceTaskID: current.id,
     })
     const now = Date.now()
-    const deadlineMs = current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
     let claimed: { task: Info; run: RunInfo }
     try {
       claimed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-        if (hasOpenRunIn(db, current.id, now, deadlineMs)) throw new RunNowOverlapAborted()
+        readRunNowTask(db, current, now)
         const runRow = insertRunRow(db, {
           taskID: current.id,
           triggerType: "manual",
@@ -885,7 +896,7 @@ export namespace ScheduledTask {
     publishUpdated(task)
     publishFired(task, runRow)
     try {
-      const workflowRun = await WorkflowScheduler.start(run.id, startOptions)
+      const workflowRun = await WorkflowScheduler.start(run.id, task.workflowStartOptions ?? {})
       return { task, workflowRun }
     } catch (error) {
       // start() can throw before it flips the run to `running` (the runtime

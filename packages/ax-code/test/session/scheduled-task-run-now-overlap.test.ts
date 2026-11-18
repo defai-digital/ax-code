@@ -458,6 +458,74 @@ describe("ScheduledTask run-now overlap protection", () => {
     })
   })
 
+  test.each([
+    { change: "disabled", update: { status: "disabled" as const }, message: /disabled/ },
+    { change: "retargeted", update: { workflowTemplateID: "builtin:issue-triage" }, message: /changed/ },
+  ])("rejects workflow run-now when its task was $change before the claim", async ({ update, message }) => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const task = await ScheduledTask.create({
+            title: "Workflow changed before claim",
+            prompt: "Run the scheduled workflow.",
+            schedule: { type: "cron", expression: "* * * * *" },
+            workflowTemplateID: "builtin:noop-dry-run",
+          })
+          const createRun = WorkflowTemplate.createRun
+          vi.spyOn(WorkflowTemplate, "createRun").mockImplementationOnce(async (input) => {
+            const run = await createRun(input)
+            await ScheduledTask.update({ id: task.id, ...update })
+            return run
+          })
+          const start = vi.spyOn(WorkflowScheduler, "start")
+
+          await expect(ScheduledTask.runNow(task.id)).rejects.toMatchObject({ status: 409, message })
+          expect(start).not.toHaveBeenCalled()
+          expect(await ScheduledTask.get(task.id)).toMatchObject(update)
+          expect((await ScheduledTask.get(task.id)).error).toBeUndefined()
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toEqual([])
+          expect(await WorkflowRun.list()).toMatchObject([{ status: "cancelled", sourceTaskID: task.id }])
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("starts a prepared workflow with the options saved at claim time", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const task = await ScheduledTask.create({
+            title: "Updated workflow options",
+            prompt: "Run the scheduled workflow.",
+            schedule: { type: "cron", expression: "* * * * *" },
+            workflowTemplateID: "builtin:noop-dry-run",
+            workflowStartOptions: { allowWriteWorkflows: true },
+          })
+          const createRun = WorkflowTemplate.createRun
+          vi.spyOn(WorkflowTemplate, "createRun").mockImplementationOnce(async (input) => {
+            const run = await createRun(input)
+            await ScheduledTask.update({ id: task.id, workflowStartOptions: { allowWriteWorkflows: false } })
+            return run
+          })
+          const start = vi.spyOn(WorkflowScheduler, "start")
+          const { workflowRun } = await ScheduledTask.runNow(task.id)
+          expect(workflowRun?.status).toBe("completed")
+          expect(start).toHaveBeenCalledWith(workflowRun?.id, { allowWriteWorkflows: false })
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   test("a workflow run-now that loses the claim race cancels its pre-created run instead of leaking it", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
