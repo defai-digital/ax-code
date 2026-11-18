@@ -34,13 +34,8 @@ async function setProviderAuth(provider: string, info: Auth.Info) {
 }
 
 async function removeProviderAuth(provider: string) {
-  const { disconnectPrivateGpu, isDedicatedPrivateGpuProviderID } = await import("../../../provider/private-gpu")
-  if (isDedicatedPrivateGpuProviderID(provider)) {
-    await disconnectPrivateGpu(provider)
-  } else {
-    const { CustomApiProvider } = await import("../../../provider/custom-api-provider")
-    if (!(await CustomApiProvider.removeIfManaged(provider))) await Auth.remove(provider)
-  }
+  const { disconnectProviderAuth } = await import("../../../provider/disconnect")
+  await disconnectProviderAuth(provider)
   const { Provider } = await import("../../../provider/provider")
   await Provider.invalidate().catch(() => {})
 }

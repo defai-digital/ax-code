@@ -262,14 +262,8 @@ export namespace Server {
         validator("param", PROVIDER_ID_PARAM),
         withProviderID(async (providerID, c) => {
           return updateProviderAuth(c, providerID, async (id) => {
-            const { disconnectPrivateGpu, isDedicatedPrivateGpuProviderID } = await import("@/provider/private-gpu")
-            if (isDedicatedPrivateGpuProviderID(id)) {
-              await disconnectPrivateGpu(id)
-              return
-            }
-            const { CustomApiProvider } = await import("@/provider/custom-api-provider")
-            if (await CustomApiProvider.removeIfManaged(id)) return
-            await Auth.remove(id)
+            const { disconnectProviderAuth } = await import("@/provider/disconnect")
+            await disconnectProviderAuth(id)
           })
         }),
       )

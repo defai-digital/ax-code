@@ -15,6 +15,7 @@ changes belong to AX Coder.
 ### Fixed
 
 - Preserve the previous private GPU credential when reconnecting fails, without overwriting a concurrent replacement.
+- Preserve provider reconnects across concurrent disconnects and restore editor-owned config after failed deletions.
 - Re-encrypt plaintext provider credentials beside a valid encryption canary and remove stale inline private GPU keys.
 - Keep dismissed message-fork requests from replacing newer routes or dialogs, and preserve prompt attachments while caches are pruned.
 - Retain gateway request IDs and nested socket diagnostics when streams fail, preserving partial output without automatic replay.

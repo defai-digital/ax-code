@@ -477,6 +477,91 @@ test("API key rollback setup rejects an empty key without changing credentials",
   expect(await Auth.get("provider")).toEqual({ type: "api", key: "old-value" })
 })
 
+test("prepared removal clears captured aliases and preserves unrelated provider updates", async () => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const data = await Filesystem.readJson<Record<string, unknown>>(file)
+  data["provider/"] = { type: "api", key: "legacy-alias" }
+  await fs.writeFile(file, JSON.stringify(data))
+  const before = await fs.readFile(file, "utf8")
+  const remove = await Auth.prepareRemoval("provider/")
+  expect(await fs.readFile(file, "utf8")).toBe(before)
+  await Auth.set("other", { type: "api", key: "other-value" })
+  expect(await remove()).toBe(true)
+  const stored = await Filesystem.readJson<Record<string, unknown>>(file)
+  expect(Object.hasOwn(stored, "provider")).toBe(false)
+  expect(Object.hasOwn(stored, "provider/")).toBe(false)
+  expect(await Auth.get("other")).toEqual({ type: "api", key: "other-value" })
+  await Auth.set("provider", { type: "api", key: "later-value" })
+  expect(await remove()).toBe(true)
+  expect(await Auth.get("provider")).toEqual({ type: "api", key: "later-value" })
+})
+
+test.each(["old-value", "new-value"])("prepared removal preserves a peer credential write (%s)", async (key) => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const remove = await Auth.prepareRemoval("provider")
+  await Auth.set("provider", { type: "api", key })
+  expect(await remove()).toBe(false)
+  expect(await Auth.get("provider")).toEqual({ type: "api", key })
+})
+
+test("prepared removal preserves a new alias beside an unchanged canonical entry", async () => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const remove = await Auth.prepareRemoval("provider")
+  const data = await Filesystem.readJson<Record<string, unknown>>(file)
+  data["provider/"] = { type: "api", key: "peer-alias" }
+  await fs.writeFile(file, JSON.stringify(data))
+  expect(await remove()).toBe(false)
+  expect(await Filesystem.readJson(file)).toEqual(data)
+})
+
+test("prepared removal distinguishes an absent credential from a later connection", async () => {
+  const absent = await Auth.prepareRemoval("provider")
+  expect(await absent()).toBe(true)
+  const beforeConnect = await Auth.prepareRemoval("provider")
+  await Auth.set("provider", { type: "api", key: "peer-value" })
+  expect(await beforeConnect()).toBe(false)
+  expect(await Auth.get("provider")).toEqual({ type: "api", key: "peer-value" })
+})
+
+test("a peer's completed removal satisfies a prepared removal", async () => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const remove = await Auth.prepareRemoval("provider")
+  await Auth.remove("provider")
+  expect(await remove()).toBe(true)
+  expect(await Auth.get("provider")).toBeUndefined()
+})
+
+test.each(["", "__canary"])("prepared removal rejects a reserved or empty provider ID (%s)", async (providerID) => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const before = await fs.readFile(file, "utf8")
+  await expect(Auth.prepareRemoval(providerID)).rejects.toMatchObject({ name: "AuthError" })
+  expect(await fs.readFile(file, "utf8")).toBe(before)
+})
+
+test("prepared removal can clear an undecodable credential without decrypting it", async () => {
+  await fs.writeFile(file, JSON.stringify({ provider: { type: "api", key: { encrypted: "corrupt" } } }))
+  const remove = await Auth.prepareRemoval("provider")
+  expect(await remove()).toBe(true)
+  expect(await Filesystem.readJson(file)).toEqual({})
+})
+
+test("a failed prepared removal preserves credentials and cannot retry against a later connection", async () => {
+  await Auth.set("provider", { type: "api", key: "old-value" })
+  const remove = await Auth.prepareRemoval("provider")
+  const failure = new Error("Auth publication failed")
+  const write = vi.spyOn(Filesystem, "writeJson").mockRejectedValueOnce(failure)
+  try {
+    await expect(remove()).rejects.toMatchObject({ name: "AuthError", data: { cause: failure } })
+    expect(write).toHaveBeenCalledOnce()
+  } finally {
+    write.mockRestore()
+  }
+  expect(await Auth.get("provider")).toEqual({ type: "api", key: "old-value" })
+  await Auth.set("provider", { type: "api", key: "peer-value" })
+  await expect(remove()).rejects.toMatchObject({ name: "AuthError" })
+  expect(await Auth.get("provider")).toEqual({ type: "api", key: "peer-value" })
+})
+
 test("auth writes recreate their data directory before acquiring the file lock", async () => {
   await Auth.set("seed", { type: "api", key: "seed-value" })
   const moved = `${Global.Path.data}.before-lock`

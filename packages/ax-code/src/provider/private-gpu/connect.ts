@@ -1,5 +1,6 @@
 import { Auth } from "@/auth"
 import { Config } from "@/config/config"
+import { removeProviderConnection } from "../disconnect"
 import {
   PRIVATE_GPU_REQUEST_TIMEOUT_MS,
   type PrivateGpuVendor,
@@ -94,18 +95,6 @@ export async function connectPrivateGpu(input: {
   }
 }
 
-export async function removePrivateGpuProviderConfig(providerID: string) {
-  if (!isDedicatedPrivateGpuProviderID(providerID)) return
-  const global = await Config.getGlobal()
-  if (!global.provider?.[providerID]) return
-  await Config.updateGlobal({
-    provider: {
-      [providerID]: undefined,
-    },
-  } as unknown as Config.Info)
-}
-
-export async function disconnectPrivateGpu(providerID: string) {
-  await Auth.remove(providerID)
-  await removePrivateGpuProviderConfig(providerID)
+export async function disconnectPrivateGpu(providerID: string): Promise<void> {
+  await removeProviderConnection(providerID, { removeConfigIf: () => isDedicatedPrivateGpuProviderID(providerID) })
 }

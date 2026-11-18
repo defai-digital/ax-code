@@ -556,12 +556,55 @@ export namespace Auth {
       }))
   }
 
-  export async function remove(key: string): Promise<void> {
+  function entryAliases(key: string): string[] {
     const norm = normalizeProviderID(key)
+    return [...new Set([key, norm, norm + "/"])]
+  }
+
+  function clearEntries(data: Record<string, unknown>, keys: readonly string[]): void {
+    for (const key of keys) delete data[key]
+  }
+
+  /** Capture a credential and return a one-shot removal that preserves later replacements. */
+  export async function prepareRemoval(key: string): Promise<() => Promise<boolean>> {
+    if (!isCanonicalProviderID(normalizeProviderID(key))) throw new AuthError({ message: "Invalid provider ID" })
+    const keys = entryAliases(key)
+    let snapshot: { present: boolean; value: unknown }[] = []
     await updateStoredData((data) => {
-      delete data[key]
-      delete data[norm]
-      delete data[norm + "/"]
+      snapshot = keys.map((alias) => ({ present: Object.hasOwn(data, alias), value: data[alias] }))
+      return false
+    })
+    const remove = async (): Promise<boolean> => {
+      let matched = false
+      await updateStoredData((data) => {
+        // Another disconnect may already have completed. There is no newer
+        // credential to protect, so config cleanup should still go through.
+        if (keys.every((alias) => !Object.hasOwn(data, alias))) {
+          matched = true
+          return false
+        }
+        if (
+          keys.some(
+            (alias, index) =>
+              Object.hasOwn(data, alias) !== snapshot[index].present ||
+              !isDeepStrictEqual(data[alias], snapshot[index].value),
+          )
+        )
+          return false
+        matched = true
+        clearEntries(data, keys)
+        return true
+      })
+      return matched
+    }
+    let pending: Promise<boolean> | undefined
+    return () => (pending ??= remove())
+  }
+
+  export async function remove(key: string): Promise<void> {
+    const keys = entryAliases(key)
+    await updateStoredData((data) => {
+      clearEntries(data, keys)
       return true
     })
   }

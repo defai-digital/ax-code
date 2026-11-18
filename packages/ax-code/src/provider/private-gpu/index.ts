@@ -23,7 +23,6 @@ export {
   disconnectPrivateGpu,
   privateGpuConfigModels,
   privateGpuProviderConfig,
-  removePrivateGpuProviderConfig,
   type PrivateGpuConnection,
 } from "./connect"
 export {

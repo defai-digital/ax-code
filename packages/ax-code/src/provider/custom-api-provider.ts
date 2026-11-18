@@ -12,6 +12,7 @@ import { isNonChatModelID, skuKey } from "@/provider/model-selectability"
 import { isRecord } from "@/util/record"
 import { Ssrf } from "@/util/ssrf"
 import { resolveCapabilityEvidence, withCapabilityEvidence } from "./capability-evidence"
+import { removeProviderConnection } from "./disconnect"
 
 export namespace CustomApiProvider {
   export const Management = z.enum(["custom-api", "ax-trust"])
@@ -721,35 +722,7 @@ export namespace CustomApiProvider {
     if (!previousProvider) return false
     if (!isManaged(previousProvider))
       throw new Error({ message: `Provider ID '${providerID}' is not managed by the custom API provider editor` })
-    const rollback = await Config.removeGlobalProviderWithRollback(providerID, isManaged)
-    if (!rollback) return false
-    try {
-      await Auth.remove(providerID)
-    } catch (cause) {
-      // Auth.remove publishes atomically. Failure leaves auth untouched;
-      // rewriting its earlier value could erase a peer's newer credential.
-      try {
-        await rollback()
-      } catch (rollbackError) {
-        throw new AggregateError([cause, rollbackError], "Failed to remove custom API provider and restore its config")
-      }
-      throw cause
-    }
-    return true
-  }
-
-  /**
-   * Disconnect a managed custom API / AX Trust provider. Returns false when the
-   * ID is not a managed editor provider so callers can fall through to
-   * credential-only Auth.remove. Auth.remove alone leaves endpoint metadata and
-   * saved models in global config, so the provider stays listed and selectable.
-   */
-  export async function removeIfManaged(rawProviderID: string): Promise<boolean> {
-    const parsed = ProviderID.safeParse(rawProviderID)
-    if (!parsed.success) return false
-    const globalConfig = await Config.getGlobal()
-    if (!isManaged(globalConfig.provider?.[parsed.data])) return false
-    return remove(parsed.data)
+    return removeProviderConnection(providerID, { removeConfigIf: isManaged, requireConfigRemoval: true })
   }
 
   /** Managed custom/AX Trust provider IDs that still have global config. */
