@@ -367,11 +367,11 @@ export namespace TaskQueue {
   export function enqueueInTransaction(
     db: Database.TxOrDb,
     input: EnqueueInput,
-    options: { now?: number; id?: TaskQueueID } = {},
+    options: { now?: number; id?: TaskQueueID; directory?: string } = {},
   ): Info {
     const parsed = EnqueueInput.parse(input)
     if (parsed.sessionID) throw new Error("Session queue writes require prepareEnqueue before the transaction")
-    return insertEnqueued(db, parsed, options.now ?? Date.now(), options.id)
+    return insertEnqueued(db, parsed, options.now ?? Date.now(), options)
   }
 
   async function parseEnqueue(input: EnqueueInput): Promise<z.output<typeof EnqueueInput>> {
@@ -390,7 +390,7 @@ export namespace TaskQueue {
     db: Database.TxOrDb,
     parsed: z.output<typeof EnqueueInput>,
     now: number,
-    id = TaskQueueID.ascending(),
+    { id = TaskQueueID.ascending(), directory = Instance.directory }: { id?: TaskQueueID; directory?: string } = {},
   ): Info {
     const projectID = Instance.project.id
     const row = db
@@ -399,7 +399,7 @@ export namespace TaskQueue {
         id,
         project_id: projectID,
         session_id: parsed.sessionID,
-        directory: Instance.directory,
+        directory,
         kind: parsed.kind,
         status: "queued",
         priority: parsed.priority,

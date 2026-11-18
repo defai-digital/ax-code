@@ -751,7 +751,7 @@ async function sessionStillReusable(
 ): Promise<boolean> {
   const session = await Session.get(sessionID).catch(() => undefined)
   if (!session || session.time.archived) return false
-  if (!Session.isCompatibleWithCurrentProject(session)) return false
+  if (session.directory !== Instance.directory || !Session.isCompatibleWithCurrentProject(session)) return false
   if (sessionPromptBusy(sessionID)) return false
   if ((await activeSessionItems(sessionID)).some((candidate) => candidate.id !== item.id)) return false
   if ((await pendingSessionItems(sessionID)).length > 0) return false
@@ -850,8 +850,9 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
       const { WorkflowScheduler } = await import("../workflow/scheduler")
       return WorkflowScheduler.cancel(workflowRunID)
     },
-    run: (attempt) =>
-      runInQueueItemInstance(item, async () => {
+    run: async (attempt) => {
+      const { ScheduledTask } = await import("./scheduled-task")
+      return ScheduledTask.runInWorkspace(item, async () => {
         const workflowTemplateID = item.payload["workflowTemplateID"]
         if (typeof workflowTemplateID === "string" && workflowTemplateID.length > 0) {
           const { WorkflowTemplate } = await import("../workflow/template")
@@ -873,7 +874,6 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
             })
             throw error
           }
-          const { ScheduledTask } = await import("./scheduled-task")
           await ScheduledTask.recordWorkflowRun(ScheduledTaskID.make(scheduledTaskID), run.id)
           const detail = await WorkflowScheduler.start(run.id, item.payload["workflowStartOptions"] ?? {}).catch(
             async (error) => {
@@ -896,7 +896,8 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
         }
 
         return runScheduledPromptAutomation(item, ScheduledTaskID.make(scheduledTaskID), execution, attempt)
-      }),
+      })
+    },
   }
   return execution
 }

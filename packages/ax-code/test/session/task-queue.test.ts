@@ -1424,10 +1424,12 @@ describe("TaskQueue", () => {
         try {
           const session = await Session.create({})
           let release!: () => void
+          const started = Promise.withResolvers<void>()
           const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(
             () =>
               new Promise((resolve) => {
                 release = () => resolve(undefined as never)
+                started.resolve()
               }),
           )
           const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue()
@@ -1446,6 +1448,7 @@ describe("TaskQueue", () => {
             })
             await TaskQueueExecutor.start(blocked)
             await vi.advanceTimersByTimeAsync(0)
+            await started.promise
             await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission" })
 
             await TaskQueue.cancel(blocked.id)
@@ -1480,10 +1483,12 @@ describe("TaskQueue", () => {
           try {
             const session = await Session.create({})
             let release!: () => void
+            const started = Promise.withResolvers<void>()
             const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(
               () =>
                 new Promise((resolve) => {
                   release = () => resolve(undefined as never)
+                  started.resolve()
                 }),
             )
             const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue()
@@ -1503,6 +1508,7 @@ describe("TaskQueue", () => {
               })
               await TaskQueueExecutor.start(blocked)
               await vi.advanceTimersByTimeAsync(0)
+              await started.promise
               await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission" })
 
               await TaskQueue.cancel(blocked.id)

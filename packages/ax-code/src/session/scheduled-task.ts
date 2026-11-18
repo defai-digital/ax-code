@@ -9,6 +9,7 @@ import { NotFoundError, and, asc, desc, eq, like, lte, notInArray, sql } from "@
 import type { Database } from "@/storage/db"
 import { NotificationEvent } from "@/notification/events"
 import { toErrorMessage } from "@/util/error-message"
+import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
 import { ScheduledTaskID, ScheduledTaskRunID, TaskQueueID, type SessionID } from "./schema"
@@ -716,6 +717,25 @@ export namespace ScheduledTask {
     }
   }
 
+  /** Scheduled dispatch can be triggered from any checkout of the same project. */
+  export async function runInWorkspace<T>(
+    task: Pick<Info, "projectID" | "directory">,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    if (!(await Filesystem.isDir(task.directory))) {
+      throw new HTTPException(409, { message: "The scheduled task's workspace is unavailable." })
+    }
+    return Instance.provide({
+      directory: task.directory,
+      fn: () => {
+        if (Instance.project.id !== task.projectID) {
+          throw new HTTPException(409, { message: "The scheduled task's workspace now belongs to another project." })
+        }
+        return run()
+      },
+    })
+  }
+
   export async function runNow(id: ScheduledTaskID): Promise<RunNowResult> {
     const current = await get(id)
     if (current.status === "disabled") {
@@ -736,11 +756,14 @@ export namespace ScheduledTask {
     }
     let claimedQueueID: TaskQueueID | undefined
     try {
-      if (current.workflowTemplateID) return await runWorkflowNow(current)
+      if (current.workflowTemplateID) return await runInWorkspace(current, () => runWorkflowNow(current))
       const { task, run, queued } = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction(
         (db) => {
           if (hasOpenRunIn(db, id, now, deadlineMs)) throw new RunNowOverlapAborted()
-          const queuedItem = TaskQueue.enqueueInTransaction(db, scheduledQueueInput(current, now, "manual"), { now })
+          const queuedItem = TaskQueue.enqueueInTransaction(db, scheduledQueueInput(current, now, "manual"), {
+            now,
+            directory: current.directory,
+          })
           const runRow = insertRunRow(db, {
             taskID: id,
             triggerType: "manual",
@@ -1038,7 +1061,7 @@ export namespace ScheduledTask {
         // Pass the PRE-claim lastRunAt: the claim above already stamped
         // last_run_at=now, which must not leak into the coalesce envelope.
         scheduledQueueInput(claimedTask, task.nextRunAt!, "scheduled", coalescedCount, task.lastRunAt),
-        { now },
+        { now, directory: claimedTask.directory },
       )
       const run = insertRunRow(db, {
         taskID: task.id,

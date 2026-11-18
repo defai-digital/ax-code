@@ -1,3 +1,5 @@
+import fs from "node:fs/promises"
+import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { ModelID, ProviderID } from "../../src/provider/schema"
@@ -78,6 +80,27 @@ describe("scheduled task session reuse", () => {
         const session = await Session.get(first.sessionID!)
         expect(session.parentID).toBeUndefined()
         expect(session.title).toBe("Tokyo weather check")
+      },
+    })
+  })
+
+  test("creates a new session when an earlier fire used a different directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const other = path.join(tmp.path, "previous-workspace")
+    await fs.mkdir(other)
+    const previous = await Instance.provide({
+      directory: other,
+      fn: () => Session.create({ title: "Earlier scheduled session" }),
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => assistant(input.sessionID))
+        vi.spyOn(ScheduledTask, "previousAutomationSessionID").mockResolvedValueOnce(previous.id)
+        const task = await createRecurring()
+        const current = await runNowAndSettle(task.id)
+        expect(current.sessionID).not.toBe(previous.id)
+        expect((await Session.get(current.sessionID!)).directory).toBe(tmp.path)
       },
     })
   })

@@ -1,3 +1,6 @@
+import { execFileSync } from "node:child_process"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -5,7 +8,7 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
-import { WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
+import { getParsedWorkflowFixtureSpec, WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 
 // 2026-09-14: run-now overlap protection. The cheap hasOpenRun pre-check in
@@ -62,6 +65,106 @@ describe("ScheduledTask run-now overlap protection", () => {
         expect(admitted).toBe(1)
         const runs = await ScheduledTask.listRuns({ taskID: task.id })
         expect(runs.filter((run) => run.status === "running")).toHaveLength(1)
+      },
+    })
+  })
+
+  test.each(["run-now", "due"] as const)("binds a %s queue item to the saved task checkout", async (trigger) => {
+    await using tmp = await tmpdir({ git: true })
+    await using linked = await tmpdir()
+    execFileSync("git", ["worktree", "add", "--detach", linked.path], { cwd: tmp.path, stdio: "pipe" })
+    vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+    const now = Date.now()
+    const task = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        ScheduledTask.create({
+          title: "Workspace-specific automation",
+          prompt: "Use the saved workspace.",
+          schedule: { type: "once", runAt: now + 60_000 },
+        }),
+    })
+
+    await Instance.provide({
+      directory: linked.path,
+      fn: async () => {
+        expect(Instance.project.id).toBe(task.projectID)
+        const dispatched =
+          trigger === "run-now"
+            ? await ScheduledTask.runNow(task.id)
+            : (await ScheduledTask.runDue(now + 7 * 60_000))[0]
+        expect(dispatched?.queueItem?.directory).toBe(tmp.path)
+      },
+    })
+  })
+
+  test.each(["run-now", "due"] as const)("loads the %s workflow template from the saved checkout", async (trigger) => {
+    await using tmp = await tmpdir({ git: true })
+    await using linked = await tmpdir()
+    execFileSync("git", ["worktree", "add", "--detach", linked.path], { cwd: tmp.path, stdio: "pipe" })
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    try {
+      const spec = getParsedWorkflowFixtureSpec("noopDryRun")
+      const now = Date.now()
+      const task = await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const template = await WorkflowTemplate.save({ scope: "project", trust: "trusted", spec })
+          return ScheduledTask.create({
+            title: "Workspace-specific workflow",
+            prompt: "Run the saved workflow.",
+            schedule: { type: "once", runAt: now + 60_000 },
+            workflowTemplateID: template.id,
+          })
+        },
+      })
+      await Instance.provide({
+        directory: linked.path,
+        fn: async () => {
+          expect(Instance.project.id).toBe(task.projectID)
+          await WorkflowTemplate.save({ scope: "project", trust: "trusted", spec: { ...spec, name: "Other checkout" } })
+          if (trigger === "run-now") await ScheduledTask.runNow(task.id)
+          else expect(await ScheduledTask.runDue(now + 7 * 60_000)).toHaveLength(1)
+          await vi.waitFor(async () => {
+            expect(await WorkflowRun.list()).toContainEqual(
+              expect.objectContaining({
+                directory: tmp.path,
+                status: "completed",
+                spec: expect.objectContaining({ name: spec.name }),
+              }),
+            )
+          })
+        },
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  test("rejects workflow run-now when the saved workspace is gone", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const directory = path.join(tmp.path, "workspace")
+    await fs.mkdir(directory)
+    const task = await Instance.provide({
+      directory,
+      fn: () =>
+        ScheduledTask.create({
+          title: "Missing workspace",
+          prompt: "Use the original directory.",
+          schedule: { type: "cron", expression: "* * * * *" },
+          workflowTemplateID: "builtin:noop-dry-run",
+        }),
+    })
+    await fs.rmdir(directory)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(ScheduledTask.runNow(task.id)).rejects.toMatchObject({
+          status: 409,
+          message: expect.stringContaining("workspace is unavailable"),
+        })
+        expect(await WorkflowRun.list()).toEqual([])
       },
     })
   })
