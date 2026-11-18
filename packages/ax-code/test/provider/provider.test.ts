@@ -606,6 +606,7 @@ test("wrapSSE fails the consumer's read when the outer abort signal fires mid-st
 
 test("wrapSSE removes the outer abort listener when the chunk timeout fires", async () => {
   let removed = 0
+  const requestID = "01a1ecd2-739b-77cc-a8bf-8738dd876a1b"
   const body = new ReadableStream<Uint8Array>({
     pull() {
       return new Promise(() => {})
@@ -614,6 +615,7 @@ test("wrapSSE removes the outer abort listener when the chunk timeout fires", as
   const response = new Response(body, {
     headers: {
       "content-type": "text/event-stream",
+      "x-request-id": requestID,
     },
   })
   const chunkAbort = new AbortController()
@@ -625,7 +627,15 @@ test("wrapSSE removes the outer abort listener when the chunk timeout fires", as
   }) as AbortSignal["removeEventListener"]
 
   const wrapped = Provider.wrapSSE(response, 1, chunkAbort, outerAbort.signal)
-  await expect(wrapped.body!.getReader().read()).rejects.toThrow("SSE read timed out")
+  const error = await wrapped
+    .body!.getReader()
+    .read()
+    .catch((error: unknown) => error)
+  expect(error).toMatchObject({ message: "SSE read timed out" })
+  expect(MessageV2.fromError(error, { providerID: ProviderID.make("stream-regression") })).toMatchObject({
+    name: "APIError",
+    data: { isRetryable: true, metadata: { requestID } },
+  })
 
   expect(chunkAbort.signal.aborted).toBe(true)
   expect(removed).toBe(1)

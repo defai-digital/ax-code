@@ -374,6 +374,7 @@ export namespace Provider {
             ms > 0
               ? setTimeout(() => {
                   const err = new Error("SSE read timed out")
+                  rememberNetworkRequestID(err, res.headers)
                   abortReader(err)
                   reject(err)
                 }, ms)
