@@ -86,7 +86,10 @@ test("headless run waits for its background handoff and reports the parent follo
         JSON.stringify({ [sessionID]: { type: delivered && !parentCompleted ? "busy" : "idle" } }),
       )
     }
-    if (request.url?.startsWith(`/session/${sessionID}/message`) && request.method === "GET") {
+    if (request.url === `/session/${sessionID}/message/msg_followup` && request.method === "GET") {
+      return void response.end(JSON.stringify(followup))
+    }
+    if (request.url === `/session/${sessionID}/message` && request.method === "GET") {
       return void response.end(
         JSON.stringify([foreground, ...(delivered ? [handoff] : []), ...(parentCompleted ? [followup] : [])]),
       )

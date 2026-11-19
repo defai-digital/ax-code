@@ -512,10 +512,12 @@ test("run command wires structured output flags after the event loop", async () 
   expect(src).toContain("finalAssistantMessageID = event.properties.info.id")
   // The final messages read carries the lifecycle abort signal (F9/F11) so a
   // hung server after the stream ended cannot keep the process alive.
-  expect(src).toContain("await sdk.session.messages({ sessionID }, signal ? { signal } : undefined)")
+  expect(src).toContain("const result = await sdk.session.message(")
+  expect(src).toContain("messageID: assistantMessageID")
+  expect(src).toContain("throwOnError: true")
   // --output-schema: the server-captured structured value is serialized into
   // the final text when present; the text parts stay the fallback.
-  expect(src).toContain("finalStructured = extractRunStructuredOutput(result.data, assistantMessageID)")
+  expect(src).toContain("finalStructured = extractRunStructuredOutput(messages, assistantMessageID)")
   expect(src).toContain(
     "outputFormat !== undefined && finalStructured !== undefined ? JSON.stringify(finalStructured) : undefined",
   )
@@ -680,13 +682,15 @@ test("TUI renderer routes native trace traps through terminal cleanup", async ()
   expect(src).toContain("registerShutdownSignals(() => exit(), { signals: TUI_EXIT_SIGNALS })")
 })
 
-test("TUI worker always forces exit after uncaught exceptions", async () => {
+test("TUI worker attempts bounded graceful shutdown after uncaught exceptions", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/tui/worker.ts"), "utf-8")
   const start = src.indexOf('registerTuiProcessHandler(\n  "uncaughtException"')
   const end = src.indexOf("const handleGlobalEvent", start)
   expect(start).toBeGreaterThan(-1)
   const block = src.slice(start, end)
-  expect(block).toContain("setTimeout(() => process.exit(1), 100)")
+  expect(block).toContain("void rpc")
+  expect(block).toContain(".shutdown()")
+  expect(block).toContain("setTimeout(() => process.exit(1), WORKER_CRASH_SHUTDOWN_TIMEOUT_MS)")
   expect(block).not.toContain(".unref()")
   expect(end).toBeGreaterThan(start)
   expect(block).not.toContain("if (!shutdownPromise) setTimeout")
@@ -1563,7 +1567,9 @@ test("shared CLI failure handler appends the run usage hint and skips full help 
   // Full help is conditional: only non-run commands print it, and the hint
   // lands before any help output. The exit stays 1.
   expect(handler.indexOf("if (hint)")).toBeLessThan(handler.indexOf("cliFailureShowsFullHelp"))
-  expect(handler).toContain("process.exit(1)")
+  expect(handler).toContain("process.exitCode = 1")
+  expect(handler).toContain("throw new UI.CancelledError()")
+  expect(handler).not.toContain("process.exit(1)")
 })
 
 test("shared CLI failure handler writes usage-failure help to stderr, never stdout", async () => {

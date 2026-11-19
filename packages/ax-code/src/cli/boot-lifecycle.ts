@@ -11,6 +11,28 @@ import { ProcessRegistry } from "../runtime/process-registry"
 
 let forcedExitTimer: ReturnType<typeof setTimeout> | undefined
 let hooksInstalled = false
+let hooksSuspended = 0
+
+function addProcessHooks() {
+  process.on("unhandledRejection", onUnhandledRejection)
+  process.on("uncaughtException", onUncaughtException)
+}
+
+function removeProcessHooks() {
+  process.off("unhandledRejection", onUnhandledRejection)
+  process.off("uncaughtException", onUncaughtException)
+}
+
+export function suspendProcessHooks() {
+  hooksSuspended++
+  if (hooksInstalled && hooksSuspended === 1) removeProcessHooks()
+}
+
+export function resumeProcessHooks() {
+  if (hooksSuspended === 0) return
+  hooksSuspended--
+  if (hooksInstalled && hooksSuspended === 0) addProcessHooks()
+}
 
 function onUnhandledRejection(err: unknown) {
   if (isHarmlessInterrupt(err)) return
@@ -58,8 +80,7 @@ export function hooks() {
   // or models.dev request. Shared by every CLI entry point (and harmless when
   // the TUI worker thread calls it again: init is idempotent).
   initNetworkEnv()
-  process.on("unhandledRejection", onUnhandledRejection)
-  process.on("uncaughtException", onUncaughtException)
+  if (hooksSuspended === 0) addProcessHooks()
   // ADR-209: sweep child-process registry entries whose owner died hard
   // (OOM, SIGKILL, a node:ffi crash). Fire-and-forget with a catch: the
   // sweep must never block or fail startup, and it is a no-op on Windows

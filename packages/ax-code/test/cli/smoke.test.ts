@@ -164,6 +164,27 @@ describe("cli smoke", () => {
     expect(text).toContain("Options:")
   }, 20000)
 
+  test.skipIf(process.platform === "win32")(
+    "does not truncate a large piped JSONL usage error",
+    async () => {
+      await using tmp = await tmpdir()
+      const out = await Process.run(cmd("run", "--format", "jsonl", "--" + "x".repeat(120_000)), {
+        cwd: ROOT,
+        env: { ...process.env, AX_CODE_TEST_HOME: tmp.path, SHELL: "/bin/true" },
+        nothrow: true,
+      })
+
+      expect(out.code).toBe(1)
+      const lines = out.stdout.toString().trim().split("\n")
+      expect(lines).toHaveLength(1)
+      const event = JSON.parse(lines[0]!)
+      expect(event.type).toBe("error")
+      expect(event.error.code).toBe("usage")
+      expect(event.error.message).toBe("Unknown argument: " + "x".repeat(120_000))
+    },
+    20000,
+  )
+
   test("runs db path command through the real entrypoint", async () => {
     const out = await Process.run(cmd("db", "path"), {
       cwd: ROOT,

@@ -93,7 +93,9 @@ async function runEventStream(input: {
   configStatus?: number
   timeout?: number
   holdMessage?: boolean
+  holdFinalMessage?: boolean
   afterSubmit?: () => void
+  afterFinalMessage?: () => void
   /** Capture the raw POST /message request body (see the captureBody tests). */
   captureBody?: boolean
   /** Capture the POST /message request headers (see the runtime-token test). */
@@ -122,6 +124,9 @@ async function runEventStream(input: {
   let eventsResponse: ServerResponse | undefined
   let heldMessageResponse: ServerResponse | undefined
   let abortCalled = false
+  let finalMessagePath: string | undefined
+  let heldFinalMessageResponse: ServerResponse | undefined
+  let finalReadAborted = false
   let capturedMessageBody: string | undefined
   let configReads = 0
   let capturedMessageHeaders: NodeJS.Dict<string | string[]> | undefined
@@ -229,6 +234,22 @@ async function runEventStream(input: {
       response.end(JSON.stringify(input.promptResponse ?? {}))
       return
     }
+    if (request.method === "GET" && /\/message\/[^/]+$/.test(pathname)) {
+      finalMessagePath = pathname
+      if (input.holdFinalMessage) {
+        heldFinalMessageResponse = response
+        response.on("close", () => {
+          if (heldFinalMessageResponse === response) {
+            finalReadAborted = true
+            heldFinalMessageResponse = undefined
+          }
+        })
+        input.afterFinalMessage?.()
+        return
+      }
+      response.end(JSON.stringify(input.messages?.[0] ?? {}))
+      return
+    }
     if (request.method === "GET" && pathname.endsWith("/message")) {
       response.end(JSON.stringify(input.messages ?? []))
       return
@@ -269,6 +290,8 @@ async function runEventStream(input: {
       exitCode: process.exitCode,
       rejected: settled.rejected,
       abortCalled,
+      finalMessagePath,
+      finalReadAborted,
       messageBody: capturedMessageBody,
       configReads,
       messageHeaders: capturedMessageHeaders,
@@ -301,7 +324,7 @@ test("run event stream ends with exactly one result line carrying usage", async 
     text: "All done",
     time: { start: 1, end: 2 },
   }
-  const { lines, exitCode, rejected } = await runEventStream({
+  const { lines, exitCode, rejected, finalMessagePath } = await runEventStream({
     events: [
       { type: "message.part.updated", properties: { part: textPart } },
       { type: "message.updated", properties: { info: assistantInfo(sessionID) } },
@@ -321,6 +344,7 @@ test("run event stream ends with exactly one result line carrying usage", async 
 
   expect(rejected).toBeUndefined()
   expect(exitCode).toBeUndefined()
+  expect(finalMessagePath).toBe("/session/ses_stream/message/msg_final")
   const resultLines = lines.filter((line) => line.includes('"type":"result"'))
   expect(resultLines).toHaveLength(1)
   expect(lines[lines.length - 1]).toBe(resultLines[0])
@@ -332,6 +356,43 @@ test("run event stream ends with exactly one result line carrying usage", async 
   expect(result.text).toBe("All done")
   expect(result.permissionDenials).toBe(0)
   expect(result.usage).toEqual({ input: 10, output: 20, reasoning: 3, cacheRead: 4, cacheWrite: 5 })
+})
+
+test("run SIGINT aborts the single-message final read and emits one cancelled result", async () => {
+  const sessionID = "ses_stream"
+  const textPart = {
+    id: "prt_text",
+    messageID: "msg_final",
+    sessionID,
+    type: "text",
+    text: "Streamed before cancellation",
+    time: { start: 1, end: 2 },
+  }
+  const { lines, exitCode, abortCalled, finalMessagePath, finalReadAborted } = await runEventStream({
+    events: [
+      { type: "message.part.updated", properties: { part: textPart } },
+      { type: "message.updated", properties: { info: assistantInfo(sessionID) } },
+    ],
+    promptResponse: { info: assistantInfo(sessionID), parts: [textPart] },
+    messages: [
+      {
+        info: { id: "msg_final", role: "assistant" },
+        parts: [{ type: "text", text: "Stored final text" }],
+      },
+    ],
+    holdFinalMessage: true,
+    afterFinalMessage: () => process.emit("SIGINT"),
+  })
+
+  expect(finalMessagePath).toBe("/session/ses_stream/message/msg_final")
+  expect(finalReadAborted).toBe(true)
+  expect(abortCalled).toBe(true)
+  expect(exitCode).toBe(130)
+  const results = lines
+    .filter((line) => line.includes('"type":"result"'))
+    .map((line) => JSON.parse(line) as { status?: string })
+  expect(results).toHaveLength(1)
+  expect(results[0]?.status).toBe("cancelled")
 })
 
 test("run result omits usage when stored messages carry no token counts", async () => {

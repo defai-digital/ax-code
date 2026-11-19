@@ -1,4 +1,3 @@
-import { NamedError } from "@ax-code/util/error"
 import { hideBin } from "yargs/helpers"
 import { AskCommand } from "./cmd/ask"
 import { AcpCommand } from "./cmd/acp"
@@ -55,11 +54,9 @@ import { WorkflowCommand } from "./cmd/workflow"
 import { TaskCommand } from "./cmd/task"
 import { ScheduleCommand } from "./cmd/schedule"
 import { GoalCommand } from "./cmd/goal-impl"
-import { fatal } from "./bootstrap/fatal"
 import { setKnownCommands } from "./tui/project-arg"
 import { ensureWindowsUtf8Console } from "./bootstrap/windows-console"
 import { UI } from "./ui"
-import { Log } from "../util/log"
 import { setAxCodeProcessTitle } from "../util/process-title"
 import { clearForcedExitTimer } from "./boot-lifecycle"
 import { createAxCodeCli, runAxCodeCli } from "./boot-shared"
@@ -242,7 +239,8 @@ export function cli(argv = hideBin(process.argv)) {
         if (!jsonUsageError && cliFailureShowsFullHelp(msg, command))
           cli.showHelp((text) => process.stderr.write(text + "\n"))
       }
-      process.exit(1)
+      process.exitCode = 1
+      throw new UI.CancelledError()
     })
     .strict()
 }
@@ -258,21 +256,7 @@ export async function run() {
   // Match only the command position, not any token anywhere: `ax-code run -- --uninstall`
   // must not be hijacked into running the (destructive) uninstall flow.
   if (argv[0] === "--uninstall" || argv[0] === "-uninstall") {
-    const cmd = cli(["uninstall"])
-    try {
-      await cmd.parse()
-    } catch (err) {
-      // Provider, Config, and MCP stay off the --help graph: this module
-      // formats those domain errors, and it is only needed once parse throws.
-      const { FormatError } = await import("./error")
-      fatal(err, {
-        format: FormatError,
-        ui: UI.error,
-        file: Log.file,
-        text: NamedError.message,
-      })
-      process.exitCode = 1
-    }
+    await runAxCodeCli(cli(["uninstall"]))
     return
   }
   await runAxCodeCli(cli())

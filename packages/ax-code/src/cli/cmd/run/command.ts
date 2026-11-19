@@ -1223,14 +1223,21 @@ export const RunCommand = cmd({
           // after the stream ended cannot keep the process alive; an abort
           // here only leaves usage/structured unknown (the caller's catch
           // treats it as such), it is never a run failure.
-          const result = await sdk.session.messages({ sessionID }, signal ? { signal } : undefined)
+          const result = await sdk.session.message(
+            {
+              sessionID,
+              messageID: assistantMessageID,
+            },
+            signal ? { signal, throwOnError: true } : { throwOnError: true },
+          )
+          const messages = result.data ? [result.data] : undefined
           // Side-channel: the same fetch carries the token counts for the
           // terminal result event; missing counts leave usage undefined.
-          finalUsage = extractRunUsageTotals(result.data, assistantMessageID)
+          finalUsage = extractRunUsageTotals(messages, assistantMessageID)
           // Side-channel: the same fetch carries the server-captured
           // structured output when the run steered through it.
-          finalStructured = extractRunStructuredOutput(result.data, assistantMessageID)
-          return extractRunFinalAssistantText(result.data, assistantMessageID)
+          finalStructured = extractRunStructuredOutput(messages, assistantMessageID)
+          return extractRunFinalAssistantText(messages, assistantMessageID)
         }
 
         async function executeRun(sdk: AxCodeClient) {

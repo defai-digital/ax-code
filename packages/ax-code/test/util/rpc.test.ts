@@ -462,6 +462,107 @@ describe("Rpc", () => {
     }
   })
 
+  test("queued stdio writes preserve order across backpressure", () => {
+    const stream = Object.assign(new EventEmitter(), {
+      write: vi.fn((_data: string) => false),
+    })
+    const writer = Rpc.createRpcQueuedWriter(stream, { onError: vi.fn() })
+
+    writer.write("first")
+    writer.write("second")
+    writer.write("third")
+    expect(stream.write).toHaveBeenCalledTimes(1)
+    expect(stream.write).toHaveBeenLastCalledWith("first")
+
+    stream.write.mockReturnValue(true)
+    stream.emit("drain")
+    expect(stream.write.mock.calls.map(([data]) => data)).toEqual(["first", "second", "third"])
+    writer.dispose()
+  })
+
+  test("does not duplicate a frame when backpressure persists across drains", () => {
+    const stream = Object.assign(new EventEmitter(), {
+      write: vi.fn((_data: string) => false),
+    })
+    const writer = Rpc.createRpcQueuedWriter(stream, { onError: vi.fn() })
+
+    writer.write("first")
+    writer.write("second")
+    stream.emit("drain")
+    expect(stream.write.mock.calls.map(([data]) => data)).toEqual(["first", "second"])
+
+    stream.write.mockReturnValue(true)
+    stream.emit("drain")
+    expect(stream.write.mock.calls.map(([data]) => data)).toEqual(["first", "second"])
+    writer.dispose()
+  })
+
+  test("routes a synchronous write failure during drain through the error callback", () => {
+    const failure = new Error("broken stream")
+    const stream = Object.assign(new EventEmitter(), {
+      write: vi.fn((_data: string) => false),
+    })
+    const onError = vi.fn()
+    const writer = Rpc.createRpcQueuedWriter(stream, { onError })
+
+    writer.write("first")
+    writer.write("second")
+    stream.write.mockImplementation(() => {
+      throw failure
+    })
+    expect(() => stream.emit("drain")).not.toThrow()
+    expect(onError).toHaveBeenCalledWith(failure)
+  })
+
+  test("queued stdio writes are byte-bounded and reject later writes after overflow", () => {
+    const stream = Object.assign(new EventEmitter(), {
+      write: vi.fn((_data: string) => false),
+    })
+    const onError = vi.fn()
+    const writer = Rpc.createRpcQueuedWriter(stream, { onError, maxBufferedBytes: 10 })
+
+    writer.write("first")
+    writer.write("12345")
+    expect(onError).not.toHaveBeenCalled()
+    writer.write("6")
+    expect(onError).toHaveBeenCalledWith(new Error("RPC output queue exceeded 10 bytes"))
+
+    writer.write("ignored")
+    stream.emit("drain")
+    expect(stream.write).toHaveBeenCalledTimes(1)
+  })
+
+  test("stdio EOF waits for an accepted response before disposing the writer", async () => {
+    const stdin = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
+    const stdout = Object.assign(new EventEmitter(), {
+      write: vi.fn((_data: string) => false),
+    })
+    let closed = false
+    const done = Rpc.listenStdio(
+      { respond: () => "ok" },
+      {
+        stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">,
+        stdout: stdout as unknown as Pick<NodeJS.WriteStream, "write" | "on">,
+      },
+    ).then(() => {
+      closed = true
+    })
+
+    stdin.emit("data", JSON.stringify({ type: "rpc.request", method: "respond", id: 11 }) + "\n")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    stdin.emit("end")
+    stdin.emit("close")
+    await flushMicrotasks()
+    expect(closed).toBe(false)
+    expect(stdout.write).toHaveBeenCalledTimes(1)
+
+    stdout.write.mockReturnValue(true)
+    stdout.emit("drain")
+    await done
+    expect(closed).toBe(true)
+    expect(stdout.write).toHaveBeenCalledTimes(1)
+  })
+
   test("supports newline-framed stdio requests and event emission", async () => {
     const stdin = new EventEmitter() as EventEmitter & { setEncoding: (encoding: BufferEncoding) => typeof stdin }
     stdin.setEncoding = () => stdin

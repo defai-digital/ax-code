@@ -83,6 +83,20 @@ describe("registerTuiCrashHandlers", () => {
 })
 
 describe("startup/exit source guardrails", () => {
+  test("backend teardown covers failures before the TUI app starts", () => {
+    const spawned = THREAD_SRC.indexOf("const backend = await createBackendRuntime")
+    const teardown = THREAD_SRC.indexOf("const stop = async () =>", spawned)
+    const guarded = THREAD_SRC.indexOf("try {", teardown)
+    const handshake = THREAD_SRC.indexOf('client.call("health"', spawned)
+    const input = THREAD_SRC.indexOf("const prompt = await input", spawned)
+    const finalStop = THREAD_SRC.indexOf("} finally {\n        await stop()", input)
+
+    expect(spawned).toBeGreaterThan(-1)
+    expect(teardown).toBeGreaterThan(spawned)
+    expect(guarded).toBeGreaterThan(teardown)
+    expect(guarded).toBeLessThan(handshake)
+    expect(finalStop).toBeGreaterThan(input)
+  })
   test("#7: forwards the full process env to the backend, not the secret-stripped view", () => {
     // The backend is a trusted peer; env-provided provider API keys must reach it.
     expect(THREAD_SRC).toContain("const backendEnv: Record<string, string | undefined> = { ...process.env }")

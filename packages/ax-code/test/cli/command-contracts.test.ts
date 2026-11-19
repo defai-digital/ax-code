@@ -34,14 +34,18 @@ test.each(["upgrade", "update"])("%s check routes to the upgrade check handler",
 async function usage(argv: string[], parser = cli) {
   const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
   const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
-  const exit = vi.spyOn(process, "exit").mockImplementation(() => {
-    throw new Error("test exit")
-  })
-  await expect(Promise.resolve().then(() => parser(argv).parseAsync())).rejects.toThrow("test exit")
-  expect(exit).toHaveBeenCalledWith(1)
-  return {
-    stdout: stdout.mock.calls.map(([text]) => String(text)).join(""),
-    stderr: stderr.mock.calls.map(([text]) => String(text)).join(""),
+  const previousExitCode = process.exitCode
+  try {
+    await expect(Promise.resolve().then(() => parser(argv).parseAsync())).rejects.toMatchObject({
+      name: "UICancelledError",
+    })
+    expect(process.exitCode).toBe(1)
+    return {
+      stdout: stdout.mock.calls.map(([text]) => String(text)).join(""),
+      stderr: stderr.mock.calls.map(([text]) => String(text)).join(""),
+    }
+  } finally {
+    process.exitCode = previousExitCode
   }
 }
 
