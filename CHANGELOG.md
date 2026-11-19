@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.1] - 2026-11-18
+
+### Changed
+
+- Publish the paired SDK 2.6.89.
+
+### Fixed
+
+- Keep scheduled runs tied to the correct workspace, occurrence, and queue attempt across retries and restarts.
+- Keep workflow completion authoritative when queue updates arrive out of order. Reject damaged phase order and kind before execution.
+- Skip unreadable automation records where possible and allow operators to stop or delete damaged schedules and workflows.
+- Preserve worktree ownership and reuse prepared sessions and worktrees when workflow setup is retried.
+- Handle AX Trust timeouts after streaming starts and verify remote parser queries before writing them.
+
 ## [7.31.0] - 2026-11-18
 
 ### Changed
