@@ -188,36 +188,36 @@ export async function assertSessionCompatible(sessionID: import("../../session/s
   })
 }
 
-export async function getPhase(id: WorkflowPhaseID): Promise<WorkflowPhaseRecord> {
-  const phase = SessionShard.storeForProject(Instance.project.id).use((db) => {
-    const row = db.select().from(WorkflowPhaseTable).where(eq(WorkflowPhaseTable.id, id)).get()
-    if (!row) throw new NotFoundError({ message: `Workflow phase not found: ${id}` })
-    return fromPhaseRow(row)
-  })
-  await getRun(phase.runID)
-  return phase
+export function readPhase(
+  db: Database.TxOrDb,
+  id: WorkflowPhaseID,
+): { phase: WorkflowPhaseRecord; run: WorkflowRunState.Info } {
+  const row = db.select().from(WorkflowPhaseTable).where(eq(WorkflowPhaseTable.id, id)).get()
+  if (!row) throw new NotFoundError({ message: `Workflow phase not found: ${id}` })
+  const phase = fromPhaseRow(row)
+  return { phase, run: fromRunRow(readRunRow(db, phase.runID)) }
 }
 
-export async function getChild(id: WorkflowChildID): Promise<WorkflowChildRecord> {
-  const child = SessionShard.storeForProject(Instance.project.id).use((db) => {
-    const row = db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, id)).get()
-    if (!row) throw new NotFoundError({ message: `Workflow child not found: ${id}` })
-    return fromChildRow(row)
-  })
-  await getRun(child.runID)
-  return child
+export function readChild(
+  db: Database.TxOrDb,
+  id: WorkflowChildID,
+): { child: WorkflowChildRecord; run: WorkflowRunState.Info } {
+  const row = db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, id)).get()
+  if (!row) throw new NotFoundError({ message: `Workflow child not found: ${id}` })
+  const child = fromChildRow(row)
+  return { child, run: fromRunRow(readRunRow(db, child.runID)) }
 }
 
-export async function assertPhaseBelongsToRun(phaseID: WorkflowPhaseID, runID: WorkflowRunID) {
-  const phase = await getPhase(phaseID)
+export async function assertPhaseBelongsToRun(phaseID: WorkflowPhaseID, runID: WorkflowRunID): Promise<void> {
+  const { phase } = SessionShard.storeForProject(Instance.project.id).use((db) => readPhase(db, phaseID))
   if (phase.runID === runID) return
   throw new HTTPException(409, {
     message: `Workflow phase ${phaseID} does not belong to workflow run ${runID}.`,
   })
 }
 
-export async function assertChildBelongsToRun(childID: WorkflowChildID, runID: WorkflowRunID) {
-  const child = await getChild(childID)
+export async function assertChildBelongsToRun(childID: WorkflowChildID, runID: WorkflowRunID): Promise<void> {
+  const { child } = SessionShard.storeForProject(Instance.project.id).use((db) => readChild(db, childID))
   if (child.runID === runID) return
   throw new HTTPException(409, {
     message: `Workflow child ${childID} does not belong to workflow run ${runID}.`,

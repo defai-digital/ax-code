@@ -40,8 +40,6 @@ import {
   fromChildRow,
   fromPhaseRow,
   fromRunRow,
-  getChild,
-  getPhase,
   getRun,
   isTerminalChildStatus,
   isTerminalPhaseStatus,
@@ -54,6 +52,8 @@ import {
   publishPhaseUpdated,
   publishUpdated,
   publishVerificationAttached,
+  readChild,
+  readPhase,
   readRunRow,
   touchRun,
   unique,
@@ -358,30 +358,27 @@ function finishCancellation(runID: WorkflowRunID): WorkflowRunDetail {
 
 async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Promise<WorkflowPhaseRecord> {
   const parsed = WorkflowRunState.SetPhaseStatusInput.parse(input)
-  const current = await getPhase(parsed.id)
-  const now = Date.now()
-  const updates: Partial<typeof WorkflowPhaseTable.$inferInsert> = {
-    status: parsed.status,
-    // Null (not undefined) so a re-enabled phase actually clears a stale error.
-    error: parsed.error ?? null,
-    time_updated: now,
-  }
-  if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
-  updates.time_completed = isTerminalPhaseStatus(parsed.status) ? now : null
-
-  const phase = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-    if (readRunRow(db, current.runID).status === "cancelled") return undefined
+  const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+    const { phase: current, run } = readPhase(db, parsed.id)
+    if (run.status === "cancelled") return { phase: current }
+    const now = Date.now()
+    const updates: Partial<typeof WorkflowPhaseTable.$inferInsert> = {
+      status: parsed.status,
+      error: parsed.error ?? null,
+      time_updated: now,
+      time_started: parsed.status === "running" && current.time.started === undefined ? now : undefined,
+      time_completed: isTerminalPhaseStatus(parsed.status) ? now : null,
+    }
     const row = db.update(WorkflowPhaseTable).set(updates).where(eq(WorkflowPhaseTable.id, parsed.id)).returning().get()
     if (!row) throw new NotFoundError({ message: `Workflow phase not found: ${parsed.id}` })
     db.update(WorkflowRunTable)
       .set(parsed.status === "running" ? { current_phase_id: row.id, time_updated: now } : { time_updated: now })
       .where(eq(WorkflowRunTable.id, row.run_id))
       .run()
-    return fromPhaseRow(row)
+    return { phase: fromPhaseRow(row), previous: current.status }
   })
-  if (!phase) return getPhase(parsed.id)
-  publishPhaseUpdated(phase, current.status)
-  return phase
+  if (result.previous) publishPhaseUpdated(result.phase, result.previous)
+  return result.phase
 }
 
 function insertChild(
@@ -606,30 +603,27 @@ async function enqueuePhaseChildren(
 
 async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Promise<WorkflowChildRecord> {
   const parsed = WorkflowRunState.SetChildStatusInput.parse(input)
-  const current = await getChild(parsed.id)
-  const now = Date.now()
-  const updates: Partial<typeof WorkflowChildTable.$inferInsert> = {
-    status: parsed.status,
-    output_summary: parsed.outputSummary,
-    artifact_ids: parsed.artifactIDs ?? current.artifactIDs,
-    evidence_refs: parsed.evidenceRefs ?? current.evidenceRefs,
-    // Null (not undefined) so a re-enabled child actually clears a stale error.
-    error: parsed.error ?? null,
-    time_updated: now,
-  }
-  if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
-  updates.time_completed = isTerminalChildStatus(parsed.status) ? now : null
-
-  const child = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-    if (readRunRow(db, current.runID).status === "cancelled") return undefined
+  const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+    const { child: current, run } = readChild(db, parsed.id)
+    if (run.status === "cancelled") return { child: current }
+    const now = Date.now()
+    const updates: Partial<typeof WorkflowChildTable.$inferInsert> = {
+      status: parsed.status,
+      output_summary: parsed.outputSummary,
+      artifact_ids: parsed.artifactIDs,
+      evidence_refs: parsed.evidenceRefs,
+      error: parsed.error ?? null,
+      time_updated: now,
+      time_started: parsed.status === "running" && current.time.started === undefined ? now : undefined,
+      time_completed: isTerminalChildStatus(parsed.status) ? now : null,
+    }
     const row = db.update(WorkflowChildTable).set(updates).where(eq(WorkflowChildTable.id, parsed.id)).returning().get()
     if (!row) throw new NotFoundError({ message: `Workflow child not found: ${parsed.id}` })
     touchRun(db, row.run_id, now)
-    return fromChildRow(row)
+    return { child: fromChildRow(row), previous: current.status }
   })
-  if (!child) return getChild(parsed.id)
-  publishChildUpdated(child, current.status)
-  return child
+  if (result.previous) publishChildUpdated(result.child, result.previous)
+  return result.child
 }
 
 export async function appendArtifact(input: WorkflowRunState.AppendArtifactInput): Promise<WorkflowArtifactRecord> {

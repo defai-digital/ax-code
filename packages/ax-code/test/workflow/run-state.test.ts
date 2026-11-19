@@ -26,6 +26,54 @@ function setWorkflowChildStartedAt(id: WorkflowChildID, startedAt: number) {
 }
 
 describe("WorkflowRun state", () => {
+  test("preserves child evidence across overlapping status updates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        const [phase] = (await WorkflowRun.getDetail(run.id)).phases
+        const child = await WorkflowRun.appendChild({ runID: run.id, phaseID: phase.id })
+        const artifact = await WorkflowRun.appendArtifact({ runID: run.id, phaseID: phase.id, kind: "summary" })
+        const evidenceRefs = [{ kind: "artifact" as const, id: artifact.id }]
+
+        await Promise.all([
+          WorkflowRun.setChildStatus({ id: child.id, status: "running", artifactIDs: [artifact.id], evidenceRefs }),
+          WorkflowRun.setChildStatus({ id: child.id, status: "completed" }),
+        ])
+
+        expect((await WorkflowRun.getDetail(run.id)).children).toMatchObject([
+          { id: child.id, status: "completed", artifactIDs: [artifact.id], evidenceRefs },
+        ])
+      },
+    })
+  })
+
+  test("publishes one phase-start event for overlapping starts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        const [phase] = (await WorkflowRun.getDetail(run.id)).phases
+        const started: string[] = []
+        const unsubscribe = Bus.subscribe(WorkflowRun.Event.PhaseStarted, ({ properties }) => {
+          started.push(properties.phase.id)
+        })
+        try {
+          const [first, second] = await Promise.all([
+            WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" }),
+            WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" }),
+          ])
+          expect(started).toEqual([phase.id])
+          expect(second.time.started).toBe(first.time.started)
+        } finally {
+          unsubscribe()
+        }
+      },
+    })
+  })
+
   test("persists run detail state and publishes lifecycle events", async () => {
     await using tmp = await tmpdir({ git: true })
 
