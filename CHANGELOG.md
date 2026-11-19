@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.2] - 2026-11-19
+
+### Changed
+
+- Refresh the bundled model catalog and publish the paired SDK 2.6.90.
+
+### Fixed
+
+- Drain piped CLI output before shutdown so large JSONL responses arrive intact.
+- Release TUI backend resources after startup errors and allow the worker to shut down cleanly.
+- Keep stdio RPC writes ordered under backpressure, enforce the byte limit from the first frame, and cancel active calls when the pipe breaks.
+- Fetch the final assistant message directly when a headless run needs it.
+
 ## [7.31.1] - 2026-11-18
 
 ### Changed
