@@ -28,6 +28,7 @@ import { stopServer as stopAxEngineServer } from "@/provider/ax-engine"
 import { registerTuiProcessHandler } from "./util/lifecycle"
 import { startShellEnvLoad } from "@/runtime/shell-env"
 import { initNetworkEnv } from "@/util/network-env"
+import { resumeProcessHooks, suspendProcessHooks } from "@/cli/boot-lifecycle"
 
 type GlobalEvent = {
   directory?: string
@@ -95,7 +96,18 @@ registerTuiProcessHandler(
       stack: error instanceof Error ? error.stack : undefined,
       code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
     })
-    setTimeout(() => process.exit(1), 100)
+    if (crashExitStarted) return
+    crashExitStarted = true
+    const timer = setTimeout(() => process.exit(1), WORKER_CRASH_SHUTDOWN_TIMEOUT_MS)
+    void rpc
+      .shutdown()
+      .catch((error) => {
+        DiagnosticLog.recordProcess("worker.crashShutdownFailed", { error })
+      })
+      .finally(() => {
+        clearTimeout(timer)
+        process.exit(1)
+      })
   },
   { name: "worker-uncaught-exception" },
 )
@@ -103,6 +115,8 @@ registerTuiProcessHandler(
 let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 let shutdownPromise: Promise<void> | undefined
 let removeSignalHandlers: (() => void) | undefined
+let crashExitStarted = false
+const WORKER_CRASH_SHUTDOWN_TIMEOUT_MS = 5_000
 
 const eventStream = {
   abort: undefined as AbortController | undefined,
@@ -402,67 +416,96 @@ export async function startTuiBackend(transport: "worker" | "stdio" = "worker") 
   // proxy env must be applied here too (idempotent; covers the stdio process
   // transport which re-runs boot.ts only by coincidence in some launch modes).
   initNetworkEnv()
+  suspendProcessHooks()
   if (transport === "stdio") {
-    const done = Rpc.listenStdio(rpc)
-    // Process transport: signal-driven cleanup. The thread's
-    // `child.kill()` lands as SIGTERM here; without these handlers the
-    // process would die before draining `Instance.disposeAll()` /
-    // `server.stop()`, leaking MCP child processes and the GlobalBus
-    // listener.
-    const onSignal = (signal: NodeJS.Signals) => {
-      DiagnosticLog.recordProcess("backend.signalShutdown", { signal })
-      void rpc
-        .shutdown()
-        .catch((error) => {
-          DiagnosticLog.recordProcess("backend.signalShutdownFailed", { signal, error })
-        })
-        .finally(() => {
-          DiagnosticLog.recordProcess("backend.signalExit", { signal })
-          process.exit(signal === "SIGINT" ? 130 : 0)
-        })
+    try {
+      const done = Rpc.listenStdio(rpc, {
+        onFatal(error) {
+          if (crashExitStarted) return
+          crashExitStarted = true
+          DiagnosticLog.recordProcess("backend.rpcFatal", { error })
+          const timer = setTimeout(() => process.exit(1), WORKER_CRASH_SHUTDOWN_TIMEOUT_MS)
+          void rpc
+            .shutdown()
+            .catch((shutdownError) => {
+              DiagnosticLog.recordProcess("backend.rpcFatalShutdownFailed", { error: shutdownError })
+            })
+            .finally(() => {
+              clearTimeout(timer)
+              process.exit(1)
+            })
+        },
+      })
+      // Process transport: signal-driven cleanup. The thread's
+      // `child.kill()` lands as SIGTERM here; without these handlers the
+      // process would die before draining `Instance.disposeAll()` /
+      // `server.stop()`, leaking MCP child processes and the GlobalBus
+      // listener.
+      const onSignal = (signal: NodeJS.Signals) => {
+        DiagnosticLog.recordProcess("backend.signalShutdown", { signal })
+        void rpc
+          .shutdown()
+          .catch((error) => {
+            DiagnosticLog.recordProcess("backend.signalShutdownFailed", { signal, error })
+          })
+          .finally(() => {
+            DiagnosticLog.recordProcess("backend.signalExit", { signal })
+            process.exit(signal === "SIGINT" ? 130 : 0)
+          })
+      }
+      // SIGHUP added to the original SIGTERM/SIGINT set so SSH disconnect
+      // and terminal close also drain MCP children, LSP servers, the HTTP
+      // server, and the event-stream reconnect timer instead of orphaning
+      // them. SIGQUIT too — ^\ shouldn't leak resources just because we
+      // didn't bother to register it.
+      removeSignalHandlers = registerShutdownSignals(onSignal)
+      await startEventStream({ directory: process.cwd() })
+      await done
+      // Awaited shutdown after stdin closes. Covers the parent-crash
+      // path where the OS closes our stdin pipe but never delivers a
+      // SIGTERM (e.g. `kill -9` on the thread): without this, the
+      // backend would orphan, holding MCP servers, LSP children, the
+      // HTTP server, and the event stream reconnect timer alive.
+      // shutdown() is idempotent — a second call after a SIGTERM-driven
+      // fire-and-forget shutdown is a no-op.
+      await rpc.shutdown().catch((error) => {
+        DiagnosticLog.recordProcess("backend.exitShutdownFailed", { error })
+      })
+    } catch (error) {
+      resumeProcessHooks()
+      throw error
     }
-    // SIGHUP added to the original SIGTERM/SIGINT set so SSH disconnect
-    // and terminal close also drain MCP children, LSP servers, the HTTP
-    // server, and the event-stream reconnect timer instead of orphaning
-    // them. SIGQUIT too — ^\ shouldn't leak resources just because we
-    // didn't bother to register it.
-    removeSignalHandlers = registerShutdownSignals(onSignal)
-    await startEventStream({ directory: process.cwd() })
-    await done
-    // Awaited shutdown after stdin closes. Covers the parent-crash
-    // path where the OS closes our stdin pipe but never delivers a
-    // SIGTERM (e.g. `kill -9` on the thread): without this, the
-    // backend would orphan, holding MCP servers, LSP children, the
-    // HTTP server, and the event stream reconnect timer alive.
-    // shutdown() is idempotent — a second call after a SIGTERM-driven
-    // fire-and-forget shutdown is a no-op.
-    await rpc.shutdown().catch((error) => {
-      DiagnosticLog.recordProcess("backend.exitShutdownFailed", { error })
-    })
     return
   }
-  Rpc.listen(rpc)
-  // Worker transport runs OUTSIDE the CLI bootstrap: a `new Worker(worker.ts)`
-  // never executes boot.ts, so the background shell-profile env recovery that
-  // `init()` kicks off for every other entrypoint (including the process
-  // backend, which re-runs boot.ts) never happens here. Run it explicitly for
-  // parity so login-rc provider API keys reach the provider loader — otherwise
-  // env-provided keys were the only ones available and login-rc keys were never
-  // recovered in worker mode (see finding #7). Best-effort + non-blocking, like
-  // init(); `provider-impl` awaits `ensureShellEnv()` before reading keys.
-  startShellEnvLoad(process.env)
-  // Worker transport: same intent, in case the runtime forwards a
-  // signal before `worker.terminate()` lands. Idempotent against the
-  // explicit `shutdown` RPC the thread normally invokes first. SIGHUP
-  // and SIGQUIT included for parity with the stdio branch above.
-  const onSignal = (signal: NodeJS.Signals) => {
-    DiagnosticLog.recordProcess("worker.signalShutdown", { signal })
-    void rpc.shutdown().catch((error) => {
-      DiagnosticLog.recordProcess("worker.signalShutdownFailed", { signal, error })
-    })
+  // Dedicated worker handlers own process faults for the backend lifetime.
+  // Restore the global hooks only when startup fails before that ownership begins.
+  try {
+    Rpc.listen(rpc)
+    // Worker transport runs OUTSIDE the CLI bootstrap: a `new Worker(worker.ts)`
+    // never executes boot.ts, so the background shell-profile env recovery that
+    // `init()` kicks off for every other entrypoint (including the process
+    // backend, which re-runs boot.ts) never happens here. Run it explicitly for
+    // parity so login-rc provider API keys reach the provider loader — otherwise
+    // env-provided keys were the only ones available and login-rc keys were never
+    // recovered in worker mode (see finding #7). Best-effort + non-blocking, like
+    // init(); `provider-impl` awaits `ensureShellEnv()` before reading keys.
+    startShellEnvLoad(process.env)
+    // Worker transport: same intent, in case the runtime forwards a
+    // signal before `worker.terminate()` lands. Idempotent against the
+    // explicit `shutdown` RPC the thread normally invokes first. SIGHUP
+    // and SIGQUIT included for parity with the stdio branch above.
+    const onSignal = (signal: NodeJS.Signals) => {
+      DiagnosticLog.recordProcess("worker.signalShutdown", { signal })
+      void rpc.shutdown().catch((error) => {
+        DiagnosticLog.recordProcess("worker.signalShutdownFailed", { signal, error })
+      })
+    }
+    removeSignalHandlers = registerShutdownSignals(onSignal)
+    await startEventStream({ directory: process.cwd() })
+  } catch (error) {
+    resumeProcessHooks()
+    throw error
   }
-  removeSignalHandlers = registerShutdownSignals(onSignal)
-  await startEventStream({ directory: process.cwd() })
 }
 
 function isWorkerEntrypoint() {

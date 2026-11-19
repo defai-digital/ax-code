@@ -9,6 +9,8 @@ import { clearForcedExitTimer, scheduleForcedExit } from "../../src/cli/boot"
 import { apply, debugOptions, debugRunDir, init, level, restoreOriginalCwd } from "../../src/cli/bootstrap/env"
 import { data, fatal } from "../../src/cli/bootstrap/fatal"
 import { migrate } from "../../src/cli/bootstrap/migrate"
+import { flushCliOutput } from "../../src/cli/boot-shared"
+import { hooks, resumeProcessHooks, suspendProcessHooks } from "../../src/cli/boot-lifecycle"
 
 afterEach(() => {
   clearForcedExitTimer()
@@ -389,6 +391,48 @@ describe("cli.boot.fatal", () => {
     expect(err).toHaveLength(1)
     expect(ui[0]).toContain("/tmp/ax-code.log")
     expect(out).toEqual(["ERR:boom\n"])
+  })
+})
+
+describe("cli.boot.output", () => {
+  test("waits for queued stdout and stderr callbacks", async () => {
+    const callbacks: Array<() => void> = []
+    const stream = {
+      writable: true,
+      destroyed: false,
+      write: vi.fn((_chunk: string, callback?: () => void) => {
+        if (callback) callbacks.push(callback)
+        return true
+      }),
+    }
+
+    const flushed = flushCliOutput([stream, stream], 100)
+    expect(callbacks).toHaveLength(2)
+    for (const callback of callbacks) callback()
+    await flushed
+    expect(stream.write).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("cli.boot.process-hooks", () => {
+  test("nested TUI owners suspend and restore the global handlers", () => {
+    hooks()
+    const uncaught = process.listenerCount("uncaughtException")
+    const rejection = process.listenerCount("unhandledRejection")
+
+    suspendProcessHooks()
+    suspendProcessHooks()
+    try {
+      expect(process.listenerCount("uncaughtException")).toBe(uncaught - 1)
+      expect(process.listenerCount("unhandledRejection")).toBe(rejection - 1)
+      resumeProcessHooks()
+      expect(process.listenerCount("uncaughtException")).toBe(uncaught - 1)
+    } finally {
+      resumeProcessHooks()
+    }
+
+    expect(process.listenerCount("uncaughtException")).toBe(uncaught)
+    expect(process.listenerCount("unhandledRejection")).toBe(rejection)
   })
 })
 

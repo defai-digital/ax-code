@@ -5,7 +5,7 @@ import { Rpc } from "../../../src/util/rpc"
 
 function createChild() {
   const child = new EventEmitter() as EventEmitter & {
-    stdin: EventEmitter & { destroyed: boolean; write: (data: string) => void }
+    stdin: EventEmitter & { destroyed: boolean; write: (data: string) => boolean | void }
     stdout: EventEmitter & { setEncoding: (encoding: string) => void }
     stderr: EventEmitter & { setEncoding: (encoding: string) => void }
   }
@@ -16,6 +16,21 @@ function createChild() {
 }
 
 describe("tui process RPC wire", () => {
+  test("queues backend requests in FIFO order while stdin is backpressured", () => {
+    const child = createChild()
+    const write = vi.mocked(child.stdin.write).mockReturnValue(false)
+    const wire = createProcessWire(child, "test-backend")
+
+    wire.postMessage("first")
+    wire.postMessage("second")
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(write).toHaveBeenLastCalledWith("first\n")
+
+    write.mockReturnValue(true)
+    child.stdin.emit("drain")
+    expect(write.mock.calls.map(([data]) => data)).toEqual(["first\n", "second\n"])
+  })
+
   test("delivers a fragmented session transcript larger than one MiB", async () => {
     const child = createChild()
     const wire = createProcessWire(child, "test-backend")

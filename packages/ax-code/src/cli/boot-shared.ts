@@ -7,7 +7,7 @@ import { cancelShellEnvLoad } from "../runtime/shell-env"
 import { UI } from "./ui"
 import { Installation } from "../installation"
 import { Log } from "../util/log"
-import { scheduleForcedExit } from "./boot-lifecycle"
+import { FORCED_EXIT_GRACE_MS, scheduleForcedExit } from "./boot-lifecycle"
 
 // Shared yargs wiring for the two CLI entry points: boot.ts (full command
 // table) and boot-node.ts (slim doctor/generate runtime). Each entry point
@@ -75,6 +75,42 @@ export function createAxCodeCli(argv: string[], cmds: readonly unknown[]) {
   return { cli, rawArgv }
 }
 
+type CliOutputStream = {
+  write(chunk: string, callback?: () => void): boolean
+  writable?: boolean
+  destroyed?: boolean
+}
+
+export async function flushCliOutput(
+  streams: CliOutputStream[] = [process.stdout, process.stderr],
+  timeoutMs = FORCED_EXIT_GRACE_MS,
+) {
+  await Promise.all(
+    streams.map(
+      (stream) =>
+        new Promise<void>((resolve) => {
+          if (stream.writable === false || stream.destroyed) {
+            resolve()
+            return
+          }
+          let settled = false
+          const done = () => {
+            if (settled) return
+            settled = true
+            clearTimeout(timer)
+            resolve()
+          }
+          const timer = setTimeout(done, timeoutMs)
+          try {
+            stream.write("", done)
+          } catch {
+            done()
+          }
+        }),
+    ),
+  )
+}
+
 export async function runAxCodeCli(cmd: { parse(): unknown }) {
   try {
     await cmd.parse()
@@ -90,6 +126,10 @@ export async function runAxCodeCli(cmd: { parse(): unknown }) {
     })
     process.exitCode = 1
   } finally {
+    // Drain queued JSON/help output before the forced-exit window starts.
+    // Immediate process.exit() in a yargs failure handler truncates piped
+    // output at the OS pipe buffer; natural exit remains the final fallback.
+    await flushCliOutput()
     // Stop the background shell-env child so a finished one-shot command can
     // exit immediately instead of waiting for the login shell to finish.
     // Some subprocesses don't react properly to SIGTERM and similar signals

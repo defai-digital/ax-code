@@ -178,11 +178,110 @@ export namespace Rpc {
     emitMessage?.(stringifyEventMessage({ type: "rpc.event", event, data }))
   }
 
+  export const RPC_MAX_QUEUED_WRITE_BYTES = 64 * 1024 * 1024
+  export const RPC_STDIO_DRAIN_TIMEOUT_MS = 5_000
+
+  type QueuedWriteStream = {
+    write(data: string): boolean
+    on(event: "drain", listener: () => void): unknown
+    off?(event: "drain", listener: () => void): unknown
+  }
+
+  export function createRpcQueuedWriter(
+    stream: QueuedWriteStream,
+    input: {
+      onError: (error: Error) => void
+      maxBufferedBytes?: number
+    },
+  ): { write(data: string): void; drain(): Promise<void>; dispose(): void } {
+    const maxBufferedBytes = input.maxBufferedBytes ?? RPC_MAX_QUEUED_WRITE_BYTES
+    let queue: Array<{ data: string; bytes: number }> = []
+    let queuedBytes = 0
+    let streamBytes = 0
+    let waiting = false
+    let disposed = false
+    let drainWaiters: Array<() => void> = []
+
+    const settleDrains = () => {
+      for (const resolve of drainWaiters) resolve()
+      drainWaiters = []
+    }
+    const dispose = () => {
+      if (disposed) return
+      disposed = true
+      queue = []
+      queuedBytes = 0
+      streamBytes = 0
+      stream.off?.("drain", flush)
+      settleDrains()
+    }
+    const fail = (error: Error) => {
+      dispose()
+      input.onError(error)
+    }
+    const writeDirect = (data: string, bytes: number) => {
+      if (stream.write(data) === false) {
+        streamBytes = bytes
+        waiting = true
+      }
+    }
+    const flush = () => {
+      if (disposed || !waiting) return
+      waiting = false
+      streamBytes = 0
+      try {
+        while (queue.length > 0 && !disposed) {
+          const next = queue.shift()!
+          queuedBytes -= next.bytes
+          writeDirect(next.data, next.bytes)
+          if (waiting) return
+        }
+        if (queue.length === 0) settleDrains()
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error(toErrorMessage(error)))
+      }
+    }
+    stream.on("drain", flush)
+
+    return {
+      write(data) {
+        if (disposed) return
+        const bytes = Buffer.byteLength(data, "utf8")
+        if (waiting || queue.length > 0) {
+          if (streamBytes + queuedBytes + bytes > maxBufferedBytes) {
+            fail(new Error(`RPC output queue exceeded ${maxBufferedBytes} bytes`))
+            return
+          }
+          queue.push({ data, bytes })
+          queuedBytes += bytes
+          return
+        }
+        try {
+          writeDirect(data, bytes)
+        } catch (error) {
+          fail(error instanceof Error ? error : new Error(toErrorMessage(error)))
+        }
+      },
+      drain() {
+        if (disposed) return Promise.resolve()
+        if (!waiting && queue.length === 0) {
+          dispose()
+          return Promise.resolve()
+        }
+        return new Promise<void>((resolve) => {
+          drainWaiters.push(resolve)
+        })
+      },
+      dispose,
+    }
+  }
+
   export async function listenStdio(
     rpc: Definition,
     io: {
       stdin?: Pick<NodeJS.ReadStream, "on" | "setEncoding">
       stdout?: Pick<NodeJS.WriteStream, "write" | "on">
+      onFatal?: (error: Error) => void
     } = {},
   ) {
     const stdin = io.stdin ?? process.stdin
@@ -195,15 +294,27 @@ export namespace Rpc {
     // throwing on each request.
     stdout.on?.("error", (error: unknown) => {
       stdoutBroken = true
+      writer.dispose()
       // eslint-disable-next-line no-console
       console.error("rpc listenStdio stdout error", toErrorMessage(error))
+    })
+    const writer = createRpcQueuedWriter(stdout, {
+      onError(error) {
+        stdoutBroken = true
+        for (const controller of active.values()) controller.abort(error)
+        active.clear()
+        // eslint-disable-next-line no-console
+        console.error("rpc listenStdio output queue failed", toErrorMessage(error))
+        io.onFatal?.(error)
+      },
     })
     const safeWrite = (data: string) => {
       if (stdoutBroken) return
       try {
-        stdout.write(data)
+        writer.write(data)
       } catch (error) {
         stdoutBroken = true
+        writer.dispose()
         // eslint-disable-next-line no-console
         console.error("rpc listenStdio stdout write threw", toErrorMessage(error))
       }
@@ -215,7 +326,7 @@ export namespace Rpc {
     stdin.setEncoding("utf8")
     let buffer = ""
     const handleLine = async (line: string) => {
-      if (!line.trim()) return
+      if (stdoutBroken || !line.trim()) return
       const parsed = parseWireMessage(line)
       if (!parsed) return
       if (parsed.type === "rpc.cancel") {
@@ -251,12 +362,28 @@ export namespace Rpc {
 
     await new Promise<void>((resolve) => {
       let settled = false
+      let ended = false
+      let finalizing = false
       const finish = () => {
         if (settled) return
         settled = true
         for (const controller of active.values()) controller.abort()
         active.clear()
+        writer.dispose()
         resolve()
+      }
+      const finalizeAfterOutputDrain = () => {
+        if (finalizing) return
+        finalizing = true
+        const timeout = setTimeout(finish, RPC_STDIO_DRAIN_TIMEOUT_MS)
+        timeout.unref?.()
+        void writer
+          .drain()
+          .catch(() => undefined)
+          .finally(() => {
+            clearTimeout(timeout)
+            finish()
+          })
       }
       stdin.on("data", (chunk) => {
         buffer += String(chunk)
@@ -269,11 +396,14 @@ export namespace Rpc {
         }
       })
       stdin.on("end", () => {
+        ended = true
         const line = buffer
         buffer = ""
-        void dispatch(line).finally(finish)
+        void dispatch(line).finally(finalizeAfterOutputDrain)
       })
-      stdin.on("close", () => finish())
+      stdin.on("close", () => {
+        if (!ended) finalizeAfterOutputDrain()
+      })
     })
   }
 

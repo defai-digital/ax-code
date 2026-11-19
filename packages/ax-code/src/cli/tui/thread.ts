@@ -287,7 +287,7 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
         return
       }
       try {
-        stdin.write(data + "\n")
+        writer?.write(data + "\n")
       } catch (error) {
         DiagnosticLog.recordProcess("tui.backendStdinWriteFailed", { target, error })
         Log.Default.warn("TUI backend stdin write failed", {
@@ -306,6 +306,7 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
   const notifyWireDeath = () => {
     if (wire.wireClosed) return
     wire.wireClosed = true
+    writer?.dispose()
     fragments = []
     bufferedBytes = 0
     const onWireDeath = wire.onWireDeath
@@ -313,6 +314,19 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
     wire.onWireDeath = null
     onWireDeath?.()
   }
+  const writer = child.stdin
+    ? Rpc.createRpcQueuedWriter(child.stdin, {
+        onError(error) {
+          DiagnosticLog.recordProcess("tui.backendStdinQueueFailed", { target, error })
+          notifyWireDeath()
+          try {
+            child.kill?.()
+          } catch (killError) {
+            DiagnosticLog.recordProcess("tui.backendStdinQueueKillFailed", { target, error: killError })
+          }
+        },
+      })
+    : undefined
   // Stream-level "error" events (EPIPE, broken pipe on SIGKILL, etc.)
   // crash the parent process if no listener is attached. These pipes
   // exist only in process transport — the worker transport's
@@ -808,244 +822,256 @@ export const TuiThreadCommand = cmd({
         cwd,
         env: Object.fromEntries(Object.entries(backendEnv).filter((e): e is [string, string] => e[1] !== undefined)),
       })
-      DiagnosticLog.recordProcess("tui.backendSpawned", {
-        mode: backend.mode,
-        target: backend.target,
-        pid: backend.pid,
-      })
-      DiagnosticLog.recordProcess("tui.workerSpawned", { mode: backend.mode, target: backend.target, pid: backend.pid })
-      if (backend.mode === "worker") {
-        const worker = backend.wire as unknown as Worker
-        worker.onerror = (e) => {
-          DiagnosticLog.recordProcess("tui.workerError", { error: e, target: backend.target })
-          Log.Default.error(e)
-          UI.error(formatWorkerLoadError(backend.target, e))
-          // Attempt graceful backend termination before exit so the child
-          // process (if any) is cleaned up and the terminal state is restored.
-          backend
-            .terminate()
-            .catch((err) => {
-              log.warn("failed to terminate backend after worker error", { error: toErrorMessage(err) })
-            })
-            .finally(() => {
-              process.exit(1)
-            })
-        }
-        worker.onmessageerror = (e) => {
-          DiagnosticLog.recordProcess("tui.workerMessageError", { error: e })
-          Log.Default.error(e)
-        }
-      }
-
-      const client = Rpc.client<typeof rpc>(backend.wire)
-      const workerReadyTimeoutMs = tuiWorkerReadyTimeoutMs()
-      DiagnosticLog.recordProcess("tui.backendHandshakeStarted", {
-        mode: backend.mode,
-        target: backend.target,
-        pid: backend.pid,
-        timeoutMs: workerReadyTimeoutMs,
-      })
-      const workerReady = await withTimeout(
-        client.call("health", undefined),
-        workerReadyTimeoutMs,
-        `TUI backend did not become ready after ${workerReadyTimeoutMs}ms`,
-      ).catch(async (error) => {
-        DiagnosticLog.recordProcess("tui.backendHandshakeFailed", {
-          error,
-          mode: backend.mode,
-          target: backend.target,
-          pid: backend.pid,
-          timeoutMs: workerReadyTimeoutMs,
-        })
-        DiagnosticLog.recordProcess("tui.workerHandshakeFailed", {
-          error,
-          mode: backend.mode,
-          target: backend.target,
-          pid: backend.pid,
-          timeoutMs: workerReadyTimeoutMs,
-        })
-        Log.Default.error("TUI backend failed readiness handshake", {
-          error: toErrorMessage(error),
-          mode: backend.mode,
-          target: backend.target,
-          pid: backend.pid,
-          timeoutMs: workerReadyTimeoutMs,
-        })
-        UI.error(
-          [
-            "TUI backend did not become ready.",
-            "This usually points to backend transport startup, AX Code TUI preload, or runtime packaging.",
-            "Run with --debug --print-logs and inspect process.jsonl around tui.backendHandshakeFailed.",
-          ].join("\n"),
-        )
-        await backend.terminate()
-        process.exitCode = 1
-        return undefined
-      })
-      if (!workerReady) return
-      DiagnosticLog.recordProcess("tui.backendReady", {
-        ...workerReady,
-        mode: backend.mode,
-        target: backend.target,
-        pid: backend.pid,
-        timeoutMs: workerReadyTimeoutMs,
-      })
-      DiagnosticLog.recordProcess("tui.workerReady", {
-        ...workerReady,
-        mode: backend.mode,
-        target: backend.target,
-        pid: backend.pid,
-        timeoutMs: workerReadyTimeoutMs,
-      })
-      const internalEvents = createEventSource(client, backend.wire)
-      let threadErrorExitScheduled = false
-      const error = (e: unknown) => {
-        DiagnosticLog.recordProcess("tui.threadError", { error: e })
-        Log.Default.error(e)
-        process.exitCode = 1
-        if (threadErrorExitScheduled) return
-        threadErrorExitScheduled = true
-        exitTuiAfterCrash()
-      }
-      const reload = () => {
-        client.call("reload", undefined).catch((err) => {
-          Log.Default.warn("backend reload failed", {
-            error: toErrorMessage(err),
-          })
-        })
-      }
-      const unregisterProcessHandlers = [
-        registerTuiCrashHandlers(error, {
-          namePrefix: "thread",
-          // Rejections (async event handlers, dropped promises) must not kill
-          // the interactive session — log + record diagnostics and continue.
-          onRejection: createTuiRejectionHandler({
-            onError: (e) => DiagnosticLog.recordProcess("tui.threadUnhandledRejection", { error: e }),
-          }),
-        }),
-        registerTuiProcessHandler("SIGUSR2", reload, { name: "thread-sigusr2-reload" }),
-      ]
-
+      let client!: RpcClient
+      let unregisterProcessHandlers: Array<() => void> = []
+      let backendReady = false
       let stopped = false
       const stop = async () => {
         if (stopped) return
         stopped = true
         for (const unregister of unregisterProcessHandlers) unregister()
-        await withTimeout(client.call("shutdown", undefined), DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS).catch(
-          (error) => {
-            Log.Default.warn("backend shutdown failed", {
-              error: toErrorMessage(error),
-            })
-          },
-        )
+        if (backendReady && client) {
+          await withTimeout(client.call("shutdown", undefined), DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS).catch(
+            (error) => {
+              Log.Default.warn("backend shutdown failed", {
+                error: toErrorMessage(error),
+              })
+            },
+          )
+        }
         await backend.terminate()
       }
-
-      const prompt = await input(args.prompt)
-      const config = await Instance.provide({
-        directory: cwd,
-        fn: () => TuiConfig.get(),
-      })
-
-      const network = await resolveNetworkOptions(args)
-      // AX Code TUI keeps the internal worker-fetch bridge unless network flags
-      // force a real HTTP loopback (--port, hostname, mDNS).
-      const external =
-        hasExplicitNetworkBindFlag() || network.mdns || network.port !== 0 || network.hostname !== "127.0.0.1"
-
-      const transport = external
-        ? {
-            url: (await client.call("server", network)).url,
-            fetch: undefined,
-            events: undefined,
-          }
-        : {
-            url: internalBaseUrl(),
-            fetch: createWorkerFetch(client),
-            events: internalEvents,
-          }
-      DiagnosticLog.recordProcess("tui.threadTransportSelected", {
-        mode: external ? "external" : "internal",
-        url: transport.url,
-        engine: "ax-code-tui",
-      })
-
-      const upgradeDelayMs = tuiUpgradeCheckDelayMs()
-      // Upgrade checks are non-critical and can touch installation/network
-      // surfaces. Keep them away from the first interactive turn, especially
-      // in packaged installs where the TUI shares a stdio backend with prompt
-      // submission.
-      const runUpgradeCheck = () =>
-        shouldRunStartupUpgradeCheck()
-          .then(async (shouldRun) => {
-            if (!shouldRun) return
-            const checked = await client.call("checkUpgrade", { directory: cwd })
-            if (checked) await recordStartupUpgradeCheck()
-          })
-          .catch((error) => {
-            log.debug("upgrade check request failed", {
-              directory: cwd,
-              error,
-            })
-          })
-      const upgradeTimer = upgradeDelayMs === 0 ? undefined : setTimeout(runUpgradeCheck, upgradeDelayMs)
-      upgradeTimer?.unref?.()
-
       try {
-        const appImportStartedAt = performance.now()
-        DiagnosticLog.recordProcess("tui.appImportStarted", {})
-        const app = await import("./app").catch((error) => {
-          const elapsedMs = Math.round(performance.now() - appImportStartedAt)
-          DiagnosticLog.recordProcess("tui.appImportFailed", {
+        DiagnosticLog.recordProcess("tui.backendSpawned", {
+          mode: backend.mode,
+          target: backend.target,
+          pid: backend.pid,
+        })
+        DiagnosticLog.recordProcess("tui.workerSpawned", {
+          mode: backend.mode,
+          target: backend.target,
+          pid: backend.pid,
+        })
+        if (backend.mode === "worker") {
+          const worker = backend.wire as unknown as Worker
+          worker.onerror = (e) => {
+            DiagnosticLog.recordProcess("tui.workerError", { error: e, target: backend.target })
+            Log.Default.error(e)
+            UI.error(formatWorkerLoadError(backend.target, e))
+            // Attempt graceful backend termination before exit so the child
+            // process (if any) is cleaned up and the terminal state is restored.
+            backend
+              .terminate()
+              .catch((err) => {
+                log.warn("failed to terminate backend after worker error", { error: toErrorMessage(err) })
+              })
+              .finally(() => {
+                process.exit(1)
+              })
+          }
+          worker.onmessageerror = (e) => {
+            DiagnosticLog.recordProcess("tui.workerMessageError", { error: e })
+            Log.Default.error(e)
+          }
+        }
+
+        client = Rpc.client<typeof rpc>(backend.wire)
+        const workerReadyTimeoutMs = tuiWorkerReadyTimeoutMs()
+        DiagnosticLog.recordProcess("tui.backendHandshakeStarted", {
+          mode: backend.mode,
+          target: backend.target,
+          pid: backend.pid,
+          timeoutMs: workerReadyTimeoutMs,
+        })
+        const workerReady = await withTimeout(
+          client.call("health", undefined),
+          workerReadyTimeoutMs,
+          `TUI backend did not become ready after ${workerReadyTimeoutMs}ms`,
+        ).catch(async (error) => {
+          DiagnosticLog.recordProcess("tui.backendHandshakeFailed", {
             error,
-            elapsedMs,
+            mode: backend.mode,
+            target: backend.target,
+            pid: backend.pid,
+            timeoutMs: workerReadyTimeoutMs,
           })
-          Log.Default.error("TUI app import failed", {
+          DiagnosticLog.recordProcess("tui.workerHandshakeFailed", {
+            error,
+            mode: backend.mode,
+            target: backend.target,
+            pid: backend.pid,
+            timeoutMs: workerReadyTimeoutMs,
+          })
+          Log.Default.error("TUI backend failed readiness handshake", {
             error: toErrorMessage(error),
-            elapsedMs,
+            mode: backend.mode,
+            target: backend.target,
+            pid: backend.pid,
+            timeoutMs: workerReadyTimeoutMs,
           })
           UI.error(
             [
-              "TUI app failed to load.",
-              "This usually points to AX Code TUI/Solid module startup or bundled-runtime packaging.",
-              "Run with --debug --print-logs and inspect process.jsonl around tui.appImportFailed.",
+              "TUI backend did not become ready.",
+              "This usually points to backend transport startup, AX Code TUI preload, or runtime packaging.",
+              "Run with --debug --print-logs and inspect process.jsonl around tui.backendHandshakeFailed.",
             ].join("\n"),
           )
           process.exitCode = 1
           return undefined
         })
-        if (!app) return
-        DiagnosticLog.recordProcess("tui.appImportReady", {
-          elapsedMs: Math.round(performance.now() - appImportStartedAt),
+        if (!workerReady) return
+        backendReady = true
+        DiagnosticLog.recordProcess("tui.backendReady", {
+          ...workerReady,
+          mode: backend.mode,
+          target: backend.target,
+          pid: backend.pid,
+          timeoutMs: workerReadyTimeoutMs,
         })
-        const { tui } = app
-        await tui({
-          url: transport.url,
-          async onSnapshot() {
-            const tuiSnapshot = writeHeapSnapshot("tui.heapsnapshot")
-            const server = await client.call("snapshot", undefined)
-            return [tuiSnapshot, server]
-          },
-          config,
-          // Highest-priority screen selection; resolved against the env flag
-          // and tui.json `screen` inside the render profile (ADR-261).
-          screen: args.screen,
+        DiagnosticLog.recordProcess("tui.workerReady", {
+          ...workerReady,
+          mode: backend.mode,
+          target: backend.target,
+          pid: backend.pid,
+          timeoutMs: workerReadyTimeoutMs,
+        })
+        const internalEvents = createEventSource(client, backend.wire)
+        let threadErrorExitScheduled = false
+        const error = (e: unknown) => {
+          DiagnosticLog.recordProcess("tui.threadError", { error: e })
+          Log.Default.error(e)
+          process.exitCode = 1
+          if (threadErrorExitScheduled) return
+          threadErrorExitScheduled = true
+          exitTuiAfterCrash()
+        }
+        const reload = () => {
+          client.call("reload", undefined).catch((err) => {
+            Log.Default.warn("backend reload failed", {
+              error: toErrorMessage(err),
+            })
+          })
+        }
+        unregisterProcessHandlers = [
+          registerTuiCrashHandlers(error, {
+            namePrefix: "thread",
+            // Rejections (async event handlers, dropped promises) must not kill
+            // the interactive session — log + record diagnostics and continue.
+            onRejection: createTuiRejectionHandler({
+              onError: (e) => DiagnosticLog.recordProcess("tui.threadUnhandledRejection", { error: e }),
+            }),
+          }),
+          registerTuiProcessHandler("SIGUSR2", reload, { name: "thread-sigusr2-reload" }),
+        ]
+
+        const prompt = await input(args.prompt)
+        const config = await Instance.provide({
           directory: cwd,
-          fetch: transport.fetch,
-          events: transport.events,
-          args: {
-            tuiMcp: args.tuiMcp || args.tuiDebug,
-            tuiDebug: args.tuiDebug,
-            continue: args.continue,
-            sessionID: args.session,
-            agent: args.agent,
-            model: args.model,
-            prompt,
-            fork: args.fork,
-          },
+          fn: () => TuiConfig.get(),
         })
+
+        const network = await resolveNetworkOptions(args)
+        // AX Code TUI keeps the internal worker-fetch bridge unless network flags
+        // force a real HTTP loopback (--port, hostname, mDNS).
+        const external =
+          hasExplicitNetworkBindFlag() || network.mdns || network.port !== 0 || network.hostname !== "127.0.0.1"
+
+        const transport = external
+          ? {
+              url: (await client.call("server", network)).url,
+              fetch: undefined,
+              events: undefined,
+            }
+          : {
+              url: internalBaseUrl(),
+              fetch: createWorkerFetch(client),
+              events: internalEvents,
+            }
+        DiagnosticLog.recordProcess("tui.threadTransportSelected", {
+          mode: external ? "external" : "internal",
+          url: transport.url,
+          engine: "ax-code-tui",
+        })
+
+        const upgradeDelayMs = tuiUpgradeCheckDelayMs()
+        // Upgrade checks are non-critical and can touch installation/network
+        // surfaces. Keep them away from the first interactive turn, especially
+        // in packaged installs where the TUI shares a stdio backend with prompt
+        // submission.
+        const runUpgradeCheck = () =>
+          shouldRunStartupUpgradeCheck()
+            .then(async (shouldRun) => {
+              if (!shouldRun) return
+              const checked = await client.call("checkUpgrade", { directory: cwd })
+              if (checked) await recordStartupUpgradeCheck()
+            })
+            .catch((error) => {
+              log.debug("upgrade check request failed", {
+                directory: cwd,
+                error,
+              })
+            })
+        const upgradeTimer = upgradeDelayMs === 0 ? undefined : setTimeout(runUpgradeCheck, upgradeDelayMs)
+        upgradeTimer?.unref?.()
+
+        try {
+          const appImportStartedAt = performance.now()
+          DiagnosticLog.recordProcess("tui.appImportStarted", {})
+          const app = await import("./app").catch((error) => {
+            const elapsedMs = Math.round(performance.now() - appImportStartedAt)
+            DiagnosticLog.recordProcess("tui.appImportFailed", {
+              error,
+              elapsedMs,
+            })
+            Log.Default.error("TUI app import failed", {
+              error: toErrorMessage(error),
+              elapsedMs,
+            })
+            UI.error(
+              [
+                "TUI app failed to load.",
+                "This usually points to AX Code TUI/Solid module startup or bundled-runtime packaging.",
+                "Run with --debug --print-logs and inspect process.jsonl around tui.appImportFailed.",
+              ].join("\n"),
+            )
+            process.exitCode = 1
+            return undefined
+          })
+          if (!app) return
+          DiagnosticLog.recordProcess("tui.appImportReady", {
+            elapsedMs: Math.round(performance.now() - appImportStartedAt),
+          })
+          const { tui } = app
+          await tui({
+            url: transport.url,
+            async onSnapshot() {
+              const tuiSnapshot = writeHeapSnapshot("tui.heapsnapshot")
+              const server = await client.call("snapshot", undefined)
+              return [tuiSnapshot, server]
+            },
+            config,
+            // Highest-priority screen selection; resolved against the env flag
+            // and tui.json `screen` inside the render profile (ADR-261).
+            screen: args.screen,
+            directory: cwd,
+            fetch: transport.fetch,
+            events: transport.events,
+            args: {
+              tuiMcp: args.tuiMcp || args.tuiDebug,
+              tuiDebug: args.tuiDebug,
+              continue: args.continue,
+              sessionID: args.session,
+              agent: args.agent,
+              model: args.model,
+              prompt,
+              fork: args.fork,
+            },
+          })
+        } finally {
+          if (upgradeTimer) clearTimeout(upgradeTimer)
+          await stop()
+        }
       } finally {
-        if (upgradeTimer) clearTimeout(upgradeTimer)
         await stop()
       }
     } finally {

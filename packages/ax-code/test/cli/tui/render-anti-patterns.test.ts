@@ -1704,7 +1704,8 @@ describe("AX Code TUI stability guardrails", () => {
     expect(worker).toContain("runtimeMode()")
     expect(worker).toContain("startTuiBackend")
     expect(worker).toContain("isWorkerEntrypoint")
-    expect(worker).toContain("Rpc.listenStdio(rpc)")
+    expect(worker).toContain("Rpc.listenStdio(rpc, {")
+    expect(worker).toContain("onFatal(error) {")
     expect(worker).toContain('DiagnosticLog.recordProcess("backend.signalExit"')
   })
 

@@ -3,6 +3,7 @@ import { toErrorMessage } from "@/util/error-message"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import type { TuiTerminalScreenMode } from "../terminal-cleanup"
 import { flushTuiStdout, resetTuiTerminalState } from "../terminal-cleanup"
+import { resumeProcessHooks, suspendProcessHooks } from "../../boot-lifecycle"
 
 const log = Log.create({ service: "tui.lifecycle" })
 
@@ -230,6 +231,7 @@ export function registerTuiCrashHandlers(
   input: { namePrefix?: string; onRejection?: ProcessHandler } = {},
 ) {
   const prefix = input.namePrefix ?? "tui"
+  suspendProcessHooks()
   const unregister = [
     guardTuiStdioErrors({ name: `${prefix}-stdio-guard` }),
     registerTuiProcessHandler("uncaughtException", handler, { name: `${prefix}-uncaught-exception` }),
@@ -237,7 +239,11 @@ export function registerTuiCrashHandlers(
       name: `${prefix}-unhandled-rejection`,
     }),
   ]
+  let disposed = false
   return () => {
+    if (disposed) return
+    disposed = true
     for (const off of unregister) off()
+    resumeProcessHooks()
   }
 }

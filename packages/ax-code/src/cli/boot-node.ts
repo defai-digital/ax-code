@@ -6,6 +6,7 @@ import { setAxCodeProcessTitle } from "../util/process-title"
 import { clearForcedExitTimer } from "./boot-lifecycle"
 import { createAxCodeCli, runAxCodeCli } from "./boot-shared"
 import { writeJsonUsageError } from "./cmd/json-output"
+import { UI } from "./ui"
 
 const cmds = [DoctorCommand, GenerateCommand]
 
@@ -30,7 +31,8 @@ export function cli(argv = hideBin(process.argv)) {
       ) {
         base.showHelp((text) => process.stderr.write(text + "\n"))
       }
-      process.exit(1)
+      process.exitCode = 1
+      throw new UI.CancelledError()
     })
     .strict()
 }
