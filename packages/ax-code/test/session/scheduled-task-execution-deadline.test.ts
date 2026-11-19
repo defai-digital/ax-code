@@ -256,6 +256,45 @@ describe("ScheduledTask execution deadline", () => {
     })
   })
 
+  test("a run without a start time uses its creation time for overlap and orphan recovery", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const deadline = 1_000
+        const grace = 10 * 60 * 1_000
+        const task = await ScheduledTask.create({
+          title: "Incomplete run history",
+          prompt: "Run once.",
+          schedule: { type: "once", runAt: Date.now() + 60_000 },
+          maxRunDurationMs: deadline,
+        })
+        const { queueItem } = await ScheduledTask.runNow(task.id)
+        if (!queueItem) throw new Error("Expected a scheduled queue item")
+        await TaskQueue.remove(queueItem.id)
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(ScheduledTaskRunTable)
+            .set({ time_started: null })
+            .where(eq(ScheduledTaskRunTable.task_id, task.id))
+            .run()
+        })
+
+        const [run] = await ScheduledTask.listRuns({ taskID: task.id })
+        const staleAt = run.time.created + deadline + grace
+        expect.soft(ScheduledTask.hasOpenRun(task.id, staleAt - 1, deadline)).toBe(true)
+        await ScheduledTask.reconcileAllOrphanRuns(staleAt - 1)
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "running" }])
+
+        expect(ScheduledTask.hasOpenRun(task.id, staleAt, deadline)).toBe(false)
+        await ScheduledTask.reconcileAllOrphanRuns(staleAt)
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+          { id: run.id, status: "failed", error: expect.stringMatching(/^orphaned:/), timeCompleted: staleAt },
+        ])
+      },
+    })
+  })
+
   test("a queued task past deadline+grace is not orphaned or dispatched twice", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

@@ -1224,7 +1224,8 @@ export namespace ScheduledTask {
   function readOpenRuns(db: Database.TxOrDb, taskID: ScheduledTaskID) {
     return db
       .select({
-        timeStarted: ScheduledTaskRunTable.time_started,
+        id: ScheduledTaskRunTable.id,
+        startedAt: sql<number>`coalesce(${ScheduledTaskRunTable.time_started}, ${ScheduledTaskRunTable.time_created})`,
         queueID: ScheduledTaskRunTable.queue_id,
         workflowRunID: ScheduledTaskRunTable.workflow_run_id,
       })
@@ -1256,21 +1257,16 @@ export namespace ScheduledTask {
   // claim across an await boundary (check-then-act).
   function hasOpenRunIn(db: Database.TxOrDb, taskID: ScheduledTaskID, now: number, deadlineMs: number): boolean {
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
-    for (const row of readOpenRuns(db, taskID)) {
-      if (row.timeStarted !== null && row.timeStarted > staleBefore) return true
-      // The execution deadline starts when the queue executor claims an item,
-      // not when the scheduler enqueues it. A stale run can therefore still
-      // have work waiting in the durable queue; keep overlap protection until
-      // that queue item reaches a terminal state.
-      if (isTaskQueueRunLive(db, row.queueID)) return true
-      // A workflow dispatch row stays `running` for the workflow's whole
-      // lifetime; the queue-path deadline cannot bound it. While the workflow
-      // is still executing the row stays open even past deadline+grace —
-      // otherwise the next occurrence would double-fire and the live
-      // workflow's outcome would find no row.
-      if (row.workflowRunID && isWorkflowRunLive(db, row.workflowRunID)) return true
-    }
-    return false
+    return readOpenRuns(db, taskID).some((run) => isRunOpen(db, run, staleBefore))
+  }
+
+  function isRunOpen(db: Database.TxOrDb, run: ReturnType<typeof readOpenRuns>[number], staleBefore: number): boolean {
+    // Queued work and executing workflows can outlive the claim's deadline.
+    return (
+      run.startedAt > staleBefore ||
+      isTaskQueueRunLive(db, run.queueID) ||
+      (!!run.workflowRunID && isWorkflowRunLive(db, run.workflowRunID))
+    )
   }
 
   // A dispatch row is backed by a live workflow while the workflow is
@@ -1322,29 +1318,8 @@ export namespace ScheduledTask {
   ): number {
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
     let closed = 0
-    const candidates = db
-      .select({
-        id: ScheduledTaskRunTable.id,
-        queueID: ScheduledTaskRunTable.queue_id,
-        workflowRunID: ScheduledTaskRunTable.workflow_run_id,
-      })
-      .from(ScheduledTaskRunTable)
-      .where(
-        and(
-          eq(ScheduledTaskRunTable.task_id, taskID),
-          eq(ScheduledTaskRunTable.status, "running"),
-          lte(ScheduledTaskRunTable.time_started, staleBefore),
-        ),
-      )
-      .all()
-    for (const candidate of candidates) {
-      if (isTaskQueueRunLive(db, candidate.queueID)) continue
-      // A workflow dispatch keeps the run row `running` for the workflow's
-      // whole lifetime, so an old row is an orphan only when its workflow is
-      // gone or terminal. Failing a row whose workflow is still executing
-      // would mislabel a live execution as orphaned, and the late outcome
-      // would lose its row.
-      if (candidate.workflowRunID && isWorkflowRunLive(db, candidate.workflowRunID)) continue
+    for (const run of readOpenRuns(db, taskID)) {
+      if (isRunOpen(db, run, staleBefore)) continue
       db.update(ScheduledTaskRunTable)
         .set({
           status: "failed",
@@ -1352,7 +1327,7 @@ export namespace ScheduledTask {
           time_completed: now,
           time_updated: now,
         })
-        .where(eq(ScheduledTaskRunTable.id, candidate.id))
+        .where(eq(ScheduledTaskRunTable.id, run.id))
         .run()
       closed += 1
     }
