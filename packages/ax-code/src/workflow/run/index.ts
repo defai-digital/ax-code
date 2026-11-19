@@ -169,40 +169,63 @@ async function get(id: WorkflowRunID): Promise<WorkflowRunState.Info> {
   return getRun(id)
 }
 
-export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
-  const run = await get(id)
+function readDetail(id: WorkflowRunID, skipUnreadableRows: boolean): WorkflowRunDetail {
   const detail = SessionShard.storeForProject(Instance.project.id).use((db) => {
+    const run = fromRunRow(readRunRow(db, id))
     const phaseRows = db
       .select()
       .from(WorkflowPhaseTable)
       .where(eq(WorkflowPhaseTable.run_id, id))
       .orderBy(asc(WorkflowPhaseTable.position), asc(WorkflowPhaseTable.id))
       .all()
-    const phases = parseWorkflowDetailRows(phaseRows, fromPhaseRow, "phase")
+    const phases = parseWorkflowDetailRows(phaseRows, fromPhaseRow, "phase", skipUnreadableRows)
     const childRows = db
       .select()
       .from(WorkflowChildTable)
       .where(eq(WorkflowChildTable.run_id, id))
       .orderBy(asc(WorkflowChildTable.time_created), asc(WorkflowChildTable.id))
       .all()
-    const children = parseWorkflowDetailRows(childRows, fromChildRow, "child")
+    const children = parseWorkflowDetailRows(childRows, fromChildRow, "child", skipUnreadableRows)
     const artifactRows = db
       .select()
       .from(WorkflowArtifactTable)
       .where(eq(WorkflowArtifactTable.run_id, id))
       .orderBy(asc(WorkflowArtifactTable.time_created), asc(WorkflowArtifactTable.id))
       .all()
-    const artifacts = parseWorkflowDetailRows(artifactRows, fromArtifactRow, "artifact")
+    const artifacts = parseWorkflowDetailRows(artifactRows, fromArtifactRow, "artifact", skipUnreadableRows)
     const budgetRows = db
       .select()
       .from(WorkflowBudgetLedgerTable)
       .where(eq(WorkflowBudgetLedgerTable.run_id, id))
       .orderBy(asc(WorkflowBudgetLedgerTable.time_created), asc(WorkflowBudgetLedgerTable.id))
       .all()
-    const budgetLedger = parseWorkflowDetailRows(budgetRows, fromBudgetLedgerRow, "budget ledger")
+    const budgetLedger = parseWorkflowDetailRows(budgetRows, fromBudgetLedgerRow, "budget ledger", skipUnreadableRows)
     return { ...run, phases, children, artifacts, budgetLedger }
   })
   return WorkflowRunDetail.parse(detail)
+}
+
+export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
+  let detail: WorkflowRunDetail
+  try {
+    detail = readDetail(id, false)
+  } catch (error) {
+    if (!(error instanceof SyntaxError || error instanceof ZodError)) throw error
+    throw new HTTPException(409, { message: `Workflow run ${id} contains unreadable stored data.`, cause: error })
+  }
+
+  const phaseIDs = new Set(detail.phases.map((phase) => phase.specPhaseID))
+  if (
+    detail.phases.length !== detail.spec.phases.length ||
+    detail.spec.phases.some((phase) => !phaseIDs.has(phase.id))
+  ) {
+    throw new HTTPException(409, { message: `Workflow run ${id} has incomplete or inconsistent phase records.` })
+  }
+  return detail
+}
+
+async function getDisplayDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
+  return readDetail(id, true)
 }
 
 async function listDetails(input: Partial<WorkflowRunState.ListInput> = {}): Promise<WorkflowRunDetail[]> {
@@ -210,7 +233,7 @@ async function listDetails(input: Partial<WorkflowRunState.ListInput> = {}): Pro
   const details = await Promise.all(
     runs.map(async ({ id }) => {
       try {
-        return await getDetail(id)
+        return await getDisplayDetail(id)
       } catch (error) {
         if (NotFoundError.isInstance(error)) return undefined
         if (!(error instanceof SyntaxError || error instanceof ZodError)) throw error
@@ -659,6 +682,7 @@ export const WorkflowRun = {
   listDetails,
   get,
   getDetail,
+  getDisplayDetail,
   setStatus,
   setPhaseStatus,
   appendChild,

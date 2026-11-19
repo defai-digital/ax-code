@@ -263,7 +263,7 @@ describe("WorkflowRun state", () => {
     })
   })
 
-  test("detail skips corrupt persisted workflow child rows", async () => {
+  test("display skips a corrupt child and completion rejects it", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -291,9 +291,11 @@ describe("WorkflowRun state", () => {
             .run()
         })
 
-        const detail = await WorkflowRun.getDetail(run.id)
+        const detail = await WorkflowRun.getDisplayDetail(run.id)
         expect(detail.phases.map((item) => item.id)).toEqual([phase.id])
         expect(detail.children).toEqual([])
+        await expect(WorkflowRun.setStatus({ id: run.id, status: "completed" })).rejects.toMatchObject({ status: 409 })
+        expect((await WorkflowRun.get(run.id)).status).toBe("queued")
       },
     })
   })

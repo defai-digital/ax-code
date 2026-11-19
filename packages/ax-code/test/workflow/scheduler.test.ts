@@ -6,9 +6,10 @@ import { Instance } from "../../src/project/instance"
 import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
+import { SessionShard } from "../../src/session/shard"
 import { SessionPrompt } from "../../src/session/prompt"
 import { TaskQueue } from "../../src/session/task-queue"
-import { Database, eq } from "../../src/storage/db"
+import { Database, eq, sql } from "../../src/storage/db"
 import { FileLock } from "../../src/util/filelock"
 import { Worktree } from "../../src/worktree"
 import {
@@ -22,11 +23,12 @@ import {
   WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
   parseWorkflowSpecV1,
 } from "../../src/workflow"
-import { WorkflowRunTable } from "../../src/workflow/workflow.sql"
+import { WorkflowPhaseTable, WorkflowRunTable } from "../../src/workflow/workflow.sql"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
   await Instance.disposeAll()
+  vi.unstubAllEnvs()
 })
 
 function workflowFinalReportParts(messages: Awaited<ReturnType<typeof Session.messages>>, runID: string) {
@@ -40,6 +42,29 @@ function workflowFinalReportParts(messages: Awaited<ReturnType<typeof Session.me
 }
 
 describe("WorkflowScheduler", () => {
+  test.each(["missing", "unreadable"] as const)("start rejects %s workflow phase data", async (damage) => {
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          const phase = eq(WorkflowPhaseTable.run_id, run.id)
+          if (damage === "missing") db.delete(WorkflowPhaseTable).where(phase).run()
+          else
+            db.update(WorkflowPhaseTable)
+              .set({ outputs: sql`${"{}"}` })
+              .where(phase)
+              .run()
+        })
+
+        await expect(WorkflowScheduler.start(run.id)).rejects.toMatchObject({ status: 409 })
+        expect(await WorkflowRun.get(run.id)).toEqual(run)
+      },
+    })
+  })
+
   test("stays behind AX_CODE_WORKFLOW_RUNTIME", async () => {
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
     try {

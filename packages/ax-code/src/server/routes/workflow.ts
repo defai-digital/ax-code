@@ -309,7 +309,7 @@ export const WorkflowRunRoutes = lazy(() =>
         },
       }),
       validator("param", WORKFLOW_RUN_ID_PARAM),
-      async (c) => c.json(compactWorkflowRunDetail(await WorkflowRun.getDetail(runID(c)))),
+      async (c) => c.json(compactWorkflowRunDetail(await WorkflowRun.getDisplayDetail(runID(c)))),
     )
     .get(
       "/:runID/artifacts",
@@ -329,7 +329,7 @@ export const WorkflowRunRoutes = lazy(() =>
       validator("query", WorkflowArtifactListQuery),
       async (c) => {
         const query = c.req.valid("query")
-        const detail = await WorkflowRun.getDetail(runID(c))
+        const detail = await WorkflowRun.getDisplayDetail(runID(c))
         const artifacts = detail.artifacts
           .filter((artifact) => (query.artifactID ? artifact.id === query.artifactID : true))
           .filter((artifact) => (query.phaseID ? artifact.phaseID === query.phaseID : true))

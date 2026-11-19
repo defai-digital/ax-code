@@ -811,7 +811,7 @@ const WorkflowRunStatusCommand = cmd({
     await withWorkflowRuntime(async () => {
       const wf = await loadWorkflow()
       const options = args as unknown as RunIDOptions
-      const detail = await wf.WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
+      const detail = await wf.WorkflowRun.getDisplayDetail(parseWorkflowRunID(options.runID))
       if (options.json) {
         writeJson(detail)
         return
@@ -854,7 +854,7 @@ const WorkflowRunArtifactsCommand = cmd({
     await withWorkflowRuntime(async () => {
       const wf = await loadWorkflow()
       const options = args as unknown as ArtifactOptions
-      const detail = await wf.WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
+      const detail = await wf.WorkflowRun.getDisplayDetail(parseWorkflowRunID(options.runID))
       const phaseID = options.phaseId ? parseWorkflowPhaseID(options.phaseId) : undefined
       const childID = options.childId ? parseWorkflowChildID(options.childId) : undefined
       const artifacts = detail.artifacts

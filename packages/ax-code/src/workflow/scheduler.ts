@@ -57,7 +57,7 @@ export namespace WorkflowScheduler {
     if (!isWorkflowRuntimeEnabled()) {
       let specID: string | undefined
       try {
-        specID = (await WorkflowRun.getDetail(runID)).spec.id
+        specID = (await WorkflowRun.get(runID)).spec.id
       } catch {
         throw new WorkflowSchedulerDisabledError()
       }
@@ -324,7 +324,7 @@ export namespace WorkflowScheduler {
   }
 
   export async function cancel(runID: WorkflowRunID) {
-    const detail = await WorkflowRun.getDetail(runID)
+    const detail = await WorkflowRun.get(runID)
     await assertEnabledForSpec(detail.spec.id)
     const cancelled = await terminateRun(runID)
     const { reportScheduledOutcome } = await import("./task-queue")
@@ -353,7 +353,7 @@ export namespace WorkflowScheduler {
     }
     WorkflowRun.finishCancellation(runID)
     inlineExecutions.get(runKey(runID))?.controller.abort()
-    return WorkflowRun.getDetail(runID)
+    return WorkflowRun.getDisplayDetail(runID)
   }
 
   export async function pause(runID: WorkflowRunID) {
@@ -444,13 +444,13 @@ export namespace WorkflowScheduler {
   }
 
   export async function retry(runID: WorkflowRunID) {
-    const detail = await WorkflowRun.getDetail(runID)
+    const detail = await WorkflowRun.get(runID)
     await assertEnabledForSpec(detail.spec.id)
     return retryChildren(runID)
   }
 
   export async function retryPhase(runID: WorkflowRunID, phaseID: WorkflowPhaseID) {
-    const detail = await WorkflowRun.getDetail(runID)
+    const detail = await WorkflowRun.get(runID)
     await assertEnabledForSpec(detail.spec.id)
     return retryChildren(runID, phaseID)
   }

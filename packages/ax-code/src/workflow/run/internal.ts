@@ -152,7 +152,9 @@ export function parseWorkflowDetailRows<TRow extends { id: string }, TInfo>(
   rows: TRow[],
   parse: (row: TRow) => TInfo,
   kind: string,
+  skipUnreadableRows: boolean,
 ): TInfo[] {
+  if (!skipUnreadableRows) return rows.map(parse)
   return rows.flatMap((row) => {
     try {
       return [parse(row)]
