@@ -1849,6 +1849,24 @@ export namespace TaskQueue {
     return before?.pid === after?.pid && before?.boot === after?.boot && before?.time === after?.time
   }
 
+  export function matchesWorkflowStatus(db: Database.TxOrDb, observed: Info): boolean {
+    const current = findProjectItem(db, observed.id)
+    if (!current || current.status !== observed.status || current.error !== observed.error) return false
+    if (current.projectID !== observed.projectID || !sameQueueAttempt(observed, current)) return false
+    const expected = workflowChild(observed)
+    const linked = workflowChild(current)
+    return (
+      expected !== undefined &&
+      linked?.runID === expected.runID &&
+      linked.phaseID === expected.phaseID &&
+      linked.childID === expected.childID
+    )
+  }
+
+  export function isCurrentWorkflowStatus(observed: Info): boolean {
+    return SessionShard.storeForProject(Instance.project.id).use((db) => matchesWorkflowStatus(db, observed))
+  }
+
   function changedExecutionError(id: TaskQueueID, action: "stop" | "cancel" | "remove"): HTTPException {
     return new HTTPException(409, { message: `Cannot ${action} task queue item ${id}: its execution changed.` })
   }

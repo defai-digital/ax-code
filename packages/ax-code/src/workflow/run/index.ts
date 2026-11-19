@@ -275,9 +275,11 @@ async function listDetails(input: Partial<WorkflowRunState.ListInput> = {}): Pro
   )
 }
 
+type QueueStatusOptions = { queueItem?: TaskQueue.Info }
+
 async function setStatus(
   input: WorkflowRunState.SetStatusInput,
-  options: { reopenCancelled?: boolean; signal?: AbortSignal; preserveTerminal?: boolean } = {},
+  options: QueueStatusOptions & { reopenCancelled?: boolean; signal?: AbortSignal; preserveTerminal?: boolean } = {},
 ): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.SetStatusInput.parse(input)
   const completionGate =
@@ -286,6 +288,7 @@ async function setStatus(
     const current = readRunRow(db, parsed.id)
     if (
       options.signal?.aborted ||
+      (options.queueItem && !TaskQueue.matchesWorkflowStatus(db, options.queueItem)) ||
       (options.preserveTerminal && isTerminalRunStatus(current.status)) ||
       (current.status === "cancelled" && !options.reopenCancelled) ||
       (parsed.status === "cancelled" && TaskQueue.hasLiveWorkflowChildren(db, parsed.id))
@@ -356,11 +359,16 @@ function finishCancellation(runID: WorkflowRunID): WorkflowRunDetail {
   return result.detail
 }
 
-async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Promise<WorkflowPhaseRecord> {
+async function setPhaseStatus(
+  input: WorkflowRunState.SetPhaseStatusInput,
+  options: QueueStatusOptions = {},
+): Promise<WorkflowPhaseRecord> {
   const parsed = WorkflowRunState.SetPhaseStatusInput.parse(input)
   const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const { phase: current, run } = readPhase(db, parsed.id)
-    if (run.status === "cancelled") return { phase: current }
+    if (run.status === "cancelled" || (options.queueItem && !TaskQueue.matchesWorkflowStatus(db, options.queueItem))) {
+      return { phase: current }
+    }
     const now = Date.now()
     const updates: Partial<typeof WorkflowPhaseTable.$inferInsert> = {
       status: parsed.status,
@@ -601,11 +609,16 @@ async function enqueuePhaseChildren(
   return result.children.map(({ created }) => created.task)
 }
 
-async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Promise<WorkflowChildRecord> {
+async function setChildStatus(
+  input: WorkflowRunState.SetChildStatusInput,
+  options: QueueStatusOptions = {},
+): Promise<WorkflowChildRecord> {
   const parsed = WorkflowRunState.SetChildStatusInput.parse(input)
   const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const { child: current, run } = readChild(db, parsed.id)
-    if (run.status === "cancelled") return { child: current }
+    if (run.status === "cancelled" || (options.queueItem && !TaskQueue.matchesWorkflowStatus(db, options.queueItem))) {
+      return { child: current }
+    }
     const now = Date.now()
     const updates: Partial<typeof WorkflowChildTable.$inferInsert> = {
       status: parsed.status,

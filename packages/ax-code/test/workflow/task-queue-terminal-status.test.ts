@@ -8,6 +8,7 @@ describe("workflow queue terminal status", () => {
   afterEach(async () => {
     vi.restoreAllMocks()
     await Instance.disposeAll()
+    vi.unstubAllEnvs()
   })
 
   test.each(["vote-with-critic", "critic-confirmation"] as const)(
@@ -69,6 +70,78 @@ describe("workflow queue terminal status", () => {
       }
     },
   )
+  test.each(["workflow read", "phase write", "run write"] as const)(
+    "an earlier queue notification cannot reopen a completed workflow after a delayed %s",
+    async (delay) => {
+      vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "delayed-queue-status",
+              name: "Delayed queue status",
+              description: "Workflow status must follow the current queue item.",
+              phases: [{ id: "work", name: "Work", kind: "fanout", inputs: ["worker"], maxParallel: 1 }],
+            }),
+          })
+          await WorkflowScheduler.start(run.id, { autoStartChildren: false })
+          const [item] = await TaskQueue.list()
+          const observed = Promise.withResolvers<void>()
+          const release = Promise.withResolvers<void>()
+          const waitForCompletion = async () => {
+            observed.resolve()
+            await release.promise
+          }
+          if (delay === "workflow read") {
+            const getDetail = WorkflowRun.getDetail
+            vi.spyOn(WorkflowRun, "getDetail").mockImplementationOnce(async (id) => {
+              const detail = await getDetail(id)
+              await waitForCompletion()
+              return detail
+            })
+          } else if (delay === "phase write") {
+            const setPhaseStatus = WorkflowRun.setPhaseStatus
+            vi.spyOn(WorkflowRun, "setPhaseStatus").mockImplementationOnce(async (...args) => {
+              await waitForCompletion()
+              return setPhaseStatus(...args)
+            })
+          } else {
+            const setStatus = WorkflowRun.setStatus
+            vi.spyOn(WorkflowRun, "setStatus").mockImplementationOnce(async (...args) => {
+              await waitForCompletion()
+              return setStatus(...args)
+            })
+          }
+
+          const earlier = TaskQueue.setStatus({ id: item.id, status: delay === "workflow read" ? "running" : "paused" })
+          try {
+            await Promise.race([
+              observed.promise,
+              earlier.then(() => {
+                throw new Error("Expected the earlier notification to wait while the workflow completes")
+              }),
+            ])
+            await TaskQueue.setStatus({ id: item.id, status: "completed" })
+            expect((await WorkflowRun.get(run.id)).status).toBe("completed")
+          } finally {
+            release.resolve()
+            await earlier
+          }
+
+          expect((await TaskQueue.get(item.id)).status).toBe("completed")
+          expect(await WorkflowRun.getDetail(run.id)).toMatchObject({
+            status: "completed",
+            phases: [{ status: "completed" }],
+            children: [{ status: "completed" }],
+          })
+        },
+      })
+    },
+  )
+
   test("a cancelled run stays cancelled when a later queue sync arrives", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

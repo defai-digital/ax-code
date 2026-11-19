@@ -1,5 +1,5 @@
 import z from "zod"
-import type { TaskQueue } from "../session/task-queue"
+import { TaskQueue } from "../session/task-queue"
 import { ScheduledTaskID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { WorkflowRun } from "./run"
@@ -52,8 +52,11 @@ export namespace WorkflowTaskQueue {
     if (child.taskQueueID && child.taskQueueID !== item.id) return detail
     // Explicit cancellation is authoritative. Late queue notifications must
     // not reinterpret completed + cancelled phases as a failed/live run.
-    if (detail.status === "cancelled") return detail
+    if (detail.status === "cancelled" || !TaskQueue.isCurrentWorkflowStatus(item)) return detail
 
+    // A status can be superseded while reconciliation waits on another step.
+    // Recheck the queue snapshot inside each transaction that uses it.
+    const statusOptions = { queueItem: item }
     const childStatus = childStatusFromQueueStatus(item.status)
     // Pausing a running child cancels its turn, so the item later settles as
     // failed/cancelled. That is the pause landing, not a failure: keep the child
@@ -64,11 +67,7 @@ export namespace WorkflowTaskQueue {
       detail.budgetLedger.some((entry) => entry.kind === "exceeded" && entry.childID === child.id)
     const childChanged = !childBudgetStopped && (child.status !== childStatus || child.error !== item.error)
     if (childChanged) {
-      await WorkflowRun.setChildStatus({
-        id: child.id,
-        status: childStatus,
-        error: item.error,
-      })
+      await WorkflowRun.setChildStatus({ id: child.id, status: childStatus, error: item.error }, statusOptions)
     }
 
     // Explicit workflow cancellation settles siblings before writing the
@@ -83,7 +82,7 @@ export namespace WorkflowTaskQueue {
     const phaseChildren = refreshed.children.filter((candidate) => candidate.phaseID === payload.workflow.phaseID)
     const phaseStatus = aggregatePhaseStatus(phaseChildren, phase ? mergeStrategyForPhase(refreshed, phase) : "all")
     if (phase && phaseStatus === "completed") {
-      await cancelSupersededPhaseChildren(phaseChildren)
+      await cancelSupersededPhaseChildren(phaseChildren, { queueItem: item })
     }
 
     const afterMerge = phaseStatus === "completed" ? await WorkflowRun.getDetail(payload.workflow.runID) : refreshed
@@ -99,11 +98,14 @@ export namespace WorkflowTaskQueue {
     const effectivePhaseStatus = phaseBudgetStopped ? "failed" : phaseStatus
     const phaseChanged = latestPhase !== undefined && latestPhase.status !== effectivePhaseStatus
     if (phaseChanged) {
-      await WorkflowRun.setPhaseStatus({
-        id: latestPhase.id,
-        status: effectivePhaseStatus,
-        error: effectivePhaseStatus === "failed" || effectivePhaseStatus === "blocked" ? item.error : undefined,
-      })
+      await WorkflowRun.setPhaseStatus(
+        {
+          id: latestPhase.id,
+          status: effectivePhaseStatus,
+          error: effectivePhaseStatus === "failed" || effectivePhaseStatus === "blocked" ? item.error : undefined,
+        },
+        statusOptions,
+      )
     }
 
     // The phase write (when it happened) is the only mutation since `afterMerge`
@@ -121,18 +123,22 @@ export namespace WorkflowTaskQueue {
     const run =
       latest.status === effectiveRunStatus
         ? latest
-        : await WorkflowRun.setStatus({
-            id: latest.id,
-            status: effectiveRunStatus,
-            error: effectiveRunStatus === "failed" || effectiveRunStatus === "blocked" ? item.error : undefined,
-          })
+        : await WorkflowRun.setStatus(
+            {
+              id: latest.id,
+              status: effectiveRunStatus,
+              error: effectiveRunStatus === "failed" || effectiveRunStatus === "blocked" ? item.error : undefined,
+            },
+            statusOptions,
+          )
+    if (!TaskQueue.isCurrentWorkflowStatus(item)) return run
     if (run.status === "failed" && WorkflowRun.isBudgetExceeded(run.id)) {
-      await cancelSupersededPhaseChildren(latest.children, "Workflow budget exceeded.")
+      await cancelSupersededPhaseChildren(latest.children, { error: "Workflow budget exceeded." })
     }
     if (run.status === "completed") await WorkflowRun.ensureFinalReportArtifact(latest.id)
     await reportScheduledOutcome(run)
 
-    if (effectivePhaseStatus === "completed" && effectiveRunStatus === "running") {
+    if (effectivePhaseStatus === "completed" && run.status === "running") {
       return WorkflowScheduler.start(latest.id, payload.workflow.startOptions)
     }
 
@@ -225,17 +231,19 @@ function aggregatePhaseStatus(
 
 async function cancelSupersededPhaseChildren(
   children: WorkflowChildRecord[],
-  error = "Workflow phase merge strategy already satisfied.",
+  {
+    error = "Workflow phase merge strategy already satisfied.",
+    queueItem,
+  }: { error?: string; queueItem?: TaskQueue.Info } = {},
 ) {
-  const { TaskQueue } = await import("../session/task-queue")
   for (const snapshot of children) {
     // Stopping one queue item awaits a recursive sync that can settle the
     // remaining siblings. Re-read before acting on the next snapshot.
     const child = (await WorkflowRun.getDetail(snapshot.runID)).children.find(
       (candidate) => candidate.id === snapshot.id,
     )
-    if (!child) continue
-    if (child.status === "completed" || child.status === "failed" || child.status === "cancelled") continue
+    if (!child || WorkflowRun.isTerminalChildStatus(child.status)) continue
+    if (queueItem && !TaskQueue.isCurrentWorkflowStatus(queueItem)) return
     const taskQueueID = child.taskQueueID
     if (taskQueueID) {
       // stop() rather than a bare setStatus: a superseded item that is already
@@ -254,11 +262,7 @@ async function cancelSupersededPhaseChildren(
         await WorkflowTaskQueue.syncItem(settled)
       })
     } else {
-      await WorkflowRun.setChildStatus({
-        id: child.id,
-        status: "cancelled",
-        error,
-      })
+      await WorkflowRun.setChildStatus({ id: child.id, status: "cancelled", error }, { queueItem })
     }
   }
 }
