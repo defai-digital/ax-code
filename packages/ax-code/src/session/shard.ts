@@ -1,4 +1,5 @@
-import { Database, eq, inArray, isNotNull, NotFoundError } from "../storage/db"
+import type { SQLiteTable } from "drizzle-orm/sqlite-core"
+import { Database, eq, getColumns, inArray, isNotNull, NotFoundError, sql, type SQL } from "../storage/db"
 import { Shard } from "../storage/shard"
 import { ProjectShardTable, type ShardState } from "../storage/shard.sql"
 import {
@@ -121,6 +122,27 @@ export namespace SessionShard {
     return out
   }
 
+  function copyBackfillRows(db: Database.TxOrDb, table: SQLiteTable, scope: SQL): void {
+    // Copy storage values without decoding JSON. A damaged record must not
+    // block activation or lose its references during the copy.
+    const columns = Object.values(getColumns(table))
+    const separator = sql`, `
+    const rows = Database.use((source) =>
+      source.values(sql`select ${sql.join(columns, separator)} from ${table} where ${scope}`),
+    )
+    const names = sql.join(
+      columns.map((column) => sql.identifier(column.name)),
+      separator,
+    )
+    for (const row of rows) {
+      const values = sql.join(
+        row.map((value) => sql`${value}`),
+        separator,
+      )
+      db.run(sql`insert into ${table} (${names}) values (${values}) on conflict do nothing`)
+    }
+  }
+
   // Copy a project's existing message+part+event_log rows from the global DB
   // into its shard (idempotent via onConflictDoNothing), then flip state to
   // active and stamp the coverage version. Crash-safety: the registry
@@ -152,104 +174,48 @@ export namespace SessionShard {
 
     const handle = Shard.handle(projectID)
     handle.transaction((db) => {
-      // Reads are interleaved with the inserts per chunk so no table is ever
-      // materialized whole.
       if (fromVersion < 1) {
         for (const ids of chunk(sessionIDs)) {
-          for (const message of Database.use((r) =>
-            r.select().from(MessageTable).where(inArray(MessageTable.session_id, ids)).all(),
-          )) {
-            db.insert(MessageTable).values(message).onConflictDoNothing().run()
-          }
-          for (const part of Database.use((r) =>
-            r.select().from(PartTable).where(inArray(PartTable.session_id, ids)).all(),
-          )) {
-            db.insert(PartTable).values(part).onConflictDoNothing().run()
-          }
+          copyBackfillRows(db, MessageTable, inArray(MessageTable.session_id, ids))
+          copyBackfillRows(db, PartTable, inArray(PartTable.session_id, ids))
         }
       }
 
       if (fromVersion < 2) {
         for (const ids of chunk(sessionIDs)) {
-          for (const event of Database.use((r) =>
-            r.select().from(EventLogTable).where(inArray(EventLogTable.session_id, ids)).all(),
-          )) {
-            db.insert(EventLogTable).values(event).onConflictDoNothing().run()
-          }
+          copyBackfillRows(db, EventLogTable, inArray(EventLogTable.session_id, ids))
         }
       }
 
       if (fromVersion < 3) {
         for (const ids of chunk(sessionIDs)) {
-          for (const todo of Database.use((r) =>
-            r.select().from(TodoTable).where(inArray(TodoTable.session_id, ids)).all(),
-          )) {
-            db.insert(TodoTable).values(todo).onConflictDoNothing().run()
-          }
-          for (const goal of Database.use((r) =>
-            r.select().from(SessionGoalTable).where(inArray(SessionGoalTable.session_id, ids)).all(),
-          )) {
-            db.insert(SessionGoalTable).values(goal).onConflictDoNothing().run()
-          }
+          copyBackfillRows(db, TodoTable, inArray(TodoTable.session_id, ids))
+          copyBackfillRows(db, SessionGoalTable, inArray(SessionGoalTable.session_id, ids))
         }
       }
 
       if (fromVersion < 4) {
-        // Slice 4 tables are project-keyed (task_queue/scheduled_task/workflow_run
-        // carry project_id); the workflow detail tables are run-keyed, so backfill
-        // them by the project's run IDs. Insert order below is dependency-ordered to
-        // satisfy the intra-shard FKs (scheduled_task -> task_queue; workflow_*
-        // -> workflow_run/phase/child).
-        for (const row of Database.use((r) =>
-          r.select().from(TaskQueueTable).where(eq(TaskQueueTable.project_id, projectID)).all(),
-        )) {
-          db.insert(TaskQueueTable).values(row).onConflictDoNothing().run()
-        }
-        for (const row of Database.use((r) =>
-          r.select().from(ScheduledTaskTable).where(eq(ScheduledTaskTable.project_id, projectID)).all(),
-        )) {
-          db.insert(ScheduledTaskTable).values(row).onConflictDoNothing().run()
-        }
-        const runs = Database.use((r) =>
-          r.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.project_id, projectID)).all(),
-        )
-        for (const row of runs) {
-          db.insert(WorkflowRunTable).values(row).onConflictDoNothing().run()
-        }
-        const runIDs = runs.map((row) => row.id)
+        copyBackfillRows(db, TaskQueueTable, eq(TaskQueueTable.project_id, projectID))
+        copyBackfillRows(db, ScheduledTaskTable, eq(ScheduledTaskTable.project_id, projectID))
+        const runIDs = Database.use((source) =>
+          source
+            .select({ id: WorkflowRunTable.id })
+            .from(WorkflowRunTable)
+            .where(eq(WorkflowRunTable.project_id, projectID))
+            .all(),
+        ).map((row) => row.id)
         for (const ids of chunk(runIDs)) {
-          for (const row of Database.use((r) =>
-            r.select().from(WorkflowPhaseTable).where(inArray(WorkflowPhaseTable.run_id, ids)).all(),
-          )) {
-            db.insert(WorkflowPhaseTable).values(row).onConflictDoNothing().run()
-          }
-          for (const row of Database.use((r) =>
-            r.select().from(WorkflowChildTable).where(inArray(WorkflowChildTable.run_id, ids)).all(),
-          )) {
-            db.insert(WorkflowChildTable).values(row).onConflictDoNothing().run()
-          }
-          for (const row of Database.use((r) =>
-            r.select().from(WorkflowArtifactTable).where(inArray(WorkflowArtifactTable.run_id, ids)).all(),
-          )) {
-            db.insert(WorkflowArtifactTable).values(row).onConflictDoNothing().run()
-          }
-          for (const row of Database.use((r) =>
-            r.select().from(WorkflowBudgetLedgerTable).where(inArray(WorkflowBudgetLedgerTable.run_id, ids)).all(),
-          )) {
-            db.insert(WorkflowBudgetLedgerTable).values(row).onConflictDoNothing().run()
-          }
+          copyBackfillRows(db, WorkflowRunTable, inArray(WorkflowRunTable.id, ids))
+          copyBackfillRows(db, WorkflowPhaseTable, inArray(WorkflowPhaseTable.run_id, ids))
+          copyBackfillRows(db, WorkflowChildTable, inArray(WorkflowChildTable.run_id, ids))
+          copyBackfillRows(db, WorkflowArtifactTable, inArray(WorkflowArtifactTable.run_id, ids))
+          copyBackfillRows(db, WorkflowBudgetLedgerTable, inArray(WorkflowBudgetLedgerTable.run_id, ids))
         }
       }
 
       if (fromVersion < 5) {
-        // Project-keyed (not session-keyed): the run history must move too, or
-        // enabling sharding drops the audit/overlap/failure-backoff record.
-        // After task_queue and scheduled_task: scheduled_task_run FKs into both.
-        for (const row of Database.use((r) =>
-          r.select().from(ScheduledTaskRunTable).where(eq(ScheduledTaskRunTable.project_id, projectID)).all(),
-        )) {
-          db.insert(ScheduledTaskRunTable).values(row).onConflictDoNothing().run()
-        }
+        // Run history depends on both the queue and the schedule.
+        copyBackfillRows(db, ScheduledTaskRunTable, eq(ScheduledTaskRunTable.project_id, projectID))
       }
     })
 

@@ -11,10 +11,12 @@ afterAll(() => {
 })
 
 import { Session } from "../../src/session/index"
+import { ScheduledTask } from "../../src/session/scheduled-task"
+import { TaskQueue } from "../../src/session/task-queue"
 import { SessionShard } from "../../src/session/shard"
 import { Instance } from "../../src/project/instance"
 import { Shard } from "../../src/storage/shard"
-import { Database, eq } from "../../src/storage/db"
+import { Database, eq, sql } from "../../src/storage/db"
 import {
   MessageTable,
   SessionTable,
@@ -22,6 +24,7 @@ import {
   SessionGoalTable,
   TaskQueueTable,
   ScheduledTaskTable,
+  ScheduledTaskRunTable,
 } from "../../src/session/session.sql"
 import {
   WorkflowRunTable,
@@ -31,7 +34,7 @@ import {
   WorkflowBudgetLedgerTable,
 } from "../../src/workflow/workflow.sql"
 import { ProjectShardTable } from "../../src/storage/shard.sql"
-import { MessageID, TaskQueueID, ScheduledTaskID } from "../../src/session/schema"
+import { MessageID, TaskQueueID, ScheduledTaskID, ScheduledTaskRunID } from "../../src/session/schema"
 import {
   WorkflowRunID,
   WorkflowPhaseID,
@@ -561,6 +564,71 @@ describe("AX_CODE_SHARD_SESSIONS=1", () => {
         expect(shardWorkflowChildCount(projectID, runID)).toBe(1)
         expect(shardWorkflowArtifactCount(projectID, runID)).toBe(1)
         expect(shardWorkflowBudgetLedgerCount(projectID, runID)).toBe(1)
+      },
+    })
+  })
+
+  test("backfill preserves unreadable JSON and copies healthy neighbors", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const projectID = Instance.project.id
+        const queueID = TaskQueueID.ascending()
+        const taskID = ScheduledTaskID.ascending()
+        const healthyQueueID = TaskQueueID.ascending()
+        const healthyTaskID = ScheduledTaskID.ascending()
+        const historyID = ScheduledTaskRunID.ascending()
+        insertGlobalTaskQueue(queueID, projectID, 0)
+        insertGlobalScheduledTask(taskID, projectID)
+        insertGlobalTaskQueue(healthyQueueID, projectID, 1)
+        insertGlobalScheduledTask(healthyTaskID, projectID)
+        const payload = '{"unfinished":'
+        const schedule = '{"type":"once",'
+        const now = Date.now()
+        Database.use((db) => {
+          db.update(TaskQueueTable)
+            .set({ payload: sql`${payload}` })
+            .where(eq(TaskQueueTable.id, queueID))
+            .run()
+          db.update(ScheduledTaskTable)
+            .set({ schedule: sql`${schedule}` })
+            .where(eq(ScheduledTaskTable.id, taskID))
+            .run()
+          db.insert(ScheduledTaskRunTable)
+            .values({
+              id: historyID,
+              project_id: projectID,
+              task_id: taskID,
+              queue_id: queueID,
+              trigger_type: "scheduled",
+              status: "running",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        await Session.updateMessage(userMessage(MessageID.ascending(), session.id))
+
+        expect(shardState(projectID)).toBe("active")
+        expect(shardVersion(projectID)).toBe(SessionShard.BACKFILL_VERSION)
+        expect((await TaskQueue.list()).map((item) => item.id)).toEqual([healthyQueueID])
+        expect((await ScheduledTask.list()).map((item) => item.id)).toEqual([healthyTaskID])
+        const stored = Shard.handle(projectID).use((db) =>
+          db
+            .select({
+              payload: sql<string>`${TaskQueueTable.payload}`,
+              schedule: sql<string>`${ScheduledTaskTable.schedule}`,
+            })
+            .from(ScheduledTaskRunTable)
+            .innerJoin(TaskQueueTable, eq(TaskQueueTable.id, ScheduledTaskRunTable.queue_id))
+            .innerJoin(ScheduledTaskTable, eq(ScheduledTaskTable.id, ScheduledTaskRunTable.task_id))
+            .where(eq(ScheduledTaskRunTable.id, historyID))
+            .get(),
+        )
+        expect(stored).toEqual({ payload, schedule })
       },
     })
   })
