@@ -554,7 +554,7 @@ describe("ScheduledTask run-now overlap protection", () => {
     })
   })
 
-  test("delete stops the in-flight run instead of letting it execute to completion", async () => {
+  test.each([false, true])("delete stops the in-flight run (damaged=%s)", async (damaged) => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -568,10 +568,18 @@ describe("ScheduledTask run-now overlap protection", () => {
         })
         const { queueItem } = await ScheduledTask.runNow(task.id)
         expect(queueItem).toBeDefined()
+        if (damaged) {
+          SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+            db.update(ScheduledTaskTable)
+              .set({ schedule: sql`${"["}` })
+              .where(eq(ScheduledTaskTable.id, task.id))
+              .run()
+          })
+        }
 
-        await ScheduledTask.remove(task.id)
+        expect(await ScheduledTask.remove(task.id)).toBe(true)
 
-        await expect(ScheduledTask.get(task.id)).rejects.toThrow()
+        await expect(ScheduledTask.get(task.id)).rejects.toThrow(`Scheduled task not found: ${task.id}`)
         expect((await TaskQueue.get(queueItem!.id)).status).toBe("cancelled")
       },
     })

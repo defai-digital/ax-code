@@ -391,7 +391,7 @@ export namespace ScheduledTask {
     })
   }
 
-  function assertProjectTask(task: Info) {
+  function assertProjectTask(task: Pick<Info, "id" | "projectID">) {
     if (task.projectID === Instance.project.id) return
     throw new HTTPException(409, {
       message: `Scheduled task ${task.id} belongs to a different project.`,
@@ -656,10 +656,34 @@ export namespace ScheduledTask {
     return update({ id, status: "active" })
   }
 
+  const taskDispatchColumns = {
+    id: ScheduledTaskTable.id,
+    lastQueueID: ScheduledTaskTable.last_queue_id,
+    lastWorkflowRunID: ScheduledTaskTable.last_workflow_run_id,
+  }
+
+  function readTaskForRemoval(db: Database.TxOrDb, id: ScheduledTaskID) {
+    // Stopping dispatches and deleting the task require only scalar fields.
+    const task = db
+      .select({
+        ...taskDispatchColumns,
+        projectID: ScheduledTaskTable.project_id,
+        directory: ScheduledTaskTable.directory,
+      })
+      .from(ScheduledTaskTable)
+      .where(eq(ScheduledTaskTable.id, id))
+      .get()
+    if (task) assertProjectTask(task)
+    return task
+  }
+
   export async function remove(id: ScheduledTaskID): Promise<boolean> {
-    const task = await get(id)
-    const projectID = task.projectID
-    const dispatches = SessionShard.storeForProject(projectID).use((db) => readLiveDispatches(db, task))
+    const projectID = Instance.project.id
+    const dispatches = SessionShard.storeForProject(projectID).use((db) => {
+      const task = readTaskForRemoval(db, id)
+      if (!task) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+      return readLiveDispatches(db, task)
+    })
     for (const queueID of dispatches.queueIDs) {
       await TaskQueue.stop(TaskQueueID.make(queueID)).catch((error) => {
         log.warn("scheduled task in-flight run stop failed during delete", { taskID: id, queueID, error })
@@ -678,10 +702,8 @@ export namespace ScheduledTask {
       }
     }
     const deleted = SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
-      const row = db.select().from(ScheduledTaskTable).where(eq(ScheduledTaskTable.id, id)).get()
-      if (!row) return undefined
-      const current = fromRow(row)
-      assertProjectTask(current)
+      const current = readTaskForRemoval(db, id)
+      if (!current) return undefined
       // The stop can race an outcome, a retry, or a new dispatch. Check the
       // actual carriers atomically with deletion, under the same write lock
       // used to claim a run.
@@ -1226,7 +1248,7 @@ export namespace ScheduledTask {
 
   function readLiveDispatches(
     db: Database.TxOrDb,
-    task: Pick<Info, "id" | "lastQueueID" | "lastWorkflowRunID">,
+    task: { id: ScheduledTaskID; lastQueueID: string | null; lastWorkflowRunID: string | null },
   ): { queueIDs: string[]; workflowRunIDs: string[] } {
     const runs = readOpenRuns(db, task.id)
     // The last dispatch can be retried even after its history row has
@@ -1807,12 +1829,7 @@ export namespace ScheduledTask {
     const projectID = Instance.project.id
     return SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
       const rows = db
-        .select({
-          id: ScheduledTaskTable.id,
-          schedule: ScheduledTaskTable.schedule,
-          lastQueueID: ScheduledTaskTable.last_queue_id,
-          lastWorkflowRunID: ScheduledTaskTable.last_workflow_run_id,
-        })
+        .select({ ...taskDispatchColumns, schedule: ScheduledTaskTable.schedule })
         .from(ScheduledTaskTable)
         .where(
           and(
@@ -1828,11 +1845,7 @@ export namespace ScheduledTask {
       for (const row of rows) {
         const schedule = Schedule.safeParse(row.schedule)
         if (!schedule.success || schedule.data.type !== "once") continue
-        const live = readLiveDispatches(db, {
-          id: row.id,
-          lastQueueID: row.lastQueueID ?? undefined,
-          lastWorkflowRunID: row.lastWorkflowRunID ?? undefined,
-        })
+        const live = readLiveDispatches(db, row)
         if (live.queueIDs.length > 0 || live.workflowRunIDs.length > 0) continue
         const deleted = db
           .delete(ScheduledTaskTable)
