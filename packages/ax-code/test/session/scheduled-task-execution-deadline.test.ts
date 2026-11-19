@@ -22,6 +22,7 @@ describe("ScheduledTask execution deadline", () => {
   afterEach(async () => {
     vi.restoreAllMocks()
     await Instance.disposeAll()
+    vi.unstubAllEnvs()
   })
 
   test("a scheduled fire without maxRunDurationMs enforces the 30-minute default", async () => {
@@ -256,7 +257,8 @@ describe("ScheduledTask execution deadline", () => {
     })
   })
 
-  test("a run without a start time uses its creation time for overlap and orphan recovery", async () => {
+  test.each([false, true])("missing start time falls back to creation time (sharded=%s)", async (sharded) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,

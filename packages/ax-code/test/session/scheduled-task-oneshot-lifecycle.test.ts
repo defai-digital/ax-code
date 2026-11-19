@@ -24,6 +24,7 @@ describe("ScheduledTask one-shot lifecycle", () => {
   afterEach(async () => {
     vi.restoreAllMocks()
     await Instance.disposeAll()
+    vi.unstubAllEnvs()
   })
 
   function collectToasts() {
@@ -550,7 +551,8 @@ describe("ScheduledTask one-shot lifecycle", () => {
     })
   })
 
-  test("one-shot retention skips malformed schedule JSON and prunes healthy rows", async () => {
+  test.each([false, true])("retention skips malformed schedule JSON (sharded=%s)", async (sharded) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -1065,7 +1067,8 @@ describe("ScheduledTask one-shot lifecycle", () => {
     },
   )
 
-  test("the sweep recovers healthy outcomes beside a malformed queue payload", async () => {
+  test.each([false, true])("restart recovery skips malformed queue payload (sharded=%s)", async (sharded) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,

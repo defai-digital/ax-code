@@ -12,6 +12,7 @@ import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
   await Instance.disposeAll()
+  vi.unstubAllEnvs()
 })
 
 describe("scheduled task routes", () => {
@@ -439,7 +440,8 @@ describe("scheduled task routes", () => {
     })
   })
 
-  test("list skips malformed schedule JSON before applying the limit", async () => {
+  test.each([false, true])("list filters malformed JSON before the limit (sharded=%s)", async (sharded) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
