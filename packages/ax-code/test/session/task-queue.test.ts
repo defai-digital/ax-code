@@ -263,6 +263,90 @@ describe("TaskQueue", () => {
     })
   })
 
+  test.each([false, true])("command deduplication skips unreadable candidates (sharded=%s)", async (sharded) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const base = { sessionID: session.id, kind: "command", title: "Queue command" } as const
+        const old = await TaskQueue.enqueue({
+          ...base,
+          payload: { body: { command: "goal", arguments: "Earlier work" } },
+        })
+        const other = await TaskQueue.enqueue({
+          ...base,
+          payload: { body: { command: "goal", arguments: "Keep this" } },
+        })
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(TaskQueueTable)
+            .set({ payload: sql`${"{"}` })
+            .where(eq(TaskQueueTable.id, old.id))
+            .run()
+          db.update(TaskQueueTable)
+            .set({ model: sql`${"{"}` })
+            .where(eq(TaskQueueTable.id, other.id))
+            .run()
+        })
+
+        const accepted = await TaskQueue.enqueueIdempotent({
+          ...base,
+          sourceMessageID: MessageID.ascending(),
+          payload: { body: { command: "goal", arguments: "New work" } },
+        })
+        const replay = await TaskQueue.enqueueIdempotent({
+          ...base,
+          sourceMessageID: MessageID.ascending(),
+          payload: { body: { command: "goal", arguments: "New work " } },
+        })
+
+        expect(replay.id).toBe(accepted.id)
+        expect((await TaskQueue.list({ sessionID: session.id })).map((item) => item.id)).toEqual([accepted.id])
+      },
+    })
+  })
+
+  test.each(["source ID", "command text"] as const)("replays by %s cannot replace an unreadable item", async (key) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const input = {
+          sessionID: session.id,
+          kind: "command" as const,
+          title: "Accepted command",
+          sourceMessageID: MessageID.ascending(),
+          payload: { body: { command: "goal", arguments: "Accepted work" } },
+        }
+        const accepted = await TaskQueue.enqueueIdempotent(input)
+        const store = SessionShard.storeForProject(Instance.project.id, { write: true })
+        store.use((db) => {
+          const damaged = sql`${"{"}`
+          db.update(TaskQueueTable)
+            .set(key === "source ID" ? { payload: damaged } : { model: damaged })
+            .where(eq(TaskQueueTable.id, accepted.id))
+            .run()
+        })
+
+        const replay = key === "source ID" ? input : { ...input, sourceMessageID: MessageID.ascending() }
+        await expect(TaskQueue.enqueueIdempotent(replay)).rejects.toMatchObject({
+          status: 409,
+          message: expect.stringContaining(accepted.id),
+        })
+        const stored = store.use((db) =>
+          db
+            .select({ id: TaskQueueTable.id })
+            .from(TaskQueueTable)
+            .where(eq(TaskQueueTable.session_id, session.id))
+            .all(),
+        )
+        expect(stored).toEqual([{ id: accepted.id }])
+      },
+    })
+  })
+
   test("does not dedupe slash commands with different arguments", async () => {
     await using tmp = await tmpdir({ git: true })
 

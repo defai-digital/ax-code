@@ -73,9 +73,10 @@ export namespace TaskQueue {
 
   const taskToolSource = "task"
   const queuePayloadJson = sql`case when json_valid(${TaskQueueTable.payload}) then ${TaskQueueTable.payload} end`
+  const queuePayloadIsObject = sql`json_type(${queuePayloadJson}) = 'object'`
   // Drizzle decodes JSON columns before post-query validation can skip a row.
   const readableQueueJson = and(
-    sql`json_type(${queuePayloadJson}) = 'object'`,
+    queuePayloadIsObject,
     sql`(${TaskQueueTable.model} is null or json_valid(${TaskQueueTable.model}))`,
   )
   const pendingDeliveryStatuses = ["pending", "delivering"] as const
@@ -286,11 +287,10 @@ export namespace TaskQueue {
    */
   function commandFingerprint(payload: Payload): { command: string; arguments: string } | undefined {
     const body = payload["body"]
-    if (!body || typeof body !== "object") return undefined
-    const record = body as Record<string, unknown>
-    const command = record["command"]
+    if (!isRecord(body)) return undefined
+    const command = body["command"]
     if (typeof command !== "string") return undefined
-    const args = record["arguments"]
+    const args = body["arguments"]
     return {
       command: command.trim(),
       arguments: typeof args === "string" ? args.trim() : "",
@@ -731,6 +731,19 @@ export namespace TaskQueue {
     return enqueueInternal(input, true)
   }
 
+  function readAcceptedSubmission(db: Database.TxOrDb, id: TaskQueueID): Info {
+    const row = db
+      .select()
+      .from(TaskQueueTable)
+      .where(and(eq(TaskQueueTable.id, id), readableQueueJson))
+      .get()
+    const item = row && readableQueueItem(row)
+    if (item) return item
+    throw new HTTPException(409, {
+      message: `Stored data for previously accepted task queue item ${id} is unreadable.`,
+    })
+  }
+
   async function enqueueInternal(input: EnqueueInput, idempotent: boolean): Promise<Info> {
     const parsed = await parseEnqueue(input)
 
@@ -739,8 +752,9 @@ export namespace TaskQueue {
     let created = false
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       if (idempotent && parsed.sessionID && parsed.sourceMessageID) {
+        // A source ID remains accepted even when its persisted row cannot be read.
         const existing = db
-          .select()
+          .select({ id: TaskQueueTable.id })
           .from(TaskQueueTable)
           .where(
             and(
@@ -751,7 +765,7 @@ export namespace TaskQueue {
             ),
           )
           .get()
-        if (existing) return fromRow(existing)
+        if (existing) return readAcceptedSubmission(db, existing.id)
       }
 
       // Dedupe identical, not-yet-started slash commands. `command` rows carry
@@ -764,7 +778,7 @@ export namespace TaskQueue {
         const incoming = commandFingerprint(parsed.payload)
         if (incoming) {
           const duplicate = db
-            .select()
+            .select({ id: TaskQueueTable.id, payload: TaskQueueTable.payload })
             .from(TaskQueueTable)
             .where(
               and(
@@ -772,6 +786,7 @@ export namespace TaskQueue {
                 eq(TaskQueueTable.session_id, parsed.sessionID),
                 eq(TaskQueueTable.kind, "command"),
                 inArray(TaskQueueTable.status, ["queued", "waiting_for_idle", "paused"]),
+                queuePayloadIsObject,
               ),
             )
             .orderBy(asc(TaskQueueTable.position), asc(TaskQueueTable.id))
@@ -785,7 +800,7 @@ export namespace TaskQueue {
               )
             })
           if (duplicate) {
-            const existing = fromRow(duplicate)
+            const existing = readAcceptedSubmission(db, duplicate.id)
             log.info("deduplicated identical pending command", {
               existingTaskQueueID: existing.id,
               incomingSourceMessageID: parsed.sourceMessageID,
