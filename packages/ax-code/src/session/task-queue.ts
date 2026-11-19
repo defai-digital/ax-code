@@ -5,8 +5,24 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { Database, NotFoundError, and, asc, desc, eq, gt, gte, inArray, ne, or, sql, type SQL } from "@/storage/db"
+import {
+  Database,
+  NotFoundError,
+  and,
+  asc,
+  desc,
+  eq,
+  getColumns,
+  gt,
+  gte,
+  inArray,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from "@/storage/db"
 import { Log } from "@/util/log"
+import { isRecord } from "@/util/record"
 import { JsonNumber } from "@/util/schema"
 import { WorkflowChildTable, WorkflowRunTable } from "@/workflow/workflow.sql"
 import type { WorkflowRunID } from "@/workflow/state"
@@ -57,6 +73,11 @@ export namespace TaskQueue {
 
   const taskToolSource = "task"
   const queuePayloadJson = sql`case when json_valid(${TaskQueueTable.payload}) then ${TaskQueueTable.payload} end`
+  // Drizzle decodes JSON columns before post-query validation can skip a row.
+  const readableQueueJson = and(
+    sql`json_type(${queuePayloadJson}) = 'object'`,
+    sql`(${TaskQueueTable.model} is null or json_valid(${TaskQueueTable.model}))`,
+  )
   const pendingDeliveryStatuses = ["pending", "delivering"] as const
   const WORKFLOW_CLEANUP_KEY = "workflowTimeoutCleanup"
   const RETRY_GENERATION_KEY = "retryGeneration"
@@ -186,8 +207,8 @@ export namespace TaskQueue {
     ),
   }
 
-  function fromRow(row: typeof TaskQueueTable.$inferSelect): Info {
-    return Info.parse({
+  function fromRowInput(row: typeof TaskQueueTable.$inferSelect) {
+    return {
       id: row.id,
       projectID: row.project_id,
       directory: row.directory,
@@ -210,15 +231,17 @@ export namespace TaskQueue {
         started: row.time_started ?? undefined,
         completed: row.time_completed ?? undefined,
       },
-    })
+    }
+  }
+
+  function fromRow(row: typeof TaskQueueTable.$inferSelect): Info {
+    return Info.parse(fromRowInput(row))
   }
 
   function readableQueueItem(row: typeof TaskQueueTable.$inferSelect): Info | undefined {
-    try {
-      return fromRow(row)
-    } catch {
-      log.warn("skipping corrupt task queue row", { id: row.id })
-    }
+    const parsed = Info.safeParse(fromRowInput(row))
+    if (parsed.success) return parsed.data
+    log.warn("skipping corrupt task queue row", { id: row.id })
   }
 
   function queueItemNotFound(id: TaskQueueID): InstanceType<typeof NotFoundError> {
@@ -376,9 +399,9 @@ export namespace TaskQueue {
 
   export function readScheduledAutomation(item: {
     kind: string
-    payload: Payload
+    payload: unknown
   }): { taskID: ScheduledTaskID; workflowTemplateID?: string } | undefined {
-    if (item.kind !== "automation") return undefined
+    if (item.kind !== "automation" || !isRecord(item.payload)) return undefined
     const taskID = ScheduledTaskID.zod.safeParse(item.payload["scheduledTaskID"])
     if (!taskID.success) return undefined
     const template = item.payload["workflowTemplateID"]
@@ -497,7 +520,7 @@ export namespace TaskQueue {
     let query = db
       .select()
       .from(TaskQueueTable)
-      .where(and(eq(TaskQueueTable.project_id, projectID), ...conditions))
+      .where(and(eq(TaskQueueTable.project_id, projectID), readableQueueJson, ...conditions))
       .orderBy(...order)
       .$dynamic()
     if (options.limit) query = query.limit(options.limit)
@@ -605,6 +628,7 @@ export namespace TaskQueue {
               eq(TaskQueueTable.project_id, projectID),
               eq(TaskQueueTable.session_id, child.id),
               eq(TaskQueueTable.kind, "subagent"),
+              readableQueueJson,
               sql`json_extract(${queuePayloadJson}, '$.source') = ${taskToolSource}`,
               sql`json_extract(${queuePayloadJson}, '$.parentSessionID') = ${input.sessionID}`,
               relevantStatus,
@@ -630,27 +654,11 @@ export namespace TaskQueue {
   }
 
   export async function listRestartableQueued(): Promise<Info[]> {
-    return SessionShard.storeForProject(Instance.project.id).use((db) =>
-      db
-        .select()
-        .from(TaskQueueTable)
-        .where(and(eq(TaskQueueTable.project_id, Instance.project.id), eq(TaskQueueTable.status, "queued")))
-        .orderBy(asc(TaskQueueTable.position), desc(TaskQueueTable.time_created), desc(TaskQueueTable.id))
-        .all()
-        .flatMap((row) => {
-          try {
-            const item = fromRow(row)
-            return resumesOnRestart(item) ? [item] : []
-          } catch {
-            log.warn("skipping corrupt restartable task queue row", { id: row.id })
-            return []
-          }
-        }),
-    )
+    return (await list({ status: "queued" })).filter(resumesOnRestart)
   }
 
   export async function listBackgroundResultDeliveriesForRecovery(): Promise<Info[]> {
-    const payload = sql`case when json_valid(${TaskQueueTable.payload}) then ${TaskQueueTable.payload} end`
+    const payload = queuePayloadJson
     const laterData = sql`case when json_valid(later.data) then later.data end`
     // Use the transcript index to exclude ordinary answered and superseded
     // handoffs before hydrating candidate rows. Admission still checks the
@@ -684,6 +692,7 @@ export namespace TaskQueue {
             eq(TaskQueueTable.project_id, Instance.project.id),
             eq(TaskQueueTable.kind, "subagent"),
             inArray(TaskQueueTable.status, terminalStatuses),
+            readableQueueJson,
             sql`json_extract(${payload}, '$.source') = ${taskToolSource}`,
             sql`(
               json_extract(${payload}, '$.deliveryStatus') is not 'delivered'
@@ -698,17 +707,11 @@ export namespace TaskQueue {
         .orderBy(asc(TaskQueueTable.time_completed), asc(TaskQueueTable.id))
         .all()
         .flatMap((row) => {
-          try {
-            const item = fromRow(row)
-            if (!isLiveTaskSubagentPayload(item.payload)) return []
-            const delivery = DeliveryStatus.safeParse(item.payload["deliveryStatus"])
-            const claim = resultDeliveryClaim(item)
-            if (delivery.success && delivery.data === "delivered" && !claim) return []
-            return [item]
-          } catch {
-            log.warn("skipping corrupt background result delivery row", { id: row.id })
-            return []
-          }
+          const item = readableQueueItem(row)
+          if (!item || !isLiveTaskSubagentPayload(item.payload)) return []
+          const delivery = DeliveryStatus.safeParse(item.payload["deliveryStatus"])
+          const claim = resultDeliveryClaim(item)
+          return delivery.success && delivery.data === "delivered" && !claim ? [] : [item]
         }),
     )
   }
@@ -1531,11 +1534,11 @@ export namespace TaskQueue {
    * treated as interrupted). `waiting_for_idle` is never heartbeated, so a
    * live owner is enough there.
    */
-  function isLiveRow(row: typeof TaskQueueTable.$inferSelect, now: number, livenessMs: number): boolean {
-    const owner = executorOwner(row.payload)
+  function isLiveQueueItem(item: Info, now: number, livenessMs: number): boolean {
+    const owner = executorOwner(item.payload)
     if (owner && !executorOwnerAlive(owner)) return false
-    if (row.status === "waiting_for_idle") return owner !== undefined
-    return typeof row.time_updated === "number" && now - row.time_updated < livenessMs
+    if (item.status === "waiting_for_idle") return owner !== undefined
+    return item.time.updated !== undefined && now - item.time.updated < livenessMs
   }
 
   export function heartbeat(attempt: ExecutionAttempt, now = Date.now()): boolean {
@@ -2031,7 +2034,7 @@ export namespace TaskQueue {
     // was still pending. Repair the original item before restart can requeue
     // it. A queue generation may belong to an explicit operator retry.
     const rows = db
-      .select({ id: TaskQueueTable.id, error: ScheduledTaskRunTable.error })
+      .select({ queue: getColumns(TaskQueueTable), error: ScheduledTaskRunTable.error })
       .from(TaskQueueTable)
       .innerJoin(
         ScheduledTaskRunTable,
@@ -2047,19 +2050,26 @@ export namespace TaskQueue {
           eq(TaskQueueTable.kind, "automation"),
           inArray(TaskQueueTable.status, ["queued", "waiting_for_idle"]),
           inArray(ScheduledTaskRunTable.status, ["failed", "timeout"]),
+          readableQueueJson,
           sql`json_extract(${queuePayloadJson}, '$.scheduledTaskID') = ${ScheduledTaskRunTable.task_id}`,
           sql`json_extract(${queuePayloadJson}, ${`$.${RETRY_GENERATION_KEY}`}) is null`,
         ),
       )
       .all()
-    return rows.map(({ id, error }) =>
-      writeRow(db, id, {
-        status: "failed",
-        error: error ?? "Scheduled task dispatch failed.",
-        time_completed: now,
-        time_updated: now,
-      }),
-    )
+    const failed: Info[] = []
+    for (const { queue, error } of rows) {
+      const item = readableQueueItem(queue)
+      if (!item) continue
+      failed.push(
+        writeRow(db, item.id, {
+          status: "failed",
+          error: error ?? "Scheduled task dispatch failed.",
+          time_completed: now,
+          time_updated: now,
+        }),
+      )
+    }
+    return failed
   }
 
   export async function recoverInterrupted(options?: {
@@ -2083,70 +2093,66 @@ export namespace TaskQueue {
         const rows = db
           .select()
           .from(TaskQueueTable)
-          .where(and(eq(TaskQueueTable.project_id, projectID), inArray(TaskQueueTable.status, recoverableStatuses)))
+          .where(
+            and(
+              eq(TaskQueueTable.project_id, projectID),
+              inArray(TaskQueueTable.status, recoverableStatuses),
+              readableQueueJson,
+            ),
+          )
           .all()
 
         const requeued: Info[] = []
         const preserved: Info[] = []
         const live: Info[] = []
         for (const row of rows) {
+          const item = readableQueueItem(row)
+          if (!item) continue
           // Every InstanceBootstrap runs this sweep, and more than one backend
           // can serve the same project at once (a TUI backend plus `ax-code run`
           // launched from inside one of its sessions, a second terminal, the
           // desktop app). A row whose owner is alive and still heartbeating
           // belongs to one of those live processes; failing or requeueing it
           // here would kill a task that is actively running elsewhere.
-          if (isLiveRow(row, now, livenessMs)) {
-            live.push(fromRow(row))
+          if (isLiveQueueItem(item, now, livenessMs)) {
+            live.push(item)
             continue
           }
-          const workflowItem = hasWorkflowPayload(row.payload)
-          const liveTaskSubagent = isLiveTaskSubagentPayload(row.payload) && row.kind === "subagent"
-          const scheduled = readScheduledAutomation(row)
+          const workflowItem = hasWorkflowPayload(item.payload)
+          const liveTaskSubagent = isLiveTaskSubagentPayload(item.payload) && item.kind === "subagent"
+          const scheduled = readScheduledAutomation(item)
           const scheduledBeforePrompt =
-            row.status === "running" && row.session_id === null && scheduled && !scheduled.workflowTemplateID
+            item.status === "running" && item.sessionID === undefined && scheduled && !scheduled.workflowTemplateID
           // Workflow children blocked on permission/question hold their pending
           // request only in memory, so a restart leaves them unresolvable. Requeue
           // them (like running children) rather than preserving a permanent wedge.
-          if (
-            row.status === "waiting_for_idle" ||
-            (workflowItem &&
-              (row.status === "running" || row.status === "blocked_permission" || row.status === "blocked_question")) ||
-            scheduledBeforePrompt ||
-            (liveTaskSubagent &&
-              (row.status === "running" || row.status === "blocked_permission" || row.status === "blocked_question"))
-          ) {
+          if (item.status === "waiting_for_idle" || workflowItem || scheduledBeforePrompt || liveTaskSubagent) {
             const updated = db
               .update(TaskQueueTable)
               .set({
                 status: "queued",
-                payload: requeuedPayload(row.payload),
+                payload: requeuedPayload(item.payload),
                 error: null,
                 time_started: null,
                 time_completed: null,
                 time_updated: now,
               })
-              .where(eq(TaskQueueTable.id, row.id))
+              .where(eq(TaskQueueTable.id, item.id))
               .returning()
               .get()
             if (updated) requeued.push(fromRow(updated))
             continue
           }
-          if (workflowItem) {
-            preserved.push(fromRow(row))
-            continue
-          }
-
           const updated = db
             .update(TaskQueueTable)
             .set({
               status: "failed",
               error: "Task interrupted by backend restart; inspect output and retry when safe.",
-              payload: { ...row.payload, [INTERRUPTION_REASON_KEY]: "backend_restart" satisfies InterruptionReason },
+              payload: { ...item.payload, [INTERRUPTION_REASON_KEY]: "backend_restart" satisfies InterruptionReason },
               time_completed: now,
               time_updated: now,
             })
-            .where(eq(TaskQueueTable.id, row.id))
+            .where(eq(TaskQueueTable.id, item.id))
             .returning()
             .get()
           if (updated) failed.push(fromRow(updated))
@@ -2178,66 +2184,69 @@ export namespace TaskQueue {
               eq(TaskQueueTable.project_id, Instance.project.id),
               eq(TaskQueueTable.status, "cancelled"),
               gt(TaskQueueTable.time_updated, now - STEER_RECOVERY_WINDOW_MS),
+              readableQueueJson,
             ),
           )
           .all()
         for (const row of steeredRows) {
-          if (typeof row.payload["steeredInto"] !== "string") continue
-          if (row.payload["steeredAppliedAt"] !== undefined) continue
-          const steeredHeartbeatAt = row.payload["steeredHeartbeatAt"]
+          const steeredInto = row.payload["steeredInto"]
+          if (typeof steeredInto !== "string" || row.payload["steeredAppliedAt"] !== undefined) continue
+          const item = readableQueueItem(row)
+          if (!item) continue
+          const steeredHeartbeatAt = item.payload["steeredHeartbeatAt"]
           if (typeof steeredHeartbeatAt === "number") {
             // The admitting backend is alive and stamping at step boundaries;
             // it can still apply the steer. A fresh heartbeat also requests a
             // later pass in case that owner died just before this bootstrap.
             if (now - steeredHeartbeatAt < livenessMs) {
-              live.push(fromRow(row))
+              live.push(item)
               continue
             }
           } else {
             // Rows written before owner heartbeats existed fall back to the
             // admission timestamp.
-            const steeredAt = typeof row.payload["steeredAt"] === "number" ? row.payload["steeredAt"] : 0
+            const steeredAt = typeof item.payload["steeredAt"] === "number" ? item.payload["steeredAt"] : 0
             if (now - steeredAt < livenessMs) {
-              live.push(fromRow(row))
+              live.push(item)
               continue
             }
           }
           // Heartbeat expiry cannot revoke a suspended foreground owner. Probe
           // the same OS guard used by prompt/shell admission before restoring the
           // text, and leave the old journal for that admission's transcript repair.
-          if (row.session_id) {
-            let guard = ownership.get(row.session_id)
+          if (item.sessionID) {
+            let guard = ownership.get(item.sessionID)
             if (!guard) {
               try {
                 // Try-only acquisition (timeout=0) avoids blocking a foreground
                 // owner that already holds its guard and needs this queue DB.
-                guard = ForegroundOwnership.acquire(Database.Path, row.session_id)
+                guard = ForegroundOwnership.acquire(Database.Path, item.sessionID)
               } catch (error) {
                 if (ForegroundOwnership.BusyError.isInstance(error)) {
                   guard = "busy"
                 } else if (ForegroundOwnership.OwnershipError.isInstance(error)) {
                   guard = "invalid"
                   log.warn("pending steer restart recovery blocked by foreground ownership", {
-                    taskID: row.id,
-                    sessionID: row.session_id,
+                    taskID: item.id,
+                    sessionID: item.sessionID,
                     error,
                   })
                 } else {
                   throw error
                 }
               }
-              ownership.set(row.session_id, guard)
+              ownership.set(item.sessionID, guard)
             }
             if (guard === "busy") {
-              live.push(fromRow(row))
+              live.push(item)
               continue
             }
             if (guard === "invalid") {
-              preserved.push(fromRow(row))
+              preserved.push(item)
               continue
             }
           }
-          const payload = requeuedPayload(row.payload)
+          const payload = requeuedPayload(item.payload)
           delete payload["steeredInto"]
           delete payload["steeredAt"]
           delete payload["steeredAppliedAt"]
@@ -2254,9 +2263,9 @@ export namespace TaskQueue {
             })
             .where(
               and(
-                eq(TaskQueueTable.id, row.id),
+                eq(TaskQueueTable.id, item.id),
                 eq(TaskQueueTable.status, "cancelled"),
-                sql`json_extract(${TaskQueueTable.payload}, '$.steeredInto') = ${row.payload["steeredInto"]}`,
+                sql`json_extract(${TaskQueueTable.payload}, '$.steeredInto') = ${steeredInto}`,
                 sql`json_type(${TaskQueueTable.payload}, '$.steeredAppliedAt') IS NULL`,
               ),
             )

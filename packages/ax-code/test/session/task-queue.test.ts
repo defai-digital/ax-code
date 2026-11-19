@@ -21,7 +21,7 @@ import { TaskQueueTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
-import { Database, eq } from "../../src/storage/db"
+import { Database, eq, inArray, sql } from "../../src/storage/db"
 import { Shard } from "../../src/storage/shard"
 import { WorkflowFixtureSpecs, WorkflowRun, parseWorkflowSpecV1 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
@@ -29,6 +29,7 @@ import { tmpdir } from "../fixture/fixture"
 afterEach(async () => {
   vi.restoreAllMocks()
   await Instance.disposeAll()
+  vi.unstubAllEnvs()
 })
 
 // Restart recovery only touches rows whose owning backend instance is gone.
@@ -867,6 +868,66 @@ describe("TaskQueue", () => {
     })
   })
 
+  test.each([
+    { invalidJson: "{", sharded: false },
+    { invalidJson: "null", sharded: true },
+  ])("recovery skips unreadable payloads ($invalidJson, sharded=$sharded)", async ({ invalidJson, sharded }) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
+    await using tmp = await tmpdir({ git: true })
+    const { damagedWaiting, damagedSteer, healthy } = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const damagedWaiting = await TaskQueue.enqueue({ kind: "prompt", title: "Unreadable waiting item" })
+        await TaskQueue.setStatus({ id: damagedWaiting.id, status: "waiting_for_idle" })
+        const damagedSteer = await TaskQueue.enqueue({ kind: "followup", title: "Unreadable applied steer" })
+        await TaskQueue.setStatus({ id: damagedSteer.id, status: "cancelled" })
+
+        const healthy = await TaskQueue.enqueue({
+          kind: "subagent",
+          title: "Restartable work",
+          payload: { resumeOnRestart: true },
+        })
+        await TaskQueue.setStatus({ id: healthy.id, status: "waiting_for_idle" })
+        const store = SessionShard.storeForProject(Instance.project.id, { write: true })
+        store.use((db) => {
+          for (const id of [damagedWaiting.id, damagedSteer.id]) {
+            db.update(TaskQueueTable)
+              .set({ payload: sql`${invalidJson}` })
+              .where(eq(TaskQueueTable.id, id))
+              .run()
+          }
+        })
+
+        return { damagedWaiting, damagedSteer, healthy }
+      },
+    })
+
+    const recovered = await restartInstance(tmp.path)
+    expect(recovered.requeued.map((item) => item.id)).toEqual([healthy.id])
+    expect(recovered.failed).toEqual([])
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect((await TaskQueue.listRestartableQueued()).map((item) => item.id)).toEqual([healthy.id])
+        const store = SessionShard.storeForProject(Instance.project.id)
+        expect(
+          store.use((db) =>
+            db
+              .select({ status: TaskQueueTable.status, payload: sql<string>`${TaskQueueTable.payload}` })
+              .from(TaskQueueTable)
+              .where(inArray(TaskQueueTable.id, [damagedWaiting.id, damagedSteer.id]))
+              .all(),
+          ),
+        ).toEqual(
+          expect.arrayContaining([
+            { status: "waiting_for_idle", payload: invalidJson },
+            { status: "cancelled", payload: invalidJson },
+          ]),
+        )
+      },
+    })
+  })
+
   test("restart recovery requeues a steered row whose apply never landed", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -1350,6 +1411,42 @@ describe("TaskQueue", () => {
         })
 
         expect((await TaskQueue.list()).map((item) => item.id)).toEqual([valid.id])
+      },
+    })
+  })
+
+  test.each([false, true])("queue scans skip invalid JSON before applying a limit (sharded=%s)", async (sharded) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const damaged: TaskQueue.Info[] = []
+        for (const title of ["Malformed payload", "Null payload", "Malformed model"]) {
+          damaged.push(await TaskQueue.enqueue({ kind: "automation", title, payload: { resumeOnRestart: true } }))
+        }
+        const healthy = await TaskQueue.enqueue({
+          kind: "automation",
+          title: "Restartable item",
+          payload: { resumeOnRestart: true },
+        })
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(TaskQueueTable)
+            .set({ payload: sql`${"{"}` })
+            .where(eq(TaskQueueTable.id, damaged[0].id))
+            .run()
+          db.update(TaskQueueTable)
+            .set({ payload: sql`${"null"}` })
+            .where(eq(TaskQueueTable.id, damaged[1].id))
+            .run()
+          db.update(TaskQueueTable)
+            .set({ model: sql`${"{"}` })
+            .where(eq(TaskQueueTable.id, damaged[2].id))
+            .run()
+        })
+
+        expect((await TaskQueue.list({ limit: 1 })).map((item) => item.id)).toEqual([healthy.id])
+        expect((await TaskQueue.listRestartableQueued()).map((item) => item.id)).toEqual([healthy.id])
       },
     })
   })
