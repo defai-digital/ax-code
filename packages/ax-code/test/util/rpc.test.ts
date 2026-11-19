@@ -532,6 +532,55 @@ describe("Rpc", () => {
     expect(stream.write).toHaveBeenCalledTimes(1)
   })
 
+  test("rejects an oversized first write before passing it to the stream", () => {
+    const stream = Object.assign(new EventEmitter(), { write: vi.fn(() => false) })
+    const onError = vi.fn()
+    const writer = Rpc.createRpcQueuedWriter(stream, { onError, maxBufferedBytes: 3 })
+
+    try {
+      writer.write("éé")
+      expect(onError).toHaveBeenCalledWith(new Error("RPC output queue exceeded 3 bytes"))
+      expect(stream.write).not.toHaveBeenCalled()
+    } finally {
+      writer.dispose()
+    }
+  })
+
+  test("an asynchronous stdout error aborts active RPCs and reports the same fatal error once", async () => {
+    const stdin = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
+    const stdout = Object.assign(new EventEmitter(), { write: vi.fn(() => true) })
+    const onFatal = vi.fn()
+    let requestSignal: AbortSignal | undefined
+    const done = Rpc.listenStdio(
+      {
+        respond: (_input, { signal }) => {
+          requestSignal = signal
+          return new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true }))
+        },
+      },
+      {
+        stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">,
+        stdout: stdout as unknown as Pick<NodeJS.WriteStream, "write" | "on">,
+        onFatal,
+      },
+    )
+
+    try {
+      stdin.emit("data", JSON.stringify({ type: "rpc.request", method: "respond", id: 12 }) + "\n")
+      expect(requestSignal?.aborted).toBe(false)
+      const failure = new Error("broken stdout")
+      stdout.emit("error", failure)
+      stdout.emit("error", new Error("stdout already closed"))
+      expect(requestSignal?.reason).toBe(failure)
+      expect(onFatal.mock.calls).toEqual([[failure]])
+      await flushMicrotasks()
+      expect(stdout.write).not.toHaveBeenCalled()
+    } finally {
+      stdin.emit("close")
+      await done
+    }
+  })
+
   test("stdio EOF waits for an accepted response before disposing the writer", async () => {
     const stdin = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
     const stdout = Object.assign(new EventEmitter(), {

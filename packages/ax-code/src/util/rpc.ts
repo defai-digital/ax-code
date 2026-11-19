@@ -247,11 +247,11 @@ export namespace Rpc {
       write(data) {
         if (disposed) return
         const bytes = Buffer.byteLength(data, "utf8")
+        if (streamBytes + queuedBytes + bytes > maxBufferedBytes) {
+          fail(new Error(`RPC output queue exceeded ${maxBufferedBytes} bytes`))
+          return
+        }
         if (waiting || queue.length > 0) {
-          if (streamBytes + queuedBytes + bytes > maxBufferedBytes) {
-            fail(new Error(`RPC output queue exceeded ${maxBufferedBytes} bytes`))
-            return
-          }
           queue.push({ data, bytes })
           queuedBytes += bytes
           return
@@ -288,36 +288,24 @@ export namespace Rpc {
     const stdout = io.stdout ?? process.stdout
     const active = new Map<number, AbortController>()
     let stdoutBroken = false
-    // Without an "error" handler, an EPIPE on stdout (parent closed our
-    // stdin pipe during shutdown) crashes the backend. Mark the pipe
-    // dead and skip subsequent writes so handleLine doesn't keep
-    // throwing on each request.
-    stdout.on?.("error", (error: unknown) => {
+    const failOutput = (error: Error) => {
+      if (stdoutBroken) return
       stdoutBroken = true
       writer.dispose()
+      for (const controller of active.values()) controller.abort(error)
+      active.clear()
       // eslint-disable-next-line no-console
-      console.error("rpc listenStdio stdout error", toErrorMessage(error))
-    })
-    const writer = createRpcQueuedWriter(stdout, {
-      onError(error) {
-        stdoutBroken = true
-        for (const controller of active.values()) controller.abort(error)
-        active.clear()
-        // eslint-disable-next-line no-console
-        console.error("rpc listenStdio output queue failed", toErrorMessage(error))
-        io.onFatal?.(error)
-      },
+      console.error("rpc listenStdio output failed", toErrorMessage(error))
+      io.onFatal?.(error)
+    }
+    const writer = createRpcQueuedWriter(stdout, { onError: failOutput })
+    // Without an "error" handler, an EPIPE on stdout (parent closed our
+    // stdin pipe during shutdown) crashes the backend without cleanup.
+    stdout.on?.("error", (error: unknown) => {
+      failOutput(error instanceof Error ? error : new Error(toErrorMessage(error)))
     })
     const safeWrite = (data: string) => {
-      if (stdoutBroken) return
-      try {
-        writer.write(data)
-      } catch (error) {
-        stdoutBroken = true
-        writer.dispose()
-        // eslint-disable-next-line no-console
-        console.error("rpc listenStdio stdout write threw", toErrorMessage(error))
-      }
+      if (!stdoutBroken) writer.write(data)
     }
     bindEmitMessage((data) => {
       safeWrite(data + "\n")
