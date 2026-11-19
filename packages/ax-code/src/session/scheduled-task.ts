@@ -705,14 +705,7 @@ export namespace ScheduledTask {
     }
   }
 
-  function assertRunNowAvailable(task: Info, isRunOpen: () => boolean): void {
-    if (task.status === "disabled") throw new RunNowClaimRejected(`Scheduled task ${task.id} is disabled.`)
-    if (isRunOpen()) {
-      throw new RunNowClaimRejected(`Scheduled task ${task.id} already has a run in progress; wait for it to finish.`)
-    }
-  }
-
-  function readRunNowTask(db: Database.TxOrDb, requested: Info, now: number): Info {
+  function prepareRunNowClaim(db: Database.TxOrDb, requested: Info, now: number): Info {
     const row = db
       .select()
       .from(ScheduledTaskTable)
@@ -720,11 +713,14 @@ export namespace ScheduledTask {
       .get()
     if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${requested.id}` })
     const current = fromRow(row)
-    assertRunNowAvailable(current, () =>
-      hasOpenRunIn(db, current.id, now, current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS),
-    )
+    if (current.status === "disabled") throw new RunNowClaimRejected(`Scheduled task ${current.id} is disabled.`)
     if (current.directory !== requested.directory || current.workflowTemplateID !== requested.workflowTemplateID) {
       throw new RunNowClaimRejected(`Scheduled task ${current.id} changed while preparing to run. Try again.`)
+    }
+    if (reconcileOrphanRunsIn(db, current, now).hasOpenRun) {
+      throw new RunNowClaimRejected(
+        `Scheduled task ${current.id} already has a run in progress; wait for it to finish.`,
+      )
     }
     return current
   }
@@ -760,20 +756,18 @@ export namespace ScheduledTask {
   type ClaimedQueueRun = { task: Info; run: RunInfo; queueItem: TaskQueue.Info }
 
   export async function runNow(id: ScheduledTaskID): Promise<RunNowResult> {
-    const current = await get(id)
+    const requested = await get(id)
     const now = Date.now()
-    const deadlineMs = current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
-    // Recheck eligibility inside the claim transaction after workflow
-    // preparation. A tick or another process can change the task in between.
-    assertRunNowAvailable(current, () => {
-      reconcileOrphanRuns(id, now, deadlineMs)
-      return hasOpenRun(id, now, deadlineMs)
-    })
     let claimed: ClaimedQueueRun
     try {
-      if (current.workflowTemplateID) return await runInWorkspace(current, () => runWorkflowNow(current))
-      claimed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-        const task = readRunNowTask(db, current, now)
+      const store = SessionShard.storeForProject(Instance.project.id, { write: true })
+      if (requested.workflowTemplateID) {
+        // Reject busy tasks before preparing a workflow and recheck at claim time.
+        const task = store.transaction((db) => prepareRunNowClaim(db, requested, now))
+        return await runInWorkspace(task, () => runWorkflowNow(task))
+      }
+      claimed = store.transaction((db) => {
+        const task = prepareRunNowClaim(db, requested, now)
         const queuedItem = TaskQueue.enqueueInTransaction(db, scheduledQueueInput(task, now, "manual"), {
           now,
           directory: task.directory,
@@ -853,7 +847,7 @@ export namespace ScheduledTask {
     let claimed: { task: Info; run: RunInfo }
     try {
       claimed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-        readRunNowTask(db, current, now)
+        prepareRunNowClaim(db, current, now)
         const runRow = insertRunRow(db, {
           taskID: current.id,
           triggerType: "manual",
@@ -1062,9 +1056,7 @@ export namespace ScheduledTask {
     return SessionShard.storeForProject(projectID, { write: true }).transaction((db) => {
       const task = readDueTask(db, id, occurrenceAt)
       if (!task) return undefined
-      const deadlineMs = task.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
-      reconcileOrphanRunsIn(db, id, now, deadlineMs)
-      if (hasOpenRunIn(db, id, now, deadlineMs)) {
+      if (reconcileOrphanRunsIn(db, task, now).hasOpenRun) {
         const overlap = { next: nextRunAt(task.schedule, now), coalescedCount: 1 }
         return recordSkippedOccurrence(db, task, "skipped_overlap", overlap, occurrenceAt, now)
       }
@@ -1251,10 +1243,7 @@ export namespace ScheduledTask {
     }
   }
 
-  // Transaction-local variant. Callers that insert a new `running` row must run
-  // this authoritative check inside the SAME synchronous transaction as the
-  // insert: the standalone hasOpenRun read can be overtaken by a concurrent
-  // claim across an await boundary (check-then-act).
+  // Check liveness without modifying run history, for reads and deadline edits.
   function hasOpenRunIn(db: Database.TxOrDb, taskID: ScheduledTaskID, now: number, deadlineMs: number): boolean {
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
     return readOpenRuns(db, taskID).some((run) => isRunOpen(db, run, staleBefore))
@@ -1304,22 +1293,21 @@ export namespace ScheduledTask {
     return status.success && !TaskQueue.isTerminalStatus(status.data)
   }
 
-  function reconcileOrphanRuns(taskID: ScheduledTaskID, now: number, deadlineMs: number): number {
-    return SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) =>
-      reconcileOrphanRunsIn(db, taskID, now, deadlineMs),
-    )
-  }
-
+  // Read the task and reconcile its runs in the same write transaction.
   function reconcileOrphanRunsIn(
     db: Database.TxOrDb,
-    taskID: ScheduledTaskID,
+    task: Pick<Info, "id" | "maxRunDurationMs">,
     now: number,
-    deadlineMs: number,
-  ): number {
+  ): { closed: number; hasOpenRun: boolean } {
+    const deadlineMs = task.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
     let closed = 0
-    for (const run of readOpenRuns(db, taskID)) {
-      if (isRunOpen(db, run, staleBefore)) continue
+    let hasOpenRun = false
+    for (const run of readOpenRuns(db, task.id)) {
+      if (isRunOpen(db, run, staleBefore)) {
+        hasOpenRun = true
+        continue
+      }
       db.update(ScheduledTaskRunTable)
         .set({
           status: "failed",
@@ -1331,7 +1319,7 @@ export namespace ScheduledTask {
         .run()
       closed += 1
     }
-    return closed
+    return { closed, hasOpenRun }
   }
 
   // Orphan reconciliation otherwise happens only for due tasks and on run-now,
@@ -1353,11 +1341,19 @@ export namespace ScheduledTask {
         .groupBy(ScheduledTaskRunTable.task_id)
         .all(),
     )
+    if (open.length === 0) return
+    const store = SessionShard.storeForProject(Instance.project.id, { write: true })
     for (const { taskID } of open) {
-      const task = await get(taskID).catch(() => undefined)
-      if (!task) continue
-      const closed = reconcileOrphanRuns(task.id, now, task.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS)
-      if (closed > 0) publishUpdated(await get(task.id))
+      try {
+        const updated = store.transaction((db) => {
+          const task = readTask(db, taskID)
+          if (reconcileOrphanRunsIn(db, task, now).closed > 0) return task
+        })
+        if (updated) publishUpdated(updated)
+      } catch (error) {
+        if (NotFoundError.isInstance(error)) continue
+        log.warn("failed to reconcile orphaned scheduled task runs", { taskID, error: toErrorMessage(error) })
+      }
     }
   }
 

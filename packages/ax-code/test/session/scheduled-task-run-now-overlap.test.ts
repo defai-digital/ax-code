@@ -7,7 +7,7 @@ import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { ScheduledTaskID, TaskQueueID } from "../../src/session/schema"
-import { ScheduledTaskTable, TaskQueueTable } from "../../src/session/session.sql"
+import { ScheduledTaskRunTable, ScheduledTaskTable, TaskQueueTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { eq, sql } from "../../src/storage/db"
 import { TaskQueue } from "../../src/session/task-queue"
@@ -24,6 +24,7 @@ describe("ScheduledTask run-now overlap protection", () => {
   afterEach(async () => {
     vi.restoreAllMocks()
     await Instance.disposeAll()
+    vi.unstubAllEnvs()
   })
 
   test("concurrent run-now claims admit exactly one run", async () => {
@@ -44,6 +45,46 @@ describe("ScheduledTask run-now overlap protection", () => {
         expect(rejected?.reason).toMatchObject({ status: 409 })
         const runs = await ScheduledTask.listRuns({ taskID: task.id })
         expect(runs.filter((run) => run.status === "running")).toHaveLength(1)
+      },
+    })
+  })
+
+  test.each([false, true])("run-now honors a concurrent deadline extension (sharded=%s)", async (sharded) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const minute = 60_000
+        const now = Date.now()
+        const task = await ScheduledTask.create({
+          title: "Deadline changed before claim",
+          prompt: "Run the scheduled task.",
+          schedule: { type: "once", runAt: now + minute },
+          maxRunDurationMs: minute,
+        })
+        const { queueItem } = await ScheduledTask.runNow(task.id)
+        if (!queueItem) throw new Error("Expected a scheduled queue item")
+        await TaskQueue.remove(queueItem.id)
+        const [original] = await ScheduledTask.listRuns({ taskID: task.id })
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(ScheduledTaskRunTable)
+            .set({ time_started: now - 15 * minute })
+            .where(eq(ScheduledTaskRunTable.id, original.id))
+            .run()
+        })
+
+        // The deadline edit commits while run-now is awaiting its initial read.
+        const runNow = ScheduledTask.runNow(task.id)
+        const admission = expect(runNow).rejects.toMatchObject({ status: 409 })
+        await ScheduledTask.update({ id: task.id, maxRunDurationMs: 30 * minute })
+        await admission
+
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+          { id: original.id, status: "running" },
+        ])
+        expect(await TaskQueue.list()).toEqual([])
       },
     })
   })
