@@ -14,7 +14,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  like,
   lte,
   ne,
   notExists,
@@ -66,10 +65,8 @@ export namespace ScheduledTask {
   export const MAX_PROJECT_ACTIVE_TASKS = 100
   const DEFAULT_RUN_DEADLINE_MS = 30 * 60 * 1_000
   const ORPHAN_GRACE_MS = 10 * 60 * 1_000
-  // Marker for run rows failed by the orphan sweep (reconcileOrphanRuns) rather
-  // than by the task itself. Infrastructure failures must not feed the
-  // consecutive-failure auto-pause counter.
-  const ORPHAN_RUN_ERROR_PREFIX = "orphaned:"
+  // Keep the persisted sweep marker stable so older abandoned runs can be recovered.
+  const ORPHAN_RUN_ERROR = "orphaned: no outcome was recorded (backend likely restarted)"
   const ONESHOT_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000
   const TOAST_DURATION_MS = 8 * 1_000
   // After an overlap skip, a one-time task re-arms for the next poll instead of
@@ -922,7 +919,7 @@ export namespace ScheduledTask {
   // other, as the claimed path already does through recordQueueOutcome.
   async function recordRunFailure(id: ScheduledTaskID, error: unknown): Promise<Info> {
     const now = Date.now()
-    const message = toErrorMessage(error)
+    const message = reportedFailureMessage(error)
     const outcome = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
       const row = db
         .update(ScheduledTaskTable)
@@ -1312,7 +1309,7 @@ export namespace ScheduledTask {
       db.update(ScheduledTaskRunTable)
         .set({
           status: "failed",
-          error: `${ORPHAN_RUN_ERROR_PREFIX} no outcome was recorded (backend likely restarted)`,
+          error: ORPHAN_RUN_ERROR,
           time_completed: now,
           time_updated: now,
         })
@@ -1374,7 +1371,7 @@ export namespace ScheduledTask {
     let count = 0
     for (const row of rows) {
       if (row.status === "failed" || row.status === "timeout") {
-        if (row.error?.startsWith(ORPHAN_RUN_ERROR_PREFIX)) continue
+        if (row.status === "failed" && row.error === ORPHAN_RUN_ERROR) continue
         count++
         continue
       }
@@ -1443,8 +1440,14 @@ export namespace ScheduledTask {
     return recordOutcome(id, { queueID }, queueOutcome(status, error))
   }
 
+  function reportedFailureMessage(error: unknown): string {
+    const message = toErrorMessage(error)
+    // An execution can report the same text as the sweep's internal marker.
+    return message === ORPHAN_RUN_ERROR ? `Execution failed: ${message}` : message
+  }
+
   function queueOutcome(status: "completed" | "failed", error: unknown): Outcome {
-    const message = status === "failed" ? toErrorMessage(error) : undefined
+    const message = status === "failed" ? reportedFailureMessage(error) : undefined
     return { status: message?.toLowerCase().includes("timed out") ? "timeout" : status, error: message }
   }
 
@@ -1655,13 +1658,7 @@ export namespace ScheduledTask {
     const adopted = db
       .update(ScheduledTaskRunTable)
       .set({ status, error: error ?? null, time_updated: now })
-      .where(
-        and(
-          eq(ScheduledTaskRunTable.id, latest.id),
-          eq(ScheduledTaskRunTable.status, "failed"),
-          like(ScheduledTaskRunTable.error, `${ORPHAN_RUN_ERROR_PREFIX}%`),
-        ),
-      )
+      .where(and(eq(ScheduledTaskRunTable.id, latest.id), orphanedOutcome()))
       .returning()
       .get()
     return adopted ? runFromRow(adopted) : undefined
@@ -1679,14 +1676,15 @@ export namespace ScheduledTask {
   function workflowOutcome(status: TerminalDispatchStatus, error?: unknown): Outcome {
     if (status === "completed") return { status }
     const fallback = status === "cancelled" ? "Scheduled workflow was cancelled." : "Scheduled workflow failed."
-    return { status: "failed", error: toErrorMessage(error ?? fallback) }
+    return { status: "failed", error: reportedFailureMessage(error ?? fallback) }
+  }
+
+  function orphanedOutcome() {
+    return and(eq(ScheduledTaskRunTable.status, "failed"), eq(ScheduledTaskRunTable.error, ORPHAN_RUN_ERROR))
   }
 
   function unrecordedOutcome() {
-    return or(
-      eq(ScheduledTaskRunTable.status, "running"),
-      and(eq(ScheduledTaskRunTable.status, "failed"), like(ScheduledTaskRunTable.error, `${ORPHAN_RUN_ERROR_PREFIX}%`)),
-    )
+    return or(eq(ScheduledTaskRunTable.status, "running"), orphanedOutcome())
   }
 
   function carrierCanRecordFailure(db: Database.TxOrDb) {

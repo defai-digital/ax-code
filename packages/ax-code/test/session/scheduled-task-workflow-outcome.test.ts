@@ -75,13 +75,14 @@ describe("ScheduledTask workflow outcome recording", () => {
           const task = await createWorkflowTask()
           await ScheduledTask.runNow(task.id)
 
-          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", new Error("workflow failed"))
+          const error = new Error("orphaned: workflow lease expired")
+          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", error)
           const first = await ScheduledTask.get(task.id)
-          expect(first.error).toBe("workflow failed")
+          expect(first.error).toBe(error.message)
           expect(first.nextRunAt).toBeDefined()
 
           await new Promise((resolve) => setTimeout(resolve, 20))
-          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", new Error("workflow failed"))
+          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", error)
           const second = await ScheduledTask.get(task.id)
           expect(second.nextRunAt).toBe(first.nextRunAt)
         } finally {

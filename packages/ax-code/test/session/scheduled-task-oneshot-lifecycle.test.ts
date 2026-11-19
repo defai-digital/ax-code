@@ -383,33 +383,30 @@ describe("ScheduledTask one-shot lifecycle", () => {
       directory: tmp.path,
       fn: async () => {
         vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
-        try {
-          const now = Date.now()
-          const task = await ScheduledTask.create({
-            title: "Restart-plagued reminder",
-            prompt: "Keep going.",
-            schedule: { type: "once", runAt: now + 1_000 },
-          })
+        const minute = 60_000
+        const task = await ScheduledTask.create({
+          title: "Restart-plagued reminder",
+          prompt: "Keep going.",
+          schedule: { type: "once", runAt: Date.now() + minute },
+          maxRunDurationMs: minute,
+        })
 
-          // Repeated backend restarts orphan the run (the orphan sweep's
-          // marker). Infrastructure failures are not task failures: the task
-          // must keep retrying instead of auto-pausing at the cap.
-          let dueAt = now + 2_000
-          for (let i = 1; i <= ScheduledTask.MAX_CONSECUTIVE_FAILURES; i++) {
-            const claimed = await claimOnce(task.id, dueAt)
-            await ScheduledTask.recordQueueOutcome(
-              task.id,
-              "failed",
-              new Error("orphaned: no outcome was recorded (backend likely restarted)"),
-              claimed.queueItem!.id,
-            )
-            const current = await ScheduledTask.get(task.id)
-            expect(current.status).toBe("active")
-            dueAt = current.nextRunAt! + 1
-          }
-        } finally {
-          vi.restoreAllMocks()
+        for (let attempts = 0; attempts < ScheduledTask.MAX_CONSECUTIVE_FAILURES; attempts++) {
+          const { queueItem } = await ScheduledTask.runNow(task.id)
+          if (!queueItem) throw new Error("Expected a scheduled queue item")
+          await TaskQueue.remove(queueItem.id)
+          await ScheduledTask.reconcileAllOrphanRuns(Date.now() + 12 * minute)
         }
+        const orphans = await ScheduledTask.listRuns({ taskID: task.id })
+        expect(orphans).toHaveLength(ScheduledTask.MAX_CONSECUTIVE_FAILURES)
+        for (const run of orphans) {
+          expect(run).toMatchObject({ status: "failed", error: expect.stringMatching(/^orphaned:/) })
+        }
+
+        const { queueItem } = await ScheduledTask.runNow(task.id)
+        if (!queueItem) throw new Error("Expected a scheduled queue item")
+        await ScheduledTask.recordQueueOutcome(task.id, "failed", "Execution failed", queueItem.id)
+        expect(await ScheduledTask.get(task.id)).toMatchObject({ status: "active", error: "Execution failed" })
       },
     })
   })
@@ -1020,12 +1017,14 @@ describe("ScheduledTask one-shot lifecycle", () => {
   })
 
   test.each([
-    { status: "completed", orphaned: false },
-    { status: "failed", orphaned: false },
-    { status: "completed", orphaned: true },
+    { status: "completed", orphaned: false, error: undefined },
+    { status: "failed", orphaned: false, error: "Persisted queue failure" },
+    { status: "failed", orphaned: false, error: "orphaned: workspace lease expired" },
+    { status: "failed", orphaned: false, error: "orphaned: no outcome was recorded (backend likely restarted)" },
+    { status: "completed", orphaned: true, error: undefined },
   ] as const)(
-    "the sweep recovers a persisted $status queue outcome (orphaned=$orphaned)",
-    async ({ status, orphaned }) => {
+    "the sweep recovers a persisted $status queue outcome (orphaned=$orphaned, error=$error)",
+    async ({ status, orphaned, error }) => {
       await using tmp = await tmpdir({ git: true })
       await Instance.provide({
         directory: tmp.path,
@@ -1039,25 +1038,31 @@ describe("ScheduledTask one-shot lifecycle", () => {
           })
           const { queueItem } = await claimOnce(task.id, now + 2_000)
           if (!queueItem) throw new Error("Expected a scheduled queue item")
-          const error = status === "failed" ? "Persisted queue failure" : undefined
           await TaskQueue.setStatus({ id: queueItem.id, status, error })
           if (orphaned) {
             SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
               db.update(ScheduledTaskRunTable)
-                .set({ status: "failed", error: "orphaned: no outcome was recorded" })
+                .set({
+                  status: "failed",
+                  error: "orphaned: no outcome was recorded (backend likely restarted)",
+                })
                 .where(eq(ScheduledTaskRunTable.queue_id, queueItem.id))
                 .run()
             })
           }
 
+          const recordedError =
+            error === "orphaned: no outcome was recorded (backend likely restarted)"
+              ? `Execution failed: ${error}`
+              : error
           const sweepAt = now + 3_000
           await ScheduledTask.reconcileAllOrphanRuns(sweepAt)
-          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status, error }])
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status, error: recordedError }])
           const settled = await ScheduledTask.get(task.id)
           if (status === "completed") {
             expect(settled).toMatchObject({ status: "disabled", nextRunAt: undefined })
           } else {
-            expect(settled).toMatchObject({ status: "active", error })
+            expect(settled).toMatchObject({ status: "active", error: recordedError })
             expect(settled.nextRunAt).toBeGreaterThan(sweepAt)
           }
           await ScheduledTask.reconcileAllOrphanRuns(sweepAt + 10_000)
