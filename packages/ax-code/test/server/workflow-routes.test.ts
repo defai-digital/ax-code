@@ -1,12 +1,16 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
-import { WorkflowFixtureSpecs, WorkflowTemplate, parseWorkflowSpecV1 } from "../../src/workflow"
+import { SessionShard } from "../../src/session/shard"
+import { eq, sql } from "../../src/storage/db"
+import { WorkflowFixtureSpecs, WorkflowRun, WorkflowTemplate, parseWorkflowSpecV1 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 import { WorkflowPhaseID } from "../../src/workflow/state"
+import { WorkflowPhaseTable } from "../../src/workflow/workflow.sql"
 
 afterEach(async () => {
   await Instance.disposeAll()
+  vi.unstubAllEnvs()
 })
 
 describe("workflow routes", () => {
@@ -183,6 +187,32 @@ describe("workflow routes", () => {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
+  })
+
+  test.each([false, true])("dashboard skips unreadable details (sharded=%s)", async (sharded) => {
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spec = parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun)
+        const healthy = await WorkflowRun.create({ spec })
+        const damaged = await WorkflowRun.create({ spec })
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(WorkflowPhaseTable)
+            .set({ outputs: sql`${"["}` })
+            .where(eq(WorkflowPhaseTable.run_id, damaged.id))
+            .run()
+        })
+
+        const response = await Server.Default().request(
+          `/workflow-runs/dashboard?directory=${encodeURIComponent(tmp.path)}`,
+        )
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject([{ runID: healthy.id }])
+      },
+    })
   })
 
   test("rejects malformed workflow route ids at the HTTP boundary", async () => {

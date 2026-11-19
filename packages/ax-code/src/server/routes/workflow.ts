@@ -270,15 +270,12 @@ export const WorkflowRunRoutes = lazy(() =>
       validator("query", WorkflowRunDashboardQuery),
       async (c) => {
         const query = c.req.valid("query")
-        const runs = await WorkflowRun.list({
+        const details = await WorkflowRun.listDetails({
           parentSessionID: query.parentSessionID,
           status: query.status,
           limit: query.limit,
         })
-        const summaries = await Promise.all(
-          runs.map(async (run) => summarizeWorkflowRunDetail(await WorkflowRun.getDetail(run.id), query.now)),
-        )
-        return c.json(summaries)
+        return c.json(details.map((detail) => summarizeWorkflowRunDetail(detail, query.now)))
       },
     )
     .get(

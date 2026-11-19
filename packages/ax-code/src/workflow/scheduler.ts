@@ -336,8 +336,7 @@ export namespace WorkflowScheduler {
    * Terminate a run that never started, without the enablement gate `cancel`
    * asserts. A dispatch that failed BECAUSE the spec is runtime-disabled must
    * still be cleaned up: `cancel` would re-run the same assert, throw the same
-   * error, and leave the pre-created row `queued` forever — `recoverInterrupted`
-   * sweeps only `running` rows and there is no run retention.
+   * error, and leave the pre-created row `queued` indefinitely.
    */
   export async function cancelUnstarted(runID: WorkflowRunID) {
     return terminateRun(runID)

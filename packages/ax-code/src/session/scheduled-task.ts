@@ -1258,9 +1258,8 @@ export namespace ScheduledTask {
 
   // A dispatch row is backed by a live workflow while the workflow is
   // executing (running / blocked / paused). A gone or terminal workflow is a
-  // genuine orphan; a `queued` run stale past deadline+grace is abandoned too
-  // (the scheduler never started it — restart recovery only sweeps running
-  // runs), so it must not hold the task's overlap lock forever.
+  // genuine orphan. After deadline plus grace, a workflow still queued also
+  // releases the task's overlap lock.
   function isWorkflowRunLive(
     db: Database.TxOrDb,
     workflowRunID: string,

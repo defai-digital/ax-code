@@ -108,8 +108,8 @@ describe("ScheduledTask execution deadline", () => {
           const first = await ScheduledTask.runNow(task.id)
           expect(first.workflowRun).toBeDefined()
 
-          // Mark the workflow as executing: a queued-forever run is
-          // abandoned, not live (restart recovery only sweeps running runs).
+          // Mark the workflow as executing so it still holds overlap protection
+          // after the dispatch deadline.
           const [createdRun] = await WorkflowRun.list()
           await WorkflowRun.setStatus({ id: createdRun!.id, status: "running" })
 

@@ -462,13 +462,11 @@ const WorkflowRunDashboardCommand = cmd({
     await withWorkflowRuntime(async () => {
       const wf = await loadWorkflow()
       const { summarizeWorkflowRunDetail } = await import("../../workflow/projection")
-      const runs = await wf.WorkflowRun.list({
+      const details = await wf.WorkflowRun.listDetails({
         status: args.status as WorkflowRun.Status | undefined,
         limit: args.limit,
       })
-      const summaries = await Promise.all(
-        runs.map(async (run) => summarizeWorkflowRunDetail(await wf.WorkflowRun.getDetail(run.id))),
-      )
+      const summaries = details.map((detail) => summarizeWorkflowRunDetail(detail))
       if (args.json) {
         writeJson(summaries)
         return

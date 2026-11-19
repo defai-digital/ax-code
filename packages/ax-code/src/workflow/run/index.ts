@@ -1,9 +1,10 @@
 import { HTTPException } from "hono/http-exception"
+import { ZodError } from "zod"
 import { Instance } from "../../project/instance"
 import { SessionShard } from "../../session/shard"
 import { TaskQueue } from "../../session/task-queue"
 import type { SessionID } from "../../session/schema"
-import { type Database, NotFoundError, and, asc, desc, eq, inArray, notInArray } from "../../storage/db"
+import { type Database, NotFoundError, and, asc, desc, eq, notInArray, sql } from "../../storage/db"
 import { Log } from "../../util/log"
 import { defaultWorkflowArtifactRedaction } from "../artifact"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "../budget"
@@ -131,10 +132,18 @@ async function create(input: WorkflowRunState.CreateInput): Promise<WorkflowRunS
   return run
 }
 
+const readableRunJson = [
+  WorkflowRunTable.spec_snapshot,
+  WorkflowRunTable.input_values,
+  WorkflowRunTable.budget,
+  WorkflowRunTable.budget_usage,
+  WorkflowRunTable.verification_envelope_ids,
+].map((column) => sql`json_valid(${column})`)
+
 async function list(input: Partial<WorkflowRunState.ListInput> = {}): Promise<WorkflowRunState.Info[]> {
   const parsed = WorkflowRunState.ListInput.partial().parse(input)
   if (parsed.parentSessionID) await assertSessionCompatible(parsed.parentSessionID)
-  const conditions = [eq(WorkflowRunTable.project_id, Instance.project.id)]
+  const conditions = [eq(WorkflowRunTable.project_id, Instance.project.id), ...readableRunJson]
   if (parsed.status) conditions.push(eq(WorkflowRunTable.status, parsed.status))
   if (parsed.parentSessionID) conditions.push(eq(WorkflowRunTable.parent_session_id, parsed.parentSessionID))
   return SessionShard.storeForProject(Instance.project.id).use((db) => {
@@ -194,6 +203,23 @@ export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
     return { ...run, phases, children, artifacts, budgetLedger }
   })
   return WorkflowRunDetail.parse(detail)
+}
+
+async function listDetails(input: Partial<WorkflowRunState.ListInput> = {}): Promise<WorkflowRunDetail[]> {
+  const runs = await list(input)
+  const details = await Promise.all(
+    runs.map(async ({ id }) => {
+      try {
+        return await getDetail(id)
+      } catch (error) {
+        if (NotFoundError.isInstance(error)) return undefined
+        if (!(error instanceof SyntaxError || error instanceof ZodError)) throw error
+        log.warn("skipping unreadable workflow run details", { id })
+        return undefined
+      }
+    }),
+  )
+  return details.filter((detail) => detail !== undefined)
 }
 
 async function setStatus(
@@ -624,55 +650,13 @@ async function attachVerificationEnvelopeIDs(
   return changed.run
 }
 
-async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[]; recovered: WorkflowRunState.Info[] }> {
-  const now = Date.now()
-  const interruptedRunStatuses = ["running"] as const
-  const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-    const rows = db
-      .select()
-      .from(WorkflowRunTable)
-      .where(
-        and(
-          eq(WorkflowRunTable.project_id, Instance.project.id),
-          inArray(WorkflowRunTable.status, interruptedRunStatuses),
-        ),
-      )
-      .all()
-    const failed: WorkflowRunState.Info[] = []
-    const recovered: WorkflowRunState.Info[] = []
-    for (const row of rows) {
-      db.update(WorkflowChildTable)
-        .set({
-          status: "queued",
-          error: null,
-          time_started: null,
-          time_completed: null,
-          time_updated: now,
-        })
-        .where(and(eq(WorkflowChildTable.run_id, row.id), eq(WorkflowChildTable.status, "running")))
-        .run()
-      const updated = db
-        .update(WorkflowRunTable)
-        .set({
-          time_updated: now,
-        })
-        .where(eq(WorkflowRunTable.id, row.id))
-        .returning()
-        .get()
-      if (updated) recovered.push(fromRunRow(updated))
-    }
-    return { failed, recovered }
-  })
-  for (const run of changed.recovered) publishUpdated(run)
-  return changed
-}
-
 // --- Public API ---
 
 export const WorkflowRun = {
   ...WorkflowRunState,
   create,
   list,
+  listDetails,
   get,
   getDetail,
   setStatus,
@@ -688,7 +672,6 @@ export const WorkflowRun = {
   isBudgetExceeded,
   attachVerificationEnvelopeIDs,
   ensureFinalReportArtifact,
-  recoverInterrupted,
   isTerminalRunStatus,
   isTerminalPhaseStatus,
   isTerminalChildStatus,

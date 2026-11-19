@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from "vitest"
 import { Bus } from "../../src/bus"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { Database, eq } from "../../src/storage/db"
+import { SessionShard } from "../../src/session/shard"
+import { Database, eq, sql } from "../../src/storage/db"
 import {
   EmptyWorkflowBudgetUsage,
   WorkflowChildID,
@@ -238,6 +239,26 @@ describe("WorkflowRun state", () => {
         })
 
         expect((await WorkflowRun.list()).map((run) => run.id)).toEqual([valid.id])
+      },
+    })
+  })
+
+  test("workflow listing skips malformed JSON before applying the limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spec = parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun)
+        const healthy = await WorkflowRun.create({ spec })
+        const damaged = await WorkflowRun.create({ spec })
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(WorkflowRunTable)
+            .set({ spec_snapshot: sql`${"{"}`, time_created: healthy.time.created + 1 })
+            .where(eq(WorkflowRunTable.id, damaged.id))
+            .run()
+        })
+
+        expect((await WorkflowRun.list({ limit: 1 })).map((run) => run.id)).toEqual([healthy.id])
       },
     })
   })
@@ -650,79 +671,6 @@ describe("WorkflowRun state", () => {
         })
         expect(overridden.inputValues).toEqual({ "issue-limit": 3 })
         expect((await WorkflowRun.get(overridden.id)).inputValues).toEqual({ "issue-limit": 3 })
-      },
-    })
-  })
-
-  test("recovers interrupted active runs after backend restart", async () => {
-    await using tmp = await tmpdir({ git: true })
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const events: string[] = []
-        const unsubscribers = [
-          Bus.subscribe(WorkflowRun.Event.Updated, (event) => {
-            events.push(`${event.type}:${event.properties.run.id}:${event.properties.run.status}`)
-          }),
-        ]
-        const running = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
-        const queued = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
-        const blocked = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
-        const completed = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
-
-        try {
-          const runningDetail = await WorkflowRun.getDetail(running.id)
-          const runningPhase = runningDetail.phases[0]!
-          await WorkflowRun.setStatus({ id: running.id, status: "running" })
-          await WorkflowRun.setPhaseStatus({ id: runningPhase.id, status: "running" })
-          const child = await WorkflowRun.appendChild({ runID: running.id, phaseID: runningPhase.id, agent: "worker" })
-          await WorkflowRun.setChildStatus({ id: child.id, status: "running" })
-
-          const blockedDetail = await WorkflowRun.getDetail(blocked.id)
-          const blockedPhase = blockedDetail.phases[0]!
-          await WorkflowRun.setStatus({ id: blocked.id, status: "running" })
-          await WorkflowRun.setPhaseStatus({ id: blockedPhase.id, status: "running" })
-          const blockedChild = await WorkflowRun.appendChild({
-            runID: blocked.id,
-            phaseID: blockedPhase.id,
-            agent: "worker",
-          })
-          await WorkflowRun.setChildStatus({
-            id: blockedChild.id,
-            status: "blocked_permission",
-            error: "approval required",
-          })
-          await WorkflowRun.setPhaseStatus({ id: blockedPhase.id, status: "blocked", error: "approval required" })
-          await WorkflowRun.setStatus({ id: blocked.id, status: "blocked", error: "approval required" })
-
-          await WorkflowRun.setStatus({ id: completed.id, status: "completed" })
-
-          const recovered = await WorkflowRun.recoverInterrupted()
-
-          expect(recovered.failed).toEqual([])
-          expect(recovered.recovered.map((item) => item.id)).toEqual([running.id])
-          expect((await WorkflowRun.get(running.id)).status).toBe("running")
-          expect((await WorkflowRun.get(queued.id)).status).toBe("queued")
-          expect((await WorkflowRun.get(blocked.id)).status).toBe("blocked")
-          expect((await WorkflowRun.get(completed.id)).status).toBe("completed")
-
-          const recoveredDetail = await WorkflowRun.getDetail(running.id)
-          expect(recoveredDetail.error).toBeUndefined()
-          expect(recoveredDetail.phases[0]?.status).toBe("running")
-          expect(recoveredDetail.children[0]?.status).toBe("queued")
-
-          const blockedAfterRecovery = await WorkflowRun.getDetail(blocked.id)
-          expect(blockedAfterRecovery.error).toBe("approval required")
-          expect(blockedAfterRecovery.phases[0]?.status).toBe("blocked")
-          expect(blockedAfterRecovery.children[0]?.status).toBe("blocked_permission")
-          expect(blockedAfterRecovery.children[0]?.error).toBe("approval required")
-
-          await new Promise((resolve) => setTimeout(resolve, 0))
-          expect(events).toContain(`workflow.run.updated:${running.id}:running`)
-        } finally {
-          for (const unsubscribe of unsubscribers) unsubscribe()
-        }
       },
     })
   })

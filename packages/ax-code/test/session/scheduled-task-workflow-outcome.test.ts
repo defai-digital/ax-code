@@ -322,8 +322,7 @@ describe("ScheduledTask workflow outcome recording", () => {
           await expect(ScheduledTask.runNow(task.id)).rejects.toThrow()
 
           // The pre-created run never started. It must be cancelled rather than
-          // left `queued` forever — recoverInterrupted only sweeps `running` rows
-          // and there is no workflow-run retention.
+          // left `queued` indefinitely.
           const runs = await WorkflowRun.list()
           expect(runs).toHaveLength(1)
           expect(runs[0]!.status).toBe("cancelled")
@@ -353,8 +352,7 @@ describe("ScheduledTask workflow outcome recording", () => {
           // The start failed BECAUSE the spec is runtime-disabled, so cancel()
           // re-runs the same enablement gate and throws the same error. The
           // cleanup must not depend on it, or the pre-created run stays `queued`
-          // with no sweep to repair it (recoverInterrupted only looks at
-          // `running` rows).
+          // with no queue item to drive it.
           const runs = await WorkflowRun.list()
           expect(runs).toHaveLength(1)
           expect(runs[0]!.status).toBe("cancelled")
