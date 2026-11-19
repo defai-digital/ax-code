@@ -1384,6 +1384,51 @@ describe("TaskQueue", () => {
     })
   })
 
+  test.each([
+    { action: "reorder", sharded: false },
+    { action: "reorder", sharded: true },
+    { action: "send now", sharded: false },
+    { action: "send now", sharded: true },
+  ])("$action moves a healthy item past an unreadable sibling (sharded=$sharded)", async ({ action, sharded }) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const damaged = await TaskQueue.enqueue({ kind: "prompt", title: "Unreadable item" })
+        const first = await TaskQueue.enqueue({ kind: "prompt", title: "Healthy sibling" })
+        const moved = await TaskQueue.enqueue({ kind: "prompt", title: "Move to front" })
+        const rawPayload = sharded ? "null" : "{"
+        const store = SessionShard.storeForProject(Instance.project.id, { write: true })
+        store.use((db) => {
+          db.update(TaskQueueTable)
+            .set({ payload: sql`${rawPayload}` })
+            .where(eq(TaskQueueTable.id, damaged.id))
+            .run()
+        })
+
+        const updated =
+          action === "reorder"
+            ? await TaskQueue.reorder({ id: moved.id, position: 0 })
+            : await TaskQueue.sendNow(moved.id)
+        expect(updated).toMatchObject({ id: moved.id, status: "queued", position: 0 })
+        expect((await TaskQueue.list()).map(({ id, position }) => ({ id, position }))).toEqual([
+          { id: moved.id, position: 0 },
+          { id: first.id, position: 2 },
+        ])
+        expect(
+          store.use((db) =>
+            db
+              .select({ position: TaskQueueTable.position, payload: sql<string>`${TaskQueueTable.payload}` })
+              .from(TaskQueueTable)
+              .where(eq(TaskQueueTable.id, damaged.id))
+              .get(),
+          ),
+        ).toEqual({ position: 1, payload: rawPayload })
+      },
+    })
+  })
+
   test("list skips corrupt persisted task queue rows", async () => {
     await using tmp = await tmpdir({ git: true })
 

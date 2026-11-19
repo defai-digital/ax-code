@@ -509,14 +509,16 @@ export namespace TaskQueue {
     return SessionShard.storeForProject(projectID).use((db) => readQueueItems(db, projectID, conditions, parsed))
   }
 
+  const queueCreationOrder = [desc(TaskQueueTable.time_created), desc(TaskQueueTable.id)]
+  const queuePositionOrder = [asc(TaskQueueTable.position), ...queueCreationOrder]
+
   function readQueueItems(
     db: Database.TxOrDb,
     projectID: ProjectID,
     conditions: SQL[],
     options: Pick<ListInput, "newestCreatedFirst" | "limit"> = {},
   ): Info[] {
-    const order = [desc(TaskQueueTable.time_created), desc(TaskQueueTable.id)]
-    if (!options.newestCreatedFirst) order.unshift(asc(TaskQueueTable.position))
+    const order = options.newestCreatedFirst ? queueCreationOrder : queuePositionOrder
     let query = db
       .select()
       .from(TaskQueueTable)
@@ -2405,11 +2407,16 @@ export namespace TaskQueue {
     const current = await get(parsed.id)
     const now = Date.now()
     const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      // Every stored position participates in the order, even if its payload cannot be read.
       const rows = db
-        .select()
+        .select({
+          id: TaskQueueTable.id,
+          position: TaskQueueTable.position,
+          readableJson: sql<number | null>`${readableQueueJson}`,
+        })
         .from(TaskQueueTable)
         .where(eq(TaskQueueTable.project_id, current.projectID))
-        .orderBy(asc(TaskQueueTable.position), desc(TaskQueueTable.time_created), desc(TaskQueueTable.id))
+        .orderBy(...queuePositionOrder)
         .all()
       const currentIndex = rows.findIndex((row) => row.id === parsed.id)
       if (currentIndex < 0) throw new NotFoundError({ message: `Task queue item not found: ${parsed.id}` })
@@ -2421,14 +2428,20 @@ export namespace TaskQueue {
       const changedItems: Info[] = []
       for (let index = 0; index < rows.length; index++) {
         const currentRow = rows[index]!
-        if (currentRow.position === index && currentRow.id !== parsed.id) continue
-        const updated = db
+        const isTarget = currentRow.id === parsed.id
+        if (currentRow.position === index && !isTarget) continue
+        const update = db
           .update(TaskQueueTable)
           .set({ position: index, time_updated: now })
           .where(eq(TaskQueueTable.id, currentRow.id))
-          .returning()
-          .get()
-        if (updated) changedItems.push(fromRow(updated))
+        if (!isTarget && !currentRow.readableJson) {
+          update.run()
+          continue
+        }
+        const updated = update.returning().get()
+        if (!updated) continue
+        const item = isTarget ? fromRow(updated) : readableQueueItem(updated)
+        if (item) changedItems.push(item)
       }
       return changedItems
     })
@@ -2445,38 +2458,19 @@ export namespace TaskQueue {
   export const SEND_NOW_STATUSES: readonly Status[] = ["queued", "waiting_for_idle", "paused"]
 
   export async function sendNow(id: TaskQueueID): Promise<Info> {
-    const current = await get(id)
-    assertActionStatus(current, "send now", SEND_NOW_STATUSES)
+    assertActionStatus(await get(id), "send now", SEND_NOW_STATUSES)
     const now = Date.now()
-    let raced: Status | undefined
     const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-      // Re-check the source status inside the same transaction as the write
-      // below (ADR-106 D5): a claim landing in the gap between the get() above
-      // and this transaction must not let sendNow force a running item back to
-      // "queued". Bail out before touching sibling positions so a lost race
-      // leaves no shifted rows to roll back.
-      const freshRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
-      if (!freshRow) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
-      if (!SEND_NOW_STATUSES.includes(freshRow.status as Status)) {
-        raced = freshRow.status as Status
-        return { item: fromRow(freshRow), shifted: [] as Info[] }
-      }
-      const shifted = db
-        .update(TaskQueueTable)
+      // Recheck before mutating siblings so a concurrent claim keeps its position.
+      const fresh = findProjectItem(db, id)
+      if (!fresh) throw queueItemNotFound(id)
+      assertActionStatus(fresh, "send now", SEND_NOW_STATUSES)
+      // Shift the active queue and leave terminal history out of the update.
+      const siblings = [ne(TaskQueueTable.id, id), inArray(TaskQueueTable.status, SEND_NOW_STATUSES)]
+      db.update(TaskQueueTable)
         .set({ position: sql`${TaskQueueTable.position} + 1`, time_updated: now })
-        .where(
-          and(
-            eq(TaskQueueTable.project_id, current.projectID),
-            sql`${TaskQueueTable.id} != ${id}`,
-            // Only the active queue participates in ordering. Terminal history
-            // rows would otherwise be renumbered and re-published (an SSE event
-            // storm on large projects) without affecting the schedule.
-            inArray(TaskQueueTable.status, SEND_NOW_STATUSES),
-          ),
-        )
-        .returning()
-        .all()
-        .map(fromRow)
+        .where(and(eq(TaskQueueTable.project_id, fresh.projectID), ...siblings))
+        .run()
       const row = db
         .update(TaskQueueTable)
         .set({ status: "queued", position: 0, time_updated: now })
@@ -2484,13 +2478,8 @@ export namespace TaskQueue {
         .returning()
         .get()
       if (!row) throw queueItemNotFound(id)
-      return { item: fromRow(row), shifted }
+      return { item: fromRow(row), shifted: readQueueItems(db, fresh.projectID, siblings) }
     })
-    if (raced) {
-      throw new HTTPException(409, {
-        message: `Cannot send now task queue item ${id} while it is ${raced}.`,
-      })
-    }
     assertProjectItem(changed.item)
     for (const item of changed.shifted) publishUpdated(item)
     publishUpdated(changed.item)
