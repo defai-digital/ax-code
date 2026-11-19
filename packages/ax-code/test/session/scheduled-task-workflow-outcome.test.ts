@@ -65,24 +65,53 @@ describe("ScheduledTask workflow outcome recording", () => {
     })
   }
 
+  test("a workflow outcome without a run ID cannot settle a prompt occurrence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const task = await ScheduledTask.create({
+          title: "Prompt occurrence",
+          prompt: "Run once.",
+          schedule: { type: "once", runAt: Date.now() + 60_000 },
+        })
+        const { queueItem, task: claimed } = await ScheduledTask.runNow(task.id)
+        if (!queueItem) throw new Error("Expected a scheduled prompt queue item")
+
+        // Untyped callers must satisfy the same identity check.
+        const report = ScheduledTask.recordWorkflowOutcome
+        await expect(Reflect.apply(report, undefined, [task.id, "completed", undefined])).rejects.toMatchObject({
+          name: "ZodError",
+        })
+
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+          { status: "running", queueID: queueItem.id },
+        ])
+        expect(await ScheduledTask.get(task.id)).toEqual(claimed)
+      },
+    })
+  })
+
   test("a repeated outcome report does not push the failure retry later", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { createRun, start } = await mockWorkflowDispatch("wfr_outcome_drift")
+        const workflowRunID = WorkflowRunID.ascending()
+        const { createRun, start } = await mockWorkflowDispatch(workflowRunID)
         try {
           const task = await createWorkflowTask()
           await ScheduledTask.runNow(task.id)
 
           const error = new Error("orphaned: workflow lease expired")
-          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", error)
+          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", error, workflowRunID)
           const first = await ScheduledTask.get(task.id)
           expect(first.error).toBe(error.message)
           expect(first.nextRunAt).toBeDefined()
 
           await new Promise((resolve) => setTimeout(resolve, 20))
-          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", error)
+          await ScheduledTask.recordWorkflowOutcome(task.id, "failed", error, workflowRunID)
           const second = await ScheduledTask.get(task.id)
           expect(second.nextRunAt).toBe(first.nextRunAt)
         } finally {
@@ -98,7 +127,8 @@ describe("ScheduledTask workflow outcome recording", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { createRun, start } = await mockWorkflowDispatch("wfr_outcome_orphan")
+        const workflowRunID = WorkflowRunID.ascending()
+        const { createRun, start } = await mockWorkflowDispatch(workflowRunID)
         try {
           const task = await createWorkflowTask()
           await ScheduledTask.runNow(task.id)
@@ -121,18 +151,19 @@ describe("ScheduledTask workflow outcome recording", () => {
           })
 
           const error = new Error("workflow really failed")
-          const adopted = await ScheduledTask.recordWorkflowOutcome(task.id, status, error, "wfr_outcome_orphan")
+          const adopted = await ScheduledTask.recordWorkflowOutcome(task.id, status, error, workflowRunID)
           const message = status === "failed" ? error.message : undefined
           expect(adopted.error).toBe(message)
           const run = (await ScheduledTask.listRuns({ taskID: task.id })).find(
-            (candidate) => candidate.workflowRunID === "wfr_outcome_orphan",
+            (candidate) => candidate.workflowRunID === workflowRunID,
           )
           expect(run?.status).toBe(status)
           expect(run?.error).toBe(message)
+          expect(run?.timeCompleted).toBe(now)
           expect(adopted.nextRunAt).toBeDefined()
 
           await new Promise((resolve) => setTimeout(resolve, 20))
-          await ScheduledTask.recordWorkflowOutcome(task.id, status, error, "wfr_outcome_orphan")
+          await ScheduledTask.recordWorkflowOutcome(task.id, status, error, workflowRunID)
           const repeat = await ScheduledTask.get(task.id)
           expect(repeat.nextRunAt).toBe(adopted.nextRunAt)
         } finally {
@@ -174,7 +205,12 @@ describe("ScheduledTask workflow outcome recording", () => {
           }
         })
 
-        await ScheduledTask.recordWorkflowOutcome(task.id, "failed", new Error("old workflow failed"), "wfr_old")
+        await ScheduledTask.recordWorkflowOutcome(
+          task.id,
+          "failed",
+          new Error("old workflow failed"),
+          WorkflowRunID.zod.parse("wfr_old"),
+        )
         const runs = await ScheduledTask.listRuns({ taskID: task.id })
         expect(runs.find((run) => run.workflowRunID === "wfr_old")?.status).toBe("failed")
         // The new occurrence's workflow is still executing; the old outcome
@@ -225,7 +261,12 @@ describe("ScheduledTask workflow outcome recording", () => {
               .run()
           })
           const before = await ScheduledTask.get(task.id)
-          await ScheduledTask.recordWorkflowOutcome(task.id, status, new Error("old workflow failed"), "wfr_old")
+          await ScheduledTask.recordWorkflowOutcome(
+            task.id,
+            status,
+            new Error("old workflow failed"),
+            WorkflowRunID.zod.parse("wfr_old"),
+          )
           const after = await ScheduledTask.get(task.id)
           expect(after.error).toBe(before.error)
           expect(after.status).toBe(before.status)
@@ -249,7 +290,12 @@ describe("ScheduledTask workflow outcome recording", () => {
         const task = await createWorkflowTask()
         await ScheduledTask.runNow(task.id)
         seedPriorFailures(task.id, 4)
-        await ScheduledTask.recordWorkflowOutcome(task.id, status, new Error("current workflow failed"), "wfr_current")
+        await ScheduledTask.recordWorkflowOutcome(
+          task.id,
+          status,
+          new Error("current workflow failed"),
+          WorkflowRunID.zod.parse("wfr_current"),
+        )
         const current = await ScheduledTask.get(task.id)
         expect(current.status).toBe(status === "failed" ? "paused" : "active")
         expect(current.error).toBe(
@@ -381,7 +427,7 @@ describe("ScheduledTask workflow outcome recording", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const workflowRunID = "wfr_rescheduled"
+        const workflowRunID = WorkflowRunID.ascending()
         await mockWorkflowDispatch(workflowRunID)
         const task = await ScheduledTask.create({
           title: "Rescheduled workflow",

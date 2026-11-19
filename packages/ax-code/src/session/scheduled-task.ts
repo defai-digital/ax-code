@@ -32,7 +32,7 @@ import { ScheduledTaskTable, ScheduledTaskRunTable, TaskQueueTable } from "./ses
 import { SessionShard } from "./shard"
 import { TaskQueue } from "./task-queue"
 import { ACTIVE_QUEUE_EXECUTION_STATUSES } from "./workflow-queue-admission"
-import { WorkflowRun as WorkflowRunState, type WorkflowRunDetail, type WorkflowRunID } from "@/workflow/state"
+import { WorkflowRun as WorkflowRunState, WorkflowRunID, type WorkflowRunDetail } from "@/workflow/state"
 import { WorkflowRunTable } from "@/workflow/workflow.sql"
 import * as Timing from "./scheduled-task-schedule"
 
@@ -1423,7 +1423,7 @@ export namespace ScheduledTask {
     )
   }
 
-  type OutcomeSource = { queueID: TaskQueueID } | { workflowRunID?: string }
+  type OutcomeSource = { queueID: TaskQueueID } | { workflowRunID: WorkflowRunID }
   type OutcomeStatus = "completed" | "failed" | "timeout"
   type Outcome = { status: OutcomeStatus; error?: string }
   const terminalDispatchStatuses = ["completed", "failed", "cancelled"] as const
@@ -1467,28 +1467,45 @@ export namespace ScheduledTask {
     now: number,
   ): RecordedOutcome | undefined {
     const projectID = Instance.project.id
-    let run: RunInfo | undefined
-    if ("queueID" in source) {
-      const row = db
-        .update(ScheduledTaskRunTable)
-        .set({ status, error: error ?? null, time_completed: now, time_updated: now })
-        .where(
-          and(
-            eq(ScheduledTaskRunTable.task_id, id),
-            eq(ScheduledTaskRunTable.project_id, projectID),
-            eq(ScheduledTaskRunTable.queue_id, source.queueID),
-            unrecordedOutcome(),
-            status === "completed" ? isNull(ScheduledTaskRunTable.workflow_run_id) : carrierCanRecordFailure(db),
-          ),
-        )
-        .returning()
-        .get()
-      if (row) run = runFromRow(row)
-    } else {
-      run = claimWorkflowOutcomeRun(db, id, status, error, source.workflowRunID, now)
-    }
+    const fromQueue = "queueID" in source
+    const occurrence = db
+      .select({ id: ScheduledTaskRunTable.id })
+      .from(ScheduledTaskRunTable)
+      .where(
+        and(
+          eq(ScheduledTaskRunTable.task_id, id),
+          eq(ScheduledTaskRunTable.project_id, projectID),
+          fromQueue
+            ? eq(ScheduledTaskRunTable.queue_id, source.queueID)
+            : eq(ScheduledTaskRunTable.workflow_run_id, source.workflowRunID),
+        ),
+      )
+      .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
+      .limit(1)
+    const runRow = db
+      .update(ScheduledTaskRunTable)
+      .set({
+        status,
+        error: error ?? null,
+        // Preserve the recorded closing time when a workflow confirms an orphaned run.
+        time_completed: fromQueue
+          ? now
+          : sql`case when ${ScheduledTaskRunTable.status} = 'running' then ${now} else ${ScheduledTaskRunTable.time_completed} end`,
+        time_updated: now,
+      })
+      .where(
+        and(
+          eq(ScheduledTaskRunTable.id, occurrence),
+          unrecordedOutcome(),
+          fromQueue && status === "completed" ? isNull(ScheduledTaskRunTable.workflow_run_id) : undefined,
+          fromQueue && status !== "completed" ? carrierCanRecordFailure(db) : undefined,
+        ),
+      )
+      .returning()
+      .get()
     // Only the callback that settles the run may update the schedule.
-    if (!run) return undefined
+    if (!runRow) return undefined
+    const run = runFromRow(runRow)
 
     // A callback can close its own history. Only the occurrence claimed for
     // the current timing may consume that schedule or apply its retry policy.
@@ -1497,8 +1514,8 @@ export namespace ScheduledTask {
       eq(ScheduledTaskTable.project_id, projectID),
       eq(ScheduledTaskTable.last_run_at, run.time.created),
     ]
-    if ("queueID" in source) conditions.push(eq(ScheduledTaskTable.last_queue_id, source.queueID))
-    else if (source.workflowRunID) conditions.push(eq(ScheduledTaskTable.last_workflow_run_id, source.workflowRunID))
+    if (fromQueue) conditions.push(eq(ScheduledTaskTable.last_queue_id, source.queueID))
+    else conditions.push(eq(ScheduledTaskTable.last_workflow_run_id, source.workflowRunID))
 
     const current = db
       .select({ schedule: ScheduledTaskTable.schedule, status: ScheduledTaskTable.status })
@@ -1615,62 +1632,13 @@ export namespace ScheduledTask {
     if (task) publishUpdated(task)
   }
 
-  // Claim the terminal transition for a workflow outcome. Returns the run row
-  // only when this call is the first to record the current run's outcome:
-  // either the open `running` row (the run inserted at claim/dispatch), or the
-  // row the orphan sweep finalized. reconcileOrphanRuns deliberately does not
-  // apply the failure policy, so a real outcome arriving after it still owes
-  // the task summary and retry policy — but an outcome already recorded here
-  // must leave the row untouched, because the workflow bridge re-reports a
-  // terminal run on every later sibling sync and each repeat would push
-  // next_run_at further out under the failure policy.
-  function claimWorkflowOutcomeRun(
-    db: Database.TxOrDb,
-    taskID: ScheduledTaskID,
-    status: OutcomeStatus,
-    error: string | undefined,
-    workflowRunID: string | undefined,
-    now: number,
-  ): RunInfo | undefined {
-    // Bind the claim to the reporting workflow when known. An older
-    // workflow must not terminate the row of a newer occurrence.
-    const conditions = [
-      eq(ScheduledTaskRunTable.task_id, taskID),
-      eq(ScheduledTaskRunTable.project_id, Instance.project.id),
-    ]
-    if (workflowRunID) conditions.push(eq(ScheduledTaskRunTable.workflow_run_id, workflowRunID))
-    const open = db
-      .update(ScheduledTaskRunTable)
-      .set({ status, error: error ?? null, time_completed: now, time_updated: now })
-      .where(and(...conditions, eq(ScheduledTaskRunTable.status, "running")))
-      .returning()
-      .get()
-    if (open) return runFromRow(open)
-
-    const latest = db
-      .select({ id: ScheduledTaskRunTable.id })
-      .from(ScheduledTaskRunTable)
-      .where(and(...conditions))
-      .orderBy(desc(ScheduledTaskRunTable.time_created), desc(ScheduledTaskRunTable.id))
-      .limit(1)
-      .get()
-    if (!latest) return undefined
-    const adopted = db
-      .update(ScheduledTaskRunTable)
-      .set({ status, error: error ?? null, time_updated: now })
-      .where(and(eq(ScheduledTaskRunTable.id, latest.id), orphanedOutcome()))
-      .returning()
-      .get()
-    return adopted ? runFromRow(adopted) : undefined
-  }
-
   export async function recordWorkflowOutcome(
     id: ScheduledTaskID,
     status: TerminalDispatchStatus,
-    error?: unknown,
-    workflowRunID?: string,
+    error: unknown,
+    workflowRunID: WorkflowRunID,
   ): Promise<Info> {
-    return recordOutcome(id, { workflowRunID }, workflowOutcome(status, error))
+    return recordOutcome(id, { workflowRunID: WorkflowRunID.zod.parse(workflowRunID) }, workflowOutcome(status, error))
   }
 
   function workflowOutcome(status: TerminalDispatchStatus, error?: unknown): Outcome {
