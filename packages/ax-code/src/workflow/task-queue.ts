@@ -74,43 +74,41 @@ export namespace WorkflowTaskQueue {
     // phase and run together. Per-child outcomes must not advance the run.
     if (options.childOnly) return detail
 
-    // The child write above is the only mutation so far. A no-op sync (status
-    // unchanged) can keep reusing `detail` instead of rebuilding it with 5
-    // more SELECTs + a full zod parse.
-    const refreshed = childChanged ? await WorkflowRun.getDetail(payload.workflow.runID) : detail
-    const phase = refreshed.phases.find((candidate) => candidate.id === payload.workflow.phaseID)
-    const phaseChildren = refreshed.children.filter((candidate) => candidate.phaseID === payload.workflow.phaseID)
-    const phaseStatus = aggregatePhaseStatus(phaseChildren, phase ? mergeStrategyForPhase(refreshed, phase) : "all")
+    let refreshed = childChanged ? await WorkflowRun.getDetail(payload.workflow.runID) : detail
+    const { phaseID } = payload.workflow
+    let phase = refreshed.phases.find((candidate) => candidate.id === phaseID)
+    let phaseChildren = refreshed.children.filter((candidate) => candidate.phaseID === phaseID)
+    const mergeStrategy = phase ? mergeStrategyForPhase(refreshed, phase) : "all"
+    let phaseStatus = aggregatePhaseStatus(phaseChildren, mergeStrategy)
     if (phase && phaseStatus === "completed") {
       await cancelSupersededPhaseChildren(phaseChildren, { queueItem: item })
+      // Stops can change the child states used for the merge, including via
+      // recursive queue notifications. Project the result from one snapshot.
+      refreshed = await WorkflowRun.getDetail(payload.workflow.runID)
+      phase = refreshed.phases.find((candidate) => candidate.id === phaseID)
+      phaseChildren = refreshed.children.filter((candidate) => candidate.phaseID === phaseID)
+      phaseStatus = aggregatePhaseStatus(phaseChildren, mergeStrategy)
     }
 
-    const afterMerge = phaseStatus === "completed" ? await WorkflowRun.getDetail(payload.workflow.runID) : refreshed
-    const latestPhase = afterMerge.phases.find((candidate) => candidate.id === payload.workflow.phaseID)
     // A phase the budget enforcement failed is a deliberate stop. A later
-    // sibling completion must not recompute it back to completed (first-success
-    // / majority), which would flip the run back to running and start the next
-    // phase — spending tokens the budget already refused.
+    // sibling completion must not revive it and start another phase.
     const phaseBudgetStopped =
-      latestPhase?.status === "failed" &&
+      phase?.status === "failed" &&
       phaseStatus !== "failed" &&
-      WorkflowRun.isBudgetExceeded(payload.workflow.runID, latestPhase.id)
+      WorkflowRun.isBudgetExceeded(payload.workflow.runID, phase.id)
     const effectivePhaseStatus = phaseBudgetStopped ? "failed" : phaseStatus
-    const phaseChanged = latestPhase !== undefined && latestPhase.status !== effectivePhaseStatus
-    if (phaseChanged) {
+    let latest = refreshed
+    if (phase && phase.status !== effectivePhaseStatus) {
       await WorkflowRun.setPhaseStatus(
         {
-          id: latestPhase.id,
+          id: phase.id,
           status: effectivePhaseStatus,
           error: effectivePhaseStatus === "failed" || effectivePhaseStatus === "blocked" ? item.error : undefined,
         },
-        statusOptions,
+        { ...statusOptions, ifCurrent: { status: phase.status, children: phaseChildren } },
       )
+      latest = await WorkflowRun.getDetail(payload.workflow.runID)
     }
-
-    // The phase write (when it happened) is the only mutation since `afterMerge`
-    // was read; a no-op sync keeps using `afterMerge` instead of rebuilding it.
-    const latest = phaseChanged ? await WorkflowRun.getDetail(payload.workflow.runID) : afterMerge
     // A cancel can land during the awaits above; it stays authoritative, as at
     // the top of this sync.
     if (latest.status === "cancelled") return latest
@@ -129,7 +127,7 @@ export namespace WorkflowTaskQueue {
               status: effectiveRunStatus,
               error: effectiveRunStatus === "failed" || effectiveRunStatus === "blocked" ? item.error : undefined,
             },
-            statusOptions,
+            { ...statusOptions, ifCurrent: { status: latest.status, phases: latest.phases } },
           )
     if (!TaskQueue.isCurrentWorkflowStatus(item)) return run
     if (run.status === "failed" && WorkflowRun.isBudgetExceeded(run.id)) {
@@ -138,7 +136,10 @@ export namespace WorkflowTaskQueue {
     if (run.status === "completed") await WorkflowRun.ensureFinalReportArtifact(latest.id)
     await reportScheduledOutcome(run)
 
-    if (effectivePhaseStatus === "completed" && run.status === "running") {
+    if (
+      run.status === "running" &&
+      latest.phases.some((phase) => phase.id === phaseID && phase.status === "completed")
+    ) {
       return WorkflowScheduler.start(latest.id, payload.workflow.startOptions)
     }
 

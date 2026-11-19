@@ -142,6 +142,89 @@ describe("workflow queue terminal status", () => {
     },
   )
 
+  test.each(["phase", "run"] as const)(
+    "a current queue notification cannot apply a stale %s aggregate",
+    async (target) => {
+      vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              schemaVersion: 1,
+              id: "overlapping-sibling-status",
+              name: "Overlapping sibling status",
+              description: "A successful sibling can finish a phase while an older aggregate is pending.",
+              phases: [
+                {
+                  id: "work",
+                  name: "Work",
+                  kind: "fanout",
+                  inputs: ["first", "second"],
+                  maxParallel: 2,
+                  mergeStrategy: "first-success",
+                },
+              ],
+            }),
+          })
+          await WorkflowScheduler.start(run.id, { autoStartChildren: false })
+          const [winner, sibling] = await TaskQueue.list()
+          const firstWaiting = Promise.withResolvers<void>()
+          const secondWaiting = Promise.withResolvers<void>()
+          const release = Promise.withResolvers<void>()
+          const waitForWinner = async (item: TaskQueue.Info | undefined) => {
+            if (item?.id === winner.id) firstWaiting.resolve()
+            else secondWaiting.resolve()
+            await release.promise
+          }
+          if (target === "phase") {
+            const setPhaseStatus = WorkflowRun.setPhaseStatus
+            vi.spyOn(WorkflowRun, "setPhaseStatus").mockImplementation(async (input, options) => {
+              if (input.status === "paused") await waitForWinner(options?.queueItem)
+              return setPhaseStatus(input, options)
+            })
+          } else {
+            const setStatus = WorkflowRun.setStatus
+            vi.spyOn(WorkflowRun, "setStatus").mockImplementation(async (input, options) => {
+              if (input.status === "paused") await waitForWinner(options?.queueItem)
+              return setStatus(input, options)
+            })
+          }
+
+          const paused = TaskQueue.setStatus({ id: winner.id, status: "paused" })
+          let failed: Promise<TaskQueue.Info> | undefined
+          try {
+            await Promise.race([
+              firstWaiting.promise,
+              paused.then(() => {
+                throw new Error("Expected the paused aggregate to wait")
+              }),
+            ])
+            failed = TaskQueue.setStatus({ id: sibling.id, status: "failed", error: "Sibling failed" })
+            await Promise.race([
+              secondWaiting.promise,
+              failed.then(() => {
+                throw new Error("Expected the sibling aggregate to wait")
+              }),
+            ])
+            await TaskQueue.setStatus({ id: winner.id, status: "completed" })
+            expect((await WorkflowRun.get(run.id)).status).toBe("completed")
+          } finally {
+            release.resolve()
+            await Promise.all([paused, failed])
+          }
+
+          expect((await TaskQueue.get(sibling.id)).status).toBe("failed")
+          expect(await WorkflowRun.getDetail(run.id)).toMatchObject({
+            status: "completed",
+            phases: [{ status: "completed" }],
+          })
+        },
+      })
+    },
+  )
+
   test("a cancelled run stays cancelled when a later queue sync arrives", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

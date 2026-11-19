@@ -9,7 +9,7 @@ import {
 import { Session } from "../../session"
 import { SessionShard } from "../../session/shard"
 import { SessionVerifications } from "../../session/verifications"
-import { NotFoundError, eq } from "../../storage/db"
+import { NotFoundError, and, asc, eq } from "../../storage/db"
 import type { Database } from "../../storage/db"
 import { Log } from "../../util/log"
 import { uniqueItems } from "../../util/string-list"
@@ -146,7 +146,46 @@ export function fromBudgetLedgerRow(row: typeof WorkflowBudgetLedgerTable.$infer
   })
 }
 
-// --- Detail row parsing ---
+// --- Detail rows ---
+
+export const phaseOrder = [asc(WorkflowPhaseTable.position), asc(WorkflowPhaseTable.id)] as const
+export const childOrder = [asc(WorkflowChildTable.time_created), asc(WorkflowChildTable.id)] as const
+
+export type StatusRows = readonly { id: string; status: string }[]
+
+function sameStatuses(current: StatusRows, expected: StatusRows): boolean {
+  return (
+    current.length === expected.length &&
+    current.every((row, index) => {
+      const previous = expected[index]
+      return row.id === previous.id && row.status === previous.status
+    })
+  )
+}
+
+export function matchesPhaseStatuses(db: Database.TxOrDb, runID: WorkflowRunID, expected: StatusRows): boolean {
+  const phases = db
+    .select({ id: WorkflowPhaseTable.id, status: WorkflowPhaseTable.status })
+    .from(WorkflowPhaseTable)
+    .where(eq(WorkflowPhaseTable.run_id, runID))
+    .orderBy(...phaseOrder)
+    .all()
+  return sameStatuses(phases, expected)
+}
+
+export function matchesChildStatuses(
+  db: Database.TxOrDb,
+  phase: Pick<WorkflowPhaseRecord, "id" | "runID">,
+  expected: StatusRows,
+): boolean {
+  const children = db
+    .select({ id: WorkflowChildTable.id, status: WorkflowChildTable.status })
+    .from(WorkflowChildTable)
+    .where(and(eq(WorkflowChildTable.run_id, phase.runID), eq(WorkflowChildTable.phase_id, phase.id)))
+    .orderBy(...childOrder)
+    .all()
+  return sameStatuses(children, expected)
+}
 
 export function parseWorkflowDetailRows<TRow extends { id: string }, TInfo>(
   rows: TRow[],

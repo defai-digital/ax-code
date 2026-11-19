@@ -44,7 +44,12 @@ import {
   isTerminalChildStatus,
   isTerminalPhaseStatus,
   isTerminalRunStatus,
+  matchesChildStatuses,
+  matchesPhaseStatuses,
   parseWorkflowDetailRows,
+  phaseOrder,
+  childOrder,
+  type StatusRows,
   publishArtifactWritten,
   publishChildCreated,
   publishChildUpdated,
@@ -204,14 +209,14 @@ function readDetail(
     .select()
     .from(WorkflowPhaseTable)
     .where(and(eq(WorkflowPhaseTable.run_id, run.id), skipMalformedJson ? readablePhaseJson : undefined))
-    .orderBy(asc(WorkflowPhaseTable.position), asc(WorkflowPhaseTable.id))
+    .orderBy(...phaseOrder)
     .all()
   const phases = parseWorkflowDetailRows(phaseRows, fromPhaseRow, "phase", skipUnreadableRows)
   const childRows = db
     .select()
     .from(WorkflowChildTable)
     .where(and(eq(WorkflowChildTable.run_id, run.id), skipMalformedJson ? readableChildJson : undefined))
-    .orderBy(asc(WorkflowChildTable.time_created), asc(WorkflowChildTable.id))
+    .orderBy(...childOrder)
     .all()
   const children = parseWorkflowDetailRows(childRows, fromChildRow, "child", skipUnreadableRows)
   const artifactRows = db
@@ -279,7 +284,12 @@ type QueueStatusOptions = { queueItem?: TaskQueue.Info }
 
 async function setStatus(
   input: WorkflowRunState.SetStatusInput,
-  options: QueueStatusOptions & { reopenCancelled?: boolean; signal?: AbortSignal; preserveTerminal?: boolean } = {},
+  options: QueueStatusOptions & {
+    ifCurrent?: { status: WorkflowRunState.Status; phases: StatusRows }
+    reopenCancelled?: boolean
+    signal?: AbortSignal
+    preserveTerminal?: boolean
+  } = {},
 ): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.SetStatusInput.parse(input)
   const completionGate =
@@ -294,6 +304,10 @@ async function setStatus(
       (parsed.status === "cancelled" && TaskQueue.hasLiveWorkflowChildren(db, parsed.id))
     )
       return { run: fromRunRow(current) }
+    const expected = options.ifCurrent
+    if (expected && (current.status !== expected.status || !matchesPhaseStatuses(db, parsed.id, expected.phases))) {
+      return { run: fromRunRow(current) }
+    }
     const now = Date.now()
     const status = completionGate.ok ? parsed.status : "blocked"
     const updates: Partial<typeof WorkflowRunTable.$inferInsert> = {
@@ -361,12 +375,16 @@ function finishCancellation(runID: WorkflowRunID): WorkflowRunDetail {
 
 async function setPhaseStatus(
   input: WorkflowRunState.SetPhaseStatusInput,
-  options: QueueStatusOptions = {},
+  options: QueueStatusOptions & { ifCurrent?: { status: WorkflowRunState.PhaseStatus; children: StatusRows } } = {},
 ): Promise<WorkflowPhaseRecord> {
   const parsed = WorkflowRunState.SetPhaseStatusInput.parse(input)
   const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const { phase: current, run } = readPhase(db, parsed.id)
     if (run.status === "cancelled" || (options.queueItem && !TaskQueue.matchesWorkflowStatus(db, options.queueItem))) {
+      return { phase: current }
+    }
+    const expected = options.ifCurrent
+    if (expected && (current.status !== expected.status || !matchesChildStatuses(db, current, expected.children))) {
       return { phase: current }
     }
     const now = Date.now()
