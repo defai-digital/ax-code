@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
-import { Database, eq } from "../../src/storage/db"
+import { Database, eq, sql } from "../../src/storage/db"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { ScheduledTaskID, TaskQueueID } from "../../src/session/schema"
 import { ScheduledTaskTable } from "../../src/session/session.sql"
+import { SessionShard } from "../../src/session/shard"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { tmpdir } from "../fixture/fixture"
@@ -416,7 +417,7 @@ describe("scheduled task routes", () => {
           schedule: { type: "once", runAt: Date.now() + 86_400_000 },
         })
         const now = Date.now()
-        Database.use((db) => {
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
           db.insert(ScheduledTaskTable)
             .values({
               id: ScheduledTaskID.make("sch_corrupt_schedule"),
@@ -434,6 +435,39 @@ describe("scheduled task routes", () => {
         })
 
         expect((await ScheduledTask.list()).map((task) => task.id)).toEqual([valid.id])
+      },
+    })
+  })
+
+  test("list skips malformed schedule JSON before applying the limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runAt = Date.now() + 86_400_000
+        const valid = await ScheduledTask.create({
+          title: "Valid review",
+          prompt: "Review the current branch.",
+          schedule: { type: "once", runAt },
+        })
+        for (const column of ["schedule", "model", "workflow_start_options"]) {
+          const damaged = await ScheduledTask.create({
+            title: `Damaged ${column}`,
+            prompt: "This row should be skipped.",
+            schedule: { type: "once", runAt: runAt - 60_000 },
+          })
+          SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+            db.run(sql`update ${ScheduledTaskTable} set ${sql.identifier(column)} = ${"{"}
+              where ${ScheduledTaskTable.id} = ${damaged.id}`)
+          })
+        }
+
+        const response = await Server.Default().request(
+          `/scheduled-task?directory=${encodeURIComponent(tmp.path)}&limit=1`,
+        )
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject([{ id: valid.id }])
       },
     })
   })

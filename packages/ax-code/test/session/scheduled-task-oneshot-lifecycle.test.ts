@@ -5,7 +5,7 @@ import { NotificationEvent } from "../../src/notification/events"
 import { ScheduledTask } from "../../src/session/scheduled-task"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import type { ScheduledTaskID } from "../../src/session/schema"
-import { ScheduledTaskRunTable, ScheduledTaskTable } from "../../src/session/session.sql"
+import { ScheduledTaskRunTable, ScheduledTaskTable, TaskQueueTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
 import { TaskQueue } from "../../src/session/task-queue"
 import { NotFoundError, eq, sql } from "../../src/storage/db"
@@ -550,6 +550,44 @@ describe("ScheduledTask one-shot lifecycle", () => {
     })
   })
 
+  test("one-shot retention skips malformed schedule JSON and prunes healthy rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const input = {
+          prompt: "Only on time.",
+          schedule: { type: "once", runAt: now + 1_000 },
+          catchUpPolicy: "skip",
+        } as const
+        const damaged = await ScheduledTask.create({ ...input, title: "Damaged reminder" })
+        const valid = await ScheduledTask.create({ ...input, title: "Valid reminder" })
+        await ScheduledTask.runDue(now + 10 * 60_000)
+
+        const store = SessionShard.storeForProject(Instance.project.id, { write: true })
+        store.use((db) => {
+          db.update(ScheduledTaskTable)
+            .set({ schedule: sql`${"{"}` })
+            .where(eq(ScheduledTaskTable.id, damaged.id))
+            .run()
+        })
+
+        expect(ScheduledTask.pruneFinishedOneShots(now + 91 * 24 * 60 * 60 * 1_000)).toBe(1)
+        await expect(ScheduledTask.get(valid.id)).rejects.toThrow(NotFoundError)
+        expect(
+          store.use((db) =>
+            db
+              .select({ id: ScheduledTaskTable.id })
+              .from(ScheduledTaskTable)
+              .where(eq(ScheduledTaskTable.id, damaged.id))
+              .get(),
+          ),
+        ).toEqual({ id: damaged.id })
+      },
+    })
+  })
+
   test("retention keeps a disabled one-shot while its dispatch is live", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -1026,6 +1064,40 @@ describe("ScheduledTask one-shot lifecycle", () => {
       })
     },
   )
+
+  test("the sweep recovers healthy outcomes beside a malformed queue payload", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+        const now = Date.now()
+        const input = { prompt: "Run once.", schedule: { type: "once", runAt: now + 1_000 } } as const
+        const damaged = await ScheduledTask.create({ ...input, title: "Damaged queue payload" })
+        const valid = await ScheduledTask.create({ ...input, title: "Valid queue payload" })
+        const claims = await ScheduledTask.runDue(now + 2_000)
+        expect(claims).toHaveLength(2)
+        for (const { queueItem } of claims) {
+          if (!queueItem) throw new Error("Expected a scheduled queue item")
+          await TaskQueue.setStatus({ id: queueItem.id, status: "completed" })
+        }
+        const damagedQueueID = claims.find(({ task }) => task.id === damaged.id)?.queueItem?.id
+        if (!damagedQueueID) throw new Error("Expected the damaged task's queue item")
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(TaskQueueTable)
+            .set({ payload: sql`${"{"}` })
+            .where(eq(TaskQueueTable.id, damagedQueueID))
+            .run()
+        })
+
+        await ScheduledTask.reconcileAllOrphanRuns(now + 3_000)
+
+        expect(await ScheduledTask.listRuns({ taskID: valid.id })).toMatchObject([{ status: "completed" }])
+        expect(await ScheduledTask.get(valid.id)).toMatchObject({ status: "disabled" })
+        expect(await ScheduledTask.listRuns({ taskID: damaged.id })).toMatchObject([{ status: "running" }])
+      },
+    })
+  })
 
   test("the scheduler sweep closes an orphaned run of a paused task and announces it", async () => {
     await using tmp = await tmpdir({ git: true })

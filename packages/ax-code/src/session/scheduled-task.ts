@@ -406,9 +406,17 @@ export namespace ScheduledTask {
     desc(ScheduledTaskTable.id),
   ] as const
 
+  const validScheduleJson = sql`json_valid(${ScheduledTaskTable.schedule})`
+
   export async function list(input: Partial<ListInput> = {}): Promise<Info[]> {
     const parsed = ListInput.partial().parse(input)
-    const conditions = [eq(ScheduledTaskTable.project_id, Instance.project.id)]
+    // Filter malformed JSON before Drizzle decodes the selected rows.
+    const conditions = [
+      eq(ScheduledTaskTable.project_id, Instance.project.id),
+      validScheduleJson,
+      sql`(${ScheduledTaskTable.model} is null or json_valid(${ScheduledTaskTable.model}))`,
+      sql`(${ScheduledTaskTable.workflow_start_options} is null or json_valid(${ScheduledTaskTable.workflow_start_options}))`,
+    ]
     if (parsed.status) conditions.push(eq(ScheduledTaskTable.status, parsed.status))
     if (parsed.dueBefore) conditions.push(lte(ScheduledTaskTable.next_run_at, parsed.dueBefore))
     return SessionShard.storeForProject(Instance.project.id).use((db) => {
@@ -419,8 +427,6 @@ export namespace ScheduledTask {
         .orderBy(...scheduledTaskOrder)
         .$dynamic()
       if (parsed.limit) query = query.limit(parsed.limit)
-      // A single corrupt row must not wedge the scheduler tick or 500 the list
-      // endpoint — skip rows whose persisted schedule no longer parses.
       return query.all().flatMap((row) => {
         const result = Info.safeParse(fromRowInput(row))
         if (result.success) return [result.data]
@@ -1736,6 +1742,7 @@ export namespace ScheduledTask {
           eq(TaskQueueTable.project_id, ScheduledTaskRunTable.project_id),
           isNull(ScheduledTaskRunTable.workflow_run_id),
           inArray(TaskQueueTable.status, terminalDispatchStatuses),
+          sql`json_valid(${TaskQueueTable.payload})`,
         ),
       )
       .leftJoin(
@@ -1855,6 +1862,7 @@ export namespace ScheduledTask {
             eq(ScheduledTaskTable.status, "disabled"),
             isNull(ScheduledTaskTable.next_run_at),
             lte(ScheduledTaskTable.last_run_at, now - ONESHOT_RETENTION_MS),
+            validScheduleJson,
           ),
         )
         .all()
