@@ -3,6 +3,8 @@ import { once } from "node:events"
 import { expect, test, vi } from "vitest"
 import { RunCommand } from "../../src/cli/cmd/run"
 
+const EVENT_EXCHANGE_TIMEOUT_MS = 2000
+
 // Exercise the real CLI handler, SDK and SSE transport without a model provider.
 test.each(["goal", false])(
   "headless submission keeps handling permissions after an early idle: %s",
@@ -28,8 +30,15 @@ test.each(["goal", false])(
     const sessionID = "ses_goal_events"
     const emit = (type: string, properties: unknown) =>
       events!.write(`data: ${JSON.stringify({ type, properties })}\n\n`)
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    let deadlineFired = false
     const server = createServer((request, response) => {
       if (request.url?.startsWith("/event")) {
+        // Measure a stalled event exchange separately from cold CLI startup.
+        deadline ??= setTimeout(() => {
+          deadlineFired = true
+          server.closeAllConnections()
+        }, EVENT_EXCHANGE_TIMEOUT_MS)
         events = response
         response.writeHead(200, { "content-type": "text/event-stream" })
         emit("server.connected", {})
@@ -82,11 +91,6 @@ test.each(["goal", false])(
     await once(server, "listening")
     const address = server.address()
     if (!address || typeof address === "string") throw new Error("Missing server address")
-    let deadlineFired = false
-    const deadline = setTimeout(() => {
-      deadlineFired = true
-      server.closeAllConnections()
-    }, 2000)
     try {
       await RunCommand.handler({
         message: ["Finish goal"],
@@ -123,8 +127,15 @@ test.each([false, true])(
       output += String(chunk)
       return true
     }) as any)
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    let deadlineFired = false
     const server = createServer((request, response) => {
       if (request.url?.startsWith("/event")) {
+        // Measure a stalled event exchange separately from cold CLI startup.
+        deadline ??= setTimeout(() => {
+          deadlineFired = true
+          server.closeAllConnections()
+        }, EVENT_EXCHANGE_TIMEOUT_MS)
         response.writeHead(200, { "content-type": "text/event-stream" })
         response.write('data: {"type":"server.connected","properties":{}}\n\n')
         response.on("close", () => {
@@ -161,11 +172,6 @@ test.each([false, true])(
     await once(server, "listening")
     const address = server.address()
     if (!address || typeof address === "string") throw new Error("Missing server address")
-    let deadlineFired = false
-    const deadline = setTimeout(() => {
-      deadlineFired = true
-      server.closeAllConnections()
-    }, 2000)
     try {
       await RunCommand.handler({
         message: [],
