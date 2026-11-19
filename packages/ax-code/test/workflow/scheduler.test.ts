@@ -70,6 +70,35 @@ describe("WorkflowScheduler", () => {
     })
   })
 
+  test.each(["position", "kind"] as const)("start rejects a phase with inconsistent %s", async (field) => {
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const run = await WorkflowRun.create({
+          spec: parseWorkflowSpecV1({
+            ...WorkflowFixtureSpecs.noopDryRun,
+            phases: [
+              { id: "first", name: "First", kind: "noop" },
+              { id: "second", name: "Second", kind: "noop", dependsOn: ["first"] },
+            ],
+          }),
+        })
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(WorkflowPhaseTable)
+            .set(field === "position" ? { position: 2 } : { kind: "synthesis" })
+            .where(eq(WorkflowPhaseTable.id, run.currentPhaseID!))
+            .run()
+        })
+
+        await expect(WorkflowScheduler.start(run.id)).rejects.toMatchObject({ status: 409 })
+        expect(await WorkflowRun.get(run.id)).toEqual(run)
+        expect(await TaskQueue.list()).toEqual([])
+      },
+    })
+  })
+
   test("stays behind AX_CODE_WORKFLOW_RUNTIME", async () => {
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
     try {

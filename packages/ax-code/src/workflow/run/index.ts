@@ -247,10 +247,12 @@ export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
     throw new HTTPException(409, { message: `Workflow run ${id} contains unreadable stored data.`, cause: error })
   }
 
-  const phaseIDs = new Set(detail.phases.map((phase) => phase.specPhaseID))
   if (
     detail.phases.length !== detail.spec.phases.length ||
-    detail.spec.phases.some((phase) => !phaseIDs.has(phase.id))
+    detail.spec.phases.some((specPhase, index) => {
+      const phase = detail.phases[index]
+      return phase.position !== index || phase.specPhaseID !== specPhase.id || phase.kind !== specPhase.kind
+    })
   ) {
     throw new HTTPException(409, { message: `Workflow run ${id} has incomplete or inconsistent phase records.` })
   }
