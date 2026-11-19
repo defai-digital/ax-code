@@ -23,7 +23,12 @@ import {
   WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
   parseWorkflowSpecV1,
 } from "../../src/workflow"
-import { WorkflowPhaseTable, WorkflowRunTable } from "../../src/workflow/workflow.sql"
+import {
+  WorkflowArtifactTable,
+  WorkflowChildTable,
+  WorkflowPhaseTable,
+  WorkflowRunTable,
+} from "../../src/workflow/workflow.sql"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -2274,6 +2279,67 @@ describe("WorkflowScheduler", () => {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
+  })
+
+  test("cancels a workflow with unreadable phase, child, and artifact data", async () => {
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+        const started = await WorkflowScheduler.start(run.id, {
+          allowScaleBeyondDefaults: true,
+          autoStartChildren: false,
+        })
+        const [phase] = started.phases
+        const [child] = started.children
+        expect(child?.taskQueueID).toBeDefined()
+        const artifact = await WorkflowRun.appendArtifact({ runID: run.id, kind: "log", summary: "Damaged artifact" })
+        const store = SessionShard.storeForProject(Instance.project.id, { write: true })
+        const phaseID = eq(WorkflowPhaseTable.id, phase.id)
+        const childID = eq(WorkflowChildTable.id, child.id)
+        store.use((db) => {
+          db.update(WorkflowPhaseTable)
+            .set({ outputs: sql`${"["}` })
+            .where(phaseID)
+            .run()
+          db.update(WorkflowChildTable)
+            .set({ evidence_refs: sql`${"{}"}` })
+            .where(childID)
+            .run()
+          db.update(WorkflowArtifactTable)
+            .set({ payload: sql`${"["}` })
+            .where(eq(WorkflowArtifactTable.id, artifact.id))
+            .run()
+        })
+
+        const cancelled = await WorkflowScheduler.cancel(run.id)
+
+        expect(cancelled.status).toBe("cancelled")
+        expect(cancelled.phases.map(({ id }) => id)).toEqual(started.phases.slice(1).map(({ id }) => id))
+        expect(cancelled.children.map(({ id }) => id)).toEqual(started.children.slice(1).map(({ id }) => id))
+        expect(cancelled.artifacts).toEqual(started.artifacts)
+        expect((await WorkflowRun.get(run.id)).status).toBe("cancelled")
+        expect((await TaskQueue.list()).map(({ status }) => status)).toEqual(started.children.map(() => "cancelled"))
+        store.use((db) => {
+          expect(
+            db
+              .select({ status: WorkflowPhaseTable.status, raw: sql`${WorkflowPhaseTable.outputs}` })
+              .from(WorkflowPhaseTable)
+              .where(phaseID)
+              .get(),
+          ).toEqual({ status: "cancelled", raw: "[" })
+          expect(
+            db
+              .select({ status: WorkflowChildTable.status, raw: sql`${WorkflowChildTable.evidence_refs}` })
+              .from(WorkflowChildTable)
+              .where(childID)
+              .get(),
+          ).toEqual({ status: "cancelled", raw: "{}" })
+        })
+      },
+    })
   })
 
   test("cancels running workflow children and linked queue items", async () => {

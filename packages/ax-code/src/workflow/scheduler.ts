@@ -351,9 +351,9 @@ export namespace WorkflowScheduler {
         if (!NotFoundError.isInstance(error)) throw error
       }
     }
-    WorkflowRun.finishCancellation(runID)
+    const detail = WorkflowRun.finishCancellation(runID)
     inlineExecutions.get(runKey(runID))?.controller.abort()
-    return WorkflowRun.getDisplayDetail(runID)
+    return detail
   }
 
   export async function pause(runID: WorkflowRunID) {

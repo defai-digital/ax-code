@@ -6,9 +6,10 @@ import { ScheduledTaskRunTable, ScheduledTaskTable } from "../../src/session/ses
 import { SessionShard } from "../../src/session/shard"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
-import { and, eq } from "../../src/storage/db"
+import { and, eq, sql } from "../../src/storage/db"
 import { WorkflowRun, WorkflowScheduler, WorkflowTemplate } from "../../src/workflow"
 import { WorkflowRunID } from "../../src/workflow/state"
+import { WorkflowPhaseTable } from "../../src/workflow/workflow.sql"
 import { tmpdir } from "../fixture/fixture"
 
 // The workflow bridge re-reports a terminal run's outcome on every later
@@ -364,35 +365,46 @@ describe("ScheduledTask workflow outcome recording", () => {
     })
   })
 
-  test("cancelling a running workflow releases its scheduled dispatch", async () => {
-    await using tmp = await tmpdir({ git: true })
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
-        try {
-          vi.spyOn(WorkflowScheduler, "start").mockImplementation(async (id) => {
-            await WorkflowRun.setStatus({ id, status: "running" })
-            return WorkflowRun.getDetail(id)
-          })
-          const task = await createWorkflowTask()
-          const first = (await ScheduledTask.runNow(task.id)).workflowRun
-          if (!first) throw new Error("Expected the first workflow dispatch")
+  test.each([false, true])(
+    "cancelling a running workflow releases its scheduled dispatch (damaged=%s)",
+    async (damaged) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+          try {
+            vi.spyOn(WorkflowScheduler, "start").mockImplementation(async (id) => {
+              await WorkflowRun.setStatus({ id, status: "running" })
+              return WorkflowRun.getDetail(id)
+            })
+            const task = await createWorkflowTask()
+            const first = (await ScheduledTask.runNow(task.id)).workflowRun
+            if (!first) throw new Error("Expected the first workflow dispatch")
+            if (damaged) {
+              SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+                db.update(WorkflowPhaseTable)
+                  .set({ outputs: sql`${"["}` })
+                  .where(eq(WorkflowPhaseTable.run_id, first.id))
+                  .run()
+              })
+            }
 
-          expect((await WorkflowScheduler.cancel(first.id)).status).toBe("cancelled")
+            expect((await WorkflowScheduler.cancel(first.id)).status).toBe("cancelled")
 
-          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
-            { workflowRunID: first.id, status: "failed", error: "Scheduled workflow was cancelled." },
-          ])
-          const second = (await ScheduledTask.runNow(task.id)).workflowRun
-          expect(second?.id).toBeDefined()
-          expect(second?.id).not.toBe(first.id)
-        } finally {
-          vi.unstubAllEnvs()
-        }
-      },
-    })
-  })
+            expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+              { workflowRunID: first.id, status: "failed", error: "Scheduled workflow was cancelled." },
+            ])
+            const second = (await ScheduledTask.runNow(task.id)).workflowRun
+            expect(second?.id).toBeDefined()
+            expect(second?.id).not.toBe(first.id)
+          } finally {
+            vi.unstubAllEnvs()
+          }
+        },
+      })
+    },
+  )
 
   test("deleting a task cancels its running workflow run", async () => {
     await using tmp = await tmpdir({ git: true })

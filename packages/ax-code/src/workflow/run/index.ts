@@ -4,7 +4,7 @@ import { Instance } from "../../project/instance"
 import { SessionShard } from "../../session/shard"
 import { TaskQueue } from "../../session/task-queue"
 import type { SessionID } from "../../session/schema"
-import { type Database, NotFoundError, and, asc, desc, eq, notInArray, sql } from "../../storage/db"
+import { type Database, type SQLWrapper, NotFoundError, and, asc, desc, eq, notInArray, sql } from "../../storage/db"
 import { Log } from "../../util/log"
 import { defaultWorkflowArtifactRedaction } from "../artifact"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "../budget"
@@ -18,7 +18,7 @@ import {
   WorkflowPhaseID,
   WorkflowPhaseRecord,
   WorkflowRun as WorkflowRunState,
-  WorkflowRunDetail,
+  type WorkflowRunDetail,
   WorkflowRunID,
 } from "../state"
 import {
@@ -132,18 +132,42 @@ async function create(input: WorkflowRunState.CreateInput): Promise<WorkflowRunS
   return run
 }
 
-const readableRunJson = [
+function readableJson(...columns: SQLWrapper[]) {
+  return sql.join(
+    columns.map((column) => sql`(${column} is null or (typeof(${column}) = 'text' and json_valid(${column})))`),
+    sql` and `,
+  )
+}
+
+const readableRunJson = readableJson(
   WorkflowRunTable.spec_snapshot,
   WorkflowRunTable.input_values,
   WorkflowRunTable.budget,
   WorkflowRunTable.budget_usage,
   WorkflowRunTable.verification_envelope_ids,
-].map((column) => sql`json_valid(${column})`)
+)
+const readablePhaseJson = readableJson(
+  WorkflowPhaseTable.model_policy,
+  WorkflowPhaseTable.budget,
+  WorkflowPhaseTable.outputs,
+)
+const readableChildJson = readableJson(
+  WorkflowChildTable.model,
+  WorkflowChildTable.budget_slice,
+  WorkflowChildTable.artifact_ids,
+  WorkflowChildTable.evidence_refs,
+)
+const readableArtifactJson = readableJson(
+  WorkflowArtifactTable.payload,
+  WorkflowArtifactTable.redaction,
+  WorkflowArtifactTable.evidence_refs,
+)
+const readableBudgetJson = readableJson(WorkflowBudgetLedgerTable.usage_delta)
 
 async function list(input: Partial<WorkflowRunState.ListInput> = {}): Promise<WorkflowRunState.Info[]> {
   const parsed = WorkflowRunState.ListInput.partial().parse(input)
   if (parsed.parentSessionID) await assertSessionCompatible(parsed.parentSessionID)
-  const conditions = [eq(WorkflowRunTable.project_id, Instance.project.id), ...readableRunJson]
+  const conditions = [eq(WorkflowRunTable.project_id, Instance.project.id), readableRunJson]
   if (parsed.status) conditions.push(eq(WorkflowRunTable.status, parsed.status))
   if (parsed.parentSessionID) conditions.push(eq(WorkflowRunTable.parent_session_id, parsed.parentSessionID))
   return SessionShard.storeForProject(Instance.project.id).use((db) => {
@@ -169,46 +193,50 @@ async function get(id: WorkflowRunID): Promise<WorkflowRunState.Info> {
   return getRun(id)
 }
 
-function readDetail(id: WorkflowRunID, skipUnreadableRows: boolean): WorkflowRunDetail {
-  const detail = SessionShard.storeForProject(Instance.project.id).use((db) => {
-    const run = fromRunRow(readRunRow(db, id))
-    const phaseRows = db
-      .select()
-      .from(WorkflowPhaseTable)
-      .where(eq(WorkflowPhaseTable.run_id, id))
-      .orderBy(asc(WorkflowPhaseTable.position), asc(WorkflowPhaseTable.id))
-      .all()
-    const phases = parseWorkflowDetailRows(phaseRows, fromPhaseRow, "phase", skipUnreadableRows)
-    const childRows = db
-      .select()
-      .from(WorkflowChildTable)
-      .where(eq(WorkflowChildTable.run_id, id))
-      .orderBy(asc(WorkflowChildTable.time_created), asc(WorkflowChildTable.id))
-      .all()
-    const children = parseWorkflowDetailRows(childRows, fromChildRow, "child", skipUnreadableRows)
-    const artifactRows = db
-      .select()
-      .from(WorkflowArtifactTable)
-      .where(eq(WorkflowArtifactTable.run_id, id))
-      .orderBy(asc(WorkflowArtifactTable.time_created), asc(WorkflowArtifactTable.id))
-      .all()
-    const artifacts = parseWorkflowDetailRows(artifactRows, fromArtifactRow, "artifact", skipUnreadableRows)
-    const budgetRows = db
-      .select()
-      .from(WorkflowBudgetLedgerTable)
-      .where(eq(WorkflowBudgetLedgerTable.run_id, id))
-      .orderBy(asc(WorkflowBudgetLedgerTable.time_created), asc(WorkflowBudgetLedgerTable.id))
-      .all()
-    const budgetLedger = parseWorkflowDetailRows(budgetRows, fromBudgetLedgerRow, "budget ledger", skipUnreadableRows)
-    return { ...run, phases, children, artifacts, budgetLedger }
-  })
-  return WorkflowRunDetail.parse(detail)
+function readDetail(
+  db: Database.TxOrDb,
+  run: WorkflowRunState.Info,
+  mode: "execution" | "display" | "dashboard",
+): WorkflowRunDetail {
+  const skipUnreadableRows = mode !== "execution"
+  const skipMalformedJson = mode === "display"
+  const phaseRows = db
+    .select()
+    .from(WorkflowPhaseTable)
+    .where(and(eq(WorkflowPhaseTable.run_id, run.id), skipMalformedJson ? readablePhaseJson : undefined))
+    .orderBy(asc(WorkflowPhaseTable.position), asc(WorkflowPhaseTable.id))
+    .all()
+  const phases = parseWorkflowDetailRows(phaseRows, fromPhaseRow, "phase", skipUnreadableRows)
+  const childRows = db
+    .select()
+    .from(WorkflowChildTable)
+    .where(and(eq(WorkflowChildTable.run_id, run.id), skipMalformedJson ? readableChildJson : undefined))
+    .orderBy(asc(WorkflowChildTable.time_created), asc(WorkflowChildTable.id))
+    .all()
+  const children = parseWorkflowDetailRows(childRows, fromChildRow, "child", skipUnreadableRows)
+  const artifactRows = db
+    .select()
+    .from(WorkflowArtifactTable)
+    .where(and(eq(WorkflowArtifactTable.run_id, run.id), skipMalformedJson ? readableArtifactJson : undefined))
+    .orderBy(asc(WorkflowArtifactTable.time_created), asc(WorkflowArtifactTable.id))
+    .all()
+  const artifacts = parseWorkflowDetailRows(artifactRows, fromArtifactRow, "artifact", skipUnreadableRows)
+  const budgetRows = db
+    .select()
+    .from(WorkflowBudgetLedgerTable)
+    .where(and(eq(WorkflowBudgetLedgerTable.run_id, run.id), skipMalformedJson ? readableBudgetJson : undefined))
+    .orderBy(asc(WorkflowBudgetLedgerTable.time_created), asc(WorkflowBudgetLedgerTable.id))
+    .all()
+  const budgetLedger = parseWorkflowDetailRows(budgetRows, fromBudgetLedgerRow, "budget ledger", skipUnreadableRows)
+  return { ...run, phases, children, artifacts, budgetLedger }
 }
 
 export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
   let detail: WorkflowRunDetail
   try {
-    detail = readDetail(id, false)
+    detail = SessionShard.storeForProject(Instance.project.id).use((db) =>
+      readDetail(db, fromRunRow(readRunRow(db, id)), "execution"),
+    )
   } catch (error) {
     if (!(error instanceof SyntaxError || error instanceof ZodError)) throw error
     throw new HTTPException(409, { message: `Workflow run ${id} contains unreadable stored data.`, cause: error })
@@ -225,24 +253,26 @@ export async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
 }
 
 async function getDisplayDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
-  return readDetail(id, true)
+  return SessionShard.storeForProject(Instance.project.id).use((db) =>
+    readDetail(db, fromRunRow(readRunRow(db, id)), "display"),
+  )
 }
 
 async function listDetails(input: Partial<WorkflowRunState.ListInput> = {}): Promise<WorkflowRunDetail[]> {
   const runs = await list(input)
-  const details = await Promise.all(
-    runs.map(async ({ id }) => {
+  return SessionShard.storeForProject(Instance.project.id).use((db) =>
+    runs.flatMap(({ id }) => {
       try {
-        return await getDisplayDetail(id)
+        // Keep incomplete JSON records out of dashboard summaries.
+        return [readDetail(db, fromRunRow(readRunRow(db, id)), "dashboard")]
       } catch (error) {
-        if (NotFoundError.isInstance(error)) return undefined
+        if (NotFoundError.isInstance(error)) return []
         if (!(error instanceof SyntaxError || error instanceof ZodError)) throw error
         log.warn("skipping unreadable workflow run details", { id })
-        return undefined
+        return []
       }
     }),
   )
-  return details.filter((detail) => detail !== undefined)
 }
 
 async function setStatus(
@@ -277,7 +307,7 @@ async function setStatus(
   return result.run
 }
 
-function finishCancellation(runID: WorkflowRunID): void {
+function finishCancellation(runID: WorkflowRunID): WorkflowRunDetail {
   const result = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
     const current = readRunRow(db, runID)
     if (TaskQueue.hasLiveWorkflowChildren(db, runID)) {
@@ -304,17 +334,26 @@ function finishCancellation(runID: WorkflowRunID): void {
         .map((row) => [row.id, row.status]),
     )
     const updates = { status: "cancelled" as const, error: null, time_completed: now, time_updated: now }
-    const phases = db.update(WorkflowPhaseTable).set(updates).where(phaseScope).returning().all().map(fromPhaseRow)
-    const children = db.update(WorkflowChildTable).set(updates).where(childScope).returning().all().map(fromChildRow)
-    const run =
-      current.status === "cancelled" && phases.length === 0 && children.length === 0
-        ? undefined
-        : fromRunRow(db.update(WorkflowRunTable).set(updates).where(eq(WorkflowRunTable.id, runID)).returning().get())
-    return { run, previous: current.status, phases, children, oldPhases, oldChildren }
+    // Status updates must succeed even when unrelated detail payloads are unreadable.
+    const phases = db.update(WorkflowPhaseTable).set(updates).where(phaseScope).run()
+    const children = db.update(WorkflowChildTable).set(updates).where(childScope).run()
+    const changed = current.status !== "cancelled" || phases.changes > 0 || children.changes > 0
+    const row = changed
+      ? db.update(WorkflowRunTable).set(updates).where(eq(WorkflowRunTable.id, runID)).returning().get()
+      : current
+    const run = fromRunRow(row)
+    return { run, detail: readDetail(db, run, "display"), changed, previous: current.status, oldPhases, oldChildren }
   })
-  for (const phase of result.phases) publishPhaseUpdated(phase, result.oldPhases.get(phase.id))
-  for (const child of result.children) publishChildUpdated(child, result.oldChildren.get(child.id))
-  if (result.run) publishUpdated(result.run, result.previous)
+  for (const phase of result.detail.phases) {
+    const previous = result.oldPhases.get(phase.id)
+    if (previous && phase.status === "cancelled") publishPhaseUpdated(phase, previous)
+  }
+  for (const child of result.detail.children) {
+    const previous = result.oldChildren.get(child.id)
+    if (previous && child.status === "cancelled") publishChildUpdated(child, previous)
+  }
+  if (result.changed) publishUpdated(result.run, result.previous)
+  return result.detail
 }
 
 async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Promise<WorkflowPhaseRecord> {
