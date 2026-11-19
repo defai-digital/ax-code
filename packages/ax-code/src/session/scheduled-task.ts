@@ -17,6 +17,7 @@ import {
   like,
   lte,
   ne,
+  notExists,
   notInArray,
   or,
   sql,
@@ -1474,6 +1475,7 @@ export namespace ScheduledTask {
             eq(ScheduledTaskRunTable.project_id, projectID),
             eq(ScheduledTaskRunTable.queue_id, source.queueID),
             unrecordedOutcome(),
+            status === "completed" ? isNull(ScheduledTaskRunTable.workflow_run_id) : carrierCanRecordFailure(db),
           ),
         )
         .returning()
@@ -1687,6 +1689,23 @@ export namespace ScheduledTask {
     )
   }
 
+  function carrierCanRecordFailure(db: Database.TxOrDb) {
+    // A queue item can fail before the workflow starts, even after it links
+    // the workflow. Once started, the workflow owns the scheduled outcome.
+    return notExists(
+      db
+        .select({ id: WorkflowRunTable.id })
+        .from(WorkflowRunTable)
+        .where(
+          and(
+            eq(WorkflowRunTable.id, ScheduledTaskRunTable.workflow_run_id),
+            eq(WorkflowRunTable.project_id, ScheduledTaskRunTable.project_id),
+            or(isNotNull(WorkflowRunTable.time_started), notInArray(WorkflowRunTable.status, ["queued", "cancelled"])),
+          ),
+        ),
+    )
+  }
+
   function persistedOutcomes(db: Database.TxOrDb, id?: ScheduledTaskRunID) {
     return db
       .select({
@@ -1711,8 +1730,11 @@ export namespace ScheduledTask {
         and(
           eq(TaskQueueTable.id, ScheduledTaskRunTable.queue_id),
           eq(TaskQueueTable.project_id, ScheduledTaskRunTable.project_id),
-          isNull(ScheduledTaskRunTable.workflow_run_id),
           inArray(TaskQueueTable.status, terminalDispatchStatuses),
+          or(
+            isNull(ScheduledTaskRunTable.workflow_run_id),
+            and(ne(TaskQueueTable.status, "completed"), carrierCanRecordFailure(db)),
+          ),
           sql`json_valid(${TaskQueueTable.payload})`,
         ),
       )

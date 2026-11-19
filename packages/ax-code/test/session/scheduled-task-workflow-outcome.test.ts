@@ -20,6 +20,7 @@ describe("ScheduledTask workflow outcome recording", () => {
   afterEach(async () => {
     vi.restoreAllMocks()
     await Instance.disposeAll()
+    vi.unstubAllEnvs()
   })
 
   async function mockWorkflowDispatch(workflowRunID: string) {
@@ -449,6 +450,86 @@ describe("ScheduledTask workflow outcome recording", () => {
         await ScheduledTask.recordWorkflowRun(task.id, retriedWorkflowID, retry.attempt)
         expect((await ScheduledTask.get(task.id)).lastWorkflowRunID).toBe(retriedWorkflowID)
         expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([{ status: "failed", workflowRunID }])
+      },
+    })
+  })
+
+  async function linkOneShotWorkflow() {
+    vi.stubEnv("AX_CODE_WORKFLOW_RUNTIME", "1")
+    vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+    const runAt = Date.now() + 60_000
+    const task = await ScheduledTask.create({
+      title: "Scheduled workflow",
+      prompt: "Run once.",
+      schedule: { type: "once", runAt },
+      workflowTemplateID: "builtin:noop-dry-run",
+    })
+    const now = runAt + 1_000
+    const [fired] = await ScheduledTask.runDue(now)
+    if (!fired?.queueItem) throw new Error("Expected a scheduled workflow carrier")
+    const workflow = await WorkflowTemplate.createRun({ templateID: "builtin:noop-dry-run", sourceTaskID: task.id })
+    const carrier = await TaskQueue.claimForExecution(fired.queueItem.id)
+    if (carrier.kind !== "claimed") throw new Error("Expected the carrier claim")
+    await ScheduledTask.recordWorkflowRun(task.id, workflow.id, carrier.attempt)
+    return { task, workflow, carrier, now }
+  }
+
+  test.each([false, true])(
+    "a started workflow owns its outcome after carrier failure (sharded=%s)",
+    async (sharded) => {
+      vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { task, workflow, carrier, now } = await linkOneShotWorkflow()
+          await WorkflowRun.setStatus({ id: workflow.id, status: "running" })
+          await TaskQueue.finishExecution(carrier.attempt, { status: "failed", error: "Carrier interrupted" })
+          await ScheduledTask.recordQueueOutcome(task.id, "failed", "Carrier interrupted", carrier.item.id)
+
+          await ScheduledTask.reconcileAllOrphanRuns(now + 1_000)
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+            { status: "running", workflowRunID: workflow.id },
+          ])
+          expect(await ScheduledTask.get(task.id)).toMatchObject({
+            status: "active",
+            error: undefined,
+            nextRunAt: undefined,
+          })
+          await expect(ScheduledTask.runNow(task.id)).rejects.toMatchObject({ status: 409 })
+
+          expect((await WorkflowScheduler.start(workflow.id)).status).toBe("completed")
+          await ScheduledTask.reconcileAllOrphanRuns(now + 2_000)
+          expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+            { status: "completed", workflowRunID: workflow.id },
+          ])
+          expect(await ScheduledTask.get(task.id)).toMatchObject({ status: "disabled", nextRunAt: undefined })
+        },
+      })
+    },
+  )
+
+  test.each([false, true])("recovery settles a failed carrier before workflow start (sharded=%s)", async (sharded) => {
+    vi.stubEnv("AX_CODE_SHARD_SESSIONS", sharded ? "1" : "0")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { task, workflow, carrier, now } = await linkOneShotWorkflow()
+        const error = "Carrier interrupted before workflow start"
+        await TaskQueue.finishExecution(carrier.attempt, { status: "failed", error })
+
+        const sweepAt = now + 1_000
+        await ScheduledTask.reconcileAllOrphanRuns(sweepAt)
+
+        expect(await ScheduledTask.listRuns({ taskID: task.id })).toMatchObject([
+          { status: "failed", workflowRunID: workflow.id, error },
+        ])
+        const saved = await ScheduledTask.get(task.id)
+        expect(saved).toMatchObject({ status: "active", error })
+        expect(saved.nextRunAt).toBeGreaterThan(sweepAt)
+        await ScheduledTask.reconcileAllOrphanRuns(sweepAt + 1_000)
+        expect(await ScheduledTask.get(task.id)).toEqual(saved)
       },
     })
   })
