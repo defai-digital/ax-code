@@ -6,6 +6,13 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.4] - 2026-11-20
+
+### Fixed
+
+- Bundle the updated AX TUI renderer with input, widget, terminal, and parser lifecycle fixes.
+- Exclude native and Solid development sources from the CLI archives while retaining their compiled runtime modules.
+
 ## [7.31.3] - 2026-11-20
 
 ### Changed
