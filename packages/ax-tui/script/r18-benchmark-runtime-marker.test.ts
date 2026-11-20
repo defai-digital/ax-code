@@ -2,10 +2,9 @@ import { spawnSync } from "node:child_process"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 
-const runtimeScript = fileURLToPath(new URL("../script/benchmark-runtime.ts", import.meta.url))
+const runtimeScript = new URL("../script/benchmark-runtime.ts", import.meta.url).href
 
 // A `dist/esm/package.json` containing only `{"type":"module"}` is an ESM
 // marker, not a version manifest. The version lookup must skip it and keep

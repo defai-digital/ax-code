@@ -133,7 +133,7 @@ const normalizeSourcePath = (path: string, normalizedSourcePathByPath: Map<strin
 
   let normalizedPath: string
   try {
-    normalizedPath = realpathSync(cleanPath)
+    normalizedPath = realpathSync.native(cleanPath)
   } catch {
     normalizedPath = cleanPath
   }

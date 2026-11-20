@@ -862,7 +862,7 @@ const SCENES: Scene[] = [
     mode: "dark",
     sync: transcriptFixture,
     body: (scene) => <Transcript width={scene.width} />,
-    expect: ["Added", "greet tests", "Edit src/util/greet.ts"],
+    expect: ["Added", "pnpm vitest run test/greet.test.ts", "Edit src/util/greet.ts"],
     ready: codeHighlighted,
   },
   {
@@ -874,7 +874,7 @@ const SCENES: Scene[] = [
     mode: "dark",
     sync: transcriptFixture,
     body: (scene) => <Transcript width={scene.width} />,
-    expect: ["Added", "greet tests", "Edit src/util/greet.ts"],
+    expect: ["Added", "pnpm vitest run test/greet.test.ts", "Edit src/util/greet.ts"],
     drive: async (setup) => {
       // Let the highlight land before scrolling so the scroll offset is
       // applied to the final content height.
@@ -890,7 +890,7 @@ const SCENES: Scene[] = [
     mode: "light",
     sync: transcriptFixture,
     body: (scene) => <Transcript width={scene.width} />,
-    expect: ["Added", "greet tests", "Edit src/util/greet.ts"],
+    expect: ["Added", "pnpm vitest run test/greet.test.ts", "Edit src/util/greet.ts"],
     ready: codeHighlighted,
   },
   {

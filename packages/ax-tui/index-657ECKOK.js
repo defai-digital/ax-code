@@ -2771,6 +2771,7 @@ function mergeKeyBindings(defaults, custom) {
   }
   for (const binding of custom) {
     const key = getKeyBindingKey(binding);
+    map.delete(key);
     map.set(key, binding);
   }
   return Array.from(map.values());

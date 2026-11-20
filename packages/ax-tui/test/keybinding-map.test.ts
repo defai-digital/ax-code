@@ -17,6 +17,18 @@ describe("key bindings map construction", () => {
     expect(map.get(getKeyBindingKey({ name: "enter" }))).toBe("default-submit")
   })
 
+  test("an override keeps priority when a later default aliases the same key", () => {
+    const defaults: KeyBinding[] = [
+      { name: "return", action: "newline" },
+      { name: "kpenter", action: "newline" },
+    ]
+    const custom: KeyBinding[] = [{ name: "return", action: "submit" }]
+    const map = buildKeyBindingsMap(mergeKeyBindings(defaults, custom), defaultKeyAliases)
+
+    expect(map.get(getKeyBindingKey({ name: "return" }))).toBe("submit")
+    expect(map.get(getKeyBindingKey({ name: "kpenter" }))).toBe("newline")
+  })
+
   test("multi-hop aliases resolve every name along the chain", () => {
     const map = buildKeyBindingsMap([{ name: "kpenter", action: "submit" }], defaultKeyAliases)
 

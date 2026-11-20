@@ -57,7 +57,7 @@ const normalizeSourcePath = (path, normalizedSourcePathByPath) => {
   }
   let normalizedPath;
   try {
-    normalizedPath = realpathSync(cleanPath);
+    normalizedPath = realpathSync.native(cleanPath);
   } catch {
     normalizedPath = cleanPath;
   }

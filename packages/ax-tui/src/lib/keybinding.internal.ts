@@ -65,6 +65,8 @@ export function mergeKeyBindings<Action extends string>(
   }
   for (const binding of custom) {
     const key = getKeyBindingKey(binding)
+    // Reinsert overrides after defaults so alias expansion respects priority.
+    map.delete(key)
     map.set(key, binding)
   }
   return Array.from(map.values())

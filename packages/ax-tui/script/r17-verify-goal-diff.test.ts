@@ -48,7 +48,12 @@ function commit(fixture: Fixture, message: string): void {
 
 function runVerifier(fixture: Fixture): ReturnType<typeof spawnSync> {
   return spawnSync(process.execPath, [path.join(fixture.pkg, "script", "verify-goal-diff.mjs"), fixture.baseline], {
-    env: { PATH: `${nodeDir}${path.delimiter}/usr/bin${path.delimiter}/bin`, HOME: fixture.root },
+    env: {
+      PATH:
+        process.platform === "win32" ? process.env.PATH : `${nodeDir}${path.delimiter}/usr/bin${path.delimiter}/bin`,
+      ...(process.platform === "win32" && { SystemRoot: process.env.SystemRoot }),
+      HOME: fixture.root,
+    },
     encoding: "utf8",
     timeout: 30_000,
   })

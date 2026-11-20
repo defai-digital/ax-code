@@ -53,7 +53,8 @@ function runVerifier(
   baseline = fixture.baseline,
 ): ReturnType<typeof spawnSync> {
   const env: Record<string, string | undefined> = {
-    PATH: `${nodeDir}${path.delimiter}/usr/bin${path.delimiter}/bin`,
+    PATH: process.platform === "win32" ? process.env.PATH : `${nodeDir}${path.delimiter}/usr/bin${path.delimiter}/bin`,
+    ...(process.platform === "win32" && { SystemRoot: process.env.SystemRoot }),
     HOME: fixture.root,
     ...overrides,
   }
