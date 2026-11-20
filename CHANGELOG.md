@@ -6,6 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.3] - 2026-11-20
+
+### Changed
+
+- Refresh the bundled model catalog and publish the paired SDK 2.6.91.
+
+### Fixed
+
+- Bound stdio backend shutdown when the final RPC frame has no newline and its handler is still pending.
+
 ## [7.31.2] - 2026-11-19
 
 ### Changed
