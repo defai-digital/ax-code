@@ -7322,7 +7322,6 @@ var MarkdownRenderable = class extends Renderable {
     });
   }
   applyMarkdownCodeRenderable(renderable, content, marginBottom, baseHighlight, initialStyledText) {
-    renderable.initialStyledText = initialStyledText;
     renderable.filetype = "markdown";
     renderable.syntaxStyle = this._syntaxStyle;
     renderable.fg = this._fg;
@@ -7332,6 +7331,7 @@ var MarkdownRenderable = class extends Renderable {
     renderable.streaming = true;
     renderable.baseHighlight = baseHighlight;
     renderable.content = content;
+    renderable.initialStyledText = initialStyledText;
     renderable.marginBottom = marginBottom;
   }
   applyBlockquoteRenderable(renderable, token, marginBottom) {

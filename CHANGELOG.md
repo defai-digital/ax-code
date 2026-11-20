@@ -12,6 +12,7 @@ changes belong to AX Coder.
 
 - Bundle the updated AX TUI renderer with input, widget, terminal, and parser lifecycle fixes.
 - Honor dialog-specific Enter bindings when the terminal supplies keypad aliases.
+- Keep transcript rows stable while a finished reply is waiting for syntax highlighting.
 - Exclude native and Solid development sources from the CLI archives while retaining their compiled runtime modules.
 
 ## [7.31.3] - 2026-11-20

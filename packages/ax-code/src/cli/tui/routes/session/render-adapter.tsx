@@ -33,6 +33,8 @@ export function SessionCodeRenderer(props: SessionCodeRendererProps) {
   return (
     <code
       filetype={props.display.filetype}
+      // Associate the pre-highlight text with the current source.
+      content={props.display.content}
       // Paint the plain buffer until the async tree-sitter highlight resolves
       // (the framework default). `false` left `_shouldRenderTextBuffer` false
       // while the worker ran, so a finished reply painted nothing and came back
@@ -43,7 +45,6 @@ export function SessionCodeRenderer(props: SessionCodeRendererProps) {
       initialStyledText={props.initialStyledText as any}
       streaming={props.streaming}
       syntaxStyle={props.syntaxStyle as any}
-      content={props.display.content}
       conceal={props.conceal}
       fg={props.fg as any}
     />

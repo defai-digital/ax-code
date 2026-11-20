@@ -1013,7 +1013,6 @@ export class MarkdownRenderable extends Renderable {
     baseHighlight?: string,
     initialStyledText?: StyledText,
   ): void {
-    renderable.initialStyledText = initialStyledText
     renderable.filetype = "markdown"
     renderable.syntaxStyle = this._syntaxStyle
     renderable.fg = this._fg
@@ -1023,6 +1022,7 @@ export class MarkdownRenderable extends Renderable {
     renderable.streaming = true
     renderable.baseHighlight = baseHighlight
     renderable.content = content
+    renderable.initialStyledText = initialStyledText
     renderable.marginBottom = marginBottom
   }
 
