@@ -15825,6 +15825,211 @@
         "release_date": "2026-11-05",
         "temperature": true,
         "tool_call": true
+      },
+      "deepseek/deepseek-v4.1-flash-abliterated": {
+        "attachment": false,
+        "family": "deepseek",
+        "id": "deepseek/deepseek-v4.1-flash-abliterated",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash Abliterated",
+        "reasoning": true,
+        "release_date": "2026-11-14",
+        "tool_call": true
+      },
+      "google/gemma4-31b-splituntied": {
+        "attachment": false,
+        "family": "gemma",
+        "id": "google/gemma4-31b-splituntied",
+        "limit": {
+          "context": 32768,
+          "input": 32768,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemma 4 31B Split-Untied",
+        "reasoning": false,
+        "release_date": "2026-09-17",
+        "tool_call": true
+      },
+      "TEE/deepseek-v3.2": {
+        "attachment": false,
+        "canonical_model_id": "deepseek/deepseek-v3.2",
+        "family": "deepseek",
+        "id": "TEE/deepseek-v3.2",
+        "limit": {
+          "context": 164000,
+          "input": 164000,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V3.2 TEE",
+        "reasoning": false,
+        "release_date": "2025-12-01",
+        "temperature": true,
+        "tool_call": false
+      },
+      "TEE/qwen3.6-27b": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen3.6-27b",
+        "family": "qwen",
+        "id": "TEE/qwen3.6-27b",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.6 27B TEE",
+        "reasoning": true,
+        "release_date": "2026-04-22",
+        "temperature": true,
+        "tool_call": false
+      },
+      "tencent/hy4-flash": {
+        "attachment": true,
+        "canonical_model_id": "tencent/hy4-flash",
+        "family": "Hy",
+        "id": "tencent/hy4-flash",
+        "limit": {
+          "context": 1048576,
+          "input": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Tencent Hy4 Flash",
+        "reasoning": true,
+        "release_date": "2026-11-16",
+        "temperature": true,
+        "tool_call": true
+      },
+      "TheDrummer/artemis-31b-v1.2": {
+        "attachment": false,
+        "id": "TheDrummer/artemis-31b-v1.2",
+        "limit": {
+          "context": 65536,
+          "input": 65536,
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Artemis 31B v1.2",
+        "reasoning": false,
+        "release_date": "2026-11-06",
+        "tool_call": false
+      },
+      "TheDrummer/Artemis-v1.1": {
+        "attachment": true,
+        "id": "TheDrummer/Artemis-v1.1",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "TheDrummer/Artemis v1.1",
+        "reasoning": true,
+        "release_date": "2026-09-06",
+        "tool_call": true
+      },
+      "z-ai/glm-5.3-abliterated": {
+        "attachment": false,
+        "family": "glm",
+        "id": "z-ai/glm-5.3-abliterated",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM 5.3 Abliterated",
+        "reasoning": true,
+        "release_date": "2026-11-14",
+        "tool_call": true
+      },
+      "z-ai/glm-5.3-flash-abliterated": {
+        "attachment": false,
+        "family": "glm",
+        "id": "z-ai/glm-5.3-flash-abliterated",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM 5.3 Flash Abliterated",
+        "reasoning": true,
+        "release_date": "2026-11-14",
+        "tool_call": true
       }
     }
   },
@@ -30344,32 +30549,6 @@
         "temperature": true,
         "tool_call": true
       },
-      "cloudflare/deepseek-v4-pro": {
-        "attachment": false,
-        "canonical_model_id": "deepseek/deepseek-v4-pro",
-        "family": "deepseek-thinking",
-        "id": "cloudflare/deepseek-v4-pro",
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "limit": {
-          "context": 1048576,
-          "output": 393216
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4 Pro (Cloudflare)",
-        "reasoning": true,
-        "release_date": "2026-04-24",
-        "temperature": true,
-        "tool_call": true
-      },
       "cloudflare/deepseek-v4.1-flash-1017": {
         "attachment": true,
         "canonical_model_id": "deepseek/deepseek-v4.1-flash-1017",
@@ -30414,32 +30593,6 @@
         "name": "GLM-5.3 (Cloudflare)",
         "reasoning": true,
         "release_date": "2026-08-14",
-        "temperature": true,
-        "tool_call": true
-      },
-      "cloudflare/glm-5.3-flash": {
-        "attachment": true,
-        "canonical_model_id": "zhipuai/glm-5.3-flash",
-        "family": "glm-flash",
-        "id": "cloudflare/glm-5.3-flash",
-        "limit": {
-          "context": 1048576,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "GLM-5.3 Flash (Cloudflare)",
-        "reasoning": true,
-        "release_date": "2026-08-26",
         "temperature": true,
         "tool_call": true
       },
@@ -31562,29 +31715,6 @@
           ]
         },
         "name": "DeepSeek V4 Flash 0731 (ByteDance)",
-        "reasoning": true,
-        "release_date": "2026-07-31",
-        "temperature": true,
-        "tool_call": true
-      },
-      "cloudflare/deepseek-v4-flash-0731": {
-        "attachment": false,
-        "canonical_model_id": "deepseek/deepseek-v4-flash-0731",
-        "family": "deepseek-flash",
-        "id": "cloudflare/deepseek-v4-flash-0731",
-        "limit": {
-          "context": 1048576,
-          "output": 393216
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "DeepSeek V4 Flash 0731 (Cloudflare)",
         "reasoning": true,
         "release_date": "2026-07-31",
         "temperature": true,
@@ -33295,6 +33425,31 @@
         "name": "GLM-5.3 FlashX (Z AI)",
         "reasoning": true,
         "release_date": "2026-09-18",
+        "temperature": true,
+        "tool_call": true
+      },
+      "together-ai/hy4": {
+        "attachment": true,
+        "canonical_model_id": "tencent/hy4",
+        "family": "Hy",
+        "id": "together-ai/hy4",
+        "limit": {
+          "context": 1048576,
+          "input": 983010,
+          "output": 1000000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Hy4 (Together AI)",
+        "reasoning": true,
+        "release_date": "2026-11-04",
         "temperature": true,
         "tool_call": true
       }
@@ -44339,6 +44494,30 @@
         "temperature": true,
         "tool_call": false,
         "type": "transcription"
+      },
+      "qwen4-max:free": {
+        "attachment": true,
+        "canonical_model_id": "alibaba/qwen4-max",
+        "family": "qwen",
+        "id": "qwen4-max:free",
+        "limit": {
+          "context": 1000000,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "image",
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen4 Max",
+        "reasoning": true,
+        "release_date": "2026-11-16",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -57082,7 +57261,7 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
-        "release_date": "2026-08-15",
+        "release_date": "2026-08-11",
         "modalities": {
           "input": [
             "text"
@@ -59426,6 +59605,87 @@
         "name": "GPT-6.2 Sol (EU)",
         "reasoning": true,
         "release_date": "2026-11-17",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gemini-4-neon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-neon",
+        "family": "gemini",
+        "id": "gemini-4-neon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Neon",
+        "reasoning": true,
+        "release_date": "2026-11-18",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gemini-4-neon@eu": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-neon",
+        "family": "gemini",
+        "id": "gemini-4-neon@eu",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Neon (EU)",
+        "reasoning": true,
+        "release_date": "2026-11-18",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gemini-4-neon@us": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-neon",
+        "family": "gemini",
+        "id": "gemini-4-neon@us",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Neon (US)",
+        "reasoning": true,
+        "release_date": "2026-11-18",
         "temperature": false,
         "tool_call": true
       }
@@ -63584,6 +63844,32 @@
         "reasoning": true,
         "release_date": "2026-11-16",
         "temperature": true,
+        "tool_call": true
+      },
+      "gemini/gemini-4-neon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-neon",
+        "family": "gemini",
+        "id": "gemini/gemini-4-neon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Neon",
+        "reasoning": true,
+        "release_date": "2026-11-18",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -72054,7 +72340,7 @@
           ]
         },
         "limit": {
-          "context": 1000000,
+          "context": 1048600,
           "output": 384000
         },
         "canonical_model_id": "deepseek/deepseek-v4-pro-0813"
@@ -87999,7 +88285,7 @@
         "family": "Hy",
         "id": "hy4",
         "limit": {
-          "context": 1000000,
+          "context": 1048576,
           "output": 65536
         },
         "modalities": {
@@ -111037,6 +111323,32 @@
         "release_date": "2026-11-17",
         "temperature": false,
         "tool_call": true
+      },
+      "google/gemini-4-neon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-neon",
+        "family": "gemini",
+        "id": "google/gemini-4-neon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Neon",
+        "reasoning": true,
+        "release_date": "2026-11-18",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -116018,7 +116330,8 @@
         "reasoning": true,
         "release_date": "2026-11-05",
         "temperature": true,
-        "tool_call": true
+        "tool_call": true,
+        "status": "deprecated"
       },
       "claude-fable-5-2": {
         "attachment": true,
@@ -122208,6 +122521,37 @@
         "reasoning": true,
         "release_date": "2026-11-16",
         "temperature": true,
+        "tool_call": true
+      },
+      "google/gemini-4-neon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-neon",
+        "family": "gemini",
+        "id": "google/gemini-4-neon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Neon",
+        "provider": {
+          "api": "https://api.ofox.ai/gemini/v1beta",
+          "npm": "@ai-sdk/google"
+        },
+        "reasoning": true,
+        "release_date": "2026-11-18",
+        "temperature": false,
         "tool_call": true
       }
     }
@@ -140160,6 +140504,108 @@
         "release_date": "2026-11-05",
         "temperature": true,
         "tool_call": true
+      },
+      "gemini-4-neon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-neon",
+        "family": "gemini",
+        "id": "gemini-4-neon",
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Neon",
+        "reasoning": true,
+        "release_date": "2026-11-18",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-6.2-astra": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.2-astra",
+        "family": "gpt-astra",
+        "id": "gpt-6.2-astra",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.2 Astra",
+        "reasoning": true,
+        "release_date": "2026-11-17",
+        "temperature": false,
+        "tool_call": true
+      },
+      "gpt-6.2-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.2-sol",
+        "family": "gpt-sol",
+        "id": "gpt-6.2-sol",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.2 Sol",
+        "reasoning": true,
+        "release_date": "2026-11-17",
+        "temperature": false,
+        "tool_call": true
+      },
+      "nemotron-3.5-super-vl": {
+        "attachment": true,
+        "canonical_model_id": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+        "family": "nemotron",
+        "id": "nemotron-3.5-super-vl",
+        "limit": {
+          "context": 1000000,
+          "output": 500000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Nemotron 3.5 Super VL 120B A12B",
+        "reasoning": true,
+        "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -150576,29 +151022,6 @@
         "temperature": true,
         "tool_call": true
       },
-      "arkanecloud/nvidia/nemotron-3-super-120b-a12b": {
-        "attachment": false,
-        "canonical_model_id": "nvidia/nemotron-3-super-120b-a12b",
-        "family": "nemotron",
-        "id": "arkanecloud/nvidia/nemotron-3-super-120b-a12b",
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Nemotron 3 Super 120B A12B (Arkanecloud)",
-        "reasoning": true,
-        "release_date": "2026-03-11",
-        "temperature": true,
-        "tool_call": true
-      },
       "arkanecloud/nvidia/nemotron-3-ultra-550b-a55b": {
         "attachment": false,
         "canonical_model_id": "nvidia/nemotron-3-ultra-550b-a55b",
@@ -152266,6 +152689,103 @@
         "reasoning": true,
         "release_date": "2026-11-18",
         "temperature": false,
+        "tool_call": true
+      },
+      "azure/gpt-4.1-nano@us": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-4.1-nano",
+        "family": "gpt-nano",
+        "id": "azure/gpt-4.1-nano@us",
+        "limit": {
+          "context": 1047576,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-4.1 nano (Azure, US)",
+        "reasoning": false,
+        "release_date": "2025-04-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "cohere/command-a-translate-08-2025": {
+        "attachment": false,
+        "canonical_model_id": "cohere/command-a-translate-08-2025",
+        "family": "command-a",
+        "id": "cohere/command-a-translate-08-2025",
+        "limit": {
+          "context": 8992,
+          "output": 8000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Command A Translate",
+        "reasoning": false,
+        "release_date": "2025-08-28",
+        "temperature": true,
+        "tool_call": true
+      },
+      "cohere/command-a-vision-07-2025": {
+        "attachment": true,
+        "canonical_model_id": "cohere/command-a-vision-07-2025",
+        "family": "command-a",
+        "id": "cohere/command-a-vision-07-2025",
+        "limit": {
+          "context": 128000,
+          "output": 8000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Command A Vision",
+        "reasoning": false,
+        "release_date": "2025-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "together_ai/tencent/Hy4": {
+        "attachment": true,
+        "canonical_model_id": "tencent/hy4",
+        "family": "Hy",
+        "id": "together_ai/tencent/Hy4",
+        "limit": {
+          "context": 1048576,
+          "input": 983010,
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Hy4 (Together AI)",
+        "reasoning": true,
+        "release_date": "2026-11-04",
+        "temperature": true,
         "tool_call": true
       }
     }
@@ -160046,6 +160566,80 @@
         "reasoning": true,
         "release_date": "2026-11-05",
         "temperature": true,
+        "tool_call": true
+      },
+      "google/gemini-4-neon": {
+        "attachment": true,
+        "canonical_model_id": "google/gemini-4-neon",
+        "family": "gemini",
+        "id": "google/gemini-4-neon",
+        "limit": {
+          "context": 1048576,
+          "output": 943718
+        },
+        "modalities": {
+          "input": [
+            "audio",
+            "image",
+            "text",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemini 4 Neon",
+        "reasoning": true,
+        "release_date": "2026-11-18",
+        "temperature": true,
+        "tool_call": true
+      },
+      "openai/gpt-6.2-astra": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.2-astra",
+        "family": "gpt-astra",
+        "id": "openai/gpt-6.2-astra",
+        "limit": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "image",
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.2 Astra",
+        "reasoning": true,
+        "release_date": "2026-11-17",
+        "temperature": false,
+        "tool_call": true
+      },
+      "openai/gpt-6.2-sol": {
+        "attachment": true,
+        "canonical_model_id": "openai/gpt-6.2-sol",
+        "family": "gpt-sol",
+        "id": "openai/gpt-6.2-sol",
+        "limit": {
+          "context": 1050000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "image",
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6.2 Sol",
+        "reasoning": true,
+        "release_date": "2026-11-17",
+        "temperature": false,
         "tool_call": true
       }
     },
