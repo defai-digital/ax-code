@@ -18,7 +18,9 @@ export declare class CapturedWritableStream extends Writable {
     isTTY: boolean;
     columns: number;
     rows: number;
+    private decoder;
     constructor(stream: "stdout" | "stderr", capture: Capture);
     _write(chunk: any, encoding: BufferEncoding, callback: (error?: Error | null) => void): void;
+    _final(callback: (error?: Error | null) => void): void;
     getColorDepth(): number;
 }

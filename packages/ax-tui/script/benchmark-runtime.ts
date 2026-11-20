@@ -1,7 +1,35 @@
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+
+// A package entry may live in a subdirectory (for example `dist/index.js`), so the
+// manifest is the nearest `package.json` above the entry, not necessarily its sibling.
+const readPackageVersion = (entryPath: string): string => {
+  let currentDir = dirname(entryPath)
+  while (true) {
+    const packageJsonPath = join(currentDir, "package.json")
+    if (existsSync(packageJsonPath)) {
+      const { version, name } = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+        version?: unknown
+        name?: unknown
+      }
+      // A manifest with neither version nor name is an ESM scope marker
+      // (`{"type":"module"}`), not a package manifest; keep walking up.
+      if (version !== undefined || name !== undefined) {
+        if (typeof version !== "string") {
+          throw new Error(`package.json at ${packageJsonPath} has no string version`)
+        }
+        return version
+      }
+    }
+    const parentDir = dirname(currentDir)
+    if (parentDir === currentDir) {
+      throw new Error(`No package.json found above ${entryPath}`)
+    }
+    currentDir = parentDir
+  }
+}
 
 // One fresh process per package/sample. Both packages use the same public APIs,
 // runtime, geometry, content and assertions. No code from the reference is copied.
@@ -12,7 +40,7 @@ export async function benchmarkRuntime(directory: string, packageName: string) {
   const testing = import.meta.resolve(`${packageName}/testing`, parent)
   const { TextRenderable } = await import(entry)
   const { createTestRenderer } = await import(testing)
-  const { version } = JSON.parse(readFileSync(join(dirname(fileURLToPath(entry)), "package.json"), "utf8"))
+  const version = readPackageVersion(fileURLToPath(entry))
   const results: { workload: string, msPerOperation: number, iterations: number, frames: number }[] = []
   for (const unicode of [false, true]) {
     const setup = await createTestRenderer({ width: 120, height: 40, useThread: false,

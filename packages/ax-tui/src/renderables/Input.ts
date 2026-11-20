@@ -1,6 +1,7 @@
 import type { PasteEvent } from "../lib/key-handler.js"
 import { decodePasteBytes, stripAnsiSequences } from "../lib/paste.js"
 import type { RenderContext } from "../core/types.js"
+import { TextBuffer } from "../core/text-buffer.js"
 import {
   TextareaRenderable,
   type TextareaOptions,
@@ -67,6 +68,12 @@ export class InputRenderable extends TextareaRenderable {
     const defaults = InputRenderable.defaultOptions
     const maxLength = options.maxLength ?? defaults.maxLength
     const minLength = options.minLength ?? defaults.minLength
+    if (!Number.isFinite(maxLength)) {
+      throw new Error(`InputRenderable: maxLength (${maxLength}) must be a finite number`)
+    }
+    if (!Number.isFinite(minLength)) {
+      throw new Error(`InputRenderable: minLength (${minLength}) must be a finite number`)
+    }
     // Sanitize initial value: strip newlines and enforce maxLength
     const rawValue = options.value ?? defaults.value
     const initialValue = truncateInput(rawValue.replace(/[\n\r]/g, ""), maxLength)
@@ -153,8 +160,24 @@ export class InputRenderable extends TextareaRenderable {
   /** Preserve single-line and length constraints for undoable programmatic edits such as completion. */
   public override replaceText(text: string, cursorOffset?: number): void {
     const value = truncateInput(text.replace(/[\n\r]/g, ""), this._maxLength)
-    super.replaceText(value, cursorOffset)
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    const before = this.plainText
+    let offset = cursorOffset
+    if (offset !== undefined) {
+      // The native cursor does not clamp an out-of-range offset (it falls
+      // back to 0,0), so clamp to the display width of the stored value when
+      // truncation made the requested caret past the end.
+      const measurement = TextBuffer.create(this.ctx.widthMethod)
+      try {
+        measurement.setText(value)
+        offset = Math.min(offset, measurement.length + measurement.getLineCount() - 1)
+      } finally {
+        measurement.destroy()
+      }
+    }
+    super.replaceText(value, offset)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
   }
 
   public override focus(): void {
@@ -190,56 +213,83 @@ export class InputRenderable extends TextareaRenderable {
   }
 
   public override deleteCharBackward(): boolean {
+    const before = this.plainText
     const result = super.deleteCharBackward()
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
     return result
   }
 
   public override deleteChar(): boolean {
+    const before = this.plainText
     const result = super.deleteChar()
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
     return result
   }
 
   public override deleteLine(): boolean {
+    const before = this.plainText
     const result = super.deleteLine()
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
     return result
   }
 
   public override deleteWordBackward(): boolean {
+    const before = this.plainText
     const result = super.deleteWordBackward()
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
     return result
   }
 
   public override deleteWordForward(): boolean {
+    const before = this.plainText
     const result = super.deleteWordForward()
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
     return result
   }
 
   public override deleteToLineStart(): boolean {
+    const before = this.plainText
     const result = super.deleteToLineStart()
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
     return result
   }
 
   public override deleteToLineEnd(): boolean {
+    const before = this.plainText
     const result = super.deleteToLineEnd()
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
     return result
   }
 
   public override undo(): boolean {
+    const before = this.plainText
     const result = super.undo()
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
     return result
   }
 
   public override redo(): boolean {
+    const before = this.plainText
     const result = super.redo()
-    this.emit(InputRenderableEvents.INPUT, this.plainText)
+    if (this.plainText !== before) {
+      this.emit(InputRenderableEvents.INPUT, this.plainText)
+    }
     return result
   }
 
@@ -252,10 +302,16 @@ export class InputRenderable extends TextareaRenderable {
   }
 
   public set maxLength(maxLength: number) {
+    if (!Number.isFinite(maxLength)) {
+      throw new Error(`InputRenderable: maxLength (${maxLength}) must be a finite number`)
+    }
+    if (this._minLength > maxLength) {
+      throw new Error(`InputRenderable: minLength (${this._minLength}) cannot be greater than maxLength (${maxLength})`)
+    }
     this._maxLength = maxLength
     const currentValue = this.plainText
     if (currentValue.length > maxLength) {
-      this.setText(truncateInput(currentValue, maxLength))
+      this.value = currentValue
     }
   }
 
@@ -264,6 +320,9 @@ export class InputRenderable extends TextareaRenderable {
   }
 
   public set minLength(minLength: number) {
+    if (!Number.isFinite(minLength)) {
+      throw new Error(`InputRenderable: minLength (${minLength}) must be a finite number`)
+    }
     if (minLength > this._maxLength) {
       throw new Error(`InputRenderable: minLength (${minLength}) cannot be greater than maxLength (${this._maxLength})`)
     }

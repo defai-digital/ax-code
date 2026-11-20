@@ -42,7 +42,7 @@ export {}
  */
 import { existsSync, readFileSync, realpathSync } from "node:fs"
 import { basename, dirname, isAbsolute, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import type { BunPlugin } from "bun"
 import * as coreRuntime from "./index.js"
 
@@ -122,9 +122,9 @@ const sourcePath = (path: string): string => {
   return end === undefined ? path : path.slice(0, end)
 }
 
-const normalizedSourcePathByPath = new Map<string, string>()
-
-const normalizeSourcePath = (path: string): string => {
+// The realpath cache must be per-setup: a symlink retargeted between builds
+// would otherwise keep resolving to the stale target forever.
+const normalizeSourcePath = (path: string, normalizedSourcePathByPath: Map<string, string>): string => {
   const cleanPath = sourcePath(path)
   const cachedPath = normalizedSourcePathByPath.get(cleanPath)
   if (cachedPath !== undefined) {
@@ -187,8 +187,9 @@ const packageTypeForPath = (
 const isNodeModulesEsmPath = (
   path: string,
   packageTypeByPackageJsonPath: Map<string, "module" | "commonjs">,
+  normalizedSourcePathByPath: Map<string, string>,
 ): boolean => {
-  const normalizedPath = normalizeSourcePath(path)
+  const normalizedPath = normalizeSourcePath(path, normalizedSourcePathByPath)
 
   if (!isNodeModulesPath(normalizedPath)) {
     return false
@@ -266,8 +267,10 @@ const runtimeLoaderForPath = (path: string): "js" | "ts" | "jsx" | "tsx" | null 
 }
 
 const resolveImportSpecifierPatterns = [
-  /(from\s+["'])([^"']+)(["'])/g,
-  /(import\s+["'])([^"']+)(["'])/g,
+  // \b plus \s* also matches minified `}from"x"` / `import"x"` without
+  // matching identifier tails like `xfrom"`.
+  /\b(from\s*["'])([^"']+)(["'])/g,
+  /\b(import\s*["'])([^"']+)(["'])/g,
   /(import\s*\(\s*["'])([^"']+)(["']\s*\))/g,
   /(require\s*\(\s*["'])([^"']+)(["']\s*\))/g,
 ] as const
@@ -340,7 +343,10 @@ const collectImportSpecifiers = (code: string): string[] => {
 
 const resolveFromParent = (specifier: string, parent: string): string | null => {
   try {
-    const resolvedSpecifier = import.meta.resolve(specifier, parent)
+    // Prescan and bare-rewrite parents are plain absolute paths; strict resolvers
+    // (Node, and Vitest's runner) require a file URL, so normalize before resolving.
+    const parentURL = isAbsolute(parent) ? pathToFileURL(parent).href : parent
+    const resolvedSpecifier = import.meta.resolve(specifier, parentURL)
     if (
       resolvedSpecifier === specifier ||
       resolvedSpecifier.startsWith("node:") ||
@@ -368,7 +374,12 @@ const resolveSourcePathFromSpecifier = (specifier: string, importer: string): st
   }
 
   if (specifier.startsWith("file:")) {
-    return sourcePath(fileURLToPath(specifier))
+    try {
+      return sourcePath(fileURLToPath(specifier))
+    } catch {
+      // Non-local file: URLs (remote hosts) have no local path; skip them.
+      return null
+    }
   }
 
   if (isAbsolute(specifier)) {
@@ -381,7 +392,11 @@ const resolveSourcePathFromSpecifier = (specifier: string, importer: string): st
   }
 
   if (resolvedSpecifier.startsWith("file:")) {
-    return sourcePath(fileURLToPath(resolvedSpecifier))
+    try {
+      return sourcePath(fileURLToPath(resolvedSpecifier))
+    } catch {
+      return null
+    }
   }
 
   if (isAbsolute(resolvedSpecifier)) {
@@ -448,25 +463,34 @@ export function createRuntimePlugin(input: CreateRuntimePluginOptions = {}): Bun
     setup: (build) => {
       const resolveParentsByRecency: string[] = []
       const installedRewriteLoaders = new Set<string>()
+      const registeredRewriteSpellings = new Set<string>()
       const nodeModulesBareRewritePackageRoots = new Set<string>()
       const packageTypeByPackageJsonPath = new Map<string, "module" | "commonjs">()
+      const normalizedSourcePathByPath = new Map<string, string>()
       const sourceAnalysisByPath = new Map<string, SourceAnalysis>()
       const nodeModulesRuntimeRewritePathsByPath = new Map<string, string[]>()
 
       const installRewriteLoader = (path: string): void => {
         const resolvedTargetPath = sourcePath(path)
-        const canonicalTargetPath = normalizeSourcePath(resolvedTargetPath)
+        const canonicalTargetPath = normalizeSourcePath(resolvedTargetPath, normalizedSourcePathByPath)
 
-        if (installedRewriteLoaders.has(canonicalTargetPath)) {
+        if (registeredRewriteSpellings.has(resolvedTargetPath)) {
           return
         }
 
+        // The canonical target may already have a loader; the new spelling still needs coverage.
+        const filterPaths = installedRewriteLoaders.has(canonicalTargetPath)
+          ? [resolvedTargetPath]
+          : [resolvedTargetPath, canonicalTargetPath]
+        for (const filterPath of filterPaths) {
+          registeredRewriteSpellings.add(filterPath)
+        }
         installedRewriteLoaders.add(canonicalTargetPath)
 
         // Register both the resolved path spelling and its canonical realpath so Bun
         // can reach the loader even if it reports the same file through a different alias.
-        build.onLoad({ filter: exactPathFilter([resolvedTargetPath, canonicalTargetPath]) }, async (args) => {
-          const loadedPath = normalizeSourcePath(args.path)
+        build.onLoad({ filter: exactPathFilter(filterPaths) }, async (args) => {
+          const loadedPath = normalizeSourcePath(args.path, normalizedSourcePathByPath)
           if (loadedPath !== canonicalTargetPath) {
             return undefined
           }
@@ -501,7 +525,7 @@ export function createRuntimePlugin(input: CreateRuntimePluginOptions = {}): Bun
       }
 
       const analyzeSourcePath = (path: string): SourceAnalysis => {
-        const normalizedPath = normalizeSourcePath(path)
+        const normalizedPath = normalizeSourcePath(path, normalizedSourcePathByPath)
         const cachedAnalysis = sourceAnalysisByPath.get(normalizedPath)
         if (cachedAnalysis) {
           return cachedAnalysis
@@ -532,9 +556,9 @@ export function createRuntimePlugin(input: CreateRuntimePluginOptions = {}): Bun
       }
 
       const collectNodeModulesRuntimeRewritePaths = (path: string, visiting = new Set<string>()): string[] => {
-        const normalizedPath = normalizeSourcePath(path)
+        const normalizedPath = normalizeSourcePath(path, normalizedSourcePathByPath)
 
-        if (!isNodeModulesEsmPath(normalizedPath, packageTypeByPackageJsonPath)) {
+        if (!isNodeModulesEsmPath(normalizedPath, packageTypeByPackageJsonPath, normalizedSourcePathByPath)) {
           return []
         }
 
@@ -558,7 +582,10 @@ export function createRuntimePlugin(input: CreateRuntimePluginOptions = {}): Bun
 
         for (const specifier of analysis.importSpecifiers) {
           const resolvedPath = resolveSourcePathFromSpecifier(specifier, normalizedPath)
-          if (!resolvedPath || !isNodeModulesEsmPath(resolvedPath, packageTypeByPackageJsonPath)) {
+          if (
+            !resolvedPath ||
+            !isNodeModulesEsmPath(resolvedPath, packageTypeByPackageJsonPath, normalizedSourcePathByPath)
+          ) {
             continue
           }
 

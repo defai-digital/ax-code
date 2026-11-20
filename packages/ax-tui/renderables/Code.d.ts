@@ -37,11 +37,13 @@ export declare class CodeRenderable extends TextBufferRenderable {
     private _treeSitterClient;
     private _highlightsDirty;
     private _highlightSnapshotId;
+    private _activeHighlightId;
     private _conceal;
     private _drawUnstyledText;
     private _shouldRenderTextBuffer;
     private _streaming;
     private _initialStyledText?;
+    private _initialStyledTextFor?;
     private _hadInitialContent;
     private _lastHighlights;
     private _baseHighlight?;
@@ -84,6 +86,7 @@ export declare class CodeRenderable extends TextBufferRenderable {
     get onChunks(): OnChunksCallback | undefined;
     set onChunks(value: OnChunksCallback | undefined);
     get isHighlighting(): boolean;
+    get isHighlightPending(): boolean;
     get highlightingDone(): Promise<void>;
     protected transformChunks(chunks: TextChunk[], context: ChunkRenderContext): Promise<TextChunk[]>;
     private ensureVisibleTextBeforeHighlight;

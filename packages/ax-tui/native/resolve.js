@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync } from "node:fs";
+import { mkdir, mkdtemp, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 const RELEASES = "https://github.com/defai-digital/ax-code/releases/download";
 const MAX_LIBRARY_BYTES = 32 * 1024 * 1024;
 const MAX_LICENSE_BYTES = 64 * 1024;
+const STALE_STAGING_MAX_AGE_MS = 60 * 60 * 1000;
 const SHA256 = /^[a-f0-9]{64}$/;
 const TARGET = /^(?:darwin-(?:arm64|x64)|win32-(?:arm64|x64)|linux-(?:arm64|x64)(?:-musl)?)$/;
 export function isNativeTarget(value) {
@@ -74,7 +75,22 @@ function readArtifact(file, maxSize) {
         if (!stat.isFile() || stat.dev !== before.dev || stat.ino !== before.ino || stat.size > BigInt(maxSize)) {
             throw new Error(`Invalid ax-tui native artifact: ${file}`);
         }
-        return readFileSync(fd);
+        // Read exactly the inspected size so a same-inode append between fstat and
+        // read cannot turn the size cap into an unbounded allocation: growth before
+        // inspection fails the size cap, later growth is never read, and a short
+        // read (file shrank) fails closed.
+        const size = Number(stat.size);
+        const bytes = Buffer.alloc(size);
+        let offset = 0;
+        while (offset < size) {
+            const read = readSync(fd, bytes, offset, size - offset, offset);
+            if (read === 0)
+                break;
+            offset += read;
+        }
+        if (offset !== size)
+            throw new Error(`Invalid ax-tui native artifact: ${file}`);
+        return bytes;
     }
     finally {
         closeSync(fd);
@@ -133,6 +149,27 @@ async function download(url, maxSize, signal, fetchImpl) {
         reader.releaseLock();
     }
 }
+/** Remove interrupted download staging dirs for this target that are older than the cutoff. */
+export async function sweepStaleStaging(cacheRoot, target) {
+    const entries = await readdir(cacheRoot, { withFileTypes: true }).catch(() => undefined);
+    if (!entries)
+        return;
+    const prefix = `.download-${target}-`;
+    for (const entry of entries) {
+        if (!entry.isDirectory() || !entry.name.startsWith(prefix))
+            continue;
+        const stagingPath = path.join(cacheRoot, entry.name);
+        try {
+            const info = await stat(stagingPath);
+            if (Date.now() - info.mtimeMs > STALE_STAGING_MAX_AGE_MS) {
+                await rm(stagingPath, { recursive: true, force: true });
+            }
+        }
+        catch {
+            // A concurrent sweep or commit may have removed the entry already.
+        }
+    }
+}
 /** Internal injectable boundary; public callers use native/index.js. */
 export async function prepareNativeLibraryFrom(packageRoot, target, options = {}, fetchImpl = globalThis.fetch) {
     options.signal?.throwIfAborted();
@@ -160,6 +197,7 @@ export async function prepareNativeLibraryFrom(packageRoot, target, options = {}
         throw new Error("Invalid ax-tui package version for native download");
     }
     await mkdir(cacheRoot, { recursive: true, mode: 0o700 });
+    await sweepStaleStaging(cacheRoot, target);
     const staging = await mkdtemp(path.join(cacheRoot, `.download-${target}-`));
     const cancel = new AbortController();
     const signal = AbortSignal.any([

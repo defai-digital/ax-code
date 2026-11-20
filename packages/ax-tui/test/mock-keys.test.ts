@@ -40,4 +40,18 @@ describe("createMockKeys", () => {
 
     expect(Buffer.concat(emitted).toString("utf8")).toBe("\t")
   })
+
+  test.each([
+    { key: "F1", modifiers: { shift: true }, expected: "\x1b[1;2P" },
+    { key: "F2", modifiers: { shift: true }, expected: "\x1b[1;2Q" },
+    { key: "F4", modifiers: { shift: true }, expected: "\x1b[1;2S" },
+    { key: "F1", modifiers: { ctrl: true }, expected: "\x1b[1;5P" },
+    { key: "F3", modifiers: undefined, expected: "\x1bOR" },
+  ])("pressKey encodes SS3 function keys with modifiers: $key", ({ key, modifiers, expected }) => {
+    const { keys, emitted } = createHarness()
+
+    keys.pressKey(key, modifiers)
+
+    expect(Buffer.concat(emitted).toString("utf8")).toBe(expected)
+  })
 })

@@ -202,15 +202,15 @@ export function createFilePathProvider(options: FilePathAutocompleteOptions = {}
       throw error
     }
     if (signal.aborted) return null
-    const matches = entries
+    const candidates = entries
       .filter((entry) => entry.name.startsWith(name))
       .filter((entry) => options.includeHidden || name.startsWith(".") || !entry.name.startsWith("."))
       // Reject names that cannot be represented by this token syntax or safely displayed in a terminal.
       .filter((entry) => !/["\x00-\x1f\x7f-\x9f]/u.test(entry.name))
-      .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
-      .slice(0, limit)
-    const items = await Promise.all(
-      matches.map(async (entry) => {
+    // Resolve symlink targets before ranking so directory symlinks sort with directories
+    // and are not dropped by the result cap.
+    const resolved = await Promise.all(
+      candidates.map(async (entry) => {
         let isDirectory = entry.isDirectory()
         if (entry.isSymbolicLink() && !signal.aborted) {
           try {
@@ -219,6 +219,14 @@ export function createFilePathProvider(options: FilePathAutocompleteOptions = {}
             // Broken or inaccessible symlinks remain selectable, but are not advertised as directories.
           }
         }
+        return { entry, isDirectory }
+      }),
+    )
+    if (signal.aborted) return null
+    const items = resolved
+      .sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.entry.name.localeCompare(b.entry.name))
+      .slice(0, limit)
+      .map(({ entry, isDirectory }) => {
         const suffix = isDirectory ? (directory.endsWith("\\") ? "\\" : "/") : ""
         const value = directory + entry.name + suffix
         const needsQuotes = quoted || /\s/u.test(value)
@@ -229,12 +237,7 @@ export function createFilePathProvider(options: FilePathAutocompleteOptions = {}
           cursorOffset: needsQuotes && isDirectory ? insertText.length - 1 : insertText.length,
           description: isDirectory ? "Directory" : entry.isSymbolicLink() ? "Symbolic link" : "File",
         }
-      }),
-    )
-    if (signal.aborted) return null
-    items.sort((a, b) =>
-      Number(b.description === "Directory") - Number(a.description === "Directory") || a.label.localeCompare(b.label),
-    )
+      })
     return { request: { ...request }, start: token.start, end: token.end, items }
   }
 }

@@ -62,14 +62,15 @@ function parseChord(value: string): Chord {
     throw new TypeError(`Duplicate keymap modifier: ${value}`)
   }
   return {
-    name: aliases[key] ?? key, ctrl: parts.includes("ctrl"), shift: parts.includes("shift"),
+    name: Object.hasOwn(aliases, key) ? aliases[key]! : key, ctrl: parts.includes("ctrl"), shift: parts.includes("shift"),
     meta: parts.includes("meta") || parts.includes("alt"), super: parts.includes("super"),
     hyper: parts.includes("hyper"),
   }
 }
 
 function matches(chord: Chord, event: KeyEvent): boolean {
-  return chord.name === (aliases[event.name.toLowerCase()] ?? event.name.toLowerCase()) &&
+  const eventName = event.name.toLowerCase()
+  return chord.name === (Object.hasOwn(aliases, eventName) ? aliases[eventName]! : eventName) &&
     chord.ctrl === !!event.ctrl && chord.shift === !!event.shift && chord.meta === !!event.meta &&
     chord.super === !!event.super && chord.hyper === !!event.hyper
 }

@@ -104,7 +104,7 @@ const presets = {
  * matching the constructor's validation path.
  */
 export function getSpinnerPreset(name) {
-    return presets[name];
+    return Object.hasOwn(presets, name) ? presets[name] : undefined;
 }
 /**
  * Returns all available preset names.

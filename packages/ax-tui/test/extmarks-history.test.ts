@@ -142,5 +142,139 @@ import { EditBuffer, EditorView } from "@defai-digital/ax-tui"
   }
 }
 
+// A no-op backspace discards its extmark snapshot; the redo stack stashed by
+// that snapshot must be restored, not dropped.
+{
+  const buffer = EditBuffer.create("unicode")
+  const view = EditorView.create(buffer, 40, 4)
+  try {
+    buffer.setText("ab")
+    const id = view.extmarks.create({ start: 1, end: 2, typeId: 5 })
+    buffer.setCursorByOffset(2)
+    buffer.insertText("X")
+    buffer.undo()
+    assert.equal(buffer.getText(), "ab")
+    assert.equal(buffer.canRedo(), true)
+
+    buffer.setCursorByOffset(0)
+    buffer.deleteCharBackward()
+    assert.equal(buffer.canRedo(), true)
+    buffer.redo()
+    assert.equal(buffer.getText(), "abX")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [1, 2])
+  } finally {
+    view.destroy()
+    buffer.destroy()
+  }
+}
+
+// replaceTextOwned clears extmarks for the replaced text, and undo restores
+// both the text and the cleared marks.
+{
+  const buffer = EditBuffer.create("unicode")
+  const view = EditorView.create(buffer, 40, 4)
+  try {
+    buffer.setText("hello")
+    const id = view.extmarks.create({ start: 0, end: 2, typeId: 5 })
+    buffer.replaceTextOwned("bye")
+    assert.equal(buffer.getText(), "bye")
+    assert.deepEqual(view.extmarks.getAllForTypeId(5), [])
+
+    buffer.undo()
+    assert.equal(buffer.getText(), "hello")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [0, 2])
+  } finally {
+    view.destroy()
+    buffer.destroy()
+  }
+}
+
+// A zero-width insertion (combining mark) changes the text bytes and pushes a
+// real native undo entry, but the display cursor does not move. The extmark
+// snapshot must be kept so undo restores the offsets of the pre-insert text.
+{
+  const buffer = EditBuffer.create("unicode")
+  const view = EditorView.create(buffer, 40, 4)
+  try {
+    buffer.setText("abcd")
+    const id = view.extmarks.create({ start: 3, end: 4, typeId: 5 })
+    buffer.setCursorByOffset(2)
+    buffer.insertText("X")
+    assert.equal(buffer.getText(), "abXcd")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [4, 5])
+
+    buffer.insertText("\\u0301")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [4, 5])
+
+    buffer.undo()
+    assert.equal(buffer.getText(), "abXcd")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [4, 5])
+
+    buffer.undo()
+    assert.equal(buffer.getText(), "abcd")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [3, 4])
+  } finally {
+    view.destroy()
+    buffer.destroy()
+  }
+}
+
+// Same zero-width desync through insertChar with a zero-width space.
+{
+  const buffer = EditBuffer.create("unicode")
+  const view = EditorView.create(buffer, 40, 4)
+  try {
+    buffer.setText("abcd")
+    const id = view.extmarks.create({ start: 3, end: 4, typeId: 5 })
+    buffer.setCursorByOffset(2)
+    buffer.insertText("X")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [4, 5])
+
+    buffer.insertChar("\\u200B")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [4, 5])
+
+    buffer.undo()
+    assert.equal(buffer.getText(), "abXcd")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [4, 5])
+
+    buffer.undo()
+    assert.equal(buffer.getText(), "abcd")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [3, 4])
+  } finally {
+    view.destroy()
+    buffer.destroy()
+  }
+}
+
+// deleteChar at end-of-line is a text no-op, but the native buffer still pushes
+// an empty undo entry. The wrapper must skip the native call, or the extmark
+// snapshot stack drifts and the next undo restores stale offsets.
+{
+  const buffer = EditBuffer.create("unicode")
+  const view = EditorView.create(buffer, 40, 4)
+  try {
+    buffer.setText("abcd")
+    const id = view.extmarks.create({ start: 3, end: 4, typeId: 5 })
+    buffer.setCursorByOffset(2)
+    buffer.insertText("X")
+    assert.equal(buffer.getText(), "abXcd")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [4, 5])
+
+    buffer.setCursorByOffset(5)
+    buffer.deleteChar()
+    assert.equal(buffer.getText(), "abXcd")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [4, 5])
+
+    // The skipped delete pushed no undo entry: one undo reverts the insert.
+    buffer.undo()
+    assert.equal(buffer.getText(), "abcd")
+    assert.deepEqual([view.extmarks.get(id).start, view.extmarks.get(id).end], [3, 4])
+    assert.equal(buffer.canUndo(), false)
+  } finally {
+    view.destroy()
+    buffer.destroy()
+  }
+}
+
 console.log("extmark history checks passed")
 `

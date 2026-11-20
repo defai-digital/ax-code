@@ -1,6 +1,6 @@
 import { BAR_EMPTY, symbolForHeight } from "./symbols.js"
 import type { Cell } from "./cells.js"
-import { paintText } from "./cells.js"
+import { paintText, truncateCodePoints } from "./cells.js"
 import type { ColorInput } from "./types.js"
 
 /** Bar input. */
@@ -58,7 +58,18 @@ function normalizeBar(entry: BarInput | number): Required<Pick<BarInput, "value"
 export function layoutBarChart(options: BarChartLayoutOptions, width: number, height: number): Cell[] {
   const barWidth = options.barWidth ?? 1
   const barGap = options.barGap ?? 1
-  if (width <= 0 || height <= 0 || barWidth <= 0 || barGap < 0 || options.data.length === 0) return []
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    !Number.isInteger(barWidth) ||
+    !Number.isInteger(barGap) ||
+    barWidth <= 0 ||
+    barGap < 0 ||
+    options.data.length === 0
+  )
+    return []
 
   const bars = options.data.map(normalizeBar)
   const showLabels = options.showLabels ?? true
@@ -110,9 +121,9 @@ export function layoutBarChart(options: BarChartLayoutOptions, width: number, he
     }
 
     if (hasLabels && bar.label !== undefined && bar.label.length > 0) {
-      const label = bar.label.length > barWidth ? bar.label.slice(0, barWidth) : bar.label
+      const label = truncateCodePoints(bar.label, barWidth)
       const labelX = x + Math.floor((barWidth - label.length) / 2)
-      paintText(cells, label, labelX, barsHeight, defaultColor, options.backgroundColor)
+      paintText(cells, label.join(""), labelX, barsHeight, defaultColor, options.backgroundColor)
     }
 
     x += barWidth + barGap

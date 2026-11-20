@@ -25,6 +25,14 @@ function fraction(value: number, start: number, end: number): number {
 }
 
 function interpolate(start: number, end: number, ratio: number): number {
+  // Equal endpoints are always exact: the expression start * (1 - ratio) +
+  // end * ratio can round one ULP away from start (e.g. clipping a horizontal
+  // segment that lies exactly on the top boundary), and the flipped outcode
+  // then makes Cohen-Sutherland clip against a parallel boundary, collapsing
+  // or dropping the whole segment.
+  if (start === end) return start
+  if (ratio <= 0) return start
+  if (ratio >= 1) return end
   return start * (1 - ratio) + end * ratio
 }
 

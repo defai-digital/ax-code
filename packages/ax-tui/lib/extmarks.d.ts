@@ -58,6 +58,7 @@ export declare class ExtmarksController {
     private originalRedo;
     private originalClearHistory;
     private originalSetTextOwned;
+    private originalReplaceTextOwned;
     constructor(editBuffer: EditBuffer, editorView: EditorView);
     private wrapCursorMovement;
     private wrapDeletion;

@@ -1,5 +1,5 @@
 import { Renderable, RootRenderable } from "./renderable.js";
-import { DebugOverlayCorner, type CursorStyleOptions, type MousePointerStyle, type RenderContext, type TerminalCapabilities, type ThemeMode, type WidthMethod } from "./types.js";
+import { CliRenderEvents, DebugOverlayCorner, type CursorStyleOptions, type MousePointerStyle, type RenderContext, type TerminalCapabilities, type ThemeMode, type WidthMethod } from "./types.js";
 import { RGBA, type ColorInput } from "../lib/rgba.js";
 import { OptimizedBuffer } from "./buffer.js";
 import { type NativeBufferedOutput, type NativeRenderStats, type RendererHandle } from "./zig.js";
@@ -172,22 +172,7 @@ export declare enum MouseButton {
     WHEEL_DOWN = 5
 }
 export declare function createCliRenderer(config?: CliRendererConfig): Promise<CliRenderer>;
-export declare enum CliRenderEvents {
-    RESIZE = "resize",
-    FRAME = "frame",
-    EXTERNAL_OUTPUT = "external_output",
-    FOCUS = "focus",
-    BLUR = "blur",
-    FOCUSED_RENDERABLE = "focused_renderable",
-    FOCUSED_EDITOR = "focused_editor",
-    THEME_MODE = "theme_mode",
-    PALETTE = "palette",
-    CAPABILITIES = "capabilities",
-    SELECTION = "selection",
-    DEBUG_OVERLAY_TOGGLE = "debugOverlay:toggle",
-    DESTROY = "destroy",
-    MEMORY_SNAPSHOT = "memory:snapshot"
-}
+export { CliRenderEvents };
 export declare enum RendererControlState {
     IDLE = "idle",
     AUTO_STARTED = "auto_started",
@@ -287,6 +272,7 @@ export declare class CliRenderer extends EventEmitter implements RenderContext {
     private _splitHeight;
     private renderOffset;
     private splitTailColumn;
+    private stdoutPendingCRLine;
     private pendingSplitFooterTransition;
     private forceFullRepaintRequested;
     private readonly maxSplitCommitsPerFrame;

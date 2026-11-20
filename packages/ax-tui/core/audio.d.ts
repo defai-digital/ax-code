@@ -57,6 +57,7 @@ export declare class Audio extends EventEmitter<AudioEvents> {
     private readonly groups;
     private playbackStarted;
     private mixerStarted;
+    private constructing;
     private constructor();
     private emitError;
     start(options?: AudioStartOptions): boolean;

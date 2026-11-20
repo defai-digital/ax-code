@@ -7,7 +7,7 @@ import { BAR_EMPTY, symbolForHeight } from "./symbols.js";
  * eighth blocks. `max <= 0` renders empty bars (no division by zero).
  */
 export function layoutSparkline(options, width, height) {
-    if (width <= 0 || height <= 0)
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0)
         return [];
     const cells = [];
     const data = options.data;

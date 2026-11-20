@@ -99,33 +99,44 @@ export class Audio extends EventEmitter<AudioEvents> {
   private readonly groups = new Map<string, number>()
   private playbackStarted = false
   private mixerStarted = false
+  private constructing = true
 
   private constructor(lib: RenderLib, options: AudioSetupOptions) {
     super()
-    this.lib = lib
-    this.defaultStartOptions = options.startOptions
-    const createOptions =
-      options.sampleRate == null && options.playbackChannels == null
-        ? undefined
-        : {
-            sampleRate: options.sampleRate == null ? undefined : Math.max(0, Math.trunc(options.sampleRate)),
-            playbackChannels:
-              options.playbackChannels == null ? undefined : Math.max(0, Math.trunc(options.playbackChannels)),
-          }
-    this.engine = this.lib.createAudioEngine(createOptions)
-    if (!this.engine) {
-      this.emitError("createAudioEngine", undefined, "Audio createAudioEngine returned null")
-      return
-    }
+    try {
+      this.lib = lib
+      this.defaultStartOptions = options.startOptions
+      const createOptions =
+        options.sampleRate == null && options.playbackChannels == null
+          ? undefined
+          : {
+              sampleRate: options.sampleRate == null ? undefined : Math.max(0, Math.trunc(options.sampleRate)),
+              playbackChannels:
+                options.playbackChannels == null ? undefined : Math.max(0, Math.trunc(options.playbackChannels)),
+            }
+      this.engine = this.lib.createAudioEngine(createOptions)
+      if (!this.engine) {
+        this.emitError("createAudioEngine", undefined, "Audio createAudioEngine returned null")
+        return
+      }
 
-    if (options.autoStart ?? false) {
-      this.start(this.defaultStartOptions)
+      if (options.autoStart ?? false) {
+        this.start(this.defaultStartOptions)
+      }
+    } finally {
+      this.constructing = false
     }
   }
 
   private emitError(action: AudioAction, status?: number, message?: string, cause?: unknown): void {
     const error = message ? new Error(message) : statusToError(action, status ?? -1)
     if (cause) (error as Error & { cause?: unknown }).cause = cause
+    if (this.constructing) {
+      // Nobody can attach an "error" listener before create() returns; emitting
+      // synchronously would throw as an unhandled EventEmitter error.
+      queueMicrotask(() => this.emit("error", error, { action, status }))
+      return
+    }
     this.emit("error", error, { action, status })
   }
 
@@ -142,9 +153,11 @@ export class Audio extends EventEmitter<AudioEvents> {
       this.emitError("start", status)
       return false
     }
+    const mixerWasStarted = this.mixerStarted
     this.playbackStarted = true
     this.mixerStarted = true
     this.emit("started")
+    if (!mixerWasStarted) this.emit("mixerStarted")
     return true
   }
 

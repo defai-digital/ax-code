@@ -9,7 +9,7 @@ import {
   type SlotMode,
   type SlotRegistryOptions,
 } from "@defai-digital/ax-tui"
-import { children, createMemo, createSignal, ErrorBoundary, For, onCleanup, splitProps, type JSX } from "solid-js"
+import { children, createEffect, createMemo, createSignal, ErrorBoundary, For, on, onCleanup, splitProps, type JSX } from "solid-js"
 
 export type { SlotMode }
 type SlotMap = Record<string, object>
@@ -94,20 +94,37 @@ export function Slot<
   const pluginFailurePlaceholder = () => local.pluginFailurePlaceholder
   const [version, setVersion] = createSignal(0)
   let queued = false
+  let missed = false
   let disposed = false
 
-  const unsubscribe = registry().subscribe(() => {
-    if (queued) return
-    queued = true
-    setVersion((current) => current + 1)
-    queueMicrotask(() => {
-      queued = false
-      if (disposed) return
-    })
-  })
+  // Subscribe reactively so a changed props.registry re-subscribes here too.
+  createEffect(
+    on(registry, (reg) => {
+      const unsubscribe = reg.subscribe(() => {
+        if (queued) {
+          // A mutation arrived while a bump was queued; remember it so the
+          // microtask re-resolves instead of dropping the update forever.
+          missed = true
+          return
+        }
+        queued = true
+        setVersion((current) => current + 1)
+        queueMicrotask(() => {
+          queued = false
+          if (disposed) return
+          if (missed) {
+            missed = false
+            setVersion((current) => current + 1)
+          }
+        })
+      })
+      onCleanup(() => unsubscribe())
+      // Re-resolve against the new registry even if it never notifies.
+      setVersion((current) => current + 1)
+    }),
+  )
   onCleanup(() => {
     disposed = true
-    unsubscribe()
   })
 
   const entries = createMemo<Array<ResolvedSlotRenderer<JSX.Element, TSlots[K], TContext>>>((previousEntries = []) => {
@@ -177,6 +194,7 @@ export function Slot<
   const renderEntry = (
     entry: ResolvedSlotRenderer<JSX.Element, TSlots[K], TContext>,
     fallbackOnError?: () => JSX.Element,
+    onResolved?: (hasOutput: boolean) => void,
   ): JSX.Element => {
     let initialRender: JSX.Element
 
@@ -194,15 +212,6 @@ export function Slot<
       return renderPluginFailurePlaceholder(failure, fallbackOnError)
     }
 
-    const resolvedInitialRender = children(() => initialRender)
-    const hasInitialOutput = resolvedInitialRender
-      .toArray()
-      .some((node) => node !== null && node !== undefined && node !== false)
-
-    if (!hasInitialOutput) {
-      return resolveFallback(fallbackOnError)
-    }
-
     return (
       <ErrorBoundary
         fallback={(error: unknown) => {
@@ -217,7 +226,29 @@ export function Slot<
           return renderPluginFailurePlaceholder(failure, fallbackOnError)
         }}
       >
-        {resolvedInitialRender()}
+        {(() => {
+          // Resolved inside the boundary's children getter so the memo is
+          // owned by the ErrorBoundary: lazy and reactive plugin throws are
+          // caught and reported instead of escaping to the slot owner. The
+          // getter runs synchronously while the boundary is created, so
+          // onResolved observes emptiness before the slot composes output.
+          try {
+            const resolved = children(() => initialRender)
+            const hasOutput = resolved.toArray().some((node) => node !== null && node !== undefined && node !== false)
+            onResolved?.(hasOutput)
+            if (!hasOutput) return null
+            return resolved()
+          } catch (error) {
+            const failure = registry().reportPluginError({
+              pluginId: entry.id,
+              slot: slotName(),
+              phase: "render",
+              source: "solid",
+              error,
+            })
+            return renderPluginFailurePlaceholder(failure, fallbackOnError)
+          }
+        })()}
       </ErrorBoundary>
     )
   }
@@ -275,10 +306,13 @@ export function Slot<
         }
 
         if (mode === "replace") {
-          const renderedEntries = resolvedEntries.map((entry) => renderEntry(entry))
-          const hasPluginOutput = renderedEntries.some(
-            (entry) => entry !== null && entry !== undefined && entry !== false,
+          const outputFlags: boolean[] = []
+          const renderedEntries = resolvedEntries.map((entry) =>
+            renderEntry(entry, undefined, (hasOutput) => {
+              outputFlags.push(hasOutput)
+            }),
           )
+          const hasPluginOutput = outputFlags.some(Boolean)
 
           if (!hasPluginOutput) {
             return renderFallback()

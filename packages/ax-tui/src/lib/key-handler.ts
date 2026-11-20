@@ -146,6 +146,12 @@ export class InternalKeyHandler extends KeyHandler {
   }
 
   private emitWithPriority<K extends keyof KeyHandlerEventMap>(event: K, ...args: KeyHandlerEventMap[K]): boolean {
+    // Snapshot the renderable handler list before global listeners run so a widget
+    // focused by a global listener does not receive the in-flight key event.
+    const renderableSet = this.renderableHandlers.get(event)
+    const renderableHandlers = renderableSet && renderableSet.size > 0 ? [...renderableSet] : []
+    const hasRenderableListeners = renderableHandlers.length > 0
+
     let hasGlobalListeners = false
 
     // Keep EventEmitter's once wrappers while checking propagation between handlers.
@@ -170,15 +176,7 @@ export class InternalKeyHandler extends KeyHandler {
       }
     }
 
-    const renderableSet = this.renderableHandlers.get(event)
-    // Snapshot the handler list so listeners added during dispatch (e.g., via focus changes)
-    // do not receive the in-flight key event.
-    const renderableHandlers = renderableSet && renderableSet.size > 0 ? [...renderableSet] : []
-    let hasRenderableListeners = false
-
-    if (renderableSet && renderableSet.size > 0) {
-      hasRenderableListeners = true
-
+    if (hasRenderableListeners) {
       if (event === "keypress" || event === "keyrelease" || event === "paste") {
         const keyEvent = args[0]
         if (keyEvent.defaultPrevented) return hasGlobalListeners || hasRenderableListeners
@@ -186,6 +184,9 @@ export class InternalKeyHandler extends KeyHandler {
       }
 
       for (const handler of renderableHandlers) {
+        // A previous handler may have detached this renderable (for example by
+        // moving focus); the snapshot must not deliver the in-flight event to it.
+        if (!renderableSet?.has(handler)) continue
         try {
           handler(...args)
         } catch (error) {

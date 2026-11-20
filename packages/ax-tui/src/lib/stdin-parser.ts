@@ -69,6 +69,7 @@ type ParserState =
   | { tag: "esc_utf8"; expected: number; seen: number }
   | { tag: "ss3" }
   | { tag: "ss3_params" }
+  | { tag: "ss3_params_deferred" }
   | { tag: "csi" }
   | { tag: "csi_sgr_mouse"; part: number; hasDigit: boolean }
   | { tag: "csi_sgr_mouse_deferred"; part: number; hasDigit: boolean }
@@ -397,8 +398,16 @@ function canStillBePixelResolution(state: ParametricCsiLike): boolean {
   return state.firstParamValue === 4 && state.semicolons === 2
 }
 
+// modifyOtherKeys reports modified keys as CSI 27;modifier;code~ regardless of
+// whether the kitty keyboard protocol is enabled, so this prefix must stay
+// deferrable outside the kitty gate.
+function canStillBeModifyOtherKeys(state: ParametricCsiLike): boolean {
+  return state.firstParamValue === 27 && state.semicolons <= 2
+}
+
 function canDeferParametricCsi(state: ParametricCsiLike, context: StdinParserProtocolContext): boolean {
   return (
+    canStillBeModifyOtherKeys(state) ||
     (context.kittyKeyboardEnabled && (canStillBeKittyU(state) || canStillBeKittySpecial(state))) ||
     (context.explicitWidthCprActive && canStillBeExplicitWidthCpr(state)) ||
     (context.startupCursorCprActive && canStillBeStartupCursorCpr(state)) ||
@@ -413,14 +422,16 @@ function canCompleteDeferredParametricCsi(
 ): boolean {
   if (context.kittyKeyboardEnabled) {
     if (state.hasDigit && byte === 0x75) return true
-    if (
-      state.hasDigit &&
-      state.semicolons === 1 &&
-      state.segments > 1 &&
-      (byte === 0x7e || (byte >= 0x41 && byte <= 0x5a))
-    ) {
+    if (state.hasDigit && state.semicolons === 1 && (byte === 0x7e || (byte >= 0x41 && byte <= 0x5a))) {
       return true
     }
+  }
+
+  // Modified special keys such as ctrl+return arrive as CSI 27;modifier;code~
+  // and can split across reads just like the single-parameter forms. This form
+  // is recognized even when the kitty keyboard protocol is disabled.
+  if (state.hasDigit && state.semicolons === 2 && state.firstParamValue === 27 && byte === 0x7e) {
+    return true
   }
 
   if (
@@ -737,6 +748,15 @@ export class StdinParser {
       remainder = remainder.subarray(appendEnd)
       this.scanPending()
 
+      // ESC-pair splitting emits keys without consuming their bytes (consumePrefix
+      // would reset the scan origin mid-flight). Drop the emitted prefix here so
+      // overflow accounting only counts bytes that have not become events yet.
+      if (this.unitStart > 0) {
+        this.pending.consume(this.unitStart)
+        this.cursor -= this.unitStart
+        this.unitStart = 0
+      }
+
       if (this.paste && this.pending.length > 0) {
         remainder = this.consumePasteBytes(this.takePendingBytes())
         continue
@@ -960,9 +980,18 @@ export class StdinParser {
               return
             }
 
-            const flushedLoneEsc = this.cursor === this.unitStart + 1 && bytes[this.unitStart] === ESC
-            this.emitKeyOrResponse("unknown", decodeUtf8(bytes.subarray(this.unitStart, this.cursor)))
-            this.justFlushedEsc = flushedLoneEsc
+            // Split runs of ESCs into pairs (meta+escape) plus a trailing lone
+            // ESC, instead of emitting one undecodable blob for the whole run.
+            while (this.cursor - this.unitStart >= 2) {
+              this.emitKeyOrResponse("unknown", "\x1b\x1b")
+              this.unitStart += 2
+            }
+            if (this.cursor - this.unitStart === 1) {
+              this.emitKeyOrResponse("unknown", "\x1b")
+              this.justFlushedEsc = true
+            } else {
+              this.justFlushedEsc = false
+            }
             this.state = { tag: "ground" }
             this.consumePrefix(this.cursor)
             continue
@@ -994,9 +1023,23 @@ export class StdinParser {
             // ESC ESC: stay in esc state. Terminals encode Alt+ESC and
             // similar sequences as ESC ESC [...], so we keep scanning.
             case ESC:
+              if (this.cursor - this.unitStart >= 2) {
+                this.emitKeyOrResponse("unknown", "\x1b\x1b")
+                this.unitStart = this.cursor
+              }
               this.cursor += 1
               continue
             default: {
+              if (this.cursor - this.unitStart >= 2) {
+                // A completed ESC pair precedes this byte: emit it, then
+                // reprocess the byte from ground (or esc for a remaining ESC).
+                this.emitKeyOrResponse("unknown", "\x1b\x1b")
+                this.unitStart += 2
+                if (this.cursor - this.unitStart === 0) {
+                  this.state = { tag: "ground" }
+                }
+                continue
+              }
               this.cursor += 1
               // Alt/Option combined with a non-ASCII character arrives as an
               // ESC prefix followed by one UTF-8 codepoint. Consume the whole
@@ -1092,10 +1135,13 @@ export class StdinParser {
               return
             }
 
-            this.emitOpaqueResponse("unknown", bytes.subarray(this.unitStart, this.cursor))
-            this.state = { tag: "ground" }
-            this.consumePrefix(this.cursor)
-            continue
+            // ESC O plus digits is unambiguously a parameterized SS3 key, so a
+            // split read must keep waiting for the final byte instead of
+            // flushing the prefix as an unknown response.
+            this.state = { tag: "ss3_params_deferred" }
+            this.pendingSinceMs = null
+            this.forceFlush = false
+            return
           }
 
           if (byte === ESC) {
@@ -1114,6 +1160,27 @@ export class StdinParser {
           this.emitKeyOrResponse("unknown", decodeUtf8(bytes.subarray(this.unitStart, this.cursor)))
           this.state = { tag: "ground" }
           this.consumePrefix(this.cursor)
+          continue
+        }
+
+        case "ss3_params_deferred": {
+          if (this.cursor >= bytes.length) {
+            this.pendingSinceMs = null
+            this.forceFlush = false
+            return
+          }
+
+          if (byte === ESC) {
+            this.emitOpaqueResponse("unknown", bytes.subarray(this.unitStart, this.cursor))
+            this.state = { tag: "ground" }
+            this.consumePrefix(this.cursor)
+            continue
+          }
+
+          // ss3_params accepts any non-ESC byte as a parameter or final, so the
+          // deferred state must resume for every continuation byte, not just
+          // digits and A-Z/~ finals (lowercase and ^/$ finals are valid too).
+          this.state = { tag: "ss3_params" }
           continue
         }
         // Narrow recovery path for delayed mouse continuations after a
@@ -1154,6 +1221,27 @@ export class StdinParser {
           if (this.cursor >= bytes.length) {
             if (!this.forceFlush) {
               this.markPending()
+              return
+            }
+
+            // A split modifyOtherKeys sequence can break right after the first
+            // parameter (ESC [ 27 | ;5;13~). If the pending bytes are a pure
+            // digit prefix that could still start a deferrable parametric CSI,
+            // keep waiting instead of flushing the prefix as unknown.
+            const firstParamValue = parsePositiveDecimalPrefix(bytes, this.unitStart + 2, this.cursor)
+            if (
+              firstParamValue !== null &&
+              canDeferParametricCsi({ semicolons: 0, segments: 1, hasDigit: true, firstParamValue }, this.protocolContext)
+            ) {
+              this.state = {
+                tag: "csi_parametric_deferred",
+                semicolons: 0,
+                segments: 1,
+                hasDigit: true,
+                firstParamValue,
+              }
+              this.pendingSinceMs = null
+              this.forceFlush = false
               return
             }
 
@@ -1228,6 +1316,13 @@ export class StdinParser {
           }
 
           if (byte === 0x3f && this.cursor === this.unitStart + 2) {
+            this.cursor += 1
+            this.state = { tag: "csi_private_reply", semicolons: 0, hasDigit: false, sawDollar: false }
+            continue
+          }
+
+          // Secondary DA replies use the CSI > prefix (e.g. ESC [ > 0;95;0 c).
+          if (byte === 0x3e && this.cursor === this.unitStart + 2) {
             this.cursor += 1
             this.state = { tag: "csi_private_reply", semicolons: 0, hasDigit: false, sawDollar: false }
             continue
@@ -1866,7 +1961,13 @@ export class StdinParser {
   // capability responses, focus sequences, and other non-key CSI traffic
   // avoids becoming text.
   private emitKeyOrResponse(protocol: StdinResponseProtocol, raw: string): void {
-    const parsed = parseKeypress(raw, { useKittyKeyboard: this.useKittyKeyboard })
+    const parsed = parseKeypress(raw, {
+      useKittyKeyboard: this.useKittyKeyboard,
+      cprAsFunctionKey:
+        protocol === "cpr" &&
+        !this.protocolContext.explicitWidthCprActive &&
+        !this.protocolContext.startupCursorCprActive,
+    })
     if (parsed) {
       this.events.push({
         type: "key",
@@ -1886,6 +1987,9 @@ export class StdinParser {
   private emitMouse(rawBytes: Uint8Array, encoding: "sgr" | "x10"): void {
     const event = this.mouseParser.parseMouseEvent(rawBytes)
     if (!event) {
+      // A well-formed SGR report can decode to no event (wheel release);
+      // consume it instead of routing mouse bytes into the response stream.
+      if (encoding === "sgr" && isMouseSgrSequence(rawBytes)) return
       this.emitOpaqueResponse("unknown", rawBytes)
       return
     }

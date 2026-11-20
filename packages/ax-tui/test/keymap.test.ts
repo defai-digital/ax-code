@@ -64,6 +64,23 @@ assert.equal(editor.value, "zx")
 `)
 })
 
+test.skipIf(!supportsFfi)("keymap treats prototype-named keys as literal chords", () => {
+  scenario(`
+const keymap = getKeymap(renderer)
+const calls = []
+keymap.register({ bindings: [
+  { id: "ctor", keys: "constructor", handler: () => calls.push("ctor") },
+  { id: "str", keys: "toString", handler: () => calls.push("str") },
+  { id: "proto", keys: "__proto__", handler: () => calls.push("proto") },
+] })
+send("constructor"); assert.deepEqual(calls, ["ctor"])
+send("toString"); assert.deepEqual(calls, ["ctor", "str"])
+send("__proto__"); assert.deepEqual(calls, ["ctor", "str", "proto"])
+keymap.register({ bindings: [{ id: "ret", keys: "enter", handler: () => calls.push("ret") }] })
+send("return"); assert.equal(calls.at(-1), "ret")
+`)
+})
+
 test.skipIf(!supportsFfi)("keymap sequences cancel on focus, paste, disposal, mismatch and Escape", () => {
   scenario(`
 const editor = new InputRenderable(renderer, { id: "editor" })

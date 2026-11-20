@@ -2,6 +2,7 @@ import type { OptimizedBuffer } from "../core/buffer.js"
 import { parseColor, RGBA, type ColorInput } from "../lib/rgba.js"
 import { Renderable, type RenderableOptions } from "../core/renderable.js"
 import type { RenderContext } from "../core/types.js"
+import { stringWidth } from "../platform/runtime.js"
 
 export interface TimeToFirstDrawOptions extends RenderableOptions<TimeToFirstDrawRenderable> {
   fg?: ColorInput
@@ -73,8 +74,15 @@ export class TimeToFirstDrawRenderable extends Renderable {
 
     const content = `${this.label}: ${this._runtimeMs.toFixed(this.precision)}ms`
     const maxWidth = Math.max(this.width, 1)
-    const visibleContent = content.length > maxWidth ? content.slice(0, maxWidth) : content
-    const centeredX = this.x + Math.max(0, Math.floor((maxWidth - visibleContent.length) / 2))
+    let visibleContent = ""
+    let visibleWidth = 0
+    for (const char of content) {
+      const charWidth = stringWidth(char)
+      if (visibleWidth + charWidth > maxWidth) break
+      visibleContent += char
+      visibleWidth += charWidth
+    }
+    const centeredX = this.x + Math.max(0, Math.floor((maxWidth - visibleWidth) / 2))
 
     buffer.drawText(visibleContent, centeredX, this.y, this.textColor)
   }
@@ -84,6 +92,6 @@ export class TimeToFirstDrawRenderable extends Renderable {
       return 2
     }
 
-    return Math.max(0, Math.floor(value))
+    return Math.min(100, Math.max(0, Math.floor(value)))
   }
 }

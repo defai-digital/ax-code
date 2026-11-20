@@ -33,7 +33,7 @@ function resetSolidTransformPluginState() {
   delete state.runtime;
 }
 function createSolidTransformPlugin(input = {}) {
-  const sourceFilter = input.resolvePath ? /^(?!.*[/\\]node_modules[/\\]).*\.[cm]?[jt]sx?(?:[?#].*)?$/ : /^(?!.*[/\\]node_modules[/\\]).*\.[cm]?[jt]sx(?:[?#].*)?$/;
+  const sourceFilter = /^(?!.*[/\\]node_modules[/\\]).*\.[cm]?[jt]sx?(?:[?#].*)?$/;
   return {
     name: "bun-plugin-solid",
     setup: (build) => {
@@ -59,6 +59,9 @@ function createSolidTransformPlugin(input = {}) {
         const runtime = getSolidTransformRuntime();
         const moduleName = input.moduleName ?? runtime.moduleName ?? "@defai-digital/ax-tui/solid";
         const resolvePath = input.resolvePath ?? runtime.resolvePath;
+        if (!resolvePath && !/\.[cm]?[jt]sx$/.test(path)) {
+          return { contents: code, loader: /\.[cm]?ts$/.test(path) ? "ts" : "js" };
+        }
         const contents = await transformSolidSource(code, {
           filename: path,
           moduleName,

@@ -48,6 +48,18 @@ export function paintText(out, text, x, y, fg, bg, maxWidth = Number.POSITIVE_IN
     }
 }
 /**
+ * Prefix of `text` at most `maxWidth` codepoints long, never splitting a
+ * surrogate pair. paintText counts one column per codepoint; truncation and
+ * centering must use the same unit so a multi-unit codepoint is never cut in
+ * half or measured as two columns.
+ */
+export function truncateCodePoints(text, maxWidth) {
+    if (maxWidth <= 0)
+        return [];
+    const points = Array.from(text);
+    return points.length > maxWidth ? points.slice(0, maxWidth) : points;
+}
+/**
  * Render a paint list into string rows for deterministic frame assertions.
  * Cells outside the area are ignored; unset cells use `fill`.
  */

@@ -9,6 +9,7 @@ export interface DownloadResult {
 }
 
 const MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
+const WASM_MAGIC = Buffer.from([0x00, 0x61, 0x73, 0x6d])
 
 /** Grammar asset URLs are https and never carry userinfo. */
 export function grammarDownloadUrl(source: string): string {
@@ -141,6 +142,11 @@ export class DownloadUtils {
         console.log(`Downloading from URL: ${source}`)
         const content = await fetchContent(source)
 
+        // Reject non-wasm bodies (e.g. HTML error pages) before they can poison the cache.
+        if (fileExtension === ".wasm" && !content.subarray(0, 4).equals(WASM_MAGIC)) {
+          return { error: `Downloaded content from ${source} is not a valid wasm module` }
+        }
+
         try {
           await writeAtomic(cacheFile, content)
           console.log(`Cached: ${source}`)
@@ -188,6 +194,11 @@ export class DownloadUtils {
       try {
         console.log(`Downloading from URL: ${source}`)
         const content = await fetchContent(source)
+
+        // Reject non-wasm bodies (e.g. HTML error pages) before they can replace a grammar.
+        if (targetPath.endsWith(".wasm") && !content.subarray(0, 4).equals(WASM_MAGIC)) {
+          return { error: `Downloaded content from ${source} is not a valid wasm module` }
+        }
 
         await writeAtomic(targetPath, content)
         console.log(`Downloaded: ${source} -> ${targetPath}`)

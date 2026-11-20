@@ -47,9 +47,10 @@ export interface ChartLayoutOptions {
 /**
  * Validate the bounds contract: when an axis object is provided, its bounds
  * are required and must be a finite pair. This is the one hard error — all
- * other degenerate input renders nothing without throwing.
+ * other degenerate input renders nothing without throwing. Returns `options`
+ * unchanged so a constructor can validate inside its super() argument.
  */
-export declare function validateChartOptions(options: ChartLayoutOptions): void;
+export declare function validateChartOptions<T extends ChartLayoutOptions>(options: T): T;
 interface ChartLayout {
     cells: Cell[];
     graphLeft: number;

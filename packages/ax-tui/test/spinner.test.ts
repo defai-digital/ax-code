@@ -41,6 +41,12 @@ describe("ax-tui spinner presets", () => {
     expect(getSpinnerPreset("nonexistent")).toBeUndefined()
   })
 
+  test("getSpinnerPreset returns undefined for Object prototype keys", () => {
+    for (const name of ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"]) {
+      expect(getSpinnerPreset(name), `prototype key "${name}" must not resolve`).toBeUndefined()
+    }
+  })
+
   test("randomSpinner returns a valid preset", () => {
     const preset = randomSpinner()
     expect(preset.interval).toBeGreaterThan(0)

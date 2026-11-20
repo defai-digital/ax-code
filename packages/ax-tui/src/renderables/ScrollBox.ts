@@ -125,6 +125,7 @@ export class ScrollBoxRenderable extends BoxRenderable {
   private readonly autoScrollSpeedMedium = 36
   private readonly autoScrollSpeedFast = 72
   private isAutoScrolling: boolean = false
+  private autoScrollOwnedLive: boolean = false
   private cachedAutoScrollSpeed: number = 3
   private autoScrollAccumulatorX: number = 0
   private autoScrollAccumulatorY: number = 0
@@ -628,6 +629,9 @@ export class ScrollBoxRenderable extends BoxRenderable {
 
     if (!this.live) {
       this.live = true
+      // Remember that auto-scroll owns the live flag so stopAutoScroll does
+      // not clear an app-requested live state.
+      this.autoScrollOwnedLive = true
     }
   }
 
@@ -654,11 +658,12 @@ export class ScrollBoxRenderable extends BoxRenderable {
     this.autoScrollAccumulatorX = 0
     this.autoScrollAccumulatorY = 0
 
-    // Only turn off live if no other features need it
-    // For now, auto-scroll is the only feature using live, but this could be extended
-    if (wasAutoScrolling && !this.hasOtherLiveReasons()) {
+    // Only turn off live if auto-scroll set it itself; an app-requested live
+    // state must survive the auto-scroll session.
+    if (wasAutoScrolling && this.autoScrollOwnedLive && !this.hasOtherLiveReasons()) {
       this.live = false
     }
+    this.autoScrollOwnedLive = false
   }
 
   private hasOtherLiveReasons(): boolean {

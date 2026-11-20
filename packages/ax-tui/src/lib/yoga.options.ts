@@ -287,7 +287,7 @@ export function parsePositionType(value: string | null | undefined): PositionTyp
     case "absolute":
       return PositionType.Absolute
     default:
-      return PositionType.Static
+      return PositionType.Relative
   }
 }
 

@@ -506,6 +506,49 @@ describe("StdinParser", () => {
 
     table([["double-ESC + [A → meta+up", "\x1b\x1b[A", [k("up", { raw: "\x1b\x1b[A", meta: true })]]])
 
+    // Three or more ESC bytes must split into meta+escape pairs plus the
+    // remainder, not collapse into a single unnamed key event that drops the
+    // trailing bytes and never triggers Escape bindings.
+    test("triple-ESC flushes as meta+escape then escape", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b\x1b\x1b"))
+        clock.advance(10)
+        expect(snap(parser)).toEqual([k("escape", { raw: "\x1b\x1b", meta: true }), k("escape", { raw: "\x1b" })])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("quadruple-ESC flushes as two meta+escape pairs", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b\x1b\x1b\x1b"))
+        clock.advance(10)
+        expect(snap(parser)).toEqual([
+          k("escape", { raw: "\x1b\x1b", meta: true }),
+          k("escape", { raw: "\x1b\x1b", meta: true }),
+        ])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    table([
+      ["double-ESC + x → meta+escape then x", "\x1b\x1bx", [k("escape", { raw: "\x1b\x1b", meta: true }), k("x")]],
+      [
+        "triple-ESC + x → meta+escape then meta+x",
+        "\x1b\x1b\x1bx",
+        [k("escape", { raw: "\x1b\x1b", meta: true }), k("x", { raw: "\x1bx", meta: true })],
+      ],
+      [
+        "triple-ESC + [A → meta+escape then up",
+        "\x1b\x1b\x1b[A",
+        [k("escape", { raw: "\x1b\x1b", meta: true }), k("up", { raw: "\x1b[A" })],
+      ],
+      ["double-ESC + é → meta+escape then é", "\x1b\x1bé", [k("escape", { raw: "\x1b\x1b", meta: true }), k("é")]],
+    ])
+
     test("meta+uppercase sets shift", () => {
       const p = createParser()
       try {
@@ -605,6 +648,98 @@ describe("StdinParser", () => {
       ["shift+digit 5", "\x1b[27;2;53~", [k("5", { raw: "\x1b[27;2;53~", shift: true })]],
       ["alt+emoji", "\x1b[27;3;128512~", [k("😀", { raw: "\x1b[27;3;128512~", meta: true })]],
     ])
+
+    test("meta modifier bit sets meta", () => {
+      const p = createParser()
+      try {
+        // Modifier 33 = 1 + 32 (meta bit).
+        p.push(Buffer.from("\x1b[27;33;65~"))
+        const event = p.read()
+        expect(event?.type).toBe("key")
+        if (!event || event.type !== "key") throw new Error("expected key event")
+        expect(event.key.meta).toBe(true)
+        expect(event.key.option).toBe(false)
+        expect(p.read()).toBeNull()
+      } finally {
+        p.destroy()
+      }
+    })
+
+    test("capsLock and numLock modifier bits are preserved", () => {
+      const p = createParser()
+      try {
+        // Modifier 193 = 1 + 64 (capsLock) + 128 (numLock).
+        p.push(Buffer.from("\x1b[27;193;97~"))
+        const event = p.read()
+        expect(event?.type).toBe("key")
+        if (!event || event.type !== "key") throw new Error("expected key event")
+        expect(event.key.name).toBe("a")
+        expect(event.key.capsLock).toBe(true)
+        expect(event.key.numLock).toBe(true)
+        expect(event.key.meta).toBe(false)
+        expect(p.read()).toBeNull()
+      } finally {
+        p.destroy()
+      }
+    })
+  })
+
+  describe("split parametric sequences across reads", () => {
+    test("SS3 params resume after a timeout for lowercase finals", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1bO1;2"))
+        expect(snap(parser)).toEqual([])
+        clock.advance(10)
+        expect(snap(parser)).toEqual([])
+        parser.push(Buffer.from("p"))
+        expect(snap(parser)).toEqual([k("0", { raw: "\x1bO1;2p", shift: true })])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("SS3 params resume after a timeout for uppercase finals", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1bO1;5"))
+        expect(snap(parser)).toEqual([])
+        clock.advance(10)
+        expect(snap(parser)).toEqual([])
+        parser.push(Buffer.from("A"))
+        expect(snap(parser)).toEqual([k("up", { raw: "\x1bO1;5A", ctrl: true })])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("modifyOtherKeys params resume after a timeout with kitty off", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b[27;5;13"))
+        expect(snap(parser)).toEqual([])
+        clock.advance(10)
+        expect(snap(parser)).toEqual([])
+        parser.push(Buffer.from("~"))
+        expect(snap(parser)).toEqual([k("return", { raw: "\x1b[27;5;13~", ctrl: true })])
+      } finally {
+        parser.destroy()
+      }
+    })
+
+    test("modifyOtherKeys first param split before its semicolons resumes", () => {
+      const { parser, clock } = createTimedParser()
+      try {
+        parser.push(Buffer.from("\x1b[27"))
+        expect(snap(parser)).toEqual([])
+        clock.advance(10)
+        expect(snap(parser)).toEqual([])
+        parser.push(Buffer.from(";5;13~"))
+        expect(snap(parser)).toEqual([k("return", { raw: "\x1b[27;5;13~", ctrl: true })])
+      } finally {
+        parser.destroy()
+      }
+    })
   })
 
   describe("alt+Unicode", () => {
@@ -892,6 +1027,8 @@ describe("StdinParser", () => {
       ["focus out", "\x1b[O", [resp("csi", "\x1b[O")]],
       // DA (Device Attributes)
       ["DA1", "\x1b[?62;1;2;6;7;8;9;15;22c", [resp("csi", "\x1b[?62;1;2;6;7;8;9;15;22c")]],
+      // Secondary DA (CSI > ... c)
+      ["secondary DA", "\x1b[>0;95;0c", [resp("csi", "\x1b[>0;95;0c")]],
       // CPR (Cursor Position Report)
       ["CPR", "\x1b[24;80R", [resp("cpr", "\x1b[24;80R")]],
       // Window/cell size
@@ -2460,5 +2597,124 @@ describe("StdinParser", () => {
         parser.destroy()
       }
     })
+  })
+})
+
+describe("modified F3 CPR disambiguation and split kitty legacy keys", () => {
+  test("shift+F3 report outside the probe window parses as a key (kitty off)", () => {
+    const p = createParser()
+    try {
+      p.push(buf("\x1b[1;2R"))
+      expect(snap(p)).toEqual([k("f3", { raw: "\x1b[1;2R", shift: true })])
+    } finally {
+      p.destroy()
+    }
+  })
+
+  test("shift+F3 report outside the probe window parses as a key (kitty on)", () => {
+    const p = createParser({ protocolContext: { kittyKeyboardEnabled: true } })
+    try {
+      p.push(buf("\x1b[1;2R"))
+      expect(snap(p)).toEqual([k("f3", { raw: "\x1b[1;2R", shift: true })])
+    } finally {
+      p.destroy()
+    }
+  })
+
+  test("CPR-shaped reports during an active width probe stay responses", () => {
+    const p = createParser({ protocolContext: { explicitWidthCprActive: true } })
+    try {
+      p.push(buf("\x1b[1;2R"))
+      expect(snap(p)).toEqual([resp("cpr", "\x1b[1;2R")])
+    } finally {
+      p.destroy()
+    }
+  })
+
+  test("row-one column-one CPR stays a response outside the probe window", () => {
+    const p = createParser()
+    try {
+      p.push(buf("\x1b[1;1R"))
+      expect(snap(p)).toEqual([resp("cpr", "\x1b[1;1R")])
+    } finally {
+      p.destroy()
+    }
+  })
+
+  test("split kitty legacy arrow key survives the parametric timeout", () => {
+    const { parser, clock } = createTimedParser({ protocolContext: { kittyKeyboardEnabled: true } })
+    try {
+      parser.push(buf("\x1b[1;2"))
+      expect(snap(parser)).toEqual([])
+      clock.advance(TEST_TIMEOUT_MS)
+      expect(snap(parser)).toEqual([])
+      parser.push(buf("A"))
+      expect(snap(parser)).toEqual([k("up", { raw: "\x1b[1;2A", shift: true })])
+    } finally {
+      parser.destroy()
+    }
+  })
+
+  test("split kitty legacy tilde key survives the parametric timeout", () => {
+    const { parser, clock } = createTimedParser({ protocolContext: { kittyKeyboardEnabled: true } })
+    try {
+      parser.push(buf("\x1b[5;2"))
+      expect(snap(parser)).toEqual([])
+      clock.advance(TEST_TIMEOUT_MS)
+      expect(snap(parser)).toEqual([])
+      parser.push(buf("~"))
+      expect(snap(parser)).toEqual([k("pageup", { raw: "\x1b[5;2~", shift: true })])
+    } finally {
+      parser.destroy()
+    }
+  })
+})
+
+
+describe("split modified special keys and parameterized SS3 keys", () => {
+  test("split kitty ctrl+return survives the parametric timeout", () => {
+    const { parser, clock } = createTimedParser({ protocolContext: { kittyKeyboardEnabled: true } })
+    try {
+      parser.push(buf("\x1b[27;5;13"))
+      expect(snap(parser)).toEqual([])
+      clock.advance(TEST_TIMEOUT_MS)
+      expect(snap(parser)).toEqual([])
+      parser.push(buf("~"))
+      expect(snap(parser)).toEqual([k("return", { raw: "\x1b[27;5;13~", ctrl: true })])
+    } finally {
+      parser.destroy()
+    }
+  })
+
+  test("split parameterized SS3 arrow survives the timeout", () => {
+    const { parser, clock } = createTimedParser()
+    try {
+      parser.push(buf("\x1bO1;5"))
+      expect(snap(parser)).toEqual([])
+      clock.advance(TEST_TIMEOUT_MS)
+      expect(snap(parser)).toEqual([])
+      parser.push(buf("A"))
+      expect(snap(parser)).toEqual([k("up", { raw: "\x1bO1;5A", ctrl: true })])
+    } finally {
+      parser.destroy()
+    }
+  })
+})
+
+describe("ESC-pair overflow accounting", () => {
+  test("overflow does not re-emit bytes already emitted as ESC pairs", () => {
+    const parser = createParser({ maxPendingBytes: 8, timeoutMs: TEST_TIMEOUT_MS })
+    try {
+      parser.push(buf("\x1b".repeat(9)))
+      const pair = k("escape", { raw: "\x1b\x1b", meta: true })
+      expect(snap(parser)).toEqual([pair, pair, pair, pair])
+
+      // The trailing lone ESC must still be pending for the timeout flush;
+      // the overflow path used to swallow it into a duplicate opaque blob.
+      parser.flushTimeout(TEST_TIMEOUT_MS)
+      expect(snap(parser)).toEqual([k("escape", { raw: "\x1b" })])
+    } finally {
+      parser.destroy()
+    }
   })
 })

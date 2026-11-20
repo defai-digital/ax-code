@@ -254,13 +254,31 @@ export class TerminalPalette implements TerminalPaletteDetector {
 
       const onData = (chunk: string | Buffer) => {
         buffer += chunk.toString()
+        let updated = false
 
         let m: RegExpExecArray | null
+        let consumed = 0
         OSC4_RESPONSE.lastIndex = 0
         while ((m = OSC4_RESPONSE.exec(buffer))) {
+          // Consume every matched reply so later unrelated chunks cannot
+          // re-match it and keep resetting the idle timer.
+          consumed = m.index + m[0].length
           const idx = parseInt(m[1], 10)
-          if (results.has(idx)) results.set(idx, toHex(m[2], m[3], m[4], m[5]))
+          if (results.has(idx)) {
+            results.set(idx, toHex(m[2], m[3], m[4], m[5]))
+            updated = true
+          }
         }
+        // Sibling special-color replies from the parallel detect() query also
+        // prove the terminal is still answering. Consume them so they cannot
+        // re-match on later chunks, and let them extend the silence window.
+        let siblingActivity = false
+        OSC_SPECIAL_RESPONSE.lastIndex = 0
+        while ((m = OSC_SPECIAL_RESPONSE.exec(buffer))) {
+          consumed = Math.max(consumed, m.index + m[0].length)
+          siblingActivity = true
+        }
+        if (consumed > 0) buffer = buffer.slice(consumed)
 
         if (buffer.length > 8192) buffer = buffer.slice(-4096)
 
@@ -269,6 +287,10 @@ export class TerminalPalette implements TerminalPaletteDetector {
           finish()
           return
         }
+
+        // Only palette replies extend the silence window; unrelated stdin
+        // traffic (keystrokes, other protocols) must not keep the query alive.
+        if (!updated && !siblingActivity) return
 
         idleTimer = session.resetTimer(idleTimer, finish, idleTimeoutMs)
       }
@@ -322,14 +344,26 @@ export class TerminalPalette implements TerminalPaletteDetector {
         let updated = false
 
         let m: RegExpExecArray | null
+        let consumed = 0
         OSC_SPECIAL_RESPONSE.lastIndex = 0
         while ((m = OSC_SPECIAL_RESPONSE.exec(buffer))) {
+          consumed = m.index + m[0].length
           const idx = parseInt(m[1], 10)
           if (idx in results) {
             results[idx] = toHex(m[2], m[3], m[4], m[5])
             updated = true
           }
         }
+        // Sibling OSC 4 replies from the parallel detect() query also prove
+        // the terminal is still answering. Consume them so they cannot
+        // re-match on later chunks, and let them extend the silence window.
+        let siblingActivity = false
+        OSC4_RESPONSE.lastIndex = 0
+        while ((m = OSC4_RESPONSE.exec(buffer))) {
+          consumed = Math.max(consumed, m.index + m[0].length)
+          siblingActivity = true
+        }
+        if (consumed > 0) buffer = buffer.slice(consumed)
 
         if (buffer.length > 8192) buffer = buffer.slice(-4096)
 
@@ -338,7 +372,7 @@ export class TerminalPalette implements TerminalPaletteDetector {
           return
         }
 
-        if (!updated) return
+        if (!updated && !siblingActivity) return
 
         idleTimer = session.resetTimer(idleTimer, finish, idleTimeoutMs)
       }

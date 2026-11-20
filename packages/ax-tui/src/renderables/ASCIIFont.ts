@@ -133,8 +133,8 @@ export class ASCIIFontRenderable extends FrameBufferRenderable {
 
   private updateDimensions(): void {
     const measurements = measureText({ text: this._text, font: this._font })
-    this.width = measurements.width
-    this.height = measurements.height
+    this.width = measurements.width || 1
+    this.height = measurements.height || 1
   }
 
   shouldStartSelection(x: number, y: number): boolean {

@@ -159,9 +159,15 @@ export class CommandRegistry extends EventEmitter<{ change: [] }> {
   dispose = (): void => {
     if (this.disposed) return
     this.disposed = true
-    for (const registration of [...this.commands.values()]) registration.remove()
     this.renderer.off("destroy", this.dispose)
     registries.delete(this.renderer)
+    for (const registration of [...this.commands.values()]) {
+      this.commands.delete(registration.definition.id)
+      registration.target?.off(RenderableEvents.DESTROYED, registration.remove)
+    }
+    try {
+      this.emit("change")
+    } catch { /* A throwing change listener must not abort teardown. */ }
     this.removeAllListeners()
   }
 }

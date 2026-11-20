@@ -9,6 +9,7 @@ export interface ExtmarksSnapshot {
 export class ExtmarksHistory {
   private undoStack: ExtmarksSnapshot[] = []
   private redoStack: ExtmarksSnapshot[] = []
+  private discardedRedoStack: ExtmarksSnapshot[] | null = null
 
   saveSnapshot(extmarks: Map<number, Extmark>, nextId: number, metadata: Map<number, any>): void {
     const snapshot: ExtmarksSnapshot = {
@@ -17,12 +18,17 @@ export class ExtmarksHistory {
       metadata: new Map(metadata),
     }
     this.undoStack.push(snapshot)
+    this.discardedRedoStack = this.redoStack.length > 0 ? this.redoStack : null
     this.redoStack = []
   }
 
   /** Drop the snapshot just recorded for an edit that turned out to be a no-op. */
   discardLastSnapshot(): void {
-    this.undoStack.pop()
+    if (!this.undoStack.pop()) return
+    if (this.discardedRedoStack) {
+      this.redoStack = this.discardedRedoStack
+      this.discardedRedoStack = null
+    }
   }
 
   undo(): ExtmarksSnapshot | null {
@@ -46,6 +52,7 @@ export class ExtmarksHistory {
   clear(): void {
     this.undoStack = []
     this.redoStack = []
+    this.discardedRedoStack = null
   }
 
   canUndo(): boolean {

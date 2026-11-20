@@ -22,6 +22,8 @@ export declare class TextRenderable extends TextBufferRenderable {
     get chunks(): TextChunk[];
     get textNode(): RootTextNodeRenderable;
     set content(value: StyledText | string);
+    private isEquivalentStringContent;
+    private chunksValueEqual;
     private updateTextFromNodes;
     add(obj: TextNodeRenderable | StyledText | string, index?: number): number;
     remove(id: string): void;

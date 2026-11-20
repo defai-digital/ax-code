@@ -37,7 +37,15 @@ function normalizeProps(props: JsxProps | null | undefined): Record<string, unkn
     return props
   }
 
-  const { key: _key, ...rest } = props
+  // Strip `key` without rest destructuring: spreading or destructuring
+  // invokes every getter eagerly and copies static values, which destroys
+  // Solid reactivity for props that forward signal-backed getters.
+  const rest: Record<string, unknown> = {}
+  for (const name of Object.keys(props)) {
+    if (name === "key") continue
+    const descriptor = Object.getOwnPropertyDescriptor(props, name)
+    if (descriptor) Object.defineProperty(rest, name, descriptor)
+  }
   return rest
 }
 

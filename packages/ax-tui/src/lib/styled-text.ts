@@ -44,28 +44,25 @@ export function stringToStyledText(content: string): StyledText {
 export type StylableInput = string | number | boolean | TextChunk
 
 function applyStyle(input: StylableInput, style: StyleAttrs): TextChunk {
-  if (typeof input === "object" && "__isChunk" in input) {
+  const attributes = createTextAttributes({ ...style, inverse: style.reverse })
+  if (typeof input === "object" && input !== null && "__isChunk" in input) {
     const existingChunk = input as TextChunk
 
     const fg = style.fg ? parseColor(style.fg) : existingChunk.fg
     const bg = style.bg ? parseColor(style.bg) : existingChunk.bg
 
-    const newAttrs = createTextAttributes(style)
-    const mergedAttrs = existingChunk.attributes ? existingChunk.attributes | newAttrs : newAttrs
+    const mergedAttrs = existingChunk.attributes ? existingChunk.attributes | attributes : attributes
 
     return {
-      __isChunk: true,
-      text: existingChunk.text,
+      ...existingChunk,
       fg,
       bg,
       attributes: mergedAttrs,
-      link: existingChunk.link,
     }
   } else {
     const plainTextStr = String(input)
     const fg = style.fg ? parseColor(style.fg) : undefined
     const bg = style.bg ? parseColor(style.bg) : undefined
-    const attributes = createTextAttributes(style)
 
     return {
       __isChunk: true,
@@ -130,7 +127,7 @@ export const link =
   (url: string) =>
   (input: StylableInput): TextChunk => {
     const chunk =
-      typeof input === "object" && "__isChunk" in input
+      typeof input === "object" && input !== null && "__isChunk" in input
         ? (input as TextChunk)
         : {
             __isChunk: true as const,
@@ -162,7 +159,7 @@ export function t(strings: TemplateStringsArray, ...values: StylableInput[]): St
     }
 
     const val = values[i]
-    if (typeof val === "object" && "__isChunk" in val) {
+    if (typeof val === "object" && val !== null && "__isChunk" in val) {
       chunks.push(val as TextChunk)
     } else if (val !== undefined) {
       const plainTextStr = String(val)

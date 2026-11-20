@@ -79,6 +79,7 @@ interface ResolvedCoreSlotEntry<
 > extends CoreResolvedSlotRenderer<TContext, TData> {
   ownership: CoreSlotOwnership
   managedSlot?: CoreManagedSlot<TContext, TData>
+  rendererRef: WrappedCoreSlotRenderer<TContext, TData>
 }
 
 interface SlotNodeState<
@@ -89,6 +90,7 @@ interface SlotNodeState<
   ownership: CoreSlotOwnership
   managedSlot?: CoreManagedSlot<TContext, TData>
   dataRef: TData
+  rendererRef: WrappedCoreSlotRenderer<TContext, TData>
 }
 
 function isCoreManagedSlot<
@@ -218,6 +220,7 @@ function resolveCoreSlotEntries<
       renderer: (ctx: Readonly<TContext>, data: TData) => wrappedRenderer(ctx, data),
       ownership: wrappedRenderer.__coreSlotOwnership ?? "host",
       managedSlot: wrappedRenderer.__coreManagedSlot,
+      rendererRef: wrappedRenderer,
     }
   })
 }
@@ -255,6 +258,8 @@ export class SlotRenderable<
   private _activePluginIds = new Set<string>()
   private _fallbackNodes: BaseRenderable[] | null = null
   private _unsubscribe: (() => void) | null = null
+  private _refreshing = false
+  private _refreshRequested = false
 
   constructor(ctx: RenderContext, options: SlotRenderableOptions<TSlotName, TSlotName, TContext, TData>) {
     super(ctx, options)
@@ -271,7 +276,7 @@ export class SlotRenderable<
     try {
       this.refresh()
     } catch (error) {
-      this._cleanupAll()
+      this.destroy()
       throw error
     }
   }
@@ -299,15 +304,67 @@ export class SlotRenderable<
       return
     }
 
+    // Hooks and registry listeners can re-enter refresh() synchronously. An
+    // inner pass would finish with newer registry state that the outer pass
+    // then clobbers with its stale snapshot, so defer inner requests and let
+    // the outermost pass loop until the registry settles.
+    if (this._refreshing) {
+      this._refreshRequested = true
+      return
+    }
+
+    this._refreshing = true
+    try {
+      do {
+        this._refreshRequested = false
+        this._refreshOnce()
+      } while (this._refreshRequested && !this._disposed)
+    } finally {
+      this._refreshing = false
+    }
+  }
+
+  private _refreshOnce(): void {
     const allEntries = resolveCoreSlotEntries(this._slotRegistry, this._slotName)
     const activeEntries = this._mode === "single_winner" && allEntries.length > 0 ? [allEntries[0]] : allEntries
     const nextActivePluginIds = new Set(activeEntries.map((entry) => entry.id))
     const registeredPluginIds = new Set(allEntries.map((entry) => entry.id))
 
     this._cleanupInactivePluginNodes(nextActivePluginIds, registeredPluginIds)
+    // A deactivation hook may destroy the slot re-entrantly; never render or
+    // mount into a disposed slot afterwards.
+    if (this._disposed) return
 
     for (const entry of activeEntries) {
       let state = this._pluginNodes.get(entry.id)
+      // A batched unregister+re-register under the same id swaps the renderer
+      // without an inactive pass. Tear the stale generation down (pairing its
+      // lifecycle hooks) so the replacement renders and activates.
+      if (state && state.rendererRef !== entry.rendererRef) {
+        if (this._activePluginIds.has(entry.id)) {
+          this._activePluginIds.delete(entry.id)
+          this._callManagedHook(entry.id, state.managedSlot, "onDeactivate", "dispose")
+          if (this._disposed) return
+        }
+
+        for (const node of state.nodes) {
+          this._detachNodeFromMount(node)
+        }
+
+        // Remove before the hook: a re-entrant destroy or refresh inside onDispose
+        // must not find this plugin still mapped and fire onDispose a second time.
+        this._pluginNodes.delete(entry.id)
+        this._callManagedHook(entry.id, state.managedSlot, "onDispose", "dispose")
+
+        if (state.ownership === "host") {
+          for (const node of state.nodes) {
+            node.destroyRecursively()
+          }
+        }
+
+        if (this._disposed) return
+        state = undefined
+      }
       const shouldRender =
         !state || (state.ownership === "plugin" && state.nodes.length === 0) || state.dataRef !== this._data
 
@@ -322,6 +379,7 @@ export class SlotRenderable<
             ownership: entry.ownership,
             managedSlot: entry.managedSlot ?? state?.managedSlot,
             dataRef: this._data,
+            rendererRef: entry.rendererRef,
           }
         } catch (error) {
           const failure = this._slotRegistry.reportPluginError({
@@ -331,12 +389,16 @@ export class SlotRenderable<
             source: "core",
             error,
           })
+          // Host error listeners run synchronously and may destroy the slot;
+          // building a placeholder afterwards would resurrect disposed state.
+          if (this._disposed) return
 
           state = {
             nodes: this._resolvePluginFailurePlaceholder(failure),
             ownership: "host",
             managedSlot: entry.managedSlot ?? state?.managedSlot,
             dataRef: this._data,
+            rendererRef: entry.rendererRef,
           }
         }
 
@@ -350,7 +412,12 @@ export class SlotRenderable<
       if (!this._activePluginIds.has(entry.id)) {
         const activeState = this._pluginNodes.get(entry.id)
         if (activeState) {
+          // Record activation before the hook: a re-entrant destroy inside
+          // onActivate (or a later reconcile failure) must still run the
+          // paired onDeactivate during cleanup.
+          this._activePluginIds.add(entry.id)
           this._callManagedHook(entry.id, activeState.managedSlot, "onActivate", "setup")
+          if (this._disposed) return
         }
       }
     }
@@ -371,6 +438,10 @@ export class SlotRenderable<
     if (this._mode !== "append" && desiredNodes.length === 0) {
       desiredNodes.push(...this._ensureFallbackNodes())
     }
+
+    // Fallback factories are host callbacks and may destroy the slot; a
+    // disposed slot must not reconcile mounts or rewrite its active set.
+    if (this._disposed) return
 
     this._reconcileMountedNodes(desiredNodes)
     this._activePluginIds = nextActivePluginIds
@@ -472,7 +543,14 @@ export class SlotRenderable<
       }
 
       if (this._activePluginIds.has(pluginId)) {
+        // Record deactivation before the hook: a re-entrant destroy inside
+        // onDeactivate must not double-fire onDeactivate during cleanup, and
+        // a later refresh failure must not skip a future onActivate.
+        this._activePluginIds.delete(pluginId)
         this._callManagedHook(pluginId, state.managedSlot, "onDeactivate", "dispose")
+        // The hook may have destroyed the slot; cleanup already detached and
+        // disposed every plugin, so continuing here would double-dispose.
+        if (this._disposed) return
       }
 
       for (const node of state.nodes) {
@@ -480,6 +558,9 @@ export class SlotRenderable<
       }
 
       if (!registeredPluginIds.has(pluginId)) {
+        // Remove before the hook: a re-entrant destroy or refresh inside onDispose
+        // must not find this plugin still mapped and fire onDispose a second time.
+        this._pluginNodes.delete(pluginId)
         this._callManagedHook(pluginId, state.managedSlot, "onDispose", "dispose")
 
         if (state.ownership === "host") {
@@ -488,7 +569,9 @@ export class SlotRenderable<
           }
         }
 
-        this._pluginNodes.delete(pluginId)
+        // The hook may have destroyed the slot; cleanup already detached and
+        // disposed every remaining plugin, so continuing here would double-dispose.
+        if (this._disposed) return
         continue
       }
 

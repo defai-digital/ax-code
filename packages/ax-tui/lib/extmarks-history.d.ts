@@ -7,6 +7,7 @@ export interface ExtmarksSnapshot {
 export declare class ExtmarksHistory {
     private undoStack;
     private redoStack;
+    private discardedRedoStack;
     saveSnapshot(extmarks: Map<number, Extmark>, nextId: number, metadata: Map<number, any>): void;
     /** Drop the snapshot just recorded for an edit that turned out to be a no-op. */
     discardLastSnapshot(): void;

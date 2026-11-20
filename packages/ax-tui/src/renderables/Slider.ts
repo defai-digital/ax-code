@@ -7,12 +7,16 @@ import { OptimizedBuffer } from "../core/buffer.js"
 const defaultThumbBackgroundColor = RGBA.fromHex("#9a9ea3")
 const defaultTrackBackgroundColor = RGBA.fromHex("#252527")
 
+const sanitizeBound = (value: number | undefined, fallback: number): number =>
+  value !== undefined && Number.isFinite(value) ? value : fallback
+
 export interface SliderOptions extends RenderableOptions<SliderRenderable> {
   orientation: "vertical" | "horizontal"
   value?: number
   min?: number
   max?: number
   viewPortSize?: number
+  clampViewPortToRange?: boolean
   backgroundColor?: ColorInput
   foregroundColor?: ColorInput
   onChange?: (value: number) => void
@@ -24,6 +28,7 @@ export class SliderRenderable extends Renderable {
   private _min: number
   private _max: number
   private _viewPortSize: number
+  private _clampViewPortToRange: boolean
   private _backgroundColor: RGBA
   private _foregroundColor: RGBA
   private _onChange?: (value: number) => void
@@ -31,13 +36,14 @@ export class SliderRenderable extends Renderable {
   constructor(ctx: RenderContext, options: SliderOptions) {
     super(ctx, { flexShrink: 0, ...options })
     this.orientation = options.orientation
-    this._min = options.min ?? 0
-    this._max = options.max ?? 100
-    this._value = options.value ?? this._min
+    this._min = sanitizeBound(options.min, 0)
+    this._max = sanitizeBound(options.max, 100)
+    this._clampViewPortToRange = options.clampViewPortToRange ?? true
+    this._value = clamp(options.value ?? this._min, this._min, this._max)
     const requestedViewPortSize = options.viewPortSize
     this._viewPortSize =
       requestedViewPortSize !== undefined && Number.isFinite(requestedViewPortSize)
-        ? clamp(requestedViewPortSize, 0.01, this._max - this._min)
+        ? this.clampViewPort(requestedViewPortSize)
         : Math.max(1, (this._max - this._min) * 0.1)
     this._onChange = options.onChange
     this._backgroundColor = options.backgroundColor ? parseColor(options.backgroundColor) : defaultTrackBackgroundColor
@@ -65,11 +71,13 @@ export class SliderRenderable extends Renderable {
   }
 
   set min(newMin: number) {
-    if (newMin !== this._min) {
-      this._min = newMin
-      if (this._value < newMin) {
-        this.value = newMin
+    const sanitized = sanitizeBound(newMin, 0)
+    if (sanitized !== this._min) {
+      this._min = sanitized
+      if (this._value < sanitized) {
+        this.value = sanitized
       }
+      this._viewPortSize = this.clampViewPort(this._viewPortSize)
       this.requestRender()
     }
   }
@@ -79,17 +87,19 @@ export class SliderRenderable extends Renderable {
   }
 
   set max(newMax: number) {
-    if (newMax !== this._max) {
-      this._max = newMax
-      if (this._value > newMax) {
-        this.value = newMax
+    const sanitized = sanitizeBound(newMax, 100)
+    if (sanitized !== this._max) {
+      this._max = sanitized
+      if (this._value > sanitized) {
+        this.value = sanitized
       }
+      this._viewPortSize = this.clampViewPort(this._viewPortSize)
       this.requestRender()
     }
   }
 
   set viewPortSize(size: number) {
-    const clampedSize = clamp(size, 0.01, this._max - this._min)
+    const clampedSize = this.clampViewPort(size)
     if (clampedSize !== this._viewPortSize) {
       this._viewPortSize = clampedSize
       this.requestRender()
@@ -98,6 +108,17 @@ export class SliderRenderable extends Renderable {
 
   get viewPortSize(): number {
     return this._viewPortSize
+  }
+
+  // Scroll bars opt out of the range cap: their viewport is a real content
+  // window that may legitimately exceed the scroll range (near-fit content),
+  // and capping it would collapse the thumb to a sliver.
+  private clampViewPort(size: number): number {
+    if (this._clampViewPortToRange) {
+      return clamp(size, 0.01, this._max - this._min)
+    }
+    if (!Number.isFinite(size)) return 0.01
+    return clamp(size, 0.01, Number.POSITIVE_INFINITY)
   }
 
   get backgroundColor(): RGBA {

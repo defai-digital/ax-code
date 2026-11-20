@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import * as coreRuntime from "./index.js";
 const CORE_RUNTIME_SPECIFIER = "@defai-digital/ax-tui";
 const CORE_TESTING_RUNTIME_SPECIFIER = "@defai-digital/ax-tui/testing";
@@ -49,8 +49,7 @@ const sourcePath = (path) => {
   const end = [searchIndex, hashIndex].filter((index) => index >= 0).sort((a, b) => a - b)[0];
   return end === void 0 ? path : path.slice(0, end);
 };
-const normalizedSourcePathByPath = /* @__PURE__ */ new Map();
-const normalizeSourcePath = (path) => {
+const normalizeSourcePath = (path, normalizedSourcePathByPath) => {
   const cleanPath = sourcePath(path);
   const cachedPath = normalizedSourcePathByPath.get(cleanPath);
   if (cachedPath !== void 0) {
@@ -96,8 +95,8 @@ const packageTypeForPath = (path, packageTypeByPackageJsonPath) => {
     currentDir = parentDir;
   }
 };
-const isNodeModulesEsmPath = (path, packageTypeByPackageJsonPath) => {
-  const normalizedPath = normalizeSourcePath(path);
+const isNodeModulesEsmPath = (path, packageTypeByPackageJsonPath, normalizedSourcePathByPath) => {
+  const normalizedPath = normalizeSourcePath(path, normalizedSourcePathByPath);
   if (!isNodeModulesPath(normalizedPath)) {
     return false;
   }
@@ -148,8 +147,10 @@ const runtimeLoaderForPath = (path) => {
   return null;
 };
 const resolveImportSpecifierPatterns = [
-  /(from\s+["'])([^"']+)(["'])/g,
-  /(import\s+["'])([^"']+)(["'])/g,
+  // \b plus \s* also matches minified `}from"x"` / `import"x"` without
+  // matching identifier tails like `xfrom"`.
+  /\b(from\s*["'])([^"']+)(["'])/g,
+  /\b(import\s*["'])([^"']+)(["'])/g,
   /(import\s*\(\s*["'])([^"']+)(["']\s*\))/g,
   /(require\s*\(\s*["'])([^"']+)(["']\s*\))/g
 ];
@@ -200,7 +201,8 @@ const collectImportSpecifiers = (code) => {
 };
 const resolveFromParent = (specifier, parent) => {
   try {
-    const resolvedSpecifier = import.meta.resolve(specifier, parent);
+    const parentURL = isAbsolute(parent) ? pathToFileURL(parent).href : parent;
+    const resolvedSpecifier = import.meta.resolve(specifier, parentURL);
     if (resolvedSpecifier === specifier || resolvedSpecifier.startsWith("node:") || resolvedSpecifier.startsWith("bun:")) {
       return null;
     }
@@ -214,7 +216,11 @@ const resolveSourcePathFromSpecifier = (specifier, importer) => {
     return null;
   }
   if (specifier.startsWith("file:")) {
-    return sourcePath(fileURLToPath(specifier));
+    try {
+      return sourcePath(fileURLToPath(specifier));
+    } catch {
+      return null;
+    }
   }
   if (isAbsolute(specifier)) {
     return sourcePath(specifier);
@@ -224,7 +230,11 @@ const resolveSourcePathFromSpecifier = (specifier, importer) => {
     return null;
   }
   if (resolvedSpecifier.startsWith("file:")) {
-    return sourcePath(fileURLToPath(resolvedSpecifier));
+    try {
+      return sourcePath(fileURLToPath(resolvedSpecifier));
+    } catch {
+      return null;
+    }
   }
   if (isAbsolute(resolvedSpecifier)) {
     return sourcePath(resolvedSpecifier);
@@ -277,19 +287,25 @@ function createRuntimePlugin(input = {}) {
     setup: (build) => {
       const resolveParentsByRecency = [];
       const installedRewriteLoaders = /* @__PURE__ */ new Set();
+      const registeredRewriteSpellings = /* @__PURE__ */ new Set();
       const nodeModulesBareRewritePackageRoots = /* @__PURE__ */ new Set();
       const packageTypeByPackageJsonPath = /* @__PURE__ */ new Map();
+      const normalizedSourcePathByPath = /* @__PURE__ */ new Map();
       const sourceAnalysisByPath = /* @__PURE__ */ new Map();
       const nodeModulesRuntimeRewritePathsByPath = /* @__PURE__ */ new Map();
       const installRewriteLoader = (path) => {
         const resolvedTargetPath = sourcePath(path);
-        const canonicalTargetPath = normalizeSourcePath(resolvedTargetPath);
-        if (installedRewriteLoaders.has(canonicalTargetPath)) {
+        const canonicalTargetPath = normalizeSourcePath(resolvedTargetPath, normalizedSourcePathByPath);
+        if (registeredRewriteSpellings.has(resolvedTargetPath)) {
           return;
         }
+        const filterPaths = installedRewriteLoaders.has(canonicalTargetPath) ? [resolvedTargetPath] : [resolvedTargetPath, canonicalTargetPath];
+        for (const filterPath of filterPaths) {
+          registeredRewriteSpellings.add(filterPath);
+        }
         installedRewriteLoaders.add(canonicalTargetPath);
-        build.onLoad({ filter: exactPathFilter([resolvedTargetPath, canonicalTargetPath]) }, async (args) => {
-          const loadedPath = normalizeSourcePath(args.path);
+        build.onLoad({ filter: exactPathFilter(filterPaths) }, async (args) => {
+          const loadedPath = normalizeSourcePath(args.path, normalizedSourcePathByPath);
           if (loadedPath !== canonicalTargetPath) {
             return void 0;
           }
@@ -313,7 +329,7 @@ function createRuntimePlugin(input = {}) {
         });
       };
       const analyzeSourcePath = (path) => {
-        const normalizedPath = normalizeSourcePath(path);
+        const normalizedPath = normalizeSourcePath(path, normalizedSourcePathByPath);
         const cachedAnalysis = sourceAnalysisByPath.get(normalizedPath);
         if (cachedAnalysis) {
           return cachedAnalysis;
@@ -340,8 +356,8 @@ function createRuntimePlugin(input = {}) {
         return analysis;
       };
       const collectNodeModulesRuntimeRewritePaths = (path, visiting = /* @__PURE__ */ new Set()) => {
-        const normalizedPath = normalizeSourcePath(path);
-        if (!isNodeModulesEsmPath(normalizedPath, packageTypeByPackageJsonPath)) {
+        const normalizedPath = normalizeSourcePath(path, normalizedSourcePathByPath);
+        if (!isNodeModulesEsmPath(normalizedPath, packageTypeByPackageJsonPath, normalizedSourcePathByPath)) {
           return [];
         }
         const cachedPaths = nodeModulesRuntimeRewritePathsByPath.get(normalizedPath);
@@ -359,7 +375,7 @@ function createRuntimePlugin(input = {}) {
         }
         for (const specifier of analysis.importSpecifiers) {
           const resolvedPath = resolveSourcePathFromSpecifier(specifier, normalizedPath);
-          if (!resolvedPath || !isNodeModulesEsmPath(resolvedPath, packageTypeByPackageJsonPath)) {
+          if (!resolvedPath || !isNodeModulesEsmPath(resolvedPath, packageTypeByPackageJsonPath, normalizedSourcePathByPath)) {
             continue;
           }
           for (const nestedPath of collectNodeModulesRuntimeRewritePaths(resolvedPath, visiting)) {

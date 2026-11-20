@@ -274,3 +274,321 @@ try {
 console.log("markdown-nested-table-options ok")
 `)
 })
+
+test.skipIf(!supportsFfi)("markdown top-level blocks skip unrenderable tokens without leaving state holes", () => {
+  runDriver(`
+${PREAMBLE}
+const treeSitterClient = new MockTreeSitterClient({ autoResolveTimeout: 1 })
+const setup = await createTestRenderer({ width: 40, height: 12 })
+try {
+  const document = ["alpha", "", "SKIPME", "", "omega"].join(NL)
+  const markdown = new MarkdownRenderable(setup.renderer, {
+    syntaxStyle: SyntaxStyle.create(),
+    treeSitterClient,
+    content: "",
+    streaming: false,
+    internalBlockMode: "top-level",
+  })
+  const original = markdown.getTopLevelBlockRaw.bind(markdown)
+  markdown.getTopLevelBlockRaw = token => (token.raw.includes("SKIPME") ? undefined : original(token))
+  markdown.content = document
+  setup.renderer.root.add(markdown)
+  await settle(setup)
+
+  let frame = setup.captureCharFrame()
+  assert.ok(frame.includes("alpha"), frame)
+  assert.ok(frame.includes("omega"), frame)
+  assert.ok(!frame.includes("SKIPME"), frame)
+  assert.equal(markdown._blockStates.length, 2)
+
+  // Clearing content destroys every block state; a sparse hole used to throw here.
+  markdown.content = ""
+  await setup.renderOnce()
+
+  markdown.getTopLevelBlockRaw = original
+  markdown.content = document
+  await settle(setup)
+  frame = setup.captureCharFrame()
+  assert.ok(frame.includes("SKIPME"), frame)
+  assert.equal(markdown._blockStates.length, 3)
+
+  // Changing the skipped block to a heading forces the replace path: the old
+  // state must be spliced out instead of leaving a stale entry behind.
+  markdown.getTopLevelBlockRaw = token => (token.raw.includes("SKIPME") ? undefined : original(token))
+  markdown.content = ["alpha", "", "# SKIPME", "", "omega"].join(NL)
+  await settle(setup)
+  frame = setup.captureCharFrame()
+  assert.ok(!frame.includes("SKIPME"), frame)
+  assert.ok(frame.includes("omega"), frame)
+  assert.equal(markdown._blockStates.length, 2)
+} finally {
+  setup.renderer.destroy()
+  await treeSitterClient.destroy()
+}
+console.log("markdown-sparse-blocks ok")
+`)
+})
+
+test.skipIf(!supportsFfi)("diff split view keeps sides aligned while conceal highlighting resolves", () => {
+  runDriver(`
+${PREAMBLE}
+import { DiffRenderable } from "@defai-digital/ax-tui"
+
+const LONG = "[alpha beta gamma delta epsilon zeta eta theta iota kappa](http://example.com)"
+const diff = ["--- a/f.md", "+++ b/f.md", "@@ -1,3 +1,3 @@", " start", "-" + LONG, "+short", " end"].join(NL)
+const treeSitterClient = new MockTreeSitterClient()
+const setup = await createTestRenderer({ width: 80, height: 12 })
+try {
+  const view = new DiffRenderable(setup.renderer, {
+    diff,
+    view: "split",
+    wrapMode: "word",
+    conceal: true,
+    filetype: "markdown",
+    syntaxStyle: SyntaxStyle.create(),
+    treeSitterClient,
+    width: 80,
+    height: 10,
+  })
+  setup.renderer.root.add(view)
+  await setup.renderOnce()
+  // The line-info pass runs before the code children start highlighting, so
+  // the diff must treat dirty-but-not-started highlights as pending too.
+  assert.equal(view._waitingForHighlight, true)
+
+  // Wrap alignment rewrites the short side's content, queueing another highlight
+  // batch, so settle repeatedly until the pending flag clears.
+  for (let i = 0; i < 3; i++) {
+    treeSitterClient.resolveAllHighlightOnce()
+    await Promise.all([view.leftCodeRenderable.highlightingDone, view.rightCodeRenderable.highlightingDone])
+    await setup.renderOnce()
+  }
+  assert.equal(view._waitingForHighlight, false)
+
+  const rows = setup.captureCharFrame().split(NL)
+  const leftRow = rows.findIndex(row => row.slice(0, 40).includes("end"))
+  const rightRow = rows.findIndex(row => row.slice(40).includes("end"))
+  assert.ok(leftRow >= 0 && rightRow >= 0, rows.join("|"))
+  assert.equal(leftRow, rightRow, rows.join("|"))
+} finally {
+  setup.renderer.destroy()
+  await treeSitterClient.destroy()
+}
+console.log("diff-split-conceal ok")
+`)
+})
+
+test.skipIf(!supportsFfi)("markdown style setters schedule a render on an idle renderer", () => {
+  runDriver(`
+${PREAMBLE}
+const treeSitterClient = new MockTreeSitterClient({ autoResolveTimeout: 1 })
+const setup = await createTestRenderer({ width: 60, height: 20 })
+try {
+  const markdown = new MarkdownRenderable(setup.renderer, {
+    syntaxStyle: SyntaxStyle.create(),
+    treeSitterClient,
+    content: ["# Title", "", "Some **bold** text."].join(NL),
+    streaming: false,
+  })
+  setup.renderer.root.add(markdown)
+  await settle(setup)
+  const idle = async () => {
+    for (let i = 0; i < 50; i++) {
+      await setup.renderOnce()
+      await setup.waitForVisualIdle()
+      if (!setup.renderer.getSchedulerState().hasScheduledRender) return
+    }
+    throw new Error("renderer never became idle")
+  }
+  await idle()
+  const mutations = [
+    () => { markdown.syntaxStyle = SyntaxStyle.create() },
+    () => { markdown.fg = "#ff0000" },
+    () => { markdown.bg = "#0000ff" },
+    () => { markdown.conceal = false },
+    () => { markdown.concealCode = true },
+  ]
+  for (const mutate of mutations) {
+    assert.equal(setup.renderer.getSchedulerState().hasScheduledRender, false)
+    mutate()
+    assert.equal(setup.renderer.getSchedulerState().hasScheduledRender, true, "setter did not schedule a render")
+    await settle(setup)
+    await idle()
+  }
+} finally {
+  setup.renderer.destroy()
+  await treeSitterClient.destroy()
+}
+console.log("markdown-setter-render ok")
+`)
+})
+
+test.skipIf(!supportsFfi)("diff split view defaults wrapMode to none on first render", () => {
+  runDriver(`
+${PREAMBLE}
+import { DiffRenderable } from "@defai-digital/ax-tui"
+const diff = ["--- a/f.txt", "+++ b/f.txt", "@@ -1,2 +1,2 @@", " alpha", "-beta", "+gamma"].join(NL)
+const setup = await createTestRenderer({ width: 80, height: 12 })
+try {
+  const view = new DiffRenderable(setup.renderer, { diff, view: "split", width: 80, height: 10 })
+  setup.renderer.root.add(view)
+  await setup.renderOnce()
+  assert.equal(view.leftCodeRenderable.wrapMode, "none")
+  assert.equal(view.rightCodeRenderable.wrapMode, "none")
+
+  view.diff = ["--- a/f.txt", "+++ b/f.txt", "@@ -1,2 +1,2 @@", " alpha", "-beta", "+delta"].join(NL)
+  await setup.renderOnce()
+  assert.equal(view.leftCodeRenderable.wrapMode, "none")
+  assert.equal(view.rightCodeRenderable.wrapMode, "none")
+} finally {
+  setup.renderer.destroy()
+}
+console.log("diff-default-wrap-mode ok")
+`)
+})
+
+test.skipIf(!supportsFfi)("diff error view propagates conceal and wrapMode", () => {
+  runDriver(`
+${PREAMBLE}
+import { DiffRenderable } from "@defai-digital/ax-tui"
+const setup = await createTestRenderer({ width: 80, height: 12 })
+try {
+  // A hunk header with no body lines fails parsePatch and builds the error view.
+  const view = new DiffRenderable(setup.renderer, { diff: "@@ -1,1 +1,1 @@" + NL, view: "unified", width: 80, height: 10 })
+  setup.renderer.root.add(view)
+  await setup.renderOnce()
+  assert.ok(view.errorCodeRenderable)
+
+  view.conceal = true
+  await setup.renderOnce()
+  assert.equal(view.errorCodeRenderable.conceal, true)
+
+  view.wrapMode = "word"
+  await setup.renderOnce()
+  assert.equal(view.errorCodeRenderable.wrapMode, "word")
+} finally {
+  setup.renderer.destroy()
+}
+console.log("diff-error-view-options ok")
+`)
+})
+
+test.skipIf(!supportsFfi)("markdown hr border follows the conceal style on content update", () => {
+  runDriver(`
+${PREAMBLE}
+import { BoxRenderable } from "@defai-digital/ax-tui"
+const treeSitterClient = new MockTreeSitterClient({ autoResolveTimeout: 1 })
+const setup = await createTestRenderer({ width: 60, height: 20 })
+try {
+  const style = SyntaxStyle.create()
+  const markdown = new MarkdownRenderable(setup.renderer, {
+    syntaxStyle: style,
+    treeSitterClient,
+    content: ["# t", "", "---", ""].join(NL),
+    streaming: false,
+  })
+  setup.renderer.root.add(markdown)
+  await settle(setup)
+  const hr = markdown._blockStates.find((state) => state.renderable instanceof BoxRenderable)
+  assert.ok(hr)
+
+  style.registerStyle("conceal", { fg: "#ff0000" })
+  // Change the hr's raw text (--- to ----) so the block is not skipped as
+  // unchanged and takes the in-place update branch instead of recreation.
+  markdown.content = ["# t2", "", "----", ""].join(NL)
+  await settle(setup)
+  const updated = markdown._blockStates.find((state) => state.renderable instanceof BoxRenderable)
+  assert.ok(updated)
+  assert.equal(updated.renderable.borderColor.r, 1)
+  assert.equal(updated.renderable.borderColor.g, 0)
+  assert.equal(updated.renderable.borderColor.b, 0)
+} finally {
+  setup.renderer.destroy()
+  await treeSitterClient.destroy()
+}
+console.log("markdown-hr-conceal-update ok")
+`)
+})
+
+test.skipIf(!supportsFfi)("diff filetype clear propagates to code panes", () => {
+  runDriver(`
+${PREAMBLE}
+import { DiffRenderable } from "@defai-digital/ax-tui"
+const diff = ["--- a/f.js", "+++ b/f.js", "@@ -1,2 +1,2 @@", " alpha", "-beta", "+gamma"].join(NL)
+const setup = await createTestRenderer({ width: 80, height: 12 })
+try {
+  const view = new DiffRenderable(setup.renderer, { diff, view: "unified", filetype: "js", width: 80, height: 10 })
+  setup.renderer.root.add(view)
+  await setup.renderOnce()
+  assert.equal(view.leftCodeRenderable.filetype, "js")
+
+  // Clearing the filetype must reach existing panes; the update path used to
+  // skip undefined and leave stale highlighting in place.
+  view.filetype = undefined
+  await setup.renderOnce()
+  assert.equal(view.leftCodeRenderable.filetype, undefined)
+
+  view.filetype = "ts"
+  await setup.renderOnce()
+  assert.equal(view.leftCodeRenderable.filetype, "ts")
+
+  view.view = "split"
+  await setup.renderOnce()
+  assert.equal(view.leftCodeRenderable.filetype, "ts")
+  assert.equal(view.rightCodeRenderable.filetype, "ts")
+  view.filetype = undefined
+  await setup.renderOnce()
+  assert.equal(view.leftCodeRenderable.filetype, undefined)
+  assert.equal(view.rightCodeRenderable.filetype, undefined)
+} finally {
+  setup.renderer.destroy()
+}
+console.log("diff-filetype-clear ok")
+`)
+})
+
+test.skipIf(!supportsFfi)("diff error view propagates fg and selection colors", () => {
+  runDriver(`
+${PREAMBLE}
+import { DiffRenderable } from "@defai-digital/ax-tui"
+const setup = await createTestRenderer({ width: 80, height: 12 })
+try {
+  const view = new DiffRenderable(setup.renderer, {
+    diff: "@@ -1,1 +1,1 @@" + NL,
+    view: "unified",
+    width: 80,
+    height: 10,
+    fg: "#ff0000",
+    selectionBg: "#00ff00",
+    selectionFg: "#0000ff",
+  })
+  setup.renderer.root.add(view)
+  await setup.renderOnce()
+  assert.ok(view.errorCodeRenderable)
+  assert.equal(view.errorCodeRenderable.fg.r, 1)
+  assert.equal(view.errorCodeRenderable.fg.g, 0)
+  assert.equal(view.errorCodeRenderable.selectionBg.g, 1)
+  assert.equal(view.errorCodeRenderable.selectionFg.b, 1)
+
+  view.fg = "#00ffff"
+  view.selectionBg = "#ff00ff"
+  view.selectionFg = "#ffff00"
+  await setup.renderOnce()
+  assert.equal(view.errorCodeRenderable.fg.r, 0)
+  assert.equal(view.errorCodeRenderable.fg.g, 1)
+  assert.equal(view.errorCodeRenderable.fg.b, 1)
+  assert.equal(view.errorCodeRenderable.selectionBg.r, 1)
+  assert.equal(view.errorCodeRenderable.selectionFg.r, 1)
+
+  // A new invalid diff takes the error-view update path; colors must survive.
+  view.diff = "@@ -2,2 +2,2 @@" + NL
+  await setup.renderOnce()
+  assert.equal(view.errorCodeRenderable.fg.g, 1)
+  assert.equal(view.errorCodeRenderable.selectionBg.r, 1)
+  assert.equal(view.errorCodeRenderable.selectionFg.r, 1)
+} finally {
+  setup.renderer.destroy()
+}
+console.log("diff-error-view-colors ok")
+`)
+})

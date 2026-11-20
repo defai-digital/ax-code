@@ -31,7 +31,8 @@ export function isValidDirectoryName(name: string): boolean {
     "LPT8",
     "LPT9",
   ]
-  if (reservedNames.includes(name.toUpperCase())) {
+  // Windows reserves the base name even when an extension follows (e.g. "CON.txt").
+  if (reservedNames.includes(name.split(".")[0]!.toUpperCase())) {
     return false
   }
 

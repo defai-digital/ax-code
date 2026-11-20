@@ -47,7 +47,7 @@ async function transformSolidSource(code, options) {
     ]);
   }
   if (tsPattern.test(filename)) {
-    presets.push([ts]);
+    presets.push([ts, /\.[cm]tsx$/.test(filename) ? { isTSX: true, allExtensions: true } : {}]);
   }
   const transformed = await transformAsync(code, {
     filename,

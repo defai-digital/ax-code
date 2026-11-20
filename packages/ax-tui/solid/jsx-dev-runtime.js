@@ -7,7 +7,12 @@ function normalizeProps(props) {
   if (!("key" in props)) {
     return props;
   }
-  const { key: _key, ...rest } = props;
+  const rest = {};
+  for (const name of Object.keys(props)) {
+    if (name === "key") continue;
+    const descriptor = Object.getOwnPropertyDescriptor(props, name);
+    if (descriptor) Object.defineProperty(rest, name, descriptor);
+  }
   return rest;
 }
 function createIntrinsicElement(type, props) {

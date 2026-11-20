@@ -36,16 +36,13 @@ interface TimelineItem {
 
 /**
  * Resolve an item start time given as `number | string`. Numeric strings
- * ("500") parse to their value; anything else falls back to 0 so an
- * unrecognizable offset lands at the start of the timeline instead of
- * producing a NaN start time.
+ * ("500") parse to their value; non-finite or negative values fall back to a
+ * clamped start so an unrecognizable offset lands at the start of the
+ * timeline instead of producing a NaN or pre-progressed start time.
  */
 function resolveStartTime(startTime: number | string): number {
-  if (typeof startTime === "string") {
-    const parsed = Number(startTime)
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0
-  }
-  return startTime
+  const parsed = typeof startTime === "string" ? Number(startTime) : startTime
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0
 }
 
 interface TimelineTimelineItem extends TimelineItem {
@@ -134,9 +131,7 @@ function captureInitialValues(item: TimelineAnimationItem): void {
       const targetInitialValues: Record<string, number> = {}
 
       for (const key of Object.keys(item.properties)) {
-        if (typeof target[key] === "number") {
-          targetInitialValues[key] = target[key]
-        }
+        targetInitialValues[key] = typeof target[key] === "number" ? target[key] : 0
       }
 
       initialValues.push(targetInitialValues)
@@ -310,7 +305,8 @@ export class Timeline {
   private stateChangeListeners: ((timeline: Timeline) => void)[] = []
 
   constructor(options: TimelineOptions = {}) {
-    this.duration = options.duration ?? 1000
+    const duration = options.duration ?? 1000
+    this.duration = Number.isFinite(duration) ? Math.max(0, duration) : 1000
     this.loop = options.loop === true
     this.autoplay = options.autoplay !== false
     this.onComplete = options.onComplete
@@ -414,7 +410,7 @@ export class Timeline {
     }
     this.subTimelines.push({
       type: "timeline",
-      startTime,
+      startTime: resolveStartTime(startTime),
       timeline,
     })
     timeline.synced = true
@@ -438,6 +434,7 @@ export class Timeline {
   }
 
   pause(): this {
+    if (!this.isPlaying) return this
     this.subTimelines.forEach((subTimeline) => {
       subTimeline.timeline.pause()
     })
@@ -461,9 +458,14 @@ export class Timeline {
     })
     this.subTimelines.forEach((subTimeline) => {
       subTimeline.timelineStarted = false
-      if (subTimeline.timeline) {
-        subTimeline.timeline.restart()
-        subTimeline.timeline.pause()
+      const child = subTimeline.timeline
+      if (child) {
+        // Reset in place without restart()+pause(): that would fire a spurious
+        // onPause on every loop wrap and leave playing children paused until
+        // the next sync evaluation re-plays them.
+        child.isComplete = false
+        child.currentTime = 0
+        child.resetItems()
       }
     })
   }
@@ -479,51 +481,55 @@ export class Timeline {
   }
 
   update(deltaTime: number): void {
-    if (!this.isPlaying) return
-
-    const nextTime = this.currentTime + deltaTime
-    const boundedTime = Math.min(nextTime, this.duration)
-    const elapsed = boundedTime - this.currentTime
-    for (const subTimeline of this.subTimelines) {
-      evaluateTimelineSync(subTimeline, boundedTime, elapsed)
-    }
-
-    this.currentTime = boundedTime
-
-    for (const item of this.items) {
-      evaluateItem(item, this.currentTime, deltaTime)
-    }
-
-    // Remove completed "once" items (iterate backwards to avoid index shifting)
-    for (let i = this.items.length - 1; i >= 0; i--) {
-      const item = this.items[i]
-      if (item.type === "animation" && item.once && item.completed) {
-        this.items.splice(i, 1)
+    // A non-finite or negative delta must not corrupt currentTime or item evaluation.
+    let remaining = Number.isFinite(deltaTime) ? Math.max(0, deltaTime) : 0
+    while (this.isPlaying) {
+      const nextTime = this.currentTime + remaining
+      const boundedTime = Math.min(nextTime, this.duration)
+      const elapsed = boundedTime - this.currentTime
+      for (const subTimeline of this.subTimelines) {
+        evaluateTimelineSync(subTimeline, boundedTime, elapsed)
       }
-    }
 
-    if (this.loop && this.currentTime >= this.duration) {
-      // Replay the entire remainder so callbacks in every crossed loop fire;
-      // `nextTime % duration` would skip whole cycles when deltaTime spans
-      // more than one loop. A non-positive duration cannot loop; treat the
-      // wrap as final to avoid an unbounded recursion.
-      const overshoot = this.duration > 0 ? nextTime - this.duration : 0
+      this.currentTime = boundedTime
 
-      this.resetItems()
-      this.currentTime = 0
-
-      if (overshoot > 0) {
-        this.update(overshoot)
+      for (const item of this.items) {
+        evaluateItem(item, this.currentTime, remaining)
       }
-    } else if (!this.loop && this.currentTime >= this.duration) {
-      this.currentTime = this.duration
-      this.isPlaying = false
-      this.isComplete = true
 
-      if (this.onComplete) {
-        this.onComplete()
+      // Remove completed "once" items (iterate backwards to avoid index shifting)
+      for (let i = this.items.length - 1; i >= 0; i--) {
+        const item = this.items[i]
+        if (item.type === "animation" && item.once && item.completed) {
+          this.items.splice(i, 1)
+        }
       }
-      this.notifyStateChange()
+
+      if (this.loop && this.currentTime >= this.duration) {
+        // Replay the entire remainder so callbacks in every crossed loop fire;
+        // `nextTime % duration` would skip whole cycles when deltaTime spans
+        // more than one loop. A non-positive duration cannot loop; treat the
+        // wrap as final to avoid an unbounded iteration.
+        const overshoot = this.duration > 0 ? nextTime - this.duration : 0
+
+        this.resetItems()
+        this.currentTime = 0
+
+        if (overshoot > 0) {
+          remaining = overshoot
+          continue
+        }
+      } else if (!this.loop && this.currentTime >= this.duration) {
+        this.currentTime = this.duration
+        this.isPlaying = false
+        this.isComplete = true
+
+        if (this.onComplete) {
+          this.onComplete()
+        }
+        this.notifyStateChange()
+      }
+      break
     }
   }
 }

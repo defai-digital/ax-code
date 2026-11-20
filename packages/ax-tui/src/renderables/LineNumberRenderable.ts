@@ -172,15 +172,16 @@ class GutterRenderable extends Renderable {
   private calculateWidth(): number {
     const totalLines = this.target.virtualLineCount
 
-    // Find max line number, considering both calculated and custom line numbers
-    let maxLineNumber = totalLines + this._lineNumberOffset
-    if (this._lineNumbers.size > 0) {
-      for (const customLineNum of this._lineNumbers.values()) {
-        maxLineNumber = Math.max(maxLineNumber, customLineNum)
-      }
+    // Size from the widest label by absolute magnitude, reserving an extra
+    // column for the minus sign when any displayed line number is negative.
+    let maxAbs = Math.max(Math.abs(1 + this._lineNumberOffset), Math.abs(totalLines + this._lineNumberOffset))
+    let hasNegative = 1 + this._lineNumberOffset < 0 || totalLines + this._lineNumberOffset < 0
+    for (const customLineNum of this._lineNumbers.values()) {
+      maxAbs = Math.max(maxAbs, Math.abs(customLineNum))
+      if (customLineNum < 0) hasNegative = true
     }
 
-    const digits = maxLineNumber > 0 ? Math.floor(Math.log10(maxLineNumber)) + 1 : 1
+    const digits = (maxAbs > 0 ? Math.floor(Math.log10(maxAbs)) + 1 : 1) + (hasNegative ? 1 : 0)
     const baseWidth = Math.max(this._minWidth, digits + this._paddingRight + 1) // +1 for left padding
     return baseWidth + this._maxBeforeWidth + this._maxAfterWidth
   }
@@ -368,17 +369,22 @@ export class LineNumberRenderable extends Renderable {
   }
 
   private parseLineColor(line: number, color: string | RGBA | LineColorConfig): void {
-    if (typeof color === "object" && "gutter" in color) {
-      // LineColorConfig format
+    if (typeof color === "object" && color !== null && ("gutter" in color || "content" in color || !("r" in color))) {
+      // LineColorConfig format. A channel absent from the config clears any
+      // previous color for that channel instead of leaving a stale entry.
       const config = color as LineColorConfig
       if (config.gutter) {
         this._lineColorsGutter.set(line, parseColor(config.gutter))
+      } else {
+        this._lineColorsGutter.delete(line)
       }
       if (config.content) {
         this._lineColorsContent.set(line, parseColor(config.content))
       } else if (config.gutter) {
         // If only gutter is specified, use a darker version for content
         this._lineColorsContent.set(line, darkenColor(parseColor(config.gutter)))
+      } else {
+        this._lineColorsContent.delete(line)
       }
     } else {
       // Simple format - same color for both, but content is darker
@@ -552,8 +558,9 @@ export class LineNumberRenderable extends Renderable {
       const lineBg = this._lineColorsContent.get(logicalLine)
 
       if (lineBg) {
-        // Fill from after gutter to the end of the LineNumberRenderable
-        buffer.fillRect(this.x + gutterWidth, this.y + i, contentWidth, 1, lineBg)
+        // A buffered renderable paints into its own framebuffer: use local
+        // coordinates like the gutter branch above.
+        buffer.fillRect((this.buffered ? 0 : this.x) + gutterWidth, (this.buffered ? 0 : this.y) + i, contentWidth, 1, lineBg)
       }
     }
   }

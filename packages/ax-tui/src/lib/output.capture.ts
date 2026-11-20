@@ -1,5 +1,6 @@
 import { Writable } from "stream"
 import { EventEmitter } from "events"
+import { StringDecoder } from "string_decoder"
 
 export type CapturedOutput = {
   stream: "stdout" | "stderr"
@@ -39,6 +40,8 @@ export class CapturedWritableStream extends Writable {
   public columns: number = process.stdout.columns || 80
   public rows: number = process.stdout.rows || 24
 
+  private decoder = new StringDecoder("utf8")
+
   constructor(
     private stream: "stdout" | "stderr",
     private capture: Capture,
@@ -47,9 +50,21 @@ export class CapturedWritableStream extends Writable {
   }
 
   _write(chunk: any, encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
-    const data = chunk.toString()
-    this.capture.write(this.stream, data)
-    callback()
+    const data = Buffer.isBuffer(chunk) ? this.decoder.write(chunk) : String(chunk)
+    try {
+      this.capture.write(this.stream, data)
+    } finally {
+      callback()
+    }
+  }
+
+  _final(callback: (error?: Error | null) => void): void {
+    const rest = this.decoder.end()
+    try {
+      if (rest) this.capture.write(this.stream, rest)
+    } finally {
+      callback()
+    }
   }
 
   getColorDepth(): number {

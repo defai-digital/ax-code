@@ -181,6 +181,7 @@ export declare abstract class Renderable extends BaseRenderable {
     focus(): void;
     protected propagateFocusChange(hasFocus: boolean): void;
     blur(): void;
+    private isVisibleInTree;
     get focused(): boolean;
     get hasFocusedDescendant(): boolean;
     get live(): boolean;

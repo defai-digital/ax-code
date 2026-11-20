@@ -13,12 +13,19 @@ export class FrameBufferRenderable extends Renderable {
   protected respectAlpha: boolean
 
   constructor(ctx: RenderContext, options: FrameBufferOptions) {
-    super(ctx, options)
+    // This renderable owns its frame buffer explicitly; the base class must not
+    // allocate a second one for buffered:true (it would leak and self-blit).
+    super(ctx, { ...options, buffered: false })
     this.respectAlpha = options.respectAlpha || false
-    this.frameBuffer = OptimizedBuffer.create(options.width, options.height, this._ctx.widthMethod, {
-      respectAlpha: this.respectAlpha,
-      id: options.id || `framebufferrenderable-${this.id}`,
-    })
+    try {
+      this.frameBuffer = OptimizedBuffer.create(options.width, options.height, this._ctx.widthMethod, {
+        respectAlpha: this.respectAlpha,
+        id: options.id || `framebufferrenderable-${this.id}`,
+      })
+    } catch (err) {
+      this.destroy()
+      throw err
+    }
   }
 
   protected onResize(width: number, height: number): void {

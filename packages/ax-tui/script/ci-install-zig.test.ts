@@ -3,7 +3,14 @@ import { spawnSync } from "node:child_process"
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { extractZigArchive, MACOS_XCRUN_WRAPPER, patchTbdTargets, prepareMacosSdk, zigArchive } from "./ci-install-zig.js"
+import {
+  extractZigArchive,
+  MACOS_XCRUN_WRAPPER,
+  patchMathHeader,
+  patchTbdTargets,
+  prepareMacosSdk,
+  zigArchive,
+} from "./ci-install-zig.js"
 
 test("pinned Zig archives cover the Quality workflow hosts", () => {
   expect(zigArchive("linux", "x64").name).toBe("zig-x86_64-linux-0.15.2.tar.xz")
@@ -18,6 +25,40 @@ test("macOS stub targets gain an arm64-macos alias without repeating it", () => 
   expect(patchTbdTargets(stub)).toBe(
     ["targets: [ arm64-macos, arm64e-macos, arm64e-maccatalyst ]", "targets: [ arm64-macos, arm64e-macos ]"].join("\n"),
   )
+})
+
+const MODERN_MATH_HEADER = [
+  "#if defined(__GNUC__)",
+  "#   define    HUGE_VALF    __builtin_huge_valf()",
+  "#   if defined(__has_feature) && __has_feature(modules) && defined(__has_include) && __has_include(<float.h>)",
+  "#       define __need_infinity_nan",
+  "#       include <float.h>",
+  "#       undef __need_infinity_nan",
+  "#   else",
+  '#       define    NAN          __builtin_nanf("0x7fc00000")',
+  "#   endif",
+  "#endif",
+  "",
+  "#if !defined(__GNUC__) || !defined(__has_feature) || !__has_feature(modules) || !defined(__has_include) || !__has_include(<float.h>)",
+  "#define INFINITY    HUGE_VALF",
+  "#endif",
+  "",
+].join("\n")
+
+test("modules-only SDK math.h gains guarded INFINITY/NAN fallbacks for Zig's libcxx build", () => {
+  const patched = patchMathHeader(MODERN_MATH_HEADER)
+  expect(patched).toContain("#ifndef INFINITY\n#define INFINITY    HUGE_VALF\n#endif")
+  expect(patched).toContain('#ifndef NAN\n#define NAN         __builtin_nanf("0x7fc00000")\n#endif')
+  expect(patched.indexOf("#ifndef INFINITY")).toBeGreaterThan(patched.indexOf("#define INFINITY    HUGE_VALF"))
+  expect(patchMathHeader(patched)).toBe(patched)
+})
+
+test("SDK math.h without the modules float.h contract is left untouched", () => {
+  const legacy = ["#define HUGE_VALF __builtin_huge_valf()", "#define INFINITY HUGE_VALF", '#define NAN __builtin_nanf("")'].join(
+    "\n",
+  )
+  expect(patchMathHeader(legacy)).toBe(legacy)
+  expect(patchMathHeader("#define FP_NAN 1\n")).toBe("#define FP_NAN 1\n")
 })
 
 test.skipIf(process.platform === "win32")("the SDK wrapper handles Zig's multi-argument SDK query", () => {
@@ -47,6 +88,26 @@ test.skipIf(process.platform === "win32")("SDK preparation patches symbol target
     expect(readFileSync(join(destination, "usr/lib/libSystem.tbd"), "utf8")).toBe(patchTbdTargets(stub))
     expect(readFileSync(join(source, "usr/lib/libSystem.tbd"), "utf8")).toBe(stub)
     expect(statSync(join(source, "usr/lib/libSystem.tbd")).mode & 0o777).toBe(0o444)
+  } finally {
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
+test.skipIf(process.platform === "win32")("SDK preparation patches the modules math.h in an independent copy", () => {
+  const fixture = mkdtempSync(join(tmpdir(), "ax-tui-sdk-math-"))
+  try {
+    const source = join(fixture, "original.sdk")
+    const destination = join(fixture, "patched", "MacOSX.sdk")
+    mkdirSync(join(source, "usr/lib"), { recursive: true })
+    mkdirSync(join(source, "usr/include"), { recursive: true })
+    writeFileSync(join(source, "usr/lib/libSystem.tbd"), "targets: [ arm64-macos ]\n")
+    writeFileSync(join(source, "usr/include/math.h"), MODERN_MATH_HEADER)
+    chmodSync(join(source, "usr/include/math.h"), 0o444)
+
+    expect(prepareMacosSdk(source, destination)).toBe(destination)
+    expect(readFileSync(join(destination, "usr/include/math.h"), "utf8")).toBe(patchMathHeader(MODERN_MATH_HEADER))
+    expect(readFileSync(join(source, "usr/include/math.h"), "utf8")).toBe(MODERN_MATH_HEADER)
+    expect(statSync(join(source, "usr/include/math.h")).mode & 0o777).toBe(0o444)
   } finally {
     rmSync(fixture, { recursive: true, force: true })
   }

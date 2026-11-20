@@ -8,6 +8,7 @@ export declare class ProcessQueue<T> {
     private processing;
     constructor(processor: (item: T) => Promise<void> | void, autoProcess?: boolean);
     enqueue(item: T): void;
+    process(): void;
     private processQueue;
     clear(): void;
     isProcessing(): boolean;

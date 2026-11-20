@@ -29,8 +29,8 @@ export const textNodeKeys = ["span", "b", "strong", "i", "em", "u", "a"] as cons
 export type TextNodeKey = (typeof textNodeKeys)[number]
 
 class TextModifierRenderable extends SpanRenderable {
-  constructor(options: any, modifier?: TextNodeKey) {
-    super(null, options)
+  constructor(ctx: RenderContext | null, options: TextNodeOptions, modifier?: TextNodeKey) {
+    super(ctx, options)
 
     // Set appropriate attributes based on modifier type
     if (modifier === "b" || modifier === "strong") {
@@ -44,20 +44,20 @@ class TextModifierRenderable extends SpanRenderable {
 }
 
 export class BoldSpanRenderable extends TextModifierRenderable {
-  constructor(options: any) {
-    super(options, "b")
+  constructor(ctx: RenderContext | null, options: TextNodeOptions) {
+    super(ctx, options, "b")
   }
 }
 
 export class ItalicSpanRenderable extends TextModifierRenderable {
-  constructor(options: any) {
-    super(options, "i")
+  constructor(ctx: RenderContext | null, options: TextNodeOptions) {
+    super(ctx, options, "i")
   }
 }
 
 export class UnderlineSpanRenderable extends TextModifierRenderable {
-  constructor(options: any) {
-    super(options, "u")
+  constructor(ctx: RenderContext | null, options: TextNodeOptions) {
+    super(ctx, options, "u")
   }
 }
 
@@ -112,7 +112,13 @@ export const baseComponents = {
 
 type ComponentCatalogue = Record<string, RenderableConstructor>
 
-export const componentCatalogue: ComponentCatalogue = { ...baseComponents }
+// Null-prototype so prototype keys ("constructor", "toString", ...) resolve
+// as unknown components instead of leaking Object.prototype members into the
+// catalogue lookup in the reconciler.
+export const componentCatalogue: ComponentCatalogue = Object.assign(
+  Object.create(null) as ComponentCatalogue,
+  baseComponents,
+)
 
 /**
  * Extend the component catalogue with new renderable components

@@ -394,7 +394,7 @@ export function parseKittyKeyboard(sequence: string): ParsedKey | null {
       } else if (key.shift && key.name.length === 1) {
         // When shift is pressed but terminal didn't provide shifted codepoint,
         // convert the character to uppercase (works for Unicode including Cyrillic)
-        text = key.name.toLocaleUpperCase()
+        text = key.name.toUpperCase()
       } else {
         text = key.name
       }

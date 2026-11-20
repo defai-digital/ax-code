@@ -1,5 +1,6 @@
 import { BLOCK_EIGHTHS, FULL_BLOCK } from "./symbols.js"
 import type { Cell } from "./cells.js"
+import { truncateCodePoints } from "./cells.js"
 import type { ColorInput } from "./types.js"
 
 /** Gauge layout options. */
@@ -28,7 +29,7 @@ export interface GaugeLayoutOptions {
  * blank+swap pass: the bar stays visually continuous behind the text.
  */
 export function layoutGauge(options: GaugeLayoutOptions, width: number, height: number): Cell[] {
-  if (width <= 0 || height <= 0) return []
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return []
   const cells: Cell[] = []
 
   const raw = options.ratio
@@ -57,15 +58,23 @@ export function layoutGauge(options: GaugeLayoutOptions, width: number, height: 
 
   const label = options.label === undefined ? `${Math.round(ratio * 100)}%` : options.label
   if (label !== null && label.length > 0) {
-    const text = label.length > width ? label.slice(0, width) : label
+    const text = truncateCodePoints(label, width)
     const col = Math.floor((width - text.length) / 2)
     const row = Math.floor(height / 2)
+    // A unicode fill whose fractional edge rounds to a full block covers
+    // column `end` too, so labels on that column are inside the fill.
+    const index = options.unicode && ratio < 1 && end < width ? Math.round((filled % 1) * 8) : 0
+    const fillEnd = index === 8 ? end + 1 : end
     for (let i = 0; i < text.length; i++) {
       const x = col + i
-      if (x < end) {
+      if (x < fillEnd) {
         // Inside the fill the fill color becomes the label background, so the
         // bar stays visually continuous behind the text (ratatui blank+swap).
-        cells.push({ x, y: row, char: text[i]!, fg: options.labelColor, bg: color })
+        // With no explicit labelColor/backgroundColor the foreground stays
+        // unset so the renderable-level default applies; GaugeRenderable
+        // passes RGBA.defaultForeground() so the label reads in the
+        // terminal's default color instead of matching a light fill.
+        cells.push({ x, y: row, char: text[i]!, fg: options.labelColor ?? options.backgroundColor, bg: color })
       } else {
         cells.push({ x, y: row, char: text[i]!, fg: options.labelColor ?? color, bg: options.backgroundColor })
       }

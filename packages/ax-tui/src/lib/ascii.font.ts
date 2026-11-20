@@ -82,8 +82,9 @@ function parseColorTags(text: string): FontSegment[] {
   return segments
 }
 
-function getParsedFont(fontKey: keyof typeof fonts): ParsedFontDefinition {
-  if (!parsedFonts[fontKey]) {
+function getParsedFont(fontKey: keyof typeof fonts): ParsedFontDefinition | undefined {
+  if (!Object.hasOwn(fonts, fontKey)) return undefined
+  if (!Object.hasOwn(parsedFonts, fontKey)) {
     const fontDef = fonts[fontKey] as FontDefinition
     const parsedChars: Record<string, FontSegment[][]> = {}
 
@@ -285,7 +286,10 @@ export function renderFontToFrameBuffer(
 
     if (currentX >= width) break
     if (currentX + charWidth < 0) {
-      currentX += charWidth + fontDef.letterspace_size
+      currentX += charWidth
+      if (i < text.length - 1) {
+        currentX += fontDef.letterspace_size
+      }
       continue
     }
 

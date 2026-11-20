@@ -1,5 +1,5 @@
 // solid/source/index.ts
-import { CliRenderer, createCliRenderer, engine as engine2 } from "@defai-digital/ax-tui";
+import { CliRenderer, Renderable as Renderable3, createCliRenderer, engine as engine2 } from "@defai-digital/ax-tui";
 import { createTestRenderer } from "@defai-digital/ax-tui/testing";
 
 // solid/source/src/elements/catalogue.ts
@@ -26,8 +26,8 @@ var SpanRenderable = class extends TextNodeRenderable {
 };
 var textNodeKeys = ["span", "b", "strong", "i", "em", "u", "a"];
 var TextModifierRenderable = class extends SpanRenderable {
-  constructor(options, modifier) {
-    super(null, options);
+  constructor(ctx, options, modifier) {
+    super(ctx, options);
     if (modifier === "b" || modifier === "strong") {
       this.attributes = (this.attributes || 0) | TextAttributes.BOLD;
     } else if (modifier === "i" || modifier === "em") {
@@ -38,18 +38,18 @@ var TextModifierRenderable = class extends SpanRenderable {
   }
 };
 var BoldSpanRenderable = class extends TextModifierRenderable {
-  constructor(options) {
-    super(options, "b");
+  constructor(ctx, options) {
+    super(ctx, options, "b");
   }
 };
 var ItalicSpanRenderable = class extends TextModifierRenderable {
-  constructor(options) {
-    super(options, "i");
+  constructor(ctx, options) {
+    super(ctx, options, "i");
   }
 };
 var UnderlineSpanRenderable = class extends TextModifierRenderable {
-  constructor(options) {
-    super(options, "u");
+  constructor(ctx, options) {
+    super(ctx, options, "u");
   }
 };
 var LineBreakRenderable = class extends SpanRenderable {
@@ -90,7 +90,10 @@ var baseComponents = {
   br: LineBreakRenderable,
   a: LinkRenderable
 };
-var componentCatalogue = { ...baseComponents };
+var componentCatalogue = Object.assign(
+  /* @__PURE__ */ Object.create(null),
+  baseComponents
+);
 function extend(objects) {
   Object.assign(componentCatalogue, objects);
 }
@@ -348,7 +351,7 @@ function createRenderer({
           if (current.length === 0) {
             appendNodes(parent, array, marker);
           } else reconcileArrays(parent, current, array);
-        } else if (current == null || current === "") {
+        } else if (current == null || !getFirstChild(parent)) {
           appendNodes(parent, array);
         } else {
           reconcileArrays(parent, multi && current || [getFirstChild(parent)], array);
@@ -359,7 +362,7 @@ function createRenderer({
       if (Array.isArray(current)) {
         if (multi) return current = cleanChildren(parent, current, marker, value);
         cleanChildren(parent, current, null, value);
-      } else if (current == null || current === "" || !getFirstChild(parent)) {
+      } else if (current == null || !getFirstChild(parent)) {
         insertNode2(parent, value);
       } else replaceNode(parent, value, getFirstChild(parent));
       current = value;
@@ -490,10 +493,18 @@ function createRenderer({
   return {
     render(code, element) {
       let disposer;
-      createRoot((dispose) => {
-        disposer = dispose;
-        insert2(element, code());
-      });
+      try {
+        createRoot((dispose) => {
+          disposer = dispose;
+          insert2(element, code());
+        });
+      } catch (error) {
+        try {
+          disposer?.();
+        } catch {
+        }
+        throw error;
+      }
       return disposer;
     },
     insert: insert2,
@@ -725,7 +736,7 @@ var {
     }
     if (isTextNodeRenderable(node)) {
       if (name === "href") {
-        node.link = { url: value };
+        node.link = value ? { url: value } : void 0;
         return;
       }
       if (name === "style") {
@@ -908,6 +919,11 @@ function Portal(props) {
         configurable: true
       });
       let disposeContent;
+      onCleanup2(() => {
+        el.remove(container.id);
+        container.destroyRecursively();
+        disposeContent?.();
+      });
       const content = runWithOwner(
         owner,
         () => createRoot2((dispose) => {
@@ -918,11 +934,6 @@ function Portal(props) {
       insert(renderRoot, content);
       el.add(container);
       props.ref && props.ref(container);
-      onCleanup2(() => {
-        el.remove(container.id);
-        container.destroyRecursively();
-        disposeContent?.();
-      });
     },
     void 0,
     { render: true }
@@ -1413,6 +1424,7 @@ function useCommandPalette() {
 // solid/source/src/scrollback.ts
 import {
   BoxRenderable as BoxRenderable2,
+  Renderable as Renderable2,
   RootRenderable
 } from "@defai-digital/ax-tui";
 import { createSignal as createSignal2 } from "solid-js/dist/solid.js";
@@ -1504,7 +1516,8 @@ function resolveSnapshotHeight(renderContext, root, snapshotRenderer) {
 }
 function createScrollbackWriter(node, options = {}) {
   return (ctx) => {
-    const width = normalizeSnapshotDimension(options.width, "width") ?? Math.max(1, Math.trunc(ctx.width));
+    const terminalWidth = Math.max(1, Math.trunc(ctx.width));
+    const width = Math.min(normalizeSnapshotDimension(options.width, "width") ?? terminalWidth, terminalWidth);
     const height = normalizeSnapshotDimension(options.height, "height");
     const startOnNewLine = options.startOnNewLine ?? true;
     const firstLineWidth = !startOnNewLine && ctx.tailColumn > 0 && ctx.tailColumn < ctx.width ? Math.min(width, ctx.width - ctx.tailColumn) : width;
@@ -1561,6 +1574,9 @@ function createScrollbackWriter(node, options = {}) {
     } catch (error) {
       teardown();
       root.destroyRecursively();
+      for (const node2 of Renderable2.renderablesByNumber.values()) {
+        if (node2.ctx === snapshotRenderer.renderer) node2.destroyRecursively();
+      }
       throw error;
     }
   };
@@ -1589,7 +1605,7 @@ import { memo as _$memo } from "@defai-digital/ax-tui/solid";
 import { createComponent as _$createComponent } from "@defai-digital/ax-tui/solid";
 import { mergeProps as _$mergeProps } from "@defai-digital/ax-tui/solid";
 import { createSlotRegistry } from "@defai-digital/ax-tui";
-import { children, createMemo as createMemo3, createSignal as createSignal3, ErrorBoundary, For, onCleanup as onCleanup6, splitProps as splitProps4 } from "solid-js/dist/solid.js";
+import { children, createEffect as createEffect2, createMemo as createMemo3, createSignal as createSignal3, ErrorBoundary, For, on, onCleanup as onCleanup6, splitProps as splitProps4 } from "solid-js/dist/solid.js";
 var EMPTY_ENTRY_IDS = [];
 function createSolidSlotRegistry(renderer, context, options = {}) {
   return createSlotRegistry(renderer, "solid:slot-registry", context, options);
@@ -1610,19 +1626,30 @@ function Slot(props) {
   const pluginFailurePlaceholder = () => local.pluginFailurePlaceholder;
   const [version, setVersion] = createSignal3(0);
   let queued = false;
+  let missed = false;
   let disposed = false;
-  const unsubscribe = registry().subscribe(() => {
-    if (queued) return;
-    queued = true;
-    setVersion((current) => current + 1);
-    queueMicrotask(() => {
-      queued = false;
-      if (disposed) return;
+  createEffect2(on(registry, (reg) => {
+    const unsubscribe = reg.subscribe(() => {
+      if (queued) {
+        missed = true;
+        return;
+      }
+      queued = true;
+      setVersion((current) => current + 1);
+      queueMicrotask(() => {
+        queued = false;
+        if (disposed) return;
+        if (missed) {
+          missed = false;
+          setVersion((current) => current + 1);
+        }
+      });
     });
-  });
+    onCleanup6(() => unsubscribe());
+    setVersion((current) => current + 1);
+  }));
   onCleanup6(() => {
     disposed = true;
-    unsubscribe();
   });
   const entries = createMemo3((previousEntries = []) => {
     version();
@@ -1668,7 +1695,7 @@ function Slot(props) {
       return resolveFallback(fallbackValue);
     }
   };
-  const renderEntry = (entry, fallbackOnError) => {
+  const renderEntry = (entry, fallbackOnError, onResolved) => {
     let initialRender;
     try {
       initialRender = entry.renderer(registry().context, slotProps);
@@ -1682,11 +1709,6 @@ function Slot(props) {
       });
       return renderPluginFailurePlaceholder(failure, fallbackOnError);
     }
-    const resolvedInitialRender = children(() => initialRender);
-    const hasInitialOutput = resolvedInitialRender.toArray().some((node) => node !== null && node !== void 0 && node !== false);
-    if (!hasInitialOutput) {
-      return resolveFallback(fallbackOnError);
-    }
     return _$createComponent(ErrorBoundary, {
       fallback: (error) => {
         const failure = registry().reportPluginError({
@@ -1699,7 +1721,24 @@ function Slot(props) {
         return renderPluginFailurePlaceholder(failure, fallbackOnError);
       },
       get children() {
-        return resolvedInitialRender();
+        return (() => {
+          try {
+            const resolved = children(() => initialRender);
+            const hasOutput = resolved.toArray().some((node) => node !== null && node !== void 0 && node !== false);
+            onResolved?.(hasOutput);
+            if (!hasOutput) return null;
+            return resolved();
+          } catch (error) {
+            const failure = registry().reportPluginError({
+              pluginId: entry.id,
+              slot: slotName(),
+              phase: "render",
+              source: "solid",
+              error
+            });
+            return renderPluginFailurePlaceholder(failure, fallbackOnError);
+          }
+        })();
       }
     });
   };
@@ -1742,8 +1781,11 @@ function Slot(props) {
       return renderEntry(winner, renderFallback);
     }
     if (mode === "replace") {
-      const renderedEntries = resolvedEntries.map((entry) => renderEntry(entry));
-      const hasPluginOutput = renderedEntries.some((entry) => entry !== null && entry !== void 0 && entry !== false);
+      const outputFlags = [];
+      const renderedEntries = resolvedEntries.map((entry) => renderEntry(entry, void 0, (hasOutput) => {
+        outputFlags.push(hasOutput);
+      }));
+      const hasPluginOutput = outputFlags.some(Boolean);
       if (!hasPluginOutput) {
         return renderFallback();
       }
@@ -1780,6 +1822,7 @@ var mountSolidRoot = (renderer, node) => {
     }
     originalDestroy();
   };
+  const before = new Set(Renderable3.renderablesByNumber.keys());
   try {
     dispose = _render(
       () => createComponent2(RendererContext.Provider, {
@@ -1792,26 +1835,38 @@ var mountSolidRoot = (renderer, node) => {
       }),
       renderer.root
     );
+  } catch (error) {
+    for (const [num, orphan] of Renderable3.renderablesByNumber) {
+      if (!before.has(num)) orphan.destroyRecursively();
+    }
+    renderer.off("destroy", runDispose);
+    throw error;
   } finally {
     mounting = false;
     renderer.destroy = originalDestroy;
-  }
-  if (disposeRequested) {
-    runDispose();
-  }
-  if (destroyRequested) {
-    originalDestroy();
+    if (disposeRequested) {
+      runDispose();
+    }
+    if (destroyRequested) {
+      originalDestroy();
+    }
   }
 };
 var render = async (node, rendererOrConfig = {}) => {
-  const renderer = rendererOrConfig instanceof CliRenderer ? rendererOrConfig : await createCliRenderer({
+  const ownsRenderer = !(rendererOrConfig instanceof CliRenderer);
+  const renderer = ownsRenderer ? await createCliRenderer({
     ...rendererOrConfig,
     onDestroy: () => {
       rendererOrConfig.onDestroy?.();
     }
-  });
+  }) : rendererOrConfig;
   engine2.attach(renderer);
-  mountSolidRoot(renderer, node);
+  try {
+    mountSolidRoot(renderer, node);
+  } catch (error) {
+    if (ownsRenderer) renderer.destroy();
+    throw error;
+  }
 };
 var testRender = async (node, renderConfig = {}) => {
   const testSetup = await createTestRenderer({
@@ -1821,7 +1876,12 @@ var testRender = async (node, renderConfig = {}) => {
     }
   });
   engine2.attach(testSetup.renderer);
-  mountSolidRoot(testSetup.renderer, node);
+  try {
+    mountSolidRoot(testSetup.renderer, node);
+  } catch (error) {
+    testSetup.renderer.destroy();
+    throw error;
+  }
   return testSetup;
 };
 export {

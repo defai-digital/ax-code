@@ -21,6 +21,8 @@ export declare class TreeSitterClient extends EventEmitter<TreeSitterClientEvent
     private rejectInitialization;
     private destroyPromise;
     private workerTerminationFailed;
+    private dataPathQueue;
+    private pendingDisposes;
     constructor(options: TreeSitterClientOptions, internalOptions?: TreeSitterClientInternalOptions);
     onDestroy(callback: () => void): () => void;
     private emitError;
@@ -58,6 +60,7 @@ export declare class TreeSitterClient extends EventEmitter<TreeSitterClientEvent
     getAllBuffers(): BufferState[];
     isInitialized(): boolean;
     setDataPath(dataPath: string): Promise<void>;
+    private applyDataPath;
     clearCache(): Promise<void>;
 }
 export {};

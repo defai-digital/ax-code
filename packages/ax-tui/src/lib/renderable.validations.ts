@@ -53,7 +53,7 @@ export function isPositionType(value: any): value is number | "auto" | `${number
 }
 
 export function isPositionTypeType(value: any): value is PositionTypeString {
-  return value === "relative" || value === "absolute"
+  return value === "relative" || value === "absolute" || value === "static"
 }
 
 export function isOverflowType(value: any): value is OverflowString {

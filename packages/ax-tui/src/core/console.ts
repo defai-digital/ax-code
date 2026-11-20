@@ -4,14 +4,17 @@ import fs from "node:fs"
 import path from "node:path"
 import util from "node:util"
 import type { CliRenderer, MouseEvent } from "./renderer.js"
+import { CliRenderEvents } from "./types.js"
 import type { ColorInput } from "../lib/rgba.js"
 import { OptimizedBuffer } from "./buffer.js"
+import { stringWidth } from "../platform/runtime.js"
 import { type Clock, SystemClock } from "../lib/clock.js"
 import { Capture, CapturedWritableStream } from "../lib/output.capture.js"
 import { parseColor, RGBA } from "../lib/rgba.js"
 import { singleton } from "../lib/singleton.js"
 import { env, registerEnvVar } from "../lib/env.js"
 import type { KeyEvent } from "../lib/key-handler.js"
+import type { RawMouseEvent } from "../lib/parse.mouse.js"
 import {
   type KeyBinding as BaseKeyBinding,
   mergeKeyBindings,
@@ -311,6 +314,58 @@ const DEFAULT_CONSOLE_OPTIONS: Required<
 
 const INDENT_WIDTH = 2
 
+// Grapheme-cluster segmentation keeps emoji sequences (e.g. ZWJ families)
+// intact: code-point iteration would tear them between the joiner and the
+// following character.
+const consoleSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" })
+
+// Clip to a display-column budget without splitting wide characters or
+// grapheme clusters; always keeps at least one cluster so wrapping callers
+// make progress.
+function clipTextToWidth(text: string, maxWidth: number): string {
+  let index = 0
+  let width = 0
+  for (const { segment } of consoleSegmenter.segment(text)) {
+    const charWidth = stringWidth(segment)
+    if (width + charWidth > maxWidth && index > 0) break
+    width += charWidth
+    index += segment.length
+  }
+  return text.substring(0, index)
+}
+
+// Map a display column to the code-unit index of the grapheme cluster
+// covering it.
+function codeUnitIndexForColumn(text: string, column: number): number {
+  if (column <= 0) return 0
+  let index = 0
+  let width = 0
+  for (const { segment } of consoleSegmenter.segment(text)) {
+    const charWidth = stringWidth(segment)
+    // Zero-width combining marks belong to the preceding grapheme; skipping
+    // them here would disagree with clipTextToWidth, which always keeps them.
+    if (width >= column && charWidth > 0) break
+    width += charWidth
+    index += segment.length
+  }
+  return index
+}
+
+function wrapLogText(text: string, firstWidth: number, restWidth: number): string[] {
+  if (text.length === 0) return [""]
+  const segments: string[] = []
+  let rest = text
+  const first = clipTextToWidth(rest, firstWidth)
+  segments.push(first)
+  rest = rest.substring(first.length)
+  while (rest.length > 0) {
+    const segment = clipTextToWidth(rest, restWidth)
+    segments.push(segment)
+    rest = rest.substring(segment.length)
+  }
+  return segments
+}
+
 interface DisplayLine {
   text: string
   level: LogLevel
@@ -363,6 +418,21 @@ export class TerminalConsole extends EventEmitter {
   private markNeedsRerender(): void {
     this._needsFrameBufferUpdate = true
     this.renderer.requestRender()
+  }
+
+  // The renderer emits MOUSE_UP for every release, including ones outside the
+  // console bounds that handleMouse never sees; end the drag here too. Releases
+  // inside the console are left to handleMouse so it can finalize the selection.
+  private _handleGlobalMouseUp = (event?: RawMouseEvent): void => {
+    if (!this._isDragging) return
+    if (event && this.isVisible) {
+      const localX = event.x - this.consoleX
+      const localY = event.y - this.consoleY
+      if (localX >= 0 && localX < this.consoleWidth && localY >= 0 && localY < this.consoleHeight) return
+    }
+    this._isDragging = false
+    this.stopAutoScroll()
+    this.markNeedsRerender()
   }
 
   private getCopyButtonLabel(): string {
@@ -430,6 +500,7 @@ export class TerminalConsole extends EventEmitter {
       this._handleNewLog(logEntry)
     }
     terminalConsoleCache.on("entry", this._entryListener)
+    this.renderer.on(CliRenderEvents.MOUSE_UP, this._handleGlobalMouseUp)
 
     if (env.SHOW_CONSOLE) {
       this.show()
@@ -479,6 +550,7 @@ export class TerminalConsole extends EventEmitter {
       const linesRemoved = this._displayLines.length - this.options.maxDisplayLines
       this._displayLines.splice(0, linesRemoved)
       this.scrollTopIndex = Math.max(0, this.scrollTopIndex - linesRemoved)
+      this._adjustSelectionForTrim(linesRemoved)
     }
 
     if (this.isScrolledToBottom) {
@@ -694,6 +766,10 @@ export class TerminalConsole extends EventEmitter {
     terminalConsoleCache.clearConsole()
     this._allLogEntries = []
     this._displayLines = []
+    this.scrollTopIndex = 0
+    this.currentLineIndex = 0
+    this.isScrolledToBottom = true
+    this.clearSelection()
     this.markNeedsRerender()
   }
 
@@ -759,6 +835,11 @@ export class TerminalConsole extends EventEmitter {
     this.hide()
     this.deactivate()
     terminalConsoleCache.off("entry", this._entryListener)
+    this.renderer.off(CliRenderEvents.MOUSE_UP, this._handleGlobalMouseUp)
+    if (this.frameBuffer) {
+      this.frameBuffer.destroy()
+      this.frameBuffer = null
+    }
   }
 
   public getCachedLogs(): string {
@@ -833,30 +914,29 @@ export class TerminalConsole extends EventEmitter {
         this.frameBuffer.drawText(" ", 0, lineY, this._rgbaDefault, this.backgroundColor)
       }
 
-      const fullText = `${linePrefix}${textToDraw.substring(0, textAvailableWidth)}`
+      const fullText = `${linePrefix}${clipTextToWidth(textToDraw, textAvailableWidth)}`
       const selectionRange = this.getLineSelectionRange(absoluteLineIndex)
 
       if (selectionRange) {
         const adjustedStart = Math.max(0, selectionRange.start)
         const adjustedEnd = Math.min(fullText.length, selectionRange.end)
+        const preWidth = stringWidth(fullText.substring(0, adjustedStart))
 
         if (adjustedStart > 0) {
           this.frameBuffer.drawText(fullText.substring(0, adjustedStart), 1, lineY, levelColor)
         }
 
+        let tailX = 1 + preWidth
         if (adjustedStart < adjustedEnd) {
-          this.frameBuffer.fillRect(1 + adjustedStart, lineY, adjustedEnd - adjustedStart, 1, this._rgbaSelection)
-          this.frameBuffer.drawText(
-            fullText.substring(adjustedStart, adjustedEnd),
-            1 + adjustedStart,
-            lineY,
-            levelColor,
-            this._rgbaSelection,
-          )
+          const midText = fullText.substring(adjustedStart, adjustedEnd)
+          const midWidth = stringWidth(midText)
+          this.frameBuffer.fillRect(1 + preWidth, lineY, midWidth, 1, this._rgbaSelection)
+          this.frameBuffer.drawText(midText, 1 + preWidth, lineY, levelColor, this._rgbaSelection)
+          tailX += midWidth
         }
 
         if (adjustedEnd < fullText.length) {
-          this.frameBuffer.drawText(fullText.substring(adjustedEnd), 1 + adjustedEnd, lineY, levelColor)
+          this.frameBuffer.drawText(fullText.substring(adjustedEnd), tailX, lineY, levelColor)
         }
       } else {
         this.frameBuffer.drawText(fullText, 1, lineY, levelColor)
@@ -935,29 +1015,25 @@ export class TerminalConsole extends EventEmitter {
     const formattedArgs = this.formatArguments(args)
     const initialLines = formattedArgs.split("\n")
 
+    // Clamp to at least 1 so wrapping always advances even in a tiny console.
+    const firstWidth = Math.max(1, this.consoleWidth - 1)
+    const restWidth = Math.max(1, this.consoleWidth - 1 - INDENT_WIDTH)
+
     for (let i = 0; i < initialLines.length; i++) {
       const lineText = initialLines[i]
       const isFirstLineOfEntry = i === 0
-      // Clamp to at least 1: a non-positive width (tiny console, or the
-      // indent consuming the whole width) would never advance currentPos and
-      // loop forever allocating display lines.
-      const availableWidth = Math.max(1, this.consoleWidth - 1 - (isFirstLineOfEntry ? 0 : INDENT_WIDTH))
-      const linePrefix = isFirstLineOfEntry ? prefix : " ".repeat(INDENT_WIDTH)
-      const textToWrap = isFirstLineOfEntry ? linePrefix + lineText : lineText
+      const segments = isFirstLineOfEntry
+        ? wrapLogText(prefix + lineText, firstWidth, restWidth)
+        : wrapLogText(lineText, restWidth, restWidth)
 
-      let currentPos = 0
-      while (currentPos < textToWrap.length || (isFirstLineOfEntry && currentPos === 0 && textToWrap.length === 0)) {
-        const segment = textToWrap.substring(currentPos, currentPos + availableWidth)
-        const isFirstSegmentOfLine = currentPos === 0
-
+      // The indent is applied by consumers via the indent flag; baking it
+      // into the text here would double-indent wrapped/continuation lines.
+      for (let j = 0; j < segments.length; j++) {
         displayLines.push({
-          text: isFirstSegmentOfLine && !isFirstLineOfEntry ? linePrefix + segment : segment,
+          text: segments[j],
           level: level,
-          indent: !isFirstLineOfEntry || !isFirstSegmentOfLine,
+          indent: !isFirstLineOfEntry || j > 0,
         })
-
-        currentPos += availableWidth
-        if (isFirstLineOfEntry && currentPos === 0 && textToWrap.length === 0) break
       }
     }
 
@@ -980,7 +1056,9 @@ export class TerminalConsole extends EventEmitter {
     }
 
     if (this._displayLines.length > this.options.maxDisplayLines) {
-      this._displayLines.splice(0, this._displayLines.length - this.options.maxDisplayLines)
+      const linesRemoved = this._displayLines.length - this.options.maxDisplayLines
+      this._displayLines.splice(0, linesRemoved)
+      this._adjustSelectionForTrim(linesRemoved)
     }
   }
 
@@ -1025,15 +1103,17 @@ export class TerminalConsole extends EventEmitter {
       const line = this._displayLines[i]
       const linePrefix = line.indent ? " ".repeat(INDENT_WIDTH) : ""
       const textAvailableWidth = this.consoleWidth - 1 - (line.indent ? INDENT_WIDTH : 0)
-      const fullText = linePrefix + line.text.substring(0, textAvailableWidth)
+      const fullText = linePrefix + clipTextToWidth(line.text, textAvailableWidth)
+      const startUnit = codeUnitIndexForColumn(fullText, selection.startCol)
+      const endUnit = codeUnitIndexForColumn(fullText, selection.endCol)
       let text = fullText
 
       if (i === selection.startLine && i === selection.endLine) {
-        text = fullText.substring(selection.startCol, selection.endCol)
+        text = fullText.substring(startUnit, endUnit)
       } else if (i === selection.startLine) {
-        text = fullText.substring(selection.startCol)
+        text = fullText.substring(startUnit)
       } else if (i === selection.endLine) {
-        text = fullText.substring(0, selection.endCol)
+        text = fullText.substring(0, endUnit)
       }
 
       lines.push(text)
@@ -1047,6 +1127,21 @@ export class TerminalConsole extends EventEmitter {
     this._selectionEnd = null
     this._isDragging = false
     this.stopAutoScroll()
+  }
+
+  // Display-line indices shift when old lines are trimmed from the top; keep
+  // the selection anchored to the same text instead of letting it drift onto
+  // unrelated lines or point past the end of the buffer.
+  private _adjustSelectionForTrim(linesRemoved: number): void {
+    if (!this._selectionStart || !this._selectionEnd) return
+    if (Math.max(this._selectionStart.line, this._selectionEnd.line) < linesRemoved) {
+      this.clearSelection()
+      return
+    }
+    const shift = (point: { line: number; col: number }): { line: number; col: number } =>
+      point.line < linesRemoved ? { line: 0, col: 0 } : { line: point.line - linesRemoved, col: point.col }
+    this._selectionStart = shift(this._selectionStart)
+    this._selectionEnd = shift(this._selectionEnd)
   }
 
   private stopAutoScroll(): void {
@@ -1120,16 +1215,17 @@ export class TerminalConsole extends EventEmitter {
 
     const linePrefix = line.indent ? " ".repeat(INDENT_WIDTH) : ""
     const textAvailableWidth = this.consoleWidth - 1 - (line.indent ? INDENT_WIDTH : 0)
-    const fullTextLength = linePrefix.length + Math.min(line.text.length, textAvailableWidth)
+    const fullText = linePrefix + clipTextToWidth(line.text, textAvailableWidth)
+    const fullTextLength = fullText.length
 
     let start = 0
     let end = fullTextLength
 
     if (lineIndex === selection.startLine) {
-      start = Math.max(0, selection.startCol)
+      start = Math.max(0, codeUnitIndexForColumn(fullText, selection.startCol))
     }
     if (lineIndex === selection.endLine) {
-      end = Math.min(fullTextLength, selection.endCol)
+      end = Math.min(fullTextLength, codeUnitIndexForColumn(fullText, selection.endCol))
     }
 
     if (start >= end) return null
@@ -1155,6 +1251,23 @@ export class TerminalConsole extends EventEmitter {
       return true
     }
 
+    const lineIndex = this.scrollTopIndex + (localY - 1)
+    const colIndex = Math.max(0, localX - 1)
+
+    // A release can land on the title bar; the global MOUSE_UP listener already
+    // ended the drag for releases outside the console bounds.
+    if (event.type === "up") {
+      if (this._isDragging) {
+        if (localY >= 1) {
+          this._selectionEnd = { line: lineIndex, col: colIndex }
+        }
+        this._isDragging = false
+        this.stopAutoScroll()
+        this.markNeedsRerender()
+      }
+      return true
+    }
+
     if (localY === 0) {
       if (
         event.type === "down" &&
@@ -1165,11 +1278,13 @@ export class TerminalConsole extends EventEmitter {
         this.triggerCopy()
         return true
       }
+      if (event.type === "drag" && this._isDragging) {
+        this.startAutoScroll("up")
+        this.markNeedsRerender()
+        return true
+      }
       return true
     }
-
-    const lineIndex = this.scrollTopIndex + (localY - 1)
-    const colIndex = Math.max(0, localX - 1)
 
     if (event.type === "down" && event.button === 0) {
       this.clearSelection()
@@ -1199,16 +1314,6 @@ export class TerminalConsole extends EventEmitter {
       }
 
       this.markNeedsRerender()
-      return true
-    }
-
-    if (event.type === "up") {
-      if (this._isDragging) {
-        this._selectionEnd = { line: lineIndex, col: colIndex }
-        this._isDragging = false
-        this.stopAutoScroll()
-        this.markNeedsRerender()
-      }
       return true
     }
 

@@ -275,7 +275,7 @@ export const {
 
     if (isTextNodeRenderable(node)) {
       if (name === "href") {
-        node.link = { url: value }
+        node.link = value ? { url: value } : undefined
         return
       }
 

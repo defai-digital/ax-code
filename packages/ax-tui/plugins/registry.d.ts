@@ -12,6 +12,7 @@ export declare class SlotRegistry<TNode, TSlots extends object, TContext extends
     private errorListeners;
     private pluginErrors;
     private registrationOrder;
+    private registeringIds;
     private batchDepth;
     private batchedNotify;
     private rendererInstance;

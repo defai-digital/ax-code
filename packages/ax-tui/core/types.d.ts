@@ -42,6 +42,23 @@ export declare enum TargetChannel {
     BG = 2,
     Both = 3
 }
+export declare enum CliRenderEvents {
+    RESIZE = "resize",
+    FRAME = "frame",
+    EXTERNAL_OUTPUT = "external_output",
+    FOCUS = "focus",
+    BLUR = "blur",
+    FOCUSED_RENDERABLE = "focused_renderable",
+    FOCUSED_EDITOR = "focused_editor",
+    THEME_MODE = "theme_mode",
+    PALETTE = "palette",
+    CAPABILITIES = "capabilities",
+    SELECTION = "selection",
+    MOUSE_UP = "mouse:up",
+    DEBUG_OVERLAY_TOGGLE = "debugOverlay:toggle",
+    DESTROY = "destroy",
+    MEMORY_SNAPSHOT = "memory:snapshot"
+}
 export type WidthMethod = "wcwidth" | "unicode";
 export type TerminalMultiplexer = "none" | "tmux" | "zellij" | "screen" | "unknown";
 export interface TerminalInfo {

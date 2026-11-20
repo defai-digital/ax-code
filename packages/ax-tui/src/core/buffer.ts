@@ -1,4 +1,5 @@
 import { validateBufferDimensions, validateGrayscaleSource } from "../lib/buffer.validations.js"
+import { clamp } from "../lib/clamp.js"
 import { RGBA } from "../lib/index.js"
 import { resolveRenderLib, type OptimizedBufferHandle, type RenderLib } from "./zig.js"
 import { type Pointer, type PointerInput, toArrayBuffer, toPointer, ptr } from "../platform/ffi.js"
@@ -554,7 +555,8 @@ export class OptimizedBuffer {
 
   public pushOpacity(opacity: number): void {
     this.guard()
-    this.lib.bufferPushOpacity(this.bufferPtr, Math.max(0, Math.min(1, opacity)))
+    // clamp maps NaN to the minimum; Math.max/min would pass NaN through to native.
+    this.lib.bufferPushOpacity(this.bufferPtr, clamp(opacity, 0, 1))
   }
 
   public popOpacity(): void {

@@ -18,10 +18,11 @@
  * overrides the extra argument list wholesale).
  *
  * Exit codes: 0 = verdict captured, 1 = FINDINGS reported (gate signal for
- * the caller to triage), 2 = CLI not found, 3 = timeout, 4 = no verdict.
+ * the caller to triage), 2 = environment/usage error (CLI not found, git
+ * failure, invalid override), 3 = timeout, 4 = no verdict.
  */
 import { execFileSync, spawn } from "node:child_process"
-import { existsSync } from "node:fs"
+import { accessSync, constants, statSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -29,6 +30,12 @@ import { fileURLToPath } from "node:url"
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const MAX_DIFF_CHARS = 96_000
 const MAX_STDOUT_CHARS = 400_000
+// git must emit the full diff before the prompt truncates it; the default 1 MiB
+// execFileSync buffer aborts (ENOBUFS) on large ranges and masquerades as FINDINGS.
+const MAX_GIT_BUFFER_BYTES = 64 * 1024 * 1024
+// Node clamps larger setTimeout delays to 1ms, so an oversized override would
+// kill the CLI instantly and masquerade as a timeout.
+const MAX_TIMEOUT_MS = 2_147_483_647
 
 function fail(exitCode, message) {
   console.error(`FAIL: ${message}`)
@@ -42,39 +49,50 @@ if (!baseline) {
 }
 
 function git(...args) {
-  return execFileSync("git", ["-C", repoRoot, ...args], { encoding: "utf8" })
+  try {
+    return execFileSync("git", ["-C", repoRoot, ...args], { encoding: "utf8", maxBuffer: MAX_GIT_BUFFER_BYTES })
+  } catch (err) {
+    fail(2, `git ${args.join(" ")} failed: ${err.message}`)
+  }
 }
 
 // --- 1. Locate the deepseek CLI. -------------------------------------------
-const candidates = []
-if (process.env.DEEPSEEK_CLI) {
-  candidates.push(process.env.DEEPSEEK_CLI)
-}
-for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-  if (dir) candidates.push(path.join(dir, "deepseek"))
-}
-const home = homedir()
-for (const dir of [
-  path.join(home, ".local", "bin"),
-  path.join(home, ".cargo", "bin"),
-  path.join(home, ".bun", "bin"),
-  path.join(home, ".deno", "bin"),
-  path.join(home, "bin"),
-  path.join(home, ".deepseek"),
-  "/usr/local/bin",
-  "/opt/homebrew/bin",
-  "/usr/bin",
-]) {
-  candidates.push(path.join(dir, "deepseek"), path.join(dir, "deepseek-cli"))
-}
-
-const cliPath = candidates.find((candidate) => {
+// An explicit DEEPSEEK_CLI override is exclusive: a missing or non-executable
+// override must fail loudly (exit 2), never silently fall back to a PATH binary.
+function isExecutableFile(candidate) {
   try {
-    return existsSync(candidate)
+    if (!statSync(candidate).isFile()) return false
+    accessSync(candidate, constants.X_OK)
+    return true
   } catch {
     return false
   }
-})
+}
+
+const candidates = []
+if (process.env.DEEPSEEK_CLI !== undefined) {
+  candidates.push(process.env.DEEPSEEK_CLI)
+} else {
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (dir) candidates.push(path.join(dir, "deepseek"))
+  }
+  const home = homedir()
+  for (const dir of [
+    path.join(home, ".local", "bin"),
+    path.join(home, ".cargo", "bin"),
+    path.join(home, ".bun", "bin"),
+    path.join(home, ".deno", "bin"),
+    path.join(home, "bin"),
+    path.join(home, ".deepseek"),
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+    "/usr/bin",
+  ]) {
+    candidates.push(path.join(dir, "deepseek"), path.join(dir, "deepseek-cli"))
+  }
+}
+
+const cliPath = candidates.find(isExecutableFile)
 if (!cliPath) {
   fail(
     2,
@@ -85,13 +103,14 @@ if (!cliPath) {
 console.log(`deepseek CLI found: ${cliPath}`)
 
 // --- 2. Build the bounded self-contained review prompt. --------------------
-git("cat-file", "-e", `${baseline}^{commit}`) // throws (and aborts) on a bad SHA
+git("cat-file", "-e", `${baseline}^{commit}`) // a bad SHA fails loudly via the git wrapper (exit 2)
 const stat = git("diff", "--stat", `${baseline}..HEAD`).trim()
-// Review the refactored renderer sources: regenerated bundles dominate the
-// raw diff (tens of thousands of lines) while their freshness is already
+// Review the maintained sources: renderer core, Solid reconciler, and the
+// spinner/chart widgets. Regenerated bundles (including solid/src) dominate
+// the raw diff (tens of thousands of lines) while their freshness is already
 // proven by `pnpm run check`, and the added tests/scripts are executed by
 // the other gates. Their per-file stats stay in the prompt for context.
-const maintainedPaths = ["src"]
+const maintainedPaths = ["src", "solid/source", "spinner/src", "chart/src"]
 let diff = git("diff", `${baseline}..HEAD`, "--", ...maintainedPaths)
 if (diff.length > MAX_DIFF_CHARS) {
   const truncatedAt = diff.lastIndexOf("\ndiff --git", MAX_DIFF_CHARS)
@@ -118,7 +137,24 @@ const prompt = [
 
 // --- 3. Run the CLI under a hard timeout. ----------------------------------
 const timeoutMs = Number(process.env.DEEPSEEK_REVIEW_TIMEOUT_MS ?? 600_000)
-const extraArgs = process.env.DEEPSEEK_REVIEW_ARGS ? process.env.DEEPSEEK_REVIEW_ARGS.split(" ").filter(Boolean) : ["--no-tools"]
+if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+  fail(
+    2,
+    "DEEPSEEK_REVIEW_TIMEOUT_MS must be a positive finite number of milliseconds " +
+      `(got ${JSON.stringify(process.env.DEEPSEEK_REVIEW_TIMEOUT_MS)})`,
+  )
+}
+if (timeoutMs > MAX_TIMEOUT_MS) {
+  fail(
+    2,
+    `DEEPSEEK_REVIEW_TIMEOUT_MS must not exceed ${MAX_TIMEOUT_MS} milliseconds ` +
+      `(got ${JSON.stringify(process.env.DEEPSEEK_REVIEW_TIMEOUT_MS)})`,
+  )
+}
+const extraArgs =
+  process.env.DEEPSEEK_REVIEW_ARGS !== undefined
+    ? process.env.DEEPSEEK_REVIEW_ARGS.split(" ").filter(Boolean)
+    : ["--no-tools"]
 const child = spawn(cliPath, extraArgs, { cwd: repoRoot, stdio: ["pipe", "pipe", "pipe"] })
 
 // The CLI contract reads the prompt from STDIN; close the pipe so the CLI
@@ -127,15 +163,36 @@ child.stdin.on("error", () => {}) // EPIPE after an early CLI exit is fine
 child.stdin.write(prompt)
 child.stdin.end()
 
-let stdout = ""
-let stderr = ""
+// Keep both the head and the tail of each stream: the verdict is the LAST
+// occurrence, so a head-only cap would drop a trailing verdict (or keep an
+// early quoted one) once output exceeds the bound.
+function boundedCollector(limit) {
+  const headLimit = Math.floor(limit / 2)
+  const tailLimit = limit - headLimit
+  let buf = ""
+  let overflow = false
+  return {
+    push(text) {
+      if (!overflow) {
+        buf += text
+        if (buf.length > limit) {
+          overflow = true
+          buf = buf.slice(0, headLimit) + buf.slice(-tailLimit)
+        }
+      } else {
+        buf = buf.slice(0, headLimit) + (buf.slice(headLimit) + text).slice(-tailLimit)
+      }
+    },
+    value() {
+      return buf
+    },
+  }
+}
+const stdoutCollector = boundedCollector(MAX_STDOUT_CHARS)
+const stderrCollector = boundedCollector(MAX_STDOUT_CHARS)
 let killedByTimeout = false
-child.stdout.on("data", (chunk) => {
-  if (stdout.length < MAX_STDOUT_CHARS) stdout += chunk.toString()
-})
-child.stderr.on("data", (chunk) => {
-  if (stderr.length < MAX_STDOUT_CHARS) stderr += chunk.toString()
-})
+child.stdout.on("data", (chunk) => stdoutCollector.push(chunk.toString()))
+child.stderr.on("data", (chunk) => stderrCollector.push(chunk.toString()))
 
 const timer = setTimeout(() => {
   killedByTimeout = true
@@ -154,12 +211,13 @@ if (killedByTimeout) {
   fail(3, `deepseek review exceeded hard timeout of ${timeoutMs}ms and was killed`)
 }
 if (exitCode !== 0) {
-  fail(2, `deepseek CLI exited with code ${exitCode}\nstderr: ${stderr.slice(-2_000)}`)
+  fail(2, `deepseek CLI exited with code ${exitCode}\nstderr: ${stderrCollector.value().slice(-2_000)}`)
 }
 
 // --- 4. Assert an explicit verdict. ---------------------------------------
 // The prompt itself shows both verdict strings, and reasoning may quote them;
 // only the final occurrence is the actual verdict.
+const stdout = stdoutCollector.value()
 const verdictMatches = [...stdout.matchAll(/VERDICT:\s*(NO-?FINDINGS|FINDINGS)/gi)]
 const verdictMatch = verdictMatches.at(-1)
 if (!verdictMatch) {

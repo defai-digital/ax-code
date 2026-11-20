@@ -26,7 +26,7 @@ export interface SparklineLayoutOptions {
  * eighth blocks. `max <= 0` renders empty bars (no division by zero).
  */
 export function layoutSparkline(options: SparklineLayoutOptions, width: number, height: number): Cell[] {
-  if (width <= 0 || height <= 0) return []
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return []
   const cells: Cell[] = []
   const data = options.data
 

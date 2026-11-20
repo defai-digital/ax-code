@@ -31,6 +31,13 @@ export declare function compositeCells(layers: readonly (readonly Cell[])[]): Ce
  */
 export declare function paintText(out: Cell[], text: string, x: number, y: number, fg?: ColorInput, bg?: ColorInput, maxWidth?: number): void;
 /**
+ * Prefix of `text` at most `maxWidth` codepoints long, never splitting a
+ * surrogate pair. paintText counts one column per codepoint; truncation and
+ * centering must use the same unit so a multi-unit codepoint is never cut in
+ * half or measured as two columns.
+ */
+export declare function truncateCodePoints(text: string, maxWidth: number): string[];
+/**
  * Render a paint list into string rows for deterministic frame assertions.
  * Cells outside the area are ignored; unset cells use `fill`.
  */

@@ -29,6 +29,22 @@ try {
   buffer.setCursor(0, 5)
   buffer.setCursorByOffset(1)
   assert.equal(buffer.getCursorPosition().offset, 0, "direct backward positioning must clamp before a leading span")
+
+  buffer.setText("aaaa\\nbbbb\\ncccc\\ndddd\\neeee")
+  view.extmarks.create({ start: 5, end: 19, virtual: true })
+  buffer.setCursorByOffset(19)
+  view.moveUpVisual()
+  assert.equal(
+    buffer.getCursorPosition().offset,
+    4,
+    "moving up from below a tall virtual block must land above it, not stick at the block end",
+  )
+  view.moveDownVisual()
+  assert.equal(
+    buffer.getCursorPosition().offset,
+    19,
+    "moving down from above the block lands below it (existing no-progress guard)",
+  )
 } finally {
   view.destroy()
   buffer.destroy()

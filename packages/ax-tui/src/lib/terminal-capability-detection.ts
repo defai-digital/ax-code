@@ -28,7 +28,7 @@ export function isCapabilityResponse(sequence: string): boolean {
   // ESC[1;1R means no width support (cursor didn't move)
   // ESC[1;2R or higher means width support (cursor moved after rendering)
   // We accept any column >= 2 to handle cases where cursor wasn't at exact home position
-  if (/\x1b\[1;(?!1R)\d+R/.test(sequence)) {
+  if (/\x1b\[1;(?!0*1R)\d+R/.test(sequence)) {
     return true
   }
 

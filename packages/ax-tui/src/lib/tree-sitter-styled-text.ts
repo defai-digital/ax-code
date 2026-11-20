@@ -111,6 +111,8 @@ export function treeSitterToTextChunks(
           chunks.push({
             __isChunk: true,
             text: replacementText,
+            contentStart: currentOffset,
+            contentEnd: boundary.offset,
             fg: defaultStyle?.fg,
             bg: defaultStyle?.bg,
             attributes: defaultStyle
@@ -191,6 +193,8 @@ export function treeSitterToTextChunks(
         chunks.push({
           __isChunk: true,
           text: segmentText,
+          contentStart: currentOffset,
+          contentEnd: boundary.offset,
           fg: finalStyle?.fg,
           bg: finalStyle?.bg,
           attributes: finalStyle
@@ -209,6 +213,8 @@ export function treeSitterToTextChunks(
       chunks.push({
         __isChunk: true,
         text,
+        contentStart: currentOffset,
+        contentEnd: boundary.offset,
         fg: style?.fg,
         bg: style?.bg,
         attributes: style
@@ -258,7 +264,10 @@ export function treeSitterToTextChunks(
       }
     }
 
-    currentOffset = boundary.offset
+    // A conceal-end skip may have advanced currentOffset past this boundary's
+    // offset (ends sort before starts at the same offset). Never rewind it, or
+    // the skipped character would be emitted again by a later boundary.
+    currentOffset = Math.max(currentOffset, boundary.offset)
   }
 
   if (currentOffset < content.length) {
@@ -267,6 +276,8 @@ export function treeSitterToTextChunks(
     chunks.push({
       __isChunk: true,
       text,
+      contentStart: currentOffset,
+      contentEnd: content.length,
       fg: style?.fg,
       bg: style?.bg,
       attributes: style
@@ -308,6 +319,8 @@ export async function treeSitterToStyledText(
       {
         __isChunk: true,
         text: content,
+        contentStart: 0,
+        contentEnd: content.length,
         fg: defaultStyle.fg,
         bg: defaultStyle.bg,
         attributes: defaultStyle.attributes,

@@ -25,7 +25,7 @@ export class EditBuffer extends EventEmitter {
   private textBufferPtr: TextBufferHandle
   public readonly id: number
   private _destroyed: boolean = false
-  private _textBytes: Uint8Array[] = []
+  private _textPins: Array<{ bytes: Uint8Array; memId: number }> = []
   private _singleTextBytes: Uint8Array | null = null
   private _singleTextMemId: number | null = null
   private _syntaxStyle?: SyntaxStyle
@@ -116,9 +116,42 @@ export class EditBuffer extends EventEmitter {
   public replaceText(text: string): void {
     this.guard()
     const textBytes = this.lib.encoder.encode(text)
-    this._textBytes.push(textBytes)
-    const memId = this.lib.textBufferRegisterMemBuffer(this.textBufferPtr, textBytes, false)
+    let memId: number
+    try {
+      memId = this.lib.textBufferRegisterMemBuffer(this.textBufferPtr, textBytes, false)
+    } catch {
+      this.recycleRegistrySlot(textBytes)
+      return
+    }
+    // Undo history can restore any prior content, so every registered buffer
+    // must stay pinned until the native registry is cleared.
+    this._textPins.push({ bytes: textBytes, memId })
     this.lib.editBufferReplaceTextFromMem(this.bufferPtr, memId)
+  }
+
+  // The native mem registry caps at 255 slots and never recycles them. Clearing
+  // it would free the add buffer's owned slot and leave insertText writing
+  // through a dangling pointer, so exhaustion must recycle a slot this instance
+  // already tracks. Native setTextFromMem resets content and undo history,
+  // dropping the last references to the other pins. The replacement text
+  // survives; undo history does not.
+  private recycleRegistrySlot(textBytes: Uint8Array): void {
+    const recycled = this._textPins.shift()
+    let memId = recycled?.memId ?? this._singleTextMemId
+    if (memId === null) {
+      throw new Error("EditBuffer text registry is exhausted and has no recyclable slot")
+    }
+    if (!this.lib.textBufferReplaceMemBuffer(this.textBufferPtr, memId, textBytes, false)) {
+      // The tracked slot became invalid because the registry was cleared
+      // elsewhere; a cleared registry has room for a fresh registration.
+      memId = this.lib.textBufferRegisterMemBuffer(this.textBufferPtr, textBytes, false)
+      this._textPins.push({ bytes: textBytes, memId })
+    } else if (recycled) {
+      this._textPins.push({ bytes: textBytes, memId })
+    } else {
+      this._singleTextBytes = textBytes
+    }
+    this.lib.editBufferSetTextFromMem(this.bufferPtr, memId)
   }
 
   /**
@@ -415,6 +448,8 @@ export class EditBuffer extends EventEmitter {
 
   public clear(): void {
     this.guard()
+    // Native clear preserves undo history and the mem registry, so the pinned
+    // bytes and the reusable setText slot must stay alive for undo to read.
     this.lib.editBufferClear(this.bufferPtr)
   }
 
@@ -424,5 +459,8 @@ export class EditBuffer extends EventEmitter {
     this._destroyed = true
     EditBuffer.registry.delete(this.id)
     this.lib.destroyEditBuffer(this.bufferPtr)
+    this._textPins = []
+    this._singleTextBytes = null
+    this._singleTextMemId = null
   }
 }

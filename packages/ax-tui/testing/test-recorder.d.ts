@@ -7,7 +7,7 @@ export interface RecordBuffersOptions {
 export interface RecordedBuffers {
     fg?: Uint16Array;
     bg?: Uint16Array;
-    attributes?: Uint8Array;
+    attributes?: Uint32Array;
 }
 export interface RecordedFrame {
     frame: string;

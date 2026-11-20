@@ -1,6 +1,7 @@
 import { Renderable, type RenderableOptions } from "../core/renderable.js"
 import { OptimizedBuffer } from "../core/buffer.js"
 import { RGBA, parseColor, type ColorInput } from "../lib/rgba.js"
+import { stringWidth } from "../platform/runtime.js"
 import type { KeyEvent } from "../lib/key-handler.js"
 import type { RenderContext } from "../core/types.js"
 import {
@@ -72,6 +73,11 @@ function calculateDynamicHeight(showUnderline: boolean, showDescription: boolean
   return height
 }
 
+const DEFAULT_TAB_WIDTH = 20
+
+const sanitizeTabWidth = (width: number | undefined): number =>
+  width !== undefined && Number.isFinite(width) && width > 0 ? width : DEFAULT_TAB_WIDTH
+
 export class TabSelectRenderable extends Renderable {
   private _options: TabSelectOption[] = []
   private selectedIndex: number = 0
@@ -106,7 +112,7 @@ export class TabSelectRenderable extends Renderable {
     this._focusedBackgroundColor = parseColor(options.focusedBackgroundColor || options.backgroundColor || "#1a1a1a")
     this._focusedTextColor = parseColor(options.focusedTextColor || options.textColor || "#FFFFFF")
     this._options = options.options || []
-    this._tabWidth = options.tabWidth || 20
+    this._tabWidth = sanitizeTabWidth(options.tabWidth)
     this._showDescription = options.showDescription ?? true
     this._showUnderline = options.showUnderline ?? true
     this._showScrollArrows = options.showScrollArrows ?? true
@@ -193,8 +199,20 @@ export class TabSelectRenderable extends Renderable {
   }
 
   private truncateText(text: string, maxWidth: number): string {
-    if (text.length <= maxWidth) return text
-    return text.substring(0, Math.max(0, maxWidth - 1)) + "…"
+    if (maxWidth <= 0) return ""
+    if (stringWidth(text) <= maxWidth) return text
+
+    // Truncate by display width, iterating code points so wide characters fit
+    // the cell budget and astral characters are never split into surrogates.
+    let width = 0
+    let result = ""
+    for (const char of text) {
+      const charWidth = stringWidth(char)
+      if (width + charWidth > maxWidth - 1) break
+      result += char
+      width += charWidth
+    }
+    return result + "…"
   }
 
   private renderScrollArrowsToFrameBuffer(
@@ -296,9 +314,10 @@ export class TabSelectRenderable extends Renderable {
   }
 
   public setTabWidth(tabWidth: number): void {
-    if (this._tabWidth === tabWidth) return
+    const sanitized = sanitizeTabWidth(tabWidth)
+    if (this._tabWidth === sanitized) return
 
-    this._tabWidth = tabWidth
+    this._tabWidth = sanitized
     this.maxVisibleTabs = Math.max(1, Math.floor(this.width / this._tabWidth))
 
     this.updateScrollOffset()
@@ -425,9 +444,10 @@ export class TabSelectRenderable extends Renderable {
   }
 
   public set tabWidth(tabWidth: number) {
-    if (this._tabWidth === tabWidth) return
+    const sanitized = sanitizeTabWidth(tabWidth)
+    if (this._tabWidth === sanitized) return
 
-    this._tabWidth = tabWidth
+    this._tabWidth = sanitized
     this.maxVisibleTabs = Math.max(1, Math.floor(this.width / this._tabWidth))
 
     this.updateScrollOffset()

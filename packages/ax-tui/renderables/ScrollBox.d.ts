@@ -47,6 +47,7 @@ export declare class ScrollBoxRenderable extends BoxRenderable {
     private readonly autoScrollSpeedMedium;
     private readonly autoScrollSpeedFast;
     private isAutoScrolling;
+    private autoScrollOwnedLive;
     private cachedAutoScrollSpeed;
     private autoScrollAccumulatorX;
     private autoScrollAccumulatorY;

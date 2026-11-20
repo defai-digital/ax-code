@@ -366,8 +366,8 @@ function createSaturationMatrix(saturation: number): Float32Array {
  * Applies a saturation adjustment to the buffer.
  */
 export function applySaturation(buffer: OptimizedBuffer, cellMask?: Float32Array, strength: number = 1.0): void {
-  // No need to process if saturation is 1 (no change) or strength is 0
-  if (strength === 1.0 || strength === 0) {
+  // No need to process if saturation is 1 (no change); 0 applies full grayscale
+  if (strength === 1.0) {
     return
   }
 

@@ -40,6 +40,14 @@ test("repeated-prefix capability probes do not backtrack", () => {
   expect(isCapabilityResponse("\x1b]1337;Capabilities=".repeat(2_000))).toBe(false)
 })
 
+test("width-probe CPR at column one is not a capability response even when zero-padded", () => {
+  expect(isCapabilityResponse("\x1b[1;1R")).toBe(false)
+  expect(isCapabilityResponse("\x1b[1;01R")).toBe(false)
+  expect(isCapabilityResponse("\x1b[1;001R")).toBe(false)
+  expect(isCapabilityResponse("\x1b[1;2R")).toBe(true)
+  expect(isCapabilityResponse("\x1b[1;10R")).toBe(true)
+})
+
 test("pixel resolution responses parse", () => {
   expect(isPixelResolutionResponse("\x1b[4;800;1200t")).toBe(true)
   expect(parsePixelResolution("\x1b[4;800;1200t")).toEqual({ width: 1200, height: 800 })

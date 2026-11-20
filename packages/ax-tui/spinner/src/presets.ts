@@ -156,7 +156,7 @@ const presets: Record<SpinnerName, SpinnerPreset> = {
  * matching the constructor's validation path.
  */
 export function getSpinnerPreset(name: string): SpinnerPreset | undefined {
-  return presets[name as SpinnerName]
+  return Object.hasOwn(presets, name) ? presets[name as SpinnerName] : undefined
 }
 
 /**

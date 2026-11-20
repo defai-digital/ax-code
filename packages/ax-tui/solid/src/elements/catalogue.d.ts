@@ -7,16 +7,16 @@ declare class SpanRenderable extends TextNodeRenderable {
 export declare const textNodeKeys: readonly ["span", "b", "strong", "i", "em", "u", "a"];
 export type TextNodeKey = (typeof textNodeKeys)[number];
 declare class TextModifierRenderable extends SpanRenderable {
-    constructor(options: any, modifier?: TextNodeKey);
+    constructor(ctx: RenderContext | null, options: TextNodeOptions, modifier?: TextNodeKey);
 }
 export declare class BoldSpanRenderable extends TextModifierRenderable {
-    constructor(options: any);
+    constructor(ctx: RenderContext | null, options: TextNodeOptions);
 }
 export declare class ItalicSpanRenderable extends TextModifierRenderable {
-    constructor(options: any);
+    constructor(ctx: RenderContext | null, options: TextNodeOptions);
 }
 export declare class UnderlineSpanRenderable extends TextModifierRenderable {
-    constructor(options: any);
+    constructor(ctx: RenderContext | null, options: TextNodeOptions);
 }
 export declare class LineBreakRenderable extends SpanRenderable {
     constructor(_ctx: RenderContext | null, options: TextNodeOptions);

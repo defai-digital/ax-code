@@ -124,10 +124,10 @@ class TestExternalOutputRecorder implements TestExternalOutput {
   }
 
   private record = (event: CliRendererExternalOutputEvent): void => {
-    const raw = decoder.decode(event.snapshot.getRealCharBytes(false))
-    const rows = Array.from({ length: event.snapshot.height }, (_, index) =>
-      raw.slice(index * event.snapshot.width, (index + 1) * event.snapshot.width).trimEnd(),
-    )
+    // Split on native row breaks: wide glyphs occupy two cells but emit one character,
+    // so slicing the raw byte string by width would shift every following row.
+    const lines = decoder.decode(event.snapshot.getRealCharBytes(true)).split("\n")
+    const rows = Array.from({ length: event.snapshot.height }, (_, index) => (lines[index] ?? "").trimEnd())
 
     this.commits.push({
       text: rows.join("\n"),

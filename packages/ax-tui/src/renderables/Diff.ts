@@ -266,8 +266,8 @@ export class DiffRenderable extends Renderable {
     if (!this._waitingForHighlight) return
     if (!this.leftCodeRenderable || !this.rightCodeRenderable) return
 
-    const leftIsHighlighting = this.leftCodeRenderable.isHighlighting
-    const rightIsHighlighting = this.rightCodeRenderable.isHighlighting
+    const leftIsHighlighting = this.leftCodeRenderable.isHighlightPending
+    const rightIsHighlighting = this.rightCodeRenderable.isHighlightPending
 
     if (!leftIsHighlighting && !rightIsHighlighting) {
       this._waitingForHighlight = false
@@ -346,19 +346,32 @@ export class DiffRenderable extends Renderable {
         content: this._diff,
         filetype: "diff",
         syntaxStyle: this._syntaxStyle ?? SyntaxStyle.create(),
-        wrapMode: this._wrapMode,
+        wrapMode: this._wrapMode ?? "none",
         conceal: this._conceal,
         width: "100%",
         flexGrow: 1,
         flexShrink: 1,
+        ...(this._fg !== undefined && { fg: this._fg }),
+        ...(this._selectionBg !== undefined && { selectionBg: this._selectionBg }),
+        ...(this._selectionFg !== undefined && { selectionFg: this._selectionFg }),
         ...(this._treeSitterClient !== undefined && { treeSitterClient: this._treeSitterClient }),
       })
       super.add(this.errorCodeRenderable)
     } else {
       this.errorCodeRenderable.content = this._diff
       this.errorCodeRenderable.wrapMode = this._wrapMode ?? "none"
+      this.errorCodeRenderable.conceal = this._conceal
       if (this._syntaxStyle) {
         this.errorCodeRenderable.syntaxStyle = this._syntaxStyle
+      }
+      if (this._fg !== undefined) {
+        this.errorCodeRenderable.fg = this._fg
+      }
+      if (this._selectionBg !== undefined) {
+        this.errorCodeRenderable.selectionBg = this._selectionBg
+      }
+      if (this._selectionFg !== undefined) {
+        this.errorCodeRenderable.selectionFg = this._selectionFg
       }
       const errorCodeIndex = this.getChildren().indexOf(this.errorCodeRenderable)
       if (errorCodeIndex === -1) {
@@ -380,7 +393,7 @@ export class DiffRenderable extends Renderable {
         id: this.id ? `${this.id}-${side}-code` : undefined,
         content,
         filetype: this._filetype,
-        wrapMode,
+        wrapMode: wrapMode ?? "none",
         conceal: this._conceal,
         syntaxStyle: this._syntaxStyle ?? SyntaxStyle.create(),
         width: "100%",
@@ -407,9 +420,7 @@ export class DiffRenderable extends Renderable {
       if (drawUnstyledText !== undefined) {
         existingRenderable.drawUnstyledText = drawUnstyledText
       }
-      if (this._filetype !== undefined) {
-        existingRenderable.filetype = this._filetype
-      }
+      existingRenderable.filetype = this._filetype
       if (this._syntaxStyle !== undefined) {
         existingRenderable.syntaxStyle = this._syntaxStyle
       }
@@ -567,7 +578,9 @@ export class DiffRenderable extends Renderable {
 
     const content = contentLines.join("\n")
 
-    const codeRenderable = this.createOrUpdateCodeRenderable("left", content, this._wrapMode)
+    // Unified view never conceals syntax, so restore styled rendering when
+    // switching over from a split view that disabled it.
+    const codeRenderable = this.createOrUpdateCodeRenderable("left", content, this._wrapMode, true)
     this.attachLineInfoListeners()
 
     this.createOrUpdateSide("left", codeRenderable, lineColors, lineSigns, lineNumbers, new Set<number>(), "100%")
@@ -720,8 +733,8 @@ export class DiffRenderable extends Renderable {
     let finalLeftLines: LogicalLine[]
     let finalRightLines: LogicalLine[]
 
-    const leftIsHighlighting = leftCodeRenderable.isHighlighting
-    const rightIsHighlighting = rightCodeRenderable.isHighlighting
+    const leftIsHighlighting = leftCodeRenderable.isHighlightPending
+    const rightIsHighlighting = rightCodeRenderable.isHighlightPending
     const highlightingInProgress = needsConsistentConcealing && (leftIsHighlighting || rightIsHighlighting)
 
     if (highlightingInProgress) {
@@ -946,6 +959,10 @@ export class DiffRenderable extends Renderable {
       } else if (this._view === "split") {
         this.requestRebuild()
       }
+
+      if (this.errorCodeRenderable) {
+        this.errorCodeRenderable.wrapMode = value ?? "none"
+      }
     }
   }
 
@@ -1123,6 +1140,9 @@ export class DiffRenderable extends Renderable {
       if (this.rightCodeRenderable) {
         this.rightCodeRenderable.selectionBg = parsed
       }
+      if (this.errorCodeRenderable) {
+        this.errorCodeRenderable.selectionBg = parsed
+      }
     }
   }
 
@@ -1139,6 +1159,9 @@ export class DiffRenderable extends Renderable {
       }
       if (this.rightCodeRenderable) {
         this.rightCodeRenderable.selectionFg = parsed
+      }
+      if (this.errorCodeRenderable) {
+        this.errorCodeRenderable.selectionFg = parsed
       }
     }
   }
@@ -1167,6 +1190,9 @@ export class DiffRenderable extends Renderable {
       }
       if (this.rightCodeRenderable) {
         this.rightCodeRenderable.fg = parsed
+      }
+      if (this.errorCodeRenderable) {
+        this.errorCodeRenderable.fg = parsed
       }
     }
   }

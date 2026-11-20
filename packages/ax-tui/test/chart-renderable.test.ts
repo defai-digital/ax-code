@@ -21,6 +21,9 @@ vi.mock("@defai-digital/ax-tui", () => {
   return {
     Renderable,
     parseColor: (value: unknown) => value,
+    RGBA: {
+      defaultForeground: () => "default-fg",
+    },
   }
 })
 

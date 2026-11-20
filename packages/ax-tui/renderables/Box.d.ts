@@ -24,6 +24,7 @@ export interface BoxOptions<TRenderable extends Renderable = BoxRenderable> exte
 export declare class BoxRenderable extends Renderable {
     protected _backgroundColor: RGBA;
     protected _border: boolean | BorderSides[];
+    private _borderExplicitlyDisabled;
     protected _borderStyle: BorderStyle;
     protected _borderColor: RGBA;
     protected _focusedBorderColor: RGBA;

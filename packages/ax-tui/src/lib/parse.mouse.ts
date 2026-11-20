@@ -15,7 +15,7 @@ export type RawMouseEvent = {
 }
 
 type ParsedMouseSequence = {
-  event: RawMouseEvent
+  event: RawMouseEvent | null
   consumed: number
 }
 
@@ -59,7 +59,7 @@ export class MouseParser {
         break
       }
 
-      events.push(parsed.event)
+      if (parsed.event) events.push(parsed.event)
       offset += parsed.consumed
     }
 
@@ -138,7 +138,12 @@ export class MouseParser {
     }
   }
 
-  private decodeSgrEvent(rawButtonCode: number, wireX: number, wireY: number, pressRelease: "M" | "m"): RawMouseEvent {
+  private decodeSgrEvent(
+    rawButtonCode: number,
+    wireX: number,
+    wireY: number,
+    pressRelease: "M" | "m",
+  ): RawMouseEvent | null {
     const button = rawButtonCode & 3
     const isScroll = (rawButtonCode & 64) !== 0
     const scrollDirection = !isScroll ? undefined : MouseParser.SCROLL_DIRECTIONS[button]
@@ -148,6 +153,13 @@ export class MouseParser {
       shift: (rawButtonCode & 4) !== 0,
       alt: (rawButtonCode & 8) !== 0,
       ctrl: (rawButtonCode & 16) !== 0,
+    }
+
+    if (isScroll && !isMotion && pressRelease === "m") {
+      // Some terminals pair each wheel press with a release report. A wheel
+      // release is not a button up: it must not touch the pressed set or end
+      // an active drag/selection.
+      return null
     }
 
     let type: MouseEventType
@@ -175,9 +187,16 @@ export class MouseParser {
       if (type === "down" && button !== 3) {
         this.mouseButtonsPressed.add(button)
       } else if (type === "up") {
-        // Release only the reported button; clearing the whole set would
-        // silently end a drag still held by another button.
-        this.mouseButtonsPressed.delete(button)
+        if (button === 3) {
+          // Mode-1000 terminals report releases with the "no button" code
+          // instead of the released button; the whole set must be cleared or
+          // later motion would be misclassified as a drag.
+          this.mouseButtonsPressed.clear()
+        } else {
+          // Release only the reported button; clearing the whole set would
+          // silently end a drag still held by another button.
+          this.mouseButtonsPressed.delete(button)
+        }
       }
     }
 

@@ -2,7 +2,7 @@ import type { OptimizedBuffer } from "../core/buffer.js";
 import { RGBA, type ColorInput } from "../lib/index.js";
 import type { KeyEvent } from "../lib/key-handler.js";
 import { Renderable, type RenderableOptions } from "../core/renderable.js";
-import type { RenderContext } from "../core/types.js";
+import { type RenderContext } from "../core/types.js";
 import { SliderRenderable, type SliderOptions } from "./Slider.js";
 export interface ScrollBarOptions extends RenderableOptions<ScrollBarRenderable> {
     focusable?: boolean;
@@ -26,6 +26,9 @@ export declare class ScrollBarRenderable extends Renderable {
     private _onChange;
     private startArrowMouseTimer;
     private endArrowMouseTimer;
+    private readonly clearStartArrowTimer;
+    private readonly clearEndArrowTimer;
+    private readonly handleGlobalMouseUp;
     scrollStep: number | undefined | null;
     get visible(): boolean;
     set visible(value: boolean);

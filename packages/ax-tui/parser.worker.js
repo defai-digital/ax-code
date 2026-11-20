@@ -1,13 +1,14 @@
 // src/lib/tree-sitter/parser.worker.ts
 import { Parser, Query, Language } from "web-tree-sitter";
-import { mkdir as mkdir3 } from "fs/promises";
-import * as path2 from "path";
+import { mkdir as mkdir3, rm as rm2 } from "fs/promises";
+import * as path3 from "path";
 
 // src/lib/tree-sitter/download-utils.ts
 import { mkdir, readFile, rename, rm, writeFile } from "fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import * as path from "path";
 var MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+var WASM_MAGIC = Buffer.from([0, 97, 115, 109]);
 function grammarDownloadUrl(source) {
   let url;
   try {
@@ -102,6 +103,9 @@ var DownloadUtils = class {
       try {
         console.log(`Downloading from URL: ${source}`);
         const content = await fetchContent(source);
+        if (fileExtension === ".wasm" && !content.subarray(0, 4).equals(WASM_MAGIC)) {
+          return { error: `Downloaded content from ${source} is not a valid wasm module` };
+        }
         try {
           await writeAtomic(cacheFile, content);
           console.log(`Cached: ${source}`);
@@ -144,6 +148,9 @@ var DownloadUtils = class {
       try {
         console.log(`Downloading from URL: ${source}`);
         const content = await fetchContent(source);
+        if (targetPath.endsWith(".wasm") && !content.subarray(0, 4).equals(WASM_MAGIC)) {
+          return { error: `Downloaded content from ${source} is not a valid wasm module` };
+        }
         await writeAtomic(targetPath, content);
         console.log(`Downloaded: ${source} -> ${targetPath}`);
         return { content, filePath: targetPath };
@@ -183,10 +190,180 @@ var DownloadUtils = class {
   }
 };
 
+// src/lib/tree-sitter/resolve-ft.ts
+import path2 from "node:path";
+var extensionToFiletype = /* @__PURE__ */ new Map([
+  ["astro", "astro"],
+  ["bash", "bash"],
+  ["c", "c"],
+  ["cc", "cpp"],
+  ["cjs", "javascript"],
+  ["clj", "clojure"],
+  ["cljs", "clojure"],
+  ["cljc", "clojure"],
+  ["cpp", "cpp"],
+  ["cxx", "cpp"],
+  ["cs", "csharp"],
+  ["cts", "typescript"],
+  ["ctsx", "typescriptreact"],
+  ["dart", "dart"],
+  ["diff", "diff"],
+  ["edn", "clojure"],
+  ["go", "go"],
+  ["gemspec", "ruby"],
+  ["groovy", "groovy"],
+  ["h", "c"],
+  ["handlebars", "handlebars"],
+  ["hbs", "handlebars"],
+  ["hpp", "cpp"],
+  ["hxx", "cpp"],
+  ["h++", "cpp"],
+  ["hh", "cpp"],
+  ["hrl", "erlang"],
+  ["hs", "haskell"],
+  ["htm", "html"],
+  ["html", "html"],
+  ["ini", "ini"],
+  ["js", "javascript"],
+  ["jsx", "javascriptreact"],
+  ["jl", "julia"],
+  ["json", "json"],
+  ["ksh", "bash"],
+  ["kt", "kotlin"],
+  ["kts", "kotlin"],
+  ["latex", "latex"],
+  ["less", "less"],
+  ["lua", "lua"],
+  ["markdown", "markdown"],
+  ["md", "markdown"],
+  ["mdown", "markdown"],
+  ["mkd", "markdown"],
+  ["mjs", "javascript"],
+  ["ml", "ocaml"],
+  ["mli", "ocaml"],
+  ["mts", "typescript"],
+  ["mtsx", "typescriptreact"],
+  ["patch", "diff"],
+  ["php", "php"],
+  ["pl", "perl"],
+  ["pm", "perl"],
+  ["ps1", "powershell"],
+  ["psm1", "powershell"],
+  ["py", "python"],
+  ["pyi", "python"],
+  ["r", "r"],
+  ["rb", "ruby"],
+  ["rake", "ruby"],
+  ["rs", "rust"],
+  ["ru", "ruby"],
+  ["sass", "sass"],
+  ["sc", "scala"],
+  ["scala", "scala"],
+  ["scss", "scss"],
+  ["sh", "bash"],
+  ["sql", "sql"],
+  ["svelte", "svelte"],
+  ["swift", "swift"],
+  ["ts", "typescript"],
+  ["tsx", "typescriptreact"],
+  ["tex", "latex"],
+  ["toml", "toml"],
+  ["vue", "vue"],
+  ["vim", "vim"],
+  ["xml", "xml"],
+  ["xsl", "xsl"],
+  ["yaml", "yaml"],
+  ["yml", "yaml"],
+  ["zig", "zig"],
+  ["zon", "zig"],
+  ["zsh", "bash"],
+  ["c++", "cpp"],
+  ["erl", "erlang"],
+  ["exs", "elixir"],
+  ["ex", "elixir"],
+  ["elm", "elm"],
+  ["fsharp", "fsharp"],
+  ["fs", "fsharp"],
+  ["fsx", "fsharp"],
+  ["fsscript", "fsharp"],
+  ["fsi", "fsharp"],
+  ["java", "java"],
+  ["css", "css"]
+]);
+var basenameToFiletype = /* @__PURE__ */ new Map([
+  [".bash_aliases", "bash"],
+  [".bash_logout", "bash"],
+  [".bash_profile", "bash"],
+  [".bashrc", "bash"],
+  [".kshrc", "bash"],
+  [".profile", "bash"],
+  [".vimrc", "vim"],
+  [".zlogin", "bash"],
+  [".zlogout", "bash"],
+  [".zprofile", "bash"],
+  [".zshenv", "bash"],
+  [".zshrc", "bash"],
+  ["appfile", "ruby"],
+  ["berksfile", "ruby"],
+  ["brewfile", "ruby"],
+  ["cheffile", "ruby"],
+  ["containerfile", "dockerfile"],
+  ["dockerfile", "dockerfile"],
+  ["fastfile", "ruby"],
+  ["gemfile", "ruby"],
+  ["gnumakefile", "make"],
+  ["gvimrc", "vim"],
+  ["guardfile", "ruby"],
+  ["makefile", "make"],
+  ["podfile", "ruby"],
+  ["rakefile", "ruby"],
+  ["thorfile", "ruby"],
+  ["vagrantfile", "ruby"]
+]);
+function normalizeFiletypeToken(value) {
+  const normalizedValue = value.trim().replace(/^\./, "").toLowerCase();
+  return normalizedValue || void 0;
+}
+function getBasename(value) {
+  const normalizedValue = value.trim().replaceAll("\\", "/");
+  if (!normalizedValue) return void 0;
+  const basename3 = path2.posix.basename(normalizedValue).toLowerCase();
+  return basename3 || void 0;
+}
+function extToFiletype(extension) {
+  const normalizedExtension = normalizeFiletypeToken(extension);
+  if (!normalizedExtension) return void 0;
+  return extensionToFiletype.get(normalizedExtension);
+}
+function pathToFiletype(path4) {
+  if (typeof path4 !== "string") return void 0;
+  const basename3 = getBasename(path4);
+  if (!basename3) return void 0;
+  const basenameFiletype = basenameToFiletype.get(basename3);
+  if (basenameFiletype) {
+    return basenameFiletype;
+  }
+  const lastDot = basename3.lastIndexOf(".");
+  if (lastDot === -1 || lastDot === basename3.length - 1) {
+    return void 0;
+  }
+  const extension = basename3.substring(lastDot + 1);
+  return extToFiletype(extension);
+}
+function infoStringToFiletype(infoString) {
+  if (typeof infoString !== "string") return void 0;
+  const token = infoString.trim().split(/\s+/, 1)[0];
+  const directBasenameMatch = basenameToFiletype.get(token.toLowerCase());
+  if (directBasenameMatch) return directBasenameMatch;
+  const normalizedToken = normalizeFiletypeToken(token);
+  if (!normalizedToken) return void 0;
+  return basenameToFiletype.get(normalizedToken) ?? pathToFiletype(normalizedToken) ?? extToFiletype(normalizedToken) ?? normalizedToken;
+}
+
 // src/lib/bunfs.ts
 import { basename as basename2, join as join2 } from "node:path";
-function isBunfsPath(path3) {
-  return path3.includes("$bunfs") || /^B:[\\/]~BUN/i.test(path3);
+function isBunfsPath(path4) {
+  return /^\/\$bunfs\//.test(path4) || /^B:[\\/]~BUN[\\/]/i.test(path4);
 }
 function getBunfsRootPath() {
   return process.platform === "win32" ? "B:\\~BUN\\root" : "/$bunfs/root";
@@ -210,17 +387,17 @@ var stripANSI = bun?.stripANSI ?? stripAnsiLib;
 var writeFile2 = bun?.write ?? writeFilePortable;
 async function resolveBundledFilePath(loadBundledFile, fallbackPath, metaUrl) {
   if (!bun) {
-    const path3 = resolveFallbackFilePath(fallbackPath, metaUrl);
-    if (existsSync(path3)) {
-      return path3;
+    const path4 = resolveFallbackFilePath(fallbackPath, metaUrl);
+    if (existsSync(path4)) {
+      return path4;
     }
-    return await loadBundledFilePath(loadBundledFile, metaUrl) ?? path3;
+    return await loadBundledFilePath(loadBundledFile, metaUrl) ?? path4;
   }
   return normalizeLoadedFilePath((await loadBundledFile()).default, metaUrl);
 }
 function resolveFallbackFilePath(fallbackPath, metaUrl) {
-  const path3 = typeof fallbackPath === "function" ? fallbackPath() : fallbackPath;
-  return fileURLToPath(path3 instanceof URL ? path3 : new URL(path3, metaUrl));
+  const path4 = typeof fallbackPath === "function" ? fallbackPath() : fallbackPath;
+  return fileURLToPath(path4 instanceof URL ? path4 : new URL(path4, metaUrl));
 }
 function normalizeLoadedFilePath(loadedPath, baseUrl) {
   if (loadedPath.startsWith("file:")) {
@@ -543,6 +720,7 @@ function setGlobalWorkerMessageHandler(handler) {
 // src/lib/tree-sitter/parser.worker.ts
 var ParserWorker = class {
   bufferParsers = /* @__PURE__ */ new Map();
+  bufferGenerations = /* @__PURE__ */ new Map();
   filetypeParserOptions = /* @__PURE__ */ new Map();
   filetypeAliases = /* @__PURE__ */ new Map();
   filetypeParsers = /* @__PURE__ */ new Map();
@@ -554,6 +732,7 @@ var ParserWorker = class {
   dataPath;
   tsDataPath;
   initialized = false;
+  injectionParseSeq = 0;
   constructor() {
     this.performance = {
       averageParseTime: 0,
@@ -569,21 +748,24 @@ var ParserWorker = class {
     return DownloadUtils.fetchHighlightQueries(sources, this.tsDataPath, filetype);
   }
   async initialize({ dataPath }) {
+    if (typeof dataPath !== "string" || dataPath.trim().length === 0) {
+      throw new Error("Invalid data path: expected a non-empty string");
+    }
     if (this.initializePromise) {
       return this.initializePromise;
     }
     this.initializePromise = (async () => {
       this.dataPath = dataPath;
-      this.tsDataPath = path2.join(dataPath, "tree-sitter");
-      await mkdir3(path2.join(this.tsDataPath, "languages"), { recursive: true });
-      await mkdir3(path2.join(this.tsDataPath, "queries"), { recursive: true });
+      this.tsDataPath = path3.join(dataPath, "tree-sitter");
+      await mkdir3(path3.join(this.tsDataPath, "languages"), { recursive: true });
+      await mkdir3(path3.join(this.tsDataPath, "queries"), { recursive: true });
       let treeWasm = await resolveBundledFilePath(
         () => import("web-tree-sitter/tree-sitter.wasm", { with: { type: "wasm" } }),
         () => import.meta.resolve("web-tree-sitter/tree-sitter.wasm"),
         import.meta.url
       );
       if (isBunfsPath(treeWasm)) {
-        treeWasm = normalizeBunfsPath(path2.parse(treeWasm).base);
+        treeWasm = normalizeBunfsPath(path3.parse(treeWasm).base);
       }
       await Parser.init({
         locateFile() {
@@ -619,6 +801,7 @@ var ParserWorker = class {
     return this.filetypeAliases.get(filetype) ?? filetype;
   }
   invalidateParserCaches(filetype) {
+    const previous = this.filetypeParsers.get(filetype);
     this.filetypeParsers.delete(filetype);
     this.filetypeParserPromises.delete(filetype);
     const reusableParser = this.reusableParsers.get(filetype);
@@ -627,6 +810,26 @@ var ParserWorker = class {
       this.reusableParsers.delete(filetype);
     }
     this.reusableParserPromises.delete(filetype);
+    if (previous) {
+      this.deleteQueriesIfUnused(previous.queries);
+    }
+  }
+  queriesInUse(queries) {
+    for (const bufferParser of this.bufferParsers.values()) {
+      if (bufferParser.queries.highlights === queries.highlights) return true;
+    }
+    for (const filetypeParser of this.filetypeParsers.values()) {
+      if (filetypeParser.queries.highlights === queries.highlights) return true;
+    }
+    for (const reusableParser of this.reusableParsers.values()) {
+      if (reusableParser.queries.highlights === queries.highlights) return true;
+    }
+    return false;
+  }
+  deleteQueriesIfUnused(queries) {
+    if (this.queriesInUse(queries)) return;
+    queries.highlights.delete();
+    queries.injections?.delete();
   }
   async createQueries(filetypeParser, language) {
     try {
@@ -673,6 +876,13 @@ var ParserWorker = class {
       return language;
     } catch (error) {
       console.error(`Error loading language from ${normalizedPath}:`, error);
+      if (result.filePath && /^https?:\/\//.test(languageSource)) {
+        try {
+          await rm2(result.filePath, { force: true });
+        } catch (cleanupError) {
+          console.warn(`Failed to remove invalid language cache ${result.filePath}:`, cleanupError);
+        }
+      }
       return void 0;
     }
   }
@@ -681,20 +891,30 @@ var ParserWorker = class {
     if (this.filetypeParsers.has(canonicalFiletype)) {
       return this.filetypeParsers.get(canonicalFiletype);
     }
-    if (this.filetypeParserPromises.has(canonicalFiletype)) {
-      return this.filetypeParserPromises.get(canonicalFiletype);
+    const inflight = this.filetypeParserPromises.get(canonicalFiletype);
+    if (inflight) {
+      return inflight;
     }
-    const loadingPromise = this.loadFiletypeParser(canonicalFiletype);
-    this.filetypeParserPromises.set(canonicalFiletype, loadingPromise);
-    try {
-      const result = await loadingPromise;
-      if (result) {
-        this.filetypeParsers.set(canonicalFiletype, result);
+    let tracked;
+    tracked = (async () => {
+      try {
+        const result = await this.loadFiletypeParser(canonicalFiletype);
+        if (this.filetypeParserPromises.get(canonicalFiletype) !== tracked) {
+          if (result) this.deleteQueriesIfUnused(result.queries);
+          return this.resolveFiletypeParser(filetype);
+        }
+        if (result) {
+          this.filetypeParsers.set(canonicalFiletype, result);
+        }
+        return result;
+      } finally {
+        if (this.filetypeParserPromises.get(canonicalFiletype) === tracked) {
+          this.filetypeParserPromises.delete(canonicalFiletype);
+        }
       }
-      return result;
-    } finally {
-      this.filetypeParserPromises.delete(canonicalFiletype);
-    }
+    })();
+    this.filetypeParserPromises.set(canonicalFiletype, tracked);
+    return tracked;
   }
   async loadFiletypeParser(filetype) {
     const filetypeParserOptions = this.filetypeParserOptions.get(filetype);
@@ -725,20 +945,30 @@ var ParserWorker = class {
     if (this.reusableParsers.has(canonicalFiletype)) {
       return this.reusableParsers.get(canonicalFiletype);
     }
-    if (this.reusableParserPromises.has(canonicalFiletype)) {
-      return this.reusableParserPromises.get(canonicalFiletype);
+    const inflight = this.reusableParserPromises.get(canonicalFiletype);
+    if (inflight) {
+      return inflight;
     }
-    const creationPromise = this.createReusableParser(canonicalFiletype);
-    this.reusableParserPromises.set(canonicalFiletype, creationPromise);
-    try {
-      const result = await creationPromise;
-      if (result) {
-        this.reusableParsers.set(canonicalFiletype, result);
+    let tracked;
+    tracked = (async () => {
+      try {
+        const result = await this.createReusableParser(canonicalFiletype);
+        if (this.reusableParserPromises.get(canonicalFiletype) !== tracked) {
+          if (result) result.parser.delete();
+          return this.getReusableParser(filetype);
+        }
+        if (result) {
+          this.reusableParsers.set(canonicalFiletype, result);
+        }
+        return result;
+      } finally {
+        if (this.reusableParserPromises.get(canonicalFiletype) === tracked) {
+          this.reusableParserPromises.delete(canonicalFiletype);
+        }
       }
-      return result;
-    } finally {
-      this.reusableParserPromises.delete(canonicalFiletype);
-    }
+    })();
+    this.reusableParserPromises.set(canonicalFiletype, tracked);
+    return tracked;
   }
   async createReusableParser(filetype) {
     const filetypeParser = await this.resolveFiletypeParser(filetype);
@@ -755,7 +985,19 @@ var ParserWorker = class {
     return reusableState;
   }
   async handleInitializeParser(bufferId, version, content, filetype, messageId) {
+    const generation = (this.bufferGenerations.get(bufferId) ?? 0) + 1;
+    this.bufferGenerations.set(bufferId, generation);
     const filetypeParser = await this.resolveFiletypeParser(filetype);
+    if (this.bufferGenerations.get(bufferId) !== generation) {
+      postWorkerMessage({
+        type: "PARSER_INIT_RESPONSE",
+        bufferId,
+        messageId,
+        hasParser: false,
+        warning: `Buffer ${bufferId} was disposed during parser initialization`
+      });
+      return;
+    }
     if (!filetypeParser) {
       postWorkerMessage({
         type: "PARSER_INIT_RESPONSE",
@@ -795,6 +1037,9 @@ var ParserWorker = class {
       hasParser: true
     });
     const highlights = await this.initialQuery(parserState);
+    if (this.bufferGenerations.get(bufferId) !== generation || this.bufferParsers.get(bufferId) !== parserState || parserState.tree !== tree) {
+      return;
+    }
     postWorkerMessage({
       type: "HIGHLIGHT_RESPONSE",
       bufferId,
@@ -803,6 +1048,7 @@ var ParserWorker = class {
     });
   }
   async initialQuery(parserState) {
+    const snapshotTree = parserState.tree;
     const query = parserState.queries.highlights;
     const matches = query.captures(parserState.tree.rootNode);
     let injectionRanges = /* @__PURE__ */ new Map();
@@ -810,6 +1056,9 @@ var ParserWorker = class {
       const injectionResult = await this.processInjections(parserState);
       matches.push(...injectionResult.captures);
       injectionRanges = injectionResult.injectionRanges;
+    }
+    if (parserState.disposed || parserState.tree !== snapshotTree) {
+      return { highlights: [] };
     }
     return this.getHighlights(parserState, matches, injectionRanges);
   }
@@ -823,6 +1072,7 @@ var ParserWorker = class {
       return { captures: injectionMatches, injectionRanges };
     }
     const content = parserState.content;
+    const snapshotTree = parserState.tree;
     const injectionCaptures = parserState.queries.injections.captures(parserState.tree.rootNode);
     const languageGroups = /* @__PURE__ */ new Map();
     const injectionMapping = parserState.injectionMapping;
@@ -841,11 +1091,11 @@ var ParserWorker = class {
               const languageNode = infoString.children.find((child) => child.type === "language");
               if (languageNode) {
                 const languageName = this.getNodeText(languageNode, content);
-                if (injectionMapping?.infoStringMap && injectionMapping.infoStringMap[languageName]) {
-                  targetLanguage = injectionMapping.infoStringMap[languageName];
-                } else {
-                  targetLanguage = languageName;
-                }
+                const languageToken = languageName.trim().split(/\s+/, 1)[0]?.toLowerCase() ?? "";
+                const infoStringFiletype = infoStringToFiletype(languageName) ?? languageToken;
+                const infoStringMap = injectionMapping?.infoStringMap;
+                const mapped = languageToken && infoStringMap?.[languageToken] || infoStringFiletype && infoStringMap?.[infoStringFiletype];
+                targetLanguage = mapped || infoStringFiletype;
               }
             }
           }
@@ -860,6 +1110,9 @@ var ParserWorker = class {
     }
     for (const [language, captures] of languageGroups.entries()) {
       const injectedParser = await this.getReusableParser(language);
+      if (parserState.disposed || parserState.tree !== snapshotTree) {
+        return { captures: injectionMatches, injectionRanges };
+      }
       if (!injectedParser) {
         console.warn(`No parser found for injection language: ${language}`);
         continue;
@@ -877,6 +1130,7 @@ var ParserWorker = class {
           const injectionContent = this.getNodeText(injectionNode, content);
           const tree = parser.parse(injectionContent);
           if (tree) {
+            const parseSeq = this.injectionParseSeq++;
             const matches = injectedParser.queries.highlights.captures(tree.rootNode);
             for (const match of matches) {
               const offsetCapture = {
@@ -886,6 +1140,7 @@ var ParserWorker = class {
                 // Store the correct query reference
                 node: {
                   ...match.node,
+                  id: `inj:${parseSeq}:${match.node.id}`,
                   startPosition: {
                     row: match.node.startPosition.row + injectionNode.startPosition.row,
                     column: match.node.startPosition.row === 0 ? match.node.startPosition.column + injectionNode.startPosition.column : match.node.startPosition.column
@@ -929,6 +1184,7 @@ var ParserWorker = class {
     if (!parserState) {
       return { warning: "No parser state found for buffer" };
     }
+    const generation = this.bufferGenerations.get(bufferId) ?? 0;
     parserState.content = content;
     for (const edit of edits) {
       parserState.tree.edit(edit);
@@ -946,6 +1202,7 @@ var ParserWorker = class {
       return { error: "Failed to parse buffer" };
     }
     const changedRanges = parserState.tree.getChangedRanges(newTree);
+    parserState.tree.delete();
     parserState.tree = newTree;
     const startQuery = performance.now();
     const matches = [];
@@ -965,7 +1222,7 @@ var ParserWorker = class {
           node,
           // WTF!?
           {
-            startIndex: range.startIndex - 100,
+            startIndex: Math.max(0, range.startIndex - 100),
             endIndex: range.endIndex + 1e3
           }
         );
@@ -984,6 +1241,9 @@ var ParserWorker = class {
     let injectionRanges = /* @__PURE__ */ new Map();
     if (parserState.queries.injections) {
       const injectionResult = await this.processInjections(parserState);
+      if (this.bufferGenerations.get(bufferId) !== generation || this.bufferParsers.get(bufferId) !== parserState || parserState.tree !== newTree) {
+        return { warning: "No parser state found for buffer" };
+      }
       matches.push(...injectionResult.captures);
       injectionRanges = injectionResult.injectionRanges;
     }
@@ -1000,6 +1260,7 @@ var ParserWorker = class {
     return node.startPosition.row <= range.startPosition.row && node.endPosition.row >= range.endPosition.row && (node.startPosition.row < range.startPosition.row || node.startPosition.column <= range.startPosition.column) && (node.endPosition.row > range.endPosition.row || node.endPosition.column >= range.endPosition.column);
   }
   getHighlights(parserState, matches, injectionRanges) {
+    const lines = parserState.content.split("\n");
     const lineHighlights = /* @__PURE__ */ new Map();
     const droppedHighlights = /* @__PURE__ */ new Map();
     for (const match of matches) {
@@ -1008,7 +1269,7 @@ var ParserWorker = class {
       const endLine = node.endPosition.row;
       const highlight = {
         startCol: node.startPosition.column,
-        endCol: node.endPosition.column,
+        endCol: startLine === endLine ? node.endPosition.column : lines[startLine]?.length ?? node.endPosition.column,
         group: match.name
       };
       if (!lineHighlights.has(startLine)) {
@@ -1026,7 +1287,7 @@ var ParserWorker = class {
           }
           const hl = {
             startCol: 0,
-            endCol: node.endPosition.column,
+            endCol: line === endLine ? node.endPosition.column : lines[line]?.length ?? 0,
             group: match.name
           };
           lineHighlights.get(line)?.set(node.id, hl);
@@ -1096,29 +1357,37 @@ var ParserWorker = class {
     if (!parserState) {
       return { warning: "No parser state found for buffer" };
     }
+    const generation = this.bufferGenerations.get(bufferId) ?? 0;
     parserState.content = content;
     const newTree = parserState.parser.parse(content);
     if (!newTree) {
       return { error: "Failed to parse buffer during reset" };
     }
+    parserState.tree.delete();
     parserState.tree = newTree;
     const matches = parserState.queries.highlights.captures(parserState.tree.rootNode);
     let injectionRanges = /* @__PURE__ */ new Map();
     if (parserState.queries.injections) {
       const injectionResult = await this.processInjections(parserState);
+      if (this.bufferGenerations.get(bufferId) !== generation || this.bufferParsers.get(bufferId) !== parserState || parserState.tree !== newTree) {
+        return { warning: "No parser state found for buffer" };
+      }
       matches.push(...injectionResult.captures);
       injectionRanges = injectionResult.injectionRanges;
     }
     return this.getHighlights(parserState, matches, injectionRanges);
   }
   disposeBuffer(bufferId) {
+    this.bufferGenerations.set(bufferId, (this.bufferGenerations.get(bufferId) ?? 0) + 1);
     const parserState = this.bufferParsers.get(bufferId);
     if (!parserState) {
       return;
     }
+    parserState.disposed = true;
     parserState.tree.delete();
     parserState.parser.delete();
     this.bufferParsers.delete(bufferId);
+    this.deleteQueriesIfUnused(parserState.queries);
   }
   async handleOneShotHighlight(content, filetype, messageId) {
     const reusableState = await this.getReusableParser(filetype);
@@ -1170,29 +1439,39 @@ var ParserWorker = class {
     }
   }
   async updateDataPath(dataPath) {
-    this.dataPath = dataPath;
-    this.tsDataPath = path2.join(dataPath, "tree-sitter");
+    if (typeof dataPath !== "string" || dataPath.trim().length === 0) {
+      throw new Error("Invalid data path: expected a non-empty string");
+    }
+    const tsDataPath = path3.join(dataPath, "tree-sitter");
     try {
-      await mkdir3(path2.join(this.tsDataPath, "languages"), { recursive: true });
-      await mkdir3(path2.join(this.tsDataPath, "queries"), { recursive: true });
+      await mkdir3(path3.join(tsDataPath, "languages"), { recursive: true });
+      await mkdir3(path3.join(tsDataPath, "queries"), { recursive: true });
     } catch (error) {
       throw new Error(`Failed to update data path: ${error}`);
     }
+    this.dataPath = dataPath;
+    this.tsDataPath = tsDataPath;
   }
   async clearCache() {
     if (!this.dataPath || !this.tsDataPath) {
       throw new Error("No data path configured");
     }
-    const { rm: rm2 } = await import("fs/promises");
     try {
-      const treeSitterPath = path2.join(this.dataPath, "tree-sitter");
+      const treeSitterPath = path3.join(this.dataPath, "tree-sitter");
       await rm2(treeSitterPath, { recursive: true, force: true });
-      await mkdir3(path2.join(treeSitterPath, "languages"), { recursive: true });
-      await mkdir3(path2.join(treeSitterPath, "queries"), { recursive: true });
+      await mkdir3(path3.join(treeSitterPath, "languages"), { recursive: true });
+      await mkdir3(path3.join(treeSitterPath, "queries"), { recursive: true });
+      for (const reusableParser of this.reusableParsers.values()) {
+        reusableParser.parser.delete();
+      }
+      const cachedQueries = [...this.filetypeParsers.values()].map((filetypeParser) => filetypeParser.queries);
       this.filetypeParsers.clear();
       this.filetypeParserPromises.clear();
       this.reusableParsers.clear();
       this.reusableParserPromises.clear();
+      for (const queries of cachedQueries) {
+        this.deleteQueriesIfUnused(queries);
+      }
     } catch (error) {
       throw new Error(`Failed to clear cache: ${error}`);
     }
@@ -1205,10 +1484,11 @@ function logMessage(type, ...args) {
     data: args
   });
 }
-function postWorkerError(bufferId, error) {
+function postWorkerError(bufferId, error, messageId) {
   postWorkerMessage({
     type: "ERROR",
     bufferId,
+    messageId,
     error: error instanceof Error ? error.stack || error.message : String(error)
   });
 }
@@ -1356,10 +1636,11 @@ if (isWorkerRuntime) {
           });
       }
     } catch (error) {
+      const messageId = "messageId" in message ? message.messageId : void 0;
       if ("bufferId" in message) {
-        postWorkerError(message.bufferId, error);
+        postWorkerError(message.bufferId, error, messageId);
       } else {
-        postWorkerError(void 0, error);
+        postWorkerError(void 0, error, messageId);
       }
     }
   });

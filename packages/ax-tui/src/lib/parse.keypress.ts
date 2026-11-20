@@ -45,6 +45,7 @@ const keyName: Record<string, string> = {
   "[H": "home",
   "[P": "f1",
   "[Q": "f2",
+  "[R": "f3",
   "[S": "f4",
   /* xterm/gnome ESC O letter */
   OA: "up",
@@ -184,6 +185,7 @@ export interface ParsedKey {
 
 export type ParseKeypressOptions = {
   useKittyKeyboard?: boolean
+  cprAsFunctionKey?: boolean
 }
 
 // Printable characters for VT100 SS3 application-keypad sequences.
@@ -217,8 +219,7 @@ export const parseKeypress = (s: Buffer | string = "", options: ParseKeypressOpt
 
   if (Buffer.isBuffer(s)) {
     if (s[0]! > 127 && s[1] === undefined) {
-      ;(s[0] as unknown as number) -= 128
-      s = "\x1b" + String(s)
+      s = "\x1b" + String.fromCharCode(s[0]! - 128)
     } else {
       s = String(s)
     }
@@ -261,8 +262,12 @@ export const parseKeypress = (s: Buffer | string = "", options: ParseKeypressOpt
   }
 
   // Cursor position reports (DSR): ESC[row;col R
+  // Outside an active width probe, ESC[1;<mod>R with mod >= 2 is a modified F3.
   if (/^\x1b\[\d+;\d+R$/.test(s)) {
-    return null
+    const modifiedF3 = options.cprAsFunctionKey ? /^\x1b\[1;(\d+)R$/.exec(s) : null
+    if (!modifiedF3 || parseInt(modifiedF3[1]!, 10) < 2) {
+      return null
+    }
   }
 
   // Device Attributes (DA) responses: ESC[?...c
@@ -329,11 +334,13 @@ export const parseKeypress = (s: Buffer | string = "", options: ParseKeypressOpt
 
     const mods = fromKittyMods(modifier)
     key.ctrl = mods.ctrl
-    key.meta = mods.alt // Alt/Option sets meta
+    key.meta = mods.alt || mods.meta
     key.shift = mods.shift
     key.option = mods.alt
     key.super = mods.super
     key.hyper = mods.hyper
+    key.capsLock = mods.capsLock
+    key.numLock = mods.numLock
 
     // Handle common keys by their ASCII codes
     if (charCode === 13) {

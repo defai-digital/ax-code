@@ -204,3 +204,82 @@ assert.ok(!setup.captureCharFrame().includes("\\u{10eeee}"))
 assert.ok(!Buffer.concat(output).toString().includes("a=d,d=A"))
 `, "{ stdout, bufferedOutput: 'stdout' }")
 })
+
+test.skipIf(!supportsFfi)("block protocol preserves alpha when compositing over a backdrop", () => {
+  scenario(`
+const backdrop = new ImageRenderable(renderer, {
+  width: 2,
+  height: 1,
+  source: rgba([0, 0, 255, 255]),
+  protocol: "blocks",
+  backgroundColor: "transparent",
+})
+renderer.root.add(backdrop)
+// A half-transparent red pixel over an opaque blue backdrop blends to equal
+// parts. Dropping the alpha and pre-darkening the channels (the old
+// flattening) instead paints an opaque dark red and erases the blue, and a
+// fully transparent pixel becomes opaque black.
+const half = new ImageRenderable(renderer, {
+  width: 2,
+  height: 1,
+  x: 0,
+  y: 0,
+  position: "absolute",
+  source: rgba([255, 0, 0, 128]),
+  protocol: "blocks",
+  backgroundColor: "transparent",
+})
+renderer.root.add(half)
+await setup.flush()
+let spans = setup.captureSpans().lines.flatMap((line) => line.spans).filter((s) => s.text.includes("\u{2580}"))
+assert.ok(spans.length > 0)
+const blended = spans[spans.length - 1]
+assert.ok(blended.fg.toInts()[0] > 150, "half-alpha red must keep its full channel over a backdrop, got " + JSON.stringify(blended.fg.toInts()))
+assert.ok(blended.fg.toInts()[2] > 0, "the blue backdrop must show through the half-alpha pixel, got " + JSON.stringify(blended.fg.toInts()))
+const ghost = new ImageRenderable(renderer, {
+  width: 2,
+  height: 1,
+  x: 0,
+  y: 0,
+  position: "absolute",
+  source: rgba([255, 0, 0, 0]),
+  protocol: "blocks",
+  backgroundColor: "transparent",
+})
+half.destroy()
+await setup.flush()
+renderer.root.add(ghost)
+await setup.flush()
+spans = setup.captureSpans().lines.flatMap((line) => line.spans).filter((s) => s.text.includes("\u{2580}"))
+const untouched = spans[spans.length - 1]
+assert.equal(untouched.fg.toInts()[2], 255, "a fully transparent pixel must leave the backdrop untouched, got " + JSON.stringify(untouched.fg.toInts()))
+assert.equal(untouched.fg.toInts()[0], 0, "a fully transparent pixel must not darken to black, got " + JSON.stringify(untouched.fg.toInts()))
+`)
+})
+
+test.skipIf(!supportsFfi)("a throwing onLoad does not clobber a successful decode", () => {
+  scenario(`
+let loaded = false
+const image = new ImageRenderable(renderer, {
+  width: 2,
+  height: 2,
+  source: rgba(),
+  protocol: "blocks",
+  onLoad: () => {
+    loaded = true
+    throw new Error("onLoad boom")
+  },
+})
+renderer.root.add(image)
+let rejected
+await image.loadPromise.catch((err) => {
+  rejected = err
+})
+assert.ok(loaded)
+assert.ok(rejected, "the onLoad error stays observable to loadPromise awaiters")
+assert.equal(image.loadError, null, "a throwing onLoad must not surface as a load error")
+assert.ok(image["pixels"], "decoded pixels must survive a throwing onLoad")
+await setup.flush()
+assert.ok(setup.captureCharFrame().includes("▀"), "the decoded image must still render")
+`)
+})

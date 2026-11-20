@@ -130,4 +130,27 @@ describe("SpinnerRenderable frame lifecycle", () => {
     expect(native.encodeUnicode).toHaveBeenCalledWith("__proto__", "unicode")
     expect(spinner.width).toBe(9)
   })
+
+  test("rejects prototype-key preset names in the constructor", () => {
+    expect(() => new SpinnerRenderable(ctx as never, { name: "constructor" as never, autoplay: false })).toThrow(
+      /Unknown spinner preset/,
+    )
+  })
+
+  test("name setter ignores prototype-key presets without stopping the spinner", () => {
+    vi.useFakeTimers()
+    const spinner = new SpinnerRenderable(ctx as never, { name: "dots" })
+    const frames = spinner.frames
+
+    expect(() => {
+      spinner.name = "toString" as never
+    }).not.toThrow()
+
+    expect(spinner.name).toBe("dots")
+    expect(spinner.running).toBe(true)
+    expect(spinner.frames).toEqual(frames)
+    vi.advanceTimersByTime(160)
+    expect(spinner.currentFrameIndex).toBe(2)
+    spinner.stop()
+  })
 })

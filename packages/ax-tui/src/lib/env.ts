@@ -41,7 +41,7 @@ export interface EnvVarConfig {
 export const envRegistry: Record<string, EnvVarConfig> = singleton("env-registry", () => ({}))
 
 export function registerEnvVar(config: EnvVarConfig): void {
-  const existing = envRegistry[config.name]
+  const existing = Object.hasOwn(envRegistry, config.name) ? envRegistry[config.name] : undefined
   if (existing) {
     if (
       existing.description !== config.description ||
@@ -64,7 +64,7 @@ function normalizeBoolean(value: string): boolean {
 }
 
 function parseEnvValue(config: EnvVarConfig): string | boolean | number {
-  const envValue = process.env[config.name]
+  const envValue = Object.hasOwn(process.env, config.name) ? process.env[config.name] : undefined
 
   if (envValue === undefined && config.default !== undefined) {
     return config.default
@@ -79,7 +79,7 @@ function parseEnvValue(config: EnvVarConfig): string | boolean | number {
       return typeof envValue === "boolean" ? envValue : normalizeBoolean(envValue)
     case "number":
       const numValue = Number(envValue)
-      if (isNaN(numValue)) {
+      if (envValue.trim() === "" || !Number.isFinite(numValue)) {
         throw new Error(`Environment variable ${config.name} must be a valid number, got: ${envValue}`)
       }
       return numValue
@@ -97,7 +97,7 @@ class EnvStore {
       return this.parsedValues.get(key)!
     }
 
-    if (!(key in envRegistry)) {
+    if (!Object.hasOwn(envRegistry, key)) {
       throw new Error(`Environment variable ${key} is not registered.`)
     }
 
@@ -111,7 +111,7 @@ class EnvStore {
   }
 
   has(key: string): boolean {
-    return key in envRegistry
+    return Object.hasOwn(envRegistry, key)
   }
 
   clearCache(): void {

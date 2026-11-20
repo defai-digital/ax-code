@@ -1404,16 +1404,37 @@ pub fn writeNotification(self: *Terminal, allocator: std.mem.Allocator, tty: any
     return true;
 }
 
+/// Write OSC 52 to a local tty, wrapping in GNU Screen DCS when STY is set.
+/// A null env_map (environment unavailable) falls back to a plain write.
+pub fn writeClipboardLocal(allocator: std.mem.Allocator, tty: anytype, osc52: []const u8, env_map: ?*const std.process.EnvMap) !void {
+    if (env_map) |map| {
+        if (map.get("STY") != null) {
+            var wrapped: std.ArrayListUnmanaged(u8) = .{};
+            defer wrapped.deinit(allocator);
+            const wrapped_writer = wrapped.writer(allocator);
+            for (osc52) |c| {
+                if (c == '\x1b') try wrapped_writer.writeByte('\x1b');
+                try wrapped_writer.writeByte(c);
+            }
+            try tty.writeAll(ansi.ANSI.screenDcsStart);
+            try tty.writeAll(wrapped.items);
+            try tty.writeAll(ansi.ANSI.screenDcsEnd);
+            return;
+        }
+    }
+    try tty.writeAll(osc52);
+}
+
 /// Write OSC 52 clipboard sequence to the terminal
 /// Supports tmux/screen passthrough, including nested tmux sessions
-pub fn writeClipboard(self: *Terminal, tty: anytype, target: ClipboardTarget, payload: []const u8) !void {
+pub fn writeClipboard(self: *Terminal, allocator: std.mem.Allocator, tty: anytype, target: ClipboardTarget, payload: []const u8) !void {
     if (!self.canWriteClipboard()) {
         return error.NotSupported;
     }
 
-    var buf: [1024]u8 = undefined;
-    var stream = std.io.fixedBufferStream(&buf);
-    const writer = stream.writer();
+    var buffer: std.ArrayListUnmanaged(u8) = .{};
+    defer buffer.deinit(allocator);
+    const writer = buffer.writer(allocator);
 
     // Build OSC 52 sequence: ESC]52;<target>;<payload>ESC\
     try writer.writeAll("\x1b]52;");
@@ -1422,7 +1443,7 @@ pub fn writeClipboard(self: *Terminal, tty: anytype, target: ClipboardTarget, pa
     try writer.writeAll(payload);
     try writer.writeAll("\x1b\\");
 
-    const osc52 = stream.getWritten();
+    const osc52 = buffer.items;
 
     // Use the detected multiplexer from env vars, xtversion response, and remote option.
     const is_tmux = self.isInTmux();
@@ -1431,52 +1452,32 @@ pub fn writeClipboard(self: *Terminal, tty: anytype, target: ClipboardTarget, pa
         // For nested tmux, we use a fixed level of 1 as we don't have access
         // to env vars here (by design - detection already happened in checkEnvironmentOverrides)
         // In practice, single-level wrapping works for most cases
-        var wrapped_buf: [4096]u8 = undefined;
-        var wrapped_stream = std.io.fixedBufferStream(&wrapped_buf);
-        const wrap_writer = wrapped_stream.writer();
+        var wrapped: std.ArrayListUnmanaged(u8) = .{};
+        defer wrapped.deinit(allocator);
+        const wrap_writer = wrapped.writer(allocator);
         for (osc52) |c| {
             if (c == '\x1b') {
                 try wrap_writer.writeByte('\x1b');
             }
             try wrap_writer.writeByte(c);
         }
-        const doubled = wrapped_stream.getWritten();
 
         try tty.writeAll(ansi.ANSI.tmuxDcsStart);
-        try tty.writeAll(doubled);
+        try tty.writeAll(wrapped.items);
         try tty.writeAll(ansi.ANSI.tmuxDcsEnd);
     } else if (self.remote) {
         try tty.writeAll(osc52);
     } else {
+        // Mirror writePassthroughSequence: an env-map failure (e.g. OOM) must
+        // not silently drop the clipboard write; fall back to a plain OSC 52.
         var env_map_storage: ?std.process.EnvMap = null;
-        const env_map: *const std.process.EnvMap = self.opts.env_map orelse blk: {
-            env_map_storage = std.process.getEnvMap(std.heap.page_allocator) catch |err| {
-                logger.err("Failed to get environment map: {}", .{err});
-                return;
-            };
-            break :blk &env_map_storage.?;
+        const env_map: ?*const std.process.EnvMap = self.opts.env_map orelse blk: {
+            env_map_storage = std.process.getEnvMap(std.heap.page_allocator) catch null;
+            break :blk if (env_map_storage) |*map| map else null;
         };
         defer if (env_map_storage) |*map| map.deinit();
 
-        if (env_map.get("STY")) |_| {
-            var wrapped_buf: [2048]u8 = undefined;
-            var wrapped_stream = std.io.fixedBufferStream(&wrapped_buf);
-            const wrapped_writer = wrapped_stream.writer();
-
-            for (osc52) |c| {
-                if (c == '\x1b') {
-                    try wrapped_writer.writeByte('\x1b');
-                }
-                try wrapped_writer.writeByte(c);
-            }
-            const doubled = wrapped_stream.getWritten();
-
-            try tty.writeAll(ansi.ANSI.screenDcsStart);
-            try tty.writeAll(doubled);
-            try tty.writeAll(ansi.ANSI.screenDcsEnd);
-        } else {
-            try tty.writeAll(osc52);
-        }
+        try writeClipboardLocal(allocator, tty, osc52, env_map);
     }
 }
 

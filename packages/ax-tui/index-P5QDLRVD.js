@@ -662,6 +662,24 @@ var TargetChannel = /* @__PURE__ */ ((TargetChannel2) => {
   TargetChannel2[TargetChannel2["Both"] = 3] = "Both";
   return TargetChannel2;
 })(TargetChannel || {});
+var CliRenderEvents = /* @__PURE__ */ ((CliRenderEvents2) => {
+  CliRenderEvents2["RESIZE"] = "resize";
+  CliRenderEvents2["FRAME"] = "frame";
+  CliRenderEvents2["EXTERNAL_OUTPUT"] = "external_output";
+  CliRenderEvents2["FOCUS"] = "focus";
+  CliRenderEvents2["BLUR"] = "blur";
+  CliRenderEvents2["FOCUSED_RENDERABLE"] = "focused_renderable";
+  CliRenderEvents2["FOCUSED_EDITOR"] = "focused_editor";
+  CliRenderEvents2["THEME_MODE"] = "theme_mode";
+  CliRenderEvents2["PALETTE"] = "palette";
+  CliRenderEvents2["CAPABILITIES"] = "capabilities";
+  CliRenderEvents2["SELECTION"] = "selection";
+  CliRenderEvents2["MOUSE_UP"] = "mouse:up";
+  CliRenderEvents2["DEBUG_OVERLAY_TOGGLE"] = "debugOverlay:toggle";
+  CliRenderEvents2["DESTROY"] = "destroy";
+  CliRenderEvents2["MEMORY_SNAPSHOT"] = "memory:snapshot";
+  return CliRenderEvents2;
+})(CliRenderEvents || {});
 
 // src/lib/rgba.ts
 var DEFAULT_FOREGROUND_RGB = [255, 255, 255];
@@ -925,12 +943,19 @@ function parseColor(color) {
     if (lowerColor === "transparent") {
       return RGBA.fromValues(0, 0, 0, 0);
     }
-    if (CSS_COLOR_NAMES[lowerColor]) {
+    if (Object.hasOwn(CSS_COLOR_NAMES, lowerColor)) {
       return hexToRgb(CSS_COLOR_NAMES[lowerColor]);
     }
     return hexToRgb(color);
   }
   return color;
+}
+
+// src/lib/clamp.ts
+function clamp(value, min, max) {
+  if (Number.isNaN(value) || max < min || value < min) return min;
+  if (value > max) return max;
+  return value;
 }
 
 // src/lib/border.ts
@@ -1155,6 +1180,9 @@ var InternalKeyHandler = class extends KeyHandler {
     return super.emit(event, ...args);
   }
   emitWithPriority(event, ...args) {
+    const renderableSet = this.renderableHandlers.get(event);
+    const renderableHandlers = renderableSet && renderableSet.size > 0 ? [...renderableSet] : [];
+    const hasRenderableListeners = renderableHandlers.length > 0;
     let hasGlobalListeners = false;
     const globalListeners = this.rawListeners(event);
     if (globalListeners.length > 0) {
@@ -1173,17 +1201,14 @@ var InternalKeyHandler = class extends KeyHandler {
         }
       }
     }
-    const renderableSet = this.renderableHandlers.get(event);
-    const renderableHandlers = renderableSet && renderableSet.size > 0 ? [...renderableSet] : [];
-    let hasRenderableListeners = false;
-    if (renderableSet && renderableSet.size > 0) {
-      hasRenderableListeners = true;
+    if (hasRenderableListeners) {
       if (event === "keypress" || event === "keyrelease" || event === "paste") {
         const keyEvent = args[0];
         if (keyEvent.defaultPrevented) return hasGlobalListeners || hasRenderableListeners;
         if (keyEvent.propagationStopped) return hasGlobalListeners || hasRenderableListeners;
       }
       for (const handler of renderableHandlers) {
+        if (!renderableSet?.has(handler)) continue;
         try {
           handler(...args);
         } catch (error) {
@@ -3970,7 +3995,8 @@ function parseColorTags(text) {
   return segments;
 }
 function getParsedFont(fontKey) {
-  if (!parsedFonts[fontKey]) {
+  if (!Object.hasOwn(fonts, fontKey)) return void 0;
+  if (!Object.hasOwn(parsedFonts, fontKey)) {
     const fontDef = fonts[fontKey];
     const parsedChars = {};
     for (const [char, lines] of Object.entries(fontDef.chars)) {
@@ -4125,7 +4151,10 @@ function renderFontToFrameBuffer(buffer, {
     }
     if (currentX >= width) break;
     if (currentX + charWidth < 0) {
-      currentX += charWidth + fontDef.letterspace_size;
+      currentX += charWidth;
+      if (i < text.length - 1) {
+        currentX += fontDef.letterspace_size;
+      }
       continue;
     }
     for (let lineIdx = 0; lineIdx < fontDef.lines && lineIdx < charDef.length; lineIdx++) {
@@ -4167,13 +4196,6 @@ function renderFontToFrameBuffer(buffer, {
 
 // src/core/renderable.ts
 import { EventEmitter as EventEmitter2 } from "events";
-
-// src/lib/clamp.ts
-function clamp(value, min, max) {
-  if (Number.isNaN(value) || max < min || value < min) return min;
-  if (value > max) return max;
-  return value;
-}
 
 // src/lib/yoga.options.ts
 function parseAlignWithFallback(value, fallback) {
@@ -4408,7 +4430,7 @@ function parsePositionType(value) {
     case "absolute":
       return 2 /* Absolute */;
     default:
-      return 0 /* Static */;
+      return 1 /* Relative */;
   }
 }
 function parseUnit(value) {
@@ -4461,6 +4483,15 @@ function flattenChildren(children) {
   }
   return result;
 }
+function findPropertyDescriptor(prototype, prop) {
+  let current = prototype;
+  while (current && current !== Object.prototype) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, prop);
+    if (descriptor) return descriptor;
+    current = Object.getPrototypeOf(current);
+  }
+  return void 0;
+}
 function h(type, props, ...children) {
   if (typeof type !== "function") {
     throw new TypeError("h() received an invalid vnode type");
@@ -4479,13 +4510,12 @@ function h(type, props, ...children) {
           return Reflect.get(target, prop, receiver);
         }
         if (typeof prop === "string") {
-          const prototype = type.prototype;
-          const hasMethod = prototype && (typeof prototype[prop] === "function" || Object.getOwnPropertyDescriptor(prototype, prop) || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(prototype), prop));
-          if (hasMethod) {
+          const descriptor = findPropertyDescriptor(type.prototype, prop);
+          if (descriptor && typeof descriptor.value === "function") {
             return (...args) => {
               target.__pendingCalls = target.__pendingCalls || [];
               target.__pendingCalls.push({ method: prop, args });
-              return target;
+              return receiver;
             };
           }
         }
@@ -4493,8 +4523,7 @@ function h(type, props, ...children) {
       },
       set(target, prop, value, receiver) {
         if (typeof prop === "string" && isRenderableConstructor(type)) {
-          const prototype = type.prototype;
-          const descriptor = Object.getOwnPropertyDescriptor(prototype, prop) || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(prototype), prop);
+          const descriptor = findPropertyDescriptor(type.prototype, prop);
           if (descriptor && descriptor.set) {
             target.__pendingCalls = target.__pendingCalls || [];
             target.__pendingCalls.push({ method: prop, args: [value], isProperty: true });
@@ -4652,7 +4681,7 @@ function isPositionType(value) {
   return isValidPercentage(value);
 }
 function isPositionTypeType(value) {
-  return value === "relative" || value === "absolute";
+  return value === "relative" || value === "absolute" || value === "static";
 }
 function isOverflowType(value) {
   return value === "visible" || value === "hidden" || value === "scroll";
@@ -4806,8 +4835,8 @@ var Renderable = class _Renderable extends BaseRenderable {
   constructor(ctx, options) {
     super(options);
     this._ctx = ctx;
-    _Renderable.renderablesByNumber.set(this.num, this);
     validateOptions(this.id, options);
+    _Renderable.renderablesByNumber.set(this.num, this);
     this.renderBefore = options.renderBefore;
     this.renderAfter = options.renderAfter;
     this._width = options.width ?? "auto";
@@ -4847,6 +4876,9 @@ var Renderable = class _Renderable extends BaseRenderable {
   }
   set focusable(value) {
     this._focusable = value;
+    if (!value && this._focused) {
+      this.blur();
+    }
   }
   get ctx() {
     return this._ctx;
@@ -4906,7 +4938,7 @@ var Renderable = class _Renderable extends BaseRenderable {
     if (this._isDestroyed || !this._focused || this._ctx.currentFocusedRenderable !== this) return;
     this.requestRender();
     this.keypressHandler = (key) => {
-      if (this._isDestroyed) return;
+      if (this._isDestroyed || !this.isVisibleInTree()) return;
       this._keyListeners["down"]?.(key);
       if (this._isDestroyed) return;
       if (!key.defaultPrevented && this.handleKeyPress) {
@@ -4914,7 +4946,7 @@ var Renderable = class _Renderable extends BaseRenderable {
       }
     };
     this.pasteHandler = (event) => {
-      if (this._isDestroyed) return;
+      if (this._isDestroyed || !this.isVisibleInTree()) return;
       this._pasteListener?.call(this, event);
       if (this._isDestroyed) return;
       if (!event.defaultPrevented && this.handlePaste) {
@@ -4938,7 +4970,7 @@ var Renderable = class _Renderable extends BaseRenderable {
     this.requestRender();
   }
   blur() {
-    if (!this._focused || !this._focusable) return;
+    if (!this._focused) return;
     this._ctx.blurRenderable(this);
     this._focused = false;
     this.requestRender();
@@ -4952,6 +4984,14 @@ var Renderable = class _Renderable extends BaseRenderable {
     }
     this.propagateFocusChange(false);
     this.emit("blurred" /* BLURRED */);
+  }
+  // Focus survives ancestor hide/show, but input must not reach a renderable
+  // whose tree is invisible; the internal key dispatch has no visibility check.
+  isVisibleInTree() {
+    for (let node = this; node; node = node.parent) {
+      if (!node._visible) return false;
+    }
+    return true;
   }
   get focused() {
     return this._focused;
@@ -5181,7 +5221,7 @@ var Renderable = class _Renderable extends BaseRenderable {
       this._height = options.height;
       this.yogaNode.setHeight(options.height);
     }
-    this._positionType = options.position === "absolute" ? "absolute" : "relative";
+    this._positionType = options.position === "absolute" || options.position === "static" ? options.position : "relative";
     if (this._positionType !== "relative") {
       node.setPositionType(parsePositionType(this._positionType));
     }
@@ -5270,33 +5310,41 @@ var Renderable = class _Renderable extends BaseRenderable {
   }
   setPosition(position) {
     this._position = { ...this._position, ...position };
-    this.updateYogaPosition(position);
+    this.updateYogaPosition(this._position);
   }
   updateYogaPosition(position) {
     const node = this.yogaNode;
     const { top, right, bottom, left } = position;
-    if (isPositionType(top)) {
+    if (top === void 0) {
+      node.setPosition(1 /* Top */, void 0);
+    } else if (isPositionType(top)) {
       if (top === "auto") {
         node.setPositionAuto(1 /* Top */);
       } else {
         node.setPosition(1 /* Top */, top);
       }
     }
-    if (isPositionType(right)) {
+    if (right === void 0) {
+      node.setPosition(2 /* Right */, void 0);
+    } else if (isPositionType(right)) {
       if (right === "auto") {
         node.setPositionAuto(2 /* Right */);
       } else {
         node.setPosition(2 /* Right */, right);
       }
     }
-    if (isPositionType(bottom)) {
+    if (bottom === void 0) {
+      node.setPosition(3 /* Bottom */, void 0);
+    } else if (isPositionType(bottom)) {
       if (bottom === "auto") {
         node.setPositionAuto(3 /* Bottom */);
       } else {
         node.setPosition(3 /* Bottom */, bottom);
       }
     }
-    if (isPositionType(left)) {
+    if (left === void 0) {
+      node.setPosition(0 /* Left */, void 0);
+    } else if (isPositionType(left)) {
       if (left === "auto") {
         node.setPositionAuto(0 /* Left */);
       } else {
@@ -5321,6 +5369,7 @@ var Renderable = class _Renderable extends BaseRenderable {
   }
   set flexDirection(direction) {
     this.yogaNode.setFlexDirection(parseFlexDirection(direction));
+    this.childrenPrimarySortDirty = true;
     this.requestRender();
   }
   set flexWrap(wrap) {
@@ -5559,7 +5608,8 @@ var Renderable = class _Renderable extends BaseRenderable {
     if (anchorRenderable) {
       return this.insertBefore(renderable, anchorRenderable);
     }
-    if (renderable.parent === this) {
+    const isExistingChild = renderable.parent === this;
+    if (isExistingChild) {
       this.yogaNode.removeChild(renderable.getLayoutNode());
       this._childrenInLayoutOrder.splice(this._childrenInLayoutOrder.indexOf(renderable), 1);
     } else {
@@ -5570,17 +5620,17 @@ var Renderable = class _Renderable extends BaseRenderable {
       if (typeof renderable.onLifecyclePass === "function") {
         this._ctx.registerLifecyclePass(renderable);
       }
-      if (renderable._liveCount > 0) {
-        this.propagateLiveCount(renderable._liveCount);
-      }
     }
     const childLayoutNode = renderable.getLayoutNode();
     const insertedIndex = this._childrenInLayoutOrder.length;
     this._childrenInLayoutOrder.push(renderable);
-    this.yogaNode.insertChild(childLayoutNode, insertedIndex);
+    this.yogaNode.insertChild(childLayoutNode, Math.min(insertedIndex, this.yogaNode.getChildCount()));
     this.childrenPrimarySortDirty = true;
     this._shouldUpdateBefore.add(renderable);
     bumpRenderListRevision(this._ctx);
+    if (!isExistingChild && renderable._liveCount > 0) {
+      this.propagateLiveCount(renderable._liveCount);
+    }
     this.requestRender();
     return insertedIndex;
   }
@@ -5622,7 +5672,8 @@ var Renderable = class _Renderable extends BaseRenderable {
       }
       return -1;
     }
-    if (renderable.parent === this) {
+    const isExistingChild = renderable.parent === this;
+    if (isExistingChild) {
       this.yogaNode.removeChild(renderable.getLayoutNode());
       this._childrenInLayoutOrder.splice(this._childrenInLayoutOrder.indexOf(renderable), 1);
     } else {
@@ -5633,17 +5684,17 @@ var Renderable = class _Renderable extends BaseRenderable {
       if (typeof renderable.onLifecyclePass === "function") {
         this._ctx.registerLifecyclePass(renderable);
       }
-      if (renderable._liveCount > 0) {
-        this.propagateLiveCount(renderable._liveCount);
-      }
     }
     this.childrenPrimarySortDirty = true;
     const anchorIndex = this._childrenInLayoutOrder.indexOf(anchor);
     const insertedIndex = Math.max(0, Math.min(anchorIndex, this._childrenInLayoutOrder.length));
     this._childrenInLayoutOrder.splice(insertedIndex, 0, renderable);
-    this.yogaNode.insertChild(renderable.getLayoutNode(), insertedIndex);
+    this.yogaNode.insertChild(renderable.getLayoutNode(), Math.min(insertedIndex, this.yogaNode.getChildCount()));
     this._shouldUpdateBefore.add(renderable);
     bumpRenderListRevision(this._ctx);
+    if (!isExistingChild && renderable._liveCount > 0) {
+      this.propagateLiveCount(renderable._liveCount);
+    }
     this.requestRender();
     return insertedIndex;
   }
@@ -5658,17 +5709,10 @@ var Renderable = class _Renderable extends BaseRenderable {
     if (this.renderableMapById.has(id)) {
       const obj = this.renderableMapById.get(id);
       if (obj) {
-        if (obj._liveCount > 0) {
-          this.propagateLiveCount(-obj._liveCount);
-        }
+        this.renderableMapById.delete(id);
         const childLayoutNode = obj.getLayoutNode();
         this.yogaNode.removeChild(childLayoutNode);
         this.requestRender();
-        obj.onRemove();
-        obj.parent = null;
-        this._ctx.unregisterLifecyclePass(obj);
-        this._shouldUpdateBefore.delete(obj);
-        this.renderableMapById.delete(id);
         const index = this._childrenInLayoutOrder.findIndex((obj2) => obj2.id === id);
         if (index !== -1) {
           this._childrenInLayoutOrder.splice(index, 1);
@@ -5679,6 +5723,27 @@ var Renderable = class _Renderable extends BaseRenderable {
         }
         this.childrenPrimarySortDirty = true;
         bumpRenderListRevision(this._ctx);
+        obj.onRemove();
+        const focused = this._ctx.currentFocusedRenderable;
+        if (focused) {
+          let node = focused;
+          while (node) {
+            if (node === obj) {
+              focused.blur();
+              break;
+            }
+            node = node.parent;
+          }
+        }
+        const remainingLive = obj._liveCount;
+        if (obj.parent === this) {
+          obj.parent = null;
+        }
+        if (remainingLive > 0) {
+          this.propagateLiveCount(-remainingLive);
+        }
+        this._ctx.unregisterLifecyclePass(obj);
+        this._shouldUpdateBefore.delete(obj);
       }
     }
   }
@@ -5803,7 +5868,7 @@ var Renderable = class _Renderable extends BaseRenderable {
       this.frameBuffer.destroy();
       this.frameBuffer = null;
     }
-    for (const child of this._childrenInLayoutOrder) {
+    for (const child of [...this._childrenInLayoutOrder]) {
       this.remove(child.id);
     }
     this._childrenInLayoutOrder = [];
@@ -5956,11 +6021,11 @@ var RootRenderable = class extends Renderable {
       this.renderListReusable = this.canReuseCurrentRenderList();
     }
     this._ctx.clearHitGridScissorRects();
-    for (let i = 1; i < this.renderList.length; i++) {
+    for (let i = 0; i < this.renderList.length; i++) {
       const command = this.renderList[i];
       switch (command.action) {
         case "render":
-          if (!command.renderable.isDestroyed) {
+          if (command.renderable !== this && !command.renderable.isDestroyed) {
             command.renderable.render(buffer, deltaTime);
           }
           break;
@@ -6093,25 +6158,22 @@ function stringToStyledText(content) {
   return new StyledText([chunk]);
 }
 function applyStyle(input, style) {
-  if (typeof input === "object" && "__isChunk" in input) {
+  const attributes = createTextAttributes({ ...style, inverse: style.reverse });
+  if (typeof input === "object" && input !== null && "__isChunk" in input) {
     const existingChunk = input;
     const fg2 = style.fg ? parseColor(style.fg) : existingChunk.fg;
     const bg2 = style.bg ? parseColor(style.bg) : existingChunk.bg;
-    const newAttrs = createTextAttributes(style);
-    const mergedAttrs = existingChunk.attributes ? existingChunk.attributes | newAttrs : newAttrs;
+    const mergedAttrs = existingChunk.attributes ? existingChunk.attributes | attributes : attributes;
     return {
-      __isChunk: true,
-      text: existingChunk.text,
+      ...existingChunk,
       fg: fg2,
       bg: bg2,
-      attributes: mergedAttrs,
-      link: existingChunk.link
+      attributes: mergedAttrs
     };
   } else {
     const plainTextStr = String(input);
     const fg2 = style.fg ? parseColor(style.fg) : void 0;
     const bg2 = style.bg ? parseColor(style.bg) : void 0;
-    const attributes = createTextAttributes(style);
     return {
       __isChunk: true,
       text: plainTextStr,
@@ -6155,7 +6217,7 @@ var blink = (input) => applyStyle(input, { blink: true });
 var fg = (color) => (input) => applyStyle(input, { fg: color });
 var bg = (color) => (input) => applyStyle(input, { bg: color });
 var link = (url) => (input) => {
-  const chunk = typeof input === "object" && "__isChunk" in input ? input : {
+  const chunk = typeof input === "object" && input !== null && "__isChunk" in input ? input : {
     __isChunk: true,
     text: String(input)
   };
@@ -6176,7 +6238,7 @@ function t(strings, ...values) {
       });
     }
     const val = values[i];
-    if (typeof val === "object" && "__isChunk" in val) {
+    if (typeof val === "object" && val !== null && "__isChunk" in val) {
       chunks.push(val);
     } else if (val !== void 0) {
       const plainTextStr = String(val);
@@ -6312,7 +6374,7 @@ var SyntaxStyle = class _SyntaxStyle {
   }
   mergeStyles(...styleNames) {
     this.guard();
-    const cacheKey = styleNames.join(":");
+    const cacheKey = JSON.stringify(styleNames);
     const cached = this.mergedCache.get(cacheKey);
     if (cached) return cached;
     const styleDefinition = {};
@@ -6760,7 +6822,7 @@ function parseKittyKeyboard(sequence) {
       } else if (key.shift && shiftedCodepoint) {
         text = String.fromCodePoint(shiftedCodepoint);
       } else if (key.shift && key.name.length === 1) {
-        text = key.name.toLocaleUpperCase();
+        text = key.name.toUpperCase();
       } else {
         text = key.name;
       }
@@ -6819,6 +6881,7 @@ var keyName = {
   "[H": "home",
   "[P": "f1",
   "[Q": "f2",
+  "[R": "f3",
   "[S": "f4",
   /* xterm/gnome ESC O letter */
   OA: "up",
@@ -6939,9 +7002,7 @@ var parseKeypress = (s = "", options = {}) => {
   let parts;
   if (Buffer2.isBuffer(s)) {
     if (s[0] > 127 && s[1] === void 0) {
-      ;
-      s[0] -= 128;
-      s = "\x1B" + String(s);
+      s = "\x1B" + String.fromCharCode(s[0] - 128);
     } else {
       s = String(s);
     }
@@ -6969,7 +7030,10 @@ var parseKeypress = (s = "", options = {}) => {
     return null;
   }
   if (/^\x1b\[\d+;\d+R$/.test(s)) {
-    return null;
+    const modifiedF3 = options.cprAsFunctionKey ? /^\x1b\[1;(\d+)R$/.exec(s) : null;
+    if (!modifiedF3 || parseInt(modifiedF3[1], 10) < 2) {
+      return null;
+    }
   }
   if (/^\x1b\[\?[\d;]+c$/.test(s)) {
     return null;
@@ -7013,11 +7077,13 @@ var parseKeypress = (s = "", options = {}) => {
     const charCode = parseInt(modifyOtherKeysMatch[2], 10);
     const mods = fromKittyMods(modifier);
     key.ctrl = mods.ctrl;
-    key.meta = mods.alt;
+    key.meta = mods.alt || mods.meta;
     key.shift = mods.shift;
     key.option = mods.alt;
     key.super = mods.super;
     key.hyper = mods.hyper;
+    key.capsLock = mods.capsLock;
+    key.numLock = mods.numLock;
     if (charCode === 13) {
       key.name = "return";
     } else if (charCode === 27) {
@@ -7150,7 +7216,7 @@ var MacOSScrollAccel = class {
     this.opts = opts;
   }
   opts;
-  lastTickTime = 0;
+  lastTickTime = null;
   velocityHistory = [];
   historySize = 3;
   streakTimeout = 150;
@@ -7162,7 +7228,7 @@ var MacOSScrollAccel = class {
     const A = this.opts.A ?? 0.8;
     const tau = this.opts.tau ?? 3;
     const maxMultiplier = this.opts.maxMultiplier ?? 6;
-    const dt = this.lastTickTime ? now - this.lastTickTime : Infinity;
+    const dt = this.lastTickTime === null ? Infinity : now - this.lastTickTime;
     if (dt === Infinity || dt > this.streakTimeout) {
       this.lastTickTime = now;
       this.velocityHistory = [];
@@ -7184,7 +7250,7 @@ var MacOSScrollAccel = class {
     return Math.min(multiplier, maxMultiplier);
   }
   reset() {
-    this.lastTickTime = 0;
+    this.lastTickTime = null;
     this.velocityHistory = [];
   }
 };
@@ -7221,7 +7287,7 @@ var MouseParser = class _MouseParser {
       if (!parsed) {
         break;
       }
-      events.push(parsed.event);
+      if (parsed.event) events.push(parsed.event);
       offset += parsed.consumed;
     }
     return events;
@@ -7293,6 +7359,9 @@ var MouseParser = class _MouseParser {
       alt: (rawButtonCode & 8) !== 0,
       ctrl: (rawButtonCode & 16) !== 0
     };
+    if (isScroll && !isMotion && pressRelease === "m") {
+      return null;
+    }
     let type;
     let scrollInfo;
     if (isMotion) {
@@ -7315,7 +7384,11 @@ var MouseParser = class _MouseParser {
       if (type === "down" && button !== 3) {
         this.mouseButtonsPressed.add(button);
       } else if (type === "up") {
-        this.mouseButtonsPressed.delete(button);
+        if (button === 3) {
+          this.mouseButtonsPressed.clear();
+        } else {
+          this.mouseButtonsPressed.delete(button);
+        }
       }
     }
     return {
@@ -7449,7 +7522,7 @@ var Selection = class {
   }
   getSelectedText() {
     const selectedTextsByLine = /* @__PURE__ */ new Map();
-    const selectedRenderables = this._selectedRenderables.sort((a, b) => {
+    const selectedRenderables = [...this._selectedRenderables].sort((a, b) => {
       const aY = a.y;
       const bY = b.y;
       if (aY !== bY) {
@@ -7575,7 +7648,7 @@ function destroySingleton(key) {
 // src/lib/env.ts
 var envRegistry = singleton("env-registry", () => ({}));
 function registerEnvVar(config) {
-  const existing = envRegistry[config.name];
+  const existing = Object.hasOwn(envRegistry, config.name) ? envRegistry[config.name] : void 0;
   if (existing) {
     if (existing.description !== config.description || existing.type !== config.type || existing.default !== config.default) {
       throw new Error(
@@ -7591,7 +7664,7 @@ function normalizeBoolean(value) {
   return ["true", "1", "on", "yes"].includes(lowerValue);
 }
 function parseEnvValue(config) {
-  const envValue = process.env[config.name];
+  const envValue = Object.hasOwn(process.env, config.name) ? process.env[config.name] : void 0;
   if (envValue === void 0 && config.default !== void 0) {
     return config.default;
   }
@@ -7603,7 +7676,7 @@ function parseEnvValue(config) {
       return typeof envValue === "boolean" ? envValue : normalizeBoolean(envValue);
     case "number":
       const numValue = Number(envValue);
-      if (isNaN(numValue)) {
+      if (envValue.trim() === "" || !Number.isFinite(numValue)) {
         throw new Error(`Environment variable ${config.name} must be a valid number, got: ${envValue}`);
       }
       return numValue;
@@ -7618,7 +7691,7 @@ var EnvStore = class {
     if (this.parsedValues.has(key)) {
       return this.parsedValues.get(key);
     }
-    if (!(key in envRegistry)) {
+    if (!Object.hasOwn(envRegistry, key)) {
       throw new Error(`Environment variable ${key} is not registered.`);
     }
     try {
@@ -7630,7 +7703,7 @@ var EnvStore = class {
     }
   }
   has(key) {
-    return key in envRegistry;
+    return Object.hasOwn(envRegistry, key);
   }
   clearCache() {
     this.parsedValues.clear();
@@ -7925,15 +7998,21 @@ function canStillBeStartupCursorCprPrefix(state) {
 function canStillBePixelResolution(state) {
   return state.firstParamValue === 4 && state.semicolons === 2;
 }
+function canStillBeModifyOtherKeys(state) {
+  return state.firstParamValue === 27 && state.semicolons <= 2;
+}
 function canDeferParametricCsi(state, context) {
-  return context.kittyKeyboardEnabled && (canStillBeKittyU(state) || canStillBeKittySpecial(state)) || context.explicitWidthCprActive && canStillBeExplicitWidthCpr(state) || context.startupCursorCprActive && canStillBeStartupCursorCpr(state) || context.pixelResolutionQueryActive && canStillBePixelResolution(state);
+  return canStillBeModifyOtherKeys(state) || context.kittyKeyboardEnabled && (canStillBeKittyU(state) || canStillBeKittySpecial(state)) || context.explicitWidthCprActive && canStillBeExplicitWidthCpr(state) || context.startupCursorCprActive && canStillBeStartupCursorCpr(state) || context.pixelResolutionQueryActive && canStillBePixelResolution(state);
 }
 function canCompleteDeferredParametricCsi(state, byte, context) {
   if (context.kittyKeyboardEnabled) {
     if (state.hasDigit && byte === 117) return true;
-    if (state.hasDigit && state.semicolons === 1 && state.segments > 1 && (byte === 126 || byte >= 65 && byte <= 90)) {
+    if (state.hasDigit && state.semicolons === 1 && (byte === 126 || byte >= 65 && byte <= 90)) {
       return true;
     }
+  }
+  if (state.hasDigit && state.semicolons === 2 && state.firstParamValue === 27 && byte === 126) {
+    return true;
   }
   if (context.explicitWidthCprActive && state.hasDigit && state.firstParamValue === 1 && state.semicolons === 1 && byte === 82) {
     return true;
@@ -8167,6 +8246,11 @@ var StdinParser = class {
       this.pending.append(remainder.subarray(0, appendEnd));
       remainder = remainder.subarray(appendEnd);
       this.scanPending();
+      if (this.unitStart > 0) {
+        this.pending.consume(this.unitStart);
+        this.cursor -= this.unitStart;
+        this.unitStart = 0;
+      }
       if (this.paste && this.pending.length > 0) {
         remainder = this.consumePasteBytes(this.takePendingBytes());
         continue;
@@ -8341,9 +8425,16 @@ var StdinParser = class {
               this.markPending();
               return;
             }
-            const flushedLoneEsc = this.cursor === this.unitStart + 1 && bytes[this.unitStart] === ESC;
-            this.emitKeyOrResponse("unknown", decodeUtf8(bytes.subarray(this.unitStart, this.cursor)));
-            this.justFlushedEsc = flushedLoneEsc;
+            while (this.cursor - this.unitStart >= 2) {
+              this.emitKeyOrResponse("unknown", "\x1B\x1B");
+              this.unitStart += 2;
+            }
+            if (this.cursor - this.unitStart === 1) {
+              this.emitKeyOrResponse("unknown", "\x1B");
+              this.justFlushedEsc = true;
+            } else {
+              this.justFlushedEsc = false;
+            }
             this.state = { tag: "ground" };
             this.consumePrefix(this.cursor);
             continue;
@@ -8372,9 +8463,21 @@ var StdinParser = class {
             // ESC ESC: stay in esc state. Terminals encode Alt+ESC and
             // similar sequences as ESC ESC [...], so we keep scanning.
             case ESC:
+              if (this.cursor - this.unitStart >= 2) {
+                this.emitKeyOrResponse("unknown", "\x1B\x1B");
+                this.unitStart = this.cursor;
+              }
               this.cursor += 1;
               continue;
             default: {
+              if (this.cursor - this.unitStart >= 2) {
+                this.emitKeyOrResponse("unknown", "\x1B\x1B");
+                this.unitStart += 2;
+                if (this.cursor - this.unitStart === 0) {
+                  this.state = { tag: "ground" };
+                }
+                continue;
+              }
               this.cursor += 1;
               const expected = byte >= 128 ? utf8SequenceLength(byte) : 0;
               if (expected > 1) {
@@ -8450,10 +8553,10 @@ var StdinParser = class {
               this.markPending();
               return;
             }
-            this.emitOpaqueResponse("unknown", bytes.subarray(this.unitStart, this.cursor));
-            this.state = { tag: "ground" };
-            this.consumePrefix(this.cursor);
-            continue;
+            this.state = { tag: "ss3_params_deferred" };
+            this.pendingSinceMs = null;
+            this.forceFlush = false;
+            return;
           }
           if (byte === ESC) {
             this.emitOpaqueResponse("unknown", bytes.subarray(this.unitStart, this.cursor));
@@ -8469,6 +8572,21 @@ var StdinParser = class {
           this.emitKeyOrResponse("unknown", decodeUtf8(bytes.subarray(this.unitStart, this.cursor)));
           this.state = { tag: "ground" };
           this.consumePrefix(this.cursor);
+          continue;
+        }
+        case "ss3_params_deferred": {
+          if (this.cursor >= bytes.length) {
+            this.pendingSinceMs = null;
+            this.forceFlush = false;
+            return;
+          }
+          if (byte === ESC) {
+            this.emitOpaqueResponse("unknown", bytes.subarray(this.unitStart, this.cursor));
+            this.state = { tag: "ground" };
+            this.consumePrefix(this.cursor);
+            continue;
+          }
+          this.state = { tag: "ss3_params" };
           continue;
         }
         // Narrow recovery path for delayed mouse continuations after a
@@ -8504,6 +8622,19 @@ var StdinParser = class {
           if (this.cursor >= bytes.length) {
             if (!this.forceFlush) {
               this.markPending();
+              return;
+            }
+            const firstParamValue = parsePositiveDecimalPrefix(bytes, this.unitStart + 2, this.cursor);
+            if (firstParamValue !== null && canDeferParametricCsi({ semicolons: 0, segments: 1, hasDigit: true, firstParamValue }, this.protocolContext)) {
+              this.state = {
+                tag: "csi_parametric_deferred",
+                semicolons: 0,
+                segments: 1,
+                hasDigit: true,
+                firstParamValue
+              };
+              this.pendingSinceMs = null;
+              this.forceFlush = false;
               return;
             }
             this.emitOpaqueResponse("unknown", bytes.subarray(this.unitStart, this.cursor));
@@ -8558,6 +8689,11 @@ var StdinParser = class {
             continue;
           }
           if (byte === 63 && this.cursor === this.unitStart + 2) {
+            this.cursor += 1;
+            this.state = { tag: "csi_private_reply", semicolons: 0, hasDigit: false, sawDollar: false };
+            continue;
+          }
+          if (byte === 62 && this.cursor === this.unitStart + 2) {
             this.cursor += 1;
             this.state = { tag: "csi_private_reply", semicolons: 0, hasDigit: false, sawDollar: false };
             continue;
@@ -9103,7 +9239,10 @@ var StdinParser = class {
   // capability responses, focus sequences, and other non-key CSI traffic
   // avoids becoming text.
   emitKeyOrResponse(protocol, raw) {
-    const parsed = parseKeypress(raw, { useKittyKeyboard: this.useKittyKeyboard });
+    const parsed = parseKeypress(raw, {
+      useKittyKeyboard: this.useKittyKeyboard,
+      cprAsFunctionKey: protocol === "cpr" && !this.protocolContext.explicitWidthCprActive && !this.protocolContext.startupCursorCprActive
+    });
     if (parsed) {
       this.events.push({
         type: "key",
@@ -9121,6 +9260,7 @@ var StdinParser = class {
   emitMouse(rawBytes, encoding) {
     const event = this.mouseParser.parseMouseEvent(rawBytes);
     if (!event) {
+      if (encoding === "sgr" && isMouseSgrSequence(rawBytes)) return;
       this.emitOpaqueResponse("unknown", rawBytes);
       return;
     }
@@ -9379,6 +9519,11 @@ var ProcessQueue = class {
       this.processQueue();
     }
   }
+  process() {
+    if (!this.processing) {
+      this.processQueue();
+    }
+  }
   processQueue() {
     if (this.queue.length === 0) {
       return;
@@ -9417,7 +9562,10 @@ var ProcessQueue = class {
 var _cachedParsers;
 function getParsers() {
   if (!_cachedParsers) {
-    _cachedParsers = loadParsers();
+    _cachedParsers = loadParsers().catch((error) => {
+      _cachedParsers = void 0;
+      throw error;
+    });
   }
   return _cachedParsers;
 }
@@ -9527,7 +9675,7 @@ import { existsSync as existsSync2 } from "fs";
 // src/lib/bunfs.ts
 import { basename, join } from "node:path";
 function isBunfsPath(path3) {
-  return path3.includes("$bunfs") || /^B:[\\/]~BUN/i.test(path3);
+  return /^\/\$bunfs\//.test(path3) || /^B:[\\/]~BUN[\\/]/i.test(path3);
 }
 function getBunfsRootPath() {
   return process.platform === "win32" ? "B:\\~BUN\\root" : "/$bunfs/root";
@@ -9836,6 +9984,10 @@ var TreeSitterClient = class extends EventEmitter3 {
   rejectInitialization;
   destroyPromise;
   workerTerminationFailed = false;
+  dataPathQueue = Promise.resolve();
+  // FIFO of dispose message ids per buffer id; null marks a timed-out dispose
+  // whose late BUFFER_DISPOSED must not complete a newer dispose for a reused id.
+  pendingDisposes = /* @__PURE__ */ new Map();
   constructor(options, internalOptions = {}) {
     super();
     this.options = options;
@@ -9892,6 +10044,7 @@ var TreeSitterClient = class extends EventEmitter3 {
   rejectPendingRequests(error) {
     const requests = Array.from(this.messageCallbacks.values());
     this.messageCallbacks.clear();
+    this.pendingDisposes.clear();
     for (const request of requests) {
       request.reject(error);
     }
@@ -10165,10 +10318,15 @@ var TreeSitterClient = class extends EventEmitter3 {
         return;
       }
       case "BUFFER_DISPOSED": {
-        const callback = this.messageCallbacks.get(`dispose_${message.bufferId}`);
-        if (callback) {
-          this.messageCallbacks.delete(`dispose_${message.bufferId}`);
-          callback.resolve(true);
+        const slots = this.pendingDisposes.get(message.bufferId);
+        const messageId = slots?.shift();
+        if (slots && slots.length === 0) this.pendingDisposes.delete(message.bufferId);
+        if (messageId) {
+          const callback = this.messageCallbacks.get(messageId);
+          if (callback) {
+            this.messageCallbacks.delete(messageId);
+            callback.resolve(true);
+          }
         }
         this.emit("buffer:disposed", message.bufferId);
         return;
@@ -10210,6 +10368,13 @@ var TreeSitterClient = class extends EventEmitter3 {
         return;
       }
       case "ERROR": {
+        if (message.messageId) {
+          const callback = this.messageCallbacks.get(message.messageId);
+          if (callback) {
+            this.messageCallbacks.delete(message.messageId);
+            callback.reject(new Error(message.error));
+          }
+        }
         this.emitError(message.error, message.bufferId);
         return;
       }
@@ -10261,25 +10426,32 @@ var TreeSitterClient = class extends EventEmitter3 {
     };
     this.buffers.set(id, pendingBuffer);
     const messageId = `init_${this.messageIdCounter++}`;
-    const response = await new Promise((resolve3, reject) => {
-      this.messageCallbacks.set(messageId, { resolve: resolve3, reject });
-      try {
-        this.sendWorkerMessage({
-          type: "INITIALIZE_PARSER",
-          bufferId: id,
-          version,
-          content,
-          filetype,
-          messageId
-        });
-      } catch (error) {
-        this.messageCallbacks.delete(messageId);
-        if (this.buffers.get(id) === pendingBuffer) this.buffers.delete(id);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      }
-    });
+    let response;
+    try {
+      response = await new Promise((resolve3, reject) => {
+        this.messageCallbacks.set(messageId, { resolve: resolve3, reject });
+        try {
+          this.sendWorkerMessage({
+            type: "INITIALIZE_PARSER",
+            bufferId: id,
+            version,
+            content,
+            filetype,
+            messageId
+          });
+        } catch (error) {
+          this.messageCallbacks.delete(messageId);
+          if (this.buffers.get(id) === pendingBuffer) this.buffers.delete(id);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      });
+    } catch (error) {
+      if (this.buffers.get(id) === pendingBuffer) this.buffers.delete(id);
+      throw error;
+    }
     if (!this.initialized || this.buffers.get(id) !== pendingBuffer) return false;
     if (!response.hasParser) {
+      if (this.buffers.get(id) === pendingBuffer) this.buffers.delete(id);
       this.emit("buffer:initialized", id, false);
       if (filetype !== "plaintext") {
         this.emitWarning(response.warning || response.error || "Buffer has no parser", id);
@@ -10335,9 +10507,15 @@ var TreeSitterClient = class extends EventEmitter3 {
     }
     if (this.worker) {
       await new Promise((resolve3, reject) => {
-        const messageId = `dispose_${bufferId}`;
+        const messageId = `dispose_${bufferId}_${this.messageIdCounter++}`;
+        const slots = this.pendingDisposes.get(bufferId) ?? [];
+        slots.push(messageId);
+        this.pendingDisposes.set(bufferId, slots);
         const timeout = setTimeout(() => {
           this.messageCallbacks.delete(messageId);
+          const pending = this.pendingDisposes.get(bufferId);
+          const index = pending?.indexOf(messageId) ?? -1;
+          if (pending && index !== -1) pending[index] = null;
           this.emitWarning("Timed out waiting for buffer to be disposed", bufferId);
           resolve3(false);
         }, 3e3);
@@ -10359,6 +10537,12 @@ var TreeSitterClient = class extends EventEmitter3 {
         } catch (error) {
           clearTimeout(timeout);
           this.messageCallbacks.delete(messageId);
+          const pending = this.pendingDisposes.get(bufferId);
+          const index = pending?.indexOf(messageId) ?? -1;
+          if (pending && index !== -1) {
+            pending.splice(index, 1);
+            if (pending.length === 0) this.pendingDisposes.delete(bufferId);
+          }
           this.emitWarning(`Error disposing buffer: ${error}`, bufferId);
           resolve3(false);
         }
@@ -10442,14 +10626,26 @@ var TreeSitterClient = class extends EventEmitter3 {
   isInitialized() {
     return this.initialized;
   }
-  async setDataPath(dataPath) {
+  setDataPath(dataPath) {
+    const run = this.dataPathQueue.then(() => this.applyDataPath(dataPath));
+    this.dataPathQueue = run.catch(() => {
+    });
+    return run;
+  }
+  async applyDataPath(dataPath) {
     if (this.options.dataPath === dataPath) {
       return;
     }
-    this.options.dataPath = dataPath;
+    if (!this.initialized && this.initializePromise) {
+      await this.initializePromise.catch(() => {
+      });
+      if (this.options.dataPath === dataPath) {
+        return;
+      }
+    }
     if (this.initialized && this.worker) {
       const messageId = `update_datapath_${this.messageIdCounter++}`;
-      return new Promise((resolve3, reject) => {
+      await new Promise((resolve3, reject) => {
         this.messageCallbacks.set(messageId, {
           resolve: (response) => {
             if (response.error) {
@@ -10472,6 +10668,7 @@ var TreeSitterClient = class extends EventEmitter3 {
         }
       });
     }
+    this.options.dataPath = dataPath;
   }
   async clearCache() {
     if (!this.initialized || !this.worker) {
@@ -10564,6 +10761,8 @@ function treeSitterToTextChunks(content, highlights, syntaxStyle, options) {
           chunks.push({
             __isChunk: true,
             text: replacementText,
+            contentStart: currentOffset,
+            contentEnd: boundary.offset,
             fg: defaultStyle?.fg,
             bg: defaultStyle?.bg,
             attributes: defaultStyle ? createTextAttributes({
@@ -10623,6 +10822,8 @@ function treeSitterToTextChunks(content, highlights, syntaxStyle, options) {
         chunks.push({
           __isChunk: true,
           text: segmentText,
+          contentStart: currentOffset,
+          contentEnd: boundary.offset,
           fg: finalStyle?.fg,
           bg: finalStyle?.bg,
           attributes: finalStyle ? createTextAttributes({
@@ -10639,6 +10840,8 @@ function treeSitterToTextChunks(content, highlights, syntaxStyle, options) {
       chunks.push({
         __isChunk: true,
         text,
+        contentStart: currentOffset,
+        contentEnd: boundary.offset,
         fg: style?.fg,
         bg: style?.bg,
         attributes: style ? createTextAttributes({
@@ -10676,7 +10879,7 @@ function treeSitterToTextChunks(content, highlights, syntaxStyle, options) {
         }
       }
     }
-    currentOffset = boundary.offset;
+    currentOffset = Math.max(currentOffset, boundary.offset);
   }
   if (currentOffset < content.length) {
     const text = content.slice(currentOffset);
@@ -10684,6 +10887,8 @@ function treeSitterToTextChunks(content, highlights, syntaxStyle, options) {
     chunks.push({
       __isChunk: true,
       text,
+      contentStart: currentOffset,
+      contentEnd: content.length,
       fg: style?.fg,
       bg: style?.bg,
       attributes: style ? createTextAttributes({
@@ -10710,6 +10915,8 @@ async function treeSitterToStyledText(content, filetype, syntaxStyle, client, op
       {
         __isChunk: true,
         text: content,
+        contentStart: 0,
+        contentEnd: content.length,
         fg: defaultStyle.fg,
         bg: defaultStyle.bg,
         attributes: defaultStyle.attributes
@@ -10756,7 +10963,7 @@ function isValidDirectoryName(name) {
     "LPT8",
     "LPT9"
   ];
-  if (reservedNames.includes(name.toUpperCase())) {
+  if (reservedNames.includes(name.split(".")[0].toUpperCase())) {
     return false;
   }
   const invalidChars = /[<>:"|?*/\\\x00-\x1f]/;
@@ -11080,6 +11287,7 @@ async function destroyTreeSitterClient() {
 var ExtmarksHistory = class {
   undoStack = [];
   redoStack = [];
+  discardedRedoStack = null;
   saveSnapshot(extmarks, nextId, metadata) {
     const snapshot = {
       extmarks: new Map(Array.from(extmarks.entries()).map(([id, extmark]) => [id, { ...extmark }])),
@@ -11087,11 +11295,16 @@ var ExtmarksHistory = class {
       metadata: new Map(metadata)
     };
     this.undoStack.push(snapshot);
+    this.discardedRedoStack = this.redoStack.length > 0 ? this.redoStack : null;
     this.redoStack = [];
   }
   /** Drop the snapshot just recorded for an edit that turned out to be a no-op. */
   discardLastSnapshot() {
-    this.undoStack.pop();
+    if (!this.undoStack.pop()) return;
+    if (this.discardedRedoStack) {
+      this.redoStack = this.discardedRedoStack;
+      this.discardedRedoStack = null;
+    }
   }
   undo() {
     if (this.undoStack.length === 0) return null;
@@ -11110,6 +11323,7 @@ var ExtmarksHistory = class {
   clear() {
     this.undoStack = [];
     this.redoStack = [];
+    this.discardedRedoStack = null;
   }
   canUndo() {
     return this.undoStack.length > 0;
@@ -11155,6 +11369,7 @@ var ExtmarksController = class {
   originalRedo;
   originalClearHistory;
   originalSetTextOwned;
+  originalReplaceTextOwned;
   constructor(editBuffer, editorView) {
     this.editBuffer = editBuffer;
     this.editorView = editorView;
@@ -11178,6 +11393,7 @@ var ExtmarksController = class {
     this.originalRedo = editBuffer.redo.bind(editBuffer);
     this.originalClearHistory = editBuffer.clearHistory.bind(editBuffer);
     this.originalSetTextOwned = editBuffer.setTextOwned.bind(editBuffer);
+    this.originalReplaceTextOwned = editBuffer.replaceTextOwned.bind(editBuffer);
     this.wrapCursorMovement();
     this.wrapDeletion();
     this.wrapInsertion();
@@ -11238,6 +11454,7 @@ var ExtmarksController = class {
         this.originalMoveUpVisual();
         return;
       }
+      const currentOffset = this.editorView.getVisualCursor().offset;
       this.originalMoveUpVisual();
       const newOffset = this.editorView.getVisualCursor().offset;
       const virtualExtmark = this.findVirtualExtmarkContaining(newOffset);
@@ -11247,7 +11464,8 @@ var ExtmarksController = class {
         if (distanceToStart < distanceToEnd) {
           this.editorView.setCursorByOffset(Math.max(0, virtualExtmark.start - 1));
         } else {
-          this.editorView.setCursorByOffset(virtualExtmark.end);
+          const adjustedOffset = Math.max(0, virtualExtmark.start - 1);
+          this.editorView.setCursorByOffset(virtualExtmark.end >= currentOffset ? adjustedOffset : virtualExtmark.end);
         }
       }
     };
@@ -11363,12 +11581,12 @@ var ExtmarksController = class {
       }
       const deleteEndOffset = this.getNextCursorOffset(currentOffset);
       const deleteLength = deleteEndOffset - currentOffset;
-      this.originalDeleteChar();
-      if (deleteLength > 0) {
-        this.adjustExtmarksAfterDeletion(currentOffset, deleteLength);
-      } else {
+      if (deleteLength === 0) {
         this.discardSnapshot();
+        return;
       }
+      this.originalDeleteChar();
+      this.adjustExtmarksAfterDeletion(currentOffset, deleteLength);
     };
     this.editBuffer.deleteRange = (startLine, startCol, endLine, endCol) => {
       if (this.destroyed) {
@@ -11441,7 +11659,7 @@ var ExtmarksController = class {
       const insertLength = this.editorView.getVisualCursor().offset - currentOffset;
       if (insertLength > 0) {
         this.adjustExtmarksAfterInsertion(currentOffset, insertLength);
-      } else {
+      } else if (text.length === 0) {
         this.discardSnapshot();
       }
     };
@@ -11456,7 +11674,7 @@ var ExtmarksController = class {
       const insertLength = this.editorView.getVisualCursor().offset - currentOffset;
       if (insertLength > 0) {
         this.adjustExtmarksAfterInsertion(currentOffset, insertLength);
-      } else {
+      } else if (char.length === 0) {
         this.discardSnapshot();
       }
     };
@@ -11490,6 +11708,15 @@ var ExtmarksController = class {
       this.saveSnapshot();
       this.clear();
       this.originalReplaceText(text);
+    };
+    this.editBuffer.replaceTextOwned = (text) => {
+      if (this.destroyed) {
+        this.originalReplaceTextOwned(text);
+        return;
+      }
+      this.saveSnapshot();
+      this.clear();
+      this.originalReplaceTextOwned(text);
     };
     this.editBuffer.clear = () => {
       if (this.destroyed) {
@@ -11818,6 +12045,7 @@ var ExtmarksController = class {
     this.editBuffer.redo = this.originalRedo;
     this.editBuffer.clearHistory = this.originalClearHistory;
     this.editBuffer.setTextOwned = this.originalSetTextOwned;
+    this.editBuffer.replaceTextOwned = this.originalReplaceTextOwned;
     this.editBuffer.off("content-changed", this.onContentChanged);
     this.extmarks.clear();
     this.extmarksByTypeId.clear();
@@ -11989,18 +12217,32 @@ var TerminalPalette = class {
       };
       const onData = (chunk) => {
         buffer += chunk.toString();
+        let updated = false;
         let m;
+        let consumed = 0;
         OSC4_RESPONSE.lastIndex = 0;
         while (m = OSC4_RESPONSE.exec(buffer)) {
+          consumed = m.index + m[0].length;
           const idx = parseInt(m[1], 10);
-          if (results.has(idx)) results.set(idx, toHex(m[2], m[3], m[4], m[5]));
+          if (results.has(idx)) {
+            results.set(idx, toHex(m[2], m[3], m[4], m[5]));
+            updated = true;
+          }
         }
+        let siblingActivity = false;
+        OSC_SPECIAL_RESPONSE.lastIndex = 0;
+        while (m = OSC_SPECIAL_RESPONSE.exec(buffer)) {
+          consumed = Math.max(consumed, m.index + m[0].length);
+          siblingActivity = true;
+        }
+        if (consumed > 0) buffer = buffer.slice(consumed);
         if (buffer.length > 8192) buffer = buffer.slice(-4096);
         const done = [...results.values()].filter((v) => v !== null).length;
         if (done === results.size) {
           finish();
           return;
         }
+        if (!updated && !siblingActivity) return;
         idleTimer = session.resetTimer(idleTimer, finish, idleTimeoutMs);
       };
       session.setTimer(finish, timeoutMs);
@@ -12041,20 +12283,29 @@ var TerminalPalette = class {
         buffer += chunk.toString();
         let updated = false;
         let m;
+        let consumed = 0;
         OSC_SPECIAL_RESPONSE.lastIndex = 0;
         while (m = OSC_SPECIAL_RESPONSE.exec(buffer)) {
+          consumed = m.index + m[0].length;
           const idx = parseInt(m[1], 10);
           if (idx in results) {
             results[idx] = toHex(m[2], m[3], m[4], m[5]);
             updated = true;
           }
         }
+        let siblingActivity = false;
+        OSC4_RESPONSE.lastIndex = 0;
+        while (m = OSC4_RESPONSE.exec(buffer)) {
+          consumed = Math.max(consumed, m.index + m[0].length);
+          siblingActivity = true;
+        }
+        if (consumed > 0) buffer = buffer.slice(consumed);
         if (buffer.length > 8192) buffer = buffer.slice(-4096);
         if (queries.every((idx) => results[idx] !== null)) {
           finish();
           return;
         }
-        if (!updated) return;
+        if (!updated && !siblingActivity) return;
         idleTimer = session.resetTimer(idleTimer, finish, idleTimeoutMs);
       };
       session.setTimer(finish, timeoutMs);
@@ -12147,6 +12398,9 @@ function stripAnsiSequences(text) {
 
 // src/lib/detect-links.ts
 var URL_SCOPES = ["markup.link.url", "string.special.url"];
+function isConceal(group, meta) {
+  return group === "conceal" || group.startsWith("conceal.") || meta?.conceal !== void 0;
+}
 function detectLinks(chunks, context) {
   const content = context.content;
   const highlights = context.highlights;
@@ -12157,26 +12411,36 @@ function detectLinks(chunks, context) {
     const url = content.slice(start, end);
     ranges.push({ start, end, url });
     for (let j = i - 1; j >= 0; j--) {
-      const [labelStart, labelEnd, prev] = highlights[j];
+      const [labelStart, labelEnd, prev, meta] = highlights[j];
       if (prev === "markup.link.label") {
-        ranges.push({ start: labelStart, end: labelEnd, url });
+        if (labelEnd <= start && /^[\s\](:]*$/u.test(content.slice(labelEnd, start))) {
+          ranges.push({ start: labelStart, end: labelEnd, url });
+        }
         break;
       }
-      if (!prev.startsWith("markup.link")) break;
+      if (!prev.startsWith("markup.link") && !isConceal(prev, meta)) break;
     }
   }
   if (ranges.length === 0) return chunks;
-  let contentPos = 0;
-  for (const chunk of chunks) {
-    if (chunk.text.length === 0) continue;
-    const idx = content.indexOf(chunk.text, contentPos);
-    if (idx < 0) continue;
+  const assignLink = (chunk, start, end) => {
     for (const range of ranges) {
-      if (idx < range.end && idx + chunk.text.length > range.start) {
+      if (start < range.end && end > range.start) {
         chunk.link = { url: range.url };
         break;
       }
     }
+  };
+  let contentPos = 0;
+  for (const chunk of chunks) {
+    if (chunk.text.length === 0) continue;
+    if (chunk.contentStart !== void 0 && chunk.contentEnd !== void 0) {
+      assignLink(chunk, chunk.contentStart, chunk.contentEnd);
+      contentPos = chunk.contentEnd;
+      continue;
+    }
+    const idx = content.indexOf(chunk.text, contentPos);
+    if (idx < 0) continue;
+    assignLink(chunk, idx, idx + chunk.text.length);
     contentPos = idx + chunk.text.length;
   }
   return chunks;
@@ -12533,7 +12797,7 @@ var OptimizedBuffer2 = class _OptimizedBuffer {
   }
   pushOpacity(opacity) {
     this.guard();
-    this.lib.bufferPushOpacity(this.bufferPtr, Math.max(0, Math.min(1, opacity)));
+    this.lib.bufferPushOpacity(this.bufferPtr, clamp(opacity, 0, 1));
   }
   popOpacity() {
     this.guard();
@@ -17559,6 +17823,7 @@ export {
   getBaseAttributes,
   DebugOverlayCorner,
   TargetChannel,
+  CliRenderEvents,
   DEFAULT_FOREGROUND_RGB,
   DEFAULT_BACKGROUND_RGB,
   normalizeIndexedColorIndex,
@@ -17569,6 +17834,7 @@ export {
   rgbToHex,
   hsvToRgb,
   parseColor,
+  clamp,
   isValidBorderStyle,
   parseBorderStyle,
   BorderChars,
@@ -17786,7 +18052,6 @@ export {
   Node,
   yoga_default,
   yoga_exports,
-  clamp,
   h,
   isVNode,
   maybeMakeRenderable,

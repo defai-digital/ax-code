@@ -159,6 +159,16 @@ test("file completion recognizes directory symlinks without recursive traversal"
   expect(result.items[0]).toMatchObject({ label: "link/", insertText: "link/", description: "Directory" })
 })
 
+test("file completion ranks directory symlinks before applying the result cap", async () => {
+  const cwd = await fixture()
+  await writeFile(path.join(cwd, "a.txt"), "")
+  await writeFile(path.join(cwd, "b.txt"), "")
+  await symlink(path.join(cwd, "folder"), path.join(cwd, "zlink"), process.platform === "win32" ? "junction" : "dir")
+  const provider = createFilePathProvider({ cwd, maxResults: 3 })
+  const result = (await provider({ text: "./", cursor: 2 }, signal))!
+  expect(result.items.map((item) => item.label)).toEqual(["folder/", "zlink/", "a.txt"])
+})
+
 test.skipIf(process.platform !== "win32")("file completion supports Windows separators, drive paths and home", async () => {
   const cwd = await fixture()
   const provider = createFilePathProvider({ cwd, home: cwd })

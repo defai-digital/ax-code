@@ -5,6 +5,11 @@
  * 0.15.2 then skips them and fails to link libc. On macOS this copies the
  * active SDK and adds an `arm64-macos` target beside `arm64e-macos`, then
  * points both `AX_CODE_TUI_MACOS_SDK` and `xcrun --show-sdk-path` at the copy.
+ *
+ * Newer SDKs also delegate INFINITY/NAN to `<float.h>` under clang modules, a
+ * contract Zig 0.15.2's bundled headers do not implement, so its libcxx
+ * sub-compilation fails with `use of undeclared identifier 'INFINITY'`. The
+ * copy gains guarded fallback defines in `usr/include/math.h`.
  */
 import { createHash, randomBytes } from "node:crypto"
 import { spawnSync } from "node:child_process"
@@ -74,6 +79,34 @@ export function patchTbdTargets(text: string): string {
     .join("\n")
 }
 
+/**
+ * Newer Apple SDK math.h defines INFINITY/NAN only when clang modules are off,
+ * expecting `<float.h>` to answer `__need_infinity_nan`. Zig 0.15.2's bundled
+ * float.h does not implement that contract, so its libcxx sub-compilation
+ * fails on `INFINITY`. Append guarded fallbacks after the conditional define.
+ */
+export function patchMathHeader(text: string): string {
+  if (!text.includes("__need_infinity_nan") || text.includes("#ifndef INFINITY")) return text
+  const lines = text.split("\n")
+  const define = lines.findIndex((line) => /^\s*#\s*define\s+INFINITY\b/.test(line))
+  if (define === -1) return text
+  let endif = define + 1
+  while (endif < lines.length && !/^\s*#\s*endif\b/.test(lines[endif]!)) endif++
+  if (endif >= lines.length) return text
+  lines.splice(
+    endif + 1,
+    0,
+    "",
+    "#ifndef INFINITY",
+    "#define INFINITY    HUGE_VALF",
+    "#endif",
+    "#ifndef NAN",
+    '#define NAN         __builtin_nanf("0x7fc00000")',
+    "#endif",
+  )
+  return lines.join("\n")
+}
+
 function sha256(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex")
 }
@@ -117,7 +150,9 @@ export function prepareMacosSdk(source: string, destination: string): string {
     if (fallback.status !== 0) throw new Error(`Failed to copy macOS SDK from ${source}`)
   }
   if (!existsSync(join(destination, "usr/lib"))) throw new Error(`Failed to copy macOS SDK from ${source}`)
-  for (const file of walkTbd(destination)) patchSdkStub(file)
+  for (const file of walkTbd(destination)) patchSdkFile(file, patchTbdTargets)
+  const mathHeader = join(destination, "usr/include/math.h")
+  if (existsSync(mathHeader)) patchSdkFile(mathHeader, patchMathHeader)
   if (!sdkIsCompatible(destination)) throw new Error(`Patched macOS SDK still has no arm64-macos stub: ${destination}`)
   return destination
 }
@@ -125,14 +160,14 @@ export function prepareMacosSdk(source: string, destination: string): string {
 const READ_NOFOLLOW = constants.O_RDONLY | constants.O_NOFOLLOW
 const NEW_FILE_NOFOLLOW = constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW
 
-/** Replace a stub through one descriptor so a symlink cannot be swapped in after a stat. */
-function patchSdkStub(file: string): void {
+/** Replace an SDK file through one descriptor so a symlink cannot be swapped in after a stat. */
+function patchSdkFile(file: string, patch: (text: string) => string): void {
   const fd = openSync(file, READ_NOFOLLOW, 0o600)
   try {
     const stat = fstatSync(fd)
-    if (!stat.isFile()) throw new Error(`macOS SDK stub is not a regular file: ${file}`)
+    if (!stat.isFile()) throw new Error(`macOS SDK file is not a regular file: ${file}`)
     const original = readFileSync(fd, "utf8")
-    const patched = patchTbdTargets(original)
+    const patched = patch(original)
     if (patched === original) return
     const temporary = `${file}.${randomBytes(8).toString("hex")}.tmp`
     const out = openSync(temporary, NEW_FILE_NOFOLLOW, 0o600)

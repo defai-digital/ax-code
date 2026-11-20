@@ -345,6 +345,9 @@ describe("layoutGauge", () => {
     const inside = cells.find((cell) => cell.char === "5")!
     expect(inside.x).toBe(3)
     expect(inside.bg).toBe("cyan")
+    // No explicit labelColor/backgroundColor: the foreground stays unset so
+    // the renderable paints it with default-color intent (GaugeRenderable
+    // passes RGBA.defaultForeground()) — never the fill color itself.
     expect(inside.fg).toBeUndefined()
     const outside = cells.find((cell) => cell.char === "%")!
     expect(outside.x).toBe(5)
@@ -439,6 +442,13 @@ describe("layoutChart", () => {
   test("zero size renders nothing", () => {
     expect(layoutChart({ datasets: [{ data: [[0, 0]] }] }, 0, 5)).toEqual([])
     expect(layoutChart({ datasets: [{ data: [[0, 0]] }] }, 5, 0)).toEqual([])
+  })
+
+  test.each([NaN, Infinity, -Infinity, 1.5])("non-finite or fractional size %s renders nothing", (size) => {
+    for (const marker of ["dot", "block", "braille"] as const) {
+      expect(layoutChart({ datasets: [{ data: [[0, 0], [1, 1]], marker }] }, size, 5)).toEqual([])
+      expect(layoutChart({ datasets: [{ data: [[0, 0], [1, 1]], marker }] }, 5, size)).toEqual([])
+    }
   })
 
   test("throws TypeError when an axis is provided without finite bounds", () => {

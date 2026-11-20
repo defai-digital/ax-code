@@ -18,6 +18,12 @@ export class ProcessQueue<T> {
     }
   }
 
+  process(): void {
+    if (!this.processing) {
+      this.processQueue()
+    }
+  }
+
   private processQueue(): void {
     if (this.queue.length === 0) {
       return

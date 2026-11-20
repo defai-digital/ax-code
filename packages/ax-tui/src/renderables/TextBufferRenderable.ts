@@ -448,6 +448,7 @@ export abstract class TextBufferRenderable extends Renderable implements LineInf
   }
 
   render(buffer: OptimizedBuffer, deltaTime: number): void {
+    if (this.isDestroyed) return
     if (!this.visible) return
     // Text views do enough per-frame work that avoiding recursive x/y lookups is
     // measurable; use the layout cache for hit-grid and draw entry points.

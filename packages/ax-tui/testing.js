@@ -1,11 +1,11 @@
 import {
   ANSI,
   CliRenderer
-} from "./index-WZRAUJQZ.js";
+} from "./index-SOSHGBKE.js";
 import {
   SystemClock,
   TreeSitterClient
-} from "./index-UXYV2YFD.js";
+} from "./index-P5QDLRVD.js";
 
 // src/testing/mock-keys.ts
 import { Buffer as Buffer2 } from "node:buffer";
@@ -196,7 +196,7 @@ function createMockKeys(renderer, options) {
     }
     let keyCode = resolveKeyInput(key).keyValue;
     if (modifiers) {
-      if (keyCode.startsWith("\x1B[") && keyCode.length > 2) {
+      if (keyCode.startsWith("\x1B[") && keyCode.length > 2 || keyCode.startsWith("\x1BO") && keyCode.length === 3) {
         const modifier = 1 + (modifiers.shift ? 1 : 0) + (modifiers.meta ? 2 : 0) + (modifiers.ctrl ? 4 : 0) + (modifiers.super ? 8 : 0) + (modifiers.hyper ? 16 : 0);
         if (modifier > 1) {
           const tildeMatch = keyCode.match(/^\x1b\[(\d+)~$/);
@@ -533,11 +533,8 @@ var TestExternalOutputRecorder = class {
     });
   }
   record = (event) => {
-    const raw = decoder.decode(event.snapshot.getRealCharBytes(false));
-    const rows = Array.from(
-      { length: event.snapshot.height },
-      (_, index) => raw.slice(index * event.snapshot.width, (index + 1) * event.snapshot.width).trimEnd()
-    );
+    const lines = decoder.decode(event.snapshot.getRealCharBytes(true)).split("\n");
+    const rows = Array.from({ length: event.snapshot.height }, (_, index) => (lines[index] ?? "").trimEnd());
     this.commits.push({
       text: rows.join("\n"),
       rows,
@@ -1015,7 +1012,7 @@ var TestRecorder = class {
         recordedFrame.buffers.bg = new Uint16Array(buffers.bg);
       }
       if (this.recordBuffers.attributes) {
-        recordedFrame.buffers.attributes = new Uint8Array(buffers.attributes);
+        recordedFrame.buffers.attributes = new Uint32Array(buffers.attributes);
       }
     }
     this.frames.push(recordedFrame);

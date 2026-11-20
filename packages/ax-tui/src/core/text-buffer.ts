@@ -11,6 +11,9 @@ export interface TextChunk {
   bg?: RGBA
   attributes?: number
   link?: { url: string }
+  /** Source span in the original content, when `text` is a conceal replacement rather than a literal slice. */
+  contentStart?: number
+  contentEnd?: number
 }
 
 export class TextBuffer {

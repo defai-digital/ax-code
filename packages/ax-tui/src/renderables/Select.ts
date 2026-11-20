@@ -115,7 +115,7 @@ export class SelectRenderable extends Renderable {
     const requestedIndex = options.selectedIndex ?? this._defaultOptions.selectedIndex
     this._selectedIndex =
       this._options.length > 0
-        ? clamp(Number.isFinite(requestedIndex) ? requestedIndex : 0, 0, this._options.length - 1)
+        ? clamp(Number.isFinite(requestedIndex) ? Math.round(requestedIndex) : 0, 0, this._options.length - 1)
         : 0
     this._backgroundColor = parseColor(options.backgroundColor || this._defaultOptions.backgroundColor)
     this._textColor = parseColor(options.textColor || this._defaultOptions.textColor)
@@ -159,6 +159,7 @@ export class SelectRenderable extends Renderable {
     const mergedBindings = mergeKeyBindings(defaultSelectKeybindings, this._keyBindings)
     this._keyBindingsMap = buildKeyBindingsMap(mergedBindings, this._keyAliasMap)
 
+    this.updateScrollOffset()
     this.requestRender() // Initial render needed
   }
 
@@ -190,7 +191,7 @@ export class SelectRenderable extends Renderable {
       const isSelected = actualIndex === this._selectedIndex
       const itemY = contentY + i * this.linesPerItem
 
-      if (itemY + this.linesPerItem - 1 >= contentY + contentHeight) break
+      if (itemY + this.fontHeight > contentY + contentHeight) break
 
       if (isSelected) {
         const contentHeight = this.linesPerItem - this._itemSpacing
@@ -238,10 +239,14 @@ export class SelectRenderable extends Renderable {
     contentHeight: number,
   ): void {
     if (!this.frameBuffer) return
+    if (contentHeight <= 0) return
 
     const scrollPercent = this._selectedIndex / Math.max(1, this._options.length - 1)
     const indicatorHeight = Math.max(1, contentHeight - 2)
-    const indicatorY = contentY + 1 + Math.floor(scrollPercent * indicatorHeight)
+    const indicatorY = Math.min(
+      contentY + contentHeight - 1,
+      contentY + 1 + Math.floor(scrollPercent * indicatorHeight),
+    )
     const indicatorX = contentX + contentWidth - 1
 
     this.frameBuffer.drawText("█", indicatorX, indicatorY, parseColor("#666666"))
@@ -267,9 +272,11 @@ export class SelectRenderable extends Renderable {
   }
 
   public moveUp(steps: number = 1): void {
-    if (this._options.length === 0) return
+    if (this._options.length === 0 || !Number.isFinite(steps)) return
 
-    const newIndex = this._selectedIndex - steps
+    const stepCount = Math.max(1, Math.round(Math.abs(steps)))
+    const previousIndex = this._selectedIndex
+    const newIndex = this._selectedIndex - stepCount
 
     if (newIndex >= 0) {
       this._selectedIndex = newIndex
@@ -279,15 +286,19 @@ export class SelectRenderable extends Renderable {
       this._selectedIndex = 0
     }
 
+    if (this._selectedIndex === previousIndex) return
+
     this.updateScrollOffset()
     this.requestRender()
     this.emit(SelectRenderableEvents.SELECTION_CHANGED, this._selectedIndex, this.getSelectedOption())
   }
 
   public moveDown(steps: number = 1): void {
-    if (this._options.length === 0) return
+    if (this._options.length === 0 || !Number.isFinite(steps)) return
 
-    const newIndex = this._selectedIndex + steps
+    const stepCount = Math.max(1, Math.round(Math.abs(steps)))
+    const previousIndex = this._selectedIndex
+    const newIndex = this._selectedIndex + stepCount
 
     if (newIndex < this._options.length) {
       this._selectedIndex = newIndex
@@ -296,6 +307,8 @@ export class SelectRenderable extends Renderable {
     } else {
       this._selectedIndex = this._options.length - 1
     }
+
+    if (this._selectedIndex === previousIndex) return
 
     this.updateScrollOffset()
     this.requestRender()
@@ -310,8 +323,13 @@ export class SelectRenderable extends Renderable {
   }
 
   public setSelectedIndex(index: number): void {
-    if (index >= 0 && index < this._options.length) {
-      this._selectedIndex = index
+    if (!Number.isFinite(index)) return
+    if (this._options.length === 0) return
+    // Round and clamp like the constructor and the silent property setter so
+    // all three entry points land on the same index for the same input.
+    const nextIndex = clamp(Math.round(index), 0, this._options.length - 1)
+    if (nextIndex !== this._selectedIndex) {
+      this._selectedIndex = nextIndex
       this.updateScrollOffset()
       this.requestRender()
       this.emit(SelectRenderableEvents.SELECTION_CHANGED, this._selectedIndex, this.getSelectedOption())
@@ -480,14 +498,14 @@ export class SelectRenderable extends Renderable {
   }
 
   public set itemSpacing(spacing: number) {
-    this._itemSpacing = spacing
+    this._itemSpacing = Number.isFinite(spacing) && spacing >= 0 ? spacing : this._defaultOptions.itemSpacing
     this.updateLinesPerItem()
     this.updateScrollOffset()
     this.requestRender()
   }
 
   public set fastScrollStep(step: number) {
-    this._fastScrollStep = step
+    this._fastScrollStep = Number.isFinite(step) && step >= 1 ? step : this._defaultOptions.fastScrollStep
   }
 
   public set keyBindings(bindings: SelectKeyBinding[]) {
@@ -503,7 +521,8 @@ export class SelectRenderable extends Renderable {
   }
 
   public set selectedIndex(value: number) {
-    const newIndex = value ?? this._defaultOptions.selectedIndex
+    const requested = value ?? this._defaultOptions.selectedIndex
+    const newIndex = Number.isFinite(requested) ? Math.round(requested) : 0
     const clampedIndex = this._options.length > 0 ? clamp(newIndex, 0, this._options.length - 1) : 0
     if (this._selectedIndex !== clampedIndex) {
       this._selectedIndex = clampedIndex

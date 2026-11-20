@@ -132,13 +132,12 @@ try {
 }
 
 let codeRef
-const code = await testRender(() => <ascii_font ref={codeRef} text={null} />, { width: 12, height: 4, useKittyKeyboard: null })
-try {
-  await code.renderOnce()
-  assert.equal(code.captureCharFrame().trim(), "")
-} finally {
-  code.renderer.destroy()
-}
+// The slim catalogue intentionally excludes ascii_font (see script/tui-patches.ts):
+// mounting one must fail with the unknown-component error, deterministically.
+await assert.rejects(
+  testRender(() => <ascii_font ref={codeRef} text={null} />, { width: 12, height: 4, useKittyKeyboard: null }),
+  /Unknown component type/,
+)
 `)
   },
 )
@@ -430,6 +429,115 @@ try {
 } finally {
   setup.renderer.destroy()
 }
+`)
+})
+
+test.skipIf(!supportsFfi)("clearing an href prop clears the stored link", async () => {
+  await runSolidScenario(`
+import assert from "node:assert/strict"
+import { createSignal } from "solid-js"
+import { testRender } from "@defai-digital/ax-tui/solid"
+
+let link
+const [href, setHref] = createSignal("https://example.com")
+const setup = await testRender(() => <text><a ref={n => link = n} href={href()}>link</a></text>, {
+  width: 20, height: 1, useKittyKeyboard: null,
+})
+try {
+  await setup.renderOnce()
+  assert.deepEqual(link.link, { url: "https://example.com" })
+
+  setHref(undefined)
+  await setup.renderOnce()
+  assert.equal(link.link, undefined, "clearing href must clear the stored link, not store { url: undefined }")
+} finally { setup.renderer.destroy() }
+`)
+})
+
+test.skipIf(!supportsFfi)("text modifier elements keep their reconciler-assigned id", async () => {
+  await runSolidScenario(`
+import assert from "node:assert/strict"
+import { testRender } from "@defai-digital/ax-tui/solid"
+import { TextAttributes } from "@defai-digital/ax-tui"
+
+let bold, italic, underline
+const setup = await testRender(
+  () => (
+    <text>
+      <b ref={n => bold = n}>bold</b>
+      <i ref={n => italic = n}>italic</i>
+      <u ref={n => underline = n}>underline</u>
+    </text>
+  ),
+  { width: 30, height: 1, useKittyKeyboard: null },
+)
+try {
+  await setup.renderOnce()
+  assert.match(bold.id, /^b-/, "Bold must receive the options object, not the renderer")
+  assert.match(italic.id, /^i-/)
+  assert.match(underline.id, /^u-/)
+  assert.ok(bold.attributes & TextAttributes.BOLD)
+  assert.ok(italic.attributes & TextAttributes.ITALIC)
+  assert.ok(underline.attributes & TextAttributes.UNDERLINE)
+  assert.ok(setup.captureCharFrame().includes("bold"))
+} finally { setup.renderer.destroy() }
+`)
+})
+
+test.skipIf(!supportsFfi)("scrollback writer clamps an oversized width to the terminal", async () => {
+  await runSolidScenario(`
+import assert from "node:assert/strict"
+import { createScrollbackWriter, useRenderer } from "@defai-digital/ax-tui/solid"
+import { createTestRenderer } from "@defai-digital/ax-tui/testing"
+
+const setup = await createTestRenderer({ width: 80, height: 10 })
+const { renderer } = setup
+try {
+  let shim, claimed
+  const Capture = () => {
+    shim = useRenderer()
+    claimed = shim.claimFirstLineOffset()
+    return <text>row</text>
+  }
+  const writer = createScrollbackWriter(() => <Capture />, { width: 100, startOnNewLine: false })
+  const snapshot = writer({ width: 80, widthMethod: "wcwidth", tailColumn: 70, renderContext: renderer })
+  try {
+    assert.equal(snapshot.width, 80, "snapshot width must be clamped to the terminal width")
+    assert.equal(shim.width, 80)
+    assert.equal(claimed, 70, "firstLineOffset must fit inside the claimed row")
+  } finally {
+    snapshot.teardown?.()
+    snapshot.root.destroyRecursively()
+  }
+} finally { renderer.destroy() }
+`)
+})
+
+test.skipIf(!supportsFfi)("a mid-render throw in a scrollback writer leaks no Solid-created renderables", async () => {
+  await runSolidScenario(`
+import assert from "node:assert/strict"
+import { createScrollbackWriter } from "@defai-digital/ax-tui/solid"
+import { Renderable } from "@defai-digital/ax-tui"
+import { createTestRenderer } from "@defai-digital/ax-tui/testing"
+
+const setup = await createTestRenderer({ width: 40, height: 6 })
+const { renderer } = setup
+try {
+  const baseline = Renderable.renderablesByNumber.size
+  const writer = createScrollbackWriter(() => {
+    const orphan = <box width={1} height={1} />
+    throw new Error("boom")
+  })
+  assert.throws(
+    () => writer({ width: 40, widthMethod: "wcwidth", tailColumn: 0, renderContext: renderer }),
+    /boom/,
+  )
+  assert.equal(
+    Renderable.renderablesByNumber.size,
+    baseline,
+    "Solid-created children carry the snapshot shim context and must be swept on throw",
+  )
+} finally { renderer.destroy() }
 `)
 })
 

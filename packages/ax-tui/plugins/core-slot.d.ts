@@ -53,12 +53,15 @@ export declare class SlotRenderable<TSlotName extends string = string, TContext 
     private _activePluginIds;
     private _fallbackNodes;
     private _unsubscribe;
+    private _refreshing;
+    private _refreshRequested;
     constructor(ctx: RenderContext, options: SlotRenderableOptions<TSlotName, TSlotName, TContext, TData>);
     get mode(): CoreSlotMode;
     set mode(value: CoreSlotMode);
     get data(): TData;
     set data(value: TData);
     refresh(): void;
+    private _refreshOnce;
     protected destroySelf(): void;
     private _cleanupAll;
     private _ensureFallbackNodes;

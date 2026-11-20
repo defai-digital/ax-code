@@ -84,7 +84,7 @@ export class DistortionEffect {
       let tempChar: Uint32Array | null = null
       let tempFg: Uint16Array | null = null
       let tempBg: Uint16Array | null = null
-      let tempAttr: Uint8Array | null = null
+      let tempAttr: Uint32Array | null = null
 
       for (const glitch of this.activeGlitches) {
         const y = glitch.y
@@ -98,7 +98,7 @@ export class DistortionEffect {
             tempChar = new Uint32Array(width)
             tempFg = new Uint16Array(width * 4)
             tempBg = new Uint16Array(width * 4)
-            tempAttr = new Uint8Array(width)
+            tempAttr = new Uint32Array(width)
           }
 
           // 1. Copy original row data to temp buffers
@@ -254,8 +254,8 @@ export class VignetteEffect {
   private precomputedAttenuationCellMask: Float32Array | null = null
   private cachedWidth: number = -1
   private cachedHeight: number = -1
-  // Zero matrix for attenuation (maps everything toward black based on strength)
-  private static zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+  // Zero matrix for attenuation (maps RGB toward black based on strength, preserves alpha)
+  private static zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
 
   constructor(strength: number = 0.5) {
     this._strength = strength
@@ -542,9 +542,9 @@ export class CloudsEffect {
     }
 
     // Use native colorMatrix with zero matrix to apply attenuation
-    // Zero matrix: transformed = 0 (black)
-    // Result = original + (0 - original) × attenuation = original × (1 - attenuation)
-    const zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    // Zero matrix: transformed RGB = 0 (black), alpha preserved
+    // Result = original + (0 - original) × attenuation = original × (1 - attenuation) for RGB
+    const zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
     buffer.colorMatrix(zeroMatrix, cellMask, 1.0, 2) // target = 2 (background only)
   }
 }
@@ -605,7 +605,7 @@ export class FlamesEffect {
 
     for (let y = 0; y < height; y++) {
       // Calculate height factor - stronger at bottom (1.0), fading toward top (0.0)
-      const heightFactor = 1.0 - y / height
+      const heightFactor = y / height
 
       for (let x = 0; x < width; x++) {
         // FBM - combine multiple octaves for organic flame detail

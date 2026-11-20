@@ -4,7 +4,7 @@ import { clamp } from "../lib/clamp.js"
 import type { KeyEvent } from "../lib/key-handler.js"
 import { stringWidth } from "../platform/runtime.js"
 import { Renderable, type RenderableOptions } from "../core/renderable.js"
-import type { RenderContext, Timeout } from "../core/types.js"
+import { CliRenderEvents, type RenderContext, type Timeout } from "../core/types.js"
 import { type BoxOptions } from "./Box.js"
 import { SliderRenderable, type SliderOptions } from "./Slider.js"
 
@@ -38,6 +38,26 @@ export class ScrollBarRenderable extends Renderable {
   // because the renderable number is already deregistered.
   private startArrowMouseTimer: Timeout | undefined
   private endArrowMouseTimer: Timeout | undefined
+
+  // Mode-1000 terminals drop releases outside the pressed renderable, so the
+  // arrow-local mouseup may never arrive; the renderer-wide release stops the
+  // repeat chains instead.
+  private readonly clearStartArrowTimer = (): void => {
+    clearTimeout(this.startArrowMouseTimer)
+    clearInterval(this.startArrowMouseTimer)
+    this.startArrowMouseTimer = undefined
+  }
+
+  private readonly clearEndArrowTimer = (): void => {
+    clearTimeout(this.endArrowMouseTimer)
+    clearInterval(this.endArrowMouseTimer)
+    this.endArrowMouseTimer = undefined
+  }
+
+  private readonly handleGlobalMouseUp = (): void => {
+    this.clearStartArrowTimer()
+    this.clearEndArrowTimer()
+  }
 
   scrollStep: number | undefined | null = null
 
@@ -133,6 +153,13 @@ export class ScrollBarRenderable extends Renderable {
     const defaultStepSize = Math.max(1, this._viewportSize)
     const stepSize = trackOptions?.viewPortSize ?? defaultStepSize
 
+    // Orientation belongs to the scroll bar; the slider must keep the ctor axis.
+    // onChange belongs to the scroll bar too: a trackOptions.onChange must not
+    // clobber the internal slider onChange that forwards scroll position.
+    const sliderTrackOptions = { ...trackOptions }
+    delete sliderTrackOptions.orientation
+    delete sliderTrackOptions.onChange
+
     this.slider = new SliderRenderable(ctx, {
       orientation,
       min: 0,
@@ -157,14 +184,15 @@ export class ScrollBarRenderable extends Renderable {
           }),
       flexGrow: 1,
       flexShrink: 1,
-      ...trackOptions,
+      ...sliderTrackOptions,
+      clampViewPortToRange: false,
     })
 
     this.updateSliderFromScrollState()
 
     const arrowOpts = arrowOptions
       ? {
-          foregroundColor: arrowOptions.backgroundColor,
+          foregroundColor: arrowOptions.foregroundColor,
           backgroundColor: arrowOptions.backgroundColor,
           attributes: arrowOptions.attributes,
           ...arrowOptions,
@@ -195,6 +223,7 @@ export class ScrollBarRenderable extends Renderable {
       event.stopPropagation()
       event.preventDefault()
 
+      this.clearStartArrowTimer()
       this.scrollBy(-0.5, "viewport")
 
       this.startArrowMouseTimer = setTimeout(() => {
@@ -208,13 +237,14 @@ export class ScrollBarRenderable extends Renderable {
 
     this.startArrow.onMouseUp = (event) => {
       event.stopPropagation()
-      clearInterval(this.startArrowMouseTimer!)
+      this.clearStartArrowTimer()
     }
 
     this.endArrow.onMouseDown = (event) => {
       event.stopPropagation()
       event.preventDefault()
 
+      this.clearEndArrowTimer()
       this.scrollBy(0.5, "viewport")
 
       this.endArrowMouseTimer = setTimeout(() => {
@@ -228,30 +258,47 @@ export class ScrollBarRenderable extends Renderable {
 
     this.endArrow.onMouseUp = (event) => {
       event.stopPropagation()
-      clearInterval(this.endArrowMouseTimer!)
+      this.clearEndArrowTimer()
     }
+
+    this._ctx.on(CliRenderEvents.MOUSE_UP, this.handleGlobalMouseUp)
   }
 
   protected destroySelf(): void {
     // An arrow held during destroy never receives its mouseup (the renderable
     // number is deregistered), which would leave the repeat interval running
     // against the destroyed subtree forever.
-    clearTimeout(this.startArrowMouseTimer)
-    clearInterval(this.startArrowMouseTimer)
-    this.startArrowMouseTimer = undefined
-    clearTimeout(this.endArrowMouseTimer)
-    clearInterval(this.endArrowMouseTimer)
-    this.endArrowMouseTimer = undefined
+    this._ctx.off(CliRenderEvents.MOUSE_UP, this.handleGlobalMouseUp)
+    this.handleGlobalMouseUp()
   }
 
   public set arrowOptions(options: ScrollBarOptions["arrowOptions"]) {
-    Object.assign(this.startArrow, options)
-    Object.assign(this.endArrow, options)
+    if (options) {
+      const arrowOpts = { ...options }
+      // The arrows' press-and-hold repeat scrolling is internal wiring;
+      // arrowOptions may style the arrows but must not replace it.
+      delete arrowOpts.onMouseDown
+      delete arrowOpts.onMouseUp
+      Object.assign(this.startArrow, arrowOpts)
+      Object.assign(this.endArrow, arrowOpts)
+    }
     this.requestRender()
   }
 
   public set trackOptions(options: ScrollBarOptions["trackOptions"]) {
-    Object.assign(this.slider, options)
+    if (options) {
+      const sliderOptions = { ...options }
+      delete sliderOptions.orientation
+      delete sliderOptions.clampViewPortToRange
+      // The slider's change forwarding and drag handlers are internal wiring;
+      // trackOptions may style the track but must not replace them.
+      delete sliderOptions.onChange
+      delete sliderOptions.onMouseDown
+      delete sliderOptions.onMouseDrag
+      delete sliderOptions.onMouseUp
+      Object.assign(this.slider, sliderOptions)
+    }
+    this.updateSliderFromScrollState()
     this.requestRender()
   }
 
@@ -260,6 +307,16 @@ export class ScrollBarRenderable extends Renderable {
 
     this.slider.min = 0
     this.slider.max = scrollRange
+
+    // The slider keeps the viewport unclamped (clampViewPortToRange: false), so
+    // near-fit content keeps a full-size thumb. Re-forward the real viewport on
+    // every state change; an unknown viewport collapses to the minimal thumb
+    // instead of fabricating one.
+    if (this._viewportSize > 0) {
+      this.slider.viewPortSize = Math.max(1, this._viewportSize)
+    } else {
+      this.slider.viewPortSize = 0.01
+    }
 
     this.slider.value = Math.min(this._scrollPosition, scrollRange)
   }
@@ -275,7 +332,10 @@ export class ScrollBarRenderable extends Renderable {
             : 1
 
     const resolvedDelta = multiplier * delta
-    this.scrollPosition += resolvedDelta
+    if (!Number.isFinite(resolvedDelta) || resolvedDelta === 0) return
+    // The position setter rounds to whole rows, which would swallow fractional
+    // deltas (arrow keys with a tiny viewport); apply at least one row instead.
+    this.scrollPosition += Math.sign(resolvedDelta) * Math.max(1, Math.abs(resolvedDelta))
   }
 
   private recalculateVisibility(): void {

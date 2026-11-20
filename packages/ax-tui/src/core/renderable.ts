@@ -291,9 +291,10 @@ export abstract class Renderable extends BaseRenderable {
     super(options)
 
     this._ctx = ctx
-    Renderable.renderablesByNumber.set(this.num, this)
-
+    // Validate before registering: a rejected options object must not leave a
+    // half-constructed renderable reachable through renderablesByNumber.
     validateOptions(this.id, options)
+    Renderable.renderablesByNumber.set(this.num, this)
 
     this.renderBefore = options.renderBefore
     this.renderAfter = options.renderAfter
@@ -344,6 +345,9 @@ export abstract class Renderable extends BaseRenderable {
 
   public set focusable(value: boolean) {
     this._focusable = value
+    if (!value && this._focused) {
+      this.blur()
+    }
   }
 
   public get ctx(): RenderContext {
@@ -423,7 +427,7 @@ export abstract class Renderable extends BaseRenderable {
     this.requestRender()
 
     this.keypressHandler = (key: KeyEvent) => {
-      if (this._isDestroyed) return
+      if (this._isDestroyed || !this.isVisibleInTree()) return
       this._keyListeners["down"]?.(key)
       // Check again after user listener - it might have destroyed the renderable
       if (this._isDestroyed) return
@@ -433,7 +437,7 @@ export abstract class Renderable extends BaseRenderable {
     }
 
     this.pasteHandler = (event: PasteEvent) => {
-      if (this._isDestroyed) return
+      if (this._isDestroyed || !this.isVisibleInTree()) return
       this._pasteListener?.call(this, event)
       // Check again after user listener - it might have destroyed the renderable
       if (this._isDestroyed) return
@@ -462,7 +466,7 @@ export abstract class Renderable extends BaseRenderable {
   }
 
   public blur(): void {
-    if (!this._focused || !this._focusable) return
+    if (!this._focused) return
 
     this._ctx.blurRenderable(this)
     this._focused = false
@@ -480,6 +484,15 @@ export abstract class Renderable extends BaseRenderable {
 
     this.propagateFocusChange(false)
     this.emit(RenderableEvents.BLURRED)
+  }
+
+  // Focus survives ancestor hide/show, but input must not reach a renderable
+  // whose tree is invisible; the internal key dispatch has no visibility check.
+  private isVisibleInTree(): boolean {
+    for (let node: Renderable | null = this; node; node = node.parent) {
+      if (!node._visible) return false
+    }
+    return true
   }
 
   public get focused(): boolean {
@@ -773,7 +786,8 @@ export abstract class Renderable extends BaseRenderable {
       this.yogaNode.setHeight(options.height)
     }
 
-    this._positionType = options.position === "absolute" ? "absolute" : "relative"
+    this._positionType =
+      options.position === "absolute" || options.position === "static" ? options.position : "relative"
     if (this._positionType !== "relative") {
       node.setPositionType(parsePositionType(this._positionType))
     }
@@ -882,35 +896,45 @@ export abstract class Renderable extends BaseRenderable {
 
   public setPosition(position: Position): void {
     this._position = { ...this._position, ...position }
-    this.updateYogaPosition(position)
+    // Apply the merged state: a partial update must not clear the other edges,
+    // and an explicit undefined must reach yoga instead of leaving a stale value.
+    this.updateYogaPosition(this._position)
   }
 
   private updateYogaPosition(position: Position): void {
     const node = this.yogaNode
     const { top, right, bottom, left } = position
 
-    if (isPositionType(top)) {
+    if (top === undefined) {
+      node.setPosition(Edge.Top, undefined)
+    } else if (isPositionType(top)) {
       if (top === "auto") {
         node.setPositionAuto(Edge.Top)
       } else {
         node.setPosition(Edge.Top, top)
       }
     }
-    if (isPositionType(right)) {
+    if (right === undefined) {
+      node.setPosition(Edge.Right, undefined)
+    } else if (isPositionType(right)) {
       if (right === "auto") {
         node.setPositionAuto(Edge.Right)
       } else {
         node.setPosition(Edge.Right, right)
       }
     }
-    if (isPositionType(bottom)) {
+    if (bottom === undefined) {
+      node.setPosition(Edge.Bottom, undefined)
+    } else if (isPositionType(bottom)) {
       if (bottom === "auto") {
         node.setPositionAuto(Edge.Bottom)
       } else {
         node.setPosition(Edge.Bottom, bottom)
       }
     }
-    if (isPositionType(left)) {
+    if (left === undefined) {
+      node.setPosition(Edge.Left, undefined)
+    } else if (isPositionType(left)) {
       if (left === "auto") {
         node.setPositionAuto(Edge.Left)
       } else {
@@ -938,6 +962,7 @@ export abstract class Renderable extends BaseRenderable {
 
   public set flexDirection(direction: FlexDirectionString | null | undefined) {
     this.yogaNode.setFlexDirection(parseFlexDirection(direction))
+    this.childrenPrimarySortDirty = true
     this.requestRender()
   }
 
@@ -1229,7 +1254,8 @@ export abstract class Renderable extends BaseRenderable {
       return this.insertBefore(renderable, anchorRenderable)
     }
 
-    if (renderable.parent === this) {
+    const isExistingChild = renderable.parent === this
+    if (isExistingChild) {
       this.yogaNode.removeChild(renderable.getLayoutNode())
       this._childrenInLayoutOrder.splice(this._childrenInLayoutOrder.indexOf(renderable), 1)
     } else {
@@ -1241,20 +1267,28 @@ export abstract class Renderable extends BaseRenderable {
       if (typeof renderable.onLifecyclePass === "function") {
         this._ctx.registerLifecyclePass(renderable)
       }
-
-      if (renderable._liveCount > 0) {
-        this.propagateLiveCount(renderable._liveCount)
-      }
     }
 
     const childLayoutNode = renderable.getLayoutNode()
     const insertedIndex = this._childrenInLayoutOrder.length
     this._childrenInLayoutOrder.push(renderable)
-    this.yogaNode.insertChild(childLayoutNode, insertedIndex)
+    // A re-entrant add() can run while a remove() higher in the call stack has
+    // detached a sibling's yoga node but not yet spliced it from
+    // _childrenInLayoutOrder; inserting past the real yoga child count is
+    // undefined behavior in the native layout engine.
+    this.yogaNode.insertChild(childLayoutNode, Math.min(insertedIndex, this.yogaNode.getChildCount()))
 
     this.childrenPrimarySortDirty = true
     this._shouldUpdateBefore.add(renderable)
     bumpRenderListRevision(this._ctx)
+
+    // Propagate live only after the child is fully attached: requestLive can
+    // start the render loop synchronously, and that first frame must not walk
+    // a child whose yoga node is not in the layout tree yet (NaN dimensions
+    // reach the native hit grid and throw).
+    if (!isExistingChild && renderable._liveCount > 0) {
+      this.propagateLiveCount(renderable._liveCount)
+    }
 
     this.requestRender()
 
@@ -1307,7 +1341,8 @@ export abstract class Renderable extends BaseRenderable {
       return -1
     }
 
-    if (renderable.parent === this) {
+    const isExistingChild = renderable.parent === this
+    if (isExistingChild) {
       this.yogaNode.removeChild(renderable.getLayoutNode())
       this._childrenInLayoutOrder.splice(this._childrenInLayoutOrder.indexOf(renderable), 1)
     } else {
@@ -1319,10 +1354,6 @@ export abstract class Renderable extends BaseRenderable {
       if (typeof renderable.onLifecyclePass === "function") {
         this._ctx.registerLifecyclePass(renderable)
       }
-
-      if (renderable._liveCount > 0) {
-        this.propagateLiveCount(renderable._liveCount)
-      }
     }
 
     this.childrenPrimarySortDirty = true
@@ -1331,10 +1362,20 @@ export abstract class Renderable extends BaseRenderable {
     const insertedIndex = Math.max(0, Math.min(anchorIndex, this._childrenInLayoutOrder.length))
 
     this._childrenInLayoutOrder.splice(insertedIndex, 0, renderable)
-    this.yogaNode.insertChild(renderable.getLayoutNode(), insertedIndex)
+    // See add(): the anchor-derived index can exceed the real yoga child
+    // count when a re-entrant remove() has not spliced its arrays yet.
+    this.yogaNode.insertChild(renderable.getLayoutNode(), Math.min(insertedIndex, this.yogaNode.getChildCount()))
 
     this._shouldUpdateBefore.add(renderable)
     bumpRenderListRevision(this._ctx)
+
+    // Propagate live only after the child is fully attached: requestLive can
+    // start the render loop synchronously, and that first frame must not walk
+    // a child whose yoga node is not in the layout tree yet (NaN dimensions
+    // reach the native hit grid and throw).
+    if (!isExistingChild && renderable._liveCount > 0) {
+      this.propagateLiveCount(renderable._liveCount)
+    }
 
     this.requestRender()
 
@@ -1354,22 +1395,22 @@ export abstract class Renderable extends BaseRenderable {
     if (this.renderableMapById.has(id)) {
       const obj = this.renderableMapById.get(id)
       if (obj) {
-        if (obj._liveCount > 0) {
-          this.propagateLiveCount(-obj._liveCount)
-        }
+        // Unregister before notifying listeners: a BLURRED listener may call
+        // remove() again with the same id, and the live-count decrement must
+        // only run once.
+        this.renderableMapById.delete(id)
 
         const childLayoutNode = obj.getLayoutNode()
         this.yogaNode.removeChild(childLayoutNode)
         this.requestRender()
 
-        obj.onRemove()
-        obj.parent = null
-        this._ctx.unregisterLifecyclePass(obj)
-        // Only updateLayout() drains this set, and it never runs for a hidden
-        // parent; a removed child left here stays reachable forever.
-        this._shouldUpdateBefore.delete(obj)
-        this.renderableMapById.delete(id)
-
+        // Drop the child from the ordered child arrays before any callback: a
+        // BLURRED/onRemove listener may reparent live descendants, and the
+        // reparent's live-count propagation can start a synchronous first
+        // frame (requestLive -> startRenderLoop) that rebuilds the render
+        // list from these arrays. A half-removed child still listed here has
+        // a detached yoga node, so its computed dimensions are NaN and reach
+        // the native hit grid.
         const index = this._childrenInLayoutOrder.findIndex((obj) => obj.id === id)
         if (index !== -1) {
           this._childrenInLayoutOrder.splice(index, 1)
@@ -1382,6 +1423,39 @@ export abstract class Renderable extends BaseRenderable {
 
         this.childrenPrimarySortDirty = true
         bumpRenderListRevision(this._ctx)
+
+        obj.onRemove()
+        // Blur a focused descendant before detaching: once parent is null the
+        // focus chain can no longer be walked to clear ancestor focus state.
+        const focused = this._ctx.currentFocusedRenderable
+        if (focused) {
+          let node: Renderable | null = focused
+          while (node) {
+            if (node === obj) {
+              focused.blur()
+              break
+            }
+            node = node.parent
+          }
+        }
+        // Decrement live counts only after detach and listener callbacks: a
+        // BLURRED/onRemove listener may reparent live descendants out of this
+        // subtree while it is still attached, and an up-front whole-subtree
+        // decrement would count those moves twice (ancestors can even go
+        // negative and dropLive without a matching requestLive). By now
+        // obj._liveCount reflects only what remains in the subtree; it stays
+        // on obj so a reparent attach propagates the same count forward.
+        const remainingLive = obj._liveCount
+        if (obj.parent === this) {
+          obj.parent = null
+        }
+        if (remainingLive > 0) {
+          this.propagateLiveCount(-remainingLive)
+        }
+        this._ctx.unregisterLifecyclePass(obj)
+        // Only updateLayout() drains this set, and it never runs for a hidden
+        // parent; a removed child left here stays reachable forever.
+        this._shouldUpdateBefore.delete(obj)
       }
     }
   }
@@ -1578,7 +1652,7 @@ export abstract class Renderable extends BaseRenderable {
       this.frameBuffer = null
     }
 
-    for (const child of this._childrenInLayoutOrder) {
+    for (const child of [...this._childrenInLayoutOrder]) {
       this.remove(child.id)
     }
 
@@ -1825,12 +1899,14 @@ export class RootRenderable extends Renderable {
 
     // 3. Render all collected renderables
     this._ctx.clearHitGridScissorRects()
-    for (let i = 1; i < this.renderList.length; i++) {
+    for (let i = 0; i < this.renderList.length; i++) {
       const command = this.renderList[i]
       switch (command.action) {
         case "render":
-          // Skip if renderable was destroyed during a previous render callback
-          if (!command.renderable.isDestroyed) {
+          // Skip the root itself (re-entering render would recurse forever when
+          // an opacity command precedes it) and renderables destroyed during a
+          // previous render callback.
+          if (command.renderable !== this && !command.renderable.isDestroyed) {
             command.renderable.render(buffer, deltaTime)
           }
           break

@@ -25,7 +25,7 @@ export function calculateRenderGeometry(
     }
   }
 
-  const effectiveFooterHeight = Math.min(footerHeight, safeTerminalHeight)
+  const effectiveFooterHeight = Math.min(Math.max(footerHeight, 0), safeTerminalHeight)
 
   return {
     effectiveFooterHeight,

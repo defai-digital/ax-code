@@ -1,8 +1,9 @@
 import { basename, join } from "node:path"
 
 export function isBunfsPath(path: string): boolean {
-  // Removed ambiguous '//' check
-  return path.includes("$bunfs") || /^B:[\\/]~BUN/i.test(path)
+  // Match only the embedded-filesystem roots, not names that merely contain
+  // "$bunfs" or "~BUN" (e.g. "$bunfs-local", "B:\~BUNNY").
+  return /^\/\$bunfs\//.test(path) || /^B:[\\/]~BUN[\\/]/i.test(path)
 }
 
 export function getBunfsRootPath(): string {

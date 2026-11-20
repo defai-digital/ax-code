@@ -58,3 +58,24 @@ describe("virtual row height index", () => {
     expect(model.range(0, 0)).toEqual({ start: 0, end: 0 })
   })
 })
+
+test("resolveAnchor rejects non-finite or negative anchor offsets", () => {
+  const model = new VirtualListModel<{ id: string }>((item) => item.id, 2)
+  model.setItems([{ id: "a" }, { id: "b" }])
+  const anchor = model.anchor(1)!
+  expect(model.resolveAnchor(anchor)).toBe(1)
+  expect(() => model.resolveAnchor({ ...anchor, offset: NaN })).toThrow(RangeError)
+  expect(() => model.resolveAnchor({ ...anchor, offset: -1 })).toThrow(RangeError)
+  expect(() => model.resolveAnchor({ ...anchor, offset: Infinity })).toThrow(RangeError)
+})
+
+
+test("resolveAnchor clamps stale negative, fractional, or non-finite indexes to a valid row", () => {
+  const model = new VirtualListModel<{ id: string }>((item) => item.id, 2)
+  model.setItems([{ id: "a" }, { id: "b" }])
+  expect(model.resolveAnchor({ key: "gone", index: -5, offset: 0 })).toBe(0)
+  expect(model.resolveAnchor({ key: "gone", index: NaN, offset: 0 })).toBe(0)
+  expect(model.resolveAnchor({ key: "gone", index: 0.9, offset: 0 })).toBe(0)
+  expect(model.resolveAnchor({ key: "gone", index: 99, offset: 0 })).toBe(2)
+  expect(model.resolveAnchor({ key: "b", index: -5, offset: 1 })).toBe(3)
+})

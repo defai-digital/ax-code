@@ -66,6 +66,7 @@ export class ExtmarksController {
   private originalRedo: typeof EditBuffer.prototype.redo
   private originalClearHistory: typeof EditBuffer.prototype.clearHistory
   private originalSetTextOwned: typeof EditBuffer.prototype.setTextOwned
+  private originalReplaceTextOwned: typeof EditBuffer.prototype.replaceTextOwned
 
   constructor(editBuffer: EditBuffer, editorView: EditorView) {
     this.editBuffer = editBuffer
@@ -91,6 +92,7 @@ export class ExtmarksController {
     this.originalRedo = editBuffer.redo.bind(editBuffer)
     this.originalClearHistory = editBuffer.clearHistory.bind(editBuffer)
     this.originalSetTextOwned = editBuffer.setTextOwned.bind(editBuffer)
+    this.originalReplaceTextOwned = editBuffer.replaceTextOwned.bind(editBuffer)
 
     this.wrapCursorMovement()
     this.wrapDeletion()
@@ -169,6 +171,7 @@ export class ExtmarksController {
         return
       }
 
+      const currentOffset = this.editorView.getVisualCursor().offset
       this.originalMoveUpVisual()
       const newOffset = this.editorView.getVisualCursor().offset
 
@@ -180,7 +183,12 @@ export class ExtmarksController {
         if (distanceToStart < distanceToEnd) {
           this.editorView.setCursorByOffset(Math.max(0, virtualExtmark.start - 1))
         } else {
-          this.editorView.setCursorByOffset(virtualExtmark.end)
+          // Coming from at/below the block end, pushing back to `end` would
+          // make no progress — the cursor could go down past the block but
+          // never back up. Land above the block instead (mirrors the
+          // moveDownVisual no-progress guard).
+          const adjustedOffset = Math.max(0, virtualExtmark.start - 1)
+          this.editorView.setCursorByOffset(virtualExtmark.end >= currentOffset ? adjustedOffset : virtualExtmark.end)
         }
       }
     }
@@ -329,13 +337,15 @@ export class ExtmarksController {
       const deleteEndOffset = this.getNextCursorOffset(currentOffset)
       const deleteLength = deleteEndOffset - currentOffset
 
-      this.originalDeleteChar()
-
-      if (deleteLength > 0) {
-        this.adjustExtmarksAfterDeletion(currentOffset, deleteLength)
-      } else {
+      if (deleteLength === 0) {
+        // No visible content ahead: native deleteChar would push an empty undo
+        // entry without changing text, desyncing the wrapper's snapshot stack.
         this.discardSnapshot()
+        return
       }
+
+      this.originalDeleteChar()
+      this.adjustExtmarksAfterDeletion(currentOffset, deleteLength)
     }
 
     this.editBuffer.deleteRange = (startLine: number, startCol: number, endLine: number, endCol: number): void => {
@@ -426,9 +436,11 @@ export class ExtmarksController {
       const insertLength = this.editorView.getVisualCursor().offset - currentOffset
       if (insertLength > 0) {
         this.adjustExtmarksAfterInsertion(currentOffset, insertLength)
-      } else {
+      } else if (text.length === 0) {
         this.discardSnapshot()
       }
+      // Zero-width text (e.g. combining marks) pushes a real native undo entry
+      // without moving the display cursor; keep the snapshot so undo stays in sync.
     }
 
     this.editBuffer.insertChar = (char: string): void => {
@@ -444,9 +456,10 @@ export class ExtmarksController {
       const insertLength = this.editorView.getVisualCursor().offset - currentOffset
       if (insertLength > 0) {
         this.adjustExtmarksAfterInsertion(currentOffset, insertLength)
-      } else {
+      } else if (char.length === 0) {
         this.discardSnapshot()
       }
+      // Zero-width chars keep their snapshot for the same reason as insertText.
     }
 
     this.editBuffer.setText = (text: string): void => {
@@ -487,6 +500,17 @@ export class ExtmarksController {
       this.saveSnapshot()
       this.clear()
       this.originalReplaceText(text)
+    }
+
+    this.editBuffer.replaceTextOwned = (text: string): void => {
+      if (this.destroyed) {
+        this.originalReplaceTextOwned(text)
+        return
+      }
+
+      this.saveSnapshot()
+      this.clear()
+      this.originalReplaceTextOwned(text)
     }
 
     this.editBuffer.clear = (): void => {
@@ -898,6 +922,7 @@ export class ExtmarksController {
     this.editBuffer.redo = this.originalRedo
     this.editBuffer.clearHistory = this.originalClearHistory
     this.editBuffer.setTextOwned = this.originalSetTextOwned
+    this.editBuffer.replaceTextOwned = this.originalReplaceTextOwned
     this.editBuffer.off("content-changed", this.onContentChanged)
 
     this.extmarks.clear()

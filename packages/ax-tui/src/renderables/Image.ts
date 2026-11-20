@@ -110,20 +110,31 @@ export class ImageRenderable extends Renderable {
     } catch (error) { snapshotError = error }
     this.loadPromise = (async () => {
       await Promise.resolve()
+      let decoded = false
       try {
         if (controller.signal.aborted || this.isDestroyed || this.controller !== controller) return
         if (snapshotError) throw snapshotError
         const value = typeof source === "function" ? await source(controller.signal) : snapshot!
         if (controller.signal.aborted || this.isDestroyed || this.controller !== controller) return
         this.pixels = value instanceof Uint8Array ? decodePng(value) : copyRgbaImage(value)
+        decoded = true
         this.requestRender()
         this.onLoad?.()
       } catch (error) {
         if (controller.signal.aborted || this.isDestroyed || this.controller !== controller) return
-        this.pixels = null
-        this.loadError = error
-        this.requestRender()
-        this.onError?.(error)
+        // The decode succeeded; only a throwing onLoad callback landed here.
+        // It must not clobber the decoded pixels or surface as a load error.
+        if (!decoded) {
+          this.pixels = null
+          this.loadError = error
+          this.requestRender()
+          try {
+            this.onError?.(error)
+          } catch {
+            // A throwing onError handler must not mask the original load
+            // error; the rejection below stays the decode failure.
+          }
+        }
         throw error
       } finally {
         if (this.controller === controller) this.controller = undefined
@@ -228,17 +239,24 @@ export class ImageRenderable extends Renderable {
       this.retirePlacement()
     }
     const background = this._backgroundColor.toInts()
+    const backgroundAlpha = background[3]! / 255
     const sample = (x: number, y: number) => {
       const sx = Math.min(image.width - 1, Math.max(0, Math.floor(x * image.width / width)))
       const sy = Math.min(image.height - 1, Math.max(0, Math.floor(y * image.height / (height * 2))))
       const offset = (sy * image.width + sx) * 4
       const alpha = image.data[offset + 3]! / 255
-      // Each half is a distinct pixel. Flatten it independently before the cell
-      // compositor can blend a translucent foreground over the lower half.
+      // Composite over the configured background, preserving the result's
+      // alpha: a transparent background must stay transparent, not become
+      // opaque black (RGBA.fromInts defaults alpha to 255).
+      const outAlpha = alpha + backgroundAlpha * (1 - alpha)
+      if (outAlpha <= 0) return RGBA.fromInts(0, 0, 0, 0)
+      const blend = (channel: number, backdrop: number) =>
+        Math.round((channel * alpha + backdrop * backgroundAlpha * (1 - alpha)) / outAlpha)
       return RGBA.fromInts(
-        image.data[offset]! * alpha + background[0] * (1 - alpha),
-        image.data[offset + 1]! * alpha + background[1] * (1 - alpha),
-        image.data[offset + 2]! * alpha + background[2] * (1 - alpha),
+        blend(image.data[offset]!, background[0]!),
+        blend(image.data[offset + 1]!, background[1]!),
+        blend(image.data[offset + 2]!, background[2]!),
+        outAlpha * 255,
       )
     }
     for (let y = Math.max(0, top); y < Math.min(this.height, top + height); y++) {

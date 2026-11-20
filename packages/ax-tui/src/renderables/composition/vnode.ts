@@ -58,6 +58,16 @@ function flattenChildren(children: VChild[]): VChild[] {
   return result
 }
 
+function findPropertyDescriptor(prototype: any, prop: string): PropertyDescriptor | undefined {
+  let current = prototype
+  while (current && current !== Object.prototype) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, prop)
+    if (descriptor) return descriptor
+    current = Object.getPrototypeOf(current)
+  }
+  return undefined
+}
+
 // Overloads for proper typing
 export function h<TCtor extends RenderableConstructor<any>>(
   type: TCtor,
@@ -88,18 +98,12 @@ export function h<P>(type: Construct<P>, props?: P, ...children: VChild[]): any 
         }
 
         if (typeof prop === "string") {
-          const prototype = type.prototype
-          const hasMethod =
-            prototype &&
-            (typeof prototype[prop] === "function" ||
-              Object.getOwnPropertyDescriptor(prototype, prop) ||
-              Object.getOwnPropertyDescriptor(Object.getPrototypeOf(prototype), prop))
-
-          if (hasMethod) {
+          const descriptor = findPropertyDescriptor(type.prototype, prop)
+          if (descriptor && typeof descriptor.value === "function") {
             return (...args: any[]) => {
               target.__pendingCalls = target.__pendingCalls || []
               target.__pendingCalls.push({ method: prop, args })
-              return target
+              return receiver
             }
           }
         }
@@ -109,10 +113,7 @@ export function h<P>(type: Construct<P>, props?: P, ...children: VChild[]): any 
 
       set(target, prop, value, receiver) {
         if (typeof prop === "string" && isRenderableConstructor(type)) {
-          const prototype = type.prototype
-          const descriptor =
-            Object.getOwnPropertyDescriptor(prototype, prop) ||
-            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(prototype), prop)
+          const descriptor = findPropertyDescriptor(type.prototype, prop)
 
           if (descriptor && descriptor.set) {
             target.__pendingCalls = target.__pendingCalls || []

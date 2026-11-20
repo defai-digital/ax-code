@@ -74,7 +74,10 @@ export async function transformSolidSource(code: string, options: TransformSolid
   }
 
   if (tsPattern.test(filename)) {
-    presets.push([ts])
+    // @babel/preset-typescript only enables TS syntax for its known
+    // extensions; .mtsx/.ctsx need explicit opt-in or Babel skips parsing
+    // annotations entirely.
+    presets.push([ts, /\.[cm]tsx$/.test(filename) ? { isTSX: true, allExtensions: true } : {}])
   }
 
   const transformed = await transformAsync(code, {

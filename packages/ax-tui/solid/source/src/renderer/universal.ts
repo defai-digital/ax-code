@@ -99,7 +99,7 @@ export function createRenderer<NodeType>({
           if (current.length === 0) {
             appendNodes(parent, array, marker)
           } else reconcileArrays(parent, current, array)
-        } else if (current == null || current === "") {
+        } else if (current == null || !getFirstChild(parent)) {
           appendNodes(parent, array)
         } else {
           reconcileArrays(parent, (multi && current) || [getFirstChild(parent)], array)
@@ -110,7 +110,7 @@ export function createRenderer<NodeType>({
       if (Array.isArray(current)) {
         if (multi) return (current = cleanChildren(parent, current, marker, value))
         cleanChildren(parent, current, null, value)
-      } else if (current == null || current === "" || !getFirstChild(parent)) {
+      } else if (current == null || !getFirstChild(parent)) {
         insertNode(parent, value)
       } else replaceNode(parent, value, getFirstChild(parent))
       current = value
@@ -257,10 +257,25 @@ export function createRenderer<NodeType>({
   return {
     render(code, element) {
       let disposer: (() => void) | undefined
-      createRoot((dispose) => {
-        disposer = dispose
-        insert(element, code())
-      })
+      // createRoot does not clean the owner when the callback throws: dispose
+      // explicitly so onCleanup callbacks and effects registered before the
+      // throw do not leak (callers like createScrollbackWriter only tear down
+      // when they receive the disposer, which a throw would otherwise deny).
+      try {
+        createRoot((dispose) => {
+          disposer = dispose
+          insert(element, code())
+        })
+      } catch (error) {
+        // A cleanup that throws during dispose must not mask the original
+        // render error.
+        try {
+          disposer?.()
+        } catch {
+          // Preserve the original error; the dispose failure is secondary.
+        }
+        throw error
+      }
       return disposer!
     },
     insert,

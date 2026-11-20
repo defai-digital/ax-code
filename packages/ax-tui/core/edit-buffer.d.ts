@@ -16,7 +16,7 @@ export declare class EditBuffer extends EventEmitter {
     private textBufferPtr;
     readonly id: number;
     private _destroyed;
-    private _textBytes;
+    private _textPins;
     private _singleTextBytes;
     private _singleTextMemId;
     private _syntaxStyle?;
@@ -40,6 +40,7 @@ export declare class EditBuffer extends EventEmitter {
      * Use this when you want the setText operation to be undoable.
      */
     replaceText(text: string): void;
+    private recycleRegistrySlot;
     /**
      * Replace text using owned memory while preserving undo history (creates an undo point).
      * The native code takes ownership of the memory.

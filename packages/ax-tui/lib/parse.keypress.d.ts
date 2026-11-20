@@ -23,5 +23,6 @@ export interface ParsedKey {
 }
 export type ParseKeypressOptions = {
     useKittyKeyboard?: boolean;
+    cprAsFunctionKey?: boolean;
 };
 export declare const parseKeypress: (s?: Buffer | string, options?: ParseKeypressOptions) => ParsedKey | null;

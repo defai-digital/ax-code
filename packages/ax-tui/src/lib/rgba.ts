@@ -336,7 +336,7 @@ export function parseColor(color: ColorInput): RGBA {
       return RGBA.fromValues(0, 0, 0, 0)
     }
 
-    if (CSS_COLOR_NAMES[lowerColor]) {
+    if (Object.hasOwn(CSS_COLOR_NAMES, lowerColor)) {
       return hexToRgb(CSS_COLOR_NAMES[lowerColor])
     }
 

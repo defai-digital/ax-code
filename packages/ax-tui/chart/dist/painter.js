@@ -10,6 +10,17 @@ function fraction(value, start, end) {
     return Number.isFinite(span) ? (value - start) / span : (value / 2 - start / 2) / (end / 2 - start / 2);
 }
 function interpolate(start, end, ratio) {
+    // Equal endpoints are always exact: the expression start * (1 - ratio) +
+    // end * ratio can round one ULP away from start (e.g. clipping a horizontal
+    // segment that lies exactly on the top boundary), and the flipped outcode
+    // then makes Cohen-Sutherland clip against a parallel boundary, collapsing
+    // or dropping the whole segment.
+    if (start === end)
+        return start;
+    if (ratio <= 0)
+        return start;
+    if (ratio >= 1)
+        return end;
     return start * (1 - ratio) + end * ratio;
 }
 /**

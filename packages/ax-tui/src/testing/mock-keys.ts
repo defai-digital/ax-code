@@ -270,7 +270,10 @@ export function createMockKeys(renderer: CliRenderer, options?: MockKeysOptions)
     // Apply modifiers if present
     if (modifiers) {
       // For arrow keys and special keys, modify the escape sequence
-      if (keyCode.startsWith("\x1b[") && keyCode.length > 2) {
+      if (
+        (keyCode.startsWith("\x1b[") && keyCode.length > 2) ||
+        (keyCode.startsWith("\x1bO") && keyCode.length === 3)
+      ) {
         // Arrow keys: \x1b[A, \x1b[B, \x1b[C, \x1b[D
         // With shift modifier: \x1b[1;2A, \x1b[1;2B, \x1b[1;2C, \x1b[1;2D
         // Special keys like delete: \x1b[3~ becomes \x1b[3;2~ with meta

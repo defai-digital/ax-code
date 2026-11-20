@@ -8,6 +8,7 @@ export interface SliderOptions extends RenderableOptions<SliderRenderable> {
     min?: number;
     max?: number;
     viewPortSize?: number;
+    clampViewPortToRange?: boolean;
     backgroundColor?: ColorInput;
     foregroundColor?: ColorInput;
     onChange?: (value: number) => void;
@@ -18,6 +19,7 @@ export declare class SliderRenderable extends Renderable {
     private _min;
     private _max;
     private _viewPortSize;
+    private _clampViewPortToRange;
     private _backgroundColor;
     private _foregroundColor;
     private _onChange?;
@@ -30,6 +32,7 @@ export declare class SliderRenderable extends Renderable {
     set max(newMax: number);
     set viewPortSize(size: number);
     get viewPortSize(): number;
+    private clampViewPort;
     get backgroundColor(): RGBA;
     set backgroundColor(value: ColorInput);
     get foregroundColor(): RGBA;

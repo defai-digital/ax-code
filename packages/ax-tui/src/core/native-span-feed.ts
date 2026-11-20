@@ -84,7 +84,9 @@ export class NativeSpanFeed {
   private closeQueued = false
   private idleResolvers: Array<() => void> = []
   private pendingHandlerError: unknown = null
+  private hasPendingHandlerError = false
   private pendingHandlerErrorQueued = false
+  private deferIdleResolve = false
 
   private constructor(streamPtr: Pointer) {
     this.streamPtr = streamPtr
@@ -104,7 +106,17 @@ export class NativeSpanFeed {
     this.dataHandlers.add(handler)
     if (this.pendingDataAvailable) {
       this.pendingDataAvailable = false
-      this.drainAll()
+      this.deferIdleResolve = true
+      try {
+        this.drainAll()
+      } catch (e) {
+        // Registration must still yield a disposer; surface the drain failure
+        // asynchronously like the native-callback path does.
+        this.queuePendingHandlerError(e)
+      } finally {
+        this.deferIdleResolve = false
+        this.resolveIdleIfNeeded()
+      }
     }
     return () => this.dataHandlers.delete(handler)
   }
@@ -190,6 +202,9 @@ export class NativeSpanFeed {
   }
 
   private resolveIdleIfNeeded(): void {
+    // onData defers resolution until its catch has queued the handler error,
+    // so idle awaiters never observe idle before the error microtask.
+    if (this.deferIdleResolve) return
     if (!this.isIdle()) return
     const resolvers = this.idleResolvers.splice(0)
     for (const resolve of resolvers) {
@@ -239,7 +254,23 @@ export class NativeSpanFeed {
         }
         case EventId.Error: {
           const code = toNumber(arg0)
-          for (const handler of this.errorHandlers) handler(code)
+          // A throwing handler must not prevent the remaining handlers from running.
+          let firstError: unknown
+          let handlerFailed = false
+          for (const handler of [...this.errorHandlers]) {
+            try {
+              handler(code)
+            } catch (e) {
+              if (!handlerFailed) {
+                handlerFailed = true
+                firstError = e
+              }
+            }
+          }
+          if (handlerFailed) {
+            if (canThrowAcrossNativeCallback) throw firstError
+            this.queuePendingHandlerError(firstError)
+          }
           break
         }
         case EventId.Closed: {
@@ -263,24 +294,30 @@ export class NativeSpanFeed {
   }
 
   private queuePendingHandlerError(error: unknown): void {
-    this.pendingHandlerError ??= error
+    // Track presence separately: a thrown null/undefined must still surface.
+    if (!this.hasPendingHandlerError) {
+      this.hasPendingHandlerError = true
+      this.pendingHandlerError = error
+    }
     if (this.pendingHandlerErrorQueued) return
 
     this.pendingHandlerErrorQueued = true
     queueMicrotask(() => {
       this.pendingHandlerErrorQueued = false
-      if (this.pendingHandlerError === null) return
+      if (!this.hasPendingHandlerError) return
 
       const pendingError = this.pendingHandlerError
+      this.hasPendingHandlerError = false
       this.pendingHandlerError = null
       throw pendingError
     })
   }
 
   private throwPendingHandlerError(): void {
-    if (this.pendingHandlerError === null) return
+    if (!this.hasPendingHandlerError) return
 
     const pendingError = this.pendingHandlerError
+    this.hasPendingHandlerError = false
     this.pendingHandlerError = null
     throw pendingError
   }
@@ -296,6 +333,7 @@ export class NativeSpanFeed {
     this.draining = true
     const spans = SpanInfoStruct.unpackList(this.drainBuffer.buffer, count)
     let firstError: unknown = null
+    let handlerFailed = false
 
     try {
       for (const span of spans) {
@@ -325,7 +363,7 @@ export class NativeSpanFeed {
         const slice = new Uint8Array(buffer, span.offset, span.len)
         let asyncResults: Promise<void>[] | null = null
 
-        for (const handler of this.dataHandlers) {
+        for (const handler of [...this.dataHandlers]) {
           try {
             const result = handler(slice)
             // Async handlers keep the chunk pinned until they settle.
@@ -334,7 +372,10 @@ export class NativeSpanFeed {
               asyncResults.push(result)
             }
           } catch (e) {
-            firstError ??= e
+            if (!handlerFailed) {
+              handlerFailed = true
+              firstError = e
+            }
           }
         }
 
@@ -344,9 +385,15 @@ export class NativeSpanFeed {
           // Use allSettled so rejections still release refcounts.
           const chunkIndex = span.chunkIndex
           this.pendingAsyncHandlers += 1
-          Promise.allSettled(asyncResults).then(() => {
+          Promise.allSettled(asyncResults).then((results) => {
             this.decrementRefcount(chunkIndex)
             this.pendingAsyncHandlers -= 1
+            const rejected = results.find((result) => result.status === "rejected")
+            if (rejected) {
+              // allSettled swallows rejections; surface the first one like a
+              // sync handler throw instead of silently releasing the chunk.
+              this.queuePendingHandlerError((rejected as PromiseRejectedResult).reason)
+            }
             this.processPendingClose()
             this.resolveIdleIfNeeded()
           })
@@ -361,7 +408,7 @@ export class NativeSpanFeed {
       this.resolveIdleIfNeeded()
     }
 
-    if (firstError) {
+    if (handlerFailed) {
       if (!this.inCallback || canThrowAcrossNativeCallback) {
         throw firstError
       }
@@ -375,9 +422,26 @@ export class NativeSpanFeed {
   }
 
   drainAll(): void {
-    let count = this.drainOnce()
-    while (count > 0) {
-      count = this.drainOnce()
+    let firstError: unknown
+    let failed = false
+    let count = 0
+    do {
+      try {
+        count = this.drainOnce()
+      } catch (e) {
+        if (!failed) {
+          failed = true
+          firstError = e
+        }
+        // The failing batch was consumed; keep draining so later batches do
+        // not stay queued with no DataAvailable left to trigger them.
+        count = 1
+      }
+    } while (count > 0)
+    if (failed) {
+      if (!this.inCallback || canThrowAcrossNativeCallback) throw firstError
+      this.queuePendingHandlerError(firstError)
+      return
     }
     if (!this.inCallback) {
       this.throwPendingHandlerError()

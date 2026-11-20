@@ -46,6 +46,7 @@ function isGapType(value: any): value is number | undefined {
 export class BoxRenderable extends Renderable {
   protected _backgroundColor: RGBA
   protected _border: boolean | BorderSides[]
+  private _borderExplicitlyDisabled = false
   protected _borderStyle: BorderStyle
   protected _borderColor: RGBA
   protected _focusedBorderColor: RGBA
@@ -80,8 +81,9 @@ export class BoxRenderable extends Renderable {
 
     this._backgroundColor = parseColor(options.backgroundColor || this._defaultOptions.backgroundColor)
     this._border = options.border ?? this._defaultOptions.border
+    this._borderExplicitlyDisabled = options.border === false
     if (
-      !options.border &&
+      options.border === undefined &&
       (options.borderStyle || options.borderColor || options.focusedBorderColor || options.customBorderChars)
     ) {
       this._border = true
@@ -113,7 +115,7 @@ export class BoxRenderable extends Renderable {
     // Solid-js reconciler does not pass props to constructor on init,
     // so we need to initialize the border when supporting properties are set.
     // borderStyle, borderColor, focusedBorderColor
-    if (this._border === false) {
+    if (this._border === false && !this._borderExplicitlyDisabled) {
       this._border = true
       this.borderSides = getBorderSides(this._border)
       this.applyYogaBorders()
@@ -127,6 +129,7 @@ export class BoxRenderable extends Renderable {
   public set customBorderChars(value: BorderCharacters | undefined) {
     this._customBorderCharsObj = value
     this._customBorderChars = value ? borderCharsToArray(value) : undefined
+    if (value) this.initializeBorder()
     this.requestRender()
   }
 
@@ -147,6 +150,7 @@ export class BoxRenderable extends Renderable {
   }
 
   public set border(value: boolean | BorderSides[]) {
+    this._borderExplicitlyDisabled = value === false
     if (this._border !== value) {
       this._border = value
       this.borderSides = getBorderSides(value)
@@ -161,9 +165,10 @@ export class BoxRenderable extends Renderable {
 
   public set borderStyle(value: BorderStyle) {
     const _value = parseBorderStyle(value, this._defaultOptions.borderStyle)
-    if (this._borderStyle !== _value || !this._border) {
+    if (this._borderStyle !== _value || !this._border || this._customBorderChars !== undefined) {
       this._borderStyle = _value
       this._customBorderChars = undefined
+      this._customBorderCharsObj = undefined
       this.initializeBorder()
       this.requestRender()
     }

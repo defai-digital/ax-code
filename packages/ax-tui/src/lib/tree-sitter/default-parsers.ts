@@ -10,7 +10,10 @@ let _cachedParsers: Promise<FiletypeParserOptions[]> | undefined
 
 export function getParsers(): Promise<FiletypeParserOptions[]> {
   if (!_cachedParsers) {
-    _cachedParsers = loadParsers()
+    _cachedParsers = loadParsers().catch((error) => {
+      _cachedParsers = undefined
+      throw error
+    })
   }
   return _cachedParsers
 }

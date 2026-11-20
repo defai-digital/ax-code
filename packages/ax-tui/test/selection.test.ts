@@ -73,4 +73,22 @@ describe("Selection.getSelectedText", () => {
 
     expect(selection.getSelectedText()).toBe("bR\ncS")
   })
+
+  test("returns selected text in reading order regardless of registration order", () => {
+    const selection = new Selection(textRenderable(0, 0, ""), { x: 0, y: 0 }, { x: 6, y: 2 })
+    selection.updateSelectedRenderables([textRenderable(0, 1, "bottom"), textRenderable(0, 0, "top")])
+
+    expect(selection.getSelectedText()).toBe("top\nbottom")
+    expect(selection.getSelectedText()).toBe("top\nbottom")
+  })
+
+  test("skips destroyed renderables without mutating the registered list", () => {
+    const selection = new Selection(textRenderable(0, 0, ""), { x: 0, y: 0 }, { x: 6, y: 2 })
+    const destroyed = { ...textRenderable(0, 1, "gone"), isDestroyed: true } as Renderable
+    const live = textRenderable(0, 0, "kept")
+    selection.updateSelectedRenderables([destroyed, live])
+
+    expect(selection.getSelectedText()).toBe("kept")
+    expect(selection.selectedRenderables).toEqual([destroyed, live])
+  })
 })

@@ -1,8 +1,8 @@
 import {
   BoxRenderable,
+  Renderable,
   RootRenderable,
   type CliRenderer,
-  type Renderable,
   type ScrollbackRenderContext,
   type ScrollbackSnapshot,
   type ScrollbackWriter,
@@ -147,7 +147,10 @@ export function createScrollbackWriter(
   options: SolidScrollbackWriterOptions = {},
 ): ScrollbackWriter {
   return (ctx: ScrollbackRenderContext): ScrollbackSnapshot => {
-    const width = normalizeSnapshotDimension(options.width, "width") ?? Math.max(1, Math.trunc(ctx.width))
+    // The host clamps the committed snapshot to the terminal width; match that
+    // here so firstLineOffset never exceeds the row it is claimed against.
+    const terminalWidth = Math.max(1, Math.trunc(ctx.width))
+    const width = Math.min(normalizeSnapshotDimension(options.width, "width") ?? terminalWidth, terminalWidth)
     const height = normalizeSnapshotDimension(options.height, "height")
     const startOnNewLine = options.startOnNewLine ?? true
     const firstLineWidth =
@@ -213,6 +216,12 @@ export function createScrollbackWriter(
     } catch (error) {
       teardown()
       root.destroyRecursively()
+      // Solid-created children carry the snapshot renderer shim as their
+      // context, which the host's snapshotContext sweep cannot match. Destroy
+      // orphans left behind by a mid-render throw so they do not leak.
+      for (const node of Renderable.renderablesByNumber.values()) {
+        if (node.ctx === snapshotRenderer.renderer) node.destroyRecursively()
+      }
       throw error
     }
   }

@@ -786,7 +786,7 @@ test "writeClipboard - generates basic OSC52 sequence" {
     var writer = TestWriter.init(testing.allocator);
     defer writer.deinit();
 
-    try term.writeClipboard(&writer, .clipboard, "aGVsbG8=");
+    try term.writeClipboard(testing.allocator, &writer, .clipboard, "aGVsbG8=");
 
     const output = writer.getWritten();
     // Should be: ESC]52;c;aGVsbG8=ESC\
@@ -924,15 +924,15 @@ test "writeClipboard - supports different targets" {
     var writer = TestWriter.init(testing.allocator);
     defer writer.deinit();
 
-    try term.writeClipboard(&writer, .primary, "test");
+    try term.writeClipboard(testing.allocator, &writer, .primary, "test");
     try testing.expect(std.mem.indexOf(u8, writer.getWritten(), "\x1b]52;p;") != null);
 
     writer.reset();
-    try term.writeClipboard(&writer, .secondary, "test");
+    try term.writeClipboard(testing.allocator, &writer, .secondary, "test");
     try testing.expect(std.mem.indexOf(u8, writer.getWritten(), "\x1b]52;s;") != null);
 
     writer.reset();
-    try term.writeClipboard(&writer, .query, "test");
+    try term.writeClipboard(testing.allocator, &writer, .query, "test");
     try testing.expect(std.mem.indexOf(u8, writer.getWritten(), "\x1b]52;q;") != null);
 }
 
@@ -945,7 +945,7 @@ test "writeClipboard - returns error when OSC52 not supported" {
     var writer = TestWriter.init(testing.allocator);
     defer writer.deinit();
 
-    const result = term.writeClipboard(&writer, .clipboard, "test");
+    const result = term.writeClipboard(testing.allocator, &writer, .clipboard, "test");
     try testing.expectError(error.NotSupported, result);
 }
 
@@ -962,7 +962,7 @@ test "writeClipboard - wraps in DCS passthrough for tmux" {
     var writer = TestWriter.init(testing.allocator);
     defer writer.deinit();
 
-    try term.writeClipboard(&writer, .clipboard, "test");
+    try term.writeClipboard(testing.allocator, &writer, .clipboard, "test");
 
     const output = writer.getWritten();
     // Should start with tmux DCS wrapper
@@ -986,7 +986,7 @@ test "writeClipboard - wraps in DCS passthrough for GNU Screen" {
     var writer = TestWriter.init(testing.allocator);
     defer writer.deinit();
 
-    try term.writeClipboard(&writer, .clipboard, "test");
+    try term.writeClipboard(testing.allocator, &writer, .clipboard, "test");
 
     const output = writer.getWritten();
     // Should start with DCS (but not tmux prefix)
@@ -1011,7 +1011,7 @@ test "writeClipboard - handles tmux sessions" {
     var writer = TestWriter.init(testing.allocator);
     defer writer.deinit();
 
-    try term.writeClipboard(&writer, .clipboard, "test");
+    try term.writeClipboard(testing.allocator, &writer, .clipboard, "test");
 
     const output = writer.getWritten();
     // Should have tmux DCS wrapper
@@ -1020,6 +1020,106 @@ test "writeClipboard - handles tmux sessions" {
     try testing.expect(std.mem.endsWith(u8, output, "\x1b\\"));
     // Should have doubled ESC characters
     try testing.expect(std.mem.indexOf(u8, output, "\x1b\x1b") != null);
+}
+
+test "writeClipboard - writes payloads larger than the fixed staging buffer" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    var env = std.process.EnvMap.init(testing.allocator);
+    defer env.deinit();
+
+    var term = Terminal.init(.{ .env_map = &env });
+    term.caps.osc52 = true;
+
+    var writer = TestWriter.init(testing.allocator);
+    defer writer.deinit();
+
+    const payload = [_]u8{'A'} ** 1500;
+    try term.writeClipboard(testing.allocator, &writer, .clipboard, payload[0..]);
+
+    const expected = "\x1b]52;c;" ++ payload ++ "\x1b\\";
+    try testing.expectEqualStrings(expected[0..], writer.getWritten());
+}
+
+test "writeClipboard - wraps large payloads in tmux DCS passthrough" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    var env = std.process.EnvMap.init(testing.allocator);
+    defer env.deinit();
+    try env.put("TMUX", "/tmp/tmux-1000/default,12345,0");
+
+    var term = Terminal.init(.{ .env_map = &env });
+    term.caps.osc52 = true;
+
+    var writer = TestWriter.init(testing.allocator);
+    defer writer.deinit();
+
+    const payload = [_]u8{'A'} ** 5000;
+    try term.writeClipboard(testing.allocator, &writer, .clipboard, payload[0..]);
+
+    const expected = ansi.ANSI.tmuxDcsStart ++ "\x1b\x1b]52;c;" ++ payload ++ "\x1b\x1b\\" ++ ansi.ANSI.tmuxDcsEnd;
+    try testing.expectEqualStrings(expected[0..], writer.getWritten());
+}
+
+test "writeClipboard - wraps large payloads in GNU Screen DCS passthrough" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    var env = std.process.EnvMap.init(testing.allocator);
+    defer env.deinit();
+    try env.put("STY", "12345.pts-0.hostname");
+
+    var term = Terminal.init(.{ .env_map = &env });
+    term.caps.osc52 = true;
+
+    var writer = TestWriter.init(testing.allocator);
+    defer writer.deinit();
+
+    const payload = [_]u8{'A'} ** 2500;
+    try term.writeClipboard(testing.allocator, &writer, .clipboard, payload[0..]);
+
+    const expected = ansi.ANSI.screenDcsStart ++ "\x1b\x1b]52;c;" ++ payload ++ "\x1b\x1b\\" ++ ansi.ANSI.screenDcsEnd;
+    try testing.expectEqualStrings(expected[0..], writer.getWritten());
+}
+
+test "writeClipboardLocal - null env map falls back to a plain OSC52 write" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    var writer = TestWriter.init(testing.allocator);
+    defer writer.deinit();
+
+    try Terminal.writeClipboardLocal(testing.allocator, &writer, "\x1b]52;c;aGVsbG8=\x1b\\", null);
+
+    try testing.expectEqualStrings("\x1b]52;c;aGVsbG8=\x1b\\", writer.getWritten());
+}
+
+test "writeClipboardLocal - STY wraps in GNU Screen DCS passthrough" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    var env = std.process.EnvMap.init(testing.allocator);
+    defer env.deinit();
+    try env.put("STY", "12345.pts-0.hostname");
+
+    var writer = TestWriter.init(testing.allocator);
+    defer writer.deinit();
+
+    try Terminal.writeClipboardLocal(testing.allocator, &writer, "\x1b]52;c;aGVsbG8=\x1b\\", &env);
+
+    const expected = ansi.ANSI.screenDcsStart ++ "\x1b\x1b]52;c;aGVsbG8=\x1b\x1b\\" ++ ansi.ANSI.screenDcsEnd;
+    try testing.expectEqualStrings(expected, writer.getWritten());
+}
+
+test "writeClipboardLocal - env without STY writes plain OSC52" {
+    if (builtin.os.tag == .windows) return error.SkipZigTest;
+
+    var env = std.process.EnvMap.init(testing.allocator);
+    defer env.deinit();
+
+    var writer = TestWriter.init(testing.allocator);
+    defer writer.deinit();
+
+    try Terminal.writeClipboardLocal(testing.allocator, &writer, "\x1b]52;c;aGVsbG8=\x1b\\", &env);
+
+    try testing.expectEqualStrings("\x1b]52;c;aGVsbG8=\x1b\\", writer.getWritten());
 }
 
 test "caps.osc52 - clipboard capability flag" {

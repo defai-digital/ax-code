@@ -9,6 +9,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import * as path from "path";
 var MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+var WASM_MAGIC = Buffer.from([0, 97, 115, 109]);
 function grammarDownloadUrl(source) {
   let url;
   try {
@@ -113,6 +114,9 @@ var DownloadUtils = class {
       try {
         console.log(`Downloading from URL: ${source}`);
         const content = await fetchContent(source);
+        if (fileExtension === ".wasm" && !content.subarray(0, 4).equals(WASM_MAGIC)) {
+          return { error: `Downloaded content from ${source} is not a valid wasm module` };
+        }
         try {
           await writeAtomic(cacheFile, content);
           console.log(`Cached: ${source}`);
@@ -155,6 +159,9 @@ var DownloadUtils = class {
       try {
         console.log(`Downloading from URL: ${source}`);
         const content = await fetchContent(source);
+        if (targetPath.endsWith(".wasm") && !content.subarray(0, 4).equals(WASM_MAGIC)) {
+          return { error: `Downloaded content from ${source} is not a valid wasm module` };
+        }
         await writeAtomic(targetPath, content);
         console.log(`Downloaded: ${source} -> ${targetPath}`);
         return { content, filePath: targetPath };
@@ -199,11 +206,12 @@ import { parseArgs } from "util";
 import { fileURLToPath } from "node:url";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path2.dirname(__filename);
-function getDefaultOptions() {
+function getDefaultOptions(dirname3 = __dirname) {
+  const sourceDir = path2.basename(dirname3) === "tree-sitter" && path2.basename(path2.dirname(dirname3)) === "lib" ? path2.resolve(dirname3, "../../src/lib/tree-sitter") : path2.resolve(dirname3, "..");
   return {
-    configPath: path2.resolve(__dirname, "../parsers-config"),
-    assetsDir: path2.resolve(__dirname),
-    outputPath: path2.resolve(__dirname, "../default-parsers.ts")
+    configPath: path2.join(sourceDir, "parsers-config"),
+    assetsDir: path2.join(sourceDir, "assets"),
+    outputPath: path2.join(sourceDir, "default-parsers.ts")
   };
 }
 async function loadConfig(configPath) {
@@ -211,9 +219,11 @@ async function loadConfig(configPath) {
   let resolvedConfigPath = configPath;
   if (ext === "") {
     const files = await readdir(path2.dirname(configPath));
-    const file = files.find(
-      (file2) => file2.startsWith(path2.basename(configPath)) && (file2.endsWith(".json") || file2.endsWith(".ts") || file2.endsWith(".js"))
+    const basename3 = path2.basename(configPath);
+    const candidates = files.filter(
+      (file2) => file2.startsWith(basename3) && !file2.endsWith(".d.ts") && (file2.endsWith(".json") || file2.endsWith(".ts") || file2.endsWith(".js"))
     );
+    const file = candidates.find((candidate) => [".json", ".ts", ".js"].some((suffix) => candidate === `${basename3}${suffix}`)) ?? candidates[0];
     if (!file) {
       throw new Error(`No config file found for ${configPath}`);
     }
@@ -229,8 +239,16 @@ async function loadConfig(configPath) {
   }
   throw new Error(`Unsupported config file extension: ${ext}`);
 }
+function resolveFiletypeDir(assetsDir, filetype) {
+  const assetsRoot = path2.resolve(assetsDir);
+  const dir = path2.resolve(assetsRoot, filetype);
+  if (!dir.startsWith(assetsRoot + path2.sep)) {
+    throw new Error(`Filetype ${filetype} escapes the assets directory`);
+  }
+  return dir;
+}
 async function downloadLanguage(filetype, languageUrl, assetsDir, outputPath) {
-  const languageDir = path2.join(assetsDir, filetype);
+  const languageDir = resolveFiletypeDir(assetsDir, filetype);
   const languageFilename = path2.basename(languageUrl);
   const languagePath = path2.join(languageDir, languageFilename);
   const result = await DownloadUtils.downloadToPath(languageUrl, languagePath);
@@ -240,7 +258,7 @@ async function downloadLanguage(filetype, languageUrl, assetsDir, outputPath) {
   return "./" + path2.relative(path2.dirname(outputPath), languagePath);
 }
 async function downloadAndCombineQueries(filetype, sources, assetsDir, outputPath, queryType, configPath) {
-  const queriesDir = path2.join(assetsDir, filetype);
+  const queriesDir = resolveFiletypeDir(assetsDir, filetype);
   const queryPath = path2.join(queriesDir, `${queryType}.scm`);
   const queryContents = [];
   for (const source of sources) {
@@ -266,21 +284,21 @@ async function generateDefaultParsersFile(parsers, outputPath) {
     const safeFiletype = parser.filetype.replace(/[^a-zA-Z0-9]/g, "_");
     const lines = [
       `const ${safeFiletype}_highlights = await resolveBundledFilePath(`,
-      `  () => import("${parser.highlightsPath}" as string, { with: { type: "file" } }),`,
-      `  "${parser.highlightsPath}",`,
+      `  () => import(${JSON.stringify(parser.highlightsPath)} as string, { with: { type: "file" } }),`,
+      `  ${JSON.stringify(parser.highlightsPath)},`,
       `  import.meta.url,`,
       `)`,
       `const ${safeFiletype}_language = await resolveBundledFilePath(`,
-      `  () => import("${parser.languagePath}" as string, { with: { type: "file" } }),`,
-      `  "${parser.languagePath}",`,
+      `  () => import(${JSON.stringify(parser.languagePath)} as string, { with: { type: "file" } }),`,
+      `  ${JSON.stringify(parser.languagePath)},`,
       `  import.meta.url,`,
       `)`
     ];
     if (parser.injectionsPath) {
       lines.push(
         `const ${safeFiletype}_injections = await resolveBundledFilePath(`,
-        `  () => import("${parser.injectionsPath}" as string, { with: { type: "file" } }),`,
-        `  "${parser.injectionsPath}",`,
+        `  () => import(${JSON.stringify(parser.injectionsPath)} as string, { with: { type: "file" } }),`,
+        `  ${JSON.stringify(parser.injectionsPath)},`,
         `  import.meta.url,`,
         `)`
       );
@@ -296,7 +314,7 @@ async function generateDefaultParsersFile(parsers, outputPath) {
     const injectionMappingLine = parser.injectionMapping ? `        injectionMapping: ${JSON.stringify(parser.injectionMapping, null, 10)},` : "";
     const aliasesLine = parser.aliases?.length ? `        aliases: ${JSON.stringify(parser.aliases)},` : "";
     return `      {
-        filetype: "${parser.filetype}",
+        filetype: ${JSON.stringify(parser.filetype)},
 ${aliasesLine ? aliasesLine + "\n" : ""}        queries: {
 ${queriesLines.join("\n")}
         },
@@ -315,7 +333,10 @@ let _cachedParsers: Promise<FiletypeParserOptions[]> | undefined
 
 export function getParsers(): Promise<FiletypeParserOptions[]> {
   if (!_cachedParsers) {
-    _cachedParsers = loadParsers()
+    _cachedParsers = loadParsers().catch((error) => {
+      _cachedParsers = undefined
+      throw error
+    })
   }
   return _cachedParsers
 }

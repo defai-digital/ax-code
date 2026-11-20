@@ -83,7 +83,7 @@ for (const [name, text, commits] of [
   ["ASCII wrapping", "abcdefghijk\n", ["abcdefghi:9", "jk:2\n"]],
   ["wide wrapping", "一二三四五\n", ["一二三四:9", "五:2\n"]],
   ["graphemes", "ok👍🏽 👩‍🚀 e\u0301\n", ["ok👍🏽 👩‍🚀 e\u0301:9\n"]],
-  ["tabs", "a\tb\tc\n", ["a       b:9", "c:1\n"]],
+  ["tabs", "a\tb\tc\n", ["a       b:9", "        c:9\n"]],
   ["CRLF", "one\r\ntwo\r\n", ["one:3\n", "two:3\n"]],
   ["CR restart", "0123456789%\r60%\n\n", ["60%:3\n", ":0\n"]],
   ["continued wide edge", ["abcdefgh", "一x"], ["abcdefgh:8", ":1", "一x:3"]],

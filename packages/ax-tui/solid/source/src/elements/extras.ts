@@ -35,15 +35,9 @@ export function Portal(props: { mount?: DomNode; ref?: (el: {}) => void; childre
       // container's subtree, so a memo cached across runs would re-insert
       // destroyed renderables into the new mount.
       let disposeContent: (() => void) | undefined
-      const content = runWithOwner(owner, () =>
-        createRoot((dispose) => {
-          disposeContent = dispose
-          return createMemo(() => props.children)
-        }),
-      )
-      insert(renderRoot, content)
-      el.add(container)
-      props.ref && (props as any).ref(container)
+      // Register the cleanup before mounting the content: if rendering the
+      // children throws, a cleanup registered after the mount would never run
+      // and would leak the container, its subtree, and the content root.
       onCleanup(() => {
         el.remove(container.id)
         // Detaching alone leaks the container and its subtree (Yoga nodes,
@@ -53,6 +47,15 @@ export function Portal(props: { mount?: DomNode; ref?: (el: {}) => void; childre
         container.destroyRecursively()
         disposeContent?.()
       })
+      const content = runWithOwner(owner, () =>
+        createRoot((dispose) => {
+          disposeContent = dispose
+          return createMemo(() => props.children)
+        }),
+      )
+      insert(renderRoot, content)
+      el.add(container)
+      props.ref && (props as any).ref(container)
     },
     undefined,
     { render: true },

@@ -112,7 +112,7 @@ export class Selection {
 
   getSelectedText(): string {
     const selectedTextsByLine = new Map<number, Array<{ x: number; text: string }>>()
-    const selectedRenderables = this._selectedRenderables
+    const selectedRenderables = [...this._selectedRenderables]
       // Sort by reading order: top-to-bottom, then left-to-right
       .sort((a, b) => {
         const aY = a.y

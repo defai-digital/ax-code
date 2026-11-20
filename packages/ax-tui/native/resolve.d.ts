@@ -14,5 +14,7 @@ export declare function nativeAssetNames(target: NativeTarget, entry: NativeMani
     license: string;
 };
 export declare function verifyNativeArtifacts(directory: string, entry: NativeManifestEntry): NativeLibraryPaths;
+/** Remove interrupted download staging dirs for this target that are older than the cutoff. */
+export declare function sweepStaleStaging(cacheRoot: string, target: string): Promise<void>;
 /** Internal injectable boundary; public callers use native/index.js. */
 export declare function prepareNativeLibraryFrom(packageRoot: string, target: NativeTarget, options?: NativeLibraryOptions, fetchImpl?: typeof globalThis.fetch): Promise<NativeLibraryPaths>;

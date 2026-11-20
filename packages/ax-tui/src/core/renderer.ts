@@ -6,6 +6,7 @@ import { BoxRenderable } from "../renderables/Box.js"
 import { CodeRenderable } from "../renderables/Code.js"
 import { TextRenderable } from "../renderables/Text.js"
 import {
+  CliRenderEvents,
   DebugOverlayCorner,
   type CursorStyleOptions,
   type MousePointerStyle,
@@ -711,22 +712,7 @@ export async function createCliRenderer(config: CliRendererConfig = {}): Promise
   }
 }
 
-export enum CliRenderEvents {
-  RESIZE = "resize",
-  FRAME = "frame",
-  EXTERNAL_OUTPUT = "external_output",
-  FOCUS = "focus",
-  BLUR = "blur",
-  FOCUSED_RENDERABLE = "focused_renderable",
-  FOCUSED_EDITOR = "focused_editor",
-  THEME_MODE = "theme_mode",
-  PALETTE = "palette",
-  CAPABILITIES = "capabilities",
-  SELECTION = "selection",
-  DEBUG_OVERLAY_TOGGLE = "debugOverlay:toggle",
-  DESTROY = "destroy",
-  MEMORY_SNAPSHOT = "memory:snapshot",
-}
+export { CliRenderEvents }
 
 export enum RendererControlState {
   IDLE = "idle",
@@ -856,6 +842,9 @@ export class CliRenderer extends EventEmitter implements RenderContext {
   private _splitHeight: number = 0
   private renderOffset: number = 0
   private splitTailColumn: number = 0
+  // Row content terminated by a CR at a chunk boundary, held until the next
+  // chunk resolves it as CRLF (keep the row) or overwrite (discard it).
+  private stdoutPendingCRLine: string | null = null
   private pendingSplitFooterTransition: PendingSplitFooterTransition | null = null
   // One-shot latch used to request a full split repaint after transitions
   // (resize/mode/output-path changes). Cleared on first renderNative tick.
@@ -1135,7 +1124,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
 
     const forwardEnvKeys = config.forwardEnvKeys ?? (config.remote === false ? [...DEFAULT_FORWARDED_ENV_KEYS] : [])
     for (const key of forwardEnvKeys) {
-      const value = process.env[key]
+      const value = Object.hasOwn(process.env, key) ? process.env[key] : undefined
       if (value === undefined) continue
       this.lib.setTerminalEnvVar(this.rendererPtr, key, value)
     }
@@ -1262,7 +1251,9 @@ export class CliRenderer extends EventEmitter implements RenderContext {
       return id
     }
     global.cancelAnimationFrame = (handle: number) => {
-      this.animationRequest.delete(handle)
+      if (this.animationRequest.delete(handle)) {
+        this.dropLive()
+      }
     }
 
     const window = global.window
@@ -1432,7 +1423,12 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     //       causing TS-side ANSI to interleave with Zig-emitted frame bytes
     //       on Linux where threading is forced off.
     if (this.rendererPtr && (this._useThread || this._feed !== null)) {
-      const data = typeof chunk === "string" ? chunk : (chunk?.toString() ?? "")
+      const data =
+        typeof chunk === "string"
+          ? chunk
+          : chunk instanceof Uint8Array
+            ? Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength).toString()
+            : (chunk?.toString() ?? "")
       this.lib.writeOut(this.rendererPtr, data)
       if (typeof callback === "function") {
         process.nextTick(callback)
@@ -1982,6 +1978,9 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     let hasRendered = false
     const pendingSettlements = new Set<(error?: Error) => void>()
     let nextCommitStartOnNewLine = startOnNewLine
+    // Tail column the next commit's rendered rows assume; null when the next
+    // commit starts on a fresh line and alignment does not depend on the tail.
+    let expectedTailColumn: number | null = startOnNewLine ? null : tailColumn
     let backingBuffer = OptimizedBuffer.create(surfaceWidth, surfaceHeight, surfaceWidthMethod, {
       id: `scrollback-surface-buffer-${surfaceId}`,
     })
@@ -2155,6 +2154,12 @@ export class CliRenderer extends EventEmitter implements RenderContext {
         return
       }
 
+      if (expectedTailColumn !== null && renderer.getPendingSplitTailColumn() !== expectedTailColumn) {
+        throw new Error(
+          "ScrollbackSurface.commitRows requires a new surface after intervening output changes the pending tail column",
+        )
+      }
+
       const rowCount = endRowExclusive - startRow
       const commitBuffer = OptimizedBuffer.create(surfaceWidth, rowCount, surfaceWidthMethod, {
         id: `scrollback-surface-commit-${surfaceId}`,
@@ -2171,6 +2176,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
         })
 
         nextCommitStartOnNewLine = false
+        expectedTailColumn = renderer.getPendingSplitTailColumn()
       } catch (error) {
         commitBuffer.destroy()
         throw error
@@ -2550,13 +2556,27 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     const rows: Array<{ line: string; trailingNewline: boolean }> = []
     let current = ""
     // CRLF ends the existing row; a standalone CR restarts an in-write status row.
-    for (const char of text.replace(/\r\n/g, "\n")) {
-      if (char === "\r") current = ""
-      else if (char === "\n") {
+    // A CR at a chunk boundary stays pending so a following "\n" still forms CRLF.
+    let pendingCRLine = this.stdoutPendingCRLine
+    this.stdoutPendingCRLine = null
+    for (const char of text) {
+      if (pendingCRLine !== null) {
+        const line = pendingCRLine
+        pendingCRLine = null
+        if (char === "\n") {
+          rows.push({ line, trailingNewline: true })
+          continue
+        }
+      }
+      if (char === "\r") {
+        pendingCRLine = current
+        current = ""
+      } else if (char === "\n") {
         rows.push({ line: current, trailingNewline: true })
         current = ""
       } else current += char
     }
+    this.stdoutPendingCRLine = pendingCRLine
     if (current.length > 0) rows.push({ line: current, trailingNewline: false })
     return rows
   }
@@ -2594,11 +2614,11 @@ export class CliRenderer extends EventEmitter implements RenderContext {
           columns = 0
         }
         for (const { segment } of segmenter.segment(row.line)) {
-          if (segment === "\t" && tail + columns >= width - 1) continue
           if (tail + columns >= width) {
             if (columns > 0) flush(false)
             tail = 0
           }
+          if (segment === "\t" && tail + columns >= width - 1) continue
           if (segment === "\t") {
             const spaces = Math.min(8 - ((tail + columns) % 8), width - 1 - tail - columns)
             line += " ".repeat(spaces)
@@ -2606,9 +2626,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
             continue
           }
           const cells = measure(segment)
-          if (cells > width) {
-            throw new RangeError("captured stdout grapheme exceeds terminal width")
-          }
+          if (cells > width) continue
           if (cells > width - tail - columns) {
             // Consume the remaining cells before a wide grapheme wraps. Padding
             // is explicit so the native append cursor and predicted tail agree.
@@ -2729,8 +2747,13 @@ export class CliRenderer extends EventEmitter implements RenderContext {
 
   private interceptStdoutWrite = (chunk: any, encoding?: any, callback?: any): boolean => {
     const resolvedCallback = typeof encoding === "function" ? encoding : callback
-    const resolvedEncoding = typeof encoding === "string" ? encoding : undefined
-    const text = typeof chunk === "string" ? chunk : (chunk?.toString(resolvedEncoding) ?? "")
+    const resolvedEncoding = (typeof encoding === "string" ? encoding : undefined) as BufferEncoding | undefined
+    const text =
+      typeof chunk === "string"
+        ? chunk
+        : chunk instanceof Uint8Array
+          ? Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength).toString(resolvedEncoding)
+          : (chunk?.toString(resolvedEncoding) ?? "")
 
     if (this._externalOutputMode === "capture-stdout" && this._screenMode === "split-footer" && this._splitHeight > 0) {
       // Capture mode intentionally diverts stdout into split commit snapshots
@@ -2826,6 +2849,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
 
   private resetSplitScrollback(seedRows: number = 0): void {
     this.splitTailColumn = 0
+    this.stdoutPendingCRLine = null
     this.renderOffset = this.lib.resetSplitScrollback(this.rendererPtr, seedRows, this.getSplitPinnedRenderOffset())
   }
 
@@ -2865,6 +2889,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     if (!splitActive) {
       this.clearPendingSplitFooterTransition()
       this.splitTailColumn = 0
+      this.stdoutPendingCRLine = null
       this.lib.resetSplitScrollback(this.rendererPtr, 0, 0)
       this.renderOffset = 0
       this.lib.setRenderOffset(this.rendererPtr, this.renderOffset)
@@ -2876,6 +2901,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     } else {
       this.clearPendingSplitFooterTransition()
       this.splitTailColumn = 0
+      this.stdoutPendingCRLine = null
       this.lib.resetSplitScrollback(this.rendererPtr, 0, 0)
       this.renderOffset = this.getSplitPinnedRenderOffset()
       this.lib.setRenderOffset(this.rendererPtr, this.renderOffset)
@@ -3114,13 +3140,16 @@ export class CliRenderer extends EventEmitter implements RenderContext {
   }
 
   // TODO: Move this to native
-  private flushStdoutCache(space: number, force: boolean = false): boolean {
+  private flushStdoutCache(space: number, force: boolean = false, asText: boolean = false): boolean {
     if (this.externalOutputQueue.size === 0 && !force) return false
 
     const outputCommits = this.externalOutputQueue.claim()
+    const decoder = asText ? new TextDecoder() : null
     let output = ""
     for (const commit of outputCommits) {
-      output += `[snapshot ${commit.snapshot.width}x${commit.snapshot.height}]\n`
+      output += decoder
+        ? decoder.decode(commit.snapshot.getRealCharBytes(true))
+        : `[snapshot ${commit.snapshot.width}x${commit.snapshot.height}]\n`
       commit.snapshot.destroy()
     }
 
@@ -3503,6 +3532,30 @@ export class CliRenderer extends EventEmitter implements RenderContext {
   private processSingleMouseEvent(mouseEvent: RawMouseEvent): boolean {
     if (this._splitHeight > 0) {
       if (mouseEvent.y < this.renderOffset) {
+        // A release in the scrollback still has to stop press-and-hold timers,
+        // captured drags, and selections started in the footer; none of the
+        // finalize paths below this branch run for scrollback events.
+        if (mouseEvent.type === "up") {
+          // Footer subscribers interpret coordinates in the footer's local
+          // space (the console bounds are footer-local in split mode, and a
+          // captured control's track coordinates are too): the console's
+          // global release handler would otherwise see a scrollback row whose
+          // absolute number lands inside its rectangle and skip the release,
+          // and a captured slider would commit a value computed from the
+          // absolute row.
+          const footerEvent = { ...mouseEvent, y: mouseEvent.y - this.renderOffset }
+          this.emit(CliRenderEvents.MOUSE_UP, footerEvent)
+          if (this.capturedRenderable) {
+            const captured = this.capturedRenderable
+            captured.processMouseEvent(new MouseEvent(captured, { ...footerEvent, type: "drag-end" }))
+            captured.processMouseEvent(new MouseEvent(captured, footerEvent))
+            this.setCapturedRenderable(undefined)
+            this.requestRender()
+          }
+          if (this.currentSelection?.isDragging) {
+            this.finishSelection()
+          }
+        }
         return false
       }
       mouseEvent.y -= this.renderOffset
@@ -3513,6 +3566,13 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     this._hasPointer = true
     this._lastPointerModifiers = mouseEvent.modifiers
 
+    // Broadcast every release, even ones no renderable receives (mode-1000
+    // terminals drop releases outside the pressed renderable), so widgets with
+    // press-and-hold timers can stop them.
+    if (mouseEvent.type === "up") {
+      this.emit(CliRenderEvents.MOUSE_UP, mouseEvent)
+    }
+
     if (this._console.visible) {
       const consoleBounds = this._console.bounds
       if (
@@ -3521,9 +3581,17 @@ export class CliRenderer extends EventEmitter implements RenderContext {
         mouseEvent.y >= consoleBounds.y &&
         mouseEvent.y < consoleBounds.y + consoleBounds.height
       ) {
-        const event = new MouseEvent(null, mouseEvent)
-        const handled = this._console.handleMouse(event)
-        if (handled) return true
+        // A release owned by a captured renderable or an active text selection
+        // must reach the finalize paths below even over the console overlay;
+        // the console never owns those drags.
+        const ownedRelease =
+          mouseEvent.type === "up" &&
+          (this.capturedRenderable !== undefined || this.currentSelection?.isDragging === true)
+        if (!ownedRelease) {
+          const event = new MouseEvent(null, mouseEvent)
+          const handled = this._console.handleMouse(event)
+          if (handled) return true
+        }
       }
     }
 
@@ -3910,9 +3978,13 @@ export class CliRenderer extends EventEmitter implements RenderContext {
   public resize(width: number, height: number): void {
     if (this._isDestroyed) return
     validateBufferDimensions(width, height)
-    if (this.resizeTimeoutId !== null) this.clock.clearTimeout(this.resizeTimeoutId)
-    this.resizeTimeoutId = null
-    this.pendingResize = null
+    // A same-size call asserts the current geometry, so it must not discard a
+    // debounced SIGWINCH resize that is still waiting to apply.
+    if (width !== this._terminalWidth || height !== this._terminalHeight) {
+      if (this.resizeTimeoutId !== null) this.clock.clearTimeout(this.resizeTimeoutId)
+      this.resizeTimeoutId = null
+      this.pendingResize = null
+    }
     this.processResize(width, height)
   }
 
@@ -4098,6 +4170,8 @@ export class CliRenderer extends EventEmitter implements RenderContext {
   }
 
   public suspend(): void {
+    if (this._isDestroyed) return
+    if (this._controlState === RendererControlState.EXPLICIT_SUSPENDED) return
     this._previousControlState = this._controlState
 
     this._controlState = RendererControlState.EXPLICIT_SUSPENDED
@@ -4138,6 +4212,8 @@ export class CliRenderer extends EventEmitter implements RenderContext {
   }
 
   public resume(): void {
+    if (this._isDestroyed) return
+    if (this._controlState !== RendererControlState.EXPLICIT_SUSPENDED) return
     this.terminalControlEpoch++
     if (this.stdin.setRawMode) {
       this.stdin.setRawMode(true)
@@ -4266,6 +4342,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
       this.clock.clearTimeout(this.resizeTimeoutId)
       this.resizeTimeoutId = null
     }
+    this.pendingResize = null
 
     if (this.capabilityTimeoutId !== null) {
       this.clock.clearTimeout(this.capabilityTimeoutId)
@@ -4321,7 +4398,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     this.externalOutputMode = "passthrough"
 
     if (this._splitHeight > 0) {
-      this.flushStdoutCache(this._splitHeight, true)
+      this.flushStdoutCache(this._splitHeight, true, true)
     }
   }
 
@@ -4488,13 +4565,15 @@ export class CliRenderer extends EventEmitter implements RenderContext {
 
   private async loop(): Promise<void> {
     if (this.rendering || this._isDestroyed) return
+    // Synchronous entries (intermediateRender, startRenderLoop) can arrive
+    // while a timer from the normal cadence or feed-idle path is still armed;
+    // disarm it here so it cannot fire later and start a second frame chain.
+    if (this.renderTimeout) {
+      this.clock.clearTimeout(this.renderTimeout)
+    }
     this.renderTimeout = null
 
     this.rendering = true
-    if (this.renderTimeout) {
-      this.clock.clearTimeout(this.renderTimeout)
-      this.renderTimeout = null
-    }
     try {
       // Bump before any work so all callers this iteration see the new id.
       this._frameId++
@@ -4519,8 +4598,11 @@ export class CliRenderer extends EventEmitter implements RenderContext {
       const frameRequests = Array.from(this.animationRequest.values())
       this.animationRequest.clear()
       for (const callback of frameRequests) {
-        callback(deltaTime)
-        this.dropLive()
+        try {
+          callback(deltaTime)
+        } finally {
+          this.dropLive()
+        }
       }
 
       const start = performance.now()
@@ -5040,11 +5122,14 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     this._paletteDetectionPromise = detector
       .detect({ ...options, timeout: detectionTimeout })
       .then((result) => {
-        this._paletteCache.set(result.palette.length, result)
         this._paletteDetectionPromise = null
         this._paletteDetectionSize = 0
 
+        // The cache write must live inside the generation guard: a theme
+        // change clears the cache while a detection is in flight, and the
+        // stale result must not re-populate it.
         if (!this._isDestroyed && this._palettePublishGeneration === publishGeneration) {
+          this._paletteCache.set(result.palette.length, result)
           this.emitPaletteChange(result)
           if (this.shouldSyncNativePaletteState() && result.palette.length >= NATIVE_PALETTE_QUERY_SIZE) {
             this.syncNativePaletteState(result)

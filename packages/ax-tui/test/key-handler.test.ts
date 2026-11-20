@@ -120,6 +120,20 @@ test("preventing the default preserves other global handlers and skips renderabl
   expect(renderable).not.toHaveBeenCalled()
 })
 
+test("renderable handlers registered during dispatch do not receive the current event", () => {
+  const handler = new InternalKeyHandler()
+  const late = vi.fn()
+  handler.on("keypress", () => {
+    handler.onInternal("keypress", late)
+  })
+
+  dispatch(handler, "keypress")
+  expect(late).not.toHaveBeenCalled()
+
+  dispatch(handler, "keypress")
+  expect(late).toHaveBeenCalledOnce()
+})
+
 test("renderable handlers can stop propagation after global handlers run", () => {
   const handler = new InternalKeyHandler()
   const global = vi.fn()
@@ -132,4 +146,19 @@ test("renderable handlers can stop propagation after global handlers run", () =>
 
   expect(global).toHaveBeenCalledOnce()
   expect(skipped).not.toHaveBeenCalled()
+})
+
+
+test("renderable handlers detached during dispatch do not receive the current event", () => {
+  const handler = new InternalKeyHandler()
+  const detached = vi.fn()
+  const survivor = vi.fn()
+  handler.onInternal("keypress", detached)
+  handler.onInternal("keypress", survivor)
+  handler.on("keypress", () => handler.offInternal("keypress", detached))
+
+  dispatch(handler, "keypress")
+
+  expect(detached).not.toHaveBeenCalled()
+  expect(survivor).toHaveBeenCalledOnce()
 })

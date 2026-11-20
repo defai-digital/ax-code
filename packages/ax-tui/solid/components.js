@@ -21,8 +21,8 @@ var SpanRenderable = class extends TextNodeRenderable {
   _ctx;
 };
 var TextModifierRenderable = class extends SpanRenderable {
-  constructor(options, modifier) {
-    super(null, options);
+  constructor(ctx, options, modifier) {
+    super(ctx, options);
     if (modifier === "b" || modifier === "strong") {
       this.attributes = (this.attributes || 0) | TextAttributes.BOLD;
     } else if (modifier === "i" || modifier === "em") {
@@ -33,18 +33,18 @@ var TextModifierRenderable = class extends SpanRenderable {
   }
 };
 var BoldSpanRenderable = class extends TextModifierRenderable {
-  constructor(options) {
-    super(options, "b");
+  constructor(ctx, options) {
+    super(ctx, options, "b");
   }
 };
 var ItalicSpanRenderable = class extends TextModifierRenderable {
-  constructor(options) {
-    super(options, "i");
+  constructor(ctx, options) {
+    super(ctx, options, "i");
   }
 };
 var UnderlineSpanRenderable = class extends TextModifierRenderable {
-  constructor(options) {
-    super(options, "u");
+  constructor(ctx, options) {
+    super(ctx, options, "u");
   }
 };
 var LineBreakRenderable = class extends SpanRenderable {
@@ -85,7 +85,10 @@ var baseComponents = {
   br: LineBreakRenderable,
   a: LinkRenderable
 };
-var componentCatalogue = { ...baseComponents };
+var componentCatalogue = Object.assign(
+  /* @__PURE__ */ Object.create(null),
+  baseComponents
+);
 function extend(objects) {
   Object.assign(componentCatalogue, objects);
 }

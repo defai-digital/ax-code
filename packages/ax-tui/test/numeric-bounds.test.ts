@@ -11,6 +11,12 @@ vi.mock("../src/core/renderable.js", () => {
     y = 0
     visible = true
 
+    constructor(ctx: unknown) {
+      this._ctx = ctx
+    }
+
+    protected _ctx: unknown
+
     private listeners = new Map<string, ((...args: unknown[]) => void)[]>()
 
     on(event: string, listener: (...args: unknown[]) => void): this {
@@ -25,6 +31,10 @@ vi.mock("../src/core/renderable.js", () => {
       return true
     }
 
+    off(_event: string, _listener: (...args: unknown[]) => void): this {
+      return this
+    }
+
     requestRender(): void {}
     add(_child: unknown): void {}
   }
@@ -33,6 +43,7 @@ vi.mock("../src/core/renderable.js", () => {
 })
 
 import { clamp } from "../src/lib/clamp.js"
+import { calculateRenderGeometry } from "../src/lib/render-geometry.js"
 import {
   fitColumnWidthsBalanced,
   fitColumnWidthsProportional,
@@ -42,7 +53,7 @@ import { ScrollBarRenderable } from "../src/renderables/ScrollBar.js"
 import { SelectRenderable, SelectRenderableEvents } from "../src/renderables/Select.js"
 import { SliderRenderable } from "../src/renderables/Slider.js"
 
-const ctx = {} as never
+const ctx = { on: () => {}, off: () => {} } as never
 
 describe("clamp boundary hardening", () => {
   test("keeps finite values inside the closed interval", () => {
@@ -63,6 +74,35 @@ describe("clamp boundary hardening", () => {
 
   test("resolves a degenerate range to the lower bound", () => {
     expect(clamp(5, 10, 0)).toBe(10)
+  })
+})
+
+describe("render geometry boundaries", () => {
+  test("a negative footer height cannot push the render offset past the terminal", () => {
+    expect(calculateRenderGeometry("split-footer", 80, 24, -5)).toEqual({
+      effectiveFooterHeight: 0,
+      renderOffset: 24,
+      renderWidth: 80,
+      renderHeight: 0,
+    })
+  })
+
+  test("an oversized footer height saturates at the terminal height", () => {
+    expect(calculateRenderGeometry("split-footer", 80, 24, 100)).toEqual({
+      effectiveFooterHeight: 24,
+      renderOffset: 0,
+      renderWidth: 80,
+      renderHeight: 24,
+    })
+  })
+
+  test("non-split modes ignore the footer height entirely", () => {
+    expect(calculateRenderGeometry("alternate-screen", 80, 24, -5)).toEqual({
+      effectiveFooterHeight: 0,
+      renderOffset: 0,
+      renderWidth: 80,
+      renderHeight: 24,
+    })
   })
 })
 

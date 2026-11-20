@@ -32,7 +32,7 @@ export class LinearScrollAccel implements ScrollAcceleration {
  * - baseMultiplier: scale for relaxed scrolling; set to 1 for linear behaviour.
  */
 export class MacOSScrollAccel implements ScrollAcceleration {
-  private lastTickTime = 0
+  private lastTickTime: number | null = null
   private velocityHistory: number[] = []
   private readonly historySize = 3
   private readonly streakTimeout = 150
@@ -54,7 +54,7 @@ export class MacOSScrollAccel implements ScrollAcceleration {
     const tau = this.opts.tau ?? 3
     const maxMultiplier = this.opts.maxMultiplier ?? 6
 
-    const dt = this.lastTickTime ? now - this.lastTickTime : Infinity
+    const dt = this.lastTickTime === null ? Infinity : now - this.lastTickTime
 
     // Reset streak if too much time has passed or first tick
     if (dt === Infinity || dt > this.streakTimeout) {
@@ -92,7 +92,7 @@ export class MacOSScrollAccel implements ScrollAcceleration {
   }
 
   reset(): void {
-    this.lastTickTime = 0
+    this.lastTickTime = null
     this.velocityHistory = []
   }
 }

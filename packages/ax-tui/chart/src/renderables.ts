@@ -1,4 +1,4 @@
-import { Renderable, parseColor } from "@defai-digital/ax-tui"
+import { Renderable, RGBA, parseColor } from "@defai-digital/ax-tui"
 import type { OptimizedBuffer, RenderContext, RenderableOptions } from "@defai-digital/ax-tui"
 import type { Cell } from "./cells.js"
 import { layoutSparkline, type SparklineLayoutOptions } from "./sparkline.js"
@@ -194,7 +194,11 @@ export class GaugeRenderable extends Renderable {
 
   protected override renderSelf(buffer: OptimizedBuffer): void {
     if (!this.visible) return
-    paintCells(buffer, layoutGauge(this._layout, this.width, this.height), this.x, this.y, "white")
+    // The default foreground carries default-color intent so an unset label
+    // foreground over the fill reads in the terminal's default color (an
+    // RGBA(0,0,0,0) "transparent" foreground would blend to the fill color on
+    // translucent fills and emit literal RGB black on opaque ones).
+    paintCells(buffer, layoutGauge(this._layout, this.width, this.height), this.x, this.y, RGBA.defaultForeground())
   }
 }
 
@@ -317,8 +321,7 @@ export class ChartRenderable extends Renderable {
   private _layout: ChartLayoutOptions
 
   constructor(ctx: RenderContext, options: ChartOptions) {
-    super(ctx, options)
-    validateChartOptions(options)
+    super(ctx, validateChartOptions(options))
     this._layout = {
       datasets: options.datasets ?? [],
       xAxis: options.xAxis,

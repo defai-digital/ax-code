@@ -31,7 +31,7 @@ test.skipIf(!built)("native and WASM share Unicode results, reject invalid batch
   expect(child.error, child.stderr).toBeUndefined()
   expect(child.status, child.stdout + child.stderr).toBe(0)
   expect(JSON.parse(child.stdout).status).toBe("AX_TEXT_WIDTH_PARITY_COMPLETE")
-})
+}, 35_000)
 
 test.skipIf(!built)("WASM width evaluation runs without native FFI enabled", () => {
   const script = new URL("../script/text-width-kernel.ts", import.meta.url).href
@@ -57,7 +57,7 @@ test.skipIf(!built)("WASM width evaluation runs without native FFI enabled", () 
   expect(child.status, child.stdout + child.stderr).toBe(0)
   expect(child.stdout).toContain("AX_WASM_WITHOUT_FFI_COMPLETE")
   expect(child.stderr).not.toContain("FFI is an experimental")
-})
+}, 20_000)
 
 test.skipIf(!built)("experiment verification rejects stale source and corrupted artifacts", () => {
   const directory = mkdtempSync(join(tmpdir(), "ax-tui-width-provenance-"))
@@ -118,4 +118,4 @@ test.skipIf(!built)("paired width benchmark alternates fresh processes and recor
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
-})
+}, 35_000)

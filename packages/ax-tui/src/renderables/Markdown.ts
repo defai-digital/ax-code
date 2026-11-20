@@ -360,8 +360,8 @@ export class MarkdownRenderable extends Renderable {
   set syntaxStyle(value: SyntaxStyle) {
     if (this._syntaxStyle !== value) {
       this._syntaxStyle = value
-      // Mark dirty - actual re-render happens in renderSelf
       this._styleDirty = true
+      this.requestRender()
     }
   }
 
@@ -374,6 +374,7 @@ export class MarkdownRenderable extends Renderable {
     if (!colorsEqual(this._fg, next)) {
       this._fg = next
       this._styleDirty = true
+      this.requestRender()
     }
   }
 
@@ -386,6 +387,7 @@ export class MarkdownRenderable extends Renderable {
     if (!colorsEqual(this._bg, next)) {
       this._bg = next
       this._styleDirty = true
+      this.requestRender()
     }
   }
 
@@ -396,8 +398,8 @@ export class MarkdownRenderable extends Renderable {
   set conceal(value: boolean) {
     if (this._conceal !== value) {
       this._conceal = value
-      // Mark dirty - actual re-render happens in renderSelf
       this._styleDirty = true
+      this.requestRender()
     }
   }
 
@@ -408,8 +410,8 @@ export class MarkdownRenderable extends Renderable {
   set concealCode(value: boolean) {
     if (this._concealCode !== value) {
       this._concealCode = value
-      // Mark dirty - actual re-render happens in renderSelf
       this._styleDirty = true
+      this.requestRender()
     }
   }
 
@@ -918,16 +920,23 @@ export class MarkdownRenderable extends Renderable {
     previousToken: MarkedToken | undefined,
     id: string,
   ): boolean {
-    if ((token.type === "text" || token.type === "paragraph") && renderable instanceof CodeRenderable) {
+    // Only reuse a child renderable for the same kind of token: text and code
+    // share CodeRenderable but differ in chunk linkification, and a rule box
+    // must not become a nested list container.
+    if (
+      (token.type === "text" || token.type === "paragraph") &&
+      (previousToken?.type === "text" || previousToken?.type === "paragraph") &&
+      renderable instanceof CodeRenderable
+    ) {
       this.applyMarkdownCodeRenderable(renderable, this.normalizeScrollbackMarkdownBlockRaw(token.raw), 0)
       return true
     }
 
-    if (token.type === "list" && renderable instanceof BoxRenderable) {
+    if (token.type === "list" && previousToken?.type === "list" && renderable instanceof BoxRenderable) {
       return this.applyListRenderable(renderable, token as Tokens.List, previousToken as Tokens.List | undefined, id)
     }
 
-    if (token.type === "code" && renderable instanceof CodeRenderable) {
+    if (token.type === "code" && previousToken?.type === "code" && renderable instanceof CodeRenderable) {
       this.applyCodeBlockRenderable(renderable, token as Tokens.Code, 0)
       return true
     }
@@ -1652,6 +1661,10 @@ export class MarkdownRenderable extends Renderable {
       concealCode: this._concealCode,
       treeSitterClient: this._treeSitterClient,
       defaultRender: () => {
+        // A renderNode that calls defaultRender more than once would orphan
+        // the earlier default renderable (never mounted, never destroyed);
+        // release it before creating the replacement.
+        this.destroyUnusedDefaultRenderable(defaultResult?.renderable)
         defaultResult = createDefault()
         return defaultResult.renderable ?? null
       },
@@ -1676,6 +1689,17 @@ export class MarkdownRenderable extends Renderable {
     forceTableRegenerate: boolean = false,
   ): void {
     const marginBottom = this.getInterBlockMargin(token, nextToken)
+
+    // Switching from top-level back to coalesced reuses renderables that were
+    // created with an inter-block marginTop; coalesced spacing comes from the
+    // raw text instead, so drop the stale margin.
+    if (
+      this._internalBlockMode !== "top-level" &&
+      state.tracksInterBlockMargin !== false &&
+      state.renderable.marginTop !== 0
+    ) {
+      state.renderable.marginTop = 0
+    }
 
     if (token.type === "code") {
       this.applyCodeBlockRenderable(state.renderable, token as Tokens.Code, marginBottom)
@@ -1705,6 +1729,8 @@ export class MarkdownRenderable extends Renderable {
     }
 
     if (token.type === "hr") {
+      if (!(state.renderable instanceof BoxRenderable)) return
+      state.renderable.borderColor = this.getStyle("conceal")?.fg ?? this._fg ?? "#888888"
       state.renderable.marginBottom = marginBottom
       return
     }
@@ -1753,7 +1779,7 @@ export class MarkdownRenderable extends Renderable {
     if (state.renderable instanceof CodeRenderable) {
       this.applyMarkdownCodeRenderable(
         state.renderable,
-        this.getTopLevelBlockRaw(token) ?? token.raw,
+        this._internalBlockMode === "top-level" ? (this.getTopLevelBlockRaw(token) ?? token.raw) : token.raw,
         marginBottom,
         undefined,
         this.createInitialStyledText(token),
@@ -1764,7 +1790,7 @@ export class MarkdownRenderable extends Renderable {
     state.renderable.destroyRecursively()
     const markdownRenderable = this.createMarkdownTextBlock(
       token,
-      this.getTopLevelBlockRaw(token) ?? token.raw,
+      this._internalBlockMode === "top-level" ? (this.getTopLevelBlockRaw(token) ?? token.raw) : token.raw,
       `${this.id}-block-${index}`,
       marginBottom,
     )
@@ -1837,9 +1863,14 @@ export class MarkdownRenderable extends Renderable {
           this.destroyUnusedDefaultRenderable(custom.renderable)
         }
 
+        const previousRenderable = existing.renderable
         this.updateBlockRenderable(existing, block.token, blockIndex, blocks[i + 1]?.token)
         existing.renderable.marginBottom = 0
-        if (existing.marginTop !== block.marginTop) {
+        // updateBlockRenderable may replace the renderable through a fallback
+        // path (e.g. a table that lost its body rows); the replacement starts
+        // with no margins, so it needs the block margins reapplied even when
+        // the block's own marginTop is unchanged.
+        if (existing.renderable !== previousRenderable || existing.marginTop !== block.marginTop) {
           this.applyMargins(existing.renderable, block.marginTop, 0)
         }
         this.syncTopLevelBlockState(existing, block)
@@ -1862,8 +1893,10 @@ export class MarkdownRenderable extends Renderable {
           tableContentCache: next.tableContentCache,
           canUpdateInPlace: next.canUpdateInPlace,
         }
+        blockIndex++
+      } else if (existing) {
+        this._blockStates.splice(blockIndex, 1)
       }
-      blockIndex++
     }
 
     while (this._blockStates.length > blockIndex) {
@@ -2031,8 +2064,10 @@ export class MarkdownRenderable extends Renderable {
           tracksInterBlockMargin,
           canUpdateInPlace,
         }
+        blockIndex++
+      } else if (existing) {
+        this._blockStates.splice(blockIndex, 1)
       }
-      blockIndex++
     }
 
     while (this._blockStates.length > blockIndex) {

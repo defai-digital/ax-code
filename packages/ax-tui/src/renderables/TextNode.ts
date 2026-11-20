@@ -55,6 +55,12 @@ export class TextNodeRenderable extends BaseRenderable {
   }
 
   public set children(children: (string | TextNodeRenderable)[]) {
+    for (const child of this._children) {
+      if (isTextNodeRenderable(child)) child.parent = null
+    }
+    for (const child of children) {
+      if (isTextNodeRenderable(child)) child.parent = this
+    }
     this._children = children
     this.requestRender()
   }
@@ -113,6 +119,9 @@ export class TextNodeRenderable extends BaseRenderable {
   }
 
   public replace(obj: TextNodeRenderable | string, index: number) {
+    if (!Number.isInteger(index) || index < 0 || index >= this._children.length) {
+      throw new Error(`Replace index ${index} is out of bounds`)
+    }
     const previous = this._children[index]
     if (previous !== undefined && isTextNodeRenderable(previous) && previous !== obj) {
       previous.parent = null

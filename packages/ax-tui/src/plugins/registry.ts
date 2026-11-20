@@ -44,6 +44,7 @@ export class SlotRegistry<TNode, TSlots extends object, TContext extends PluginC
   private errorListeners: Set<(event: PluginErrorEvent) => void> = new Set()
   private pluginErrors: PluginErrorEvent[] = []
   private registrationOrder = 0
+  private registeringIds = new Set<string>()
   private batchDepth = 0
   private batchedNotify = false
   private rendererInstance: CliRenderer
@@ -84,10 +85,13 @@ export class SlotRegistry<TNode, TSlots extends object, TContext extends PluginC
   }
 
   public register(plugin: Plugin<TNode, TSlots, TContext>): () => void {
-    if (this.plugins.some((entry) => entry.plugin.id === plugin.id)) {
+    // A setup hook can re-enter register() before the entry is pushed, so the
+    // in-flight id must count as registered or duplicates slip past the check.
+    if (this.plugins.some((entry) => entry.plugin.id === plugin.id) || this.registeringIds.has(plugin.id)) {
       throw new Error(`Plugin with id "${plugin.id}" is already registered`)
     }
 
+    this.registeringIds.add(plugin.id)
     try {
       plugin.setup?.(this.hostContext, this.rendererInstance)
     } catch (error) {
@@ -99,6 +103,8 @@ export class SlotRegistry<TNode, TSlots extends object, TContext extends PluginC
       })
 
       return noop
+    } finally {
+      this.registeringIds.delete(plugin.id)
     }
 
     this.plugins.push({

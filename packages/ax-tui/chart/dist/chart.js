@@ -1,4 +1,4 @@
-import { compositeCells, paintText } from "./cells.js";
+import { compositeCells, paintText, truncateCodePoints } from "./cells.js";
 import { createGrid } from "./grid.js";
 import { getPoint, strokeSegment } from "./painter.js";
 import { BOX_BOTTOM_LEFT, BOX_BOTTOM_RIGHT, BOX_TOP_LEFT, BOX_TOP_RIGHT, LINE_BOTTOM_LEFT, LINE_HORIZONTAL, LINE_VERTICAL, } from "./symbols.js";
@@ -11,7 +11,8 @@ function isFinitePair(value) {
 /**
  * Validate the bounds contract: when an axis object is provided, its bounds
  * are required and must be a finite pair. This is the one hard error — all
- * other degenerate input renders nothing without throwing.
+ * other degenerate input renders nothing without throwing. Returns `options`
+ * unchanged so a constructor can validate inside its super() argument.
  */
 export function validateChartOptions(options) {
     for (const [name, axis] of [
@@ -22,6 +23,7 @@ export function validateChartOptions(options) {
             throw new TypeError(`chart ${name}.bounds must be a finite [min, max] pair when ${name} is provided`);
         }
     }
+    return options;
 }
 /**
  * Auto bounds over one coordinate of every finite point (documented deviation:
@@ -46,8 +48,21 @@ function autoBoundsOf(datasets, coord) {
     }
     if (!Number.isFinite(min) || !Number.isFinite(max))
         return [0, 1];
-    if (min === max)
-        return [min - 0.5, max + 0.5];
+    if (min === max) {
+        // A fixed 0.5 margin is smaller than half a ULP once |min| >= 2^52
+        // (e.g. nanosecond timestamps), which would leave [min, min] and make
+        // every point/segment fail the validBounds min < max check.
+        const margin = Math.max(0.5, Math.abs(min) * Number.EPSILON * 8);
+        const lo = min - margin;
+        const hi = max + margin;
+        if (Number.isFinite(lo) && Number.isFinite(hi))
+            return [lo, hi];
+        // Near ±Number.MAX_VALUE an outward margin overflows to ±Infinity;
+        // expand inward on the finite side so the range stays non-degenerate.
+        if (!Number.isFinite(hi))
+            return [min - margin * 2, max];
+        return [min, max + margin * 2];
+    }
     return [min, max];
 }
 /**
@@ -62,8 +77,9 @@ export function layoutChart(options, width, height) {
 export function layoutChartInternal(options, width, height) {
     validateChartOptions(options);
     const cells = [];
-    if (width <= 0 || height <= 0)
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
         return { cells, graphLeft: 0, graphWidth: 0, graphHeight: 0 };
+    }
     const datasets = options.datasets ?? [];
     const xAxis = options.xAxis;
     const yAxis = options.yAxis;
@@ -166,14 +182,14 @@ export function layoutChartInternal(options, width, height) {
             areaX = Math.max(graphLeft - 1, 0);
             areaWidth = graphLeft + tickWidth - areaX;
         }
-        const shownFirst = first.length > areaWidth ? first.slice(0, areaWidth) : first;
+        const shownFirst = truncateCodePoints(first, areaWidth);
         if (shownFirst.length > 0) {
             let fx = areaX;
             if (alignment === "left")
                 fx = areaX + areaWidth - shownFirst.length;
             else if (alignment === "center")
                 fx = areaX + Math.floor((areaWidth - shownFirst.length) / 2);
-            paintText(cells, shownFirst, fx, labelRowX, labelColor);
+            paintText(cells, shownFirst.join(""), fx, labelRowX, labelColor);
         }
         // Middle labels: centered in (graphLeft + i*tickWidth + 1, tickWidth - 1),
         // truncated to the area (ratatui render_x_labels).
@@ -183,11 +199,11 @@ export function layoutChartInternal(options, width, height) {
             const text = xLabels[i];
             const areaMiddleX = graphLeft + i * tickWidth + 1;
             const areaMiddleWidth = tickWidth - 1;
-            const shown = text.length > areaMiddleWidth ? text.slice(0, areaMiddleWidth) : text;
+            const shown = truncateCodePoints(text, areaMiddleWidth);
             const lx = areaMiddleX + Math.floor((areaMiddleWidth - shown.length) / 2);
             if (lx < graphLeft || lx + shown.length > width)
                 continue;
-            paintText(cells, shown, lx, labelRowX, labelColor);
+            paintText(cells, shown.join(""), lx, labelRowX, labelColor);
         }
         const last = xLabels[n - 1];
         if (last.length <= width) {
@@ -207,13 +223,13 @@ export function layoutChartInternal(options, width, height) {
             if (row < 0 || row >= height)
                 continue;
             const full = yLabels[i];
-            const text = full.length > yLabelWidth ? full.slice(0, yLabelWidth) : full;
+            const text = truncateCodePoints(full, yLabelWidth);
             let tx = 0;
             if (alignment === "right")
                 tx = yLabelWidth - text.length;
             else if (alignment === "center")
                 tx = Math.floor((yLabelWidth - text.length) / 2);
-            paintText(cells, text, tx, row, labelColor);
+            paintText(cells, text.join(""), tx, row, labelColor);
         }
     }
     // --- Data stage (Canvas port) -------------------------------------------
@@ -278,7 +294,10 @@ export function layoutChartInternal(options, width, height) {
             const legendWidth = innerWidth + 2;
             const legendHeight = named.length + 2;
             const [ratioW, ratioH] = options.hiddenLegendConstraints ?? [0.25, 0.25];
-            const maxWidth = Math.floor(graphWidth * ratioW);
+            // The legend must never be wider than the graph itself even when a
+            // constraint ratio above 1 is passed; lx = width - legendWidth would
+            // otherwise go negative and paint outside the widget's left edge.
+            const maxWidth = Math.min(graphWidth, Math.max(0, Math.floor(graphWidth * ratioW)));
             const maxHeight = Math.floor(graphHeight * ratioH);
             const xTitleWidth = xAxis?.title !== undefined && xAxis.title.length > 0 ? xAxis.title.length : 0;
             const yTitleWidth = yAxis?.title !== undefined && yAxis.title.length > 0 ? yAxis.title.length : 0;

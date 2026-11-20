@@ -61,13 +61,22 @@ export class SpinnerRenderable extends Renderable {
   }
 
   constructor(ctx: RenderContext, options: SpinnerOptions) {
+    // Validate before super(): the base constructor registers the instance in
+    // Renderable.renderablesByNumber and allocates the native yoga node, so a
+    // throw after super() would leak both (same pattern as ChartRenderable).
+    const preset = options.name ? getSpinnerPreset(options.name) : undefined
+    if (options.name && !preset) {
+      throw new Error(`Unknown spinner preset: "${options.name}"`)
+    }
+    const interval = options.name ? preset!.interval : options.interval ?? DEFAULT_INTERVAL
+    // NaN/Infinity pass a plain `<= 0` check; Node coerces them to a 1ms
+    // timer, which would spin the render loop at full speed.
+    if (!Number.isFinite(interval) || interval <= 0) {
+      throw new Error(`Spinner interval must be a positive finite number, got ${interval}`)
+    }
     super(ctx, options)
 
-    if (options.name) {
-      const preset = getSpinnerPreset(options.name)
-      if (!preset) {
-        throw new Error(`Unknown spinner preset: "${options.name}"`)
-      }
+    if (preset) {
       this._name = options.name
       this._frames = [...preset.frames]
       this._interval = preset.interval
@@ -75,12 +84,6 @@ export class SpinnerRenderable extends Renderable {
       this._name = undefined
       this._frames = options.frames?.length ? [...options.frames] : [...DEFAULT_FRAMES]
       this._interval = options.interval ?? DEFAULT_INTERVAL
-    }
-
-    // NaN/Infinity pass a plain `<= 0` check; Node coerces them to a 1ms
-    // timer, which would spin the render loop at full speed.
-    if (!Number.isFinite(this._interval) || this._interval <= 0) {
-      throw new Error(`Spinner interval must be a positive finite number, got ${this._interval}`)
     }
 
     this._autoplay = options.autoplay ?? true
@@ -123,6 +126,9 @@ export class SpinnerRenderable extends Renderable {
   }
 
   private _replaceFrames(frames: readonly string[]): void {
+    // Post-destroy this would allocate native unicode handles no
+    // destroySelf() can free again (destroy() early-returns once flagged).
+    if (this.isDestroyed) return
     this._freeFrames()
     this._frames = [...frames]
     this._currentFrameIndex = 0
@@ -172,7 +178,7 @@ export class SpinnerRenderable extends Renderable {
   }
 
   get frames(): string[] {
-    return this._frames
+    return [...this._frames]
   }
 
   set frames(value: string[]) {
@@ -210,7 +216,9 @@ export class SpinnerRenderable extends Renderable {
   }
 
   start(): void {
-    if (this._intervalId) return
+    // A destroyed spinner can never be rendered again; starting its interval
+    // would pin the event loop with a timer destroy() can no longer clear.
+    if (this._intervalId || this.isDestroyed) return
     this._intervalId = setInterval(() => {
       this._currentFrameIndex = (this._currentFrameIndex + 1) % this._frames.length
       this.requestRender()

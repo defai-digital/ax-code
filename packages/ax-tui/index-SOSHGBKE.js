@@ -33,10 +33,11 @@ import {
   singleton,
   sleep,
   stringToStyledText,
+  stringWidth,
   toArrayBuffer,
   treeSitterToTextChunks,
   validateBufferDimensions
-} from "./index-UXYV2YFD.js";
+} from "./index-P5QDLRVD.js";
 
 // src/core/text-buffer-view.ts
 var TextBufferView = class _TextBufferView {
@@ -192,7 +193,7 @@ var EditBuffer = class _EditBuffer extends EventEmitter {
   textBufferPtr;
   id;
   _destroyed = false;
-  _textBytes = [];
+  _textPins = [];
   _singleTextBytes = null;
   _singleTextMemId = null;
   _syntaxStyle;
@@ -265,9 +266,37 @@ var EditBuffer = class _EditBuffer extends EventEmitter {
   replaceText(text) {
     this.guard();
     const textBytes = this.lib.encoder.encode(text);
-    this._textBytes.push(textBytes);
-    const memId = this.lib.textBufferRegisterMemBuffer(this.textBufferPtr, textBytes, false);
+    let memId;
+    try {
+      memId = this.lib.textBufferRegisterMemBuffer(this.textBufferPtr, textBytes, false);
+    } catch {
+      this.recycleRegistrySlot(textBytes);
+      return;
+    }
+    this._textPins.push({ bytes: textBytes, memId });
     this.lib.editBufferReplaceTextFromMem(this.bufferPtr, memId);
+  }
+  // The native mem registry caps at 255 slots and never recycles them. Clearing
+  // it would free the add buffer's owned slot and leave insertText writing
+  // through a dangling pointer, so exhaustion must recycle a slot this instance
+  // already tracks. Native setTextFromMem resets content and undo history,
+  // dropping the last references to the other pins. The replacement text
+  // survives; undo history does not.
+  recycleRegistrySlot(textBytes) {
+    const recycled = this._textPins.shift();
+    let memId = recycled?.memId ?? this._singleTextMemId;
+    if (memId === null) {
+      throw new Error("EditBuffer text registry is exhausted and has no recyclable slot");
+    }
+    if (!this.lib.textBufferReplaceMemBuffer(this.textBufferPtr, memId, textBytes, false)) {
+      memId = this.lib.textBufferRegisterMemBuffer(this.textBufferPtr, textBytes, false);
+      this._textPins.push({ bytes: textBytes, memId });
+    } else if (recycled) {
+      this._textPins.push({ bytes: textBytes, memId });
+    } else {
+      this._singleTextBytes = textBytes;
+    }
+    this.lib.editBufferSetTextFromMem(this.bufferPtr, memId);
   }
   /**
    * Replace text using owned memory while preserving undo history (creates an undo point).
@@ -508,6 +537,9 @@ var EditBuffer = class _EditBuffer extends EventEmitter {
     this._destroyed = true;
     _EditBuffer.registry.delete(this.id);
     this.lib.destroyEditBuffer(this.bufferPtr);
+    this._textPins = [];
+    this._singleTextBytes = null;
+    this._singleTextMemId = null;
   }
 };
 
@@ -734,6 +766,7 @@ function isGapType(value) {
 var BoxRenderable = class extends Renderable {
   _backgroundColor;
   _border;
+  _borderExplicitlyDisabled = false;
   _borderStyle;
   _borderColor;
   _focusedBorderColor;
@@ -763,7 +796,8 @@ var BoxRenderable = class extends Renderable {
     }
     this._backgroundColor = parseColor(options.backgroundColor || this._defaultOptions.backgroundColor);
     this._border = options.border ?? this._defaultOptions.border;
-    if (!options.border && (options.borderStyle || options.borderColor || options.focusedBorderColor || options.customBorderChars)) {
+    this._borderExplicitlyDisabled = options.border === false;
+    if (options.border === void 0 && (options.borderStyle || options.borderColor || options.focusedBorderColor || options.customBorderChars)) {
       this._border = true;
     }
     this._borderStyle = parseBorderStyle(options.borderStyle, this._defaultOptions.borderStyle);
@@ -785,7 +819,7 @@ var BoxRenderable = class extends Renderable {
     }
   }
   initializeBorder() {
-    if (this._border === false) {
+    if (this._border === false && !this._borderExplicitlyDisabled) {
       this._border = true;
       this.borderSides = getBorderSides(this._border);
       this.applyYogaBorders();
@@ -797,6 +831,7 @@ var BoxRenderable = class extends Renderable {
   set customBorderChars(value) {
     this._customBorderCharsObj = value;
     this._customBorderChars = value ? borderCharsToArray(value) : void 0;
+    if (value) this.initializeBorder();
     this.requestRender();
   }
   get backgroundColor() {
@@ -813,6 +848,7 @@ var BoxRenderable = class extends Renderable {
     return this._border;
   }
   set border(value) {
+    this._borderExplicitlyDisabled = value === false;
     if (this._border !== value) {
       this._border = value;
       this.borderSides = getBorderSides(value);
@@ -825,9 +861,10 @@ var BoxRenderable = class extends Renderable {
   }
   set borderStyle(value) {
     const _value = parseBorderStyle(value, this._defaultOptions.borderStyle);
-    if (this._borderStyle !== _value || !this._border) {
+    if (this._borderStyle !== _value || !this._border || this._customBorderChars !== void 0) {
       this._borderStyle = _value;
       this._customBorderChars = void 0;
+      this._customBorderCharsObj = void 0;
       this.initializeBorder();
       this.requestRender();
     }
@@ -1365,6 +1402,7 @@ var TextBufferRenderable = class extends Renderable {
     return this.textBufferView.getSelection();
   }
   render(buffer, deltaTime) {
+    if (this.isDestroyed) return;
     if (!this.visible) return;
     const screenX = this._screenX;
     const screenY = this._screenY;
@@ -1405,11 +1443,13 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
   _treeSitterClient;
   _highlightsDirty = false;
   _highlightSnapshotId = 0;
+  _activeHighlightId = 0;
   _conceal;
   _drawUnstyledText;
   _shouldRenderTextBuffer = true;
   _streaming;
   _initialStyledText;
+  _initialStyledTextFor;
   _hadInitialContent = false;
   _lastHighlights = [];
   _baseHighlight;
@@ -1435,6 +1475,7 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
     this._drawUnstyledText = options.drawUnstyledText ?? this._contentDefaultOptions.drawUnstyledText;
     this._streaming = options.streaming ?? this._contentDefaultOptions.streaming;
     this._initialStyledText = options.initialStyledText;
+    this._initialStyledTextFor = this._content;
     this._baseHighlight = options.baseHighlight;
     this._onHighlight = options.onHighlight;
     this._onChunks = options.onChunks;
@@ -1457,11 +1498,11 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
       this._content = value;
       this._highlightsDirty = true;
       this._highlightSnapshotId++;
-      if (this._streaming && this._filetype && !this._drawUnstyledText) {
+      if (this._streaming && this._filetype && !this._drawUnstyledText && value.length > 0) {
         this.requestRender();
         return;
       }
-      if (this._initialStyledText && this._drawUnstyledText) {
+      if (this._initialStyledText && this._drawUnstyledText && this._initialStyledTextFor === this._content) {
         this.textBuffer.setStyledText(this._initialStyledText);
       } else {
         this.textBuffer.setText(value);
@@ -1505,6 +1546,8 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
     if (this._filetype !== value) {
       this._filetype = value;
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   get syntaxStyle() {
@@ -1514,6 +1557,8 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
     if (this._syntaxStyle !== value) {
       this._syntaxStyle = value;
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   get conceal() {
@@ -1523,6 +1568,8 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
     if (this._conceal !== value) {
       this._conceal = value;
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   get drawUnstyledText() {
@@ -1532,6 +1579,8 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
     if (this._drawUnstyledText !== value) {
       this._drawUnstyledText = value;
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   get streaming() {
@@ -1540,7 +1589,10 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
   set initialStyledText(value) {
     if (this._initialStyledText !== value) {
       this._initialStyledText = value;
+      this._initialStyledTextFor = this._content;
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   set streaming(value) {
@@ -1549,6 +1601,8 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
       this._hadInitialContent = false;
       this._lastHighlights = [];
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   get treeSitterClient() {
@@ -1558,6 +1612,8 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
     if (this._treeSitterClient !== value) {
       this._treeSitterClient = value;
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   get onHighlight() {
@@ -1570,12 +1626,16 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
     if (this._baseHighlight !== value) {
       this._baseHighlight = value;
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   set onHighlight(value) {
     if (this._onHighlight !== value) {
       this._onHighlight = value;
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   get onChunks() {
@@ -1585,10 +1645,15 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
     if (this._onChunks !== value) {
       this._onChunks = value;
       this._highlightsDirty = true;
+      this._highlightSnapshotId++;
+      this.requestRender();
     }
   }
   get isHighlighting() {
     return this._isHighlighting;
+  }
+  get isHighlightPending() {
+    return this._isHighlighting || this._highlightsDirty && this._content.length > 0 && !!this._filetype;
   }
   get highlightingDone() {
     return this._highlightingPromise;
@@ -1610,7 +1675,7 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
     if (this._streaming && !isInitialContent) {
       this._shouldRenderTextBuffer = true;
     } else if (shouldDrawUnstyledNow) {
-      if (this._initialStyledText) {
+      if (this._initialStyledText && this._initialStyledTextFor === this._content) {
         this.textBuffer.setStyledText(this._initialStyledText);
       } else {
         this.textBuffer.setText(content);
@@ -1631,13 +1696,18 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
       this._hadInitialContent = true;
     }
     this._isHighlighting = true;
+    this._activeHighlightId = snapshotId;
     try {
       const result = await this._treeSitterClient.highlightOnce(content, filetype);
       if (snapshotId !== this._highlightSnapshotId) {
+        if (snapshotId === this._activeHighlightId) this._isHighlighting = false;
         this.requestRender();
         return;
       }
-      if (this.isDestroyed) return;
+      if (this.isDestroyed) {
+        if (snapshotId === this._activeHighlightId) this._isHighlighting = false;
+        return;
+      }
       let highlights = result.highlights ?? [];
       if (this._onHighlight && highlights.length >= 0) {
         const context = {
@@ -1651,10 +1721,14 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
         }
       }
       if (snapshotId !== this._highlightSnapshotId) {
+        if (snapshotId === this._activeHighlightId) this._isHighlighting = false;
         this.requestRender();
         return;
       }
-      if (this.isDestroyed) return;
+      if (this.isDestroyed) {
+        if (snapshotId === this._activeHighlightId) this._isHighlighting = false;
+        return;
+      }
       if (highlights.length > 0) {
         if (this._streaming) {
           this._lastHighlights = highlights;
@@ -1674,10 +1748,14 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
         const renderedLineSources = this._onChunks ? void 0 : this.getConcealLinesSourceMap(content, highlights);
         chunks = await this.transformChunks(chunks, context);
         if (snapshotId !== this._highlightSnapshotId) {
+          if (snapshotId === this._activeHighlightId) this._isHighlighting = false;
           this.requestRender();
           return;
         }
-        if (this.isDestroyed) return;
+        if (this.isDestroyed) {
+          if (snapshotId === this._activeHighlightId) this._isHighlighting = false;
+          return;
+        }
         const styledText = new StyledText(chunks);
         this.textBuffer.setStyledText(styledText);
         this.setRenderedLineSources(renderedLineSources);
@@ -1692,11 +1770,15 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
       this.requestRender();
     } catch (error) {
       if (snapshotId !== this._highlightSnapshotId) {
+        if (snapshotId === this._activeHighlightId) this._isHighlighting = false;
         this.requestRender();
         return;
       }
       console.warn("Code highlighting failed, falling back to plain text:", error);
-      if (this.isDestroyed) return;
+      if (this.isDestroyed) {
+        if (snapshotId === this._activeHighlightId) this._isHighlighting = false;
+        return;
+      }
       this.textBuffer.setText(content);
       this.setRenderedLineSources(void 0);
       this._shouldRenderTextBuffer = true;
@@ -1796,6 +1878,11 @@ var CodeRenderable = class _CodeRenderable extends TextBufferRenderable {
         this._shouldRenderTextBuffer = false;
         this._highlightsDirty = false;
       } else if (!this._filetype) {
+        if (this.textBuffer.getPlainText() !== this._content) {
+          this.textBuffer.setText(this._content);
+          this.setRenderedLineSources(void 0);
+          this.updateTextInfo();
+        }
         this._shouldRenderTextBuffer = true;
         this._highlightsDirty = false;
       } else {
@@ -1845,6 +1932,12 @@ var TextNodeRenderable = class _TextNodeRenderable extends BaseRenderable {
     return this._children;
   }
   set children(children) {
+    for (const child of this._children) {
+      if (isTextNodeRenderable(child)) child.parent = null;
+    }
+    for (const child of children) {
+      if (isTextNodeRenderable(child)) child.parent = this;
+    }
     this._children = children;
     this.requestRender();
   }
@@ -1894,6 +1987,9 @@ var TextNodeRenderable = class _TextNodeRenderable extends BaseRenderable {
     throw new Error("TextNodeRenderable only accepts strings, TextNodeRenderable instances, or StyledText instances");
   }
   replace(obj, index) {
+    if (!Number.isInteger(index) || index < 0 || index >= this._children.length) {
+      throw new Error(`Replace index ${index} is out of bounds`);
+    }
     const previous = this._children[index];
     if (previous !== void 0 && isTextNodeRenderable(previous) && previous !== obj) {
       previous.parent = null;
@@ -2109,13 +2205,51 @@ var TextRenderable = class extends TextBufferRenderable {
     return this.rootTextNode;
   }
   set content(value) {
-    this._hasManualStyledText = true;
     const styledText = typeof value === "string" ? stringToStyledText(value) : value;
     if (this._text !== styledText) {
+      if (typeof value === "string" && this.isEquivalentStringContent(styledText)) {
+        return;
+      }
+      this._hasManualStyledText = true;
       this._text = styledText;
       this.updateTextBuffer(styledText);
       this.updateTextInfo();
     }
+  }
+  isEquivalentStringContent(styledText) {
+    if (this._hasManualStyledText) {
+      return this.chunksValueEqual(this._text.chunks, styledText.chunks);
+    }
+    const wasDirty = this.rootTextNode.isDirty;
+    const nodeChunks = this.rootTextNode.gatherWithInheritedStyle({
+      fg: this._defaultFg,
+      bg: this._defaultBg,
+      attributes: this._defaultAttributes,
+      link: void 0
+    });
+    if (!this.chunksValueEqual(nodeChunks, styledText.chunks)) return false;
+    if (wasDirty) {
+      this._text = styledText;
+      this.updateTextBuffer(styledText);
+      this.updateTextInfo();
+    }
+    return true;
+  }
+  chunksValueEqual(a, b) {
+    const left = a.filter((chunk) => chunk.text !== "");
+    const right = b.filter((chunk) => chunk.text !== "");
+    if (left.length !== right.length) return false;
+    for (let i = 0; i < left.length; i++) {
+      const x = left[i];
+      const y = right[i];
+      if (x.text !== y.text) return false;
+      if ((x.attributes ?? 0) !== (y.attributes ?? 0)) return false;
+      if (x.link?.url !== y.link?.url) return false;
+      if (x.contentStart !== y.contentStart || x.contentEnd !== y.contentEnd) return false;
+      if (!(x.fg ?? this._defaultFg).equals(y.fg ?? this._defaultFg)) return false;
+      if (!(x.bg ?? this._defaultBg).equals(y.bg ?? this._defaultBg)) return false;
+    }
+    return true;
   }
   updateTextFromNodes() {
     if (this.rootTextNode.isDirty && !this._hasManualStyledText) {
@@ -2145,6 +2279,7 @@ var TextRenderable = class extends TextBufferRenderable {
   }
   clear() {
     this.rootTextNode.clear();
+    this._hasManualStyledText = false;
     const emptyStyledText = stringToStyledText("");
     this._text = emptyStyledText;
     this.updateTextBuffer(emptyStyledText);
@@ -2164,7 +2299,7 @@ var TextRenderable = class extends TextBufferRenderable {
     this.rootTextNode.attributes = newAttributes;
   }
   destroy() {
-    this.rootTextNode.children.length = 0;
+    this.rootTextNode.clear();
     super.destroy();
   }
 };
@@ -2219,7 +2354,9 @@ var NativeSpanFeed = class _NativeSpanFeed {
   closeQueued = false;
   idleResolvers = [];
   pendingHandlerError = null;
+  hasPendingHandlerError = false;
   pendingHandlerErrorQueued = false;
+  deferIdleResolve = false;
   constructor(streamPtr) {
     this.streamPtr = streamPtr;
     this.eventHandler = (eventId, arg0, arg1) => {
@@ -2236,7 +2373,15 @@ var NativeSpanFeed = class _NativeSpanFeed {
     this.dataHandlers.add(handler);
     if (this.pendingDataAvailable) {
       this.pendingDataAvailable = false;
-      this.drainAll();
+      this.deferIdleResolve = true;
+      try {
+        this.drainAll();
+      } catch (e) {
+        this.queuePendingHandlerError(e);
+      } finally {
+        this.deferIdleResolve = false;
+        this.resolveIdleIfNeeded();
+      }
     }
     return () => this.dataHandlers.delete(handler);
   }
@@ -2307,6 +2452,7 @@ var NativeSpanFeed = class _NativeSpanFeed {
     return !this.inCallback && !this.draining && this.pendingAsyncHandlers === 0 && !this.pendingDataAvailable && !this.hasPinnedChunks();
   }
   resolveIdleIfNeeded() {
+    if (this.deferIdleResolve) return;
     if (!this.isIdle()) return;
     const resolvers = this.idleResolvers.splice(0);
     for (const resolve of resolvers) {
@@ -2353,7 +2499,22 @@ var NativeSpanFeed = class _NativeSpanFeed {
         }
         case 6 /* Error */: {
           const code = toNumber(arg0);
-          for (const handler of this.errorHandlers) handler(code);
+          let firstError;
+          let handlerFailed = false;
+          for (const handler of [...this.errorHandlers]) {
+            try {
+              handler(code);
+            } catch (e) {
+              if (!handlerFailed) {
+                handlerFailed = true;
+                firstError = e;
+              }
+            }
+          }
+          if (handlerFailed) {
+            if (canThrowAcrossNativeCallback) throw firstError;
+            this.queuePendingHandlerError(firstError);
+          }
           break;
         }
         case 5 /* Closed */: {
@@ -2375,20 +2536,25 @@ var NativeSpanFeed = class _NativeSpanFeed {
     }
   }
   queuePendingHandlerError(error) {
-    this.pendingHandlerError ??= error;
+    if (!this.hasPendingHandlerError) {
+      this.hasPendingHandlerError = true;
+      this.pendingHandlerError = error;
+    }
     if (this.pendingHandlerErrorQueued) return;
     this.pendingHandlerErrorQueued = true;
     queueMicrotask(() => {
       this.pendingHandlerErrorQueued = false;
-      if (this.pendingHandlerError === null) return;
+      if (!this.hasPendingHandlerError) return;
       const pendingError = this.pendingHandlerError;
+      this.hasPendingHandlerError = false;
       this.pendingHandlerError = null;
       throw pendingError;
     });
   }
   throwPendingHandlerError() {
-    if (this.pendingHandlerError === null) return;
+    if (!this.hasPendingHandlerError) return;
     const pendingError = this.pendingHandlerError;
+    this.hasPendingHandlerError = false;
     this.pendingHandlerError = null;
     throw pendingError;
   }
@@ -2401,6 +2567,7 @@ var NativeSpanFeed = class _NativeSpanFeed {
     this.draining = true;
     const spans = SpanInfoStruct.unpackList(this.drainBuffer.buffer, count);
     let firstError = null;
+    let handlerFailed = false;
     try {
       for (const span of spans) {
         if (span.len === 0) {
@@ -2423,7 +2590,7 @@ var NativeSpanFeed = class _NativeSpanFeed {
         }
         const slice = new Uint8Array(buffer, span.offset, span.len);
         let asyncResults = null;
-        for (const handler of this.dataHandlers) {
+        for (const handler of [...this.dataHandlers]) {
           try {
             const result = handler(slice);
             if (result && typeof result.then === "function") {
@@ -2431,16 +2598,23 @@ var NativeSpanFeed = class _NativeSpanFeed {
               asyncResults.push(result);
             }
           } catch (e) {
-            firstError ??= e;
+            if (!handlerFailed) {
+              handlerFailed = true;
+              firstError = e;
+            }
           }
         }
         const shouldStopAfterThisSpan = this.pendingClose;
         if (asyncResults) {
           const chunkIndex = span.chunkIndex;
           this.pendingAsyncHandlers += 1;
-          Promise.allSettled(asyncResults).then(() => {
+          Promise.allSettled(asyncResults).then((results) => {
             this.decrementRefcount(chunkIndex);
             this.pendingAsyncHandlers -= 1;
+            const rejected = results.find((result) => result.status === "rejected");
+            if (rejected) {
+              this.queuePendingHandlerError(rejected.reason);
+            }
             this.processPendingClose();
             this.resolveIdleIfNeeded();
           });
@@ -2453,7 +2627,7 @@ var NativeSpanFeed = class _NativeSpanFeed {
       this.draining = false;
       this.resolveIdleIfNeeded();
     }
-    if (firstError) {
+    if (handlerFailed) {
       if (!this.inCallback || canThrowAcrossNativeCallback) {
         throw firstError;
       }
@@ -2462,9 +2636,24 @@ var NativeSpanFeed = class _NativeSpanFeed {
     return count;
   }
   drainAll() {
-    let count = this.drainOnce();
-    while (count > 0) {
-      count = this.drainOnce();
+    let firstError;
+    let failed = false;
+    let count = 0;
+    do {
+      try {
+        count = this.drainOnce();
+      } catch (e) {
+        if (!failed) {
+          failed = true;
+          firstError = e;
+        }
+        count = 1;
+      }
+    } while (count > 0);
+    if (failed) {
+      if (!this.inCallback || canThrowAcrossNativeCallback) throw firstError;
+      this.queuePendingHandlerError(firstError);
+      return;
     }
     if (!this.inCallback) {
       this.throwPendingHandlerError();
@@ -2482,6 +2671,7 @@ import util from "node:util";
 // src/lib/output.capture.ts
 import { Writable } from "stream";
 import { EventEmitter as EventEmitter2 } from "events";
+import { StringDecoder } from "string_decoder";
 var Capture = class extends EventEmitter2 {
   // TODO: Cache could rather be a buffer to avoid join()?
   output = [];
@@ -2515,10 +2705,22 @@ var CapturedWritableStream = class extends Writable {
   isTTY = true;
   columns = process.stdout.columns || 80;
   rows = process.stdout.rows || 24;
+  decoder = new StringDecoder("utf8");
   _write(chunk, encoding, callback) {
-    const data = chunk.toString();
-    this.capture.write(this.stream, data);
-    callback();
+    const data = Buffer.isBuffer(chunk) ? this.decoder.write(chunk) : String(chunk);
+    try {
+      this.capture.write(this.stream, data);
+    } finally {
+      callback();
+    }
+  }
+  _final(callback) {
+    const rest = this.decoder.end();
+    try {
+      if (rest) this.capture.write(this.stream, rest);
+    } finally {
+      callback();
+    }
   }
   getColorDepth() {
     return process.stdout.getColorDepth?.() || 8;
@@ -2615,14 +2817,12 @@ function buildKeyBindingsMap(bindings, aliasMap) {
   const map = /* @__PURE__ */ new Map();
   const aliases = aliasMap || {};
   for (const binding of bindings) {
-    const key = getKeyBindingKey(binding);
-    map.set(key, binding.action);
-  }
-  for (const binding of bindings) {
-    const normalizedName = aliases[binding.name] || binding.name;
-    if (normalizedName !== binding.name) {
-      const aliasedKey = getKeyBindingKey({ ...binding, name: normalizedName });
-      map.set(aliasedKey, binding.action);
+    const seen = /* @__PURE__ */ new Set();
+    let name = binding.name;
+    while (name !== void 0 && !seen.has(name)) {
+      seen.add(name);
+      map.set(getKeyBindingKey({ ...binding, name }), binding.action);
+      name = Object.hasOwn(aliases, name) ? aliases[name] : void 0;
     }
   }
   return map;
@@ -2816,6 +3016,44 @@ var DEFAULT_CONSOLE_OPTIONS = {
   copyButtonColor: "#00A0FF"
 };
 var INDENT_WIDTH = 2;
+var consoleSegmenter = new Intl.Segmenter(void 0, { granularity: "grapheme" });
+function clipTextToWidth(text, maxWidth) {
+  let index = 0;
+  let width = 0;
+  for (const { segment } of consoleSegmenter.segment(text)) {
+    const charWidth = stringWidth(segment);
+    if (width + charWidth > maxWidth && index > 0) break;
+    width += charWidth;
+    index += segment.length;
+  }
+  return text.substring(0, index);
+}
+function codeUnitIndexForColumn(text, column) {
+  if (column <= 0) return 0;
+  let index = 0;
+  let width = 0;
+  for (const { segment } of consoleSegmenter.segment(text)) {
+    const charWidth = stringWidth(segment);
+    if (width >= column && charWidth > 0) break;
+    width += charWidth;
+    index += segment.length;
+  }
+  return index;
+}
+function wrapLogText(text, firstWidth, restWidth) {
+  if (text.length === 0) return [""];
+  const segments = [];
+  let rest = text;
+  const first = clipTextToWidth(rest, firstWidth);
+  segments.push(first);
+  rest = rest.substring(first.length);
+  while (rest.length > 0) {
+    const segment = clipTextToWidth(rest, restWidth);
+    segments.push(segment);
+    rest = rest.substring(segment.length);
+  }
+  return segments;
+}
 var TerminalConsole = class extends EventEmitter3 {
   isVisible = false;
   isFocused = false;
@@ -2855,6 +3093,20 @@ var TerminalConsole = class extends EventEmitter3 {
     this._needsFrameBufferUpdate = true;
     this.renderer.requestRender();
   }
+  // The renderer emits MOUSE_UP for every release, including ones outside the
+  // console bounds that handleMouse never sees; end the drag here too. Releases
+  // inside the console are left to handleMouse so it can finalize the selection.
+  _handleGlobalMouseUp = (event) => {
+    if (!this._isDragging) return;
+    if (event && this.isVisible) {
+      const localX = event.x - this.consoleX;
+      const localY = event.y - this.consoleY;
+      if (localX >= 0 && localX < this.consoleWidth && localY >= 0 && localY < this.consoleHeight) return;
+    }
+    this._isDragging = false;
+    this.stopAutoScroll();
+    this.markNeedsRerender();
+  };
   getCopyButtonLabel() {
     const copyBindings = this._mergedKeyBindings.filter((b) => b.action === "copy-selection");
     const copyBinding = copyBindings[copyBindings.length - 1];
@@ -2913,6 +3165,7 @@ var TerminalConsole = class extends EventEmitter3 {
       this._handleNewLog(logEntry);
     };
     terminalConsoleCache.on("entry", this._entryListener);
+    this.renderer.on("mouse:up" /* MOUSE_UP */, this._handleGlobalMouseUp);
     if (env.SHOW_CONSOLE) {
       this.show();
     }
@@ -2950,6 +3203,7 @@ var TerminalConsole = class extends EventEmitter3 {
       const linesRemoved = this._displayLines.length - this.options.maxDisplayLines;
       this._displayLines.splice(0, linesRemoved);
       this.scrollTopIndex = Math.max(0, this.scrollTopIndex - linesRemoved);
+      this._adjustSelectionForTrim(linesRemoved);
     }
     if (this.isScrolledToBottom) {
       this._scrollToBottom();
@@ -3138,6 +3392,10 @@ var TerminalConsole = class extends EventEmitter3 {
     terminalConsoleCache.clearConsole();
     this._allLogEntries = [];
     this._displayLines = [];
+    this.scrollTopIndex = 0;
+    this.currentLineIndex = 0;
+    this.isScrolledToBottom = true;
+    this.clearSelection();
     this.markNeedsRerender();
   }
   toggle() {
@@ -3195,6 +3453,11 @@ var TerminalConsole = class extends EventEmitter3 {
     this.hide();
     this.deactivate();
     terminalConsoleCache.off("entry", this._entryListener);
+    this.renderer.off("mouse:up" /* MOUSE_UP */, this._handleGlobalMouseUp);
+    if (this.frameBuffer) {
+      this.frameBuffer.destroy();
+      this.frameBuffer = null;
+    }
   }
   getCachedLogs() {
     return terminalConsoleCache.cachedLogs.map((logEntry) => logEntry[0].toISOString() + " " + logEntry.slice(1).join(" ")).join("\n");
@@ -3252,26 +3515,25 @@ var TerminalConsole = class extends EventEmitter3 {
       } else {
         this.frameBuffer.drawText(" ", 0, lineY, this._rgbaDefault, this.backgroundColor);
       }
-      const fullText = `${linePrefix}${textToDraw.substring(0, textAvailableWidth)}`;
+      const fullText = `${linePrefix}${clipTextToWidth(textToDraw, textAvailableWidth)}`;
       const selectionRange = this.getLineSelectionRange(absoluteLineIndex);
       if (selectionRange) {
         const adjustedStart = Math.max(0, selectionRange.start);
         const adjustedEnd = Math.min(fullText.length, selectionRange.end);
+        const preWidth = stringWidth(fullText.substring(0, adjustedStart));
         if (adjustedStart > 0) {
           this.frameBuffer.drawText(fullText.substring(0, adjustedStart), 1, lineY, levelColor);
         }
+        let tailX = 1 + preWidth;
         if (adjustedStart < adjustedEnd) {
-          this.frameBuffer.fillRect(1 + adjustedStart, lineY, adjustedEnd - adjustedStart, 1, this._rgbaSelection);
-          this.frameBuffer.drawText(
-            fullText.substring(adjustedStart, adjustedEnd),
-            1 + adjustedStart,
-            lineY,
-            levelColor,
-            this._rgbaSelection
-          );
+          const midText = fullText.substring(adjustedStart, adjustedEnd);
+          const midWidth = stringWidth(midText);
+          this.frameBuffer.fillRect(1 + preWidth, lineY, midWidth, 1, this._rgbaSelection);
+          this.frameBuffer.drawText(midText, 1 + preWidth, lineY, levelColor, this._rgbaSelection);
+          tailX += midWidth;
         }
         if (adjustedEnd < fullText.length) {
-          this.frameBuffer.drawText(fullText.substring(adjustedEnd), 1 + adjustedEnd, lineY, levelColor);
+          this.frameBuffer.drawText(fullText.substring(adjustedEnd), tailX, lineY, levelColor);
         }
       } else {
         this.frameBuffer.drawText(fullText, 1, lineY, levelColor);
@@ -3334,23 +3596,18 @@ var TerminalConsole = class extends EventEmitter3 {
     const prefix = `[${timestamp}] [${level}]` + (this._debugModeEnabled ? ` [${callerSource}]` : "") + " ";
     const formattedArgs = this.formatArguments(args);
     const initialLines = formattedArgs.split("\n");
+    const firstWidth = Math.max(1, this.consoleWidth - 1);
+    const restWidth = Math.max(1, this.consoleWidth - 1 - INDENT_WIDTH);
     for (let i = 0; i < initialLines.length; i++) {
       const lineText = initialLines[i];
       const isFirstLineOfEntry = i === 0;
-      const availableWidth = Math.max(1, this.consoleWidth - 1 - (isFirstLineOfEntry ? 0 : INDENT_WIDTH));
-      const linePrefix = isFirstLineOfEntry ? prefix : " ".repeat(INDENT_WIDTH);
-      const textToWrap = isFirstLineOfEntry ? linePrefix + lineText : lineText;
-      let currentPos = 0;
-      while (currentPos < textToWrap.length || isFirstLineOfEntry && currentPos === 0 && textToWrap.length === 0) {
-        const segment = textToWrap.substring(currentPos, currentPos + availableWidth);
-        const isFirstSegmentOfLine = currentPos === 0;
+      const segments = isFirstLineOfEntry ? wrapLogText(prefix + lineText, firstWidth, restWidth) : wrapLogText(lineText, restWidth, restWidth);
+      for (let j = 0; j < segments.length; j++) {
         displayLines.push({
-          text: isFirstSegmentOfLine && !isFirstLineOfEntry ? linePrefix + segment : segment,
+          text: segments[j],
           level,
-          indent: !isFirstLineOfEntry || !isFirstSegmentOfLine
+          indent: !isFirstLineOfEntry || j > 0
         });
-        currentPos += availableWidth;
-        if (isFirstLineOfEntry && currentPos === 0 && textToWrap.length === 0) break;
       }
     }
     return displayLines;
@@ -3367,7 +3624,9 @@ var TerminalConsole = class extends EventEmitter3 {
       this._displayLines.push(...processed);
     }
     if (this._displayLines.length > this.options.maxDisplayLines) {
-      this._displayLines.splice(0, this._displayLines.length - this.options.maxDisplayLines);
+      const linesRemoved = this._displayLines.length - this.options.maxDisplayLines;
+      this._displayLines.splice(0, linesRemoved);
+      this._adjustSelectionForTrim(linesRemoved);
     }
   }
   hasSelection() {
@@ -3404,14 +3663,16 @@ var TerminalConsole = class extends EventEmitter3 {
       const line = this._displayLines[i];
       const linePrefix = line.indent ? " ".repeat(INDENT_WIDTH) : "";
       const textAvailableWidth = this.consoleWidth - 1 - (line.indent ? INDENT_WIDTH : 0);
-      const fullText = linePrefix + line.text.substring(0, textAvailableWidth);
+      const fullText = linePrefix + clipTextToWidth(line.text, textAvailableWidth);
+      const startUnit = codeUnitIndexForColumn(fullText, selection.startCol);
+      const endUnit = codeUnitIndexForColumn(fullText, selection.endCol);
       let text = fullText;
       if (i === selection.startLine && i === selection.endLine) {
-        text = fullText.substring(selection.startCol, selection.endCol);
+        text = fullText.substring(startUnit, endUnit);
       } else if (i === selection.startLine) {
-        text = fullText.substring(selection.startCol);
+        text = fullText.substring(startUnit);
       } else if (i === selection.endLine) {
-        text = fullText.substring(0, selection.endCol);
+        text = fullText.substring(0, endUnit);
       }
       lines.push(text);
     }
@@ -3422,6 +3683,19 @@ var TerminalConsole = class extends EventEmitter3 {
     this._selectionEnd = null;
     this._isDragging = false;
     this.stopAutoScroll();
+  }
+  // Display-line indices shift when old lines are trimmed from the top; keep
+  // the selection anchored to the same text instead of letting it drift onto
+  // unrelated lines or point past the end of the buffer.
+  _adjustSelectionForTrim(linesRemoved) {
+    if (!this._selectionStart || !this._selectionEnd) return;
+    if (Math.max(this._selectionStart.line, this._selectionEnd.line) < linesRemoved) {
+      this.clearSelection();
+      return;
+    }
+    const shift = (point) => point.line < linesRemoved ? { line: 0, col: 0 } : { line: point.line - linesRemoved, col: point.col };
+    this._selectionStart = shift(this._selectionStart);
+    this._selectionEnd = shift(this._selectionEnd);
   }
   stopAutoScroll() {
     if (this._autoScrollInterval !== null) {
@@ -3489,14 +3763,15 @@ var TerminalConsole = class extends EventEmitter3 {
     if (!line) return null;
     const linePrefix = line.indent ? " ".repeat(INDENT_WIDTH) : "";
     const textAvailableWidth = this.consoleWidth - 1 - (line.indent ? INDENT_WIDTH : 0);
-    const fullTextLength = linePrefix.length + Math.min(line.text.length, textAvailableWidth);
+    const fullText = linePrefix + clipTextToWidth(line.text, textAvailableWidth);
+    const fullTextLength = fullText.length;
     let start = 0;
     let end = fullTextLength;
     if (lineIndex === selection.startLine) {
-      start = Math.max(0, selection.startCol);
+      start = Math.max(0, codeUnitIndexForColumn(fullText, selection.startCol));
     }
     if (lineIndex === selection.endLine) {
-      end = Math.min(fullTextLength, selection.endCol);
+      end = Math.min(fullTextLength, codeUnitIndexForColumn(fullText, selection.endCol));
     }
     if (start >= end) return null;
     return { start, end };
@@ -3516,15 +3791,31 @@ var TerminalConsole = class extends EventEmitter3 {
       }
       return true;
     }
+    const lineIndex = this.scrollTopIndex + (localY - 1);
+    const colIndex = Math.max(0, localX - 1);
+    if (event.type === "up") {
+      if (this._isDragging) {
+        if (localY >= 1) {
+          this._selectionEnd = { line: lineIndex, col: colIndex };
+        }
+        this._isDragging = false;
+        this.stopAutoScroll();
+        this.markNeedsRerender();
+      }
+      return true;
+    }
     if (localY === 0) {
       if (event.type === "down" && event.button === 0 && localX >= this._copyButtonBounds.x && localX < this._copyButtonBounds.x + this._copyButtonBounds.width) {
         this.triggerCopy();
         return true;
       }
+      if (event.type === "drag" && this._isDragging) {
+        this.startAutoScroll("up");
+        this.markNeedsRerender();
+        return true;
+      }
       return true;
     }
-    const lineIndex = this.scrollTopIndex + (localY - 1);
-    const colIndex = Math.max(0, localX - 1);
     if (event.type === "down" && event.button === 0) {
       this.clearSelection();
       this._selectionStart = { line: lineIndex, col: colIndex };
@@ -3545,15 +3836,6 @@ var TerminalConsole = class extends EventEmitter3 {
         this.stopAutoScroll();
       }
       this.markNeedsRerender();
-      return true;
-    }
-    if (event.type === "up") {
-      if (this._isDragging) {
-        this._selectionEnd = { line: lineIndex, col: colIndex };
-        this._isDragging = false;
-        this.stopAutoScroll();
-        this.markNeedsRerender();
-      }
       return true;
     }
     return true;
@@ -4123,7 +4405,11 @@ var EditBufferRenderable = class extends Renderable {
     return true;
   }
   newLine() {
-    this._ctx.clearSelection();
+    if (this.hasSelection()) {
+      this.deleteSelectedText();
+    } else {
+      this._ctx.clearSelection();
+    }
     this.editBuffer.newLine();
     this.requestRender();
     return true;
@@ -4195,13 +4481,7 @@ var EditBufferRenderable = class extends Renderable {
     const select = options?.select ?? false;
     this.updateSelectionForMovement(select, true);
     const cursor = this.editorView.getCursor();
-    if (cursor.col === 0 && cursor.row > 0) {
-      this.editBuffer.setCursor(cursor.row - 1, 0);
-      const prevLineEol = this.editBuffer.getEOL();
-      this.editBuffer.setCursor(prevLineEol.row, prevLineEol.col);
-    } else {
-      this.editBuffer.setCursor(cursor.row, 0);
-    }
+    this.editBuffer.setCursor(cursor.row, 0);
     this.updateSelectionForMovement(select, false);
     this.requestRender();
     return true;
@@ -4209,14 +4489,8 @@ var EditBufferRenderable = class extends Renderable {
   gotoLineEnd(options) {
     const select = options?.select ?? false;
     this.updateSelectionForMovement(select, true);
-    const cursor = this.editorView.getCursor();
     const eol = this.editBuffer.getEOL();
-    const lineCount = this.editBuffer.getLineCount();
-    if (cursor.col === eol.col && cursor.row < lineCount - 1) {
-      this.editBuffer.setCursor(cursor.row + 1, 0);
-    } else {
-      this.editBuffer.setCursor(eol.row, eol.col);
-    }
+    this.editBuffer.setCursor(eol.row, eol.col);
     this.updateSelectionForMovement(select, false);
     this.requestRender();
     return true;
@@ -4612,7 +4886,7 @@ function calculateRenderGeometry(screenMode, terminalWidth, terminalHeight, foot
       renderHeight: safeTerminalHeight
     };
   }
-  const effectiveFooterHeight = Math.min(footerHeight, safeTerminalHeight);
+  const effectiveFooterHeight = Math.min(Math.max(footerHeight, 0), safeTerminalHeight);
   return {
     effectiveFooterHeight,
     renderOffset: safeTerminalHeight - effectiveFooterHeight,
@@ -4626,7 +4900,7 @@ function isCapabilityResponse(sequence) {
   if (/\x1b\[\?\d+(?:;\d+)*\$y/.test(sequence)) {
     return true;
   }
-  if (/\x1b\[1;(?!1R)\d+R/.test(sequence)) {
+  if (/\x1b\[1;(?!0*1R)\d+R/.test(sequence)) {
     return true;
   }
   if (/\x1bP>\|[^\x1b]*\x1b\\/.test(sequence)) {
@@ -5149,23 +5423,6 @@ async function createCliRenderer(config = {}) {
     throw error;
   }
 }
-var CliRenderEvents = /* @__PURE__ */ ((CliRenderEvents2) => {
-  CliRenderEvents2["RESIZE"] = "resize";
-  CliRenderEvents2["FRAME"] = "frame";
-  CliRenderEvents2["EXTERNAL_OUTPUT"] = "external_output";
-  CliRenderEvents2["FOCUS"] = "focus";
-  CliRenderEvents2["BLUR"] = "blur";
-  CliRenderEvents2["FOCUSED_RENDERABLE"] = "focused_renderable";
-  CliRenderEvents2["FOCUSED_EDITOR"] = "focused_editor";
-  CliRenderEvents2["THEME_MODE"] = "theme_mode";
-  CliRenderEvents2["PALETTE"] = "palette";
-  CliRenderEvents2["CAPABILITIES"] = "capabilities";
-  CliRenderEvents2["SELECTION"] = "selection";
-  CliRenderEvents2["DEBUG_OVERLAY_TOGGLE"] = "debugOverlay:toggle";
-  CliRenderEvents2["DESTROY"] = "destroy";
-  CliRenderEvents2["MEMORY_SNAPSHOT"] = "memory:snapshot";
-  return CliRenderEvents2;
-})(CliRenderEvents || {});
 var RendererControlState = /* @__PURE__ */ ((RendererControlState2) => {
   RendererControlState2["IDLE"] = "idle";
   RendererControlState2["AUTO_STARTED"] = "auto_started";
@@ -5276,6 +5533,9 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
   _splitHeight = 0;
   renderOffset = 0;
   splitTailColumn = 0;
+  // Row content terminated by a CR at a chunk boundary, held until the next
+  // chunk resolves it as CRLF (keep the row) or overwrite (discard it).
+  stdoutPendingCRLine = null;
   pendingSplitFooterTransition = null;
   // One-shot latch used to request a full split repaint after transitions
   // (resize/mode/output-path changes). Cleared on first renderNative tick.
@@ -5491,7 +5751,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     this.lib.setClearOnShutdown(this.rendererPtr, this.clearOnShutdown);
     const forwardEnvKeys = config.forwardEnvKeys ?? (config.remote === false ? [...DEFAULT_FORWARDED_ENV_KEYS] : []);
     for (const key of forwardEnvKeys) {
-      const value = process.env[key];
+      const value = Object.hasOwn(process.env, key) ? process.env[key] : void 0;
       if (value === void 0) continue;
       this.lib.setTerminalEnvVar(this.rendererPtr, key, value);
     }
@@ -5608,7 +5868,9 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
       return id;
     };
     global.cancelAnimationFrame = (handle) => {
-      this.animationRequest.delete(handle);
+      if (this.animationRequest.delete(handle)) {
+        this.dropLive();
+      }
     };
     const window = global.window;
     if (!window) {
@@ -5735,7 +5997,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
   }
   writeOut(chunk, encoding, callback) {
     if (this.rendererPtr && (this._useThread || this._feed !== null)) {
-      const data = typeof chunk === "string" ? chunk : chunk?.toString() ?? "";
+      const data = typeof chunk === "string" ? chunk : chunk instanceof Uint8Array ? Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength).toString() : chunk?.toString() ?? "";
       this.lib.writeOut(this.rendererPtr, data);
       if (typeof callback === "function") {
         process.nextTick(callback);
@@ -6153,6 +6415,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     let hasRendered = false;
     const pendingSettlements = /* @__PURE__ */ new Set();
     let nextCommitStartOnNewLine = startOnNewLine;
+    let expectedTailColumn = startOnNewLine ? null : tailColumn;
     let backingBuffer = OptimizedBuffer.create(surfaceWidth, surfaceHeight, surfaceWidthMethod, {
       id: `scrollback-surface-buffer-${surfaceId}`
     });
@@ -6289,6 +6552,11 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
       if (startRow === endRowExclusive) {
         return;
       }
+      if (expectedTailColumn !== null && renderer.getPendingSplitTailColumn() !== expectedTailColumn) {
+        throw new Error(
+          "ScrollbackSurface.commitRows requires a new surface after intervening output changes the pending tail column"
+        );
+      }
       const rowCount = endRowExclusive - startRow;
       const commitBuffer = OptimizedBuffer.create(surfaceWidth, rowCount, surfaceWidthMethod, {
         id: `scrollback-surface-commit-${surfaceId}`
@@ -6302,6 +6570,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
           trailingNewline: commitOptions.trailingNewline ?? true
         });
         nextCommitStartOnNewLine = false;
+        expectedTailColumn = renderer.getPendingSplitTailColumn();
       } catch (error) {
         commitBuffer.destroy();
         throw error;
@@ -6606,13 +6875,26 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
   splitStdoutRows(text) {
     const rows = [];
     let current = "";
-    for (const char of text.replace(/\r\n/g, "\n")) {
-      if (char === "\r") current = "";
-      else if (char === "\n") {
+    let pendingCRLine = this.stdoutPendingCRLine;
+    this.stdoutPendingCRLine = null;
+    for (const char of text) {
+      if (pendingCRLine !== null) {
+        const line = pendingCRLine;
+        pendingCRLine = null;
+        if (char === "\n") {
+          rows.push({ line, trailingNewline: true });
+          continue;
+        }
+      }
+      if (char === "\r") {
+        pendingCRLine = current;
+        current = "";
+      } else if (char === "\n") {
         rows.push({ line: current, trailingNewline: true });
         current = "";
       } else current += char;
     }
+    this.stdoutPendingCRLine = pendingCRLine;
     if (current.length > 0) rows.push({ line: current, trailingNewline: false });
     return rows;
   }
@@ -6646,11 +6928,11 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
           columns = 0;
         };
         for (const { segment } of segmenter.segment(row.line)) {
-          if (segment === "	" && tail + columns >= width - 1) continue;
           if (tail + columns >= width) {
             if (columns > 0) flush(false);
             tail = 0;
           }
+          if (segment === "	" && tail + columns >= width - 1) continue;
           if (segment === "	") {
             const spaces = Math.min(8 - (tail + columns) % 8, width - 1 - tail - columns);
             line += " ".repeat(spaces);
@@ -6658,9 +6940,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
             continue;
           }
           const cells = measure(segment);
-          if (cells > width) {
-            throw new RangeError("captured stdout grapheme exceeds terminal width");
-          }
+          if (cells > width) continue;
           if (cells > width - tail - columns) {
             const padding = width - tail - columns;
             line += " ".repeat(padding);
@@ -6753,7 +7033,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
   interceptStdoutWrite = (chunk, encoding, callback) => {
     const resolvedCallback = typeof encoding === "function" ? encoding : callback;
     const resolvedEncoding = typeof encoding === "string" ? encoding : void 0;
-    const text = typeof chunk === "string" ? chunk : chunk?.toString(resolvedEncoding) ?? "";
+    const text = typeof chunk === "string" ? chunk : chunk instanceof Uint8Array ? Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength).toString(resolvedEncoding) : chunk?.toString(resolvedEncoding) ?? "";
     if (this._externalOutputMode === "capture-stdout" && this._screenMode === "split-footer" && this._splitHeight > 0) {
       const commits = this.createStdoutSnapshotCommits(text);
       for (const commit of commits) {
@@ -6811,6 +7091,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
   }
   resetSplitScrollback(seedRows = 0) {
     this.splitTailColumn = 0;
+    this.stdoutPendingCRLine = null;
     this.renderOffset = this.lib.resetSplitScrollback(this.rendererPtr, seedRows, this.getSplitPinnedRenderOffset());
   }
   syncSplitScrollback() {
@@ -6843,6 +7124,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     if (!splitActive) {
       this.clearPendingSplitFooterTransition();
       this.splitTailColumn = 0;
+      this.stdoutPendingCRLine = null;
       this.lib.resetSplitScrollback(this.rendererPtr, 0, 0);
       this.renderOffset = 0;
       this.lib.setRenderOffset(this.rendererPtr, this.renderOffset);
@@ -6853,6 +7135,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     } else {
       this.clearPendingSplitFooterTransition();
       this.splitTailColumn = 0;
+      this.stdoutPendingCRLine = null;
       this.lib.resetSplitScrollback(this.rendererPtr, 0, 0);
       this.renderOffset = this.getSplitPinnedRenderOffset();
       this.lib.setRenderOffset(this.rendererPtr, this.renderOffset);
@@ -7016,12 +7299,13 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     }
   }
   // TODO: Move this to native
-  flushStdoutCache(space, force = false) {
+  flushStdoutCache(space, force = false, asText = false) {
     if (this.externalOutputQueue.size === 0 && !force) return false;
     const outputCommits = this.externalOutputQueue.claim();
+    const decoder = asText ? new TextDecoder() : null;
     let output = "";
     for (const commit of outputCommits) {
-      output += `[snapshot ${commit.snapshot.width}x${commit.snapshot.height}]
+      output += decoder ? decoder.decode(commit.snapshot.getRealCharBytes(true)) : `[snapshot ${commit.snapshot.width}x${commit.snapshot.height}]
 `;
       commit.snapshot.destroy();
     }
@@ -7321,6 +7605,20 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
   processSingleMouseEvent(mouseEvent) {
     if (this._splitHeight > 0) {
       if (mouseEvent.y < this.renderOffset) {
+        if (mouseEvent.type === "up") {
+          const footerEvent = { ...mouseEvent, y: mouseEvent.y - this.renderOffset };
+          this.emit("mouse:up" /* MOUSE_UP */, footerEvent);
+          if (this.capturedRenderable) {
+            const captured = this.capturedRenderable;
+            captured.processMouseEvent(new MouseEvent(captured, { ...footerEvent, type: "drag-end" }));
+            captured.processMouseEvent(new MouseEvent(captured, footerEvent));
+            this.setCapturedRenderable(void 0);
+            this.requestRender();
+          }
+          if (this.currentSelection?.isDragging) {
+            this.finishSelection();
+          }
+        }
         return false;
       }
       mouseEvent.y -= this.renderOffset;
@@ -7329,12 +7627,18 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     this._latestPointer.y = mouseEvent.y;
     this._hasPointer = true;
     this._lastPointerModifiers = mouseEvent.modifiers;
+    if (mouseEvent.type === "up") {
+      this.emit("mouse:up" /* MOUSE_UP */, mouseEvent);
+    }
     if (this._console.visible) {
       const consoleBounds = this._console.bounds;
       if (mouseEvent.x >= consoleBounds.x && mouseEvent.x < consoleBounds.x + consoleBounds.width && mouseEvent.y >= consoleBounds.y && mouseEvent.y < consoleBounds.y + consoleBounds.height) {
-        const event2 = new MouseEvent(null, mouseEvent);
-        const handled = this._console.handleMouse(event2);
-        if (handled) return true;
+        const ownedRelease = mouseEvent.type === "up" && (this.capturedRenderable !== void 0 || this.currentSelection?.isDragging === true);
+        if (!ownedRelease) {
+          const event2 = new MouseEvent(null, mouseEvent);
+          const handled = this._console.handleMouse(event2);
+          if (handled) return true;
+        }
       }
     }
     if (mouseEvent.type === "scroll") {
@@ -7628,9 +7932,11 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
   resize(width, height) {
     if (this._isDestroyed) return;
     validateBufferDimensions(width, height);
-    if (this.resizeTimeoutId !== null) this.clock.clearTimeout(this.resizeTimeoutId);
-    this.resizeTimeoutId = null;
-    this.pendingResize = null;
+    if (width !== this._terminalWidth || height !== this._terminalHeight) {
+      if (this.resizeTimeoutId !== null) this.clock.clearTimeout(this.resizeTimeoutId);
+      this.resizeTimeoutId = null;
+      this.pendingResize = null;
+    }
     this.processResize(width, height);
   }
   setBackgroundColor(color) {
@@ -7775,6 +8081,8 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     this.internalPause();
   }
   suspend() {
+    if (this._isDestroyed) return;
+    if (this._controlState === "explicit_suspended" /* EXPLICIT_SUSPENDED */) return;
     this._previousControlState = this._controlState;
     this._controlState = "explicit_suspended" /* EXPLICIT_SUSPENDED */;
     this.updateScheduled = false;
@@ -7806,6 +8114,8 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     this.stdin.pause();
   }
   resume() {
+    if (this._isDestroyed) return;
+    if (this._controlState !== "explicit_suspended" /* EXPLICIT_SUSPENDED */) return;
     this.terminalControlEpoch++;
     if (this.stdin.setRawMode) {
       this.stdin.setRawMode(true);
@@ -7898,6 +8208,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
       this.clock.clearTimeout(this.resizeTimeoutId);
       this.resizeTimeoutId = null;
     }
+    this.pendingResize = null;
     if (this.capabilityTimeoutId !== null) {
       this.clock.clearTimeout(this.capabilityTimeoutId);
       this.capabilityTimeoutId = null;
@@ -7943,7 +8254,7 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     }
     this.externalOutputMode = "passthrough";
     if (this._splitHeight > 0) {
-      this.flushStdoutCache(this._splitHeight, true);
+      this.flushStdoutCache(this._splitHeight, true, true);
     }
   }
   prepareDestroyDuringRender() {
@@ -8045,12 +8356,11 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
   }
   async loop() {
     if (this.rendering || this._isDestroyed) return;
-    this.renderTimeout = null;
-    this.rendering = true;
     if (this.renderTimeout) {
       this.clock.clearTimeout(this.renderTimeout);
-      this.renderTimeout = null;
     }
+    this.renderTimeout = null;
+    this.rendering = true;
     try {
       this._frameId++;
       const now = this.normalizeClockTime(this.clock.now(), this.lastTime);
@@ -8069,8 +8379,11 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
       const frameRequests = Array.from(this.animationRequest.values());
       this.animationRequest.clear();
       for (const callback of frameRequests) {
-        callback(deltaTime);
-        this.dropLive();
+        try {
+          callback(deltaTime);
+        } finally {
+          this.dropLive();
+        }
       }
       const start = performance.now();
       for (const frameCallback of this.frameCallbacks) {
@@ -8483,10 +8796,10 @@ var CliRenderer = class _CliRenderer extends EventEmitter4 {
     const publishGeneration = this._palettePublishGeneration;
     this._paletteDetectionSize = requestedSize;
     this._paletteDetectionPromise = detector.detect({ ...options, timeout: detectionTimeout }).then((result) => {
-      this._paletteCache.set(result.palette.length, result);
       this._paletteDetectionPromise = null;
       this._paletteDetectionSize = 0;
       if (!this._isDestroyed && this._palettePublishGeneration === publishGeneration) {
+        this._paletteCache.set(result.palette.length, result);
         this.emitPaletteChange(result);
         if (this.shouldSyncNativePaletteState() && result.palette.length >= NATIVE_PALETTE_QUERY_SIZE) {
           this.syncNativePaletteState(result);
@@ -8535,7 +8848,6 @@ export {
   MouseEvent,
   MouseButton,
   createCliRenderer,
-  CliRenderEvents,
   RendererControlState,
   CliRenderer
 };

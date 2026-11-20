@@ -37,6 +37,21 @@ export async function stageNativeAssets(packageRoot: string, outputDir: string) 
     }
   }
   await mkdir(outputDir, { recursive: true })
+  // Detect conflicts before writing anything so a later conflicting artifact
+  // cannot leave earlier artifacts half-staged.
+  for (const artifact of artifacts) {
+    const destination = path.join(outputDir, artifact.name)
+    let existing: Buffer
+    try {
+      existing = await readFile(destination)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue
+      throw error
+    }
+    if (!existing.equals(artifact.bytes)) {
+      throw new Error(`Refusing to replace a different staged native asset: ${artifact.name}`)
+    }
+  }
   for (const artifact of artifacts) {
     const destination = path.join(outputDir, artifact.name)
     try {

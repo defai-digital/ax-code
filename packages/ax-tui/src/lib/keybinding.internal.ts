@@ -140,18 +140,16 @@ export function buildKeyBindingsMap<Action extends string>(
   const map = new Map<string, Action>()
   const aliases = aliasMap || {}
 
+  // Single pass in binding order: later (custom) bindings must win over
+  // earlier (default) ones for the raw key and every alias along its chain,
+  // including multi-hop aliases such as kpenter -> enter -> return.
   for (const binding of bindings) {
-    const key = getKeyBindingKey(binding)
-    map.set(key, binding.action)
-  }
-
-  // Add aliased versions of all bindings
-  for (const binding of bindings) {
-    const normalizedName = aliases[binding.name] || binding.name
-    if (normalizedName !== binding.name) {
-      // Create aliased key with normalized name
-      const aliasedKey = getKeyBindingKey({ ...binding, name: normalizedName })
-      map.set(aliasedKey, binding.action)
+    const seen = new Set<string>()
+    let name: string | undefined = binding.name
+    while (name !== undefined && !seen.has(name)) {
+      seen.add(name)
+      map.set(getKeyBindingKey({ ...binding, name }), binding.action)
+      name = Object.hasOwn(aliases, name) ? aliases[name] : undefined
     }
   }
 

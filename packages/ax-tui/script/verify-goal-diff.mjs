@@ -6,7 +6,7 @@
  * Checks:
  * 1. BASELINE exists and is an ancestor of HEAD.
  * 2. The range is nonempty and linear (no merge commits).
- * 3. Every changed path of every commit (deletions and renames included)
+ * 3. Every changed path of every commit (deletions, renames, and copies included)
  *    falls inside the allowed maintained-source / generated-artifact set.
  * 4. package.json is byte-identical to BASELINE (public exports map unchanged).
  *
@@ -18,9 +18,22 @@ import { fileURLToPath } from "node:url"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
-function git(...args) {
-  return execFileSync("git", ["-C", repoRoot, ...args], { encoding: "utf8" })
+function gitRaw(...args) {
+  return execFileSync("git", ["-C", repoRoot, "-c", "core.quotePath=false", ...args], { encoding: "utf8" })
 }
+
+function git(...args) {
+  try {
+    return gitRaw(...args)
+  } catch (err) {
+    console.error(`FAIL: git ${args.join(" ")} failed: ${err.message}`)
+    process.exit(2)
+  }
+}
+
+// diff-tree paths are relative to the repository root; when this package is a
+// subdirectory, strip its prefix so policy matching sees package-local paths.
+const repoPrefix = git("rev-parse", "--show-prefix").trim()
 
 function fail(message) {
   console.error(`FAIL: ${message}`)
@@ -50,14 +63,24 @@ const allowedPrefixes = [
   "testing/",
   "spinner/dist/",
   "chart/dist/",
-  "renderer-artifacts.json",
 ]
 
-const allowedRootFiles = [/^index-[^/]*\.js$/, /^index\.js$/, /\.d\.ts$/, /^testing\.js$/, /^yoga\.js$/]
+const allowedRootFiles = [
+  /^index-[^/]*\.js$/,
+  /^index\.js$/,
+  /\.d\.ts$/,
+  /^testing\.js$/,
+  /^yoga\.js$/,
+  /^renderer-artifacts\.json$/,
+]
 
 // Maintained root JS/declaration artifacts are the only root-level files that
 // may change; everything else at the repo root is out of scope.
 function isAllowedPath(filePath) {
+  if (repoPrefix) {
+    if (!filePath.startsWith(repoPrefix)) return false
+    filePath = filePath.slice(repoPrefix.length)
+  }
   if (allowedPrefixes.some((prefix) => filePath.startsWith(prefix))) return true
   if (!filePath.includes("/")) return allowedRootFiles.some((pattern) => pattern.test(filePath))
   return false
@@ -65,12 +88,12 @@ function isAllowedPath(filePath) {
 
 // 1. BASELINE ancestry.
 try {
-  git("cat-file", "-e", `${baseline}^{commit}`)
+  gitRaw("cat-file", "-e", `${baseline}^{commit}`)
 } catch {
   fail(`baseline ${baseline} does not resolve to a commit`)
 }
 try {
-  git("merge-base", "--is-ancestor", baseline, "HEAD")
+  gitRaw("merge-base", "--is-ancestor", baseline, "HEAD")
 } catch {
   fail(`baseline ${baseline} is not an ancestor of HEAD`)
 }
@@ -86,12 +109,21 @@ console.log(`range ${baseline.slice(0, 8)}..HEAD: ${commits.length} linear commi
 const violations = []
 for (const commit of commits) {
   const subject = git("log", "-1", "--format=%s", commit).trim()
-  const nameStatus = git("diff-tree", "--no-commit-id", "--name-status", "-r", "-M", commit)
-  const entries = nameStatus.split("\n").filter(Boolean)
-
-  for (const entry of entries) {
-    const [status, from, to] = entry.split("\t")
-    const paths = status.startsWith("R") ? [from, to] : [from ?? to]
+  // -C: diff-tree is plumbing and ignores diff.renames, so copy detection must
+  // be explicit; without it a copy's destination is only seen as a plain add.
+  // -z: core.quotePath=false still C-quotes `"`, `\`, and control bytes, so
+  // NUL-delimited records are the only spelling that survives every path.
+  const nameStatus = git("diff-tree", "--no-commit-id", "--name-status", "-r", "-M", "-C", "-z", commit)
+  const tokens = nameStatus.split("\0")
+  for (let i = 0; i < tokens.length; ) {
+    const status = tokens[i]
+    if (!status) {
+      i += 1
+      continue
+    }
+    const isRenameOrCopy = status.startsWith("R") || status.startsWith("C")
+    const paths = isRenameOrCopy ? [tokens[i + 1], tokens[i + 2]] : [tokens[i + 1]]
+    i += isRenameOrCopy ? 3 : 2
     for (const changedPath of paths.filter(Boolean)) {
       if (!isAllowedPath(changedPath)) {
         violations.push(`${commit.slice(0, 8)} (${subject}): ${status} ${changedPath}`)

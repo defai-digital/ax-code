@@ -56,6 +56,10 @@ export function ensureSolidTransformPlugin(input: CreateSolidTransformPluginOpti
     return false
   }
 
+  // The filter is wide regardless of configuration, so the registered plugin
+  // needs no input closure: all ensure-time configuration lives in the
+  // runtime state (refreshed on every call, cleared on reset), and leaving
+  // the closure empty keeps a later reset from resurrecting removed values.
   registerBunPlugin(createSolidTransformPlugin())
   state.installed = true
   return true
@@ -68,9 +72,12 @@ export function resetSolidTransformPluginState(): void {
 }
 
 export function createSolidTransformPlugin(input: CreateSolidTransformPluginOptions = {}): BunPlugin {
-  const sourceFilter = input.resolvePath
-    ? /^(?!.*[/\\]node_modules[/\\]).*\.[cm]?[jt]sx?(?:[?#].*)?$/
-    : /^(?!.*[/\\]node_modules[/\\]).*\.[cm]?[jt]sx(?:[?#].*)?$/
+  // Always register the wide filter: whether imports need rewriting is decided
+  // per load from the current runtime (below), and a filter fixed at
+  // registration cannot be widened when a resolvePath is configured after the
+  // plugin was installed (e.g. preload.ts installs it with no arguments long
+  // before ensureRuntimePluginSupport provides the resolvePath).
+  const sourceFilter = /^(?!.*[/\\]node_modules[/\\]).*\.[cm]?[jt]sx?(?:[?#].*)?$/
 
   return {
     name: "bun-plugin-solid",
@@ -97,9 +104,20 @@ export function createSolidTransformPlugin(input: CreateSolidTransformPluginOpti
 
         const file = Bun.file(path)
         const code = await file.text()
+        // Input passed directly to createSolidTransformPlugin (only possible
+        // for standalone constructions — ensure registers an empty closure)
+        // wins per field; the runtime state fills the rest.
         const runtime = getSolidTransformRuntime()
         const moduleName = input.moduleName ?? runtime.moduleName ?? "@defai-digital/ax-tui/solid"
         const resolvePath = input.resolvePath ?? runtime.resolvePath
+        // Without a resolvePath there is nothing to rewrite and (for non-JSX
+        // files) no JSX to strip; hand the file to Bun's native loader
+        // unchanged. Babel's module-strict parse is not equivalent to Bun's
+        // native TS/JS handling (CJS top-level return, sloppy mode,
+        // decorators).
+        if (!resolvePath && !/\.[cm]?[jt]sx$/.test(path)) {
+          return { contents: code, loader: /\.[cm]?ts$/.test(path) ? "ts" : "js" }
+        }
         const contents = await transformSolidSource(code, {
           filename: path,
           moduleName,

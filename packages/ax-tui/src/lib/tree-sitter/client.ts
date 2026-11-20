@@ -89,6 +89,10 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
   private rejectInitialization: ((error: Error) => void) | undefined
   private destroyPromise: Promise<void> | undefined
   private workerTerminationFailed = false
+  private dataPathQueue: Promise<void> = Promise.resolve()
+  // FIFO of dispose message ids per buffer id; null marks a timed-out dispose
+  // whose late BUFFER_DISPOSED must not complete a newer dispose for a reused id.
+  private pendingDisposes = new Map<number, Array<string | null>>()
 
   constructor(options: TreeSitterClientOptions, internalOptions: TreeSitterClientInternalOptions = {}) {
     super()
@@ -158,6 +162,7 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
   private rejectPendingRequests(error: Error): void {
     const requests = Array.from(this.messageCallbacks.values())
     this.messageCallbacks.clear()
+    this.pendingDisposes.clear()
     for (const request of requests) {
       request.reject(error)
     }
@@ -483,10 +488,18 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
       }
 
       case "BUFFER_DISPOSED": {
-        const callback = this.messageCallbacks.get(`dispose_${message.bufferId}`)
-        if (callback) {
-          this.messageCallbacks.delete(`dispose_${message.bufferId}`)
-          callback.resolve(true)
+        // Responses arrive in send order, so match the oldest pending dispose
+        // for this id. A null slot is a timed-out dispose: consume it without
+        // resolving a newer callback that reused the same buffer id.
+        const slots = this.pendingDisposes.get(message.bufferId)
+        const messageId = slots?.shift()
+        if (slots && slots.length === 0) this.pendingDisposes.delete(message.bufferId)
+        if (messageId) {
+          const callback = this.messageCallbacks.get(messageId)
+          if (callback) {
+            this.messageCallbacks.delete(messageId)
+            callback.resolve(true)
+          }
         }
 
         this.emit("buffer:disposed", message.bufferId)
@@ -535,6 +548,13 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
       }
 
       case "ERROR": {
+        if (message.messageId) {
+          const callback = this.messageCallbacks.get(message.messageId)
+          if (callback) {
+            this.messageCallbacks.delete(message.messageId)
+            callback.reject(new Error(message.error))
+          }
+        }
         this.emitError(message.error, message.bufferId)
         return
       }
@@ -599,27 +619,34 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
     this.buffers.set(id, pendingBuffer)
 
     const messageId = `init_${this.messageIdCounter++}`
-    const response = await new Promise<{ hasParser: boolean; warning?: string; error?: string }>((resolve, reject) => {
-      this.messageCallbacks.set(messageId, { resolve, reject })
-      try {
-        this.sendWorkerMessage({
-          type: "INITIALIZE_PARSER",
-          bufferId: id,
-          version,
-          content,
-          filetype,
-          messageId,
-        })
-      } catch (error) {
-        this.messageCallbacks.delete(messageId)
-        if (this.buffers.get(id) === pendingBuffer) this.buffers.delete(id)
-        reject(error instanceof Error ? error : new Error(String(error)))
-      }
-    })
+    let response: { hasParser: boolean; warning?: string; error?: string }
+    try {
+      response = await new Promise<{ hasParser: boolean; warning?: string; error?: string }>((resolve, reject) => {
+        this.messageCallbacks.set(messageId, { resolve, reject })
+        try {
+          this.sendWorkerMessage({
+            type: "INITIALIZE_PARSER",
+            bufferId: id,
+            version,
+            content,
+            filetype,
+            messageId,
+          })
+        } catch (error) {
+          this.messageCallbacks.delete(messageId)
+          if (this.buffers.get(id) === pendingBuffer) this.buffers.delete(id)
+          reject(error instanceof Error ? error : new Error(String(error)))
+        }
+      })
+    } catch (error) {
+      if (this.buffers.get(id) === pendingBuffer) this.buffers.delete(id)
+      throw error
+    }
 
     if (!this.initialized || this.buffers.get(id) !== pendingBuffer) return false
 
     if (!response.hasParser) {
+      if (this.buffers.get(id) === pendingBuffer) this.buffers.delete(id)
       this.emit("buffer:initialized", id, false)
       if (filetype !== "plaintext") {
         this.emitWarning(response.warning || response.error || "Buffer has no parser", id)
@@ -697,9 +724,17 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
 
     if (this.worker) {
       await new Promise<boolean>((resolve, reject) => {
-        const messageId = `dispose_${bufferId}`
+        const messageId = `dispose_${bufferId}_${this.messageIdCounter++}`
+        const slots = this.pendingDisposes.get(bufferId) ?? []
+        slots.push(messageId)
+        this.pendingDisposes.set(bufferId, slots)
         const timeout = setTimeout(() => {
           this.messageCallbacks.delete(messageId)
+          // Keep a tombstone in the FIFO so the late BUFFER_DISPOSED consumes
+          // this slot instead of completing a newer dispose for a reused id.
+          const pending = this.pendingDisposes.get(bufferId)
+          const index = pending?.indexOf(messageId) ?? -1
+          if (pending && index !== -1) pending[index] = null
           this.emitWarning("Timed out waiting for buffer to be disposed", bufferId)
           resolve(false)
         }, 3000)
@@ -721,6 +756,14 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
         } catch (error) {
           clearTimeout(timeout)
           this.messageCallbacks.delete(messageId)
+          // The message never reached the worker, so no response will arrive:
+          // drop the slot entirely rather than leaving a tombstone.
+          const pending = this.pendingDisposes.get(bufferId)
+          const index = pending?.indexOf(messageId) ?? -1
+          if (pending && index !== -1) {
+            pending.splice(index, 1)
+            if (pending.length === 0) this.pendingDisposes.delete(bufferId)
+          }
           this.emitWarning(`Error disposing buffer: ${error}`, bufferId)
           resolve(false)
         }
@@ -823,16 +866,32 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
     return this.initialized
   }
 
-  public async setDataPath(dataPath: string): Promise<void> {
+  public setDataPath(dataPath: string): Promise<void> {
+    // Serialize updates so a rapid A->B->A bounce cannot early-return against a
+    // stale committed path while an earlier update is still awaiting its worker
+    // ack. Each call observes the committed state left by all prior calls.
+    const run = this.dataPathQueue.then(() => this.applyDataPath(dataPath))
+    this.dataPathQueue = run.catch(() => {})
+    return run
+  }
+
+  private async applyDataPath(dataPath: string): Promise<void> {
     if (this.options.dataPath === dataPath) {
       return
     }
 
-    this.options.dataPath = dataPath
+    if (!this.initialized && this.initializePromise) {
+      // INIT is in flight with the old path; wait for it so the update below reaches the worker.
+      // Init failures surface through initialize() itself, so they are ignored here.
+      await this.initializePromise.catch(() => {})
+      if (this.options.dataPath === dataPath) {
+        return
+      }
+    }
 
     if (this.initialized && this.worker) {
       const messageId = `update_datapath_${this.messageIdCounter++}`
-      return new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         this.messageCallbacks.set(messageId, {
           resolve: (response: any) => {
             if (response.error) {
@@ -855,6 +914,8 @@ export class TreeSitterClient extends EventEmitter<TreeSitterClientEvents> {
         }
       })
     }
+
+    this.options.dataPath = dataPath
   }
 
   public async clearCache(): Promise<void> {

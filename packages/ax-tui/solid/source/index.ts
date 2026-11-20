@@ -4,7 +4,7 @@
  * @module
  */
 export {}
-import { CliRenderer, createCliRenderer, engine, type CliRendererConfig } from "@defai-digital/ax-tui"
+import { CliRenderer, Renderable, createCliRenderer, engine, type CliRendererConfig } from "@defai-digital/ax-tui"
 import { createTestRenderer, type TestRendererOptions } from "@defai-digital/ax-tui/testing"
 import type { JSX } from "./jsx-runtime.js"
 import { RendererContext } from "./src/elements/index.js"
@@ -46,6 +46,7 @@ const mountSolidRoot = (renderer: CliRenderer, node: () => JSX.Element) => {
     originalDestroy()
   }
 
+  const before = new Set(Renderable.renderablesByNumber.keys())
   try {
     dispose = renderInternal(
       () =>
@@ -59,33 +60,50 @@ const mountSolidRoot = (renderer: CliRenderer, node: () => JSX.Element) => {
         }),
       renderer.root,
     )
+  } catch (error) {
+    // A throw partway through inserting the tree leaves earlier siblings
+    // attached under root (disposing the Solid owner does not detach nodes);
+    // destroy those orphans so the failed mount does not pollute later frames.
+    for (const [num, orphan] of Renderable.renderablesByNumber) {
+      if (!before.has(num)) orphan.destroyRecursively()
+    }
+    // The mount never completed: nothing to dispose on a later destroy.
+    renderer.off("destroy", runDispose)
+    throw error
   } finally {
     mounting = false
     renderer.destroy = originalDestroy
-  }
-
-  if (disposeRequested) {
-    runDispose()
-  }
-
-  if (destroyRequested) {
-    originalDestroy()
+    // Honor destruction requested while the mount was in flight (even when
+    // the mount then failed) now that the destroy override is restored.
+    if (disposeRequested) {
+      runDispose()
+    }
+    if (destroyRequested) {
+      originalDestroy()
+    }
   }
 }
 
 export const render = async (node: () => JSX.Element, rendererOrConfig: CliRenderer | CliRendererConfig = {}) => {
-  const renderer =
-    rendererOrConfig instanceof CliRenderer
-      ? rendererOrConfig
-      : await createCliRenderer({
-          ...rendererOrConfig,
-          onDestroy: () => {
-            rendererOrConfig.onDestroy?.()
-          },
-        })
+  const ownsRenderer = !(rendererOrConfig instanceof CliRenderer)
+  const renderer = ownsRenderer
+    ? await createCliRenderer({
+        ...rendererOrConfig,
+        onDestroy: () => {
+          rendererOrConfig.onDestroy?.()
+        },
+      })
+    : rendererOrConfig
 
   engine.attach(renderer)
-  mountSolidRoot(renderer, node)
+  try {
+    mountSolidRoot(renderer, node)
+  } catch (error) {
+    // The caller has no handle to the renderer we created; destroy it so a
+    // failed mount does not leak the native renderer and event listeners.
+    if (ownsRenderer) renderer.destroy()
+    throw error
+  }
 }
 
 export const testRender = async (node: () => JSX.Element, renderConfig: TestRendererOptions = {}) => {
@@ -97,7 +115,14 @@ export const testRender = async (node: () => JSX.Element, renderConfig: TestRend
   })
 
   engine.attach(testSetup.renderer)
-  mountSolidRoot(testSetup.renderer, node)
+  try {
+    mountSolidRoot(testSetup.renderer, node)
+  } catch (error) {
+    // The caller never receives the setup; destroy it so a failed mount does
+    // not leak the renderer and its native resources.
+    testSetup.renderer.destroy()
+    throw error
+  }
 
   return testSetup
 }

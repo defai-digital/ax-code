@@ -36,25 +36,37 @@ export interface UpdateOptions {
   outputPath: string
 }
 
-function getDefaultOptions(): UpdateOptions {
+export function getDefaultOptions(dirname: string = __dirname): UpdateOptions {
+  // When invoked from the built lib/tree-sitter output, map back to the source tree so the
+  // config, assets, and generated file land where the source build expects them.
+  const sourceDir =
+    path.basename(dirname) === "tree-sitter" && path.basename(path.dirname(dirname)) === "lib"
+      ? path.resolve(dirname, "../../src/lib/tree-sitter")
+      : path.resolve(dirname, "..")
   return {
-    configPath: path.resolve(__dirname, "../parsers-config"),
-    assetsDir: path.resolve(__dirname),
-    outputPath: path.resolve(__dirname, "../default-parsers.ts"),
+    configPath: path.join(sourceDir, "parsers-config"),
+    assetsDir: path.join(sourceDir, "assets"),
+    outputPath: path.join(sourceDir, "default-parsers.ts"),
   }
 }
 
-async function loadConfig(configPath: string): Promise<ParsersConfig> {
+export async function loadConfig(configPath: string): Promise<ParsersConfig> {
   let ext = path.extname(configPath)
   let resolvedConfigPath = configPath
 
   if (ext === "") {
     const files = await readdir(path.dirname(configPath))
-    const file = files.find(
+    const basename = path.basename(configPath)
+    // Declaration files are not configs; prefer an exact basename match over prefix matches.
+    const candidates = files.filter(
       (file) =>
-        file.startsWith(path.basename(configPath)) &&
+        file.startsWith(basename) &&
+        !file.endsWith(".d.ts") &&
         (file.endsWith(".json") || file.endsWith(".ts") || file.endsWith(".js")),
     )
+    const file =
+      candidates.find((candidate) => [".json", ".ts", ".js"].some((suffix) => candidate === `${basename}${suffix}`)) ??
+      candidates[0]
     if (!file) {
       throw new Error(`No config file found for ${configPath}`)
     }
@@ -72,13 +84,22 @@ async function loadConfig(configPath: string): Promise<ParsersConfig> {
   throw new Error(`Unsupported config file extension: ${ext}`)
 }
 
-async function downloadLanguage(
+function resolveFiletypeDir(assetsDir: string, filetype: string): string {
+  const assetsRoot = path.resolve(assetsDir)
+  const dir = path.resolve(assetsRoot, filetype)
+  if (!dir.startsWith(assetsRoot + path.sep)) {
+    throw new Error(`Filetype ${filetype} escapes the assets directory`)
+  }
+  return dir
+}
+
+export async function downloadLanguage(
   filetype: string,
   languageUrl: string,
   assetsDir: string,
   outputPath: string,
 ): Promise<string> {
-  const languageDir = path.join(assetsDir, filetype)
+  const languageDir = resolveFiletypeDir(assetsDir, filetype)
   const languageFilename = path.basename(languageUrl)
   const languagePath = path.join(languageDir, languageFilename)
 
@@ -91,7 +112,7 @@ async function downloadLanguage(
   return "./" + path.relative(path.dirname(outputPath), languagePath)
 }
 
-async function downloadAndCombineQueries(
+export async function downloadAndCombineQueries(
   filetype: string,
   sources: QuerySource[],
   assetsDir: string,
@@ -99,7 +120,7 @@ async function downloadAndCombineQueries(
   queryType: "highlights" | "injections",
   configPath: string,
 ): Promise<string> {
-  const queriesDir = path.join(assetsDir, filetype)
+  const queriesDir = resolveFiletypeDir(assetsDir, filetype)
   const queryPath = path.join(queriesDir, `${queryType}.scm`)
 
   const queryContents: string[] = []
@@ -127,19 +148,19 @@ async function downloadAndCombineQueries(
   return "./" + path.relative(path.dirname(outputPath), queryPath)
 }
 
-async function generateDefaultParsersFile(parsers: GeneratedParser[], outputPath: string): Promise<void> {
+export async function generateDefaultParsersFile(parsers: GeneratedParser[], outputPath: string): Promise<void> {
   const assetPaths = parsers
     .map((parser) => {
       const safeFiletype = parser.filetype.replace(/[^a-zA-Z0-9]/g, "_")
       const lines = [
         `const ${safeFiletype}_highlights = await resolveBundledFilePath(`,
-        `  () => import("${parser.highlightsPath}" as string, { with: { type: "file" } }),`,
-        `  "${parser.highlightsPath}",`,
+        `  () => import(${JSON.stringify(parser.highlightsPath)} as string, { with: { type: "file" } }),`,
+        `  ${JSON.stringify(parser.highlightsPath)},`,
         `  import.meta.url,`,
         `)`,
         `const ${safeFiletype}_language = await resolveBundledFilePath(`,
-        `  () => import("${parser.languagePath}" as string, { with: { type: "file" } }),`,
-        `  "${parser.languagePath}",`,
+        `  () => import(${JSON.stringify(parser.languagePath)} as string, { with: { type: "file" } }),`,
+        `  ${JSON.stringify(parser.languagePath)},`,
         `  import.meta.url,`,
         `)`,
       ]
@@ -147,8 +168,8 @@ async function generateDefaultParsersFile(parsers: GeneratedParser[], outputPath
       if (parser.injectionsPath) {
         lines.push(
           `const ${safeFiletype}_injections = await resolveBundledFilePath(`,
-          `  () => import("${parser.injectionsPath}" as string, { with: { type: "file" } }),`,
-          `  "${parser.injectionsPath}",`,
+          `  () => import(${JSON.stringify(parser.injectionsPath)} as string, { with: { type: "file" } }),`,
+          `  ${JSON.stringify(parser.injectionsPath)},`,
           `  import.meta.url,`,
           `)`,
         )
@@ -173,7 +194,7 @@ async function generateDefaultParsersFile(parsers: GeneratedParser[], outputPath
       const aliasesLine = parser.aliases?.length ? `        aliases: ${JSON.stringify(parser.aliases)},` : ""
 
       return `      {
-        filetype: "${parser.filetype}",
+        filetype: ${JSON.stringify(parser.filetype)},
 ${aliasesLine ? aliasesLine + "\n" : ""}        queries: {
 ${queriesLines.join("\n")}
         },
@@ -194,7 +215,10 @@ let _cachedParsers: Promise<FiletypeParserOptions[]> | undefined
 
 export function getParsers(): Promise<FiletypeParserOptions[]> {
   if (!_cachedParsers) {
-    _cachedParsers = loadParsers()
+    _cachedParsers = loadParsers().catch((error) => {
+      _cachedParsers = undefined
+      throw error
+    })
   }
   return _cachedParsers
 }

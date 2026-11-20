@@ -1,4 +1,4 @@
-import { Renderable, parseColor } from "@defai-digital/ax-tui";
+import { Renderable, RGBA, parseColor } from "@defai-digital/ax-tui";
 import { layoutSparkline } from "./sparkline.js";
 import { layoutGauge } from "./gauge.js";
 import { layoutBarChart } from "./barchart.js";
@@ -136,7 +136,11 @@ export class GaugeRenderable extends Renderable {
     renderSelf(buffer) {
         if (!this.visible)
             return;
-        paintCells(buffer, layoutGauge(this._layout, this.width, this.height), this.x, this.y, "white");
+        // The default foreground carries default-color intent so an unset label
+        // foreground over the fill reads in the terminal's default color (an
+        // RGBA(0,0,0,0) "transparent" foreground would blend to the fill color on
+        // translucent fills and emit literal RGB black on opaque ones).
+        paintCells(buffer, layoutGauge(this._layout, this.width, this.height), this.x, this.y, RGBA.defaultForeground());
     }
 }
 /** Bar-chart renderable. */
@@ -225,8 +229,7 @@ export class BarChartRenderable extends Renderable {
 export class ChartRenderable extends Renderable {
     _layout;
     constructor(ctx, options) {
-        super(ctx, options);
-        validateChartOptions(options);
+        super(ctx, validateChartOptions(options));
         this._layout = {
             datasets: options.datasets ?? [],
             xAxis: options.xAxis,

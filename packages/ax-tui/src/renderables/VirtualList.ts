@@ -122,7 +122,14 @@ export class VirtualListRenderable<T> extends ScrollBoxRenderable {
     let dirty = false
     try {
       // User scroll input takes precedence over an estimate-based jump still settling.
-      if (this.seek?.offset !== undefined && this.scrollTop !== this.seek.offset) this.seek = undefined
+      // A viewport resize can programmatically clamp scrollTop below the recorded
+      // seek offset; that clamp is not user input, so tolerate it and keep seeking.
+      // Compare against the scroll box's own clamp basis: setItems can swap the
+      // model between the seek and this refresh, making model.totalHeight stale.
+      if (this.seek?.offset !== undefined && this.scrollTop !== this.seek.offset) {
+        const maxTop = Math.max(0, this.scrollHeight - this.viewport.height)
+        if (this.scrollTop !== Math.min(this.seek.offset, maxTop)) this.seek = undefined
+      }
       const width = this.viewport.width
       const viewport = this.viewport.height
       const anchor = this.anchor ?? this.model.anchor(this.scrollTop)

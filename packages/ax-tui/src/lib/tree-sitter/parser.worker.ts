@@ -6,7 +6,7 @@
 export {}
 import { Parser, Query, Tree, Language } from "web-tree-sitter"
 import type { Edit, QueryCapture, Range } from "web-tree-sitter"
-import { mkdir } from "fs/promises"
+import { mkdir, rm } from "fs/promises"
 import * as path from "path"
 import type {
   HighlightRange,
@@ -20,6 +20,7 @@ import type {
   TreeSitterWorkerResponse,
 } from "./types.js"
 import { DownloadUtils } from "./download-utils.js"
+import { infoStringToFiletype } from "./resolve-ft.js"
 import { isBunfsPath, normalizeBunfsPath } from "../bunfs.js"
 import { resolveBundledFilePath } from "../../platform/runtime.js"
 import {
@@ -39,6 +40,7 @@ type ParserState = {
   filetype: string
   content: string
   injectionMapping?: InjectionMapping
+  disposed?: boolean
 }
 
 interface FiletypeParser {
@@ -62,6 +64,7 @@ interface ReusableParserState {
 
 class ParserWorker {
   private bufferParsers: Map<number, ParserState> = new Map()
+  private bufferGenerations: Map<number, number> = new Map()
   private filetypeParserOptions: Map<string, FiletypeParserOptions> = new Map()
   private filetypeAliases: Map<string, string> = new Map()
   private filetypeParsers: Map<string, FiletypeParser> = new Map()
@@ -73,6 +76,7 @@ class ParserWorker {
   private dataPath: string | undefined
   private tsDataPath: string | undefined
   private initialized: boolean = false
+  private injectionParseSeq = 0
 
   constructor() {
     this.performance = {
@@ -91,6 +95,9 @@ class ParserWorker {
   }
 
   async initialize({ dataPath }: { dataPath: string }) {
+    if (typeof dataPath !== "string" || dataPath.trim().length === 0) {
+      throw new Error("Invalid data path: expected a non-empty string")
+    }
     if (this.initializePromise) {
       return this.initializePromise
     }
@@ -154,6 +161,7 @@ class ParserWorker {
   }
 
   private invalidateParserCaches(filetype: string): void {
+    const previous = this.filetypeParsers.get(filetype)
     this.filetypeParsers.delete(filetype)
     this.filetypeParserPromises.delete(filetype)
 
@@ -164,6 +172,29 @@ class ParserWorker {
     }
 
     this.reusableParserPromises.delete(filetype)
+
+    if (previous) {
+      this.deleteQueriesIfUnused(previous.queries)
+    }
+  }
+
+  private queriesInUse(queries: { highlights: Query; injections?: Query }): boolean {
+    for (const bufferParser of this.bufferParsers.values()) {
+      if (bufferParser.queries.highlights === queries.highlights) return true
+    }
+    for (const filetypeParser of this.filetypeParsers.values()) {
+      if (filetypeParser.queries.highlights === queries.highlights) return true
+    }
+    for (const reusableParser of this.reusableParsers.values()) {
+      if (reusableParser.queries.highlights === queries.highlights) return true
+    }
+    return false
+  }
+
+  private deleteQueriesIfUnused(queries: { highlights: Query; injections?: Query }): void {
+    if (this.queriesInUse(queries)) return
+    queries.highlights.delete()
+    queries.injections?.delete()
   }
 
   private async createQueries(
@@ -230,6 +261,15 @@ class ParserWorker {
       return language
     } catch (error) {
       console.error(`Error loading language from ${normalizedPath}:`, error)
+      // A downloaded wasm that fails to load is a poisoned cache entry; remove it so the next
+      // attempt re-downloads instead of failing forever. Local files are never touched.
+      if (result.filePath && /^https?:\/\//.test(languageSource)) {
+        try {
+          await rm(result.filePath, { force: true })
+        } catch (cleanupError) {
+          console.warn(`Failed to remove invalid language cache ${result.filePath}:`, cleanupError)
+        }
+      }
       return undefined
     }
   }
@@ -241,22 +281,35 @@ class ParserWorker {
       return this.filetypeParsers.get(canonicalFiletype)
     }
 
-    if (this.filetypeParserPromises.has(canonicalFiletype)) {
-      return this.filetypeParserPromises.get(canonicalFiletype)
+    const inflight = this.filetypeParserPromises.get(canonicalFiletype)
+    if (inflight) {
+      return inflight
     }
 
-    const loadingPromise = this.loadFiletypeParser(canonicalFiletype)
-    this.filetypeParserPromises.set(canonicalFiletype, loadingPromise)
-
-    try {
-      const result = await loadingPromise
-      if (result) {
-        this.filetypeParsers.set(canonicalFiletype, result)
+    // Track the whole check-and-register pipeline, not just the inner load:
+    // joiners must observe the staleness re-resolve, never a freed result.
+    let tracked!: Promise<FiletypeParser | undefined>
+    tracked = (async () => {
+      try {
+        const result = await this.loadFiletypeParser(canonicalFiletype)
+        if (this.filetypeParserPromises.get(canonicalFiletype) !== tracked) {
+          // Invalidated mid-load: the result is stale. Free its queries and
+          // resolve again against the current options.
+          if (result) this.deleteQueriesIfUnused(result.queries)
+          return this.resolveFiletypeParser(filetype)
+        }
+        if (result) {
+          this.filetypeParsers.set(canonicalFiletype, result)
+        }
+        return result
+      } finally {
+        if (this.filetypeParserPromises.get(canonicalFiletype) === tracked) {
+          this.filetypeParserPromises.delete(canonicalFiletype)
+        }
       }
-      return result
-    } finally {
-      this.filetypeParserPromises.delete(canonicalFiletype)
-    }
+    })()
+    this.filetypeParserPromises.set(canonicalFiletype, tracked)
+    return tracked
   }
 
   private async loadFiletypeParser(filetype: string): Promise<FiletypeParser | undefined> {
@@ -292,22 +345,35 @@ class ParserWorker {
       return this.reusableParsers.get(canonicalFiletype)
     }
 
-    if (this.reusableParserPromises.has(canonicalFiletype)) {
-      return this.reusableParserPromises.get(canonicalFiletype)
+    const inflight = this.reusableParserPromises.get(canonicalFiletype)
+    if (inflight) {
+      return inflight
     }
 
-    const creationPromise = this.createReusableParser(canonicalFiletype)
-    this.reusableParserPromises.set(canonicalFiletype, creationPromise)
-
-    try {
-      const result = await creationPromise
-      if (result) {
-        this.reusableParsers.set(canonicalFiletype, result)
+    // Track the whole check-and-register pipeline, not just the inner creation:
+    // joiners must observe the staleness re-resolve, never a deleted parser.
+    let tracked!: Promise<ReusableParserState | undefined>
+    tracked = (async () => {
+      try {
+        const result = await this.createReusableParser(canonicalFiletype)
+        if (this.reusableParserPromises.get(canonicalFiletype) !== tracked) {
+          // Invalidated mid-load: the result is stale. Free the parser and
+          // resolve again against the current options.
+          if (result) result.parser.delete()
+          return this.getReusableParser(filetype)
+        }
+        if (result) {
+          this.reusableParsers.set(canonicalFiletype, result)
+        }
+        return result
+      } finally {
+        if (this.reusableParserPromises.get(canonicalFiletype) === tracked) {
+          this.reusableParserPromises.delete(canonicalFiletype)
+        }
       }
-      return result
-    } finally {
-      this.reusableParserPromises.delete(canonicalFiletype)
-    }
+    })()
+    this.reusableParserPromises.set(canonicalFiletype, tracked)
+    return tracked
   }
 
   private async createReusableParser(filetype: string): Promise<ReusableParserState | undefined> {
@@ -335,7 +401,23 @@ class ParserWorker {
     filetype: string,
     messageId: string,
   ) {
+    const generation = (this.bufferGenerations.get(bufferId) ?? 0) + 1
+    this.bufferGenerations.set(bufferId, generation)
+
     const filetypeParser = await this.resolveFiletypeParser(filetype)
+
+    if (this.bufferGenerations.get(bufferId) !== generation) {
+      // Disposed or re-initialized while the parser was resolving; still respond so the pending
+      // createBuffer callback settles instead of hanging.
+      postWorkerMessage({
+        type: "PARSER_INIT_RESPONSE",
+        bufferId,
+        messageId,
+        hasParser: false,
+        warning: `Buffer ${bufferId} was disposed during parser initialization`,
+      })
+      return
+    }
 
     if (!filetypeParser) {
       postWorkerMessage({
@@ -379,6 +461,14 @@ class ParserWorker {
       hasParser: true,
     })
     const highlights = await this.initialQuery(parserState)
+    if (
+      this.bufferGenerations.get(bufferId) !== generation ||
+      this.bufferParsers.get(bufferId) !== parserState ||
+      parserState.tree !== tree
+    ) {
+      // Disposed while the initial query ran; disposeBuffer already freed this parser and tree.
+      return
+    }
     postWorkerMessage({
       type: "HIGHLIGHT_RESPONSE",
       bufferId,
@@ -388,6 +478,7 @@ class ParserWorker {
   }
 
   private async initialQuery(parserState: ParserState) {
+    const snapshotTree = parserState.tree
     const query = parserState.queries.highlights
     const matches: QueryCapture[] = query.captures(parserState.tree.rootNode)
     let injectionRanges = new Map<string, Array<{ start: number; end: number }>>()
@@ -396,6 +487,12 @@ class ParserWorker {
       const injectionResult = await this.processInjections(parserState)
       matches.push(...injectionResult.captures)
       injectionRanges = injectionResult.injectionRanges
+    }
+
+    // An edit or dispose may have freed the tree while injections loaded; the
+    // captured nodes now belong to a dead tree and must not be read.
+    if (parserState.disposed || parserState.tree !== snapshotTree) {
+      return { highlights: [] }
     }
 
     return this.getHighlights(parserState, matches, injectionRanges)
@@ -416,6 +513,7 @@ class ParserWorker {
     }
 
     const content = parserState.content
+    const snapshotTree = parserState.tree
     const injectionCaptures = parserState.queries.injections.captures(parserState.tree.rootNode)
     const languageGroups = new Map<string, Array<{ node: any; name: string }>>()
 
@@ -441,12 +539,13 @@ class ParserWorker {
               const languageNode = infoString.children.find((child: any) => child.type === "language")
               if (languageNode) {
                 const languageName = this.getNodeText(languageNode, content)
-
-                if (injectionMapping?.infoStringMap && injectionMapping.infoStringMap[languageName]) {
-                  targetLanguage = injectionMapping.infoStringMap[languageName]
-                } else {
-                  targetLanguage = languageName
-                }
+                const languageToken = languageName.trim().split(/\s+/, 1)[0]?.toLowerCase() ?? ""
+                const infoStringFiletype = infoStringToFiletype(languageName) ?? languageToken
+                const infoStringMap = injectionMapping?.infoStringMap
+                const mapped =
+                  (languageToken && infoStringMap?.[languageToken]) ||
+                  (infoStringFiletype && infoStringMap?.[infoStringFiletype])
+                targetLanguage = mapped || infoStringFiletype
               }
             }
           }
@@ -464,6 +563,12 @@ class ParserWorker {
     // Process each language group
     for (const [language, captures] of languageGroups.entries()) {
       const injectedParser = await this.getReusableParser(language)
+      // An edit may have swapped (and deleted) the tree, or a dispose may have
+      // deleted it in place, while the parser load was in flight; every
+      // captured node now belongs to a dead tree.
+      if (parserState.disposed || parserState.tree !== snapshotTree) {
+        return { captures: injectionMatches, injectionRanges }
+      }
 
       if (!injectedParser) {
         console.warn(`No parser found for injection language: ${language}`)
@@ -488,6 +593,9 @@ class ParserWorker {
           const tree = parser.parse(injectionContent)
 
           if (tree) {
+            // Node ids are only unique within a single tree; namespace them per injection parse
+            // so captures from different trees cannot erase each other during per-line dedup.
+            const parseSeq = this.injectionParseSeq++
             const matches = injectedParser.queries.highlights.captures(tree.rootNode)
 
             // Create new QueryCapture objects with offset positions
@@ -500,6 +608,7 @@ class ParserWorker {
                 _injectedQuery: injectedParser.queries.highlights, // Store the correct query reference
                 node: {
                   ...match.node,
+                  id: `inj:${parseSeq}:${match.node.id}`,
                   startPosition: {
                     row: match.node.startPosition.row + injectionNode.startPosition.row,
                     column:
@@ -559,6 +668,7 @@ class ParserWorker {
     if (!parserState) {
       return { warning: "No parser state found for buffer" }
     }
+    const generation = this.bufferGenerations.get(bufferId) ?? 0
 
     parserState.content = content
 
@@ -584,6 +694,7 @@ class ParserWorker {
     }
 
     const changedRanges = parserState.tree.getChangedRanges(newTree)
+    parserState.tree.delete()
     parserState.tree = newTree
 
     const startQuery = performance.now()
@@ -614,7 +725,7 @@ class ParserWorker {
           node,
           // WTF!?
           {
-            startIndex: range.startIndex - 100,
+            startIndex: Math.max(0, range.startIndex - 100),
             endIndex: range.endIndex + 1000,
           },
         )
@@ -637,6 +748,13 @@ class ParserWorker {
     let injectionRanges = new Map<string, Array<{ start: number; end: number }>>()
     if (parserState.queries.injections) {
       const injectionResult = await this.processInjections(parserState)
+      if (
+        this.bufferGenerations.get(bufferId) !== generation ||
+        this.bufferParsers.get(bufferId) !== parserState ||
+        parserState.tree !== newTree
+      ) {
+        return { warning: "No parser state found for buffer" }
+      }
       // Only add injection matches that are in the changed ranges
       // This is a simplification - ideally we'd only process injections in changed ranges
       matches.push(...injectionResult.captures)
@@ -669,8 +787,9 @@ class ParserWorker {
     matches: QueryCapture[],
     injectionRanges?: Map<string, Array<{ start: number; end: number }>>,
   ): { highlights: HighlightResponse[] } {
-    const lineHighlights: Map<number, Map<number, HighlightRange>> = new Map()
-    const droppedHighlights: Map<number, Map<number, HighlightRange>> = new Map()
+    const lines = parserState.content.split("\n")
+    const lineHighlights: Map<number, Map<number | string, HighlightRange>> = new Map()
+    const droppedHighlights: Map<number, Map<number | string, HighlightRange>> = new Map()
 
     for (const match of matches) {
       const node = match.node
@@ -679,7 +798,7 @@ class ParserWorker {
 
       const highlight = {
         startCol: node.startPosition.column,
-        endCol: node.endPosition.column,
+        endCol: startLine === endLine ? node.endPosition.column : (lines[startLine]?.length ?? node.endPosition.column),
         group: match.name,
       }
 
@@ -699,7 +818,7 @@ class ParserWorker {
           }
           const hl: HighlightRange = {
             startCol: 0,
-            endCol: node.endPosition.column,
+            endCol: line === endLine ? node.endPosition.column : (lines[line]?.length ?? 0),
             group: match.name,
           }
           lineHighlights.get(line)?.set(node.id, hl)
@@ -788,6 +907,7 @@ class ParserWorker {
     if (!parserState) {
       return { warning: "No parser state found for buffer" }
     }
+    const generation = this.bufferGenerations.get(bufferId) ?? 0
 
     parserState.content = content
 
@@ -797,12 +917,20 @@ class ParserWorker {
       return { error: "Failed to parse buffer during reset" }
     }
 
+    parserState.tree.delete()
     parserState.tree = newTree
     const matches = parserState.queries.highlights.captures(parserState.tree.rootNode)
 
     let injectionRanges = new Map<string, Array<{ start: number; end: number }>>()
     if (parserState.queries.injections) {
       const injectionResult = await this.processInjections(parserState)
+      if (
+        this.bufferGenerations.get(bufferId) !== generation ||
+        this.bufferParsers.get(bufferId) !== parserState ||
+        parserState.tree !== newTree
+      ) {
+        return { warning: "No parser state found for buffer" }
+      }
       matches.push(...injectionResult.captures)
       injectionRanges = injectionResult.injectionRanges
     }
@@ -811,15 +939,18 @@ class ParserWorker {
   }
 
   disposeBuffer(bufferId: number): void {
+    this.bufferGenerations.set(bufferId, (this.bufferGenerations.get(bufferId) ?? 0) + 1)
     const parserState = this.bufferParsers.get(bufferId)
     if (!parserState) {
       return
     }
 
+    parserState.disposed = true
     parserState.tree.delete()
     parserState.parser.delete()
 
     this.bufferParsers.delete(bufferId)
+    this.deleteQueriesIfUnused(parserState.queries)
   }
 
   async handleOneShotHighlight(content: string, filetype: string, messageId: string): Promise<void> {
@@ -884,23 +1015,26 @@ class ParserWorker {
   }
 
   async updateDataPath(dataPath: string): Promise<void> {
-    this.dataPath = dataPath
-    this.tsDataPath = path.join(dataPath, "tree-sitter")
+    if (typeof dataPath !== "string" || dataPath.trim().length === 0) {
+      throw new Error("Invalid data path: expected a non-empty string")
+    }
+    const tsDataPath = path.join(dataPath, "tree-sitter")
 
     try {
-      await mkdir(path.join(this.tsDataPath, "languages"), { recursive: true })
-      await mkdir(path.join(this.tsDataPath, "queries"), { recursive: true })
+      await mkdir(path.join(tsDataPath, "languages"), { recursive: true })
+      await mkdir(path.join(tsDataPath, "queries"), { recursive: true })
     } catch (error) {
       throw new Error(`Failed to update data path: ${error}`)
     }
+
+    this.dataPath = dataPath
+    this.tsDataPath = tsDataPath
   }
 
   async clearCache(): Promise<void> {
     if (!this.dataPath || !this.tsDataPath) {
       throw new Error("No data path configured")
     }
-
-    const { rm } = await import("fs/promises")
 
     try {
       const treeSitterPath = path.join(this.dataPath, "tree-sitter")
@@ -910,10 +1044,17 @@ class ParserWorker {
       await mkdir(path.join(treeSitterPath, "languages"), { recursive: true })
       await mkdir(path.join(treeSitterPath, "queries"), { recursive: true })
 
+      for (const reusableParser of this.reusableParsers.values()) {
+        reusableParser.parser.delete()
+      }
+      const cachedQueries = [...this.filetypeParsers.values()].map((filetypeParser) => filetypeParser.queries)
       this.filetypeParsers.clear()
       this.filetypeParserPromises.clear()
       this.reusableParsers.clear()
       this.reusableParserPromises.clear()
+      for (const queries of cachedQueries) {
+        this.deleteQueriesIfUnused(queries)
+      }
     } catch (error) {
       throw new Error(`Failed to clear cache: ${error}`)
     }
@@ -928,10 +1069,11 @@ function logMessage(type: TreeSitterWorkerLogType, ...args: unknown[]): void {
   } satisfies TreeSitterWorkerResponse)
 }
 
-function postWorkerError(bufferId: number | undefined, error: unknown): void {
+function postWorkerError(bufferId: number | undefined, error: unknown, messageId?: string): void {
   postWorkerMessage({
     type: "ERROR",
     bufferId,
+    messageId,
     error: error instanceof Error ? error.stack || error.message : String(error),
   } satisfies TreeSitterWorkerResponse)
 }
@@ -1094,10 +1236,11 @@ if (isWorkerRuntime) {
           } satisfies TreeSitterWorkerResponse)
       }
     } catch (error) {
+      const messageId = "messageId" in message ? message.messageId : undefined
       if ("bufferId" in message) {
-        postWorkerError(message.bufferId, error)
+        postWorkerError(message.bufferId, error, messageId)
       } else {
-        postWorkerError(undefined, error)
+        postWorkerError(undefined, error, messageId)
       }
     }
   })

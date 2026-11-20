@@ -1,6 +1,5 @@
 import {
   BoxRenderable,
-  CliRenderEvents,
   CliRenderer,
   CodeRenderable,
   ConsolePosition,
@@ -29,7 +28,7 @@ import {
   isTextNodeRenderable,
   mergeKeyAliases,
   mergeKeyBindings
-} from "./index-WZRAUJQZ.js";
+} from "./index-SOSHGBKE.js";
 import {
   ASCIIFontSelectionHelper,
   ATTRIBUTE_BASE_BITS,
@@ -37,6 +36,7 @@ import {
   BaseRenderable,
   BorderCharArrays,
   BorderChars,
+  CliRenderEvents,
   DEFAULT_BACKGROUND_RGB,
   DEFAULT_FOREGROUND_RGB,
   DataPathsManager,
@@ -183,7 +183,7 @@ import {
   wrapWithDelegates,
   yellow,
   yoga_exports
-} from "./index-UXYV2YFD.js";
+} from "./index-P5QDLRVD.js";
 
 // src/post/color-bytes.ts
 function toU8(value) {
@@ -270,7 +270,7 @@ var DistortionEffect = class {
             tempChar = new Uint32Array(width);
             tempFg = new Uint16Array(width * 4);
             tempBg = new Uint16Array(width * 4);
-            tempAttr = new Uint8Array(width);
+            tempAttr = new Uint32Array(width);
           }
           try {
             tempChar.set(buf.char.subarray(baseIndex, baseIndex + width));
@@ -389,8 +389,8 @@ var VignetteEffect = class _VignetteEffect {
   precomputedAttenuationCellMask = null;
   cachedWidth = -1;
   cachedHeight = -1;
-  // Zero matrix for attenuation (maps everything toward black based on strength)
-  static zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  // Zero matrix for attenuation (maps RGB toward black based on strength, preserves alpha)
+  static zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
   constructor(strength = 0.5) {
     this._strength = strength;
   }
@@ -605,7 +605,7 @@ var CloudsEffect = class {
         cellMask[maskIdx++] = attenuation;
       }
     }
-    const zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const zeroMatrix = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
     buffer.colorMatrix(zeroMatrix, cellMask, 1, 2);
   }
 };
@@ -651,7 +651,7 @@ var FlamesEffect = class {
     const scale = this._scale;
     const timeOffset = this.time;
     for (let y = 0; y < height; y++) {
-      const heightFactor = 1 - y / height;
+      const heightFactor = y / height;
       for (let x = 0; x < width; x++) {
         let noiseValue = 0;
         let amplitude = 1;
@@ -1193,7 +1193,7 @@ function createSaturationMatrix(saturation) {
   ]);
 }
 function applySaturation(buffer, cellMask, strength = 1) {
-  if (strength === 1 || strength === 0) {
+  if (strength === 1) {
     return;
   }
   const matrix = createSaturationMatrix(strength);
@@ -1604,11 +1604,8 @@ var INVERT_MATRIX = new Float32Array([
 
 // src/animation/Timeline.ts
 function resolveStartTime(startTime) {
-  if (typeof startTime === "string") {
-    const parsed = Number(startTime);
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-  }
-  return startTime;
+  const parsed = typeof startTime === "string" ? Number(startTime) : startTime;
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 var easingFunctions = {
   linear: (t2) => t2,
@@ -1658,9 +1655,7 @@ function captureInitialValues(item) {
       const target = item.target[i];
       const targetInitialValues = {};
       for (const key of Object.keys(item.properties)) {
-        if (typeof target[key] === "number") {
-          targetInitialValues[key] = target[key];
-        }
+        targetInitialValues[key] = typeof target[key] === "number" ? target[key] : 0;
       }
       initialValues.push(targetInitialValues);
     }
@@ -1796,7 +1791,8 @@ var Timeline = class {
   onPause;
   stateChangeListeners = [];
   constructor(options = {}) {
-    this.duration = options.duration ?? 1e3;
+    const duration = options.duration ?? 1e3;
+    this.duration = Number.isFinite(duration) ? Math.max(0, duration) : 1e3;
     this.loop = options.loop === true;
     this.autoplay = options.autoplay !== false;
     this.onComplete = options.onComplete;
@@ -1884,7 +1880,7 @@ var Timeline = class {
     }
     this.subTimelines.push({
       type: "timeline",
-      startTime,
+      startTime: resolveStartTime(startTime),
       timeline
     });
     timeline.synced = true;
@@ -1905,6 +1901,7 @@ var Timeline = class {
     return this;
   }
   pause() {
+    if (!this.isPlaying) return this;
     this.subTimelines.forEach((subTimeline) => {
       subTimeline.timeline.pause();
     });
@@ -1927,9 +1924,11 @@ var Timeline = class {
     });
     this.subTimelines.forEach((subTimeline) => {
       subTimeline.timelineStarted = false;
-      if (subTimeline.timeline) {
-        subTimeline.timeline.restart();
-        subTimeline.timeline.pause();
+      const child = subTimeline.timeline;
+      if (child) {
+        child.isComplete = false;
+        child.currentTime = 0;
+        child.resetItems();
       }
     });
   }
@@ -1942,38 +1941,42 @@ var Timeline = class {
     return this;
   }
   update(deltaTime) {
-    if (!this.isPlaying) return;
-    const nextTime = this.currentTime + deltaTime;
-    const boundedTime = Math.min(nextTime, this.duration);
-    const elapsed = boundedTime - this.currentTime;
-    for (const subTimeline of this.subTimelines) {
-      evaluateTimelineSync(subTimeline, boundedTime, elapsed);
-    }
-    this.currentTime = boundedTime;
-    for (const item of this.items) {
-      evaluateItem(item, this.currentTime, deltaTime);
-    }
-    for (let i = this.items.length - 1; i >= 0; i--) {
-      const item = this.items[i];
-      if (item.type === "animation" && item.once && item.completed) {
-        this.items.splice(i, 1);
+    let remaining = Number.isFinite(deltaTime) ? Math.max(0, deltaTime) : 0;
+    while (this.isPlaying) {
+      const nextTime = this.currentTime + remaining;
+      const boundedTime = Math.min(nextTime, this.duration);
+      const elapsed = boundedTime - this.currentTime;
+      for (const subTimeline of this.subTimelines) {
+        evaluateTimelineSync(subTimeline, boundedTime, elapsed);
       }
-    }
-    if (this.loop && this.currentTime >= this.duration) {
-      const overshoot = this.duration > 0 ? nextTime - this.duration : 0;
-      this.resetItems();
-      this.currentTime = 0;
-      if (overshoot > 0) {
-        this.update(overshoot);
+      this.currentTime = boundedTime;
+      for (const item of this.items) {
+        evaluateItem(item, this.currentTime, remaining);
       }
-    } else if (!this.loop && this.currentTime >= this.duration) {
-      this.currentTime = this.duration;
-      this.isPlaying = false;
-      this.isComplete = true;
-      if (this.onComplete) {
-        this.onComplete();
+      for (let i = this.items.length - 1; i >= 0; i--) {
+        const item = this.items[i];
+        if (item.type === "animation" && item.once && item.completed) {
+          this.items.splice(i, 1);
+        }
       }
-      this.notifyStateChange();
+      if (this.loop && this.currentTime >= this.duration) {
+        const overshoot = this.duration > 0 ? nextTime - this.duration : 0;
+        this.resetItems();
+        this.currentTime = 0;
+        if (overshoot > 0) {
+          remaining = overshoot;
+          continue;
+        }
+      } else if (!this.loop && this.currentTime >= this.duration) {
+        this.currentTime = this.duration;
+        this.isPlaying = false;
+        this.isComplete = true;
+        if (this.onComplete) {
+          this.onComplete();
+        }
+        this.notifyStateChange();
+      }
+      break;
     }
   }
 };
@@ -2083,6 +2086,7 @@ var SlotRegistry = class {
   errorListeners = /* @__PURE__ */ new Set();
   pluginErrors = [];
   registrationOrder = 0;
+  registeringIds = /* @__PURE__ */ new Set();
   batchDepth = 0;
   batchedNotify = false;
   rendererInstance;
@@ -2115,9 +2119,10 @@ var SlotRegistry = class {
     }
   }
   register(plugin) {
-    if (this.plugins.some((entry) => entry.plugin.id === plugin.id)) {
+    if (this.plugins.some((entry) => entry.plugin.id === plugin.id) || this.registeringIds.has(plugin.id)) {
       throw new Error(`Plugin with id "${plugin.id}" is already registered`);
     }
+    this.registeringIds.add(plugin.id);
     try {
       plugin.setup?.(this.hostContext, this.rendererInstance);
     } catch (error) {
@@ -2128,6 +2133,8 @@ var SlotRegistry = class {
         error
       });
       return noop;
+    } finally {
+      this.registeringIds.delete(plugin.id);
     }
     this.plugins.push({
       plugin,
@@ -2446,7 +2453,8 @@ function resolveCoreSlotEntries(registry, slot) {
       id: entry.id,
       renderer: (ctx, data) => wrappedRenderer(ctx, data),
       ownership: wrappedRenderer.__coreSlotOwnership ?? "host",
-      managedSlot: wrappedRenderer.__coreManagedSlot
+      managedSlot: wrappedRenderer.__coreManagedSlot,
+      rendererRef: wrappedRenderer
     };
   });
 }
@@ -2463,6 +2471,8 @@ var SlotRenderable = class extends Renderable {
   _activePluginIds = /* @__PURE__ */ new Set();
   _fallbackNodes = null;
   _unsubscribe = null;
+  _refreshing = false;
+  _refreshRequested = false;
   constructor(ctx, options) {
     super(ctx, options);
     this._slotRegistry = options.registry;
@@ -2475,7 +2485,7 @@ var SlotRenderable = class extends Renderable {
     try {
       this.refresh();
     } catch (error) {
-      this._cleanupAll();
+      this.destroy();
       throw error;
     }
   }
@@ -2497,13 +2507,48 @@ var SlotRenderable = class extends Renderable {
     if (this._disposed) {
       return;
     }
+    if (this._refreshing) {
+      this._refreshRequested = true;
+      return;
+    }
+    this._refreshing = true;
+    try {
+      do {
+        this._refreshRequested = false;
+        this._refreshOnce();
+      } while (this._refreshRequested && !this._disposed);
+    } finally {
+      this._refreshing = false;
+    }
+  }
+  _refreshOnce() {
     const allEntries = resolveCoreSlotEntries(this._slotRegistry, this._slotName);
     const activeEntries = this._mode === "single_winner" && allEntries.length > 0 ? [allEntries[0]] : allEntries;
     const nextActivePluginIds = new Set(activeEntries.map((entry) => entry.id));
     const registeredPluginIds = new Set(allEntries.map((entry) => entry.id));
     this._cleanupInactivePluginNodes(nextActivePluginIds, registeredPluginIds);
+    if (this._disposed) return;
     for (const entry of activeEntries) {
       let state = this._pluginNodes.get(entry.id);
+      if (state && state.rendererRef !== entry.rendererRef) {
+        if (this._activePluginIds.has(entry.id)) {
+          this._activePluginIds.delete(entry.id);
+          this._callManagedHook(entry.id, state.managedSlot, "onDeactivate", "dispose");
+          if (this._disposed) return;
+        }
+        for (const node of state.nodes) {
+          this._detachNodeFromMount(node);
+        }
+        this._pluginNodes.delete(entry.id);
+        this._callManagedHook(entry.id, state.managedSlot, "onDispose", "dispose");
+        if (state.ownership === "host") {
+          for (const node of state.nodes) {
+            node.destroyRecursively();
+          }
+        }
+        if (this._disposed) return;
+        state = void 0;
+      }
       const shouldRender = !state || state.ownership === "plugin" && state.nodes.length === 0 || state.dataRef !== this._data;
       if (shouldRender) {
         const previousState = state;
@@ -2514,7 +2559,8 @@ var SlotRenderable = class extends Renderable {
             nodes: [node],
             ownership: entry.ownership,
             managedSlot: entry.managedSlot ?? state?.managedSlot,
-            dataRef: this._data
+            dataRef: this._data,
+            rendererRef: entry.rendererRef
           };
         } catch (error) {
           const failure = this._slotRegistry.reportPluginError({
@@ -2524,11 +2570,13 @@ var SlotRenderable = class extends Renderable {
             source: "core",
             error
           });
+          if (this._disposed) return;
           state = {
             nodes: this._resolvePluginFailurePlaceholder(failure),
             ownership: "host",
             managedSlot: entry.managedSlot ?? state?.managedSlot,
-            dataRef: this._data
+            dataRef: this._data,
+            rendererRef: entry.rendererRef
           };
         }
         if (previousState) {
@@ -2539,7 +2587,9 @@ var SlotRenderable = class extends Renderable {
       if (!this._activePluginIds.has(entry.id)) {
         const activeState = this._pluginNodes.get(entry.id);
         if (activeState) {
+          this._activePluginIds.add(entry.id);
           this._callManagedHook(entry.id, activeState.managedSlot, "onActivate", "setup");
+          if (this._disposed) return;
         }
       }
     }
@@ -2556,6 +2606,7 @@ var SlotRenderable = class extends Renderable {
     if (this._mode !== "append" && desiredNodes.length === 0) {
       desiredNodes.push(...this._ensureFallbackNodes());
     }
+    if (this._disposed) return;
     this._reconcileMountedNodes(desiredNodes);
     this._activePluginIds = nextActivePluginIds;
   }
@@ -2633,19 +2684,22 @@ var SlotRenderable = class extends Renderable {
         continue;
       }
       if (this._activePluginIds.has(pluginId)) {
+        this._activePluginIds.delete(pluginId);
         this._callManagedHook(pluginId, state.managedSlot, "onDeactivate", "dispose");
+        if (this._disposed) return;
       }
       for (const node of state.nodes) {
         this._detachNodeFromMount(node);
       }
       if (!registeredPluginIds.has(pluginId)) {
+        this._pluginNodes.delete(pluginId);
         this._callManagedHook(pluginId, state.managedSlot, "onDispose", "dispose");
         if (state.ownership === "host") {
           for (const node of state.nodes) {
             node.destroyRecursively();
           }
         }
-        this._pluginNodes.delete(pluginId);
+        if (this._disposed) return;
         continue;
       }
       if (state.ownership === "host") {
@@ -2735,26 +2789,35 @@ var Audio = class _Audio extends EventEmitter {
   groups = /* @__PURE__ */ new Map();
   playbackStarted = false;
   mixerStarted = false;
+  constructing = true;
   constructor(lib, options) {
     super();
-    this.lib = lib;
-    this.defaultStartOptions = options.startOptions;
-    const createOptions = options.sampleRate == null && options.playbackChannels == null ? void 0 : {
-      sampleRate: options.sampleRate == null ? void 0 : Math.max(0, Math.trunc(options.sampleRate)),
-      playbackChannels: options.playbackChannels == null ? void 0 : Math.max(0, Math.trunc(options.playbackChannels))
-    };
-    this.engine = this.lib.createAudioEngine(createOptions);
-    if (!this.engine) {
-      this.emitError("createAudioEngine", void 0, "Audio createAudioEngine returned null");
-      return;
-    }
-    if (options.autoStart ?? false) {
-      this.start(this.defaultStartOptions);
+    try {
+      this.lib = lib;
+      this.defaultStartOptions = options.startOptions;
+      const createOptions = options.sampleRate == null && options.playbackChannels == null ? void 0 : {
+        sampleRate: options.sampleRate == null ? void 0 : Math.max(0, Math.trunc(options.sampleRate)),
+        playbackChannels: options.playbackChannels == null ? void 0 : Math.max(0, Math.trunc(options.playbackChannels))
+      };
+      this.engine = this.lib.createAudioEngine(createOptions);
+      if (!this.engine) {
+        this.emitError("createAudioEngine", void 0, "Audio createAudioEngine returned null");
+        return;
+      }
+      if (options.autoStart ?? false) {
+        this.start(this.defaultStartOptions);
+      }
+    } finally {
+      this.constructing = false;
     }
   }
   emitError(action, status, message, cause) {
     const error = message ? new Error(message) : statusToError(action, status ?? -1);
     if (cause) error.cause = cause;
+    if (this.constructing) {
+      queueMicrotask(() => this.emit("error", error, { action, status }));
+      return;
+    }
     this.emit("error", error, { action, status });
   }
   start(options) {
@@ -2770,9 +2833,11 @@ var Audio = class _Audio extends EventEmitter {
       this.emitError("start", status);
       return false;
     }
+    const mixerWasStarted = this.mixerStarted;
     this.playbackStarted = true;
     this.mixerStarted = true;
     this.emit("started");
+    if (!mixerWasStarted) this.emit("mixerStarted");
     return true;
   }
   startMixer() {
@@ -3075,12 +3140,17 @@ var FrameBufferRenderable = class extends Renderable {
   frameBuffer;
   respectAlpha;
   constructor(ctx, options) {
-    super(ctx, options);
+    super(ctx, { ...options, buffered: false });
     this.respectAlpha = options.respectAlpha || false;
-    this.frameBuffer = OptimizedBuffer.create(options.width, options.height, this._ctx.widthMethod, {
-      respectAlpha: this.respectAlpha,
-      id: options.id || `framebufferrenderable-${this.id}`
-    });
+    try {
+      this.frameBuffer = OptimizedBuffer.create(options.width, options.height, this._ctx.widthMethod, {
+        respectAlpha: this.respectAlpha,
+        id: options.id || `framebufferrenderable-${this.id}`
+      });
+    } catch (err) {
+      this.destroy();
+      throw err;
+    }
   }
   onResize(width, height) {
     if (width <= 0 || height <= 0) {
@@ -3187,8 +3257,8 @@ var ASCIIFontRenderable = class _ASCIIFontRenderable extends FrameBufferRenderab
   }
   updateDimensions() {
     const measurements = measureText({ text: this._text, font: this._font });
-    this.width = measurements.width;
-    this.height = measurements.height;
+    this.width = measurements.width || 1;
+    this.height = measurements.height || 1;
   }
   shouldStartSelection(x, y) {
     const localX = x - this.x;
@@ -3436,13 +3506,13 @@ var GutterRenderable = class extends Renderable {
   }
   calculateWidth() {
     const totalLines = this.target.virtualLineCount;
-    let maxLineNumber = totalLines + this._lineNumberOffset;
-    if (this._lineNumbers.size > 0) {
-      for (const customLineNum of this._lineNumbers.values()) {
-        maxLineNumber = Math.max(maxLineNumber, customLineNum);
-      }
+    let maxAbs = Math.max(Math.abs(1 + this._lineNumberOffset), Math.abs(totalLines + this._lineNumberOffset));
+    let hasNegative = 1 + this._lineNumberOffset < 0 || totalLines + this._lineNumberOffset < 0;
+    for (const customLineNum of this._lineNumbers.values()) {
+      maxAbs = Math.max(maxAbs, Math.abs(customLineNum));
+      if (customLineNum < 0) hasNegative = true;
     }
-    const digits = maxLineNumber > 0 ? Math.floor(Math.log10(maxLineNumber)) + 1 : 1;
+    const digits = (maxAbs > 0 ? Math.floor(Math.log10(maxAbs)) + 1 : 1) + (hasNegative ? 1 : 0);
     const baseWidth = Math.max(this._minWidth, digits + this._paddingRight + 1);
     return baseWidth + this._maxBeforeWidth + this._maxAfterWidth;
   }
@@ -3577,15 +3647,19 @@ var LineNumberRenderable = class extends Renderable {
     this.requestRender();
   };
   parseLineColor(line, color) {
-    if (typeof color === "object" && "gutter" in color) {
+    if (typeof color === "object" && color !== null && ("gutter" in color || "content" in color || !("r" in color))) {
       const config = color;
       if (config.gutter) {
         this._lineColorsGutter.set(line, parseColor(config.gutter));
+      } else {
+        this._lineColorsGutter.delete(line);
       }
       if (config.content) {
         this._lineColorsContent.set(line, parseColor(config.content));
       } else if (config.gutter) {
         this._lineColorsContent.set(line, darkenColor(parseColor(config.gutter)));
+      } else {
+        this._lineColorsContent.delete(line);
       }
     } else {
       const parsedColor = parseColor(color);
@@ -3713,7 +3787,7 @@ var LineNumberRenderable = class extends Renderable {
       const logicalLine = sources[visualLineIndex];
       const lineBg = this._lineColorsContent.get(logicalLine);
       if (lineBg) {
-        buffer.fillRect(this.x + gutterWidth, this.y + i, contentWidth, 1, lineBg);
+        buffer.fillRect((this.buffered ? 0 : this.x) + gutterWidth, (this.buffered ? 0 : this.y) + i, contentWidth, 1, lineBg);
       }
     }
   }
@@ -4034,8 +4108,8 @@ var DiffRenderable = class extends Renderable {
     this.invalidateHunkRowOffsets();
     if (!this._waitingForHighlight) return;
     if (!this.leftCodeRenderable || !this.rightCodeRenderable) return;
-    const leftIsHighlighting = this.leftCodeRenderable.isHighlighting;
-    const rightIsHighlighting = this.rightCodeRenderable.isHighlighting;
+    const leftIsHighlighting = this.leftCodeRenderable.isHighlightPending;
+    const rightIsHighlighting = this.rightCodeRenderable.isHighlightPending;
     if (!leftIsHighlighting && !rightIsHighlighting) {
       this._waitingForHighlight = false;
       this.requestRebuild();
@@ -4104,19 +4178,32 @@ var DiffRenderable = class extends Renderable {
         content: this._diff,
         filetype: "diff",
         syntaxStyle: this._syntaxStyle ?? SyntaxStyle.create(),
-        wrapMode: this._wrapMode,
+        wrapMode: this._wrapMode ?? "none",
         conceal: this._conceal,
         width: "100%",
         flexGrow: 1,
         flexShrink: 1,
+        ...this._fg !== void 0 && { fg: this._fg },
+        ...this._selectionBg !== void 0 && { selectionBg: this._selectionBg },
+        ...this._selectionFg !== void 0 && { selectionFg: this._selectionFg },
         ...this._treeSitterClient !== void 0 && { treeSitterClient: this._treeSitterClient }
       });
       super.add(this.errorCodeRenderable);
     } else {
       this.errorCodeRenderable.content = this._diff;
       this.errorCodeRenderable.wrapMode = this._wrapMode ?? "none";
+      this.errorCodeRenderable.conceal = this._conceal;
       if (this._syntaxStyle) {
         this.errorCodeRenderable.syntaxStyle = this._syntaxStyle;
+      }
+      if (this._fg !== void 0) {
+        this.errorCodeRenderable.fg = this._fg;
+      }
+      if (this._selectionBg !== void 0) {
+        this.errorCodeRenderable.selectionBg = this._selectionBg;
+      }
+      if (this._selectionFg !== void 0) {
+        this.errorCodeRenderable.selectionFg = this._selectionFg;
       }
       const errorCodeIndex = this.getChildren().indexOf(this.errorCodeRenderable);
       if (errorCodeIndex === -1) {
@@ -4131,7 +4218,7 @@ var DiffRenderable = class extends Renderable {
         id: this.id ? `${this.id}-${side}-code` : void 0,
         content,
         filetype: this._filetype,
-        wrapMode,
+        wrapMode: wrapMode ?? "none",
         conceal: this._conceal,
         syntaxStyle: this._syntaxStyle ?? SyntaxStyle.create(),
         width: "100%",
@@ -4156,9 +4243,7 @@ var DiffRenderable = class extends Renderable {
       if (drawUnstyledText !== void 0) {
         existingRenderable.drawUnstyledText = drawUnstyledText;
       }
-      if (this._filetype !== void 0) {
-        existingRenderable.filetype = this._filetype;
-      }
+      existingRenderable.filetype = this._filetype;
       if (this._syntaxStyle !== void 0) {
         existingRenderable.syntaxStyle = this._syntaxStyle;
       }
@@ -4288,7 +4373,7 @@ var DiffRenderable = class extends Renderable {
       }
     }
     const content = contentLines.join("\n");
-    const codeRenderable = this.createOrUpdateCodeRenderable("left", content, this._wrapMode);
+    const codeRenderable = this.createOrUpdateCodeRenderable("left", content, this._wrapMode, true);
     this.attachLineInfoListeners();
     this.createOrUpdateSide("left", codeRenderable, lineColors, lineSigns, lineNumbers, /* @__PURE__ */ new Set(), "100%");
     if (this.rightSide && this.rightSideAdded) {
@@ -4415,8 +4500,8 @@ var DiffRenderable = class extends Renderable {
     this.attachLineInfoListeners();
     let finalLeftLines;
     let finalRightLines;
-    const leftIsHighlighting = leftCodeRenderable.isHighlighting;
-    const rightIsHighlighting = rightCodeRenderable.isHighlighting;
+    const leftIsHighlighting = leftCodeRenderable.isHighlightPending;
+    const rightIsHighlighting = rightCodeRenderable.isHighlightPending;
     const highlightingInProgress = needsConsistentConcealing && (leftIsHighlighting || rightIsHighlighting);
     if (highlightingInProgress) {
       this._waitingForHighlight = true;
@@ -4606,6 +4691,9 @@ var DiffRenderable = class extends Renderable {
       } else if (this._view === "split") {
         this.requestRebuild();
       }
+      if (this.errorCodeRenderable) {
+        this.errorCodeRenderable.wrapMode = value ?? "none";
+      }
     }
   }
   get showLineNumbers() {
@@ -4755,6 +4843,9 @@ var DiffRenderable = class extends Renderable {
       if (this.rightCodeRenderable) {
         this.rightCodeRenderable.selectionBg = parsed;
       }
+      if (this.errorCodeRenderable) {
+        this.errorCodeRenderable.selectionBg = parsed;
+      }
     }
   }
   get selectionFg() {
@@ -4769,6 +4860,9 @@ var DiffRenderable = class extends Renderable {
       }
       if (this.rightCodeRenderable) {
         this.rightCodeRenderable.selectionFg = parsed;
+      }
+      if (this.errorCodeRenderable) {
+        this.errorCodeRenderable.selectionFg = parsed;
       }
     }
   }
@@ -4793,6 +4887,9 @@ var DiffRenderable = class extends Renderable {
       }
       if (this.rightCodeRenderable) {
         this.rightCodeRenderable.fg = parsed;
+      }
+      if (this.errorCodeRenderable) {
+        this.errorCodeRenderable.fg = parsed;
       }
     }
   }
@@ -5181,6 +5278,12 @@ var InputRenderable = class _InputRenderable extends TextareaRenderable {
     const defaults = _InputRenderable.defaultOptions;
     const maxLength = options.maxLength ?? defaults.maxLength;
     const minLength = options.minLength ?? defaults.minLength;
+    if (!Number.isFinite(maxLength)) {
+      throw new Error(`InputRenderable: maxLength (${maxLength}) must be a finite number`);
+    }
+    if (!Number.isFinite(minLength)) {
+      throw new Error(`InputRenderable: minLength (${minLength}) must be a finite number`);
+    }
     const rawValue = options.value ?? defaults.value;
     const initialValue = truncateInput(rawValue.replace(/[\n\r]/g, ""), maxLength);
     if (minLength > maxLength) {
@@ -5253,8 +5356,21 @@ var InputRenderable = class _InputRenderable extends TextareaRenderable {
   /** Preserve single-line and length constraints for undoable programmatic edits such as completion. */
   replaceText(text, cursorOffset) {
     const value = truncateInput(text.replace(/[\n\r]/g, ""), this._maxLength);
-    super.replaceText(value, cursorOffset);
-    this.emit("input" /* INPUT */, this.plainText);
+    const before = this.plainText;
+    let offset = cursorOffset;
+    if (offset !== void 0) {
+      const measurement = TextBuffer.create(this.ctx.widthMethod);
+      try {
+        measurement.setText(value);
+        offset = Math.min(offset, measurement.length + measurement.getLineCount() - 1);
+      } finally {
+        measurement.destroy();
+      }
+    }
+    super.replaceText(value, offset);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
   }
   focus() {
     if (this.isDestroyed || this.focused || !this.focusable) return;
@@ -5284,48 +5400,75 @@ var InputRenderable = class _InputRenderable extends TextareaRenderable {
     return true;
   }
   deleteCharBackward() {
+    const before = this.plainText;
     const result = super.deleteCharBackward();
-    this.emit("input" /* INPUT */, this.plainText);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
     return result;
   }
   deleteChar() {
+    const before = this.plainText;
     const result = super.deleteChar();
-    this.emit("input" /* INPUT */, this.plainText);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
     return result;
   }
   deleteLine() {
+    const before = this.plainText;
     const result = super.deleteLine();
-    this.emit("input" /* INPUT */, this.plainText);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
     return result;
   }
   deleteWordBackward() {
+    const before = this.plainText;
     const result = super.deleteWordBackward();
-    this.emit("input" /* INPUT */, this.plainText);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
     return result;
   }
   deleteWordForward() {
+    const before = this.plainText;
     const result = super.deleteWordForward();
-    this.emit("input" /* INPUT */, this.plainText);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
     return result;
   }
   deleteToLineStart() {
+    const before = this.plainText;
     const result = super.deleteToLineStart();
-    this.emit("input" /* INPUT */, this.plainText);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
     return result;
   }
   deleteToLineEnd() {
+    const before = this.plainText;
     const result = super.deleteToLineEnd();
-    this.emit("input" /* INPUT */, this.plainText);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
     return result;
   }
   undo() {
+    const before = this.plainText;
     const result = super.undo();
-    this.emit("input" /* INPUT */, this.plainText);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
     return result;
   }
   redo() {
+    const before = this.plainText;
     const result = super.redo();
-    this.emit("input" /* INPUT */, this.plainText);
+    if (this.plainText !== before) {
+      this.emit("input" /* INPUT */, this.plainText);
+    }
     return result;
   }
   deleteCharacter(direction) {
@@ -5336,16 +5479,25 @@ var InputRenderable = class _InputRenderable extends TextareaRenderable {
     }
   }
   set maxLength(maxLength) {
+    if (!Number.isFinite(maxLength)) {
+      throw new Error(`InputRenderable: maxLength (${maxLength}) must be a finite number`);
+    }
+    if (this._minLength > maxLength) {
+      throw new Error(`InputRenderable: minLength (${this._minLength}) cannot be greater than maxLength (${maxLength})`);
+    }
     this._maxLength = maxLength;
     const currentValue = this.plainText;
     if (currentValue.length > maxLength) {
-      this.setText(truncateInput(currentValue, maxLength));
+      this.value = currentValue;
     }
   }
   get maxLength() {
     return this._maxLength;
   }
   set minLength(minLength) {
+    if (!Number.isFinite(minLength)) {
+      throw new Error(`InputRenderable: minLength (${minLength}) must be a finite number`);
+    }
     if (minLength > this._maxLength) {
       throw new Error(`InputRenderable: minLength (${minLength}) cannot be greater than maxLength (${this._maxLength})`);
     }
@@ -6469,18 +6621,29 @@ var TextTableRenderable = class extends Renderable {
 
 // src/renderables/markdown-parser.ts
 import { Lexer } from "marked";
+function containsDef(tokens) {
+  for (const token of tokens) {
+    if (token.type === "def") return true;
+    if ("tokens" in token && token.tokens && containsDef(token.tokens)) return true;
+    if ("items" in token && token.items) {
+      for (const item of token.items) {
+        if ("tokens" in item && item.tokens && containsDef(item.tokens)) return true;
+      }
+    }
+  }
+  return false;
+}
+function lexFullState(content, trailingUnstable) {
+  try {
+    const tokens = Lexer.lex(content, { gfm: true });
+    return { content, tokens, stableTokenCount: Math.max(0, tokens.length - trailingUnstable) };
+  } catch {
+    return { content, tokens: [], stableTokenCount: 0 };
+  }
+}
 function parseMarkdownIncremental(newContent, prevState, trailingUnstable = 2) {
   if (!prevState || prevState.tokens.length === 0) {
-    try {
-      const tokens = Lexer.lex(newContent, { gfm: true });
-      return {
-        content: newContent,
-        tokens,
-        stableTokenCount: Math.max(0, tokens.length - trailingUnstable)
-      };
-    } catch {
-      return { content: newContent, tokens: [], stableTokenCount: 0 };
-    }
+    return lexFullState(newContent, trailingUnstable);
   }
   let offset = 0;
   let reuseCount = 0;
@@ -6500,6 +6663,9 @@ function parseMarkdownIncremental(newContent, prevState, trailingUnstable = 2) {
   }
   const stableTokens = prevState.tokens.slice(0, reuseCount);
   const remainingContent = newContent.slice(offset);
+  if (containsDef(prevState.tokens)) {
+    return lexFullState(newContent, trailingUnstable);
+  }
   if (!remainingContent) {
     return {
       content: newContent,
@@ -6509,6 +6675,9 @@ function parseMarkdownIncremental(newContent, prevState, trailingUnstable = 2) {
   }
   try {
     const newTokens = Lexer.lex(remainingContent, { gfm: true });
+    if (containsDef(newTokens)) {
+      return lexFullState(newContent, trailingUnstable);
+    }
     return {
       content: newContent,
       tokens: [...stableTokens, ...newTokens],
@@ -6644,6 +6813,7 @@ var MarkdownRenderable = class extends Renderable {
     if (this._syntaxStyle !== value) {
       this._syntaxStyle = value;
       this._styleDirty = true;
+      this.requestRender();
     }
   }
   get fg() {
@@ -6654,6 +6824,7 @@ var MarkdownRenderable = class extends Renderable {
     if (!colorsEqual(this._fg, next)) {
       this._fg = next;
       this._styleDirty = true;
+      this.requestRender();
     }
   }
   get bg() {
@@ -6664,6 +6835,7 @@ var MarkdownRenderable = class extends Renderable {
     if (!colorsEqual(this._bg, next)) {
       this._bg = next;
       this._styleDirty = true;
+      this.requestRender();
     }
   }
   get conceal() {
@@ -6673,6 +6845,7 @@ var MarkdownRenderable = class extends Renderable {
     if (this._conceal !== value) {
       this._conceal = value;
       this._styleDirty = true;
+      this.requestRender();
     }
   }
   get concealCode() {
@@ -6682,6 +6855,7 @@ var MarkdownRenderable = class extends Renderable {
     if (this._concealCode !== value) {
       this._concealCode = value;
       this._styleDirty = true;
+      this.requestRender();
     }
   }
   get streaming() {
@@ -7078,14 +7252,14 @@ var MarkdownRenderable = class extends Renderable {
     return tokens;
   }
   applyListChildRenderable(renderable, token, previousToken, id) {
-    if ((token.type === "text" || token.type === "paragraph") && renderable instanceof CodeRenderable) {
+    if ((token.type === "text" || token.type === "paragraph") && (previousToken?.type === "text" || previousToken?.type === "paragraph") && renderable instanceof CodeRenderable) {
       this.applyMarkdownCodeRenderable(renderable, this.normalizeScrollbackMarkdownBlockRaw(token.raw), 0);
       return true;
     }
-    if (token.type === "list" && renderable instanceof BoxRenderable) {
+    if (token.type === "list" && previousToken?.type === "list" && renderable instanceof BoxRenderable) {
       return this.applyListRenderable(renderable, token, previousToken, id);
     }
-    if (token.type === "code" && renderable instanceof CodeRenderable) {
+    if (token.type === "code" && previousToken?.type === "code" && renderable instanceof CodeRenderable) {
       this.applyCodeBlockRenderable(renderable, token, 0);
       return true;
     }
@@ -7652,6 +7826,7 @@ var MarkdownRenderable = class extends Renderable {
       concealCode: this._concealCode,
       treeSitterClient: this._treeSitterClient,
       defaultRender: () => {
+        this.destroyUnusedDefaultRenderable(defaultResult?.renderable);
         defaultResult = createDefault();
         return defaultResult.renderable ?? null;
       }
@@ -7665,6 +7840,9 @@ var MarkdownRenderable = class extends Renderable {
   }
   updateBlockRenderable(state, token, index, nextToken, forceListRefresh = false, forceTableRegenerate = false) {
     const marginBottom = this.getInterBlockMargin(token, nextToken);
+    if (this._internalBlockMode !== "top-level" && state.tracksInterBlockMargin !== false && state.renderable.marginTop !== 0) {
+      state.renderable.marginTop = 0;
+    }
     if (token.type === "code") {
       this.applyCodeBlockRenderable(state.renderable, token, marginBottom);
       return;
@@ -7688,6 +7866,8 @@ var MarkdownRenderable = class extends Renderable {
       return;
     }
     if (token.type === "hr") {
+      if (!(state.renderable instanceof BoxRenderable)) return;
+      state.renderable.borderColor = this.getStyle("conceal")?.fg ?? this._fg ?? "#888888";
       state.renderable.marginBottom = marginBottom;
       return;
     }
@@ -7730,7 +7910,7 @@ var MarkdownRenderable = class extends Renderable {
     if (state.renderable instanceof CodeRenderable) {
       this.applyMarkdownCodeRenderable(
         state.renderable,
-        this.getTopLevelBlockRaw(token) ?? token.raw,
+        this._internalBlockMode === "top-level" ? this.getTopLevelBlockRaw(token) ?? token.raw : token.raw,
         marginBottom,
         void 0,
         this.createInitialStyledText(token)
@@ -7740,7 +7920,7 @@ var MarkdownRenderable = class extends Renderable {
     state.renderable.destroyRecursively();
     const markdownRenderable = this.createMarkdownTextBlock(
       token,
-      this.getTopLevelBlockRaw(token) ?? token.raw,
+      this._internalBlockMode === "top-level" ? this.getTopLevelBlockRaw(token) ?? token.raw : token.raw,
       `${this.id}-block-${index}`,
       marginBottom
     );
@@ -7793,9 +7973,10 @@ var MarkdownRenderable = class extends Renderable {
           }
           this.destroyUnusedDefaultRenderable(custom.renderable);
         }
+        const previousRenderable = existing.renderable;
         this.updateBlockRenderable(existing, block.token, blockIndex, blocks[i + 1]?.token);
         existing.renderable.marginBottom = 0;
-        if (existing.marginTop !== block.marginTop) {
+        if (existing.renderable !== previousRenderable || existing.marginTop !== block.marginTop) {
           this.applyMargins(existing.renderable, block.marginTop, 0);
         }
         this.syncTopLevelBlockState(existing, block);
@@ -7816,8 +7997,10 @@ var MarkdownRenderable = class extends Renderable {
           tableContentCache: next.tableContentCache,
           canUpdateInPlace: next.canUpdateInPlace
         };
+        blockIndex++;
+      } else if (existing) {
+        this._blockStates.splice(blockIndex, 1);
       }
-      blockIndex++;
     }
     while (this._blockStates.length > blockIndex) {
       const removed = this._blockStates.pop();
@@ -7962,8 +8145,10 @@ var MarkdownRenderable = class extends Renderable {
           tracksInterBlockMargin,
           canUpdateInPlace
         };
+        blockIndex++;
+      } else if (existing) {
+        this._blockStates.splice(blockIndex, 1);
       }
-      blockIndex++;
     }
     while (this._blockStates.length > blockIndex) {
       const removed = this._blockStates.pop();
@@ -8014,23 +8199,26 @@ var MarkdownRenderable = class extends Renderable {
 // src/renderables/Slider.ts
 var defaultThumbBackgroundColor = RGBA.fromHex("#9a9ea3");
 var defaultTrackBackgroundColor = RGBA.fromHex("#252527");
+var sanitizeBound = (value, fallback) => value !== void 0 && Number.isFinite(value) ? value : fallback;
 var SliderRenderable = class extends Renderable {
   orientation;
   _value;
   _min;
   _max;
   _viewPortSize;
+  _clampViewPortToRange;
   _backgroundColor;
   _foregroundColor;
   _onChange;
   constructor(ctx, options) {
     super(ctx, { flexShrink: 0, ...options });
     this.orientation = options.orientation;
-    this._min = options.min ?? 0;
-    this._max = options.max ?? 100;
-    this._value = options.value ?? this._min;
+    this._min = sanitizeBound(options.min, 0);
+    this._max = sanitizeBound(options.max, 100);
+    this._clampViewPortToRange = options.clampViewPortToRange ?? true;
+    this._value = clamp(options.value ?? this._min, this._min, this._max);
     const requestedViewPortSize = options.viewPortSize;
-    this._viewPortSize = requestedViewPortSize !== void 0 && Number.isFinite(requestedViewPortSize) ? clamp(requestedViewPortSize, 0.01, this._max - this._min) : Math.max(1, (this._max - this._min) * 0.1);
+    this._viewPortSize = requestedViewPortSize !== void 0 && Number.isFinite(requestedViewPortSize) ? this.clampViewPort(requestedViewPortSize) : Math.max(1, (this._max - this._min) * 0.1);
     this._onChange = options.onChange;
     this._backgroundColor = options.backgroundColor ? parseColor(options.backgroundColor) : defaultTrackBackgroundColor;
     this._foregroundColor = options.foregroundColor ? parseColor(options.foregroundColor) : defaultThumbBackgroundColor;
@@ -8052,11 +8240,13 @@ var SliderRenderable = class extends Renderable {
     return this._min;
   }
   set min(newMin) {
-    if (newMin !== this._min) {
-      this._min = newMin;
-      if (this._value < newMin) {
-        this.value = newMin;
+    const sanitized = sanitizeBound(newMin, 0);
+    if (sanitized !== this._min) {
+      this._min = sanitized;
+      if (this._value < sanitized) {
+        this.value = sanitized;
       }
+      this._viewPortSize = this.clampViewPort(this._viewPortSize);
       this.requestRender();
     }
   }
@@ -8064,16 +8254,18 @@ var SliderRenderable = class extends Renderable {
     return this._max;
   }
   set max(newMax) {
-    if (newMax !== this._max) {
-      this._max = newMax;
-      if (this._value > newMax) {
-        this.value = newMax;
+    const sanitized = sanitizeBound(newMax, 100);
+    if (sanitized !== this._max) {
+      this._max = sanitized;
+      if (this._value > sanitized) {
+        this.value = sanitized;
       }
+      this._viewPortSize = this.clampViewPort(this._viewPortSize);
       this.requestRender();
     }
   }
   set viewPortSize(size) {
-    const clampedSize = clamp(size, 0.01, this._max - this._min);
+    const clampedSize = this.clampViewPort(size);
     if (clampedSize !== this._viewPortSize) {
       this._viewPortSize = clampedSize;
       this.requestRender();
@@ -8081,6 +8273,16 @@ var SliderRenderable = class extends Renderable {
   }
   get viewPortSize() {
     return this._viewPortSize;
+  }
+  // Scroll bars opt out of the range cap: their viewport is a real content
+  // window that may legitimately exceed the scroll range (near-fit content),
+  // and capping it would collapse the thumb to a sliver.
+  clampViewPort(size) {
+    if (this._clampViewPortToRange) {
+      return clamp(size, 0.01, this._max - this._min);
+    }
+    if (!Number.isFinite(size)) return 0.01;
+    return clamp(size, 0.01, Number.POSITIVE_INFINITY);
   }
   get backgroundColor() {
     return this._backgroundColor;
@@ -8283,6 +8485,23 @@ var ScrollBarRenderable = class extends Renderable {
   // because the renderable number is already deregistered.
   startArrowMouseTimer;
   endArrowMouseTimer;
+  // Mode-1000 terminals drop releases outside the pressed renderable, so the
+  // arrow-local mouseup may never arrive; the renderer-wide release stops the
+  // repeat chains instead.
+  clearStartArrowTimer = () => {
+    clearTimeout(this.startArrowMouseTimer);
+    clearInterval(this.startArrowMouseTimer);
+    this.startArrowMouseTimer = void 0;
+  };
+  clearEndArrowTimer = () => {
+    clearTimeout(this.endArrowMouseTimer);
+    clearInterval(this.endArrowMouseTimer);
+    this.endArrowMouseTimer = void 0;
+  };
+  handleGlobalMouseUp = () => {
+    this.clearStartArrowTimer();
+    this.clearEndArrowTimer();
+  };
   scrollStep = null;
   get visible() {
     return super.visible;
@@ -8349,6 +8568,9 @@ var ScrollBarRenderable = class extends Renderable {
     const scrollRange = Math.max(0, this._scrollSize - this._viewportSize);
     const defaultStepSize = Math.max(1, this._viewportSize);
     const stepSize = trackOptions?.viewPortSize ?? defaultStepSize;
+    const sliderTrackOptions = { ...trackOptions };
+    delete sliderTrackOptions.orientation;
+    delete sliderTrackOptions.onChange;
     this.slider = new SliderRenderable(ctx, {
       orientation,
       min: 0,
@@ -8371,11 +8593,12 @@ var ScrollBarRenderable = class extends Renderable {
       },
       flexGrow: 1,
       flexShrink: 1,
-      ...trackOptions
+      ...sliderTrackOptions,
+      clampViewPortToRange: false
     });
     this.updateSliderFromScrollState();
     const arrowOpts = arrowOptions ? {
-      foregroundColor: arrowOptions.backgroundColor,
+      foregroundColor: arrowOptions.foregroundColor,
       backgroundColor: arrowOptions.backgroundColor,
       attributes: arrowOptions.attributes,
       ...arrowOptions
@@ -8400,6 +8623,7 @@ var ScrollBarRenderable = class extends Renderable {
     this.startArrow.onMouseDown = (event) => {
       event.stopPropagation();
       event.preventDefault();
+      this.clearStartArrowTimer();
       this.scrollBy(-0.5, "viewport");
       this.startArrowMouseTimer = setTimeout(() => {
         this.scrollBy(-0.5, "viewport");
@@ -8410,11 +8634,12 @@ var ScrollBarRenderable = class extends Renderable {
     };
     this.startArrow.onMouseUp = (event) => {
       event.stopPropagation();
-      clearInterval(this.startArrowMouseTimer);
+      this.clearStartArrowTimer();
     };
     this.endArrow.onMouseDown = (event) => {
       event.stopPropagation();
       event.preventDefault();
+      this.clearEndArrowTimer();
       this.scrollBy(0.5, "viewport");
       this.endArrowMouseTimer = setTimeout(() => {
         this.scrollBy(0.5, "viewport");
@@ -8425,36 +8650,54 @@ var ScrollBarRenderable = class extends Renderable {
     };
     this.endArrow.onMouseUp = (event) => {
       event.stopPropagation();
-      clearInterval(this.endArrowMouseTimer);
+      this.clearEndArrowTimer();
     };
+    this._ctx.on("mouse:up" /* MOUSE_UP */, this.handleGlobalMouseUp);
   }
   destroySelf() {
-    clearTimeout(this.startArrowMouseTimer);
-    clearInterval(this.startArrowMouseTimer);
-    this.startArrowMouseTimer = void 0;
-    clearTimeout(this.endArrowMouseTimer);
-    clearInterval(this.endArrowMouseTimer);
-    this.endArrowMouseTimer = void 0;
+    this._ctx.off("mouse:up" /* MOUSE_UP */, this.handleGlobalMouseUp);
+    this.handleGlobalMouseUp();
   }
   set arrowOptions(options) {
-    Object.assign(this.startArrow, options);
-    Object.assign(this.endArrow, options);
+    if (options) {
+      const arrowOpts = { ...options };
+      delete arrowOpts.onMouseDown;
+      delete arrowOpts.onMouseUp;
+      Object.assign(this.startArrow, arrowOpts);
+      Object.assign(this.endArrow, arrowOpts);
+    }
     this.requestRender();
   }
   set trackOptions(options) {
-    Object.assign(this.slider, options);
+    if (options) {
+      const sliderOptions = { ...options };
+      delete sliderOptions.orientation;
+      delete sliderOptions.clampViewPortToRange;
+      delete sliderOptions.onChange;
+      delete sliderOptions.onMouseDown;
+      delete sliderOptions.onMouseDrag;
+      delete sliderOptions.onMouseUp;
+      Object.assign(this.slider, sliderOptions);
+    }
+    this.updateSliderFromScrollState();
     this.requestRender();
   }
   updateSliderFromScrollState() {
     const scrollRange = Math.max(0, this._scrollSize - this._viewportSize);
     this.slider.min = 0;
     this.slider.max = scrollRange;
+    if (this._viewportSize > 0) {
+      this.slider.viewPortSize = Math.max(1, this._viewportSize);
+    } else {
+      this.slider.viewPortSize = 0.01;
+    }
     this.slider.value = Math.min(this._scrollPosition, scrollRange);
   }
   scrollBy(delta, unit = "absolute") {
     const multiplier = unit === "viewport" ? this.viewportSize : unit === "content" ? this.scrollSize : unit === "step" ? this.scrollStep ?? 1 : 1;
     const resolvedDelta = multiplier * delta;
-    this.scrollPosition += resolvedDelta;
+    if (!Number.isFinite(resolvedDelta) || resolvedDelta === 0) return;
+    this.scrollPosition += Math.sign(resolvedDelta) * Math.max(1, Math.abs(resolvedDelta));
   }
   recalculateVisibility() {
     if (!this._manualVisibility) {
@@ -8666,6 +8909,7 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
   autoScrollSpeedMedium = 36;
   autoScrollSpeedFast = 72;
   isAutoScrolling = false;
+  autoScrollOwnedLive = false;
   cachedAutoScrollSpeed = 3;
   autoScrollAccumulatorX = 0;
   autoScrollAccumulatorY = 0;
@@ -9076,6 +9320,7 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
     this.isAutoScrolling = true;
     if (!this.live) {
       this.live = true;
+      this.autoScrollOwnedLive = true;
     }
   }
   updateAutoScroll(mouseX, mouseY) {
@@ -9095,9 +9340,10 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
     this.isAutoScrolling = false;
     this.autoScrollAccumulatorX = 0;
     this.autoScrollAccumulatorY = 0;
-    if (wasAutoScrolling && !this.hasOtherLiveReasons()) {
+    if (wasAutoScrolling && this.autoScrollOwnedLive && !this.hasOtherLiveReasons()) {
       this.live = false;
     }
+    this.autoScrollOwnedLive = false;
   }
   hasOtherLiveReasons() {
     return false;
@@ -9354,7 +9600,7 @@ var SelectRenderable = class extends Renderable {
     this._focusable = options.focusable ?? true;
     this._options = options.options || [];
     const requestedIndex = options.selectedIndex ?? this._defaultOptions.selectedIndex;
-    this._selectedIndex = this._options.length > 0 ? clamp(Number.isFinite(requestedIndex) ? requestedIndex : 0, 0, this._options.length - 1) : 0;
+    this._selectedIndex = this._options.length > 0 ? clamp(Number.isFinite(requestedIndex) ? Math.round(requestedIndex) : 0, 0, this._options.length - 1) : 0;
     this._backgroundColor = parseColor(options.backgroundColor || this._defaultOptions.backgroundColor);
     this._textColor = parseColor(options.textColor || this._defaultOptions.textColor);
     this._focusedBackgroundColor = parseColor(
@@ -9383,6 +9629,7 @@ var SelectRenderable = class extends Renderable {
     this._keyBindings = options.keyBindings || [];
     const mergedBindings = mergeKeyBindings(defaultSelectKeybindings, this._keyBindings);
     this._keyBindingsMap = buildKeyBindingsMap(mergedBindings, this._keyAliasMap);
+    this.updateScrollOffset();
     this.requestRender();
   }
   renderSelf(buffer, deltaTime) {
@@ -9406,7 +9653,7 @@ var SelectRenderable = class extends Renderable {
       const option = visibleOptions[i];
       const isSelected = actualIndex === this._selectedIndex;
       const itemY = contentY + i * this.linesPerItem;
-      if (itemY + this.linesPerItem - 1 >= contentY + contentHeight) break;
+      if (itemY + this.fontHeight > contentY + contentHeight) break;
       if (isSelected) {
         const contentHeight2 = this.linesPerItem - this._itemSpacing;
         this.frameBuffer.fillRect(contentX, itemY, contentWidth, contentHeight2, this._selectedBackgroundColor);
@@ -9442,9 +9689,13 @@ var SelectRenderable = class extends Renderable {
   }
   renderScrollIndicatorToFrameBuffer(contentX, contentY, contentWidth, contentHeight) {
     if (!this.frameBuffer) return;
+    if (contentHeight <= 0) return;
     const scrollPercent = this._selectedIndex / Math.max(1, this._options.length - 1);
     const indicatorHeight = Math.max(1, contentHeight - 2);
-    const indicatorY = contentY + 1 + Math.floor(scrollPercent * indicatorHeight);
+    const indicatorY = Math.min(
+      contentY + contentHeight - 1,
+      contentY + 1 + Math.floor(scrollPercent * indicatorHeight)
+    );
     const indicatorX = contentX + contentWidth - 1;
     this.frameBuffer.drawText("\u2588", indicatorX, indicatorY, parseColor("#666666"));
   }
@@ -9464,8 +9715,10 @@ var SelectRenderable = class extends Renderable {
     return this._selectedIndex;
   }
   moveUp(steps = 1) {
-    if (this._options.length === 0) return;
-    const newIndex = this._selectedIndex - steps;
+    if (this._options.length === 0 || !Number.isFinite(steps)) return;
+    const stepCount = Math.max(1, Math.round(Math.abs(steps)));
+    const previousIndex = this._selectedIndex;
+    const newIndex = this._selectedIndex - stepCount;
     if (newIndex >= 0) {
       this._selectedIndex = newIndex;
     } else if (this._wrapSelection && this._options.length > 0) {
@@ -9473,13 +9726,16 @@ var SelectRenderable = class extends Renderable {
     } else {
       this._selectedIndex = 0;
     }
+    if (this._selectedIndex === previousIndex) return;
     this.updateScrollOffset();
     this.requestRender();
     this.emit("selectionChanged" /* SELECTION_CHANGED */, this._selectedIndex, this.getSelectedOption());
   }
   moveDown(steps = 1) {
-    if (this._options.length === 0) return;
-    const newIndex = this._selectedIndex + steps;
+    if (this._options.length === 0 || !Number.isFinite(steps)) return;
+    const stepCount = Math.max(1, Math.round(Math.abs(steps)));
+    const previousIndex = this._selectedIndex;
+    const newIndex = this._selectedIndex + stepCount;
     if (newIndex < this._options.length) {
       this._selectedIndex = newIndex;
     } else if (this._wrapSelection && this._options.length > 0) {
@@ -9487,6 +9743,7 @@ var SelectRenderable = class extends Renderable {
     } else {
       this._selectedIndex = this._options.length - 1;
     }
+    if (this._selectedIndex === previousIndex) return;
     this.updateScrollOffset();
     this.requestRender();
     this.emit("selectionChanged" /* SELECTION_CHANGED */, this._selectedIndex, this.getSelectedOption());
@@ -9498,8 +9755,11 @@ var SelectRenderable = class extends Renderable {
     }
   }
   setSelectedIndex(index) {
-    if (index >= 0 && index < this._options.length) {
-      this._selectedIndex = index;
+    if (!Number.isFinite(index)) return;
+    if (this._options.length === 0) return;
+    const nextIndex = clamp(Math.round(index), 0, this._options.length - 1);
+    if (nextIndex !== this._selectedIndex) {
+      this._selectedIndex = nextIndex;
       this.updateScrollOffset();
       this.requestRender();
       this.emit("selectionChanged" /* SELECTION_CHANGED */, this._selectedIndex, this.getSelectedOption());
@@ -9638,13 +9898,13 @@ var SelectRenderable = class extends Renderable {
     this.requestRender();
   }
   set itemSpacing(spacing) {
-    this._itemSpacing = spacing;
+    this._itemSpacing = Number.isFinite(spacing) && spacing >= 0 ? spacing : this._defaultOptions.itemSpacing;
     this.updateLinesPerItem();
     this.updateScrollOffset();
     this.requestRender();
   }
   set fastScrollStep(step) {
-    this._fastScrollStep = step;
+    this._fastScrollStep = Number.isFinite(step) && step >= 1 ? step : this._defaultOptions.fastScrollStep;
   }
   set keyBindings(bindings) {
     this._keyBindings = bindings;
@@ -9657,7 +9917,8 @@ var SelectRenderable = class extends Renderable {
     this._keyBindingsMap = buildKeyBindingsMap(mergedBindings, this._keyAliasMap);
   }
   set selectedIndex(value) {
-    const newIndex = value ?? this._defaultOptions.selectedIndex;
+    const requested = value ?? this._defaultOptions.selectedIndex;
+    const newIndex = Number.isFinite(requested) ? Math.round(requested) : 0;
     const clampedIndex = this._options.length > 0 ? clamp(newIndex, 0, this._options.length - 1) : 0;
     if (this._selectedIndex !== clampedIndex) {
       this._selectedIndex = clampedIndex;
@@ -9691,6 +9952,8 @@ function calculateDynamicHeight(showUnderline, showDescription) {
   }
   return height;
 }
+var DEFAULT_TAB_WIDTH = 20;
+var sanitizeTabWidth = (width) => width !== void 0 && Number.isFinite(width) && width > 0 ? width : DEFAULT_TAB_WIDTH;
 var TabSelectRenderable = class extends Renderable {
   _options = [];
   selectedIndex = 0;
@@ -9720,7 +9983,7 @@ var TabSelectRenderable = class extends Renderable {
     this._focusedBackgroundColor = parseColor(options.focusedBackgroundColor || options.backgroundColor || "#1a1a1a");
     this._focusedTextColor = parseColor(options.focusedTextColor || options.textColor || "#FFFFFF");
     this._options = options.options || [];
-    this._tabWidth = options.tabWidth || 20;
+    this._tabWidth = sanitizeTabWidth(options.tabWidth);
     this._showDescription = options.showDescription ?? true;
     this._showUnderline = options.showUnderline ?? true;
     this._showScrollArrows = options.showScrollArrows ?? true;
@@ -9787,8 +10050,17 @@ var TabSelectRenderable = class extends Renderable {
     }
   }
   truncateText(text, maxWidth) {
-    if (text.length <= maxWidth) return text;
-    return text.substring(0, Math.max(0, maxWidth - 1)) + "\u2026";
+    if (maxWidth <= 0) return "";
+    if (stringWidth(text) <= maxWidth) return text;
+    let width = 0;
+    let result = "";
+    for (const char of text) {
+      const charWidth = stringWidth(char);
+      if (width + charWidth > maxWidth - 1) break;
+      result += char;
+      width += charWidth;
+    }
+    return result + "\u2026";
   }
   renderScrollArrowsToFrameBuffer(contentX, contentY, contentWidth, contentHeight) {
     if (!this.frameBuffer) return;
@@ -9868,8 +10140,9 @@ var TabSelectRenderable = class extends Renderable {
     this.requestRender();
   }
   setTabWidth(tabWidth) {
-    if (this._tabWidth === tabWidth) return;
-    this._tabWidth = tabWidth;
+    const sanitized = sanitizeTabWidth(tabWidth);
+    if (this._tabWidth === sanitized) return;
+    this._tabWidth = sanitized;
     this.maxVisibleTabs = Math.max(1, Math.floor(this.width / this._tabWidth));
     this.updateScrollOffset();
     this.requestRender();
@@ -9972,8 +10245,9 @@ var TabSelectRenderable = class extends Renderable {
     return this._tabWidth;
   }
   set tabWidth(tabWidth) {
-    if (this._tabWidth === tabWidth) return;
-    this._tabWidth = tabWidth;
+    const sanitized = sanitizeTabWidth(tabWidth);
+    if (this._tabWidth === sanitized) return;
+    this._tabWidth = sanitized;
     this.maxVisibleTabs = Math.max(1, Math.floor(this.width / this._tabWidth));
     this.updateScrollOffset();
     this.requestRender();
@@ -10043,15 +10317,22 @@ var TimeToFirstDrawRenderable = class extends Renderable {
     }
     const content = `${this.label}: ${this._runtimeMs.toFixed(this.precision)}ms`;
     const maxWidth = Math.max(this.width, 1);
-    const visibleContent = content.length > maxWidth ? content.slice(0, maxWidth) : content;
-    const centeredX = this.x + Math.max(0, Math.floor((maxWidth - visibleContent.length) / 2));
+    let visibleContent = "";
+    let visibleWidth = 0;
+    for (const char of content) {
+      const charWidth = stringWidth(char);
+      if (visibleWidth + charWidth > maxWidth) break;
+      visibleContent += char;
+      visibleWidth += charWidth;
+    }
+    const centeredX = this.x + Math.max(0, Math.floor((maxWidth - visibleWidth) / 2));
     buffer.drawText(visibleContent, centeredX, this.y, this.textColor);
   }
   normalizePrecision(value) {
     if (!Number.isFinite(value)) {
       return 2;
     }
-    return Math.max(0, Math.floor(value));
+    return Math.min(100, Math.max(0, Math.floor(value)));
   }
 };
 
@@ -10191,8 +10472,11 @@ var VirtualListModel = class {
   }
   resolveAnchor(anchor) {
     if (!anchor || !this.count) return 0;
+    if (!Number.isFinite(anchor.offset) || anchor.offset < 0) {
+      throw new RangeError("Virtual anchor offset must be finite and nonnegative");
+    }
     const found = this.indexOf(anchor.key);
-    const index = found < 0 ? Math.min(anchor.index, this.count - 1) : found;
+    const index = found < 0 ? clamp(Math.floor(anchor.index), 0, this.count - 1) : found;
     return this.offsetAt(index) + Math.min(anchor.offset, this.heightAt(index) - 1);
   }
 };
@@ -10282,7 +10566,10 @@ var VirtualListRenderable = class extends ScrollBoxRenderable {
     this.refreshing = true;
     let dirty = false;
     try {
-      if (this.seek?.offset !== void 0 && this.scrollTop !== this.seek.offset) this.seek = void 0;
+      if (this.seek?.offset !== void 0 && this.scrollTop !== this.seek.offset) {
+        const maxTop = Math.max(0, this.scrollHeight - this.viewport.height);
+        if (this.scrollTop !== Math.min(this.seek.offset, maxTop)) this.seek = void 0;
+      }
       const width = this.viewport.width;
       const viewport = this.viewport.height;
       const anchor = this.anchor ?? this.model.anchor(this.scrollTop);
@@ -11133,20 +11420,27 @@ var ImageRenderable = class extends Renderable {
     }
     this.loadPromise = (async () => {
       await Promise.resolve();
+      let decoded = false;
       try {
         if (controller.signal.aborted || this.isDestroyed || this.controller !== controller) return;
         if (snapshotError) throw snapshotError;
         const value = typeof source === "function" ? await source(controller.signal) : snapshot2;
         if (controller.signal.aborted || this.isDestroyed || this.controller !== controller) return;
         this.pixels = value instanceof Uint8Array ? decodePng(value) : copyRgbaImage(value);
+        decoded = true;
         this.requestRender();
         this.onLoad?.();
       } catch (error) {
         if (controller.signal.aborted || this.isDestroyed || this.controller !== controller) return;
-        this.pixels = null;
-        this.loadError = error;
-        this.requestRender();
-        this.onError?.(error);
+        if (!decoded) {
+          this.pixels = null;
+          this.loadError = error;
+          this.requestRender();
+          try {
+            this.onError?.(error);
+          } catch {
+          }
+        }
         throw error;
       } finally {
         if (this.controller === controller) this.controller = void 0;
@@ -11258,15 +11552,20 @@ var ImageRenderable = class extends Renderable {
       this.retirePlacement();
     }
     const background = this._backgroundColor.toInts();
+    const backgroundAlpha = background[3] / 255;
     const sample = (x, y) => {
       const sx = Math.min(image.width - 1, Math.max(0, Math.floor(x * image.width / width)));
       const sy = Math.min(image.height - 1, Math.max(0, Math.floor(y * image.height / (height * 2))));
       const offset = (sy * image.width + sx) * 4;
       const alpha = image.data[offset + 3] / 255;
+      const outAlpha = alpha + backgroundAlpha * (1 - alpha);
+      if (outAlpha <= 0) return RGBA.fromInts(0, 0, 0, 0);
+      const blend = (channel2, backdrop) => Math.round((channel2 * alpha + backdrop * backgroundAlpha * (1 - alpha)) / outAlpha);
       return RGBA.fromInts(
-        image.data[offset] * alpha + background[0] * (1 - alpha),
-        image.data[offset + 1] * alpha + background[1] * (1 - alpha),
-        image.data[offset + 2] * alpha + background[2] * (1 - alpha)
+        blend(image.data[offset], background[0]),
+        blend(image.data[offset + 1], background[1]),
+        blend(image.data[offset + 2], background[2]),
+        outAlpha * 255
       );
     };
     for (let y = Math.max(0, top); y < Math.min(this.height, top + height); y++) {
@@ -11422,9 +11721,9 @@ function createFilePathProvider(options = {}) {
       throw error;
     }
     if (signal.aborted) return null;
-    const matches2 = entries.filter((entry) => entry.name.startsWith(name)).filter((entry) => options.includeHidden || name.startsWith(".") || !entry.name.startsWith(".")).filter((entry) => !/["\x00-\x1f\x7f-\x9f]/u.test(entry.name)).sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name)).slice(0, limit);
-    const items = await Promise.all(
-      matches2.map(async (entry) => {
+    const candidates = entries.filter((entry) => entry.name.startsWith(name)).filter((entry) => options.includeHidden || name.startsWith(".") || !entry.name.startsWith(".")).filter((entry) => !/["\x00-\x1f\x7f-\x9f]/u.test(entry.name));
+    const resolved = await Promise.all(
+      candidates.map(async (entry) => {
         let isDirectory = entry.isDirectory();
         if (entry.isSymbolicLink() && !signal.aborted) {
           try {
@@ -11432,22 +11731,22 @@ function createFilePathProvider(options = {}) {
           } catch {
           }
         }
-        const suffix = isDirectory ? directory.endsWith("\\") ? "\\" : "/" : "";
-        const value = directory + entry.name + suffix;
-        const needsQuotes = quoted || /\s/u.test(value);
-        const insertText = needsQuotes ? `${mention}"${value}"` : mention + value;
-        return {
-          label: entry.name + suffix,
-          insertText,
-          cursorOffset: needsQuotes && isDirectory ? insertText.length - 1 : insertText.length,
-          description: isDirectory ? "Directory" : entry.isSymbolicLink() ? "Symbolic link" : "File"
-        };
+        return { entry, isDirectory };
       })
     );
     if (signal.aborted) return null;
-    items.sort(
-      (a, b) => Number(b.description === "Directory") - Number(a.description === "Directory") || a.label.localeCompare(b.label)
-    );
+    const items = resolved.sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.entry.name.localeCompare(b.entry.name)).slice(0, limit).map(({ entry, isDirectory }) => {
+      const suffix = isDirectory ? directory.endsWith("\\") ? "\\" : "/" : "";
+      const value = directory + entry.name + suffix;
+      const needsQuotes = quoted || /\s/u.test(value);
+      const insertText = needsQuotes ? `${mention}"${value}"` : mention + value;
+      return {
+        label: entry.name + suffix,
+        insertText,
+        cursorOffset: needsQuotes && isDirectory ? insertText.length - 1 : insertText.length,
+        description: isDirectory ? "Directory" : entry.isSymbolicLink() ? "Symbolic link" : "File"
+      };
+    });
     return { request: { ...request }, start: token.start, end: token.end, items };
   };
 }
@@ -11749,7 +12048,7 @@ function parseChord(value) {
     throw new TypeError(`Duplicate keymap modifier: ${value}`);
   }
   return {
-    name: aliases[key] ?? key,
+    name: Object.hasOwn(aliases, key) ? aliases[key] : key,
     ctrl: parts.includes("ctrl"),
     shift: parts.includes("shift"),
     meta: parts.includes("meta") || parts.includes("alt"),
@@ -11758,7 +12057,8 @@ function parseChord(value) {
   };
 }
 function matches(chord, event) {
-  return chord.name === (aliases[event.name.toLowerCase()] ?? event.name.toLowerCase()) && chord.ctrl === !!event.ctrl && chord.shift === !!event.shift && chord.meta === !!event.meta && chord.super === !!event.super && chord.hyper === !!event.hyper;
+  const eventName = event.name.toLowerCase();
+  return chord.name === (Object.hasOwn(aliases, eventName) ? aliases[eventName] : eventName) && chord.ctrl === !!event.ctrl && chord.shift === !!event.shift && chord.meta === !!event.meta && chord.super === !!event.super && chord.hyper === !!event.hyper;
 }
 var Keymap = class _Keymap {
   constructor(renderer, sequenceTimeoutMs) {
@@ -12224,9 +12524,16 @@ var CommandRegistry = class _CommandRegistry extends EventEmitter2 {
   dispose = () => {
     if (this.disposed) return;
     this.disposed = true;
-    for (const registration of [...this.commands.values()]) registration.remove();
     this.renderer.off("destroy", this.dispose);
     registries.delete(this.renderer);
+    for (const registration of [...this.commands.values()]) {
+      this.commands.delete(registration.definition.id);
+      registration.target?.off("destroyed" /* DESTROYED */, registration.remove);
+    }
+    try {
+      this.emit("change");
+    } catch {
+    }
     this.removeAllListeners();
   };
 };

@@ -1,3 +1,5 @@
+import { clamp } from "./clamp.js"
+
 export type VirtualListKey = string | number
 
 export interface VirtualListAnchor {
@@ -144,8 +146,11 @@ export class VirtualListModel<T> {
 
   resolveAnchor(anchor: VirtualListAnchor | undefined): number {
     if (!anchor || !this.count) return 0
+    if (!Number.isFinite(anchor.offset) || anchor.offset < 0) {
+      throw new RangeError("Virtual anchor offset must be finite and nonnegative")
+    }
     const found = this.indexOf(anchor.key)
-    const index = found < 0 ? Math.min(anchor.index, this.count - 1) : found
+    const index = found < 0 ? clamp(Math.floor(anchor.index), 0, this.count - 1) : found
     return this.offsetAt(index) + Math.min(anchor.offset, this.heightAt(index) - 1)
   }
 }

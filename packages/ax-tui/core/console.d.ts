@@ -70,6 +70,7 @@ export declare class TerminalConsole extends EventEmitter {
     private _mergedKeyBindings;
     private _actionHandlers;
     private markNeedsRerender;
+    private _handleGlobalMouseUp;
     private getCopyButtonLabel;
     private _rgbaInfo;
     private _rgbaWarn;
@@ -129,6 +130,7 @@ export declare class TerminalConsole extends EventEmitter {
     private normalizeSelection;
     private getSelectedText;
     private clearSelection;
+    private _adjustSelectionForTrim;
     private stopAutoScroll;
     private startAutoScroll;
     private triggerCopy;

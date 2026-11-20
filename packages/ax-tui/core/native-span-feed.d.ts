@@ -29,7 +29,9 @@ export declare class NativeSpanFeed {
     private closeQueued;
     private idleResolvers;
     private pendingHandlerError;
+    private hasPendingHandlerError;
     private pendingHandlerErrorQueued;
+    private deferIdleResolve;
     private constructor();
     private ensureDrainBuffer;
     onData(handler: DataHandler): () => void;

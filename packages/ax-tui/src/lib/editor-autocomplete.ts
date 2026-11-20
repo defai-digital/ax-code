@@ -26,7 +26,7 @@ export function applyEditorAutocomplete(
   const measurement = TextBuffer.create(editor.ctx.widthMethod)
   try {
     // Apply the caret before input callbacks can make a newer edit or destroy the editor.
-    // The native cursor clamps to the resulting buffer if InputRenderable truncates the text.
+    // InputRenderable clamps the offset to the stored (post-truncation) display width.
     measurement.setText(editor instanceof InputRenderable ? prefix.replace(/[\n\r]/g, "") : prefix)
     editor.replaceText(replacement.text, measurement.length + measurement.getLineCount() - 1)
   } finally {
