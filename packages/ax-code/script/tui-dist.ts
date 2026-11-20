@@ -26,7 +26,16 @@ export function copyTuiDistPackage(packageRoot: string, nodeModulesDir: string) 
   return target
 }
 
-const DENY_PREFIXES = ["tests", "patches", "assets/zig", "lib/tree-sitter/assets", "solid/patches"] as const
+const DENY_PREFIXES = [
+  "tests",
+  "patches",
+  "assets/zig",
+  "lib/tree-sitter/assets",
+  "native/source",
+  "native/renderer",
+  "solid/patches",
+  "solid/source",
+] as const
 
 // Only runtime directories and entry files belong in the CLI. The registry
 // artifact may also contain source, declarations, and maintenance documentation.

@@ -32,6 +32,10 @@ const developmentFiles = [
   "chart/tsconfig.json",
   ".internal/reports/notes.md",
   "node_modules/solid-js/package.json",
+  "native/source/resolve.ts",
+  "native/renderer/renderer.zig",
+  "native/renderer/tests/terminal_test.zig",
+  "solid/source/src/reconciler.ts",
   "solid/scripts/solid-transform.js",
   "index.d.ts",
 ]
