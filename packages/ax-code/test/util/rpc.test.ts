@@ -612,6 +612,45 @@ describe("Rpc", () => {
     expect(stdout.write).toHaveBeenCalledTimes(1)
   })
 
+  test("stdio EOF bounds shutdown while an unterminated final request is pending", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const stdin = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
+    const stdout = Object.assign(new EventEmitter(), { write: vi.fn(() => true) })
+    const response = Promise.withResolvers<string>()
+    let requestSignal: AbortSignal | undefined
+    let closed = false
+    const done = Rpc.listenStdio(
+      {
+        respond: (_input, { signal }) => {
+          requestSignal = signal
+          return response.promise
+        },
+      },
+      {
+        stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">,
+        stdout: stdout as unknown as Pick<NodeJS.WriteStream, "write" | "on">,
+      },
+    ).then(() => {
+      closed = true
+    })
+
+    try {
+      stdin.emit("data", JSON.stringify({ type: "rpc.request", method: "respond", id: 13 }))
+      stdin.emit("end")
+      stdin.emit("close")
+      expect(requestSignal?.aborted).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(Rpc.RPC_STDIO_DRAIN_TIMEOUT_MS)
+      expect(requestSignal?.aborted).toBe(true)
+      expect(closed).toBe(true)
+    } finally {
+      response.resolve("late response")
+      await done
+      vi.useRealTimers()
+    }
+    expect(stdout.write).not.toHaveBeenCalled()
+  })
+
   test("supports newline-framed stdio requests and event emission", async () => {
     const stdin = new EventEmitter() as EventEmitter & { setEncoding: (encoding: BufferEncoding) => typeof stdin }
     stdin.setEncoding = () => stdin

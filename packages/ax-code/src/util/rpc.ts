@@ -350,7 +350,6 @@ export namespace Rpc {
 
     await new Promise<void>((resolve) => {
       let settled = false
-      let ended = false
       let finalizing = false
       const finish = () => {
         if (settled) return
@@ -360,13 +359,15 @@ export namespace Rpc {
         writer.dispose()
         resolve()
       }
-      const finalizeAfterOutputDrain = () => {
+      const finalizeAfterOutputDrain = (lastLine: string) => {
         if (finalizing) return
         finalizing = true
+        // An unterminated frame can start an asynchronous handler at EOF.
+        // Bound its completion and the remaining output with one deadline.
         const timeout = setTimeout(finish, RPC_STDIO_DRAIN_TIMEOUT_MS)
         timeout.unref?.()
-        void writer
-          .drain()
+        void dispatch(lastLine)
+          .then(() => writer.drain())
           .catch(() => undefined)
           .finally(() => {
             clearTimeout(timeout)
@@ -384,13 +385,12 @@ export namespace Rpc {
         }
       })
       stdin.on("end", () => {
-        ended = true
         const line = buffer
         buffer = ""
-        void dispatch(line).finally(finalizeAfterOutputDrain)
+        finalizeAfterOutputDrain(line)
       })
       stdin.on("close", () => {
-        if (!ended) finalizeAfterOutputDrain()
+        finalizeAfterOutputDrain("")
       })
     })
   }
