@@ -9,9 +9,10 @@ mkdir -p source
 tar xzf source.tar.gz -C source
 cd source
 case "$(uname -m)" in x86_64) target_arch=x64;; aarch64) target_arch=arm64;; *) exit 1;; esac
-node_archive="node-v26.5.1-linux-${target_arch}.tar.xz"
-curl -fsSLO "https://nodejs.org/dist/v26.5.1/${node_archive}"
-curl -fsSLO https://nodejs.org/dist/v26.5.1/SHASUMS256.txt
+node_version=v26.9.0
+node_archive="node-${node_version}-linux-${target_arch}.tar.xz"
+curl -fsSLO "https://nodejs.org/dist/${node_version}/${node_archive}"
+curl -fsSLO "https://nodejs.org/dist/${node_version}/SHASUMS256.txt"
 awk -v file="$node_archive" '$2 == file { print }' SHASUMS256.txt | sha256sum -c -
 mkdir -p /opt/ax-release-node
 tar xJf "$node_archive" --strip-components=1 -C /opt/ax-release-node

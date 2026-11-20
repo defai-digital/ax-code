@@ -14,6 +14,7 @@ changes belong to AX Coder.
 - Honor dialog-specific Enter bindings when the terminal supplies keypad aliases.
 - Keep transcript rows stable while a finished reply is waiting for syntax highlighting.
 - Exclude native and Solid development sources from the CLI archives while retaining their compiled runtime modules.
+- Bundle Node.js 26.9.0 to preserve partial output when an AX Trust stream ends in a timeout.
 
 ## [7.31.3] - 2026-11-20
 

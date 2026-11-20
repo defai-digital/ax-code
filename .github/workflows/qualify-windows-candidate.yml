@@ -70,6 +70,7 @@ jobs:
       - uses: ./.github/actions/setup-ax-code-toolchain
         with:
           checkout: "false"
+          node-version: "26.9.0"
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Test Windows installer regressions
         run: pnpm exec vitest run script/install-powershell.test.ts script/windows-runtime-integrity.test.ts --retry=0

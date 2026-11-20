@@ -1,5 +1,4 @@
-import { realpathSync } from "node:fs"
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
@@ -41,7 +40,7 @@ describe("runtime plugin prescan follows transitive imports from a plain-path pa
 
       // The prescan discovers the dependency through its canonical realpath, so the
       // rewrite loader is registered for that spelling (Bun canonicalizes before onLoad).
-      const canonicalDep = realpathSync(dep)
+      const canonicalDep = await realpath(dep)
       expect(loads.some((entry) => entry.filter.test(canonicalDep))).toBe(true)
     } finally {
       await rm(root, { recursive: true, force: true })
