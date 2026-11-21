@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.6] - 2026-11-21
+
+### Changed
+
+- `ax-code doctor` now identifies configured model pins that cannot be resolved.
+- Publish SDK 2.6.92 with the updated `small_model` configuration description.
+
+### Fixed
+
+- Use the session model for compaction when the dedicated compaction model is unavailable. A stale `small_model` setting can no longer block the next turn.
+- Let title and recap generation use the session model when an auxiliary model is unavailable, and skip optional complexity routing when its model cannot be resolved.
+- Show auxiliary model warnings once per project so each affected workspace receives the diagnostic.
+
 ## [7.31.5] - 2026-11-21
 
 ### Changed
