@@ -1,3 +1,4 @@
+import { Instance } from "@/project/instance"
 import { Bus } from "@/bus"
 import { NotificationEvent } from "@/notification/events"
 import { Provider } from "../provider/provider"
@@ -54,12 +55,7 @@ export namespace AuxiliaryModel {
 
   const NOTICE_DURATION_MS = 15_000
 
-  const notified = new Set<string>()
-
-  /** Test hook: forget which degraded targets were already announced. */
-  export function resetNotices(): void {
-    notified.clear()
-  }
+  const notified = Instance.state(() => new Set<string>())
 
   function isUnavailable(error: unknown): boolean {
     return Provider.ModelNotFoundError.isInstance(error) || Provider.InitError.isInstance(error)
@@ -107,8 +103,9 @@ export namespace AuxiliaryModel {
   function announce(input: Input, degraded: Degraded[], used: Used): void {
     for (const item of degraded) {
       const key = `${item.configKey}|${item.target}|${item.reason}|${input.purpose}`
-      if (notified.has(key)) continue
-      notified.add(key)
+      const notices = notified()
+      if (notices.has(key)) continue
+      notices.add(key)
       const outcome = outcomeText(input.purpose, used)
       const message = `${item.configKey} selects ${item.target}, but ${describeReason(item.reason, input.anchor)}; ${outcome}. Update or remove ${item.configKey} in your config.`
       log.warn("auxiliary model degraded", {

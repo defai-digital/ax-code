@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Bus } from "../../src/bus"
+import { NotificationEvent } from "../../src/notification/events"
 import { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Instance } from "../../src/project/instance"
@@ -34,7 +35,6 @@ async function withConfig(config: Record<string, unknown>, fn: () => Promise<voi
 
 beforeEach(() => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
-  AuxiliaryModel.resetNotices()
 })
 
 afterEach(() => {
@@ -72,6 +72,18 @@ describe("AuxiliaryModel.resolve", () => {
       expect(payload.message).toContain("small_model")
       expect(payload.message).toContain("remote-gw/big")
     })
+  })
+
+  test("warns each project independently about the same unavailable target", async () => {
+    const toast = vi.spyOn(Bus, "publishDetached")
+    const config = { small_model: "missing/gone" }
+    for (const expectedCount of [1, 2]) {
+      await withConfig(config, async () => {
+        await AuxiliaryModel.resolve({ purpose: "recap", anchor: remote, primary, smallModel: true })
+      })
+      const warnings = toast.mock.calls.filter(([event]) => event === NotificationEvent.ToastShow)
+      expect(warnings).toHaveLength(expectedCount)
+    }
   })
 
   test("without a primary an unavailable small_model skips the work", async () => {

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 
+import { tmpdir } from "../fixture/fixture"
+import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
 import { Config } from "../../src/config/config"
 import { AX_ENGINE_PROVIDER_ID } from "../../src/provider/ax-engine"
@@ -135,11 +137,16 @@ describe("ensureTitle model resolution", () => {
       text: Promise.resolve("Count lines of code"),
     } as unknown as Awaited<ReturnType<typeof LLM.stream>>)
 
-    await ensureTitle({
-      session: { id: sessionID, title: "New session" } as Session.Info,
-      history,
-      providerID: ProviderID.make("openai"),
-      modelID: ModelID.make("session-model"),
+    await using tmp = await tmpdir()
+    await Instance.provideScoped({
+      directory: tmp.path,
+      fn: () =>
+        ensureTitle({
+          session: { id: sessionID, title: "New session" } as Session.Info,
+          history,
+          providerID: ProviderID.make("openai"),
+          modelID: ModelID.make("session-model"),
+        }),
     })
 
     // The generated title is applied on the session model, not just the

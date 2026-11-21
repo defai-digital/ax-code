@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { tmpdir } from "../fixture/fixture"
+import { Instance } from "../../src/project/instance"
 import { Agent } from "../../src/agent/agent"
 import { Config } from "../../src/config/config"
 import { Provider } from "../../src/provider/provider"
@@ -243,7 +245,9 @@ describe("recap generation boundary", () => {
       assistantMessage([text("Tests passed")], undefined, { time: { created: 1, completed: 2 } }),
     ]
     const { model, stream, getModel } = setup(history, "deepseek/deepseek-v4-flash")
-    expect(await SessionRecap.generate({ sessionID })).toEqual({ text: "Fixed login; tests passed." })
+    await using tmp = await tmpdir()
+    const recap = await Instance.provideScoped({ directory: tmp.path, fn: () => SessionRecap.generate({ sessionID }) })
+    expect(recap).toEqual({ text: "Fixed login; tests passed." })
     expect(stream).toHaveBeenCalledWith(expect.objectContaining({ model }))
     expect(getModel).toHaveBeenCalledWith(ProviderID.make("openai"), ModelID.make("gpt-5.2"))
   })
