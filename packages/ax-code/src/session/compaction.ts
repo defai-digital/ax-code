@@ -39,30 +39,12 @@ import {
 } from "./compaction-budget"
 import { MediaProjection } from "./media-projection"
 import { agentModel } from "./prompt/prompt-command-selection"
+import { AuxiliaryModel } from "./auxiliary-model"
 import { SessionEvidence } from "./evidence"
 import { modelContextTokens } from "../provider/context-usage"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
-  const MODEL_UNAVAILABLE = "COMPACTION_MODEL_UNAVAILABLE"
-
-  async function overrideModel(agent: Agent.Info, providerID: ProviderID): Promise<Provider.Model | undefined> {
-    const pinned = await agentModel(agent)
-    try {
-      return pinned
-        ? await Provider.getModel(pinned.providerID, pinned.modelID)
-        : await Provider.getSmallModel(providerID)
-    } catch (error) {
-      if (!Provider.ModelNotFoundError.isInstance(error)) throw error
-      const configKey = pinned ? "agent.compaction.model" : "small_model"
-      const target = `${error.data.providerID}/${error.data.modelID}`
-      throw new MessageV2.APIError({
-        message: `Cannot compact this session: ${configKey} selects unavailable model ${target}. Update or remove ${configKey}, then resume the session.`,
-        isRetryable: false,
-        metadata: { errorCode: MODEL_UNAVAILABLE, configKey },
-      })
-    }
-  }
   const inFlight = new Set<string>()
 
   /** Machine-readable marker on the synthetic plan-carryover part (ADR-141). */
@@ -811,10 +793,6 @@ export namespace SessionCompaction {
         }
       }
       return result
-    } catch (error) {
-      if (!MessageV2.APIError.isInstance(error) || error.data.metadata?.errorCode !== MODEL_UNAVAILABLE) throw error
-      Session.publishError({ sessionID: input.sessionID, error: error.toObject() })
-      return "stop" as const
     } finally {
       inFlight.delete(input.sessionID)
     }
@@ -861,11 +839,22 @@ export namespace SessionCompaction {
     const agent = await Agent.get("compaction")
     if (!agent) throw new Error("Compaction agent is not configured or has been disabled")
     const userModel = userMessage.model
-    // Compaction uses an exact role pin, an explicit small_model, or the
-    // original session primary. Catalog recommendations grant no route.
-    let model =
-      (await overrideModel(agent, userModel.providerID)) ??
-      (await Provider.getModel(userModel.providerID, userModel.modelID))
+    // Compaction is quality-critical and small models often have smaller
+    // context windows than the session primary, so `small_model` never
+    // applies here. The exact `agent.compaction.model` pin is used when it
+    // resolves; an unavailable or local-route-ineligible pin degrades to the
+    // session primary instead of wedging the session on a marker that can
+    // never run. Catalog recommendations grant no route.
+    const pinned = await agentModel(agent)
+    const resolved = await AuxiliaryModel.resolve({
+      purpose: "compaction",
+      anchor: userModel.providerID,
+      primary: { providerID: userModel.providerID, modelID: userModel.modelID },
+      ...(pinned ? { pin: { configKey: "agent.compaction.model", model: pinned } } : {}),
+      smallModel: false,
+    })
+    if (!resolved.model) throw new Error("Compaction failed: no model resolved for the session primary")
+    let model = resolved.model
     // Resolve the next explicit recovery target only after a transient failure.
     const resolveNextRung = async (current: Provider.Model): Promise<Provider.Model | undefined> => {
       if (!fallbackCandidates.length) return undefined
@@ -1347,19 +1336,6 @@ When constructing the summary, try to stick to this template:
       keep: z.number().int().min(1).max(COMPACTION_KEEP_MAX).optional(),
     }),
     async (input) => {
-      // Validate configured overrides before mutating history. Existing markers
-      // are checked again by process() so repairing the pin permits a resume.
-      const agent = await Agent.get("compaction")
-      if (agent) {
-        try {
-          await overrideModel(agent, input.model.providerID)
-        } catch (error) {
-          if (MessageV2.APIError.isInstance(error) && error.data.metadata?.errorCode === MODEL_UNAVAILABLE) {
-            Session.publishError({ sessionID: input.sessionID, error: error.toObject() })
-          }
-          throw error
-        }
-      }
       const triggerReason = input.triggerReason ?? (input.auto ? "provider_usage" : "manual")
       log.info("compaction scheduled", {
         command: "session.compaction.create",

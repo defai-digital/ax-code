@@ -844,7 +844,7 @@ export const Info = z
       "Explicit ordered recovery targets. Empty by default; only user-owned config grants targets.",
     ),
     small_model: ModelId.describe(
-      "Explicit auxiliary model in provider/model format. When omitted, auxiliary tasks inherit the selected model.",
+      "Auxiliary model in provider/model format for titles, recaps and complexity classification. Compaction does not use it; set agent.compaction.model instead. When omitted or unavailable, these tasks use the session model (classification is skipped).",
     ).optional(),
     default_agent: z
       .string()

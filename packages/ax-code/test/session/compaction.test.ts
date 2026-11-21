@@ -1156,9 +1156,9 @@ describe("session.compaction PostCompact hook", () => {
         // A tiny-window compaction model makes the compaction instructions
         // alone exceed the usable budget, so processInner bails via
         // stopForContextOverflow and returns "stop" without compacting.
-        const modelSpy = vi
-          .spyOn(Provider, "getSmallModel")
-          .mockResolvedValue(createModel({ context: 500, output: 50 }))
+        // Compaction runs on the session primary, so the model is injected
+        // through Provider.getModel.
+        const modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(createModel({ context: 500, output: 50 }))
         try {
           const session = await Session.create({})
           const user = await Session.updateMessage({
@@ -1200,10 +1200,9 @@ describe("session.compaction summary input", () => {
       directory: tmp.path,
       fn: async () => {
         // A window wide enough for the compaction instructions, far too small
-        // for the single 60k-character user turn.
-        const modelSpy = vi
-          .spyOn(Provider, "getSmallModel")
-          .mockResolvedValue(createModel({ context: 6_000, output: 512 }))
+        // for the single 60k-character user turn. Compaction runs on the
+        // session primary, so the model is injected through Provider.getModel.
+        const modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(createModel({ context: 6_000, output: 512 }))
         const { SessionProcessor } = await import("../../src/session/processor")
         const processSpy = vi.fn(async () => "continue" as const)
         const createSpy = vi.spyOn(SessionProcessor, "create").mockImplementation(
@@ -1965,136 +1964,169 @@ describe("session.compaction.pickSourceUser", () => {
 })
 
 describe("compaction model configuration recovery", () => {
-  test.each(["small_model", "agent.compaction.model"] as const)(
-    "rejects unavailable %s before creating a marker",
-    async (configKey) => {
-      await using tmp = await tmpdir({
-        config:
-          configKey === "small_model"
-            ? { small_model: "missing-helper/missing-model" }
-            : { agent: { compaction: { model: "missing-helper/missing-model" } } },
-      })
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const session = await Session.create({})
-          const before = await Session.messages({ sessionID: session.id })
-          const errors: MessageV2.Assistant["error"][] = []
-          const unsubscribe = Bus.subscribe(Session.Event.Error, (event) => errors.push(event.properties.error))
-          const create = vi.spyOn(SessionProcessor, "create")
-          try {
-            await expect(
-              SessionCompaction.create({
-                sessionID: session.id,
-                agent: "build",
-                model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
-                auto: true,
-              }),
-            ).rejects.toMatchObject({
-              name: "APIError",
-              data: { isRetryable: false, metadata: { errorCode: "COMPACTION_MODEL_UNAVAILABLE", configKey } },
-            })
-            expect(await Session.messages({ sessionID: session.id })).toEqual(before)
-            expect(errors).toHaveLength(1)
-            expect(errors[0]?.data.message).toContain(configKey)
-            expect(create).not.toHaveBeenCalled()
-          } finally {
-            unsubscribe()
-            create.mockRestore()
-          }
-        },
-      })
-    },
-  )
+  /** Resolve the session primary and reject every other route like the real registry. */
+  function mockPrimaryModel() {
+    return vi.spyOn(Provider, "getModel").mockImplementation(async (providerID, modelID) => {
+      if (`${providerID}/${modelID}` === "test/test-model") return createModel({ context: 100_000, output: 8_000 })
+      throw new Provider.ModelNotFoundError({ providerID, modelID })
+    })
+  }
 
-  test("an existing pending marker fails once per resume and completes when its exact helper becomes available", async () => {
+  /** Scripted SessionProcessor that completes the compaction on the model it was created with. */
+  function mockProcessorSuccess(sessionID: SessionID) {
+    return vi.spyOn(SessionProcessor, "create").mockImplementation((args) => ({
+      message: args.assistantMessage,
+      recoverySafe: true,
+      streamError: undefined,
+      lastStepUsage: undefined,
+      partFromToolCall: () => {
+        throw new Error("No synthetic tool call exists")
+      },
+      process: async () => {
+        args.assistantMessage.finish = "stop"
+        args.assistantMessage.time.completed = Date.now()
+        await Session.updatePart({
+          id: PartID.ascending(),
+          sessionID,
+          messageID: args.assistantMessage.id,
+          type: "text",
+          text: "Synthetic recovered summary.",
+        })
+        await Session.updateMessage(args.assistantMessage)
+        return "continue" as const
+      },
+    }))
+  }
+
+  async function seedPendingMarker(session: { id: SessionID }) {
+    const ref = { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") }
+    const user = await Session.updateMessage({
+      id: MessageID.ascending(),
+      sessionID: session.id,
+      role: "user",
+      agent: "build",
+      model: ref,
+      time: { created: Date.now() },
+    })
+    await Session.updatePart({
+      id: PartID.ascending(),
+      sessionID: session.id,
+      messageID: user.id,
+      type: "text",
+      text: "A synthetic request whose completed work must survive compaction.",
+    })
+    const marker = await Session.updateMessage({
+      id: MessageID.ascending(),
+      sessionID: session.id,
+      role: "user",
+      agent: "build",
+      model: ref,
+      time: { created: Date.now() },
+    })
+    await Session.updatePart({
+      id: PartID.ascending(),
+      sessionID: session.id,
+      messageID: marker.id,
+      type: "compaction",
+      auto: true,
+      overflow: true,
+    })
+    return { marker }
+  }
+
+  test("an unavailable small_model never blocks scheduling and is never consulted", async () => {
     await using tmp = await tmpdir({ config: { small_model: "missing-helper/missing-model" } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const ref = { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") }
-        const user = await Session.updateMessage({
-          id: MessageID.ascending(),
-          sessionID: session.id,
-          role: "user",
-          agent: "build",
-          model: ref,
-          time: { created: Date.now() },
-        })
-        await Session.updatePart({
-          id: PartID.ascending(),
-          sessionID: session.id,
-          messageID: user.id,
-          type: "text",
-          text: "A synthetic request whose completed work must survive compaction.",
-        })
-        const marker = await Session.updateMessage({
-          id: MessageID.ascending(),
-          sessionID: session.id,
-          role: "user",
-          agent: "build",
-          model: ref,
-          time: { created: Date.now() },
-        })
-        await Session.updatePart({
-          id: PartID.ascending(),
-          sessionID: session.id,
-          messageID: marker.id,
-          type: "compaction",
-          auto: true,
-          overflow: true,
-        })
-        const before = await Session.messages({ sessionID: session.id })
         const errors: MessageV2.Assistant["error"][] = []
         const unsubscribe = Bus.subscribe(Session.Event.Error, (event) => errors.push(event.properties.error))
-        const create = vi.spyOn(SessionProcessor, "create")
         const small = vi.spyOn(Provider, "getSmallModel")
-        const process = () =>
-          SessionCompaction.process({
+        try {
+          await SessionCompaction.create({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+            auto: true,
+          })
+          const after = await Session.messages({ sessionID: session.id })
+          expect(after.at(-1)?.parts.some((part) => part.type === "compaction")).toBe(true)
+          expect(errors).toHaveLength(0)
+          expect(small).not.toHaveBeenCalled()
+        } finally {
+          unsubscribe()
+          small.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("an unavailable agent.compaction.model degrades to the session primary", async () => {
+    await using tmp = await tmpdir({
+      config: { agent: { compaction: { model: "missing-helper/missing-model" } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const errors: MessageV2.Assistant["error"][] = []
+        const unsubscribe = Bus.subscribe(Session.Event.Error, (event) => errors.push(event.properties.error))
+        const getModel = mockPrimaryModel()
+        const create = mockProcessorSuccess(session.id)
+        try {
+          const { marker } = await seedPendingMarker(session)
+          const result = await SessionCompaction.process({
             sessionID: session.id,
             parentID: marker.id,
-            messages: before,
+            messages: await Session.messages({ sessionID: session.id }),
             abort: AbortSignal.any([]),
             auto: true,
             overflow: true,
           })
-        try {
-          expect(await process()).toBe("stop")
-          expect(await process()).toBe("stop")
-          expect(small).toHaveBeenCalledTimes(2)
-          expect(errors).toHaveLength(2)
-          expect(create).not.toHaveBeenCalled()
-          expect(await Session.messages({ sessionID: session.id })).toEqual(before)
-          small.mockResolvedValue({
-            ...createModel({ context: 100_000, output: 8_000 }),
-            providerID: ProviderID.make("missing-helper"),
-            id: ModelID.make("missing-model"),
-          })
-          create.mockImplementation((args) => ({
-            message: args.assistantMessage,
-            recoverySafe: true,
-            streamError: undefined,
-            lastStepUsage: undefined,
-            partFromToolCall: () => {
-              throw new Error("No synthetic tool call exists")
-            },
-            process: async () => {
-              args.assistantMessage.finish = "stop"
-              args.assistantMessage.time.completed = Date.now()
-              await Session.updatePart({
-                id: PartID.ascending(),
-                sessionID: session.id,
-                messageID: args.assistantMessage.id,
-                type: "text",
-                text: "Synthetic recovered summary.",
-              })
-              await Session.updateMessage(args.assistantMessage)
-              return "continue" as const
-            },
-          }))
-          expect(await process()).toBe("continue")
+          expect(result).toBe("continue")
           expect(create).toHaveBeenCalledTimes(1)
+          const processorModel = create.mock.calls[0]?.[0]?.model
+          expect(`${processorModel?.providerID}/${processorModel?.id}`).toBe("test/test-model")
+          expect(errors).toHaveLength(0)
+        } finally {
+          unsubscribe()
+          create.mockRestore()
+          getModel.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("an existing pending marker with an unavailable pin completes on the first resume using the session primary", async () => {
+    await using tmp = await tmpdir({
+      config: { agent: { compaction: { model: "missing-helper/missing-model" } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { marker } = await seedPendingMarker(session)
+        const before = await Session.messages({ sessionID: session.id })
+        const errors: MessageV2.Assistant["error"][] = []
+        const unsubscribe = Bus.subscribe(Session.Event.Error, (event) => errors.push(event.properties.error))
+        const getModel = mockPrimaryModel()
+        const create = mockProcessorSuccess(session.id)
+        try {
+          expect(
+            await SessionCompaction.process({
+              sessionID: session.id,
+              parentID: marker.id,
+              messages: before,
+              abort: AbortSignal.any([]),
+              auto: true,
+              overflow: true,
+            }),
+          ).toBe("continue")
+          expect(create).toHaveBeenCalledTimes(1)
+          const processorModel = create.mock.calls[0]?.[0]?.model
+          expect(`${processorModel?.providerID}/${processorModel?.id}`).toBe("test/test-model")
+          expect(errors).toHaveLength(0)
           const after = await Session.messages({ sessionID: session.id })
           expect(
             after.filter(
@@ -2107,6 +2139,49 @@ describe("compaction model configuration recovery", () => {
         } finally {
           unsubscribe()
           create.mockRestore()
+          getModel.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("an available small_model is not used for compaction — the session primary runs it", async () => {
+    await using tmp = await tmpdir({ config: { small_model: "test/test-small" } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const { marker } = await seedPendingMarker(session)
+        const errors: MessageV2.Assistant["error"][] = []
+        const unsubscribe = Bus.subscribe(Session.Event.Error, (event) => errors.push(event.properties.error))
+        const small = vi.spyOn(Provider, "getSmallModel")
+        const getModel = vi.spyOn(Provider, "getModel").mockImplementation(async (providerID, modelID) => {
+          if (`${providerID}/${modelID}` === "test/test-model") return createModel({ context: 100_000, output: 8_000 })
+          if (`${providerID}/${modelID}` === "test/test-small") {
+            return { ...createModel({ context: 100_000, output: 8_000 }), id: ModelID.make("test-small") }
+          }
+          throw new Provider.ModelNotFoundError({ providerID, modelID })
+        })
+        const create = mockProcessorSuccess(session.id)
+        try {
+          expect(
+            await SessionCompaction.process({
+              sessionID: session.id,
+              parentID: marker.id,
+              messages: await Session.messages({ sessionID: session.id }),
+              abort: AbortSignal.any([]),
+              auto: true,
+              overflow: true,
+            }),
+          ).toBe("continue")
+          expect(small).not.toHaveBeenCalled()
+          const processorModel = create.mock.calls[0]?.[0]?.model
+          expect(`${processorModel?.providerID}/${processorModel?.id}`).toBe("test/test-model")
+          expect(errors).toHaveLength(0)
+        } finally {
+          unsubscribe()
+          create.mockRestore()
+          getModel.mockRestore()
           small.mockRestore()
         }
       },

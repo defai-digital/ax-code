@@ -122,12 +122,11 @@ describe("session.compaction model fallback (C9)", () => {
       directory: tmp.path,
       fn: async () => {
         const config = await Config.get()
-        config.llm_routing = { fallback: [{ providerID: "test", modelID: "test-model" }] }
+        config.llm_routing = { fallback: [{ providerID: "test", modelID: "test-fallback" }] }
 
-        const small = createModel({ providerID: "test", modelID: "test-small" })
         const session = createModel({ providerID: "test", modelID: "test-model" })
-        const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
-        const { getModel } = mockProviders({ "test/test-model": session, "test/test-small": small })
+        const fallback = createModel({ providerID: "test", modelID: "test-fallback" })
+        const { getModel } = mockProviders({ "test/test-model": session, "test/test-fallback": fallback })
         const processor = mockProcessor([
           { type: "fail", error: apiError({ message: "Service Unavailable", statusCode: 503, isRetryable: true }) },
           { type: "succeed" },
@@ -143,10 +142,11 @@ describe("session.compaction model fallback (C9)", () => {
           })
 
           expect(result).toBe("continue")
-          // Exactly one retry: small tier first, session model as the next rung.
+          // Exactly one retry: the session primary first, the explicit fallback
+          // list as the next rung.
           expect(processor.models).toEqual([
-            { providerID: "test", modelID: "test-small" },
             { providerID: "test", modelID: "test-model" },
+            { providerID: "test", modelID: "test-fallback" },
           ])
 
           // Both attempts are recorded as assistant messages; the failed one
@@ -155,17 +155,16 @@ describe("session.compaction model fallback (C9)", () => {
           expect(assistants).toHaveLength(2)
           const [failed, succeeded] = assistants
           expect(failed?.providerID).toBe("test")
-          expect(failed?.modelID).toBe("test-small")
+          expect(failed?.modelID).toBe("test-model")
           expect(MessageV2.APIError.isInstance(failed?.error)).toBe(true)
           if (MessageV2.APIError.isInstance(failed?.error)) {
             expect(failed.error.data.metadata?.retryAttempt).toBe("1")
             expect(failed.error.data.metadata?.failureClass).toBe("internal_server_error")
           }
-          expect(succeeded?.modelID).toBe("test-model")
+          expect(succeeded?.modelID).toBe("test-fallback")
           expect(succeeded?.error).toBeUndefined()
         } finally {
           processor.spy.mockRestore()
-          smallSpy.mockRestore()
           getModel.mockRestore()
         }
       },
@@ -361,19 +360,16 @@ describe("session.compaction model fallback (C9)", () => {
   })
 
   test.each([false, true])(
-    "an incompatible explicit helper stops without silently using the session model (pinned=%s)",
+    "an incompatible compaction model stops without silently using the session model (pinned=%s)",
     async (pinned) => {
       await using tmp = await tmpdir({ config: pinned ? { agent: { compaction: { model: "test/test-pin" } } } : {} })
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const small = createModel({ providerID: "test", modelID: "test-small" })
           const pin = createModel({ providerID: "test", modelID: "test-pin" })
           const session = createModel({ providerID: "test", modelID: "test-model" })
-          const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
           const { getModel } = mockProviders({
             "test/test-model": session,
-            "test/test-small": small,
             "test/test-pin": pin,
           })
           const processor = mockProcessor([
@@ -398,16 +394,17 @@ describe("session.compaction model fallback (C9)", () => {
             })
 
             expect(result).toBe("stop")
-            // Exactly one retry: small tier first, session model as the next rung.
-            expect(processor.models).toEqual([{ providerID: "test", modelID: pinned ? "test-pin" : "test-small" }])
+            // The pinned model (or the session primary without a pin) fails as
+            // incompatible and compaction stops — no silent model switch.
+            expect(processor.models).toEqual([{ providerID: "test", modelID: pinned ? "test-pin" : "test-model" }])
 
-            // Both attempts are recorded as assistant messages; the failed one
-            // carries the retryAttempt metadata.
+            // The failed attempt is recorded and carries the retryAttempt
+            // metadata.
             const assistants = await compactionAssistantMessages(s.id)
             expect(assistants).toHaveLength(1)
             const [failed] = assistants
             expect(failed?.providerID).toBe("test")
-            expect(failed?.modelID).toBe(pinned ? "test-pin" : "test-small")
+            expect(failed?.modelID).toBe(pinned ? "test-pin" : "test-model")
             expect(MessageV2.APIError.isInstance(failed?.error)).toBe(true)
             if (MessageV2.APIError.isInstance(failed?.error)) {
               expect(failed.error.data.metadata?.retryAttempt).toBe("1")
@@ -415,7 +412,6 @@ describe("session.compaction model fallback (C9)", () => {
             }
           } finally {
             processor.spy.mockRestore()
-            smallSpy.mockRestore()
             getModel.mockRestore()
           }
         },
@@ -428,10 +424,8 @@ describe("session.compaction model fallback (C9)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const small = createModel({ providerID: "test", modelID: "test-small" })
         const session = createModel({ providerID: "test", modelID: "test-model" })
-        const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
-        const { getModel } = mockProviders({ "test/test-model": session, "test/test-small": small })
+        const { getModel } = mockProviders({ "test/test-model": session })
         const processor = mockProcessor([
           {
             type: "fail",
@@ -450,7 +444,7 @@ describe("session.compaction model fallback (C9)", () => {
           })
 
           expect(result).toBe("stop")
-          expect(processor.models).toEqual([{ providerID: "test", modelID: "test-small" }])
+          expect(processor.models).toEqual([{ providerID: "test", modelID: "test-model" }])
 
           const assistants = await compactionAssistantMessages(s.id)
           expect(assistants).toHaveLength(1)
@@ -463,7 +457,6 @@ describe("session.compaction model fallback (C9)", () => {
           }
         } finally {
           processor.spy.mockRestore()
-          smallSpy.mockRestore()
           getModel.mockRestore()
         }
       },
@@ -475,10 +468,8 @@ describe("session.compaction model fallback (C9)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const small = createModel({ providerID: "test", modelID: "test-small" })
         const session = createModel({ providerID: "test", modelID: "test-model" })
-        const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
-        const { getModel } = mockProviders({ "test/test-model": session, "test/test-small": small })
+        const { getModel } = mockProviders({ "test/test-model": session })
         const processor = mockProcessor([{ type: "request_too_large" }, { type: "succeed" }])
         try {
           const { session: s, user } = await seedSession()
@@ -492,7 +483,7 @@ describe("session.compaction model fallback (C9)", () => {
           })
 
           expect(result).toBe("stop")
-          expect(processor.models).toEqual([{ providerID: "test", modelID: "test-small" }])
+          expect(processor.models).toEqual([{ providerID: "test", modelID: "test-model" }])
           const assistants = await compactionAssistantMessages(s.id)
           expect(assistants).toHaveLength(1)
           const failed = assistants[0]
@@ -504,7 +495,6 @@ describe("session.compaction model fallback (C9)", () => {
           }
         } finally {
           processor.spy.mockRestore()
-          smallSpy.mockRestore()
           getModel.mockRestore()
         }
       },
@@ -531,7 +521,6 @@ describe("session.compaction model fallback (C9)", () => {
           "cloud/cloud-big": cloud,
           "cloud/cloud-small": cloudSmall,
         })
-        const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(cloudSmall)
         const processor = mockProcessor([
           { type: "fail", error: apiError({ message: "Internal Server Error", statusCode: 500, isRetryable: true }) },
           { type: "succeed" },
@@ -565,7 +554,6 @@ describe("session.compaction model fallback (C9)", () => {
           expect(getModel).not.toHaveBeenCalledWith("cloud", "cloud-small")
         } finally {
           processor.spy.mockRestore()
-          smallSpy.mockRestore()
           getModel.mockRestore()
         }
       },
@@ -578,12 +566,11 @@ describe("session.compaction model fallback (C9)", () => {
       directory: tmp.path,
       fn: async () => {
         const config = await Config.get()
-        config.llm_routing = { fallback: [{ providerID: "test", modelID: "test-model" }] }
+        config.llm_routing = { fallback: [{ providerID: "test", modelID: "test-fallback" }] }
 
-        const small = createModel({ providerID: "test", modelID: "test-small" })
         const session = createModel({ providerID: "test", modelID: "test-model" })
-        const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
-        const { getModel } = mockProviders({ "test/test-model": session, "test/test-small": small })
+        const fallback = createModel({ providerID: "test", modelID: "test-fallback" })
+        const { getModel } = mockProviders({ "test/test-model": session, "test/test-fallback": fallback })
         const processor = mockProcessor([
           { type: "fail", error: apiError({ message: "Service Unavailable", statusCode: 503, isRetryable: true }) },
           { type: "fail", error: apiError({ message: "Bad Gateway", statusCode: 502, isRetryable: true }) },
@@ -602,8 +589,8 @@ describe("session.compaction model fallback (C9)", () => {
           // Transient errors on both rungs: exactly 2 attempts, then stop.
           expect(result).toBe("stop")
           expect(processor.models).toEqual([
-            { providerID: "test", modelID: "test-small" },
             { providerID: "test", modelID: "test-model" },
+            { providerID: "test", modelID: "test-fallback" },
           ])
 
           const assistants = await compactionAssistantMessages(s.id)
@@ -623,7 +610,6 @@ describe("session.compaction model fallback (C9)", () => {
           }
         } finally {
           processor.spy.mockRestore()
-          smallSpy.mockRestore()
           getModel.mockRestore()
         }
       },

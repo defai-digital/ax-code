@@ -40004,7 +40004,7 @@
           },
           "small_model": {
             "type": "string",
-            "description": "Explicit auxiliary model in provider/model format. When omitted, auxiliary tasks inherit the selected model."
+            "description": "Auxiliary model in provider/model format for titles, recaps and complexity classification. Compaction does not use it; set agent.compaction.model instead. When omitted or unavailable, these tasks use the session model (classification is skipped)."
           },
           "default_agent": {
             "description": "Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.",

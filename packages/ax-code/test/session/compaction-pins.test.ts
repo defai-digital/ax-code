@@ -213,10 +213,10 @@ function mockProcessor() {
 }
 
 function withCompactionModelMocks<T>(fn: () => Promise<T>): Promise<T> {
-  const small = createModel({ providerID: "test", modelID: "test-small" })
+  // Compaction runs on the session primary, so the model is injected through
+  // Provider.getModel.
   const session = createModel({ providerID: "test", modelID: "test-model" })
-  const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
-  const models: Record<string, Provider.Model> = { "test/test-model": session, "test/test-small": small }
+  const models: Record<string, Provider.Model> = { "test/test-model": session }
   const getModel = vi.spyOn(Provider, "getModel").mockImplementation(async (providerID, modelID) => {
     const model = models[`${providerID}/${modelID}`]
     if (!model) throw new Error(`model not found: ${providerID}/${modelID}`)
@@ -225,7 +225,6 @@ function withCompactionModelMocks<T>(fn: () => Promise<T>): Promise<T> {
   const processor = mockProcessor()
   return fn().finally(() => {
     processor.spy.mockRestore()
-    smallSpy.mockRestore()
     getModel.mockRestore()
   })
 }
