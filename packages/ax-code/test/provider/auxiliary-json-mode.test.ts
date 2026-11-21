@@ -1,12 +1,18 @@
 import { beforeEach, expect, test, vi } from "vitest"
 
 vi.mock("ai", () => ({ generateObject: vi.fn() }))
-vi.mock("@/config/config", () => ({ Config: { get: vi.fn(async () => ({ routing: { llm: true } })) } }))
+vi.mock("@/config/config", () => ({
+  Config: { get: vi.fn(async () => ({ routing: { llm: true }, small_model: "gateway/small" })) },
+}))
 vi.mock("@/provider/provider", () => ({
   Provider: {
     getModel: vi.fn(async () => ({})),
     getLanguage: vi.fn(async () => ({})),
-    getSmallModel: vi.fn(async () => ({})),
+    isLocalProvider: vi.fn(async () => false),
+    parseModel: vi.fn((model: string) => {
+      const [providerID, ...rest] = model.split("/")
+      return { providerID, modelID: rest.join("/") }
+    }),
   },
 }))
 

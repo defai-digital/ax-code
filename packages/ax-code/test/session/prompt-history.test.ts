@@ -141,8 +141,8 @@ test("compaction retries transform fresh history without rewriting the source tr
     fn: async () => {
       try {
         const config = await Config.get()
-        config.llm_routing = { fallback: [{ providerID: "test", modelID: "test-model" }] }
-        vi.spyOn(Provider, "getSmallModel").mockResolvedValue({ ...model, id: ModelID.make("test-small") })
+        // Compaction starts on the session primary; the explicit fallback is the retry rung.
+        config.llm_routing = { fallback: [{ providerID: "test", modelID: "test-fallback" }] }
         vi.spyOn(Provider, "getModel").mockResolvedValue(model)
         const attempts: string[] = []
         vi.spyOn(SessionProcessor, "create").mockImplementation(
