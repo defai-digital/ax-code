@@ -12,6 +12,7 @@ import { DiagnosticCorrelation, prewarmAffectedFiles } from "@ax-code/ax-code-re
 import { DebugEngine } from "@ax-code/ax-code-reason"
 import { Instance } from "@/project/instance"
 import { uniqueStrings } from "@/util/string-list"
+import { sleep } from "@/util/timeout"
 
 const log = Log.create({ service: "tool.diagnostics" })
 
@@ -24,6 +25,26 @@ const MAX_CORRELATIONS_IN_OUTPUT = 5
 // claims type correctness.
 const SYNTAX_FALLBACK_BUDGET_MS = 200
 const SYNTAX_FALLBACK_MAX_BYTES = 1_048_576
+
+// An edit result must not wait on a language server that is slow to start.
+// Past this budget the server keeps warming in the background and the edit
+// reports what is already known; files nobody answered for get the
+// syntax-only check, which says it is not a type check.
+const LSP_WARMUP_BUDGET_MS = 10_000
+
+/** Resolves `undefined` when `work` does not settle within `ms`. */
+async function withinBudget<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
+  const budget = new AbortController()
+  const expired = sleep(ms, { signal: budget.signal }).then(
+    () => undefined,
+    () => undefined,
+  )
+  try {
+    return await Promise.race([work, expired])
+  } finally {
+    budget.abort()
+  }
+}
 
 /**
  * Publish file edit + watcher events. Shared across edit, write, and apply_patch.
@@ -42,9 +63,18 @@ export async function notifyFileEdited(file: string, event: "change" | "add") {
  */
 export async function collectDiagnostics(files: string[], options?: { includeProjectDiagnostics?: boolean }) {
   const uniqueFiles = uniqueStrings(files)
-  const touched = await Promise.allSettled(uniqueFiles.map((file) => LSP.touchFile(file, false)))
-  for (let index = 0; index < touched.length; index++) {
-    const result = touched[index]
+  const touched = await withinBudget(
+    Promise.allSettled(uniqueFiles.map((file) => LSP.touchFile(file, false))),
+    LSP_WARMUP_BUDGET_MS,
+  )
+  if (!touched) {
+    log.warn("language server warm-up exceeded the edit budget; reporting available diagnostics", {
+      files: uniqueFiles.length,
+      budgetMs: LSP_WARMUP_BUDGET_MS,
+    })
+  }
+  for (let index = 0; index < (touched?.length ?? 0); index++) {
+    const result = touched?.[index]
     if (result?.status !== "rejected") continue
     log.warn("failed to warm LSP before collecting diagnostics", {
       file: uniqueFiles[index],

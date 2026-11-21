@@ -3,6 +3,7 @@ import { type ProcessChild, type ProcessOptions } from "@ax-code/util/process"
 import type { ChildProcessWithoutNullStreams } from "child_process"
 import { Process } from "./internal/process"
 import { Env } from "./internal/env"
+import { captureStderrHead } from "./client-startup"
 
 type Child = ProcessChild & ChildProcessWithoutNullStreams
 type SpawnOptions = ProcessOptions & {
@@ -41,6 +42,8 @@ export function spawn(cmd: string, argsOrOpts?: string[] | SpawnOptions, opts?: 
   if (!proc.stdin || !proc.stdout || !proc.stderr) throw new Error("Process output not available")
   if (onStderr) proc.stderr.on("data", onStderr)
   else proc.stderr.resume() // Unread stderr can block the next RPC response.
+  // A server that dies during startup explains itself on stderr.
+  captureStderrHead(proc)
 
   liveChildren.add(proc)
   // ADR-209 (core host): record the child for the startup orphan sweep.

@@ -44,6 +44,32 @@ describe("tool diagnostics", () => {
     expect(diagnosticsSpy).toHaveBeenCalledTimes(1)
   })
 
+  test("a language server that is slow to start does not hold the edit result", async () => {
+    vi.useFakeTimers()
+    try {
+      // Never settles: a server stuck in startup.
+      touchFileSpy = vi.spyOn(LSP, "touchFile").mockImplementation(() => new Promise<number>(() => {}))
+      diagnosticsSpy = vi.spyOn(LSP, "diagnostics").mockResolvedValue({})
+
+      let settled = false
+      const pending = collectDiagnostics(["/repo/does-not-exist.rs"]).then((result) => {
+        settled = true
+        return result
+      })
+      await vi.advanceTimersByTimeAsync(9_000)
+      expect(settled).toBe(false)
+      expect(diagnosticsSpy).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1_500)
+      vi.useRealTimers()
+      const result = await pending
+      expect(result.diagnostics).toEqual({})
+      expect(diagnosticsSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("correlates an edited file passed by a non-canonical path", async () => {
     await using tmp = await tmpdir({ git: true })
     touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1)

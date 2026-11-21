@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto"
 import {
   CancellationTokenSource,
   createMessageConnection,
+  ErrorCodes,
   StreamMessageReader,
   StreamMessageWriter,
 } from "vscode-jsonrpc/node"
@@ -22,10 +23,13 @@ import { Filesystem } from "./internal/filesystem"
 import { Lock } from "./internal/lock"
 import { ContentCache } from "./content-cache"
 import { ClientActivity } from "./client-activity"
+import { watchServerStartup } from "./client-startup"
 import { sourceCacheBytes } from "./prewarm-profile"
 import { fingerprintHash } from "./internal/fingerprint"
 
 const DIAGNOSTICS_DEBOUNCE_MS = 150
+// How long a live server may take to answer `initialize`.
+const INITIALIZE_TIMEOUT_MS = 45_000
 
 // Hard cap on the per-client diagnostics Map to prevent unbounded growth in
 // long sessions. 1000 is comfortably above typical working-set sizes while
@@ -350,9 +354,19 @@ export namespace LSPClient {
     let closing = false
     let incompleteClose = false
     let closeNotified = false
+    // Until the handshake settles, a lost server is reported once, through
+    // create()'s rejection. Telling onClose as well made the caller count
+    // one failed start as two and quadruple its retry backoff.
+    let initializing = true
+    let closedDuringInitialize = false
 
     function notifyClosed(error?: unknown) {
       if (closing || closeNotified) return
+      if (initializing) {
+        closedDuringInitialize = true
+        startup.connectionLost(error)
+        return
+      }
       closeNotified = true
       input.onClose?.({ error })
     }
@@ -434,10 +448,23 @@ export namespace LSPClient {
         uri: pathToFileURL(input.root).href,
       },
     ])
+    // Transport events start with listen(), so the watch starts here too.
+    const startup = watchServerStartup(input.server.process)
+    // A failed handshake returns no client: release the transport and the
+    // pending request (which also cancels its timeout) instead of holding
+    // them until the timer fires.
+    function abandonHandshake() {
+      closeNotified = true
+      try {
+        connection.dispose()
+      } catch (error) {
+        l.debug("failed to dispose connection after initialize failure", { error })
+      }
+    }
     connection.listen()
 
     l.info("sending initialize")
-    const initializeResult = await withTimeout(
+    const sendInitialize = () =>
       connection.sendRequest("initialize", {
         rootUri: pathToFileURL(input.root).href,
         processId: process.pid,
@@ -485,17 +512,47 @@ export namespace LSPClient {
             },
           },
         },
-      }) as Promise<{ capabilities?: Record<string, unknown>; serverInfo?: { name?: string; version?: string } }>,
-      45_000,
-    ).catch((err) => {
-      l.error("initialize error", { error: err })
-      throw new InitializeError(
-        { serverID: input.serverID },
-        {
-          cause: err,
-        },
-      )
-    })
+      }) as Promise<{ capabilities?: Record<string, unknown>; serverInfo?: { name?: string; version?: string } }>
+    // A server that exits or drops its transport fails the handshake at
+    // once instead of holding the caller for the whole timeout. One that is
+    // already gone is sent nothing: vscode-jsonrpc turns a write to a
+    // destroyed stream into an unhandled rejection.
+    const serverProcess = input.server.process
+    const serverExited = serverProcess.exitCode !== null || serverProcess.signalCode !== null
+    // Promise.try: a synchronous throw while building the request must reach
+    // the cleanup below like any other handshake failure.
+    const initializeRequest = serverExited
+      ? startup.terminated
+      : withTimeout(Promise.try(sendInitialize), INITIALIZE_TIMEOUT_MS).catch((err) => {
+          // A failed write means the transport is gone. The process status
+          // and stderr explain it better than the bare EPIPE.
+          if ((err as { code?: unknown } | undefined)?.code !== ErrorCodes.MessageWriteError) throw err
+          startup.connectionLost(err)
+          return startup.terminated
+        })
+    const initializeResult = await Promise.race([startup.terminated, initializeRequest])
+      .catch((err) => {
+        // No client is returned, so later transport events have no owner.
+        abandonHandshake()
+        l.error("initialize error", { error: err })
+        throw new InitializeError(
+          { serverID: input.serverID },
+          {
+            cause: err,
+          },
+        )
+      })
+      .finally(() => {
+        initializing = false
+        startup.dispose()
+      })
+    if (closedDuringInitialize) {
+      // The reply and the close arrived together; the connection is unusable.
+      abandonHandshake()
+      const cause = new Error("language server connection closed while completing initialize")
+      l.error("initialize error", { error: cause })
+      throw new InitializeError({ serverID: input.serverID }, { cause })
+    }
 
     const runtimeCapabilityHints = capabilityHintsFromInitialize(initializeResult?.capabilities)
     pullsDiagnostics =
