@@ -1,4 +1,4 @@
-import { render, type JSX } from "ax-tui/solid"
+import { render, useRenderer, type JSX } from "ax-tui/solid"
 import type { CliRendererConfig } from "ax-tui"
 import { Clipboard } from "@tui/util/clipboard"
 import { writeTuiSequenceThroughRenderer } from "@tui/util/sequence-writer"
@@ -18,6 +18,7 @@ import {
 } from "./terminal-cleanup"
 import { inlineRenderOptions } from "./inline/lifecycle"
 import { disposeTuiProgramChrome, updateTuiProgramChrome, type TuiProgramChromeState } from "./program-chrome"
+import { allowTuiComponentListeners, restoreProcessWarnings, routeProcessWarningsToLog } from "./process-warnings"
 import {
   resolveTuiScreen,
   tuiScreenModeFor,
@@ -348,8 +349,13 @@ export async function destroyTuiRenderer(
   // TUI frame to avoid a dead full-screen UI lingering above the shell prompt.
   // split-footer owns no alternate screen and must keep the committed
   // transcript + shell scrollback, so it never clears the display (ADR-261).
-  if (profile.screenMode === "main-screen") clearTuiMainScreen()
-  await flushTuiStdout()
+  try {
+    if (profile.screenMode === "main-screen") clearTuiMainScreen()
+    await flushTuiStdout()
+  } finally {
+    // The terminal is the shell's again; warnings may print normally.
+    restoreProcessWarnings()
+  }
   if (destroyError) throw destroyError
 }
 
@@ -369,10 +375,25 @@ export function renderTui(
   // parsing, and clean teardown in both profiles. Native terminal setup also
   // sets modifyOtherKeys mode 1, so mode 2 must be applied after setup resolves
   // or Shift+Enter is immediately downgraded back to a plain Enter.
-  return render(root, createTuiRenderOptionsFromProfile(profile, options)).then((result) => {
-    if (profile.useModifyOtherKeys) {
-      writeTuiSequence(process.stdout, TUI_MODIFY_OTHER_KEYS_ENABLE_SEQUENCE)
-    }
-    return result
-  })
+  const restoreWarnings = routeProcessWarningsToLog()
+  // The root runs before any component mounts, so the listener bounds are in
+  // place before the first useKeyboard / useTerminalDimensions subscribes.
+  const boundedRoot: TuiRenderRoot = () => {
+    allowTuiComponentListeners(useRenderer())
+    return root()
+  }
+  // Promise.try: a synchronous throw while building options must undo the
+  // warning routing like a rejected render does.
+  return Promise.try(() => render(boundedRoot, createTuiRenderOptionsFromProfile(profile, options))).then(
+    (result) => {
+      if (profile.useModifyOtherKeys) {
+        writeTuiSequence(process.stdout, TUI_MODIFY_OTHER_KEYS_ENABLE_SEQUENCE)
+      }
+      return result
+    },
+    (error) => {
+      restoreWarnings()
+      throw error
+    },
+  )
 }

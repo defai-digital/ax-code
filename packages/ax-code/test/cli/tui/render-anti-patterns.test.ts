@@ -149,7 +149,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("getTuiRenderProfile")
     expect(app).not.toMatch(/runNativeTuiSlice|AX_CODE_TUI_NATIVE/i)
     expect(renderer).toContain('from "ax-tui/solid"')
-    expect(renderer).toContain("render(root, createTuiRenderOptionsFromProfile(profile, options))")
+    expect(renderer).toContain("render(boundedRoot, createTuiRenderOptionsFromProfile(profile, options))")
   })
 
   test("keeps the Node TUI runtime on Solid client modules", async () => {

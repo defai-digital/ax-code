@@ -63,7 +63,7 @@ describe("tui console hygiene", () => {
     expect(app).not.toMatch(/import\s*\{[^}]*\brender\b[^}]*\}\s*from\s*["@']@opentui\/solid["@']/)
     expect(app).toContain("renderTui(")
     expect(renderer).toContain("createTuiRenderOptions")
-    expect(renderer).toContain("render(root, createTuiRenderOptionsFromProfile(profile, options))")
+    expect(renderer).toContain("render(boundedRoot, createTuiRenderOptionsFromProfile(profile, options))")
   })
 
   test("keeps resize input recovery wired through the app shell", async () => {
