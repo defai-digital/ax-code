@@ -8480,28 +8480,26 @@ var ScrollBarRenderable = class extends Renderable {
   _showArrows = false;
   _manualVisibility = false;
   _onChange;
-  // Arrow auto-repeat chains (setTimeout -> setInterval). Held across the
-  // handlers so destroy can clear them; a mouseup never arrives after destroy
-  // because the renderable number is already deregistered.
-  startArrowMouseTimer;
-  endArrowMouseTimer;
-  // Mode-1000 terminals drop releases outside the pressed renderable, so the
-  // arrow-local mouseup may never arrive; the renderer-wide release stops the
-  // repeat chains instead.
-  clearStartArrowTimer = () => {
-    clearTimeout(this.startArrowMouseTimer);
-    clearInterval(this.startArrowMouseTimer);
-    this.startArrowMouseTimer = void 0;
+  arrowRepeatTimer;
+  stopArrowRepeat = () => {
+    if (this.arrowRepeatTimer === void 0) return;
+    clearTimeout(this.arrowRepeatTimer);
+    clearInterval(this.arrowRepeatTimer);
+    this.arrowRepeatTimer = void 0;
+    this._ctx.off("mouse:up" /* MOUSE_UP */, this.stopArrowRepeat);
   };
-  clearEndArrowTimer = () => {
-    clearTimeout(this.endArrowMouseTimer);
-    clearInterval(this.endArrowMouseTimer);
-    this.endArrowMouseTimer = void 0;
-  };
-  handleGlobalMouseUp = () => {
-    this.clearStartArrowTimer();
-    this.clearEndArrowTimer();
-  };
+  startArrowRepeat(direction) {
+    this.stopArrowRepeat();
+    const delay = setTimeout(() => {
+      this.scrollBy(direction * 0.5, "viewport");
+      if (this.arrowRepeatTimer === delay) {
+        this.arrowRepeatTimer = setInterval(() => this.scrollBy(direction * 0.2, "viewport"), 200);
+      }
+    }, 500);
+    this.arrowRepeatTimer = delay;
+    this._ctx.on("mouse:up" /* MOUSE_UP */, this.stopArrowRepeat);
+    this.scrollBy(direction * 0.5, "viewport");
+  }
   scrollStep = null;
   get visible() {
     return super.visible;
@@ -8623,40 +8621,24 @@ var ScrollBarRenderable = class extends Renderable {
     this.startArrow.onMouseDown = (event) => {
       event.stopPropagation();
       event.preventDefault();
-      this.clearStartArrowTimer();
-      this.scrollBy(-0.5, "viewport");
-      this.startArrowMouseTimer = setTimeout(() => {
-        this.scrollBy(-0.5, "viewport");
-        this.startArrowMouseTimer = setInterval(() => {
-          this.scrollBy(-0.2, "viewport");
-        }, 200);
-      }, 500);
+      this.startArrowRepeat(-1);
     };
     this.startArrow.onMouseUp = (event) => {
       event.stopPropagation();
-      this.clearStartArrowTimer();
+      this.stopArrowRepeat();
     };
     this.endArrow.onMouseDown = (event) => {
       event.stopPropagation();
       event.preventDefault();
-      this.clearEndArrowTimer();
-      this.scrollBy(0.5, "viewport");
-      this.endArrowMouseTimer = setTimeout(() => {
-        this.scrollBy(0.5, "viewport");
-        this.endArrowMouseTimer = setInterval(() => {
-          this.scrollBy(0.2, "viewport");
-        }, 200);
-      }, 500);
+      this.startArrowRepeat(1);
     };
     this.endArrow.onMouseUp = (event) => {
       event.stopPropagation();
-      this.clearEndArrowTimer();
+      this.stopArrowRepeat();
     };
-    this._ctx.on("mouse:up" /* MOUSE_UP */, this.handleGlobalMouseUp);
   }
   destroySelf() {
-    this._ctx.off("mouse:up" /* MOUSE_UP */, this.handleGlobalMouseUp);
-    this.handleGlobalMouseUp();
+    this.stopArrowRepeat();
   }
   set arrowOptions(options) {
     if (options) {
@@ -8900,7 +8882,12 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
   content;
   horizontalScrollBar;
   verticalScrollBar;
-  selectionListener;
+  handleSelectionChange = () => {
+    if (!this._ctx.getSelection()?.isDragging) {
+      this.stopAutoScroll();
+    }
+  };
+  autoScrollSelection;
   autoScrollMouseX = 0;
   autoScrollMouseY = 0;
   autoScrollThresholdVertical = 3;
@@ -9141,13 +9128,6 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
     if (stickyStart && stickyScroll) {
       this.applyStickyStart(stickyStart);
     }
-    this.selectionListener = () => {
-      const selection = this._ctx.getSelection();
-      if (!selection || !selection.isDragging) {
-        this.stopAutoScroll();
-      }
-    };
-    this._ctx.on("selection", this.selectionListener);
   }
   onUpdate(deltaTime) {
     this.handleAutoScroll(deltaTime);
@@ -9314,13 +9294,16 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
   }
   startAutoScroll(mouseX, mouseY) {
     this.stopAutoScroll();
+    const selection = this._ctx.getSelection();
+    this.autoScrollSelection = selection?.isDragging ? selection : void 0;
     this.autoScrollMouseX = mouseX;
     this.autoScrollMouseY = mouseY;
     this.cachedAutoScrollSpeed = this.getAutoScrollSpeed(mouseX, mouseY);
     this.isAutoScrolling = true;
+    this._ctx.on("selection" /* SELECTION */, this.handleSelectionChange);
     if (!this.live) {
-      this.live = true;
       this.autoScrollOwnedLive = true;
+      this.live = true;
     }
   }
   updateAutoScroll(mouseX, mouseY) {
@@ -9338,6 +9321,10 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
   stopAutoScroll() {
     const wasAutoScrolling = this.isAutoScrolling;
     this.isAutoScrolling = false;
+    this.autoScrollSelection = void 0;
+    if (wasAutoScrolling) {
+      this._ctx.off("selection" /* SELECTION */, this.handleSelectionChange);
+    }
     this.autoScrollAccumulatorX = 0;
     this.autoScrollAccumulatorY = 0;
     if (wasAutoScrolling && this.autoScrollOwnedLive && !this.hasOtherLiveReasons()) {
@@ -9350,6 +9337,11 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
   }
   handleAutoScroll(deltaTime) {
     if (!this.isAutoScrolling) return;
+    const selection = this.autoScrollSelection;
+    if (selection && (!selection.isDragging || selection !== this._ctx.getSelection())) {
+      this.stopAutoScroll();
+      return;
+    }
     const scrollX = this.getAutoScrollDirectionX(this.autoScrollMouseX);
     const scrollY = this.getAutoScrollDirectionY(this.autoScrollMouseY);
     const scrollAmount = this.cachedAutoScrollSpeed * (deltaTime / 1e3);
@@ -9531,10 +9523,7 @@ var ScrollBoxRenderable = class _ScrollBoxRenderable extends BoxRenderable {
     this.requestRender();
   }
   destroySelf() {
-    if (this.selectionListener) {
-      this._ctx.off("selection", this.selectionListener);
-      this.selectionListener = void 0;
-    }
+    this.stopAutoScroll();
     super.destroySelf();
   }
 };

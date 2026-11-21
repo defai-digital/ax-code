@@ -2,7 +2,7 @@ import { type KeyEvent } from "../lib/index.js";
 import { type ScrollAcceleration } from "../lib/scroll-acceleration.js";
 import type { Renderable, RenderableOptions } from "../core/renderable.js";
 import type { MouseEvent } from "../core/renderer.js";
-import type { RenderContext } from "../core/types.js";
+import { type RenderContext } from "../core/types.js";
 import { BoxRenderable, type BoxOptions } from "./Box.js";
 import type { VNode } from "./composition/vnode.js";
 import { ScrollBarRenderable, type ScrollBarOptions, type ScrollUnit } from "./ScrollBar.js";
@@ -38,7 +38,8 @@ export declare class ScrollBoxRenderable extends BoxRenderable {
     readonly content: ContentRenderable;
     readonly horizontalScrollBar: ScrollBarRenderable;
     readonly verticalScrollBar: ScrollBarRenderable;
-    private selectionListener?;
+    private readonly handleSelectionChange;
+    private autoScrollSelection?;
     private autoScrollMouseX;
     private autoScrollMouseY;
     private readonly autoScrollThresholdVertical;

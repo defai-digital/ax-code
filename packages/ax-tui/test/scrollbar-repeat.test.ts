@@ -109,6 +109,15 @@ describe("fractional scroll deltas", () => {
 })
 
 describe("arrow auto-repeat lifecycle", () => {
+  test("idle scrollbars do not subscribe to renderer-wide mouse releases", () => {
+    const ctx = createCtx()
+    for (let index = 0; index < 20; index++) {
+      new ScrollBarRenderable(ctx as never, { orientation: "vertical", showArrows: index % 2 === 0 })
+    }
+
+    expect(ctx.listenerCount(CliRenderEvents.MOUSE_UP)).toBe(0)
+  })
+
   test("a global mouse release stops the repeat even when the arrow never sees mouseup", () => {
     vi.useFakeTimers()
     try {
@@ -120,6 +129,7 @@ describe("arrow auto-repeat lifecycle", () => {
 
       bar.endArrow.onMouseDown?.(mouseEvent)
       expect(bar.scrollPosition).toBe(105)
+      expect(ctx.listenerCount(CliRenderEvents.MOUSE_UP)).toBe(1)
 
       vi.advanceTimersByTime(500)
       expect(bar.scrollPosition).toBe(110)
@@ -131,6 +141,7 @@ describe("arrow auto-repeat lifecycle", () => {
       // the arrow-local onMouseUp never fires; the renderer-wide event must
       // still stop the interval.
       ctx.emit(CliRenderEvents.MOUSE_UP)
+      expect(ctx.listenerCount(CliRenderEvents.MOUSE_UP)).toBe(0)
       vi.advanceTimersByTime(2000)
       expect(bar.scrollPosition).toBe(116)
     } finally {

@@ -16,6 +16,74 @@ function runDriver(source: string): void {
   expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
 }
 
+test.skipIf(!supportsFfi)("scroll boxes listen for selection changes only during auto-scroll", () => {
+  runDriver(`
+import assert from "node:assert/strict"
+import { createTestRenderer } from "@defai-digital/ax-tui/testing"
+import { CliRenderEvents, ScrollBoxRenderable, TextRenderable } from "@defai-digital/ax-tui"
+const setup = await createTestRenderer({ width: 30, height: 10 })
+const { renderer } = setup
+const event = CliRenderEvents.SELECTION
+const baseline = renderer.listenerCount(event)
+try {
+  const boxes = Array.from({ length: 12 }, (_, index) =>
+    new ScrollBoxRenderable(renderer, { width: 20, height: 8, visible: index === 0 }))
+  for (const box of boxes) renderer.root.add(box)
+  assert.equal(renderer.listenerCount(event), baseline)
+
+  const [box] = boxes
+  box.add(new TextRenderable(renderer, { content: "line\\n".repeat(20) }))
+  await setup.renderOnce()
+  assert.ok(box.scrollHeight > box.viewport.height)
+  const x = box.x + 8
+  const y = box.y + box.height - 1
+  box.startAutoScroll(x, y)
+  assert.equal(renderer.listenerCount(event), baseline + 1)
+  renderer.emit(event)
+  assert.equal(box.live, false)
+  assert.equal(renderer.listenerCount(event), baseline)
+
+  box.startAutoScroll(x, y)
+  box.destroyRecursively()
+  assert.equal(renderer.listenerCount(event), baseline)
+} finally {
+  renderer.destroy()
+}
+`)
+})
+
+test.skipIf(!supportsFfi)("clearing a drag selection stops scroll box auto-scroll", () => {
+  runDriver(`
+import assert from "node:assert/strict"
+import { createTestRenderer } from "@defai-digital/ax-tui/testing"
+import { CliRenderEvents, ScrollBoxRenderable, TextRenderable } from "@defai-digital/ax-tui"
+const setup = await createTestRenderer({ width: 30, height: 10 })
+const { renderer } = setup
+try {
+  const box = new ScrollBoxRenderable(renderer, { width: 20, height: 8 })
+  const text = new TextRenderable(renderer, { content: "line\\n".repeat(20) })
+  box.add(text)
+  renderer.root.add(box)
+  await setup.renderOnce()
+  assert.ok(box.scrollHeight > box.viewport.height)
+  const baseline = renderer.listenerCount(CliRenderEvents.SELECTION)
+  const x = box.x + 8
+  const y = box.y + box.height - 1
+  renderer.startSelection(text, text.x, text.y)
+  assert.equal(renderer.getSelection()?.isDragging, true)
+  box.updateAutoScroll(x, y)
+  assert.equal(box.live, true)
+
+  renderer.clearSelection()
+  await setup.renderOnce()
+  assert.equal(box.live, false)
+  assert.equal(renderer.listenerCount(CliRenderEvents.SELECTION), baseline)
+} finally {
+  renderer.destroy()
+}
+`)
+})
+
 test.skipIf(!supportsFfi)("select normalizes fractional indexes and stops emitting on no-change moves", () => {
   runDriver(`
 import assert from "node:assert/strict"

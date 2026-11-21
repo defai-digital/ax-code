@@ -24,11 +24,9 @@ export declare class ScrollBarRenderable extends Renderable {
     private _showArrows;
     private _manualVisibility;
     private _onChange;
-    private startArrowMouseTimer;
-    private endArrowMouseTimer;
-    private readonly clearStartArrowTimer;
-    private readonly clearEndArrowTimer;
-    private readonly handleGlobalMouseUp;
+    private arrowRepeatTimer;
+    private readonly stopArrowRepeat;
+    private startArrowRepeat;
     scrollStep: number | undefined | null;
     get visible(): boolean;
     set visible(value: boolean);

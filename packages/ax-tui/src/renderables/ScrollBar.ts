@@ -33,30 +33,29 @@ export class ScrollBarRenderable extends Renderable {
 
   private _onChange: ((position: number) => void) | undefined
 
-  // Arrow auto-repeat chains (setTimeout -> setInterval). Held across the
-  // handlers so destroy can clear them; a mouseup never arrives after destroy
-  // because the renderable number is already deregistered.
-  private startArrowMouseTimer: Timeout | undefined
-  private endArrowMouseTimer: Timeout | undefined
+  private arrowRepeatTimer: Timeout | undefined
 
-  // Mode-1000 terminals drop releases outside the pressed renderable, so the
-  // arrow-local mouseup may never arrive; the renderer-wide release stops the
-  // repeat chains instead.
-  private readonly clearStartArrowTimer = (): void => {
-    clearTimeout(this.startArrowMouseTimer)
-    clearInterval(this.startArrowMouseTimer)
-    this.startArrowMouseTimer = undefined
+  private readonly stopArrowRepeat = (): void => {
+    if (this.arrowRepeatTimer === undefined) return
+    clearTimeout(this.arrowRepeatTimer)
+    clearInterval(this.arrowRepeatTimer)
+    this.arrowRepeatTimer = undefined
+    this._ctx.off(CliRenderEvents.MOUSE_UP, this.stopArrowRepeat)
   }
 
-  private readonly clearEndArrowTimer = (): void => {
-    clearTimeout(this.endArrowMouseTimer)
-    clearInterval(this.endArrowMouseTimer)
-    this.endArrowMouseTimer = undefined
-  }
-
-  private readonly handleGlobalMouseUp = (): void => {
-    this.clearStartArrowTimer()
-    this.clearEndArrowTimer()
+  private startArrowRepeat(direction: -1 | 1): void {
+    this.stopArrowRepeat()
+    const delay = setTimeout(() => {
+      this.scrollBy(direction * 0.5, "viewport")
+      if (this.arrowRepeatTimer === delay) {
+        this.arrowRepeatTimer = setInterval(() => this.scrollBy(direction * 0.2, "viewport"), 200)
+      }
+    }, 500)
+    this.arrowRepeatTimer = delay
+    // A release outside the arrow may only reach the renderer. Subscribe
+    // while pressed so idle and hidden scrollbars do not accumulate listeners.
+    this._ctx.on(CliRenderEvents.MOUSE_UP, this.stopArrowRepeat)
+    this.scrollBy(direction * 0.5, "viewport")
   }
 
   scrollStep: number | undefined | null = null
@@ -222,54 +221,28 @@ export class ScrollBarRenderable extends Renderable {
     this.startArrow.onMouseDown = (event) => {
       event.stopPropagation()
       event.preventDefault()
-
-      this.clearStartArrowTimer()
-      this.scrollBy(-0.5, "viewport")
-
-      this.startArrowMouseTimer = setTimeout(() => {
-        this.scrollBy(-0.5, "viewport")
-
-        this.startArrowMouseTimer = setInterval(() => {
-          this.scrollBy(-0.2, "viewport")
-        }, 200)
-      }, 500)
+      this.startArrowRepeat(-1)
     }
 
     this.startArrow.onMouseUp = (event) => {
       event.stopPropagation()
-      this.clearStartArrowTimer()
+      this.stopArrowRepeat()
     }
 
     this.endArrow.onMouseDown = (event) => {
       event.stopPropagation()
       event.preventDefault()
-
-      this.clearEndArrowTimer()
-      this.scrollBy(0.5, "viewport")
-
-      this.endArrowMouseTimer = setTimeout(() => {
-        this.scrollBy(0.5, "viewport")
-
-        this.endArrowMouseTimer = setInterval(() => {
-          this.scrollBy(0.2, "viewport")
-        }, 200)
-      }, 500)
+      this.startArrowRepeat(1)
     }
 
     this.endArrow.onMouseUp = (event) => {
       event.stopPropagation()
-      this.clearEndArrowTimer()
+      this.stopArrowRepeat()
     }
-
-    this._ctx.on(CliRenderEvents.MOUSE_UP, this.handleGlobalMouseUp)
   }
 
   protected destroySelf(): void {
-    // An arrow held during destroy never receives its mouseup (the renderable
-    // number is deregistered), which would leave the repeat interval running
-    // against the destroyed subtree forever.
-    this._ctx.off(CliRenderEvents.MOUSE_UP, this.handleGlobalMouseUp)
-    this.handleGlobalMouseUp()
+    this.stopArrowRepeat()
   }
 
   public set arrowOptions(options: ScrollBarOptions["arrowOptions"]) {

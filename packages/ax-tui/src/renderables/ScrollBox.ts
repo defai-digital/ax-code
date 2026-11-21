@@ -3,7 +3,8 @@ import { getObjectsInViewport } from "../lib/objects-in-viewport.js"
 import { LinearScrollAccel, type ScrollAcceleration } from "../lib/scroll-acceleration.js"
 import type { Renderable, RenderableOptions } from "../core/renderable.js"
 import type { MouseEvent } from "../core/renderer.js"
-import type { RenderContext } from "../core/types.js"
+import { CliRenderEvents, type RenderContext } from "../core/types.js"
+import type { Selection } from "../lib/selection.js"
 import { BoxRenderable, type BoxOptions } from "./Box.js"
 import type { VNode } from "./composition/vnode.js"
 import { ScrollBarRenderable, type ScrollBarOptions, type ScrollUnit } from "./ScrollBar.js"
@@ -115,8 +116,13 @@ export class ScrollBoxRenderable extends BoxRenderable {
   public readonly horizontalScrollBar: ScrollBarRenderable
   public readonly verticalScrollBar: ScrollBarRenderable
 
-  private selectionListener?: () => void
+  private readonly handleSelectionChange = (): void => {
+    if (!this._ctx.getSelection()?.isDragging) {
+      this.stopAutoScroll()
+    }
+  }
 
+  private autoScrollSelection?: Selection
   private autoScrollMouseX: number = 0
   private autoScrollMouseY: number = 0
   private readonly autoScrollThresholdVertical = 3
@@ -395,14 +401,6 @@ export class ScrollBoxRenderable extends BoxRenderable {
     if (stickyStart && stickyScroll) {
       this.applyStickyStart(stickyStart)
     }
-
-    this.selectionListener = () => {
-      const selection = this._ctx.getSelection()
-      if (!selection || !selection.isDragging) {
-        this.stopAutoScroll()
-      }
-    }
-    this._ctx.on("selection", this.selectionListener)
   }
 
   protected onUpdate(deltaTime: number): void {
@@ -622,16 +620,19 @@ export class ScrollBoxRenderable extends BoxRenderable {
 
   public startAutoScroll(mouseX: number, mouseY: number): void {
     this.stopAutoScroll()
+    const selection = this._ctx.getSelection()
+    this.autoScrollSelection = selection?.isDragging ? selection : undefined
     this.autoScrollMouseX = mouseX
     this.autoScrollMouseY = mouseY
     this.cachedAutoScrollSpeed = this.getAutoScrollSpeed(mouseX, mouseY)
     this.isAutoScrolling = true
+    this._ctx.on(CliRenderEvents.SELECTION, this.handleSelectionChange)
 
     if (!this.live) {
-      this.live = true
       // Remember that auto-scroll owns the live flag so stopAutoScroll does
       // not clear an app-requested live state.
       this.autoScrollOwnedLive = true
+      this.live = true
     }
   }
 
@@ -655,6 +656,10 @@ export class ScrollBoxRenderable extends BoxRenderable {
   public stopAutoScroll(): void {
     const wasAutoScrolling = this.isAutoScrolling
     this.isAutoScrolling = false
+    this.autoScrollSelection = undefined
+    if (wasAutoScrolling) {
+      this._ctx.off(CliRenderEvents.SELECTION, this.handleSelectionChange)
+    }
     this.autoScrollAccumulatorX = 0
     this.autoScrollAccumulatorY = 0
 
@@ -674,6 +679,12 @@ export class ScrollBoxRenderable extends BoxRenderable {
 
   private handleAutoScroll(deltaTime: number): void {
     if (!this.isAutoScrolling) return
+
+    const selection = this.autoScrollSelection
+    if (selection && (!selection.isDragging || selection !== this._ctx.getSelection())) {
+      this.stopAutoScroll()
+      return
+    }
 
     const scrollX = this.getAutoScrollDirectionX(this.autoScrollMouseX)
     const scrollY = this.getAutoScrollDirectionY(this.autoScrollMouseY)
@@ -911,10 +922,7 @@ export class ScrollBoxRenderable extends BoxRenderable {
   }
 
   protected destroySelf(): void {
-    if (this.selectionListener) {
-      this._ctx.off("selection", this.selectionListener)
-      this.selectionListener = undefined
-    }
+    this.stopAutoScroll()
     super.destroySelf()
   }
 }
