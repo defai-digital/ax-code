@@ -11,7 +11,9 @@ import { ModelID, ProviderID } from "../../provider/schema"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { Recorder } from "../../replay/recorder"
 import { Log } from "../../util/log"
+import { toErrorMessage } from "../../util/error-message"
 import { MessageID, SessionID } from "../schema"
+import { AuxiliaryModel } from "../auxiliary-model"
 import { agentInfo } from "./prompt-agent-model-info"
 import { agentModel, lastModel } from "./prompt-command-selection"
 
@@ -104,24 +106,37 @@ export async function resolveUserMessageRouting(input: {
   let hybridModel: PromptRouteModel | undefined
 
   if (messageComplexity === "low" && anchor) {
-    const small = await Provider.getSmallModel(anchor.providerID)
-    if (small) {
-      complexityModel = { providerID: small.providerID, modelID: small.id }
-      log.info("complexity-route", {
-        command: "session.prompt.complexity",
-        status: "ok",
-        sessionID: input.sessionID,
-        model: small.id,
+    try {
+      const resolved = await AuxiliaryModel.resolve({
+        purpose: "route",
+        anchor: anchor.providerID,
+        smallModel: true,
       })
-      Recorder.emit({
-        type: "agent.route",
+      const small = resolved.source === "small_model" ? resolved.model : undefined
+      if (small) {
+        complexityModel = { providerID: small.providerID, modelID: small.id }
+        log.info("complexity-route", {
+          command: "session.prompt.complexity",
+          status: "ok",
+          sessionID: input.sessionID,
+          model: small.id,
+        })
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: input.sessionID,
+          messageID: input.messageID,
+          fromAgent: agentName,
+          toAgent: agentName,
+          confidence: 0,
+          routeMode: "complexity",
+          complexity: messageComplexity,
+        })
+      }
+    } catch (error) {
+      // Complexity routing is optional: it must never fail user-message creation.
+      log.info("complexity-route skipped", {
         sessionID: input.sessionID,
-        messageID: input.messageID,
-        fromAgent: agentName,
-        toAgent: agentName,
-        confidence: 0,
-        routeMode: "complexity",
-        complexity: messageComplexity,
+        error: toErrorMessage(error),
       })
     }
   }

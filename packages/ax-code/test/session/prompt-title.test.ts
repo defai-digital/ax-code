@@ -1,13 +1,21 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 
+import { Agent } from "../../src/agent/agent"
+import { Config } from "../../src/config/config"
 import { AX_ENGINE_PROVIDER_ID } from "../../src/provider/ax-engine"
-import { ProviderID } from "../../src/provider/schema"
+import { Provider } from "../../src/provider/provider"
+import { ModelID, ProviderID } from "../../src/provider/schema"
+import { Session } from "../../src/session"
+import { LLM } from "../../src/session/llm"
+import type { MessageV2 } from "../../src/session/message-v2"
 import {
   capTitleWords,
   cleanGeneratedTitle,
+  ensureTitle,
   fallbackTitleFromUserText,
   shouldSkipAutomaticTitle,
 } from "../../src/session/prompt/prompt-title"
+import { MessageID, PartID, SessionID } from "../../src/session/schema"
 
 describe("session prompt title", () => {
   test("title caps never leave half a surrogate pair", () => {
@@ -84,5 +92,59 @@ describe("session prompt title", () => {
     )
     expect(fallbackTitleFromUserText("Upgrade to v1.2 and rerun")).toBe("Upgrade to v1.2 and rerun")
     expect(fallbackTitleFromUserText("Fix it. Then deploy the release")).toBe("Fix it.")
+  })
+})
+
+describe("ensureTitle model resolution", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  test("an unavailable small_model titles with the session model", async () => {
+    const sessionID = SessionID.make("ses_title_small_unavailable")
+    const sessionModel = {
+      id: ModelID.make("session-model"),
+      providerID: ProviderID.make("openai"),
+    } as Provider.Model
+    const messageID = MessageID.make("msg_title_user")
+    const history = [
+      {
+        info: { id: messageID, sessionID, role: "user", time: { created: 1 } },
+        parts: [
+          {
+            id: PartID.make("prt_title_user"),
+            sessionID,
+            messageID,
+            type: "text",
+            text: "count the line of code",
+          },
+        ],
+      },
+    ] as unknown as MessageV2.WithParts[]
+
+    vi.spyOn(Session, "isDefaultTitle").mockReturnValue(true)
+    const setTitle = vi.spyOn(Session, "setTitle").mockResolvedValue({ id: sessionID } as Session.Info)
+    vi.spyOn(Agent, "get").mockResolvedValue({ name: "title" } as Agent.Info)
+    vi.spyOn(Config, "get").mockResolvedValue({ small_model: "deepseek/deepseek-v4-flash" } as Config.Info)
+    vi.spyOn(Provider, "isLocalProvider").mockResolvedValue(false)
+    vi.spyOn(Provider, "getModel").mockImplementation(async (providerID, modelID) => {
+      if (`${providerID}/${modelID}` === "deepseek/deepseek-v4-flash") {
+        throw new Provider.ModelNotFoundError({ providerID, modelID })
+      }
+      return sessionModel
+    })
+    const stream = vi.spyOn(LLM, "stream").mockResolvedValue({
+      text: Promise.resolve("Count lines of code"),
+    } as unknown as Awaited<ReturnType<typeof LLM.stream>>)
+
+    await ensureTitle({
+      session: { id: sessionID, title: "New session" } as Session.Info,
+      history,
+      providerID: ProviderID.make("openai"),
+      modelID: ModelID.make("session-model"),
+    })
+
+    // The generated title is applied on the session model, not just the
+    // deterministic fallback.
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ model: sessionModel }))
+    expect(setTitle.mock.calls.at(-1)?.[0]).toEqual({ sessionID, title: "Count lines of code" })
   })
 })

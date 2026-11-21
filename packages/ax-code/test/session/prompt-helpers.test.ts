@@ -462,6 +462,35 @@ describe("session.prompt helpers", () => {
     })
   })
 
+  test("skips a complexity-routed user message when inheriting the last model", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const user = (modelOrigin: MessageV2.User["modelOrigin"], modelID: string) =>
+          ({
+            id: MessageID.ascending(),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "build",
+            model: { providerID: ProviderID.make("remote-gw"), modelID: ModelID.make(modelID) },
+            modelOrigin,
+          }) as MessageV2.User
+
+        await Session.updateMessage(user("session-or-config", "big"))
+        // A complexity turn ran on the auxiliary small model for that one turn.
+        await Session.updateMessage(user("complexity", "small"))
+
+        await expect(lastModel(session.id)).resolves.toEqual({ providerID: "remote-gw", modelID: "big" })
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("selects user agent and model for subtask commands", async () => {
     expect(
       await commandUser({

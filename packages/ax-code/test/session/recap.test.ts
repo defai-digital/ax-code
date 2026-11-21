@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Agent } from "../../src/agent/agent"
+import { Config } from "../../src/config/config"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
 import { LLM } from "../../src/session/llm"
 
 import { AX_ENGINE_PROVIDER_ID } from "../../src/provider/ax-engine"
-import { ProviderID } from "../../src/provider/schema"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 import type { MessageV2 } from "../../src/session/message-v2"
 import {
   cleanGeneratedRecap,
@@ -188,19 +189,28 @@ describe("session recap", () => {
 })
 
 describe("recap generation boundary", () => {
-  function setup(history: MessageV2.WithParts[]) {
+  function setup(history: MessageV2.WithParts[], smallModel?: string) {
     vi.spyOn(Session, "messages").mockResolvedValue(history)
     vi.spyOn(Session, "get").mockResolvedValue({ id: sessionID } as Session.Info)
     const persist = vi.spyOn(Session, "setLastRecap").mockResolvedValue({ id: sessionID } as Session.Info)
     const agent = vi.spyOn(Agent, "get").mockResolvedValue({ name: "recap" } as Agent.Info)
     const model = { id: "small", providerID: "openai" } as Provider.Model
-    vi.spyOn(Provider, "getSmallModel").mockResolvedValue(model)
+    // AuxiliaryModel reads `small_model` from Config and resolves through
+    // Provider.getModel; there is no Instance here, so stub both.
+    vi.spyOn(Config, "get").mockResolvedValue((smallModel ? { small_model: smallModel } : {}) as Config.Info)
+    vi.spyOn(Provider, "isLocalProvider").mockResolvedValue(false)
+    const getModel = vi.spyOn(Provider, "getModel").mockImplementation(async (providerID, modelID) => {
+      if (smallModel && `${providerID}/${modelID}` === smallModel) {
+        throw new Provider.ModelNotFoundError({ providerID, modelID })
+      }
+      return model
+    })
     const stream = vi
       .spyOn(LLM, "stream")
       .mockResolvedValue({ text: Promise.resolve("Fixed login; tests passed.") } as unknown as Awaited<
         ReturnType<typeof LLM.stream>
       >)
-    return { agent, model, persist, stream }
+    return { agent, model, persist, stream, getModel }
   }
 
   test("conversation generation is bounded, tool-free, and outside the transcript", async () => {
@@ -225,6 +235,17 @@ describe("recap generation boundary", () => {
     stream.mockClear()
     await SessionRecap.generate({ sessionID })
     expect(stream.mock.calls[0][0].messages[0].content).not.toContain("Fix the login bug")
+  })
+
+  test("an unavailable small_model still recaps on the session model", async () => {
+    const history = [
+      userMessage([text("Fix the login bug")]),
+      assistantMessage([text("Tests passed")], undefined, { time: { created: 1, completed: 2 } }),
+    ]
+    const { model, stream, getModel } = setup(history, "deepseek/deepseek-v4-flash")
+    expect(await SessionRecap.generate({ sessionID })).toEqual({ text: "Fixed login; tests passed." })
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ model }))
+    expect(getModel).toHaveBeenCalledWith(ProviderID.make("openai"), ModelID.make("gpt-5.2"))
   })
 
   test("persists the generated recap with its scope for the session picker", async () => {

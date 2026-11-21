@@ -2,8 +2,8 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { stripThinkTags } from "@/provider/think-tags"
 import { Agent } from "../agent/agent"
 import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine"
-import { Provider } from "../provider/provider"
 import { agentModel } from "./prompt/prompt-command-selection"
+import { AuxiliaryModel } from "./auxiliary-model"
 import { Log } from "../util/log"
 import { Session } from "."
 import { LLM } from "./llm"
@@ -178,17 +178,22 @@ export namespace SessionRecap {
       const userModel = lastUser.model
       // Same precedence as the title agent: explicit model pin first, then
       // the provider's small tier, then the session model as fallback.
-      const model = await (async () => {
-        const pinned = await agentModel(agent)
-        if (pinned) return Provider.getModel(pinned.providerID, pinned.modelID)
-        const small = await Provider.getSmallModel(userModel.providerID)
-        if (small) return small
-        log.info("no small model for provider; recap uses the session model", {
+      const pinned = await agentModel(agent)
+      const resolved = await AuxiliaryModel.resolve({
+        purpose: "recap",
+        anchor: userModel.providerID,
+        primary: { providerID: userModel.providerID, modelID: userModel.modelID },
+        pin: pinned ? { configKey: "agent.recap.model", model: pinned } : undefined,
+        smallModel: true,
+      })
+      if (resolved.source === "none") return undefined
+      if (resolved.source === "primary") {
+        log.info("recap uses the session model", {
           sessionID: input.sessionID,
           providerID: userModel.providerID,
         })
-        return Provider.getModel(userModel.providerID, userModel.modelID)
-      })()
+      }
+      const model = resolved.model
       // Dedicated timeout — do not share the prompt-loop abort controller.
       const abort = AbortSignal.timeout(RECAP_TIMEOUT_MS)
       const result = await LLM.stream({

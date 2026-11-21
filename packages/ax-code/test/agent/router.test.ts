@@ -326,21 +326,50 @@ describe("classifyComplexity provider failure", () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
     if (origEnv === undefined) delete process.env["AX_CODE_SMART_LLM"]
     else process.env["AX_CODE_SMART_LLM"] = origEnv
   })
 
-  test("returns null instead of throwing when the small-model language cannot load", async () => {
-    process.env["AX_CODE_SMART_LLM"] = "true"
-    vi.spyOn(Provider, "getSmallModel").mockResolvedValue({ providerID: "test", id: "small" } as any)
-    vi.spyOn(Provider, "getLanguage").mockRejectedValue(new Error("provider sdk unavailable"))
+  const auxProviders = {
+    "remote-gw": {
+      npm: "@ai-sdk/openai-compatible",
+      options: { apiKey: "test-key", baseURL: "https://api.example.com/v1" },
+      models: {
+        small: { name: "small", tool_call: true, limit: { context: 128_000, output: 4_096 } },
+      },
+    },
+  }
 
-    // A throw here would escape resolveUserMessageRouting and fail user-message
-    // creation; routing must instead skip.
-    const result = await classifyComplexity(
-      "explain how this caching layer is supposed to work end to end",
-      ProviderID.make("test"),
-    )
-    expect(result.complexity).toBeNull()
+  async function withAuxiliaryConfig(config: Record<string, unknown>, fn: () => Promise<void>) {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({ config: { provider: auxProviders, routing: { llm: true }, ...config } })
+    await Instance.provide({ directory: tmp.path, fn })
+  }
+
+  test("returns null instead of throwing when the small-model language cannot load", async () => {
+    await withAuxiliaryConfig({ small_model: "remote-gw/small" }, async () => {
+      const getLanguage = vi.spyOn(Provider, "getLanguage").mockRejectedValue(new Error("provider sdk unavailable"))
+
+      // A throw here would escape resolveUserMessageRouting and fail user-message
+      // creation; routing must instead skip.
+      const result = await classifyComplexity(
+        "explain how this caching layer is supposed to work end to end",
+        ProviderID.make("remote-gw"),
+      )
+      expect(result.complexity).toBeNull()
+      expect(getLanguage).toHaveBeenCalled()
+    })
+  })
+
+  test("returns null without throwing when the configured small_model is unavailable", async () => {
+    await withAuxiliaryConfig({ small_model: "missing/model" }, async () => {
+      await expect(
+        classifyComplexity(
+          "explain how this caching layer is supposed to work end to end",
+          ProviderID.make("remote-gw"),
+        ),
+      ).resolves.toEqual({ complexity: null })
+    })
   })
 })

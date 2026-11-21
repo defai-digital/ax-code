@@ -1,8 +1,6 @@
 import type { ModelMessage } from "ai"
 import { NotFoundError } from "@/storage/db"
-import { iife } from "@/util/iife"
 import { Agent } from "../../agent/agent"
-import { Provider } from "../../provider/provider"
 import { agentModel } from "./prompt-command-selection"
 import { AX_ENGINE_PROVIDER_ID } from "../../provider/ax-engine"
 import { ModelID, ProviderID } from "../../provider/schema"
@@ -14,6 +12,7 @@ import { LLM } from "../llm"
 import { MessageV2 } from "../message-v2"
 import { stripThinkTags } from "@/provider/think-tags"
 import { sliceCodeUnits } from "@/util/format"
+import { AuxiliaryModel } from "../auxiliary-model"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -201,17 +200,19 @@ export async function ensureTitle(input: {
     if (!agent) {
       log.warn("title agent missing, using fallback title", { sessionID: input.session.id })
     } else {
-      const model = await iife(async () => {
-        const pinned = await agentModel(agent)
-        if (pinned) return await Provider.getModel(pinned.providerID, pinned.modelID)
-        const small = await Provider.getSmallModel(input.providerID)
-        if (small) return small
-        log.info("no small model for provider; title uses the session model", {
-          sessionID: input.session.id,
-          providerID: input.providerID,
-        })
-        return await Provider.getModel(input.providerID, input.modelID)
+      const pinned = await agentModel(agent)
+      const resolved = await AuxiliaryModel.resolve({
+        purpose: "title",
+        anchor: input.providerID,
+        primary: { providerID: input.providerID, modelID: input.modelID },
+        pin: pinned ? { configKey: "agent.title.model", model: pinned } : undefined,
+        smallModel: true,
       })
+      if (resolved.source === "none") {
+        log.warn("title model unresolved, using fallback title", { sessionID: input.session.id })
+        return
+      }
+      const model = resolved.model
       // Dedicated timeout — do not share the prompt-loop abort controller.
       const titleAbort = AbortSignal.timeout(TITLE_TIMEOUT_MS)
       const result = await LLM.stream({

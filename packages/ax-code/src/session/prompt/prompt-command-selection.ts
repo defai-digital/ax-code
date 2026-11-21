@@ -17,7 +17,9 @@ export async function requestedModel(model: ModelRef): Promise<ModelRef> {
 
 export async function lastModel(sessionID: SessionID) {
   for await (const item of MessageV2.stream(sessionID)) {
-    if (item.info.role === "user" && item.info.model) return item.info.model
+    // A complexity-routed turn ran on the auxiliary small model for that turn
+    // only; inheriting it would silently pin the next turn to the small model.
+    if (item.info.role === "user" && item.info.model && item.info.modelOrigin !== "complexity") return item.info.model
   }
   return Provider.defaultModel()
 }

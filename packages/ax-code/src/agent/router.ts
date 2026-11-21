@@ -22,6 +22,7 @@ import { ProviderTransform } from "../provider/transform"
 import type { ProviderID } from "../provider/schema"
 import { Config } from "../config/config"
 import { ScopedFlag } from "../flag/scoped"
+import { AuxiliaryModel } from "../session/auxiliary-model"
 import { toErrorMessage } from "../util/error-message"
 import z from "zod"
 
@@ -381,7 +382,12 @@ export async function classifyComplexity(message: string, providerID?: ProviderI
   // the same provider as the turn; fresh sessions fall back to the default.
   const anchor = providerID ?? (await Provider.defaultModel().catch(() => undefined))?.providerID
   if (!anchor) return { complexity: null }
-  const small = await Provider.getSmallModel(anchor).catch(() => undefined)
+  const small = await AuxiliaryModel.resolve({ purpose: "classify", anchor, smallModel: true })
+    .then((resolution) => resolution.model)
+    .catch((error) => {
+      log.info("complexity-skipped", { reason: "resolve-failed", error: toErrorMessage(error) })
+      return undefined
+    })
   if (!small) {
     log.info("complexity-skipped", { reason: "no-small-model" })
     return { complexity: null }
