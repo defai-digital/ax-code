@@ -17,6 +17,7 @@ import { NativeAddon } from "../../../native/addon"
 import { evidenceCacheMode } from "../../../evidence/mode"
 import { Database } from "../../../storage/db"
 import { getDoctorConfiguration, getConfiguredCredentialProviders } from "./config"
+import type { ProviderID } from "../../../provider/schema"
 import { Locale } from "@/util/locale"
 import { getTuiPreloadCheck } from "./preload"
 import { getDoctorDatabaseCheck, getDoctorDatabaseIntegrityCheck } from "./storage"
@@ -499,6 +500,7 @@ export const DOCTOR_CHECK_IDS = [
   "db-integrity",
   "child-processes",
   "credential-sources",
+  "model-pins",
 ] as const
 
 export type DoctorCheckId = (typeof DOCTOR_CHECK_IDS)[number]
@@ -559,6 +561,35 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
   // skipped.
   const configuration = await getDoctorConfiguration(project.callerCwd)
   push("config", configuration.check)
+
+  // 5b. Model pins — configured exact provider/model selections (model,
+  // small_model, wiki, planner, agents, llm_routing fallbacks) must resolve
+  // against the provider registry; broken pins only surface once a session
+  // breaks, so surface them here. Catalog lookups read local provider state
+  // only, inside the same project instance context that loaded the config.
+  if (configuration.config && !skip.has("model-pins")) {
+    const pinsConfig = configuration.config
+    try {
+      const { Instance } = await import("../../../project/instance")
+      const { Provider } = await import("../../../provider/provider")
+      const { getDoctorModelPinsCheck } = await import("./model-pins")
+      const check = await Instance.provide({
+        directory: project.callerCwd,
+        fn: () =>
+          getDoctorModelPinsCheck(pinsConfig, async (providerID) => {
+            const provider = await Provider.getProvider(providerID as ProviderID)
+            return provider && { models: provider.models }
+          }),
+      })
+      push("model-pins", check)
+    } catch (error) {
+      push("model-pins", {
+        name: "Model pins",
+        status: "warn",
+        detail: `unable to inspect model pins: ${toErrorMessage(error)}`,
+      })
+    }
+  }
 
   // 6. Credentials — combine `ax-code providers login` entries (auth.json)
   // with environment variable fallbacks. Previously we only checked

@@ -2,7 +2,40 @@ import { bootstrapReadonly } from "../../bootstrap"
 import { cmd } from "../cmd"
 import type { ProviderID } from "../../../provider/schema"
 
-type PinTarget = string | { providerID: string; modelID: string } | undefined
+export type PinTarget = string | { providerID: string; modelID: string } | undefined
+
+/** Resolves a provider to its local catalog view; never sends model requests. */
+export type ProviderLookup = (providerID: string) => Promise<{ models: Record<string, unknown> } | undefined>
+
+/** Structural subset of the config schema: every field that pins an exact provider/model. */
+export type PinConfig = {
+  model?: string
+  small_model?: string
+  wiki?: { model?: string }
+  experimental?: { planner_architect_model?: string }
+  agent?: Record<string, { model?: string } | undefined>
+  llm_routing?: { fallback?: readonly { providerID: string; modelID: string }[] }
+}
+
+/**
+ * Every config key that pins an exact provider/model, in a stable order. Unset
+ * keys are omitted so callers can count configured pins. Shared by `ax-code
+ * debug routing` and the doctor "Model pins" check so the two cannot drift.
+ */
+export function configuredPins(config: PinConfig): (readonly [string, PinTarget])[] {
+  return [
+    ...(config.model ? ([["model", config.model]] as const) : []),
+    ...(config.small_model ? ([["small_model", config.small_model]] as const) : []),
+    ...(config.wiki?.model ? ([["wiki.model", config.wiki.model]] as const) : []),
+    ...(config.experimental?.planner_architect_model
+      ? ([["experimental.planner_architect_model", config.experimental.planner_architect_model]] as const)
+      : []),
+    ...Object.entries(config.agent ?? {}).flatMap(([name, agent]) =>
+      agent?.model ? ([[`agent.${name}.model`, agent.model]] as const) : [],
+    ),
+    ...(config.llm_routing?.fallback ?? []).map((target, index) => [`llm_routing.fallback[${index}]`, target] as const),
+  ]
+}
 
 /**
  * A pin naming a provider or model that is not configured fails at dispatch.
@@ -42,15 +75,12 @@ export const RoutingCommand = cmd({
       const fallback = (config.llm_routing?.fallback ?? []).filter(
         (target) => RoutePolicy.key(target) !== RoutePolicy.key(primary),
       )
+      // The first entry reports the primary selection (--model override,
+      // configured `model`, or most recent); configuredPins repeats the
+      // `model` key in that case, so drop the duplicate from the shared list.
       const pins: (readonly [string, PinTarget])[] = [
         [args.model ? "--model" : config.model ? "model" : "recent", primary],
-        ["small_model", config.small_model],
-        ["wiki.model", config.wiki?.model],
-        ["experimental.planner_architect_model", config.experimental?.planner_architect_model],
-        ...Object.entries(config.agent ?? {}).map(([name, agent]) => [`agent.${name}.model`, agent.model] as const),
-        ...(config.llm_routing?.fallback ?? []).map(
-          (target, index) => [`llm_routing.fallback[${index}]`, target] as const,
-        ),
+        ...configuredPins(config).filter(([pin]) => pin !== "model"),
       ]
       const warnings = await pinWarnings(pins, async (providerID) => {
         const provider = await Provider.getProvider(providerID as ProviderID)
