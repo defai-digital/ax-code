@@ -609,7 +609,8 @@ test("fills a namespaced Xiaomi card from the vendor catalog", async () => {
       fn: async () => {
         await Provider.ready()
         const model = await Provider.getModel(ProviderID.make(id), ModelID.make("xiaomi/mimo-v2.6-pro"))
-        expect(model.family).toBe("mimo")
+        const catalogModel = (await ModelsDev.get()).xiaomi.models["mimo-v2.6-pro"]
+        expect(model.family).toBe(catalogModel.family)
         expect(model.limit).toEqual({ context: 1_048_576, output: 131_072 })
         expect(model.capabilities).toMatchObject({
           reasoning: true,
