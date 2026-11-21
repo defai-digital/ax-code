@@ -1,45 +1,45 @@
 {
   "version": 1,
-  "checkedAt": "2026-11-01T07:51:49.655Z",
+  "checkedAt": "2026-11-21T07:52:07.661Z",
   "models": [
     {
       "repo": "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
-      "revision": "dca0394d42a107a68616a7ae79cc724c65fe20d1",
+      "revision": "253893ccc3c69d8eefba4f27437e3c77eab1541c",
       "private": false,
       "gated": false,
       "license": "apache-2.0"
     },
     {
       "repo": "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP",
-      "revision": "790d6d36c3ba63f04c832638a47c285ce19cd387",
+      "revision": "3f8f23b9fee441616cedcbcbaa25bc07dbbf406b",
       "private": false,
       "gated": false,
       "license": "apache-2.0"
     },
     {
       "repo": "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP",
-      "revision": "975716d838f7f418f49b380a9b4b6044b07fcf78",
+      "revision": "9fda0d590ead171ba3ef92fb8c6f6e540df6430c",
       "private": false,
       "gated": false,
       "license": "other"
     },
     {
       "repo": "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP8-MTP",
-      "revision": "7509a7f4d1888e862d3445cb273125385df5d839",
+      "revision": "48d6b7a73d802109cb2a0aecb8511ffc9a304ee3",
       "private": false,
       "gated": false,
       "license": "other"
     },
     {
       "repo": "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
-      "revision": "fd149a2448cf17e9ded08ceeba8ff91d825f85bb",
+      "revision": "c42ae31b7acd069cb9b88da04f520755a4da4f77",
       "private": false,
       "gated": false,
       "license": "apache-2.0"
     },
     {
       "repo": "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP8-MTP",
-      "revision": "0037131982557c07cc689615bfcf1eeab07c3a0f",
+      "revision": "2f955164ce43132f2e77fc37a0aa85a7f1a81697",
       "private": false,
       "gated": false,
       "license": "apache-2.0"
@@ -53,14 +53,14 @@
     },
     {
       "repo": "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-6bit-MTP",
-      "revision": "3e6dde8707817972570530c8ca5620c6f730cc68",
+      "revision": "e01a6176b5f75490e2ef041f70b91d3e114f0fc7",
       "private": false,
       "gated": false,
       "license": "mit"
     },
     {
       "repo": "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-6bit-MTP",
-      "revision": "bc0807ad1ab78b92b604dd8e4cf4d7d4d32d7ab0",
+      "revision": "354cda1090f50f03b59b6ebb06ad5b9beac20ad1",
       "private": false,
       "gated": false,
       "license": "mit"
@@ -74,7 +74,7 @@
     },
     {
       "repo": "AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
-      "revision": "25e4538250e1b09bc79f3c7e9dc6665d20411192",
+      "revision": "bead062e0519c202ab63a219488d79871a31e7cc",
       "private": false,
       "gated": false,
       "license": "other"
