@@ -21,7 +21,7 @@ export function captureStderrHead(proc: ChildProcess): void {
   const stream = proc.stderr
   if (!stream || stderrHeads.has(proc)) return
   const head = { text: "" }
-  stderrHeads.set(proc, head)
+  stderrHeads.set(proc, head) // @scan-suppress lifecycle_scan - Weak keys release diagnostics when child processes are collected.
   const onData = (chunk: Buffer | string) => {
     head.text += typeof chunk === "string" ? chunk : chunk.toString("utf8")
     if (head.text.length < STDERR_HEAD_LIMIT_CHARS) return
