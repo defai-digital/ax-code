@@ -97,7 +97,9 @@ permissions, stale-file checks and all Git/staging operations.
 All methods accept `{ signal, timeoutMs }`. Each engine admits one in-flight
 call and rejects concurrent calls without queueing. It lazily reuses a worker.
 Abort/deadline terminates that worker; later calls recreate it after successful
-termination. Request IDs and worker identity exclude stale responses. A failed
+termination. A rejection the kernel returns normally (a stale hunk, a resource
+limit) keeps the worker; a trap or binding failure retires it. An idle Node
+worker does not hold the process open, so a missed `close()` cannot hang exit. Request IDs and worker identity exclude stale responses. A failed
 or stuck termination blocks reuse; caller rejection is bounded by a one-second
 teardown grace and retains the original reason. `close()` reports termination
 failure and may be retried. Always close idle engines. The default operation

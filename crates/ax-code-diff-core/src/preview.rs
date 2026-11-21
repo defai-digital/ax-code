@@ -118,13 +118,23 @@ struct Budget<'a> {
     /// Extra cap on search steps alone; tests lower it to force the fallback.
     search: usize,
 }
+/// Cancellation is polled once per this many units of work, not on every
+/// line: the poll is an indirect call in the innermost comparison loop.
+const CANCEL_POLL_INTERVAL: usize = 256;
+
 impl Budget<'_> {
+    fn poll(&self) -> Result<()> {
+        if self.work % CANCEL_POLL_INTERVAL == 0 {
+            check(self.cancel)?;
+        }
+        Ok(())
+    }
     fn tick(&mut self) -> Result<()> {
         self.work += 1;
         if self.work > self.max {
             return Err(limit());
         }
-        check(self.cancel)
+        self.poll()
     }
     /// Same accounting as `tick`, but reports search exhaustion separately.
     fn step(&mut self) -> Search<()> {
@@ -133,7 +143,17 @@ impl Budget<'_> {
             return Err(Stop::Exhausted);
         }
         self.search -= 1;
-        Ok(check(self.cancel)?)
+        Ok(self.poll()?)
+    }
+}
+
+/// Storage slot of a search diagonal: 0, -1, 1, -2, 2, ... so the table grows
+/// with the number of edits explored instead of with the size of the inputs.
+fn slot(diagonal: isize) -> usize {
+    if diagonal >= 0 {
+        (diagonal as usize) * 2
+    } else {
+        diagonal.unsigned_abs() * 2 - 1
     }
 }
 
@@ -162,8 +182,9 @@ fn common(
 
 fn components(old: &[&str], new: &[&str], budget: &mut Budget) -> Search<Vec<Component>> {
     let max = old.len() + new.len();
-    let offset = max + 1;
-    let mut best: Vec<Option<Path>> = vec![None; 2 * max + 3];
+    // Indexed by `slot`. Sizing it for every possible diagonal up front cost
+    // tens of megabytes of zeroing on large files with a handful of edits.
+    let mut best: Vec<Option<Path>> = vec![None; 3];
     let mut arena = Vec::new();
     let mut first = Path {
         old: -1,
@@ -175,19 +196,24 @@ fn components(old: &[&str], new: &[&str], budget: &mut Budget) -> Search<Vec<Com
     } else {
         None
     };
-    best[offset] = Some(first);
+    best[slot(0)] = Some(first);
     let mut min = -(max as isize);
     let mut max_diagonal = max as isize;
     'search: for edits in 1..=max {
         if done.is_some() {
             break;
         }
+        // This round reads diagonals out to edits + 1 on either side.
+        let needed = slot(edits as isize + 1) + 1;
+        if best.len() < needed {
+            best.resize(needed.max(best.len() * 2), None);
+        }
         let mut diagonal = min.max(-(edits as isize));
         while diagonal <= max_diagonal.min(edits as isize) {
             budget.step()?;
-            let i = (offset as isize + diagonal) as usize;
-            let remove = best[i - 1].take();
-            let add = best[i + 1];
+            let i = slot(diagonal);
+            let remove = best[slot(diagonal - 1)].take();
+            let add = best[slot(diagonal + 1)];
             let can_add =
                 add.is_some_and(|p| p.old - diagonal >= 0 && p.old - diagonal < new.len() as isize);
             let can_remove = remove.is_some_and(|p| p.old + 1 < old.len() as isize);

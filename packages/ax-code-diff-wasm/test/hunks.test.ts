@@ -116,3 +116,28 @@ test("work-budget overruns return an approximate preview that still roundtrips",
     await engine.close()
   }
 })
+test("a rejected call leaves the real worker usable and an unclosed engine lets the process exit", async () => {
+  const { execFileSync } = await import("node:child_process")
+  const moduleUrl = new URL("../dist/node.js", import.meta.url).href
+  // No close(): before the idle worker was unref'd this program never exited.
+  const output = execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `
+      const { createDiffEngine } = await import(${JSON.stringify(moduleUrl)})
+      const engine = createDiffEngine()
+      const stale = [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ["-nope", "+x"] }]
+      const outcomes = []
+      for (let round = 0; round < 3; round++) {
+        outcomes.push(await engine.applyHunks("a\\n", stale).then(() => "applied", (error) => "rejected"))
+        outcomes.push((await engine.diff("a\\n", "b\\n")).hunks.length)
+      }
+      console.log(JSON.stringify(outcomes))
+      `,
+    ],
+    { encoding: "utf8", timeout: 20_000 },
+  )
+  expect(JSON.parse(output)).toEqual(["rejected", 1, "rejected", 1, "rejected", 1])
+}, 30_000)

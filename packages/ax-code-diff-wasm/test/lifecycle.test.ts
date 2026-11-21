@@ -73,3 +73,69 @@ test("hung termination bounds caller latency without permitting a second worker"
   await Promise.resolve()
   await client.close()
 })
+function scripted() {
+  const state = {
+    spawned: 0,
+    terminated: 0,
+    busy: [] as boolean[],
+    emit: (_: unknown) => {},
+    request: undefined as Request | undefined,
+  }
+  const client = createClient((message) => {
+    state.spawned++
+    state.emit = message
+    return {
+      post(value) {
+        state.request = value
+      },
+      async terminate() {
+        state.terminated++
+      },
+      busy(active) {
+        state.busy.push(active)
+      },
+    }
+  })
+  return { client, state }
+}
+test("an ordinary kernel rejection keeps the worker for the next call", async () => {
+  const { client, state } = scripted()
+  try {
+    const first = client.compare([], 1)
+    const rejected = expect(first).rejects.toThrow("Hunk context mismatched")
+    state.emit({ type: "ready", version: 1 })
+    state.emit({ type: "error", id: state.request!.id, message: "Hunk context mismatched", fatal: false })
+    await rejected
+    expect(state.terminated).toBe(0)
+    // No terminate, no cold start: the same worker answers at once.
+    const next = client.compare([], 1)
+    state.emit({ type: "result", id: state.request!.id, json: empty })
+    expect(await next).toEqual([])
+    expect(state.spawned).toBe(1)
+    expect(state.busy).toEqual([true, false, true, false])
+  } finally {
+    await client.close()
+  }
+})
+test.each([
+  ["a trap", { fatal: true }],
+  ["a reply without the flag", {}],
+  ["a malformed flag", { fatal: "false" }],
+])("%s retires the worker", async (_name, flag) => {
+  const { client, state } = scripted()
+  try {
+    const first = client.compare([], 1)
+    const rejected = expect(first).rejects.toThrow("unreachable")
+    state.emit({ type: "ready", version: 1 })
+    state.emit({ type: "error", id: state.request!.id, message: "unreachable", ...flag })
+    await rejected
+    expect(state.terminated).toBe(1)
+    const next = client.compare([], 1)
+    expect(state.spawned).toBe(2)
+    state.emit({ type: "ready", version: 1 })
+    state.emit({ type: "result", id: state.request!.id, json: empty })
+    expect(await next).toEqual([])
+  } finally {
+    await client.close()
+  }
+})

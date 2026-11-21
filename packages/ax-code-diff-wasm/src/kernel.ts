@@ -40,6 +40,9 @@ export async function loadKernel(bytes?: Uint8Array) {
         type: "error",
         id: request.id,
         message: String(error instanceof Error ? error.message : error).slice(0, 2048),
+        // wasm-bindgen throws the kernel's own `Err` as a plain string after a normal return, so
+        // the instance is intact. A trap or a binding failure arrives as an Error object.
+        fatal: typeof error !== "string",
       }
     }
   }

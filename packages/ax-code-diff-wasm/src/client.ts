@@ -25,6 +25,11 @@ export type DuplicateComparator = DiffEngine
 export interface Endpoint {
   post(message: Request): void
   terminate(): Promise<void>
+  /**
+   * Told when a call starts and settles. A host can let an idle worker stop holding the process
+   * open, so an engine that is never closed does not keep a program from exiting.
+   */
+  busy?(active: boolean): void
 }
 export type Spawn = (onMessage: (message: unknown) => void, onFailure: (error: Error) => void) => Endpoint
 const TEARDOWN_MS = 1000
@@ -99,6 +104,7 @@ export function createClient(spawn: Spawn): DiffEngine {
   function send() {
     if (!ready || !worker || !job || job.sent || job.failing) return
     job.sent = true
+    worker.busy?.(true)
     worker.post(job.request)
   }
   function start() {
@@ -118,11 +124,22 @@ export function createClient(spawn: Spawn): DiffEngine {
             return
           }
           if (!job?.sent || message.id !== job.request.id) throw new Error("Unexpected Wasm worker response ID")
-          if (message.type === "error") throw new Error(message.message)
+          if (message.type === "error") {
+            if (message.fatal) throw new Error(message.message)
+            // An ordinary rejection: the kernel is intact, so keep the worker for the next call
+            // instead of paying a terminate and a cold start for every stale hunk.
+            const rejected = job
+            job = undefined
+            rejected.cleanup()
+            endpoint.busy?.(false)
+            rejected.reject(new Error(message.message))
+            return
+          }
           const result = job.decode(message.json),
             current = job
           job = undefined
           current.cleanup()
+          endpoint.busy?.(false)
           current.resolve(result)
         } catch (error) {
           void fail(error)

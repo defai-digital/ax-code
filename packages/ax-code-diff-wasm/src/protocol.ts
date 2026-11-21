@@ -22,7 +22,12 @@ export type Request = Operation & { id: number }
 export type Reply =
   | { type: "ready"; version: number }
   | { type: "result"; id: number; json: string }
-  | { type: "error"; id: number; message: string }
+  /**
+   * `fatal: false` is a rejection the kernel returned in the ordinary way (a stale hunk, a
+   * resource limit): the instance is intact and stays in use. Anything else — a trap, a binding
+   * failure — leaves the instance in an unknown state and the worker is retired.
+   */
+  | { type: "error"; id: number; message: string; fatal: boolean }
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -59,7 +64,8 @@ export function parseReply(value: unknown): Reply {
   const id = value.id as number
   if (value.type === "result" && typeof value.json === "string") return { type: "result", id, json: value.json }
   if (value.type === "error" && typeof value.message === "string" && value.message.length <= 2048)
-    return { type: "error", id, message: value.message }
+    // Only an explicit `false` keeps the worker; a missing or malformed flag is treated as fatal.
+    return { type: "error", id, message: value.message, fatal: value.fatal !== false }
   throw new Error("Invalid Wasm worker response or ABI version")
 }
 
@@ -106,9 +112,15 @@ export function decodeGroups(json: string, rowCount: number): DuplicateGroup[] {
   return groups
 }
 
+// A UTF-16 code unit encodes to at most this many UTF-8 bytes (a surrogate pair is two units, four bytes).
+const MAX_UTF8_BYTES_PER_UNIT = 3
+
 export function checkedText(value: unknown, max = MAX_INPUT_BYTES): string {
   if (typeof value !== "string" || !value.isWellFormed()) throw new TypeError("Expected well-formed Unicode text")
-  if (value.length > max || encoder.encode(value).byteLength > max) throw new RangeError("Diff byte limit exceeded")
+  if (value.length > max) throw new RangeError("Diff byte limit exceeded")
+  // Encoding copies the whole text just to count it. Skip that when even the worst case fits.
+  if (value.length * MAX_UTF8_BYTES_PER_UNIT > max && encoder.encode(value).byteLength > max)
+    throw new RangeError("Diff byte limit exceeded")
   return value
 }
 export function encodeHunks(hunks: readonly Hunk[]): string {

@@ -15,6 +15,8 @@ export function createDiffEngine() {
       terminate: async () => {
         await worker.terminate()
       },
+      // An idle worker must not keep the process alive when close() is never reached.
+      busy: (active) => (active ? worker.ref() : worker.unref()),
     }
   })
 }
