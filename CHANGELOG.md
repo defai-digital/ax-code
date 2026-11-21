@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.5] - 2026-11-21
+
+### Changed
+
+- Refresh the bundled model catalog and model download documentation.
+
+### Fixed
+
+- Scope AX TUI scroll listeners to active gestures and stop auto-scroll when a drag selection is cleared.
+- Keep Node listener warnings from overwriting the active terminal display.
+- Fail the language server handshake immediately when the server exits.
+- Keep the diff worker available after rejected requests and reduce memory use for large diffs.
+
 ## [7.31.4] - 2026-11-20
 
 ### Fixed
