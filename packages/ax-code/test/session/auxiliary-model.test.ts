@@ -22,11 +22,18 @@ const providers = {
     options: { apiKey: "test-key", baseURL: "http://192.168.1.50:11434/v1" },
     models: { m: model },
   },
+  "lan-box-2": {
+    npm: "@ai-sdk/openai-compatible",
+    options: { apiKey: "test-key", baseURL: "http://192.168.1.51:11434/v1" },
+    models: { m: model },
+  },
 }
 const remote = ProviderID.make("remote-gw")
 const local = ProviderID.make("lan-box")
+const local2 = ProviderID.make("lan-box-2")
 const primary = { providerID: remote, modelID: ModelID.make("big") }
 const localPrimary = { providerID: local, modelID: ModelID.make("m") }
+const local2Primary = { providerID: local2, modelID: ModelID.make("m") }
 
 async function withConfig(config: Record<string, unknown>, fn: () => Promise<void>): Promise<void> {
   await using tmp = await tmpdir({ config: { provider: providers, ...config } })
@@ -70,7 +77,9 @@ describe("AuxiliaryModel.resolve", () => {
       const payload = notices[0]!
       expect(payload.variant).toBe("warning")
       expect(payload.message).toContain("small_model")
-      expect(payload.message).toContain("remote-gw/big")
+      expect(payload.message).toContain("Recap uses the session model remote-gw/big")
+      expect(payload.message).toContain("ax-code models")
+      expect(payload.message).toContain("or remove small_model from your config")
     })
   })
 
@@ -123,6 +132,7 @@ describe("AuxiliaryModel.resolve", () => {
 
   test("a local session never resolves a remote auxiliary target", async () => {
     await withConfig({ small_model: "remote-gw/small" }, async () => {
+      const toast = vi.spyOn(Bus, "publishDetached")
       const result = await AuxiliaryModel.resolve({
         purpose: "title",
         anchor: local,
@@ -132,6 +142,26 @@ describe("AuxiliaryModel.resolve", () => {
       expect(result.source).toBe("primary")
       expect(String(result.model?.providerID)).toBe("lan-box")
       expect(result.degraded).toEqual([{ configKey: "small_model", target: "remote-gw/small", reason: "local_route" }])
+      const notices = toast.mock.calls
+        .map((call) => call[1] as { title?: string; message: string; variant: string })
+        .filter((payload) => payload?.title === "Auxiliary model unavailable")
+      expect(notices).toHaveLength(1)
+      expect(notices[0]!.message).toContain("Title uses the session model lan-box/m")
+      expect(notices[0]!.message).toContain("Pin a model on local provider lan-box")
+    })
+  })
+
+  test("the same remote small_model degraded for two different local anchors announces twice", async () => {
+    await withConfig({ small_model: "remote-gw/small" }, async () => {
+      const toast = vi.spyOn(Bus, "publishDetached")
+      await AuxiliaryModel.resolve({ purpose: "title", anchor: local, primary: localPrimary, smallModel: true })
+      await AuxiliaryModel.resolve({ purpose: "title", anchor: local2, primary: local2Primary, smallModel: true })
+      const notices = toast.mock.calls
+        .map((call) => call[1] as { title?: string; message: string })
+        .filter((payload) => payload?.title === "Auxiliary model unavailable")
+      expect(notices).toHaveLength(2)
+      expect(notices[0]!.message).toContain("it would leave local provider lan-box")
+      expect(notices[1]!.message).toContain("it would leave local provider lan-box-2")
     })
   })
 

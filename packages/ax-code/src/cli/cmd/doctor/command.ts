@@ -17,7 +17,6 @@ import { NativeAddon } from "../../../native/addon"
 import { evidenceCacheMode } from "../../../evidence/mode"
 import { Database } from "../../../storage/db"
 import { getDoctorConfiguration, getConfiguredCredentialProviders } from "./config"
-import type { ProviderID } from "../../../provider/schema"
 import { Locale } from "@/util/locale"
 import { getTuiPreloadCheck } from "./preload"
 import { getDoctorDatabaseCheck, getDoctorDatabaseIntegrityCheck } from "./storage"
@@ -565,21 +564,19 @@ export async function runDoctorChecks(input: { skip?: ReadonlySet<string> } = {}
   // 5b. Model pins — configured exact provider/model selections (model,
   // small_model, wiki, planner, agents, llm_routing fallbacks) must resolve
   // against the provider registry; broken pins only surface once a session
-  // breaks, so surface them here. Catalog lookups read local provider state
-  // only, inside the same project instance context that loaded the config.
+  // breaks, so surface them here. Catalog lookups wait for provider catalog
+  // discovery, which may contact providers but never runs inference, inside
+  // the same project instance context that loaded the config.
   if (configuration.config && !skip.has("model-pins")) {
     const pinsConfig = configuration.config
     try {
       const { Instance } = await import("../../../project/instance")
       const { Provider } = await import("../../../provider/provider")
+      const { registryLookup } = await import("../debug/routing")
       const { getDoctorModelPinsCheck } = await import("./model-pins")
       const check = await Instance.provide({
         directory: project.callerCwd,
-        fn: () =>
-          getDoctorModelPinsCheck(pinsConfig, async (providerID) => {
-            const provider = await Provider.getProvider(providerID as ProviderID)
-            return provider && { models: provider.models }
-          }),
+        fn: () => getDoctorModelPinsCheck(pinsConfig, registryLookup(), (target) => Provider.parseModel(target)),
       })
       push("model-pins", check)
     } catch (error) {

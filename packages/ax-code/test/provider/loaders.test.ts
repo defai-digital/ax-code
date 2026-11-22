@@ -1248,6 +1248,100 @@ describe("offline provider loaders", () => {
   })
 })
 
+describe("local runtime model discovery failures", () => {
+  // One Ollama-compatible and one OpenAI-compatible local runtime, covering
+  // both discovery code paths. Discovery failures must THROW so
+  // provider-impl's `runDiscovery` records them as `discovery:<id>`
+  // diagnostics instead of silently dropping the provider; the reachability
+  // probe used for `autoload` keeps swallowing every failure.
+  const localRuntimes = [
+    { providerID: "ollama", baseURL: "http://localhost:11434", url: "http://localhost:11434/api/tags" },
+    { providerID: "lmstudio", baseURL: "http://localhost:1234", url: "http://localhost:1234/v1/models" },
+  ]
+
+  function localRuntimeProvider(runtime: (typeof localRuntimes)[number]): Provider.Info {
+    return {
+      id: ProviderID.make(runtime.providerID),
+      name: runtime.providerID,
+      source: "config",
+      env: [],
+      models: {},
+      options: { baseURL: runtime.baseURL },
+    } as unknown as Provider.Info
+  }
+
+  async function discoverLocalModels(runtime: (typeof localRuntimes)[number]) {
+    const provider = localRuntimeProvider(runtime)
+    const loader = await CUSTOM_LOADERS[runtime.providerID]!(provider)
+    return loader.discoverModels!(provider)
+  }
+
+  function stubDiscoveryFetch(url: string, respond: () => Response) {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      if (String(input) !== url) throw new Error(`unexpected fetch: ${String(input)}`)
+      return respond()
+    }) as typeof fetch
+  }
+
+  test.each(localRuntimes)("$providerID discovery rejects on a non-OK response", async (runtime) => {
+    stubDiscoveryFetch(runtime.url, () => new Response("unavailable", { status: 503 }))
+    await expect(discoverLocalModels(runtime)).rejects.toThrow(
+      new RegExp(`${runtime.providerID} model discovery failed: .*HTTP 503`),
+    )
+  })
+
+  test.each(localRuntimes)("$providerID discovery rejects when the fetch fails", async (runtime) => {
+    stubDiscoveryFetch(runtime.url, () => {
+      throw new Error("boom")
+    })
+    await expect(discoverLocalModels(runtime)).rejects.toThrow(
+      new RegExp(`${runtime.providerID} model discovery failed: .*boom`),
+    )
+  })
+
+  test.each(localRuntimes)("$providerID discovery rejects on invalid JSON", async (runtime) => {
+    stubDiscoveryFetch(
+      runtime.url,
+      () => new Response("not-json", { status: 200, headers: { "content-type": "application/json" } }),
+    )
+    await expect(discoverLocalModels(runtime)).rejects.toThrow(
+      new RegExp(`${runtime.providerID} model discovery failed: .*invalid JSON`),
+    )
+  })
+
+  test.each(localRuntimes)("$providerID discovery rejects on an invalid response schema", async (runtime) => {
+    stubDiscoveryFetch(
+      runtime.url,
+      () =>
+        new Response(
+          JSON.stringify(runtime.providerID === "ollama" ? { models: { name: "not-an-array" } } : { data: "nope" }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    )
+    await expect(discoverLocalModels(runtime)).rejects.toThrow(
+      `${runtime.providerID} model discovery failed: invalid response schema`,
+    )
+  })
+
+  test.each(localRuntimes)("$providerID discovery returns an empty catalog for a valid empty list", async (runtime) => {
+    stubDiscoveryFetch(
+      runtime.url,
+      () =>
+        new Response(JSON.stringify(runtime.providerID === "ollama" ? { models: [] } : { data: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    )
+    await expect(discoverLocalModels(runtime)).resolves.toEqual({})
+  })
+
+  test.each(localRuntimes)("$providerID autoload probe still swallows a failing model list", async (runtime) => {
+    stubDiscoveryFetch(runtime.url, () => new Response("unavailable", { status: 503 }))
+    const loader = await CUSTOM_LOADERS[runtime.providerID]!(localRuntimeProvider(runtime))
+    expect(loader.autoload).toBe(false)
+  })
+})
+
 describe("provider config integration", () => {
   test("config-based provider with baseURL", async () => {
     // Redirecting provider traffic from project config is intentionally gated

@@ -44,6 +44,11 @@ Merge this field into your existing project or global `ax-code.json`; replace th
 
 Restart after editing configuration. Existing agent, session or recent choices can affect selection when no explicit model is supplied; check the active model before sending the task. Desktop maintains its own settings.
 
+If you connect through a gateway, use the gateway's exact IDs in `model`, `small_model`, and agent model pins. Run
+`ax-code doctor` for a summary of stale pins or `ax-code debug routing` for the full list. Titles and recaps can use
+the session model when `small_model` is unavailable, and optional complexity routing is skipped. Compaction uses
+`agent.compaction.model` when available and otherwise uses the session model.
+
 ## Choose for the task
 
 Start with a small repository question. For edits, verify tool calling and run your project checks. For images, confirm image input support. For long tasks, inspect context and output limits rather than relying on the model name.

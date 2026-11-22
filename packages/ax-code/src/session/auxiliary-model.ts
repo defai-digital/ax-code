@@ -92,6 +92,12 @@ export namespace AuxiliaryModel {
       : "the provider or model is not available"
   }
 
+  function advice(item: Degraded, anchor: ProviderID): string {
+    if (item.reason === "local_route")
+      return `Pin a model on local provider ${anchor}, or remove ${item.configKey} from your config.`
+    return `Use an exact ID from ax-code models, or remove ${item.configKey} from your config.`
+  }
+
   type Used = { kind: "pin" | "small_model" | "primary"; ref: Ref } | undefined
 
   function outcomeText(purpose: Purpose, used: Used): string {
@@ -102,12 +108,16 @@ export namespace AuxiliaryModel {
 
   function announce(input: Input, degraded: Degraded[], used: Used): void {
     for (const item of degraded) {
-      const key = `${item.configKey}|${item.target}|${item.reason}|${input.purpose}`
+      // The local_route message names the anchor provider, so the anchor is
+      // part of the identity: the same target degraded on two different local
+      // anchors is two distinct notices.
+      const key = `${item.configKey}|${item.target}|${item.reason}|${input.purpose}|${input.anchor}`
       const notices = notified()
       if (notices.has(key)) continue
       notices.add(key)
       const outcome = outcomeText(input.purpose, used)
-      const message = `${item.configKey} selects ${item.target}, but ${describeReason(item.reason, input.anchor)}; ${outcome}. Update or remove ${item.configKey} in your config.`
+      const capitalized = outcome.charAt(0).toUpperCase() + outcome.slice(1)
+      const message = `${item.configKey} selects ${item.target}, but ${describeReason(item.reason, input.anchor)}. ${capitalized}. ${advice(item, input.anchor)}`
       log.warn("auxiliary model degraded", {
         purpose: input.purpose,
         configKey: item.configKey,

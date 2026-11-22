@@ -13,6 +13,7 @@ import { cliModelEfforts } from "./cli/effort"
 import { URL } from "url"
 import { Log } from "@/util/log"
 import { isLocalHostname } from "@/util/local-host"
+import { toErrorMessage } from "../util/error-message"
 import { axEngineLoader } from "./ax-engine/provider-loader"
 import { PRIVATE_GPU_LOADERS } from "./private-gpu/loader"
 import { isRecord } from "@/util/record"
@@ -175,6 +176,10 @@ function openAICompatibleLimit(item: OpenAICompatibleModelItem): Provider.Model[
   }
 }
 
+/**
+ * Reachability probe for `autoload`: any failure (fetch error, timeout,
+ * non-OK, invalid JSON/schema) is a miss, never a throw.
+ */
 async function fetchOpenAICompatibleModels(
   fetcher: ModelListFetcher,
   endpoint: LocalProviderEndpoint,
@@ -197,6 +202,39 @@ async function fetchOpenAICompatibleModels(
       log.debug("OpenAI-compatible model list fetch failed", { host: endpoint.discoveryHost, error })
       return null
     })
+}
+
+/**
+ * Discovery path: failures THROW so provider-impl's `runDiscovery` records
+ * them as a `discovery:<id>` diagnostic instead of silently dropping the
+ * provider. A successful response listing zero models returns `{data: []}`.
+ */
+async function discoverOpenAICompatibleModels(
+  providerID: string,
+  fetcher: ModelListFetcher,
+  endpoint: LocalProviderEndpoint,
+  headers?: Record<string, string>,
+): Promise<{ data: OpenAICompatibleModelItem[] }> {
+  let payload: unknown
+  try {
+    payload = await requestModelList({
+      url: `${endpoint.inferenceBaseURL}/models`,
+      label: "OpenAI-compatible model list",
+      timeoutMs: 5_000,
+      headers,
+      redirect: "follow",
+      fetcher,
+    })
+  } catch (error) {
+    log.debug("OpenAI-compatible model list fetch failed", { host: endpoint.discoveryHost, error })
+    throw new Error(`${providerID} model discovery failed: ${toErrorMessage(error)}`, { cause: error })
+  }
+  const parsed = asOpenAICompatibleModelList(payload)
+  if (!parsed) {
+    log.debug("OpenAI-compatible model list returned invalid schema", { host: endpoint.discoveryHost })
+    throw new Error(`${providerID} model discovery failed: invalid response schema`)
+  }
+  return parsed
 }
 
 type LocalProviderEndpoint = {
@@ -267,22 +305,24 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
       async discoverModels(provider) {
         const endpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
         const fetcher = endpoint.local ? fetch : Ssrf.pinnedFetch
-        const res = await fetcher(`${endpoint.discoveryHost}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch(
-          (error) => {
-            log.debug("Ollama-compatible model discovery failed", { providerID, host: endpoint.discoveryHost, error })
-            return null
-          },
-        )
-        if (!res?.ok) {
-          if (res) {
-            await res.arrayBuffer().catch(() => undefined)
-            log.debug("Ollama-compatible model discovery returned non-OK", {
-              providerID,
-              host: endpoint.discoveryHost,
-              status: res.status,
-            })
-          }
-          return {}
+        // Discovery failures THROW so provider-impl's `runDiscovery` records
+        // them as a `discovery:<id>` diagnostic instead of silently dropping
+        // the provider. Only the reachability probe above stays non-throwing.
+        let res: Response
+        try {
+          res = await fetcher(`${endpoint.discoveryHost}/api/tags`, { signal: AbortSignal.timeout(5000) })
+        } catch (error) {
+          log.debug("Ollama-compatible model discovery failed", { providerID, host: endpoint.discoveryHost, error })
+          throw new Error(`${providerID} model discovery failed: ${toErrorMessage(error)}`, { cause: error })
+        }
+        if (!res.ok) {
+          await res.arrayBuffer().catch(() => undefined)
+          log.debug("Ollama-compatible model discovery returned non-OK", {
+            providerID,
+            host: endpoint.discoveryHost,
+            status: res.status,
+          })
+          throw new Error(`${providerID} model discovery failed: HTTP ${res.status}`)
         }
         let data: { models: { name: string }[] } | null = null
         try {
@@ -293,13 +333,14 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
             host: endpoint.discoveryHost,
             error,
           })
+          throw new Error(`${providerID} model discovery failed: invalid JSON`, { cause: error })
         }
         if (!data) {
           log.debug("Ollama-compatible model discovery returned invalid schema", {
             providerID,
             host: endpoint.discoveryHost,
           })
-          return {}
+          throw new Error(`${providerID} model discovery failed: invalid response schema`)
         }
         const models: Record<string, Provider.Model> = {}
         for (const m of data.models) {
@@ -354,8 +395,12 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
       async discoverModels(provider) {
         const endpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
         const fetcher = endpoint.local ? fetch : Ssrf.pinnedFetch
-        const discovered = await fetchOpenAICompatibleModels(fetcher, endpoint, discoveryHeaders(provider))
-        if (!discovered) return {}
+        const discovered = await discoverOpenAICompatibleModels(
+          providerID,
+          fetcher,
+          endpoint,
+          discoveryHeaders(provider),
+        )
         const models: Record<string, Provider.Model> = {}
         for (const item of discovered.data ?? []) {
           if (typeof item.id !== "string" || !item.id.trim()) continue
