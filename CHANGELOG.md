@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.7] - 2026-11-23
+
+### Changed
+
+- Refresh the bundled model catalog from the upstream snapshot.
+
+### Fixed
+
+- Distinguish unavailable provider endpoints, broken catalogs, and excluded or unloadable models in model pin diagnostics.
+- Escape markup characters and Unicode line separators in generated tree-sitter import paths.
+
 ## [7.31.6] - 2026-11-21
 
 ### Changed
