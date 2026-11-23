@@ -193,12 +193,23 @@ describe("private-gpu loader", () => {
 })
 
 describe("private-gpu catalog health", () => {
-  test("an offline endpoint marks the catalog incomplete without a startup failure", async () => {
+  // undici's shape for a refused connection: a TypeError whose `cause`
+  // carries the socket error code. A bare `Error("connect ECONNREFUSED ...")`
+  // carries no code, so it does not prove the server is unreachable.
+  function connectionRefused() {
+    return Object.assign(new TypeError("fetch failed"), {
+      cause: Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:18110"), { code: "ECONNREFUSED" }),
+    })
+  }
+
+  // Runs a full registry init against a dedicated endpoint whose model list
+  // fails the way `respond` decides, and reports how that failure was recorded.
+  async function recordFailedDiscovery(respond: () => Response) {
     const vendor = requireDedicatedPrivateGpuVendor("custom-private-gpu")
     vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
     vi.stubEnv(vendor.envKey, "endpoint-token")
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-      if (String(input) === "http://127.0.0.1:18110/v1/models") return new Response("unavailable", { status: 503 })
+      if (String(input) === "http://127.0.0.1:18110/v1/models") return respond()
       return originalFetch(input, init)
     }) as typeof fetch
     await using tmp = await tmpdir({
@@ -211,16 +222,39 @@ describe("private-gpu catalog health", () => {
         },
       },
     })
-    await Instance.provide({
+    // Awaited here so the temp directory outlives the registry init.
+    return await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         await Provider.ready()
         const health = await Provider.catalogHealth()
-        expect(health.failed.has(vendor.id)).toBe(true)
-        expect(health.completed.has(vendor.id)).toBe(false)
         const snapshot = await Provider.snapshot()
-        expect(snapshot.discovery.diagnostics.some((entry) => entry.source === `discovery:${vendor.id}`)).toBe(false)
+        return {
+          failed: health.failed.has(vendor.id),
+          completed: health.completed.has(vendor.id),
+          reported: snapshot.discovery.diagnostics.some((entry) => entry.source === `discovery:${vendor.id}`),
+        }
       },
+    })
+  }
+
+  test("an unreachable endpoint marks the catalog incomplete without a startup failure", async () => {
+    // The server cannot be reached, which is an ordinary state for a dedicated
+    // endpoint: incomplete for pin diagnostics, but not a startup failure.
+    expect(
+      await recordFailedDiscovery(() => {
+        throw connectionRefused()
+      }),
+    ).toEqual({ failed: true, completed: false, reported: false })
+  })
+
+  test("an endpoint that answers with an HTTP error is reported as a discovery failure", async () => {
+    // The server answered, so it is reachable: the failed model list is a real
+    // discovery failure, not an offline state.
+    expect(await recordFailedDiscovery(() => new Response("unavailable", { status: 503 }))).toEqual({
+      failed: true,
+      completed: false,
+      reported: true,
     })
   })
 })

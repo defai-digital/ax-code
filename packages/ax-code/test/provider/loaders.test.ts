@@ -1401,6 +1401,15 @@ describe("provider catalog health", () => {
     }) as typeof fetch
   }
 
+  // undici's shape for a refused connection: a TypeError whose `cause`
+  // carries the socket error code. A bare `Error("connect ECONNREFUSED ...")`
+  // carries no code, so it does not prove the server is unreachable.
+  function connectionRefused() {
+    return Object.assign(new TypeError("fetch failed"), {
+      cause: Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:11434"), { code: "ECONNREFUSED" }),
+    })
+  }
+
   test("marks a provider whose discovery loader throws as incomplete", async () => {
     // The startup reachability probe succeeds (so the runtime registers) and
     // the background discovery request then fails.
@@ -1521,11 +1530,9 @@ describe("provider catalog health", () => {
       // Both the reachability probe and the discovery request are refused: the
       // catalog is incomplete for pin diagnostics, but a stopped local server
       // is not an initialization failure.
-      globalThis.fetch = (async (input: string | URL | Request) => {
-        const url = String(input)
-        if (url !== "http://localhost:11434/api/tags") throw new Error(`unexpected fetch: ${url}`)
-        throw new Error("connect ECONNREFUSED 127.0.0.1:11434")
-      }) as typeof fetch
+      stubTags(() => {
+        throw connectionRefused()
+      })
 
       await using tmp = await tmpdir({ config: { provider: { ollama: saved } } })
       await Instance.provide({
@@ -1545,15 +1552,13 @@ describe("provider catalog health", () => {
 
   test("a local runtime that starts after a failed probe is still discovered", async () => {
     let calls = 0
-    globalThis.fetch = (async (input: string | URL | Request) => {
-      const url = String(input)
-      if (url !== "http://localhost:11434/api/tags") throw new Error(`unexpected fetch: ${url}`)
-      if (calls++ === 0) throw new Error("connect ECONNREFUSED 127.0.0.1:11434")
+    stubTags(() => {
+      if (calls++ === 0) throw connectionRefused()
       return new Response(JSON.stringify({ models: [{ name: "qwen3.5:9b" }] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       })
-    }) as typeof fetch
+    })
 
     await using tmp = await tmpdir({ config: { provider: { ollama: {} } } })
     await Instance.provide({
@@ -1564,6 +1569,27 @@ describe("provider catalog health", () => {
         expect(health.completed.has("ollama")).toBe(true)
         expect(health.failed.has("ollama")).toBe(false)
         expect(Object.keys((await Provider.list())[ProviderID.make("ollama")].models)).toEqual(["qwen3.5:9b"])
+      },
+    })
+  })
+
+  test("a local runtime that answers with an HTTP error is reported as a discovery failure", async () => {
+    // The server is reachable, so this is not an offline state: the discovery
+    // failure is reported and degrades the phase instead of being kept quiet
+    // like a refused connection.
+    stubTags(() => new Response("unauthorized", { status: 401 }))
+
+    await using tmp = await tmpdir({ config: { provider: { ollama: {} } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const health = await Provider.catalogHealth()
+        expect(health.failed.has("ollama")).toBe(true)
+        expect(health.completed.has("ollama")).toBe(false)
+        const snapshot = await Provider.snapshot()
+        expect(snapshot.discovery.diagnostics.some((entry) => entry.source === "discovery:ollama")).toBe(true)
+        expect(snapshot.discovery.phase).not.toBe("ready")
       },
     })
   })

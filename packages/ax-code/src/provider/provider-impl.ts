@@ -9,7 +9,7 @@ import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
 import { NoSuchModelError, type LanguageModel } from "ai"
 import { Log } from "../util/log"
 import { toErrorMessage } from "@/util/error-message"
-import { rememberNetworkRequestID } from "@/util/network-interruption"
+import { isNetworkInterruption, rememberNetworkRequestID } from "@/util/network-interruption"
 import { BunProc } from "../bun"
 import { Plugin } from "../plugin"
 import { NamedError } from "@ax-code/util/error"
@@ -533,18 +533,38 @@ export namespace Provider {
     const failedCatalogs = new Set<string>()
     const authFailedCatalogs = new Set<string>()
     const completedDiscovery = new Set<string>()
-    // Providers whose discovery failure is an ordinary offline state rather
-    // than an initialization failure: opt-in local runtimes whose startup
-    // reachability probe failed, and dedicated private GPU endpoints (often
-    // scaled to zero). Their failures still mark the catalog incomplete.
+    // Providers whose discovery failure may be an ordinary offline state
+    // rather than an initialization failure: opt-in local runtimes whose
+    // startup reachability probe failed, and dedicated private GPU endpoints
+    // (often scaled to zero). Their failures always mark the catalog
+    // incomplete, but stay quiet only when the error shows the server could
+    // not be reached (see `isUnreachable`); a server that answers with an
+    // HTTP error or an invalid model list is reported like any other.
     const quietDiscoveryFailures = new Set<string>()
     // Ids whose discovery loader actually ran (the provider was registered
     // when discovery started); a whole-run failure taints only these.
     const scheduledDiscovery = new Set<string>()
     let discoveryFailedAll = false
     const exclusions = new Map<string, { providerID: string; modelID: string; reason: string }>()
-    const exclude = (providerID: string, modelID: string, reason: string) => {
-      exclusions.set(JSON.stringify([providerID, modelID]), { providerID, modelID, reason })
+    // Upstream target of each exclusion, under the same key as `exclusions`.
+    // An alias row (`my-alias` with `id: m`) is excluded under its own key but
+    // served by `m`, so an authoritative refresh needs the target to tell an
+    // alias the live catalog still serves from a row it dropped. Held beside
+    // `exclusions` rather than on its entries, which `snapshot()` exposes.
+    const excludedTargets = new Map<string, string>()
+    const exclusionKey = (providerID: string, modelID: string) => JSON.stringify([providerID, modelID])
+    const exclude = (providerID: string, modelID: string, reason: string, target?: string) => {
+      const key = exclusionKey(providerID, modelID)
+      exclusions.set(key, { providerID, modelID, reason })
+      // A reason recorded without a target must not inherit an older one.
+      if (target === undefined) excludedTargets.delete(key)
+      else excludedTargets.set(key, target)
+    }
+    // Dropping an exclusion drops its target with it, so the two maps cannot
+    // disagree about a model.
+    const unexclude = (key: string) => {
+      exclusions.delete(key)
+      excludedTargets.delete(key)
     }
     let revision = 0
     const discoveryStatus: { phase: "pending" | "ready" | "partial" | "failed" } = { phase: "pending" }
@@ -582,7 +602,7 @@ export namespace Provider {
     function applyModelFilters(providerID: ProviderID, provider: Info) {
       // Rediscovery can qualify a previously excluded model. Recompute the
       // decision for every incoming entry instead of retaining a stale reason.
-      for (const modelID of Object.keys(provider.models)) exclusions.delete(JSON.stringify([providerID, modelID]))
+      for (const modelID of Object.keys(provider.models)) unexclude(exclusionKey(providerID, modelID))
       const managedAxEngine = providerID === AX_ENGINE_PROVIDER_ID && !axEngineAttached
       if (providerID === "anthropic") {
         const keep = new Set<string>(latestAnthropicFamilyModels(provider.models).map((model) => model.id))
@@ -648,7 +668,9 @@ export namespace Provider {
                     ? "outside-configured-whitelist"
                     : undefined
         if (exclusion) {
-          exclude(providerID, modelID, exclusion)
+          // `model.api.id` is canonical by now; for an alias it names the
+          // upstream row the endpoint serves rather than the local key.
+          exclude(providerID, modelID, exclusion, model.api.id)
           delete provider.models[modelID]
           continue
         }
@@ -690,6 +712,23 @@ export namespace Provider {
           ]),
         )
       }
+    }
+
+    // How many nested `cause`s `isUnreachable` inspects below the error itself.
+    const UNREACHABLE_CAUSE_DEPTH = 5
+    // Whether a discovery error means the server could not be reached at all:
+    // a connection-level failure (refused, DNS, unreachable network, dropped
+    // socket) anywhere in the `cause` chain, or an `AbortSignal.timeout`
+    // deadline. A server that answered with an HTTP status, malformed JSON or
+    // an unusable model list was reachable and has to be reported.
+    function isUnreachable(error: unknown): boolean {
+      if (isNetworkInterruption(error)) return true
+      let current = error
+      for (let depth = 0; depth <= UNREACHABLE_CAUSE_DEPTH && current instanceof Error; depth++) {
+        if (current.name === "TimeoutError") return true
+        current = current.cause
+      }
+      return false
     }
 
     // extend database from config
@@ -922,7 +961,8 @@ export namespace Provider {
             if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels
             // A local runtime whose startup reachability probe failed is
             // usually just stopped; its discovery still runs (the server may
-            // come up meanwhile), but a failure is expected and stays quiet.
+            // come up meanwhile), but a failure to reach it is expected and
+            // stays quiet. A failure the server answers with is still reported.
             if ((OPT_IN_PROVIDERS.has(providerID) && !result.autoload) || isDedicatedPrivateGpuProviderID(providerID))
               quietDiscoveryFailures.add(providerID)
             if (result.autoload || providers[providerID] || configured) {
@@ -1011,11 +1051,21 @@ export namespace Provider {
               // Authoritative catalogs replace saved membership only after a
               // complete successful response. Failed refreshes retain fallback models.
               providers[providerID].models = {}
-              // Exclusions recorded against dropped fallback rows must not
-              // survive the replacement. Collect keys first so the map is
-              // never mutated mid-iteration.
-              const dropped = [...exclusions.values()].filter((entry) => entry.providerID === providerID)
-              for (const entry of dropped) exclusions.delete(JSON.stringify([providerID, entry.modelID]))
+              // A whitelist exclusion depends on its row still existing, so it
+              // goes when the live catalog serves neither the excluded row nor,
+              // for an alias, its recorded upstream target. Every other reason
+              // (model policy, status, blacklist) advises about the model
+              // itself and survives. Collect keys first so the map is never
+              // mutated mid-iteration.
+              const dropped = [...exclusions.values()].filter((entry) => {
+                if (entry.providerID !== providerID || entry.reason !== "outside-configured-whitelist") return false
+                const target = excludedTargets.get(exclusionKey(providerID, entry.modelID))
+                return (
+                  !Object.hasOwn(discovered, entry.modelID) &&
+                  (target === undefined || !Object.hasOwn(discovered, target))
+                )
+              })
+              for (const entry of dropped) unexclude(exclusionKey(providerID, entry.modelID))
             }
             for (const [modelID, model] of Object.entries(discovered)) {
               providers[providerID].models[modelID] = model
@@ -1025,11 +1075,13 @@ export namespace Provider {
             revision++
           })().catch((e) => {
             failedCatalogs.add(id)
-            // A stopped local runtime or an offline private GPU endpoint is an
-            // ordinary state, not an initialization failure: keep the catalog
-            // marked incomplete for pin diagnostics without degrading the
-            // discovery phase or warning on every startup.
-            if (quietDiscoveryFailures.has(id)) {
+            // Only a server that could not be reached is an ordinary offline
+            // state: a stopped local runtime or an offline private GPU endpoint
+            // keeps the catalog marked incomplete for pin diagnostics without
+            // degrading the discovery phase or warning on every startup. A
+            // reachable server that answers with an HTTP error or an invalid
+            // model list takes the normal failure path below.
+            if (quietDiscoveryFailures.has(id) && isUnreachable(e)) {
               log.debug("offline provider discovery failed", { id, error: e })
               return
             }

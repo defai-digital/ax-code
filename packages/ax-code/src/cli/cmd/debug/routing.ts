@@ -193,7 +193,9 @@ const STATUS_EXCLUSIONS = new Set(["deprecated-model", "experimental-model-disab
  * discovery and had not completed. A local LLM runtime that completed
  * discovery and was then dropped for an empty catalog is `ready` with an
  * empty model list, so its pins read as model_not_found; other providers can
- * complete with `{}` without contacting anything and stay `missing`. A provider that is absent and not
+ * complete with `{}` without contacting anything and stay `missing`, and
+ * their catalog still counts as unverifiable, so a config whitelist miss
+ * explains a pin. A provider that is absent and not
  * allowed by provider settings (enabled_providers / disabled_providers /
  * retired) is `missing` with no exclusion, since its config blacklist or
  * whitelist cannot explain a pin it cannot serve. Config
@@ -237,7 +239,9 @@ export function registryLookup(): ProviderLookup {
     const provider = await Provider.getProvider(providerID as ProviderID)
     // A provider filtered out by provider settings (enabled_providers /
     // disabled_providers / retired) cannot be registered, so its config
-    // blacklist/whitelist must not explain a pin as "excluded".
+    // blacklist/whitelist must not explain a pin as "excluded". The provider
+    // gate comes first, as in the registry: removing a blacklist or whitelist
+    // entry cannot restore a provider that provider settings filter out.
     if (
       !provider &&
       !Provider.shouldAllowProviderInCore({
@@ -262,7 +266,12 @@ export function registryLookup(): ProviderLookup {
     const incomplete = runtimeDown || (!health.completed.has(providerID) && health.failed.has(providerID))
     // With a complete catalog, a pin missing from both the catalog and the
     // recorded exclusions does not exist, so the config lists cannot explain it.
-    const catalogVerifiable = !incomplete && (!!provider || health.completed.has(providerID))
+    // Only a local LLM runtime's completed-then-dropped catalog is actually
+    // verified: other loaders can complete with `{}` without contacting
+    // anything, so their catalog still cannot be checked.
+    const verifiedEmptyCatalog =
+      !provider && health.completed.has(providerID) && Object.hasOwn(LOCAL_LLM_RUNTIMES, providerID)
+    const catalogVerifiable = !incomplete && (!!provider || verifiedEmptyCatalog)
     const exclusion = (modelID: string): string | undefined => {
       // Prefer the reason the registry recorded: it already follows
       // applyModelFilters' precedence for models that were actually loaded.
@@ -287,8 +296,7 @@ export function registryLookup(): ProviderLookup {
       // provider_not_configured. Other loaders can "complete" with `{}`
       // without contacting anything (missing token or CLI binary), so they
       // stay missing.
-      if (health.completed.has(providerID) && Object.hasOwn(LOCAL_LLM_RUNTIMES, providerID))
-        return { status: "ready", models: {}, exclusion }
+      if (verifiedEmptyCatalog) return { status: "ready", models: {}, exclusion }
       return { status: incomplete ? "incomplete" : "missing", exclusion }
     }
     return { status: incomplete ? "incomplete" : "ready", models: provider.models, exclusion }

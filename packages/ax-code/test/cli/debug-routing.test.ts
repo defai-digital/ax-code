@@ -341,6 +341,30 @@ test("registryLookup keeps a completed, dropped non-runtime provider missing", a
   ])
 })
 
+test("registryLookup lets a whitelist explain a pin on a completed, dropped non-runtime provider", async () => {
+  // Its empty completed catalog is not verified (the loader can complete
+  // with `{}` without contacting anything), so the catalog cannot be checked
+  // and a config whitelist miss still explains the pin as excluded.
+  mockRegistry({
+    health: { all: false, failed: [], completed: ["custom-private-gpu"] },
+    config: { "custom-private-gpu": { whitelist: ["kept"] } },
+    provider: undefined,
+  })
+  const lookup = registryLookup()
+  const result = await lookup("custom-private-gpu")
+  expect(result?.status).toBe("missing")
+  expect(result?.exclusion?.("blocked")).toBe("outside-configured-whitelist")
+  expect(await pinWarnings([["model", "custom-private-gpu/blocked"]], lookup)).toEqual([
+    {
+      pin: "model",
+      target: "custom-private-gpu/blocked",
+      code: "excluded",
+      reason: "excluded by provider whitelist",
+      excludeReason: "outside-configured-whitelist",
+    },
+  ])
+})
+
 test("registryLookup honours an explicit config blacklist even with a complete catalog", async () => {
   // An AX Trust refresh can rebuild the catalog without a blacklisted alias
   // and clear its recorded reason; the explicit entry still explains the pin.

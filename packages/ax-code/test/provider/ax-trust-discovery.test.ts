@@ -1028,3 +1028,48 @@ test("an authoritative refresh drops exclusions recorded against saved fallback 
     await Auth.remove(id)
   }
 })
+
+test("an authoritative refresh keeps the whitelist exclusion of an alias the live catalog still serves", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.setHeader("Content-Type", "application/json")
+    res.end(JSON.stringify({ data: [vision] }))
+  })
+  const id = "managed-alias-exclusion"
+  const base = config(id, api.url, "ax-trust")
+  const alias = "vision-alias"
+  // The whitelist names only the upstream id, so before discovery it excludes
+  // both the saved `retired` row and the alias, which the gateway serves
+  // under `vision.id` rather than under its own key.
+  const settings = {
+    ...base,
+    provider: {
+      [id]: {
+        ...base.provider[id],
+        whitelist: [vision.id],
+        models: { ...base.provider[id].models, [alias]: { id: vision.id, name: "Alias" } },
+      },
+    },
+  }
+  await using tmp = await tmpdir({ config: settings })
+  await Auth.set(id, { type: "api", key: "alias-exclusion-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        expect((await Provider.catalogHealth()).completed.has(id)).toBe(true)
+        expect(Object.keys((await Provider.list())[ProviderID.make(id)].models)).toEqual([vision.id])
+        // The gateway dropped `retired`, so that exclusion goes with its row.
+        // It still serves the alias's target, so the alias stays excluded by
+        // the whitelist instead of reading as a model the catalog never had.
+        const snapshot = await Provider.snapshot()
+        expect(snapshot.exclusions.filter((entry) => entry.providerID === id)).toEqual([
+          { providerID: id, modelID: alias, reason: "outside-configured-whitelist" },
+        ])
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})
