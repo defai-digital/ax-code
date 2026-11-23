@@ -148,19 +148,26 @@ export async function downloadAndCombineQueries(
   return "./" + path.relative(path.dirname(outputPath), queryPath)
 }
 
+function quoteImportPath(value: string): string {
+  // Keep markup characters and Unicode line separators escaped in generated source.
+  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, (character) => {
+    return `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+  })
+}
+
 export async function generateDefaultParsersFile(parsers: GeneratedParser[], outputPath: string): Promise<void> {
   const assetPaths = parsers
     .map((parser) => {
       const safeFiletype = parser.filetype.replace(/[^a-zA-Z0-9]/g, "_")
       const lines = [
         `const ${safeFiletype}_highlights = await resolveBundledFilePath(`,
-        `  () => import(${JSON.stringify(parser.highlightsPath)} as string, { with: { type: "file" } }),`,
-        `  ${JSON.stringify(parser.highlightsPath)},`,
+        `  () => import(${quoteImportPath(parser.highlightsPath)} as string, { with: { type: "file" } }),`,
+        `  ${quoteImportPath(parser.highlightsPath)},`,
         `  import.meta.url,`,
         `)`,
         `const ${safeFiletype}_language = await resolveBundledFilePath(`,
-        `  () => import(${JSON.stringify(parser.languagePath)} as string, { with: { type: "file" } }),`,
-        `  ${JSON.stringify(parser.languagePath)},`,
+        `  () => import(${quoteImportPath(parser.languagePath)} as string, { with: { type: "file" } }),`,
+        `  ${quoteImportPath(parser.languagePath)},`,
         `  import.meta.url,`,
         `)`,
       ]
@@ -168,8 +175,8 @@ export async function generateDefaultParsersFile(parsers: GeneratedParser[], out
       if (parser.injectionsPath) {
         lines.push(
           `const ${safeFiletype}_injections = await resolveBundledFilePath(`,
-          `  () => import(${JSON.stringify(parser.injectionsPath)} as string, { with: { type: "file" } }),`,
-          `  ${JSON.stringify(parser.injectionsPath)},`,
+          `  () => import(${quoteImportPath(parser.injectionsPath)} as string, { with: { type: "file" } }),`,
+          `  ${quoteImportPath(parser.injectionsPath)},`,
           `  import.meta.url,`,
           `)`,
         )

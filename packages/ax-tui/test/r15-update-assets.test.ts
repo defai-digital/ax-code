@@ -120,15 +120,25 @@ describe("r15 update-assets", () => {
     expect(await readdir(outsideDir)).toEqual([])
   })
 
-  test("G7: generateDefaultParsersFile JSON-escapes filetypes and asset paths", async () => {
+  test("G7: generateDefaultParsersFile escapes asset paths without changing their values", async () => {
     const root = await tmpRoot()
     const outputPath = path.join(root, "default-parsers.ts")
     const filetype = 'evil"\nname'
     const languagePath = './lang"q.wasm'
-    await api.generateDefaultParsersFile([{ filetype, languagePath, highlightsPath: "./h.scm" }], outputPath)
+    const highlightsPath = "./highlight<>&.scm"
+    const injectionsPath = "./injection\u2028\u2029.scm"
+    await api.generateDefaultParsersFile([{ filetype, languagePath, highlightsPath, injectionsPath }], outputPath)
     const content = await readFile(outputPath, "utf-8")
     expect(content).toContain(`filetype: ${JSON.stringify(filetype)},`)
-    expect(content).toContain(`() => import(${JSON.stringify(languagePath)} as string`)
-    expect(content).toContain(`  ${JSON.stringify(languagePath)},`)
+    const literals = [
+      JSON.stringify(highlightsPath).replace("<>&", "\\u003c\\u003e\\u0026"),
+      JSON.stringify(languagePath),
+      JSON.stringify(injectionsPath).replace("\u2028\u2029", "\\u2028\\u2029"),
+    ]
+    for (const literal of literals) {
+      expect(content).toContain(`() => import(${literal} as string`)
+      expect(content).toContain(`  ${literal},`)
+    }
+    expect(literals.map((literal) => JSON.parse(literal))).toEqual([highlightsPath, languagePath, injectionsPath])
   })
 })
