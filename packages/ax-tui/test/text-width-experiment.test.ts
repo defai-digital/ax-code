@@ -5,13 +5,30 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { expect, test } from "vitest"
 import { defaultExperimentDirectory } from "../script/build-text-width-experiment.js"
-import { verifyTextWidthExperiment } from "../script/text-width-kernel.js"
+import { hasCurrentTextWidthExperiment, verifyTextWidthExperiment } from "../script/text-width-kernel.js"
 
-const built = existsSync(join(defaultExperimentDirectory, "manifest.json"))
 const rustDirectory = process.env.AX_CODE_TUI_RUST_WIDTH_DIR
+const requireArtifacts =
+  process.env.AX_CODE_TUI_REQUIRE_TEXT_WIDTH_EXPERIMENT === "1" ||
+  Boolean(process.env.AX_CODE_TUI_TEXT_WIDTH_DIR || rustDirectory)
+const built = requireArtifacts
+  ? existsSync(join(defaultExperimentDirectory, "manifest.json"))
+  : hasCurrentTextWidthExperiment()
 
 test("required text width qualification has compiled artifacts", () => {
-  if (rustDirectory || process.env.AX_CODE_TUI_REQUIRE_TEXT_WIDTH_EXPERIMENT === "1") expect(built).toBe(true)
+  if (requireArtifacts) expect(built).toBe(true)
+})
+
+test("stale artifacts are skipped only during optional cache discovery", () => {
+  const directory = mkdtempSync(join(tmpdir(), "ax-tui-stale-width-"))
+  try {
+    expect(hasCurrentTextWidthExperiment(directory)).toBe(false)
+    writeFileSync(join(directory, "manifest.json"), JSON.stringify({ schemaVersion: 1, nativeSourceSha256: "stale" }))
+    expect(hasCurrentTextWidthExperiment(directory)).toBe(false)
+    expect(() => verifyTextWidthExperiment(directory)).toThrow(/stale/)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 
 test.skipIf(!built)(
@@ -92,6 +109,7 @@ test.skipIf(!built)("experiment verification rejects stale source and corrupted 
     bytes[bytes.length - 1] ^= 1
     writeFileSync(wasm, bytes)
     expect(() => verifyTextWidthExperiment(directory)).toThrow("Artifact hash mismatch")
+    expect(() => hasCurrentTextWidthExperiment(directory)).toThrow("Artifact hash mismatch")
     writeFileSync(join(directory, "manifest.json"), JSON.stringify({ ...manifest, nativeSourceSha256: "stale" }))
     expect(() => verifyTextWidthExperiment(directory)).toThrow("stale")
   } finally {

@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
     get_widths widths = (get_widths)SYMBOL("kernelWidths");
     measure_batch measure = (measure_batch)SYMBOL("kernelMeasure");
     if (!abi || !byte_capacity || !item_capacity || !acquire || !release || !input || !ranges || !widths || !measure ||
-        abi() != 1 || byte_capacity() != 1024 * 1024 || item_capacity() != 4096 ||
+        abi() != 2 || byte_capacity() != 1024 * 1024 || item_capacity() != 4096 ||
         acquire() != 1 || acquire() != 0) {
         fprintf(stderr, "Wrong Rust width ABI or lease state\n");
         return 1;

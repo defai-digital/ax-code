@@ -46,13 +46,16 @@ try {
     const candidate = await loadNativeTextWidthKernel(artifacts.native, true)
     rustNative = candidate
     kernels.push(candidate)
-    const rustWasm = await createWasmTextWidthKernel(readFileSync(artifacts.wasm), true)
+    const rustWasmBytes = readFileSync(artifacts.wasm)
+    const rustWasm = await createWasmTextWidthKernel(rustWasmBytes, true)
     kernels.push(rustWasm)
     candidate.write({ bytes: Uint8Array.of(65), ranges: new Uint32Array([0, 1]) })
+    await assert.rejects(loadNativeTextWidthKernel(artifacts.native), /Unsupported text width kernel ABI/)
+    await assert.rejects(createWasmTextWidthKernel(rustWasmBytes), /Unsupported text width kernel ABI/)
     await assert.rejects(loadNativeTextWidthKernel(artifacts.native, true), /already leased/)
     candidate.run()
     assert.deepEqual([...candidate.read()], [1])
-    const independent = await createWasmTextWidthKernel(readFileSync(artifacts.wasm), true)
+    const independent = await createWasmTextWidthKernel(rustWasmBytes, true)
     try {
       rustWasm.write({ bytes: Uint8Array.of(65), ranges: new Uint32Array([0, 1]) })
       assert.deepEqual([...independent.measure(["中文"])], [4])
@@ -94,6 +97,23 @@ try {
   for (const kernel of kernels) {
     assert.deepEqual([...kernel.measure([])], [])
     assert.equal(kernel.measure(["a".repeat(textWidthByteCapacity)])[0], textWidthByteCapacity)
+    const fullInput = new Uint8Array(textWidthByteCapacity).fill(65)
+    kernel.write({ bytes: fullInput, ranges: Uint32Array.of(0, fullInput.length, 0, 1) })
+    assert.throws(() => kernel.run(), /status 4/)
+    assert.throws(() => kernel.read(), /No successful/)
+    const repeatedRanges = new Uint32Array(textWidthItemCapacity * 2)
+    for (let i = 1; i < repeatedRanges.length; i += 2) repeatedRanges[i] = fullInput.length
+    kernel.write({ bytes: fullInput, ranges: repeatedRanges })
+    assert.throws(() => kernel.run(), /status 4/)
+    kernel.write({ bytes: fullInput, ranges: Uint32Array.of(0, fullInput.length - 1, 0, 1) })
+    kernel.run()
+    assert.deepEqual([...kernel.read()], [fullInput.length - 1, 1])
+    kernel.write({
+      bytes: Uint8Array.of(0xff, 65),
+      ranges: Uint32Array.of(1, 1, 2, 0),
+    })
+    kernel.run()
+    assert.deepEqual([...kernel.read()], [1, 0])
     assert.equal(kernel.measure(new Array(textWidthItemCapacity).fill("中")).length, textWidthItemCapacity)
     assert.equal(kernel.measure(["\t"], "unicode", 255)[0], 255)
     const saved = kernel.measure(["saved"])

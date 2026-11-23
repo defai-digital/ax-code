@@ -60,15 +60,19 @@ export fn kernelGraphemeTransition(previous: u32, current: u32, state: u32) u32 
     return @as(u32, @intFromEnum(next)) | (@as(u32, @intFromBool(boundary)) << 7);
 }
 
-// Status: 0 success, 1 invalid options/capacity, 2 invalid range, 3 invalid UTF-8.
+// Status: 0 success, 1 invalid options/capacity, 2 invalid range, 3 invalid UTF-8,
+// 4 total range length exceeds the work budget, including overlapping ranges.
 // Validate the entire batch before publishing any result. All offsets are bytes.
 export fn kernelMeasure(count: u32, byte_length: u32, tab_width: u32, method: u32) u32 {
     if (count > item_capacity or byte_length > byte_capacity or tab_width == 0 or tab_width > 255 or method > 2)
         return 1;
+    var bytes_remaining: u32 = byte_capacity;
     for (0..count) |index| {
         const start = ranges[index * 2];
         const len = ranges[index * 2 + 1];
         if (start > byte_length or len > byte_length - start) return 2;
+        if (len > bytes_remaining) return 4;
+        bytes_remaining -= len;
         if (!std.unicode.utf8ValidateSlice(input[start..][0..len])) return 3;
     }
     const width_method: utf8.WidthMethod = switch (method) {

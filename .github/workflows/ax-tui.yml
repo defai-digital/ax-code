@@ -86,6 +86,22 @@ jobs:
           cargo build --release --locked --manifest-path "$manifest"
           cargo build --release --locked --manifest-path "$manifest" --target wasm32-unknown-unknown
 
+      - name: Load the Rust width library on clean Alpine
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          source_dir="$GITHUB_WORKSPACE/packages/ax-tui/experiments/text-width/rust"
+          output_dir="$(mktemp -d)"
+          trap 'rm -rf "$output_dir"' EXIT
+          docker run --rm -v "$source_dir:/src:ro" -v "$output_dir:/out" \
+            -e CARGO_TARGET_DIR=/tmp/target -e 'RUSTFLAGS=-C target-feature=-crt-static' \
+            rust:1.98-alpine sh -ec '
+              cargo build --locked --release --manifest-path /src/Cargo.toml
+              cc -Wall -Wextra -Werror /src/native-smoke.c -ldl -o /out/width-smoke
+              cp /tmp/target/release/libax_tui_text_width.so /out/'
+          docker run --rm -v "$output_dir:/out:ro" alpine:3.22 \
+            /out/width-smoke /out/libax_tui_text_width.so
+
       - name: Install pinned Zig
         shell: bash
         run: pnpm --dir packages/ax-tui exec tsx script/ci-install-zig.ts

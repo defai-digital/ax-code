@@ -1,18 +1,39 @@
 //! Dedicated native and Wasm ABI for the AX TUI width experiment.
 
+#![cfg_attr(
+    all(target_env = "musl", panic = "abort", not(debug_assertions), not(test)),
+    no_std
+)]
+
 mod width;
 
 use core::sync::atomic::{AtomicBool, Ordering};
 use width::WidthMethod;
 
+#[cfg(all(target_env = "musl", panic = "abort", not(debug_assertions), not(test)))]
+mod musl_release {
+    #[link(name = "c")]
+    unsafe extern "C" {
+        fn abort() -> !;
+    }
+
+    #[panic_handler]
+    fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
+        // SAFETY: The musl C runtime supplies abort, which never returns.
+        unsafe { abort() }
+    }
+}
+
 const BYTE_CAPACITY: u32 = 1024 * 1024;
 const ITEM_CAPACITY: u32 = 4096;
-const ABI_VERSION: u32 = 1;
+// ABI 2 requires callers to acquire the lease before accessing the buffers.
+const ABI_VERSION: u32 = 2;
 
 const OK: u32 = 0;
 const INVALID_OPTIONS: u32 = 1;
 const INVALID_RANGE: u32 = 2;
 const INVALID_UTF8: u32 = 3;
+const WORK_LIMIT_EXCEEDED: u32 = 4;
 
 static LEASED: AtomicBool = AtomicBool::new(false);
 static mut INPUT: [u8; BYTE_CAPACITY as usize] = [0; BYTE_CAPACITY as usize];
@@ -116,6 +137,7 @@ fn measure_batch(
     tab_width: u32,
     method: WidthMethod,
 ) -> u32 {
+    let mut bytes_remaining = BYTE_CAPACITY;
     for &[offset, length] in ranges {
         let Some(end) = offset.checked_add(length) else {
             return INVALID_RANGE;
@@ -123,6 +145,10 @@ fn measure_batch(
         let Some(bytes) = input.get(offset as usize..end as usize) else {
             return INVALID_RANGE;
         };
+        let Some(remaining) = bytes_remaining.checked_sub(length) else {
+            return WORK_LIMIT_EXCEEDED;
+        };
+        bytes_remaining = remaining;
         if core::str::from_utf8(bytes).is_err() {
             return INVALID_UTF8;
         }
@@ -161,6 +187,34 @@ mod tests {
             );
             assert_eq!(widths, [42, 89]);
         }
+    }
+
+    #[test]
+    fn work_budget_counts_overlapping_ranges_before_publishing_widths() {
+        let input = vec![b'a'; BYTE_CAPACITY as usize];
+        let mut widths = [42, 89];
+        assert_eq!(
+            measure_batch(
+                &input,
+                &[[0, BYTE_CAPACITY], [0, 1]],
+                &mut widths,
+                4,
+                WidthMethod::Unicode
+            ),
+            WORK_LIMIT_EXCEEDED
+        );
+        assert_eq!(widths, [42, 89]);
+        assert_eq!(
+            measure_batch(
+                &input,
+                &[[0, BYTE_CAPACITY - 1], [0, 1]],
+                &mut widths,
+                4,
+                WidthMethod::Unicode
+            ),
+            OK
+        );
+        assert_eq!(widths, [BYTE_CAPACITY - 1, 1]);
     }
 
     #[test]

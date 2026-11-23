@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Pointer } from "../src/platform/ffi.js"
 import { defaultExperimentDirectory, tuiRoot } from "./build-text-width-experiment.js"
@@ -8,6 +8,8 @@ import { nativeSourceDigest } from "./native-source.js"
 
 export const textWidthByteCapacity = 1024 * 1024
 export const textWidthItemCapacity = 4096
+const referenceKernelAbi = 1
+const leasedKernelAbi = 2
 export const widthMethods = ["unicode", "wcwidth", "no_zwj"] as const
 export type WidthMethod = (typeof widthMethods)[number]
 export interface TextWidthBatch {
@@ -66,7 +68,11 @@ function bindKernel(
   memoryBytes?: number,
   requireLease = false,
 ): TextWidthKernel {
-  assert.equal(exports.kernelAbiVersion(), 1, "Unsupported text width kernel ABI")
+  assert.equal(
+    exports.kernelAbiVersion(),
+    requireLease ? leasedKernelAbi : referenceKernelAbi,
+    "Unsupported text width kernel ABI",
+  )
   assert.equal(exports.kernelByteCapacity(), textWidthByteCapacity)
   assert.equal(exports.kernelItemCapacity(), textWidthItemCapacity)
   const release = requireLease ? exports.kernelRelease : undefined
@@ -161,18 +167,35 @@ export async function createWasmTextWidthKernel(
   )
 }
 
+class StaleTextWidthExperimentError extends Error {}
+
+export function hasCurrentTextWidthExperiment(directory = defaultExperimentDirectory): boolean {
+  if (!existsSync(join(directory, "manifest.json"))) return false
+  try {
+    verifyTextWidthExperiment(directory)
+    return true
+  } catch (error) {
+    if (error instanceof StaleTextWidthExperimentError) return false
+    throw error
+  }
+}
+
 export function verifyTextWidthExperiment(directory = defaultExperimentDirectory) {
   const manifest = JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8"))
   const hash = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex")
   assert.equal(manifest.schemaVersion, 1)
-  assert.equal(manifest.nativeSourceSha256, nativeSourceDigest(), "Rebuild stale text width experiment")
-  assert.equal(manifest.kernelSha256, hash(join(tuiRoot, "experiments/text-width/kernel.zig")))
-  assert.equal(manifest.buildSha256, hash(join(tuiRoot, "experiments/text-width/build.zig")))
+  if (
+    manifest.nativeSourceSha256 !== nativeSourceDigest() ||
+    manifest.kernelSha256 !== hash(join(tuiRoot, "experiments/text-width/kernel.zig")) ||
+    manifest.buildSha256 !== hash(join(tuiRoot, "experiments/text-width/build.zig")) ||
+    manifest.nativeTarget !== `${process.platform}-${process.arch}`
+  ) {
+    throw new StaleTextWidthExperimentError("Rebuild stale text width experiment for the current source and host")
+  }
   const nativeFile =
     process.platform === "win32"
       ? "bin/ax-tui-text-width.dll"
       : `lib/libax-tui-text-width.${process.platform === "darwin" ? "dylib" : "so"}`
-  assert.equal(manifest.nativeTarget, `${process.platform}-${process.arch}`, "Rebuild experiment on this host")
   for (const file of [nativeFile, "bin/ax-tui-text-width.wasm"]) {
     assert.equal(hash(join(directory, file)), manifest.artifacts[file]?.sha256, `Artifact hash mismatch: ${file}`)
   }

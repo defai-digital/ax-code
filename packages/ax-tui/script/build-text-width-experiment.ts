@@ -8,7 +8,7 @@ import { nativeSourceDigest } from "./native-source.js"
 
 export const tuiRoot = fileURLToPath(new URL("../", import.meta.url))
 export const defaultExperimentDirectory = resolve(
-  process.env.AX_CODE_TUI_TEXT_WIDTH_DIR ?? join(tuiRoot, ".internal/text-width"),
+  process.env.AX_CODE_TUI_TEXT_WIDTH_DIR || join(tuiRoot, ".internal/text-width"),
 )
 
 export function buildTextWidthExperiment(directory = defaultExperimentDirectory) {

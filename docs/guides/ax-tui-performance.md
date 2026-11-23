@@ -119,9 +119,11 @@ uucode URL/hash and the same four Unicode table fields. Both arms use
 
 The versioned batch ABI has 1 MiB of UTF-8 input, 4,096 offset/length pairs,
 and one width per item. It supports `unicode`, `wcwidth`, and `no_zwj`, plus
-tab widths 1-255. It validates the whole batch before writing results. Invalid
-ranges, capacity, options, and UTF-8 fail explicitly. Input strings use
-TextEncoder semantics, including replacement of isolated UTF-16 surrogates.
+tab widths 1-255. It validates the whole batch before writing results. The sum
+of range lengths is also limited to 1 MiB, including bytes covered by multiple
+ranges. Invalid ranges, capacity, options, UTF-8, and work size fail explicitly.
+Input strings use TextEncoder semantics, including replacement of isolated
+UTF-16 surrogates.
 This prototype has static per-module storage and is synchronous and
 non-reentrant; callers must not interleave native instances sharing one library.
 The JavaScript adapter owns returned results, rejects reads after failed work
@@ -156,7 +158,8 @@ pnpm --dir packages/ax-tui test
 ```
 
 The normal test suite always checks workload reporting and batch packing.
-Compiled native/WASM tests run when the experiment is built. CI builds it on
+Compiled native/WASM tests use a current local cache. Explicit qualification
+fails if the requested artifacts are missing, stale, or corrupted. CI builds it on
 Linux, macOS, and Windows, then requires the parity suite: golden widths,
 1,000 seeded Unicode texts across all three modes and four tab widths,
 byte-boundary UTF-8 rejection, capacity limits, invalid ranges/options,
@@ -220,15 +223,18 @@ Omit `--check` only to update the snapshot from a freshly built Zig reference.
 The cross-language test compares every Unicode scalar and exercises all three
 width modes, four tab widths, compound graphemes, malformed batches, result
 ownership, and native lease contention. Wasm instances have independent memory
-and can be loaded without Node FFI. Native adapters take an exclusive lease
-for the lifetime of the handle because the kernel uses shared module buffers.
+and can be loaded without Node FFI. Rust advertises width ABI 2, which requires
+the adapter to take an exclusive lease for the lifetime of the handle. The Zig
+reference exposes ABI 1.
 
 The standalone loader probe is `rust/native-smoke.c`. Compile it with the
 target's native C compiler and pass the absolute path to the Rust shared
 library. On Linux link the probe with `-ldl`. Build on a glibc 2.17 sysroot
 and audit the result with `readelf --version-info`. On musl, use a musl
 toolchain and `RUSTFLAGS="-C target-feature=-crt-static"` for the `cdylib`.
-Inspect dynamic dependencies in both cases. On Windows use an MSVC environment
+The release musl build uses Rust `core` and the platform C library, and fails
+at link time if symbols are unresolved. CI exercises the loader in a plain
+Alpine runtime image. On Windows use an MSVC environment
 matching the target architecture and verify the DLL with the native loader.
 
 ### Pilot measurements
@@ -247,9 +253,9 @@ These values measure the pilot on one host. The production renderer also
 handles editing, styling, terminal capabilities, and output delivery, which
 the width benchmark does not exercise.
 
-The loader probe passed on Apple Silicon and in glibc 2.17 and Alpine
-containers for x64 and arm64. The Alpine builds link `libgcc_s.so.1`, which
-needs a distribution decision before replacing the existing musl library.
+The loader probe passed on Apple Silicon and in glibc 2.17 and clean Alpine
+containers for x64 and arm64. The release musl library loads with the system
+musl runtime alone.
 The Intel macOS library cross-compiles with a relocatable install name.
 Intel macOS loader execution and both Windows targets still need qualification.
 
