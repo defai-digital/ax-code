@@ -522,12 +522,25 @@ export namespace Provider {
     log.info("provider init started", { command: "provider.init", status: "started" })
     const initFailures: { source: string; error: unknown }[] = []
     // Catalog completeness is tracked explicitly rather than re-parsed from
-    // diagnostics: `failedCatalogs` holds ids whose loader, discovery, or
-    // plugin auth failed; `completedDiscovery` holds ids whose discovery
-    // finished successfully (which supersedes an earlier failure); and
-    // `discoveryFailedAll` marks a whole-run failure that taints every id.
+    // diagnostics: `failedCatalogs` holds ids whose loader or discovery
+    // failed; `authFailedCatalogs` holds ids whose plugin auth loader failed
+    // (a plugin auth loader only merges options, never models, so those ids
+    // count as failed only when the provider never registered — resolved at
+    // catalogHealth() call time); `completedDiscovery` holds ids whose
+    // discovery finished successfully (which supersedes an earlier failure);
+    // and `discoveryFailedAll` marks a whole-run discovery failure that
+    // taints the ids scheduled for discovery but not yet completed.
     const failedCatalogs = new Set<string>()
+    const authFailedCatalogs = new Set<string>()
     const completedDiscovery = new Set<string>()
+    // Providers whose discovery failure is an ordinary offline state rather
+    // than an initialization failure: opt-in local runtimes whose startup
+    // reachability probe failed, and dedicated private GPU endpoints (often
+    // scaled to zero). Their failures still mark the catalog incomplete.
+    const quietDiscoveryFailures = new Set<string>()
+    // Ids whose discovery loader actually ran (the provider was registered
+    // when discovery started); a whole-run failure taints only these.
+    const scheduledDiscovery = new Set<string>()
     let discoveryFailedAll = false
     const exclusions = new Map<string, { providerID: string; modelID: string; reason: string }>()
     const exclude = (providerID: string, modelID: string, reason: string) => {
@@ -862,7 +875,11 @@ export namespace Provider {
           mergeProvider(providerID, patch)
         } catch (err) {
           initFailures.push({ source: `plugin-auth:${plugin.auth!.provider}`, error: err })
-          failedCatalogs.add(plugin.auth!.provider)
+          // A plugin auth loader only merges `options`, never models, so its
+          // failure must not mark the catalog incomplete while the provider
+          // is still registered with its catalog. catalogHealth() counts the
+          // id as failed only when the provider is absent at call time.
+          authFailedCatalogs.add(plugin.auth!.provider)
           log.warn("plugin auth loader failed", { provider: plugin.auth!.provider, error: err })
         }
       }
@@ -903,6 +920,11 @@ export namespace Provider {
             if (result.getModel) modelLoaders[providerID] = result.getModel
             if (result.vars) varsLoaders[providerID] = result.vars
             if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels
+            // A local runtime whose startup reachability probe failed is
+            // usually just stopped; its discovery still runs (the server may
+            // come up meanwhile), but a failure is expected and stays quiet.
+            if ((OPT_IN_PROVIDERS.has(providerID) && !result.autoload) || isDedicatedPrivateGpuProviderID(providerID))
+              quietDiscoveryFailures.add(providerID)
             if (result.autoload || providers[providerID] || configured) {
               const opts = result.options ?? {}
               const patch: Partial<Info> = providers[providerID]
@@ -977,6 +999,7 @@ export namespace Provider {
         Object.entries(discoveryLoaders).map(async ([id, loader]) => {
           const providerID = ProviderID.make(id)
           if (!providers[providerID]) return
+          scheduledDiscovery.add(id)
           await (async () => {
             const discovered = await withTimeout(
               loader(providers[providerID]),
@@ -988,6 +1011,11 @@ export namespace Provider {
               // Authoritative catalogs replace saved membership only after a
               // complete successful response. Failed refreshes retain fallback models.
               providers[providerID].models = {}
+              // Exclusions recorded against dropped fallback rows must not
+              // survive the replacement. Collect keys first so the map is
+              // never mutated mid-iteration.
+              const dropped = [...exclusions.values()].filter((entry) => entry.providerID === providerID)
+              for (const entry of dropped) exclusions.delete(JSON.stringify([providerID, entry.modelID]))
             }
             for (const [modelID, model] of Object.entries(discovered)) {
               providers[providerID].models[modelID] = model
@@ -996,8 +1024,16 @@ export namespace Provider {
             completedDiscovery.add(providerID)
             revision++
           })().catch((e) => {
-            initFailures.push({ source: `discovery:${id}`, error: e })
             failedCatalogs.add(id)
+            // A stopped local runtime or an offline private GPU endpoint is an
+            // ordinary state, not an initialization failure: keep the catalog
+            // marked incomplete for pin diagnostics without degrading the
+            // discovery phase or warning on every startup.
+            if (quietDiscoveryFailures.has(id)) {
+              log.debug("offline provider discovery failed", { id, error: e })
+              return
+            }
+            initFailures.push({ source: `discovery:${id}`, error: e })
             log.warn("state discovery error", { id, error: e })
           })
         }),
@@ -1032,6 +1068,13 @@ export namespace Provider {
       Object.keys(discoveryLoaders).length > 0
         ? runDiscovery().catch((err) => {
             initFailures.push({ source: "discovery", error: err })
+            // Taint only the ids this run actually scheduled for discovery
+            // and had not already completed; a static-catalog provider with
+            // no discovery step, or a loader whose provider never registered,
+            // is not made incomplete by the whole-run failure.
+            for (const id of scheduledDiscovery) {
+              if (!completedDiscovery.has(id)) failedCatalogs.add(id)
+            }
             discoveryFailedAll = true
             discoveryStatus.phase = "failed"
             revision++
@@ -1078,7 +1121,7 @@ export namespace Provider {
       }),
       catalogHealth: () => ({
         all: discoveryFailedAll,
-        failed: new Set(failedCatalogs),
+        failed: new Set([...failedCatalogs, ...[...authFailedCatalogs].filter((id) => !Object.hasOwn(providers, id))]),
         completed: new Set(completedDiscovery),
       }),
     }
@@ -1142,13 +1185,13 @@ export namespace Provider {
 
   /**
    * Catalog completeness across the configured providers. `all` marks a failed
-   * discovery run, `failed` holds provider ids whose loader, discovery, or
-   * plugin auth failed, and `completed` holds ids whose discovery finished
+   * discovery run, `failed` holds provider ids whose loader or discovery
+   * failed (a plugin auth failure counts only while the provider never
+   * registered), and `completed` holds ids whose discovery finished
    * successfully. A provider's catalog is incomplete iff
-   * `!completed.has(id) && (all || failed.has(id))`, so a successful
-   * authoritative refresh supersedes an earlier failure. Kept out of
-   * `snapshot()` because it is diagnostic state, not credential-free model
-   * data.
+   * `!completed.has(id) && failed.has(id)`, so a successful authoritative
+   * refresh supersedes an earlier failure. Kept out of `snapshot()` because it
+   * is diagnostic state, not credential-free model data.
    */
   export async function catalogHealth(): Promise<CatalogHealth> {
     const s = await state()

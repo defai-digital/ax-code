@@ -995,3 +995,36 @@ test("reads the gateway's vision and modality flags instead of its attachment fl
     await Auth.remove(id)
   }
 })
+
+test("an authoritative refresh drops exclusions recorded against saved fallback rows", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.setHeader("Content-Type", "application/json")
+    res.end(JSON.stringify({ data: [vision] }))
+  })
+  const id = "managed-stale-exclusion"
+  const base = config(id, api.url, "ax-trust")
+  // The whitelist excludes the saved `retired` row before discovery runs.
+  const settings = {
+    ...base,
+    provider: { [id]: { ...base.provider[id], whitelist: [vision.id] } },
+  }
+  await using tmp = await tmpdir({ config: settings })
+  await Auth.set(id, { type: "api", key: "stale-exclusion-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        expect((await Provider.catalogHealth()).completed.has(id)).toBe(true)
+        expect(Object.keys((await Provider.list())[ProviderID.make(id)].models)).toEqual([vision.id])
+        // The live catalog no longer lists `retired`, so the whitelist reason
+        // recorded against the saved row must not survive the replacement.
+        const snapshot = await Provider.snapshot()
+        expect(snapshot.exclusions.filter((entry) => entry.providerID === id)).toEqual([])
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})

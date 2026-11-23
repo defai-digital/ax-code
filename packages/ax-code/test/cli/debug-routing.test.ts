@@ -26,6 +26,12 @@ test("configuredPins lists every configured exact model selection with stable ke
   ])
 })
 
+test("configuredPins skips disabled agents, whose pins are never parsed or used", () => {
+  expect(
+    configuredPins({ agent: { off: { model: "gateway/", disable: true }, on: { model: "gateway/glm-5.3" } } }),
+  ).toEqual([["agent.on.model", "gateway/glm-5.3"]])
+})
+
 test("configuredPins omits unset keys so configured pin counts stay accurate", () => {
   expect(configuredPins({})).toEqual([])
   expect(configuredPins({ wiki: {}, agent: { scout: {} }, llm_routing: {} })).toEqual([])
@@ -166,6 +172,8 @@ function mockRegistry(input: {
   exclusions?: { providerID: string; modelID: string; reason: string }[]
   config?: Record<string, unknown>
   provider?: { models: Record<string, unknown> } | undefined
+  enabled?: string[]
+  disabled?: string[]
 }) {
   const ready = vi.spyOn(Provider, "ready").mockResolvedValue(undefined)
   const catalogHealth = vi.spyOn(Provider, "catalogHealth").mockResolvedValue({
@@ -177,9 +185,11 @@ function mockRegistry(input: {
     exclusions: input.exclusions ?? [],
   } as unknown as Awaited<ReturnType<typeof Provider.snapshot>>)
   const getProvider = vi.spyOn(Provider, "getProvider").mockImplementation(async () => input.provider as never)
-  const config = vi
-    .spyOn(Config, "get")
-    .mockResolvedValue({ provider: input.config ?? {} } as unknown as Awaited<ReturnType<typeof Config.get>>)
+  const config = vi.spyOn(Config, "get").mockResolvedValue({
+    provider: input.config ?? {},
+    ...(input.enabled ? { enabled_providers: input.enabled } : {}),
+    ...(input.disabled ? { disabled_providers: input.disabled } : {}),
+  } as unknown as Awaited<ReturnType<typeof Config.get>>)
   return { ready, catalogHealth, snapshot, getProvider, config }
 }
 
@@ -203,14 +213,33 @@ test("registryLookup reports a failed, unfinished catalog as incomplete", async 
   expect(result?.status).toBe("incomplete")
 })
 
-test("registryLookup reports every provider incomplete on a whole-run failure unless it completed", async () => {
+test("registryLookup scopes a whole-run discovery failure to discovery-scheduled ids", async () => {
   mockRegistry({
     health: { all: true, failed: [], completed: ["gateway"] },
     provider: { models: { m: {} } },
   })
   const lookup = registryLookup()
   expect((await lookup("gateway"))?.status).toBe("ready")
-  expect((await lookup("other"))?.status).toBe("incomplete")
+  // A static-catalog provider was never scheduled for discovery (absent from
+  // `failed`), so the whole-run failure cannot make its catalog incomplete.
+  expect((await lookup("static-box"))?.status).toBe("ready")
+
+  vi.restoreAllMocks()
+  mockRegistry({
+    health: { all: true, failed: ["gw2"], completed: [] },
+    provider: { models: { m: {} } },
+  })
+  expect((await registryLookup()("gw2"))?.status).toBe("incomplete")
+})
+
+test("a typo provider id stays provider_not_configured on a whole-run failure", async () => {
+  mockRegistry({
+    health: { all: true, failed: [], completed: [] },
+    provider: undefined,
+  })
+  expect(await pinWarnings([["model", "openia/gpt-5"]], registryLookup())).toEqual([
+    { pin: "model", target: "openia/gpt-5", code: "provider_not_configured", reason: "provider not configured" },
+  ])
 })
 
 test("registryLookup sees a config blacklist even when the provider is absent", async () => {
@@ -268,24 +297,88 @@ test("registryLookup distrusts a status exclusion for an offline local runtime",
   expect(result?.exclusion?.("llama3")).toBeUndefined()
 })
 
-test("registryLookup reports a local runtime that completed discovery but was dropped as missing", async () => {
+test("registryLookup reports a local runtime that completed discovery but was dropped as ready with an empty catalog", async () => {
   mockRegistry({
     health: { all: false, failed: [], completed: ["ollama"] },
     config: { ollama: {} },
     provider: undefined,
   })
-  expect((await registryLookup()("ollama"))?.status).toBe("missing")
+  const result = await registryLookup()("ollama")
+  expect(result?.status).toBe("ready")
+  expect(result?.models).toEqual({})
+  expect(await pinWarnings([["model", "ollama/llama3"]], registryLookup())).toEqual([
+    { pin: "model", target: "ollama/llama3", code: "model_not_found", reason: "model not in provider catalog" },
+  ])
 })
 
-test("registryLookup does not let config lists explain a typo on a completed, dropped catalog", async () => {
+test("registryLookup does not let a whitelist explain a typo on a completed, dropped local runtime", async () => {
+  mockRegistry({
+    health: { all: false, failed: [], completed: ["ollama"] },
+    config: { ollama: { whitelist: ["kept"] } },
+    provider: undefined,
+  })
+  const result = await registryLookup()("ollama")
+  expect(result?.status).toBe("ready")
+  expect(result?.exclusion?.("typo")).toBeUndefined()
+})
+
+test("registryLookup keeps a completed, dropped non-runtime provider missing", async () => {
+  // Private GPU (no token) and CLI providers (no binary) can complete
+  // discovery with `{}` without contacting anything, so an empty completed
+  // catalog only proves absence for a local runtime.
+  mockRegistry({
+    health: { all: false, failed: [], completed: ["custom-private-gpu"] },
+    config: { "custom-private-gpu": {} },
+    provider: undefined,
+  })
+  expect(await pinWarnings([["model", "custom-private-gpu/my-model"]], registryLookup())).toEqual([
+    {
+      pin: "model",
+      target: "custom-private-gpu/my-model",
+      code: "provider_not_configured",
+      reason: "provider not configured",
+    },
+  ])
+})
+
+test("registryLookup honours an explicit config blacklist even with a complete catalog", async () => {
+  // An AX Trust refresh can rebuild the catalog without a blacklisted alias
+  // and clear its recorded reason; the explicit entry still explains the pin.
   mockRegistry({
     health: { all: false, failed: [], completed: ["gateway"] },
-    config: { gateway: { whitelist: ["kept"] } },
+    config: { gateway: { blacklist: ["alias"], whitelist: ["kept"] } },
+    provider: { models: { kept: {} } },
+  })
+  const result = await registryLookup()("gateway")
+  expect(result?.exclusion?.("alias")).toBe("configured-blacklist")
+  expect(result?.exclusion?.("typo")).toBeUndefined()
+})
+
+test("registryLookup reports a disabled provider as missing without config-list exclusions", async () => {
+  mockRegistry({
+    health: { all: false, failed: [], completed: [] },
+    config: { ollama: { whitelist: ["other"] } },
     provider: undefined,
+    disabled: ["ollama"],
+  })
+  const result = await registryLookup()("ollama")
+  expect(result?.status).toBe("missing")
+  expect(result?.exclusion?.("llama3")).toBeUndefined()
+  expect(await pinWarnings([["model", "ollama/llama3"]], registryLookup())).toEqual([
+    { pin: "model", target: "ollama/llama3", code: "provider_not_configured", reason: "provider not configured" },
+  ])
+})
+
+test("registryLookup reports a provider outside enabled_providers as missing without exclusions", async () => {
+  mockRegistry({
+    health: { all: false, failed: [], completed: [] },
+    config: { gateway: { blacklist: ["m"] } },
+    provider: undefined,
+    enabled: ["other"],
   })
   const result = await registryLookup()("gateway")
   expect(result?.status).toBe("missing")
-  expect(result?.exclusion?.("typo")).toBeUndefined()
+  expect(result?.exclusion?.("m")).toBeUndefined()
 })
 
 test("registryLookup uses a registry exclusion with a complete catalog", async () => {

@@ -11,6 +11,7 @@ import { Process } from "../../src/util/process"
 import { selectPreferredCodexBinary } from "../../src/provider/cli/binary"
 import { CUSTOM_LOADERS, resolveCliBinary } from "../../src/provider/loaders"
 import { Config } from "../../src/config/config"
+import { Auth } from "../../src/auth"
 import { Global } from "../../src/global"
 import { ModelsDev } from "../../src/provider/models"
 import { declaredCapabilityEvidence } from "../../src/provider/capability-evidence"
@@ -1460,6 +1461,109 @@ describe("provider catalog health", () => {
         expect(health.all).toBe(false)
         expect(health.failed.has("static-box")).toBe(false)
         expect(health.completed.has("static-box")).toBe(false)
+      },
+    })
+  })
+
+  test("a failed plugin auth loader leaves a registered static catalog complete", async () => {
+    // A plugin auth loader only merges options, so its failure must not make
+    // a registered provider's static catalog look incomplete; it counts only
+    // for a provider that never registered.
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    const plugin = (provider: string) =>
+      [
+        "export default async () => ({",
+        "  auth: {",
+        `    provider: '${provider}',`,
+        "    methods: [],",
+        "    loader: async () => { throw new Error('token refresh failed') },",
+        "  },",
+        "})",
+        "",
+      ].join("\n")
+    await using tmp = await tmpdir({
+      config: { provider: { "static-box": { name: "Static", models: { m: { name: "M" } } } } },
+      init: async (dir) => {
+        const pluginDir = path.join(dir, ".ax-code", "plugin")
+        await mkdir(pluginDir, { recursive: true })
+        await writeFile(path.join(pluginDir, "static-auth.ts"), plugin("static-box"))
+        await writeFile(path.join(pluginDir, "ghost-auth.ts"), plugin("ghost-box"))
+      },
+    })
+    await Auth.set("static-box", { type: "api", key: "static-token" })
+    await Auth.set("ghost-box", { type: "api", key: "ghost-token" })
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await Provider.ready()
+          const health = await Provider.catalogHealth()
+          expect(health.failed.has("static-box")).toBe(false)
+          expect(health.failed.has("ghost-box")).toBe(true)
+          const snapshot = await Provider.snapshot()
+          expect(snapshot.discovery.diagnostics.map((entry) => entry.source)).toEqual(
+            expect.arrayContaining(["plugin-auth:static-box", "plugin-auth:ghost-box"]),
+          )
+        },
+      })
+    } finally {
+      await Auth.remove("static-box")
+      await Auth.remove("ghost-box")
+    }
+  })
+
+  test.each([
+    ["without saved models", {}],
+    ["with saved models", { models: { llama3: { name: "Llama 3" } } }],
+  ] as const)(
+    "a stopped, configured local runtime %s is incomplete without a startup failure",
+    async (_label, saved) => {
+      // Both the reachability probe and the discovery request are refused: the
+      // catalog is incomplete for pin diagnostics, but a stopped local server
+      // is not an initialization failure.
+      globalThis.fetch = (async (input: string | URL | Request) => {
+        const url = String(input)
+        if (url !== "http://localhost:11434/api/tags") throw new Error(`unexpected fetch: ${url}`)
+        throw new Error("connect ECONNREFUSED 127.0.0.1:11434")
+      }) as typeof fetch
+
+      await using tmp = await tmpdir({ config: { provider: { ollama: saved } } })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await Provider.ready()
+          const health = await Provider.catalogHealth()
+          expect(health.failed.has("ollama")).toBe(true)
+          expect(health.completed.has("ollama")).toBe(false)
+          const snapshot = await Provider.snapshot()
+          expect(snapshot.discovery.phase).toBe("ready")
+          expect(snapshot.discovery.diagnostics.some((entry) => entry.source === "discovery:ollama")).toBe(false)
+        },
+      })
+    },
+  )
+
+  test("a local runtime that starts after a failed probe is still discovered", async () => {
+    let calls = 0
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url !== "http://localhost:11434/api/tags") throw new Error(`unexpected fetch: ${url}`)
+      if (calls++ === 0) throw new Error("connect ECONNREFUSED 127.0.0.1:11434")
+      return new Response(JSON.stringify({ models: [{ name: "qwen3.5:9b" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({ config: { provider: { ollama: {} } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const health = await Provider.catalogHealth()
+        expect(health.completed.has("ollama")).toBe(true)
+        expect(health.failed.has("ollama")).toBe(false)
+        expect(Object.keys((await Provider.list())[ProviderID.make("ollama")].models)).toEqual(["qwen3.5:9b"])
       },
     })
   })

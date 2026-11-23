@@ -19,6 +19,7 @@ import {
   privateGpuVendor,
   reservedOutputTokens,
   requireDedicatedPrivateGpuVendor,
+  PRIVATE_GPU_LOADERS,
 } from "../../src/provider/private-gpu"
 import { declaredCapabilityEvidence } from "../../src/provider/capability-evidence"
 import { modelSelectableForProvider } from "../../src/provider/model-selectability"
@@ -28,6 +29,7 @@ const originalFetch = globalThis.fetch
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   globalThis.fetch = originalFetch
   await Instance.disposeAll()
 })
@@ -160,6 +162,67 @@ test("dedicated GPU discovery qualifies a valid top-level declaration despite ma
   expect(modelSelectableForProvider(vendor.id, models.qualified)).toBe(true)
   expect(modelSelectableForProvider(vendor.id, models["explicit-deny"])).toBe(false)
   expect(declaredCapabilityEvidence(models.undeclared.capabilities)?.toolCalling.state).toBe("unknown")
+})
+
+describe("private-gpu loader", () => {
+  test("discoverModels rejects when the endpoint fails instead of returning an empty catalog", async () => {
+    const vendor = requireDedicatedPrivateGpuVendor("custom-private-gpu")
+    vi.stubEnv(vendor.envKey, "endpoint-token")
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://127.0.0.1:18110/v1/models") return new Response("unavailable", { status: 503 })
+      return originalFetch(input)
+    }) as typeof fetch
+    const provider = {
+      id: ProviderID.make(vendor.id),
+      name: vendor.id,
+      source: "config",
+      env: [],
+      models: {},
+      options: { baseURL: "http://127.0.0.1:18110" },
+    } as unknown as Provider.Info
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const loader = await PRIVATE_GPU_LOADERS[vendor.id](provider)
+        await expect(loader.discoverModels!(provider)).rejects.toThrow(/custom-private-gpu model discovery failed/)
+      },
+    })
+  })
+})
+
+describe("private-gpu catalog health", () => {
+  test("an offline endpoint marks the catalog incomplete without a startup failure", async () => {
+    const vendor = requireDedicatedPrivateGpuVendor("custom-private-gpu")
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    vi.stubEnv(vendor.envKey, "endpoint-token")
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === "http://127.0.0.1:18110/v1/models") return new Response("unavailable", { status: 503 })
+      return originalFetch(input, init)
+    }) as typeof fetch
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          [vendor.id]: {
+            options: { baseURL: "http://127.0.0.1:18110" },
+            models: { saved: { name: "Saved", limit: { context: 8000, output: 2000 } } },
+          },
+        },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const health = await Provider.catalogHealth()
+        expect(health.failed.has(vendor.id)).toBe(true)
+        expect(health.completed.has(vendor.id)).toBe(false)
+        const snapshot = await Provider.snapshot()
+        expect(snapshot.discovery.diagnostics.some((entry) => entry.source === `discovery:${vendor.id}`)).toBe(false)
+      },
+    })
+  })
 })
 
 describe("private-gpu connect and disconnect", () => {

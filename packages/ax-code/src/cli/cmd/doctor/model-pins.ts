@@ -1,4 +1,11 @@
-import { configuredPins, pinWarnings, type PinConfig, type PinWarning, type ProviderLookup } from "../debug/routing"
+import {
+  CATALOG_UNAVAILABLE_ADVICE,
+  configuredPins,
+  pinWarnings,
+  type PinConfig,
+  type PinWarning,
+  type ProviderLookup,
+} from "../debug/routing"
 import type { DoctorCheck } from "./health"
 import { toErrorMessage } from "../../../util/error-message"
 
@@ -9,9 +16,13 @@ function consequence(warning: PinWarning): string {
   // The runtime throws while parsing an invalid-format pin (never reaches the
   // fallback chain), so every pin key shares the same consequence — except
   // the planner architect pin, whose parse error the planner ignores
-  // (configuredArchitectModel falls back to the default model).
+  // (configuredArchitectModel falls back to the default model), and agent
+  // pins: agent.ts parses every enabled agent's model while building shared
+  // agent state, uncaught, so one bad agent pin breaks agent loading for
+  // every session.
   if (warning.code === "invalid_format") {
     if (warning.pin === "experimental.planner_architect_model") return "ignored; the planner uses the default model"
+    if (warning.pin.startsWith("agent.")) return "breaks agent loading for every session; fix the provider/model format"
     return "fails when used; fix the provider/model format"
   }
   switch (warning.pin) {
@@ -60,7 +71,7 @@ function advice(warnings: PinWarning[]): string[] {
     result.push("Pin a supported model instead.")
   }
   if (codes.has("catalog_unavailable")) {
-    result.push("Some provider catalogs could not be loaded; rerun when those providers are reachable.")
+    result.push(CATALOG_UNAVAILABLE_ADVICE)
   }
   return result
 }

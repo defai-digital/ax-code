@@ -120,7 +120,7 @@ test("doctor model pins report an incomplete catalog instead of a stale pin", as
   expect(check.status).toBe("warn")
   expect(check.detail).toContain("small_model → gateway/glm-5.3-unreleased (catalog unavailable)")
   expect(check.detail).toContain(
-    "Some provider catalogs could not be loaded; rerun when those providers are reachable.",
+    "Some provider catalogs could not be loaded; check that those providers are running and returning a valid model list, then rerun.",
   )
   expect(check.detail).not.toContain("remove stale pins")
 })
@@ -156,6 +156,21 @@ test("doctor model pins say an invalid-format planner pin is ignored for the def
   expect(check.detail).toContain(
     "experimental.planner_architect_model → gateway/ (invalid model format) — ignored; the planner uses the default model",
   )
+  expect(check.detail).toContain("Use exact IDs from ax-code models or remove stale pins.")
+})
+
+test("doctor model pins say an invalid-format agent pin breaks agent loading for every session", async () => {
+  // `deepseek` alone is a valid family alias for the real parser, so use an
+  // empty model id; a disabled agent's pin is never parsed and is not listed.
+  const check = await getDoctorModelPinsCheck(
+    { agent: { title: { model: "gateway/" }, retired: { model: "gateway/", disable: true } } },
+    lookup,
+  )
+  expect(check.status).toBe("warn")
+  expect(check.detail).toContain(
+    "agent.title.model → gateway/ (invalid model format) — breaks agent loading for every session; fix the provider/model format",
+  )
+  expect(check.detail).not.toContain("agent.retired.model")
   expect(check.detail).toContain("Use exact IDs from ax-code models or remove stale pins.")
 })
 

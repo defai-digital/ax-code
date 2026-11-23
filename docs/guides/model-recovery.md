@@ -88,4 +88,4 @@ external providers retain responsibility for upstream routing and authorization.
 
 ## Provider state diagnostics
 
-`ax-code debug routing` also reports the registry discovery phase and model exclusion reasons. A pending or partially failed catalog is distinguishable from a completed successful discovery. These diagnostics do not send inference requests; normal provider initialization can still run metadata/auth discovery. Missing tool-capability metadata remains unknown; custom deployments should declare `tool_call: true` only when they accept tools.
+`ax-code debug routing` also reports the registry discovery phase and model exclusion reasons. A pending or partially failed catalog is distinguishable from a completed successful discovery. A stopped local runtime or an offline dedicated private GPU endpoint does not degrade the phase; its pins are reported as catalog unavailable rather than stale. These diagnostics do not send inference requests; normal provider initialization can still run metadata/auth discovery. Missing tool-capability metadata remains unknown; custom deployments should declare `tool_call: true` only when they accept tools.

@@ -1,5 +1,6 @@
 import { Auth } from "@/auth"
 import { Env } from "@/env"
+import { toErrorMessage } from "@/util/error-message"
 import type { Provider } from "../provider"
 import type { CustomLoader } from "../loaders"
 import { DEDICATED_PRIVATE_GPU_VENDORS, PRIVATE_GPU_REQUEST_TIMEOUT_MS, type PrivateGpuVendor } from "./presets"
@@ -51,8 +52,10 @@ export function privateGpuLoader(vendor: PrivateGpuVendor): CustomLoader {
             apiKey: token,
           })
           return privateGpuModelRecords(discovered.models, discovered.baseURL, vendor)
-        } catch {
-          return {}
+        } catch (error) {
+          // Rethrow so a failed load is recorded as a failed discovery, not a
+          // completed empty catalog.
+          throw new Error(`${vendor.id} model discovery failed: ${toErrorMessage(error)}`, { cause: error })
         }
       },
     }

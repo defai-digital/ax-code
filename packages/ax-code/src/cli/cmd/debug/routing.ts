@@ -43,7 +43,7 @@ export type PinConfig = {
   small_model?: string
   wiki?: { model?: string }
   experimental?: { planner_architect_model?: string }
-  agent?: Record<string, { model?: string } | undefined>
+  agent?: Record<string, { model?: string; disable?: boolean } | undefined>
   llm_routing?: { fallback?: readonly { providerID: string; modelID: string }[] }
 }
 
@@ -60,8 +60,9 @@ export function configuredPins(config: PinConfig): (readonly [string, PinTarget]
     ...(config.experimental?.planner_architect_model
       ? ([["experimental.planner_architect_model", config.experimental.planner_architect_model]] as const)
       : []),
+    // A disabled agent is never loaded, so its model pin is never parsed or used.
     ...Object.entries(config.agent ?? {}).flatMap(([name, agent]) =>
-      agent?.model ? ([[`agent.${name}.model`, agent.model]] as const) : [],
+      agent?.model && !agent.disable ? ([[`agent.${name}.model`, agent.model]] as const) : [],
     ),
     ...(config.llm_routing?.fallback ?? []).map((target, index) => [`llm_routing.fallback[${index}]`, target] as const),
   ]
@@ -145,13 +146,21 @@ export async function pinWarnings(
 /** Structural subset of the catalog-health view exposed by `Provider.catalogHealth()`. */
 type CatalogHealthView = { all: boolean; failed: Set<string>; completed: Set<string> }
 
+/** Shared by doctor and `debug routing` for any catalog_unavailable pin. */
+export const CATALOG_UNAVAILABLE_ADVICE =
+  "Some provider catalogs could not be loaded; check that those providers are running and returning a valid model list, then rerun."
+
 /** Structural subset of a config provider block: only the model filters matter here. */
 type ProviderFilterConfig = { blacklist?: readonly string[]; whitelist?: readonly string[] }
 
 type RegistryContext = {
   health: CatalogHealthView
   exclusions: Map<string, Map<string, string>>
-  config: { provider?: Record<string, ProviderFilterConfig | undefined> }
+  config: {
+    provider?: Record<string, ProviderFilterConfig | undefined>
+    enabled_providers?: readonly string[]
+    disabled_providers?: readonly string[]
+  }
 }
 
 /** Mirrors the provider registry's opt-in and allow rules for local LLM runtimes. */
@@ -170,26 +179,36 @@ async function localRuntimeOptedIn(providerID: string): Promise<boolean> {
   return !!(runtime.defaultHost || process.env[runtime.envVar] || configured?.options?.baseURL)
 }
 
+/** Exclusions derived from a model row's status, which live discovery may override. */
+const STATUS_EXCLUSIONS = new Set(["deprecated-model", "experimental-model-disabled"])
+
 /**
  * Provider-catalog lookup backed by the live registry, shared by `debug
  * routing` and the doctor model pins check. Awaits discovery and memoizes the
  * catalog health, registry exclusions, and config once per closure. A provider
  * whose discovery failed is reported as `incomplete` (even when the failed
- * loader dropped it from the registry) instead of "not configured", because the
- * pin may work again once the endpoint is reachable. Config blacklist/whitelist
- * exclusions are read directly from config, so they hold even offline, when the
- * provider is absent, or when its catalog is incomplete. An opted-in, allowed
- * local LLM runtime absent from the registry gets the same `incomplete`
- * treatment: such runtimes register only when their startup reachability probe
- * succeeds, so the pin works once the local server is started. A runtime that
- * was never opted in (config.provider / enabled_providers) or is filtered out by
- * provider settings stays "missing", since starting a server would not help.
- * Keeps this module free of static provider imports — it is unit-tested with
- * fakes via model-pins.ts.
+ * loader dropped it from the registry) instead of "not configured", because
+ * the pin may work again once the endpoint is reachable; a whole-run
+ * discovery failure only taints ids that were actually scheduled for
+ * discovery and had not completed. A local LLM runtime that completed
+ * discovery and was then dropped for an empty catalog is `ready` with an
+ * empty model list, so its pins read as model_not_found; other providers can
+ * complete with `{}` without contacting anything and stay `missing`. A provider that is absent and not
+ * allowed by provider settings (enabled_providers / disabled_providers /
+ * retired) is `missing` with no exclusion, since its config blacklist or
+ * whitelist cannot explain a pin it cannot serve. Config
+ * blacklist/whitelist exclusions are read directly from config, so they hold
+ * even offline, when the provider is absent, or when its catalog is
+ * incomplete; a whitelist miss counts only while the catalog cannot be
+ * checked, but an explicit blacklist entry always holds. An opted-in, allowed
+ * local LLM runtime absent from the registry without a recorded discovery
+ * result gets the same `incomplete` treatment (for example when it was
+ * dropped before discovery ran), so the pin works once the local server is
+ * started. A runtime that was never opted in (config.provider /
+ * enabled_providers) or is filtered out by provider settings stays "missing",
+ * since starting a server would not help. Keeps this module free of static
+ * provider imports — it is unit-tested with fakes via model-pins.ts.
  */
-/** Exclusions derived from a model row's status, which live discovery may override. */
-const STATUS_EXCLUSIONS = new Set(["deprecated-model", "experimental-model-disabled"])
-
 export function registryLookup(): ProviderLookup {
   let context: Promise<RegistryContext> | undefined
   const load = () =>
@@ -216,17 +235,31 @@ export function registryLookup(): ProviderLookup {
     const { health, exclusions, config } = await load()
     const configured = config.provider?.[providerID]
     const provider = await Provider.getProvider(providerID as ProviderID)
+    // A provider filtered out by provider settings (enabled_providers /
+    // disabled_providers / retired) cannot be registered, so its config
+    // blacklist/whitelist must not explain a pin as "excluded".
+    if (
+      !provider &&
+      !Provider.shouldAllowProviderInCore({
+        providerID,
+        disabled: new Set<string>(config.disabled_providers ?? []),
+        enabled: config.enabled_providers ? new Set<string>(config.enabled_providers) : null,
+        // ax-engine support is a host capability, not a config choice.
+        axEngineSupported: true,
+      })
+    )
+      return { status: "missing" }
     // An opted-in, allowed local LLM runtime that is absent and never
-    // completed discovery failed its startup reachability probe (the server is
-    // down); the pin is not stale. A runtime that completed discovery and was
-    // dropped for an empty catalog is genuinely missing.
+    // completed discovery failed its startup reachability probe (the server
+    // is down); the pin is not stale. A runtime that completed discovery and
+    // was dropped for an empty catalog has a verifiably complete, empty
+    // catalog and is reported ready below.
     const runtimeDown =
       !provider &&
       !health.completed.has(providerID) &&
       Object.hasOwn(LOCAL_LLM_RUNTIMES, providerID) &&
       (await localRuntimeOptedIn(providerID))
-    const incomplete =
-      runtimeDown || (!health.completed.has(providerID) && (health.all || health.failed.has(providerID)))
+    const incomplete = runtimeDown || (!health.completed.has(providerID) && health.failed.has(providerID))
     // With a complete catalog, a pin missing from both the catalog and the
     // recorded exclusions does not exist, so the config lists cannot explain it.
     const catalogVerifiable = !incomplete && (!!provider || health.completed.has(providerID))
@@ -237,14 +270,27 @@ export function registryLookup(): ProviderLookup {
       // Saved fallback rows carry a status that live rows may not, so a status
       // exclusion is not trustworthy while the catalog is incomplete.
       if (recorded && !(incomplete && STATUS_EXCLUSIONS.has(recorded))) return recorded
-      if (catalogVerifiable) return undefined
-      // Absent provider or incomplete catalog: config lists still hold offline
-      // and before a model loads.
+      // An explicit blacklist entry names the model, so it explains the pin
+      // even when a refresh rebuilt the catalog without it (for example an
+      // AX Trust alias whose recorded reason was cleared).
       if (configured?.blacklist?.includes(modelID)) return "configured-blacklist"
+      if (catalogVerifiable) return undefined
+      // Absent provider or incomplete catalog: a whitelist miss still holds
+      // offline and before a model loads.
       if (configured?.whitelist && !configured.whitelist.includes(modelID)) return "outside-configured-whitelist"
       return undefined
     }
-    if (!provider) return { status: incomplete ? "incomplete" : "missing", exclusion }
+    if (!provider) {
+      // A local runtime that completed discovery and was then dropped for an
+      // empty catalog (LM Studio/Ollama running with no model loaded) has a
+      // verified, empty catalog: the pin is model_not_found, not
+      // provider_not_configured. Other loaders can "complete" with `{}`
+      // without contacting anything (missing token or CLI binary), so they
+      // stay missing.
+      if (health.completed.has(providerID) && Object.hasOwn(LOCAL_LLM_RUNTIMES, providerID))
+        return { status: "ready", models: {}, exclusion }
+      return { status: incomplete ? "incomplete" : "missing", exclusion }
+    }
     return { status: incomplete ? "incomplete" : "ready", models: provider.models, exclusion }
   }
 }
@@ -294,8 +340,7 @@ export const RoutingCommand = cmd({
         "Configuration loading and catalog discovery may contact providers without running inference.",
         "External CLI and gateway internal routing are outside this local preview.",
       ]
-      if (warnings.some((warning) => warning.code === "catalog_unavailable"))
-        notes.push("Some provider catalogs could not be loaded; rerun when those providers are reachable.")
+      if (warnings.some((warning) => warning.code === "catalog_unavailable")) notes.push(CATALOG_UNAVAILABLE_ADVICE)
       process.stdout.write(
         JSON.stringify(
           {
@@ -304,7 +349,9 @@ export const RoutingCommand = cmd({
             fallback,
             auxiliary,
             agentPins: Object.fromEntries(
-              Object.entries(config.agent ?? {}).flatMap(([name, agent]) => (agent.model ? [[name, agent.model]] : [])),
+              Object.entries(config.agent ?? {}).flatMap(([name, agent]) =>
+                agent.model && !agent.disable ? [[name, agent.model]] : [],
+              ),
             ),
             maxSameTargetRetries: SessionRetry.RETRY_MAX_ATTEMPTS,
             maxConcurrencyRetries: SessionRetry.CONCURRENCY_RETRY_MAX_ATTEMPTS,
