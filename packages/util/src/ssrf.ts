@@ -410,16 +410,23 @@ export namespace Ssrf {
 
     // Resolve DNS once
     const emptyAddresses: ResolvedAddress[] = []
+    // Kept as the `cause` so callers can tell a DNS failure (ENOTFOUND) apart
+    // from other request errors.
+    let lookupFailure: unknown
     const addresses = await withTimeout(
       dnsResolveFn ? dnsResolveFn(hostname) : dns.lookup(hostname, { all: true }),
       5_000,
       `${label}: DNS lookup timed out after 5s: ${hostname}`,
     ).catch((err) => {
       if (err instanceof Error && err.message.includes("timed out")) throw err
+      lookupFailure = err
       return emptyAddresses
     })
     if (addresses.length === 0) {
-      throw new Error(`${label}: could not resolve hostname: ${hostname}`)
+      throw new Error(
+        `${label}: could not resolve hostname: ${hostname}`,
+        lookupFailure === undefined ? undefined : { cause: lookupFailure },
+      )
     }
 
     // Validate ALL resolved addresses

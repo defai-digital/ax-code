@@ -309,3 +309,18 @@ test("publicLookup blocks a real http.Agent connection to a rebound private addr
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
 })
+
+test("pinnedFetch keeps the DNS failure as the cause of an unresolved hostname", async () => {
+  const lookupError = Object.assign(new Error("getaddrinfo ENOTFOUND gone.invalid"), { code: "ENOTFOUND" })
+  const failure = await Ssrf.pinnedFetch(
+    "https://gone.invalid/v1/models",
+    { label: "ssrf-test" },
+    vi.fn(),
+    async () => {
+      throw lookupError
+    },
+  ).catch((error: unknown) => error)
+  expect(failure).toBeInstanceOf(Error)
+  expect((failure as Error).message).toContain("could not resolve hostname")
+  expect((failure as Error).cause).toBe(lookupError)
+})

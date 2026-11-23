@@ -9,7 +9,7 @@ import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
 import { NoSuchModelError, type LanguageModel } from "ai"
 import { Log } from "../util/log"
 import { toErrorMessage } from "@/util/error-message"
-import { isNetworkInterruption, rememberNetworkRequestID } from "@/util/network-interruption"
+import { isServerUnreachable, rememberNetworkRequestID } from "@/util/network-interruption"
 import { BunProc } from "../bun"
 import { Plugin } from "../plugin"
 import { NamedError } from "@ax-code/util/error"
@@ -538,7 +538,7 @@ export namespace Provider {
     // startup reachability probe failed, and dedicated private GPU endpoints
     // (often scaled to zero). Their failures always mark the catalog
     // incomplete, but stay quiet only when the error shows the server could
-    // not be reached (see `isUnreachable`); a server that answers with an
+    // not be reached (see `isServerUnreachable`); a server that answers with an
     // HTTP error or an invalid model list is reported like any other.
     const quietDiscoveryFailures = new Set<string>()
     // Ids whose discovery loader actually ran (the provider was registered
@@ -712,23 +712,6 @@ export namespace Provider {
           ]),
         )
       }
-    }
-
-    // How many nested `cause`s `isUnreachable` inspects below the error itself.
-    const UNREACHABLE_CAUSE_DEPTH = 5
-    // Whether a discovery error means the server could not be reached at all:
-    // a connection-level failure (refused, DNS, unreachable network, dropped
-    // socket) anywhere in the `cause` chain, or an `AbortSignal.timeout`
-    // deadline. A server that answered with an HTTP status, malformed JSON or
-    // an unusable model list was reachable and has to be reported.
-    function isUnreachable(error: unknown): boolean {
-      if (isNetworkInterruption(error)) return true
-      let current = error
-      for (let depth = 0; depth <= UNREACHABLE_CAUSE_DEPTH && current instanceof Error; depth++) {
-        if (current.name === "TimeoutError") return true
-        current = current.cause
-      }
-      return false
     }
 
     // extend database from config
@@ -1041,11 +1024,12 @@ export namespace Provider {
           if (!providers[providerID]) return
           scheduledDiscovery.add(id)
           await (async () => {
-            const discovered = await withTimeout(
-              loader(providers[providerID]),
-              10_000,
-              `discovery loader '${id}' timed out`,
-            )
+            // The watchdog can fire before a loader's own fetch deadline (a
+            // blackholed endpoint), so it reports the same TimeoutError name
+            // and a hung server is classified as unreachable either way.
+            const discovered = await withTimeout(loader(providers[providerID]), 10_000, undefined, {
+              error: () => Object.assign(new Error(`discovery loader '${id}' timed out`), { name: "TimeoutError" }),
+            })
             if (generation !== currentModelCacheGeneration()) return
             if (authoritativeDiscovery.has(providerID) || (providerID === AX_ENGINE_PROVIDER_ID && !axEngineAttached)) {
               // Authoritative catalogs replace saved membership only after a
@@ -1081,7 +1065,7 @@ export namespace Provider {
             // degrading the discovery phase or warning on every startup. A
             // reachable server that answers with an HTTP error or an invalid
             // model list takes the normal failure path below.
-            if (quietDiscoveryFailures.has(id) && isUnreachable(e)) {
+            if (quietDiscoveryFailures.has(id) && isServerUnreachable(e)) {
               log.debug("offline provider discovery failed", { id, error: e })
               return
             }

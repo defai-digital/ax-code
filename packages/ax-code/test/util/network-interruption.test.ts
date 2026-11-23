@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   isNetworkInterruption,
+  isServerUnreachable,
   networkInterruptionCause,
   networkInterruptionRequestID,
   rememberNetworkRequestID,
@@ -49,5 +50,36 @@ describe("network interruption", () => {
     let error: Error = http2Reset()
     for (let i = 0; i < 6; i++) error = new Error(`layer ${i}`, { cause: error })
     expect(isNetworkInterruption(error)).toBe(false)
+  })
+})
+
+describe("server unreachable", () => {
+  const errno = (code: string) => Object.assign(new Error(code), { code })
+  const fetchFailed = (cause: unknown) => Object.assign(new TypeError("fetch failed"), { cause })
+
+  test.each([
+    ["a refused connection", fetchFailed(errno("ECONNREFUSED"))],
+    ["a DNS failure", new Error("could not resolve hostname", { cause: errno("ENOTFOUND") })],
+    ["undici's connect timeout", fetchFailed(errno("UND_ERR_CONNECT_TIMEOUT"))],
+    ["an AbortSignal deadline", new Error("wrapped", { cause: new DOMException("timed out", "TimeoutError") })],
+    ["a watchdog TimeoutError", Object.assign(new Error("discovery loader timed out"), { name: "TimeoutError" })],
+    [
+      "a dual-stack failure with mixed codes",
+      fetchFailed(new AggregateError([errno("ECONNREFUSED"), errno("EHOSTUNREACH")])),
+    ],
+  ])("treats %s as unreachable", (_label, error) => {
+    expect(isServerUnreachable(error)).toBe(true)
+  })
+
+  test.each([
+    ["an HTTP status error", new Error("ollama model discovery failed: HTTP 401")],
+    ["an invalid payload", new Error("returned invalid JSON", { cause: new SyntaxError("Unexpected token") })],
+    [
+      "a dual-stack failure with an unknown attempt",
+      fetchFailed(new AggregateError([errno("ECONNREFUSED"), new Error("tls")])),
+    ],
+    ["a non-error", "ECONNREFUSED"],
+  ])("does not treat %s as unreachable", (_label, error) => {
+    expect(isServerUnreachable(error)).toBe(false)
   })
 })

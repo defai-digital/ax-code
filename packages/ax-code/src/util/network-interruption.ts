@@ -64,3 +64,32 @@ export function isNetworkInterruption(error: unknown): boolean {
   if (error instanceof TypeError && UNDICI_TERMINATED_MESSAGES.has(error.message)) return true
   return networkInterruptionCause(error) !== undefined
 }
+
+// undici's connect deadline: the server never accepted the connection.
+const CONNECT_TIMEOUT_CODE = "UND_ERR_CONNECT_TIMEOUT"
+// How many nested `cause`s `isServerUnreachable` inspects below the error itself.
+const UNREACHABLE_CAUSE_DEPTH = 5
+
+/**
+ * Whether a request error means the server could not be reached at all: a
+ * connection-level failure (refused, DNS, unreachable network, dropped socket)
+ * or a deadline (`AbortSignal.timeout`, undici's connect timeout) anywhere in
+ * the `cause` chain. A dual-stack connect failure arrives as an AggregateError
+ * and counts when every attempt was unreachable. A server that answered with
+ * an HTTP status, malformed JSON or an unusable payload was reachable.
+ */
+export function isServerUnreachable(error: unknown, depth = 0): boolean {
+  let current = error
+  for (; depth <= UNREACHABLE_CAUSE_DEPTH && current instanceof Error; depth++) {
+    if (current.name === "TimeoutError") return true
+    const code = (current as NodeJS.ErrnoException).code
+    if (code === CONNECT_TIMEOUT_CODE || (code && INTERRUPTION_CODES.has(code))) return true
+    if (current instanceof TypeError && UNDICI_TERMINATED_MESSAGES.has(current.message)) return true
+    if (current instanceof AggregateError && current.errors.length > 0) {
+      const next = depth + 1
+      if (current.errors.every((inner) => isServerUnreachable(inner, next))) return true
+    }
+    current = current.cause
+  }
+  return false
+}
