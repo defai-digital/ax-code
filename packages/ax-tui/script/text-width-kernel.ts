@@ -44,6 +44,8 @@ interface KernelExports {
   kernelRanges(): number | Pointer
   kernelWidths(): number | Pointer
   kernelMeasure(count: number, byteLength: number, tabWidth: number, method: number): number
+  kernelAcquire?(): number
+  kernelRelease?(): void
 }
 
 export interface TextWidthKernel {
@@ -62,10 +64,16 @@ function bindKernel(
   view: (pointer: number | Pointer, length: number) => Uint8Array,
   close: () => void,
   memoryBytes?: number,
+  requireLease = false,
 ): TextWidthKernel {
   assert.equal(exports.kernelAbiVersion(), 1, "Unsupported text width kernel ABI")
   assert.equal(exports.kernelByteCapacity(), textWidthByteCapacity)
   assert.equal(exports.kernelItemCapacity(), textWidthItemCapacity)
+  const release = requireLease ? exports.kernelRelease : undefined
+  if (requireLease) {
+    assert.equal(typeof release, "function", "Missing text width kernel lease release")
+    assert.equal(exports.kernelAcquire?.(), 1, "Text width kernel is already leased or cannot be acquired")
+  }
   let closed = false
   let count = 0
   let byteLength = 0
@@ -124,13 +132,20 @@ function bindKernel(
     close() {
       if (closed) return
       closed = true
-      close()
+      try {
+        release?.()
+      } finally {
+        close()
+      }
     },
   }
   return kernel
 }
 
-export async function createWasmTextWidthKernel(bytes: Uint8Array<ArrayBuffer>): Promise<TextWidthKernel> {
+export async function createWasmTextWidthKernel(
+  bytes: Uint8Array<ArrayBuffer>,
+  requireLease = false,
+): Promise<TextWidthKernel> {
   const module = await WebAssembly.compile(bytes)
   assert.deepEqual(WebAssembly.Module.imports(module), [], "Text width kernel must be freestanding")
   const instance = await WebAssembly.instantiate(module)
@@ -142,6 +157,7 @@ export async function createWasmTextWidthKernel(bytes: Uint8Array<ArrayBuffer>):
     (pointer, length) => new Uint8Array(memory.buffer, Number(pointer), length),
     () => {},
     memory.buffer.byteLength,
+    requireLease,
   )
 }
 
@@ -167,9 +183,13 @@ export async function loadTextWidthKernel(backend: TextWidthKernel["backend"], d
   const { nativeFile } = verifyTextWidthExperiment(directory)
   if (backend === "wasm") return createWasmTextWidthKernel(readFileSync(join(directory, "bin/ax-tui-text-width.wasm")))
   assert.equal(backend, "native")
+  return loadNativeTextWidthKernel(join(directory, nativeFile))
+}
+
+export async function loadNativeTextWidthKernel(path: string, requireLease = false): Promise<TextWidthKernel> {
   // Only the native arm loads FFI. The WASM arm runs without --experimental-ffi.
   const { dlopen, toArrayBuffer } = await import("../src/platform/ffi.js")
-  const library = dlopen(join(directory, nativeFile), {
+  const library = dlopen(path, {
     kernelAbiVersion: { args: [], returns: "u32" },
     kernelByteCapacity: { args: [], returns: "u32" },
     kernelItemCapacity: { args: [], returns: "u32" },
@@ -177,6 +197,12 @@ export async function loadTextWidthKernel(backend: TextWidthKernel["backend"], d
     kernelRanges: { args: [], returns: "ptr" },
     kernelWidths: { args: [], returns: "ptr" },
     kernelMeasure: { args: ["u32", "u32", "u32", "u32"], returns: "u32" },
+    ...(requireLease
+      ? {
+          kernelAcquire: { args: [], returns: "u32" },
+          kernelRelease: { args: [], returns: "void" },
+        }
+      : {}),
   })
   try {
     return bindKernel(
@@ -185,9 +211,22 @@ export async function loadTextWidthKernel(backend: TextWidthKernel["backend"], d
       (pointer, length) =>
         length === 0 ? new Uint8Array(0) : new Uint8Array(toArrayBuffer(pointer as Pointer, 0, length)),
       () => library.close(),
+      undefined,
+      requireLease,
     )
   } catch (error) {
     library.close()
     throw error
+  }
+}
+
+export function rustTextWidthArtifacts(targetDirectory: string): { native: string; wasm: string } {
+  const nativeFile =
+    process.platform === "win32"
+      ? "ax_tui_text_width.dll"
+      : `libax_tui_text_width.${process.platform === "darwin" ? "dylib" : "so"}`
+  return {
+    native: join(targetDirectory, "release", nativeFile),
+    wasm: join(targetDirectory, "wasm32-unknown-unknown/release/ax_tui_text_width.wasm"),
   }
 }

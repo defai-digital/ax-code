@@ -171,6 +171,88 @@ TTY input, signals, output transport, audio, threading, callbacks, and pointer
 layouts still need host adapters or a redesigned interface. The width prototype
 does not provide those facilities or remove FFI from the complete application.
 
+## Rust migration pilot
+
+1. Port the width kernel to an isolated Cargo crate and build it as a native
+   shared library and a freestanding Wasm artifact. Compare with the same
+   Zig implementation on both transports.
+2. Qualify the native build and loader across the eight AX TUI artifact targets.
+   Record compile and load results independently. Check glibc 2.17 on an
+   actual compatible host or container, dynamic musl loading on Alpine, Mach-O
+   deployment metadata and signing, and PE architecture and CRT dependencies.
+3. After the pilot qualifies, port text and cell buffers in stages. Keep the
+   current AX TUI C ABI and publication names through the native migration.
+   Before switching production, exercise ABI layout, Unicode and PTY parity,
+   packaged offline loading, startup, memory, and p95 frame times on the full
+   renderer. Consider a Wasm renderer if an embedding or FFI-free requirement
+   justifies the host integration.
+
+The Rust crate lives at `packages/ax-tui/experiments/text-width/rust`. It
+uses the width policy of AX TUI's MIT-licensed OpenTUI fork, including the
+renderer-specific rules for variation selectors, regional indicators, and
+Devanagari. A generated snapshot freezes the pinned uucode grapheme transitions
+and scalar properties with the renderer's calculated scalar widths. Its byte
+layout is the class and state counts, the transition matrix, one page ID per
+256 scalars, then the deduplicated pages. The existing renderer's
+`THIRD_PARTY_LICENSES.txt` records the OpenTUI dependencies and Unicode notices.
+Cargo builds use the committed snapshot. The Zig oracle regenerates it when
+the reference data or width policy changes.
+
+Set a temporary output directory to build and qualify both implementations.
+On macOS, prepare the compatible Zig SDK as described above.
+
+```sh
+export AX_CODE_TUI_TEXT_WIDTH_DIR="$(mktemp -d)"
+export CARGO_TARGET_DIR="$(mktemp -d)"
+export AX_CODE_TUI_RUST_WIDTH_DIR="$CARGO_TARGET_DIR"
+manifest=packages/ax-tui/experiments/text-width/rust/Cargo.toml
+
+rustup target add wasm32-unknown-unknown
+pnpm --dir packages/ax-tui run build:wasm-experiment
+pnpm --dir packages/ax-tui exec tsx script/generate-rust-width-data.ts --check
+cargo test --locked --manifest-path "$manifest"
+cargo build --release --locked --manifest-path "$manifest"
+cargo build --release --locked --manifest-path "$manifest" --target wasm32-unknown-unknown
+pnpm --dir packages/ax-tui exec vitest run test/text-width-experiment.test.ts
+```
+
+Omit `--check` only to update the snapshot from a freshly built Zig reference.
+The cross-language test compares every Unicode scalar and exercises all three
+width modes, four tab widths, compound graphemes, malformed batches, result
+ownership, and native lease contention. Wasm instances have independent memory
+and can be loaded without Node FFI. Native adapters take an exclusive lease
+for the lifetime of the handle because the kernel uses shared module buffers.
+
+The standalone loader probe is `rust/native-smoke.c`. Compile it with the
+target's native C compiler and pass the absolute path to the Rust shared
+library. On Linux link the probe with `-ldl`. Build on a glibc 2.17 sysroot
+and audit the result with `readelf --version-info`. On musl, use a musl
+toolchain and `RUSTFLAGS="-C target-feature=-crt-static"` for the `cdylib`.
+Inspect dynamic dependencies in both cases. On Windows use an MSVC environment
+matching the target architecture and verify the DLL with the native loader.
+
+### Pilot measurements
+
+On Apple M3 Max with Node 26.9.0, Zig 0.15.2 and Rust 1.98.1, seven alternating
+fresh-process pairs compared the full encoding, copy, compute and result
+read per batch. The Rust version with a paged table produced the same widths.
+
+| Workload                 | Native Rust / Zig | Wasm Rust / Zig |
+| ------------------------ | ----------------: | --------------: |
+| 256 ASCII lines          |              1.12 |            1.16 |
+| 256 Unicode lines        |              0.75 |            0.74 |
+| 64 longer Unicode blocks |              0.65 |            0.71 |
+
+These values measure the pilot on one host. The production renderer also
+handles editing, styling, terminal capabilities, and output delivery, which
+the width benchmark does not exercise.
+
+The loader probe passed on Apple Silicon and in glibc 2.17 and Alpine
+containers for x64 and arm64. The Alpine builds link `libgcc_s.so.1`, which
+needs a distribution decision before replacing the existing musl library.
+The Intel macOS library cross-compiles with a relocatable install name.
+Intel macOS loader execution and both Windows targets still need qualification.
+
 ## Initial local findings
 
 Measured on 2026-11-08 on Apple M5 Max, macOS arm64, Node 26.13.0, Zig 0.15.2.

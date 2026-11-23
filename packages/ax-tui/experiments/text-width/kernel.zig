@@ -2,6 +2,7 @@
 //! The production Unicode implementation is imported, never copied.
 const std = @import("std");
 const utf8 = @import("utf8");
+const uucode = @import("uucode");
 
 const byte_capacity = 1024 * 1024;
 const item_capacity = 4096;
@@ -31,6 +32,32 @@ export fn kernelRanges() [*]u32 {
 
 export fn kernelWidths() [*]u32 {
     return &widths;
+}
+
+// Exports for regenerating the Rust pilot's frozen Unicode compatibility data.
+// These encode the renderer's policy, including its terminal-specific widths.
+export fn kernelGraphemeClassCount() u32 {
+    return @typeInfo(uucode.types.GraphemeBreak).@"enum".fields.len;
+}
+
+export fn kernelGraphemeStateCount() u32 {
+    return @typeInfo(uucode.grapheme.BreakState).@"enum".fields.len;
+}
+
+export fn kernelScalarProperties(cp: u32) u32 {
+    if (cp > 0x10FFFF) return 0;
+    const codepoint: u21 = @intCast(cp);
+    const grapheme: u32 = @intFromEnum(uucode.get(.grapheme_break, codepoint));
+    const mark: u32 = @intFromBool(uucode.get(.general_category, codepoint) == .mark_nonspacing);
+    return grapheme | (utf8.eastAsianWidth(codepoint) << 5) | (mark << 7);
+}
+
+export fn kernelGraphemeTransition(previous: u32, current: u32, state: u32) u32 {
+    if (previous >= kernelGraphemeClassCount() or current >= kernelGraphemeClassCount() or
+        state >= kernelGraphemeStateCount()) return 0;
+    var next: uucode.grapheme.BreakState = @enumFromInt(state);
+    const boundary = uucode.grapheme.precomputedGraphemeBreak(@enumFromInt(previous), @enumFromInt(current), &next);
+    return @as(u32, @intFromEnum(next)) | (@as(u32, @intFromBool(boundary)) << 7);
 }
 
 // Status: 0 success, 1 invalid options/capacity, 2 invalid range, 3 invalid UTF-8.

@@ -75,6 +75,17 @@ jobs:
         working-directory: packages/ax-tui
         run: node --experimental-ffi --expose-gc script/stress-application.ts 1000
 
+      - name: Test and build the Rust width kernel
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/ax-tui-rust-width
+        run: |
+          rustup target add wasm32-unknown-unknown
+          manifest=packages/ax-tui/experiments/text-width/rust/Cargo.toml
+          cargo test --locked --manifest-path "$manifest"
+          cargo build --release --locked --manifest-path "$manifest"
+          cargo build --release --locked --manifest-path "$manifest" --target wasm32-unknown-unknown
+
       - name: Install pinned Zig
         shell: bash
         run: pnpm --dir packages/ax-tui exec tsx script/ci-install-zig.ts
@@ -87,11 +98,14 @@ jobs:
         shell: bash
         run: pnpm --dir packages/ax-tui run build:wasm-experiment
 
-      - name: Qualify native and WASM width parity
+      - name: Qualify Zig and Rust width parity on native and WASM
         shell: bash
         env:
           AX_CODE_TUI_REQUIRE_TEXT_WIDTH_EXPERIMENT: "1"
-        run: pnpm --dir packages/ax-tui exec vitest run test/text-width-experiment.test.ts
+          AX_CODE_TUI_RUST_WIDTH_DIR: ${{ runner.temp }}/ax-tui-rust-width
+        run: |
+          pnpm --dir packages/ax-tui exec tsx script/generate-rust-width-data.ts --check
+          pnpm --dir packages/ax-tui exec vitest run test/text-width-experiment.test.ts
 
       - name: Verify publication payload
         if: runner.os == 'Linux'

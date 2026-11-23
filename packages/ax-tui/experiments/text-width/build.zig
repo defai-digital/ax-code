@@ -16,7 +16,10 @@ fn module(b: *std.Build, target: std.Build.ResolvedTarget, kernel_path: []const 
         .root_source_file = .{ .cwd_relative = kernel_path },
         .target = target,
         .optimize = .ReleaseFast,
-        .imports = &.{.{ .name = "utf8", .module = utf8 }},
+        .imports = &.{
+            .{ .name = "utf8", .module = utf8 },
+            .{ .name = "uucode", .module = uucode },
+        },
     });
 }
 

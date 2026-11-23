@@ -8,56 +8,75 @@ import { defaultExperimentDirectory } from "../script/build-text-width-experimen
 import { verifyTextWidthExperiment } from "../script/text-width-kernel.js"
 
 const built = existsSync(join(defaultExperimentDirectory, "manifest.json"))
+const rustDirectory = process.env.AX_CODE_TUI_RUST_WIDTH_DIR
 
 test("required text width qualification has compiled artifacts", () => {
-  if (process.env.AX_CODE_TUI_REQUIRE_TEXT_WIDTH_EXPERIMENT === "1") expect(built).toBe(true)
+  if (rustDirectory || process.env.AX_CODE_TUI_REQUIRE_TEXT_WIDTH_EXPERIMENT === "1") expect(built).toBe(true)
 })
 
-test.skipIf(!built)("native and WASM share Unicode results, reject invalid batches, and own returned data", () => {
-  const child = spawnSync(
-    process.execPath,
-    [
-      "--experimental-ffi",
-      "--disable-warning=ExperimentalWarning",
-      "--import",
-      "tsx",
-      fileURLToPath(new URL("fixtures/text-width-driver.ts", import.meta.url)),
-    ],
-    {
-      encoding: "utf8",
-      timeout: 30_000,
-    },
-  )
-  expect(child.error, child.stderr).toBeUndefined()
-  expect(child.status, child.stdout + child.stderr).toBe(0)
-  expect(JSON.parse(child.stdout).status).toBe("AX_TEXT_WIDTH_PARITY_COMPLETE")
-}, 35_000)
+test.skipIf(!built)(
+  "native and WASM share Unicode results, reject invalid batches, and own returned data",
+  () => {
+    const child = spawnSync(
+      process.execPath,
+      [
+        "--experimental-ffi",
+        "--disable-warning=ExperimentalWarning",
+        "--import",
+        "tsx",
+        fileURLToPath(new URL("fixtures/text-width-driver.ts", import.meta.url)),
+      ],
+      {
+        encoding: "utf8",
+        timeout: 30_000,
+      },
+    )
+    expect(child.error, child.stderr).toBeUndefined()
+    expect(child.status, child.stdout + child.stderr).toBe(0)
+    expect(JSON.parse(child.stdout)).toEqual({
+      status: "AX_TEXT_WIDTH_PARITY_COMPLETE",
+      kernels: rustDirectory ? 4 : 2,
+    })
+  },
+  35_000,
+)
 
-test.skipIf(!built)("WASM width evaluation runs without native FFI enabled", () => {
-  const script = new URL("../script/text-width-kernel.ts", import.meta.url).href
-  const child = spawnSync(
-    process.execPath,
-    [
-      "--import",
-      "tsx",
-      "--input-type=module",
-      "-e",
-      `
+test.skipIf(!built)(
+  "WASM width evaluation runs without native FFI enabled",
+  () => {
+    const script = new URL("../script/text-width-kernel.ts", import.meta.url).href
+    const child = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        `
     import assert from "node:assert/strict"
-    import { loadTextWidthKernel } from ${JSON.stringify(script)}
+    import { readFileSync } from "node:fs"
+    import { createWasmTextWidthKernel, loadTextWidthKernel, rustTextWidthArtifacts } from ${JSON.stringify(script)}
     assert.ok(!process.execArgv.includes("--experimental-ffi"))
-    const kernel = await loadTextWidthKernel("wasm")
-    try { assert.deepEqual([...kernel.measure(["中文", "👩‍🚀"])], [4, 2]) }
-    finally { kernel.close() }
+    const rustDirectory = process.env.AX_CODE_TUI_RUST_WIDTH_DIR
+    const kernels = [await loadTextWidthKernel("wasm")]
+    if (rustDirectory) {
+      kernels.push(await createWasmTextWidthKernel(readFileSync(rustTextWidthArtifacts(rustDirectory).wasm), true))
+    }
+    for (const kernel of kernels) {
+      try { assert.deepEqual([...kernel.measure(["中文", "👩‍🚀"])], [4, 2]) }
+      finally { kernel.close() }
+    }
     console.log("AX_WASM_WITHOUT_FFI_COMPLETE")
   `,
-    ],
-    { encoding: "utf8", timeout: 15_000, env: { ...process.env, NODE_OPTIONS: "" } },
-  )
-  expect(child.status, child.stdout + child.stderr).toBe(0)
-  expect(child.stdout).toContain("AX_WASM_WITHOUT_FFI_COMPLETE")
-  expect(child.stderr).not.toContain("FFI is an experimental")
-}, 20_000)
+      ],
+      { encoding: "utf8", timeout: 15_000, env: { ...process.env, NODE_OPTIONS: "" } },
+    )
+    expect(child.status, child.stdout + child.stderr).toBe(0)
+    expect(child.stdout).toContain("AX_WASM_WITHOUT_FFI_COMPLETE")
+    expect(child.stderr).not.toContain("FFI is an experimental")
+  },
+  20_000,
+)
 
 test.skipIf(!built)("experiment verification rejects stale source and corrupted artifacts", () => {
   const directory = mkdtempSync(join(tmpdir(), "ax-tui-width-provenance-"))
