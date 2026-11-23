@@ -155,12 +155,16 @@ type ProviderFilterConfig = { blacklist?: readonly string[]; whitelist?: readonl
 
 type RegistryContext = {
   health: CatalogHealthView
-  exclusions: Map<string, Map<string, string>>
+  exclusions: ReadonlyMap<string, string>
   config: {
     provider?: Record<string, ProviderFilterConfig | undefined>
     enabled_providers?: readonly string[]
     disabled_providers?: readonly string[]
   }
+}
+
+function exclusionKey(providerID: string, modelID: string): string {
+  return JSON.stringify([providerID, modelID])
 }
 
 /** Mirrors the provider registry's opt-in and allow rules for local LLM runtimes. */
@@ -223,12 +227,9 @@ export function registryLookup(): ProviderLookup {
         Provider.snapshot(),
         Config.get(),
       ])
-      const exclusions = new Map<string, Map<string, string>>()
-      for (const entry of snapshot.exclusions) {
-        const byModel = exclusions.get(entry.providerID) ?? new Map<string, string>()
-        byModel.set(entry.modelID, entry.reason)
-        exclusions.set(entry.providerID, byModel)
-      }
+      const exclusions = new Map(
+        snapshot.exclusions.map(({ providerID, modelID, reason }) => [exclusionKey(providerID, modelID), reason]),
+      )
       return { health, exclusions, config }
     })())
   return async (providerID) => {
@@ -275,7 +276,7 @@ export function registryLookup(): ProviderLookup {
     const exclusion = (modelID: string): string | undefined => {
       // Prefer the reason the registry recorded: it already follows
       // applyModelFilters' precedence for models that were actually loaded.
-      const recorded = exclusions.get(providerID)?.get(modelID)
+      const recorded = exclusions.get(exclusionKey(providerID, modelID))
       // Saved fallback rows carry a status that live rows may not, so a status
       // exclusion is not trustworthy while the catalog is incomplete.
       if (recorded && !(incomplete && STATUS_EXCLUSIONS.has(recorded))) return recorded
