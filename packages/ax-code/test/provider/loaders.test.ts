@@ -1335,10 +1335,133 @@ describe("local runtime model discovery failures", () => {
     await expect(discoverLocalModels(runtime)).resolves.toEqual({})
   })
 
+  test.each(localRuntimes)(
+    "$providerID discovery rejects a non-empty list whose entries are all unusable",
+    async (runtime) => {
+      const reason = runtime.providerID === "ollama" ? "no usable model names" : "no usable model ids"
+      stubDiscoveryFetch(
+        runtime.url,
+        () =>
+          new Response(JSON.stringify(runtime.providerID === "ollama" ? { models: [{}] } : { data: [{}] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      )
+      await expect(discoverLocalModels(runtime)).rejects.toThrow(
+        `${runtime.providerID} model discovery failed: ${reason}`,
+      )
+    },
+  )
+
+  test.each(localRuntimes)("$providerID discovery rejects whitespace-only ids/names", async (runtime) => {
+    const reason = runtime.providerID === "ollama" ? "no usable model names" : "no usable model ids"
+    stubDiscoveryFetch(
+      runtime.url,
+      () =>
+        new Response(
+          JSON.stringify(runtime.providerID === "ollama" ? { models: [{ name: "   " }] } : { data: [{ id: "  " }] }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    )
+    await expect(discoverLocalModels(runtime)).rejects.toThrow(
+      `${runtime.providerID} model discovery failed: ${reason}`,
+    )
+  })
+
+  test.each(localRuntimes)("$providerID discovery keeps usable entries in a mixed list", async (runtime) => {
+    const usable = "qwen3.5:9b"
+    stubDiscoveryFetch(
+      runtime.url,
+      () =>
+        new Response(
+          JSON.stringify(
+            runtime.providerID === "ollama" ? { models: [{}, { name: usable }] } : { data: [{}, { id: usable }] },
+          ),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    )
+    const models = await discoverLocalModels(runtime)
+    expect(Object.keys(models)).toEqual([usable])
+  })
+
   test.each(localRuntimes)("$providerID autoload probe still swallows a failing model list", async (runtime) => {
     stubDiscoveryFetch(runtime.url, () => new Response("unavailable", { status: 503 }))
     const loader = await CUSTOM_LOADERS[runtime.providerID]!(localRuntimeProvider(runtime))
     expect(loader.autoload).toBe(false)
+  })
+})
+
+describe("provider catalog health", () => {
+  function stubTags(respond: () => Response) {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url !== "http://localhost:11434/api/tags") throw new Error(`unexpected fetch: ${url}`)
+      return respond()
+    }) as typeof fetch
+  }
+
+  test("marks a provider whose discovery loader throws as incomplete", async () => {
+    // The startup reachability probe succeeds (so the runtime registers) and
+    // the background discovery request then fails.
+    let calls = 0
+    stubTags(() =>
+      calls++ === 0
+        ? new Response(JSON.stringify({ models: [{ name: "qwen3.5:9b" }] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        : new Response("unavailable", { status: 503 }),
+    )
+
+    await using tmp = await tmpdir({ config: { enabled_providers: ["ollama"] } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const health = await Provider.catalogHealth()
+        expect(health.all).toBe(false)
+        expect(health.failed.has("ollama")).toBe(true)
+        expect(health.completed.has("ollama")).toBe(false)
+      },
+    })
+  })
+
+  test("marks a provider whose discovery succeeded as completed", async () => {
+    stubTags(
+      () =>
+        new Response(JSON.stringify({ models: [{ name: "qwen3.5:9b" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    )
+
+    await using tmp = await tmpdir({ config: { enabled_providers: ["ollama"] } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const health = await Provider.catalogHealth()
+        expect(health.all).toBe(false)
+        expect(health.completed.has("ollama")).toBe(true)
+        expect(health.failed.has("ollama")).toBe(false)
+      },
+    })
+  })
+
+  test("does not mark a static provider without a discovery loader as incomplete", async () => {
+    await using tmp = await tmpdir({
+      config: { provider: { "static-box": { name: "Static", models: { m: { name: "M" } } } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const health = await Provider.catalogHealth()
+        expect(health.all).toBe(false)
+        expect(health.failed.has("static-box")).toBe(false)
+        expect(health.completed.has("static-box")).toBe(false)
+      },
+    })
   })
 })
 

@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
 import { getDoctorModelPinsCheck } from "../../src/cli/cmd/doctor/model-pins"
+import type { ProviderLookup } from "../../src/cli/cmd/debug/routing"
 import { Provider } from "../../src/provider/provider"
 
 const providers: Record<string, { models: Record<string, unknown> }> = {
@@ -8,7 +9,10 @@ const providers: Record<string, { models: Record<string, unknown> }> = {
   zai: { models: { "glm-5.3-flash": {} } },
 }
 
-const lookup = async (providerID: string) => providers[providerID]
+const lookup: ProviderLookup = async (providerID) => {
+  const provider = providers[providerID]
+  return provider ? { status: "ready", models: provider.models } : { status: "missing" }
+}
 
 test("doctor model pins report ok when every configured pin resolves", async () => {
   const check = await getDoctorModelPinsCheck(
@@ -110,8 +114,8 @@ test("doctor model pins degrade to a warning when the provider registry cannot l
 
 test("doctor model pins report an incomplete catalog instead of a stale pin", async () => {
   const check = await getDoctorModelPinsCheck({ small_model: "gateway/glm-5.3-unreleased" }, async () => ({
+    status: "incomplete",
     models: { "glm-5.3": {} },
-    catalogIncomplete: true,
   }))
   expect(check.status).toBe("warn")
   expect(check.detail).toContain("small_model → gateway/glm-5.3-unreleased (catalog unavailable)")
@@ -122,7 +126,7 @@ test("doctor model pins report an incomplete catalog instead of a stale pin", as
 })
 
 test("doctor model pins report catalog unavailable when an incomplete provider is missing entirely", async () => {
-  const check = await getDoctorModelPinsCheck({ small_model: "lan-box/m" }, async () => ({ catalogIncomplete: true }))
+  const check = await getDoctorModelPinsCheck({ small_model: "lan-box/m" }, async () => ({ status: "incomplete" }))
   expect(check.status).toBe("warn")
   expect(check.detail).toContain("small_model → lan-box/m (catalog unavailable)")
 })
@@ -170,4 +174,71 @@ test("real Provider.parseModel resolves colon, trailing-space, and bare family p
     status: "ok",
     detail: "All 3 configured model pins resolve",
   })
+})
+
+test("doctor model pins report a blacklisted pin and its own advice", async () => {
+  const check = await getDoctorModelPinsCheck({ small_model: "gateway/glm-5.3" }, async () => ({
+    status: "ready",
+    models: {},
+    exclusion: () => "configured-blacklist",
+  }))
+  expect(check.status).toBe("warn")
+  expect(check.detail).toContain(
+    "small_model → gateway/glm-5.3 (excluded by provider blacklist) — falls back to the session model; complexity routing skipped",
+  )
+  expect(check.detail).toContain("Edit the provider blacklist/whitelist or change the pin.")
+  expect(check.detail).not.toContain("Use exact IDs")
+})
+
+test("doctor model pins report a whitelist miss and its own advice", async () => {
+  const check = await getDoctorModelPinsCheck({ model: "gateway/glm-5.3" }, async () => ({
+    status: "ready",
+    models: {},
+    exclusion: () => "outside-configured-whitelist",
+  }))
+  expect(check.detail).toContain("model → gateway/glm-5.3 (excluded by provider whitelist)")
+  expect(check.detail).toContain("Edit the provider blacklist/whitelist or change the pin.")
+  expect(check.detail).not.toContain("AX_CODE_ENABLE_EXPERIMENTAL_MODELS")
+})
+
+test("doctor model pins mention the experimental flag only for experimental exclusions", async () => {
+  const check = await getDoctorModelPinsCheck({ model: "gateway/glm-5.3" }, async () => ({
+    status: "ready",
+    models: {},
+    exclusion: () => "experimental-model-disabled",
+  }))
+  expect(check.detail).toContain("model → gateway/glm-5.3 (excluded: experimental models disabled)")
+  expect(check.detail).toContain(
+    "Set AX_CODE_ENABLE_EXPERIMENTAL_MODELS=1 to allow experimental models, or change the pin.",
+  )
+  expect(check.detail).not.toContain("blacklist/whitelist")
+})
+
+test("doctor model pins report a deprecated registry exclusion", async () => {
+  const check = await getDoctorModelPinsCheck({ model: "gateway/glm-5.3" }, async () => ({
+    status: "ready",
+    models: {},
+    exclusion: () => "deprecated-model",
+  }))
+  expect(check.detail).toContain("model → gateway/glm-5.3 (excluded: deprecated model)")
+  expect(check.detail).toContain("Pin a supported model instead.")
+  expect(check.detail).not.toContain("blacklist/whitelist")
+  expect(check.detail).not.toContain("AX_CODE_ENABLE_EXPERIMENTAL_MODELS")
+})
+
+test("doctor model pins order the stale-pin advice before the excluded advice", async () => {
+  const check = await getDoctorModelPinsCheck(
+    {
+      model: "gateway/glm-5.3",
+      small_model: "elsewhere/m",
+    },
+    async (providerID) =>
+      providerID === "gateway"
+        ? { status: "ready", models: {}, exclusion: () => "configured-blacklist" }
+        : { status: "missing" },
+  )
+  const stale = check.detail.indexOf("Use exact IDs from ax-code models or remove stale pins.")
+  const excluded = check.detail.indexOf("Edit the provider blacklist/whitelist or change the pin.")
+  expect(stale).toBeGreaterThanOrEqual(0)
+  expect(excluded).toBeGreaterThan(stale)
 })

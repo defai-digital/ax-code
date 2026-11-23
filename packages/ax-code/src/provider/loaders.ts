@@ -74,14 +74,19 @@ type OpenAICompatibleModelItem = {
   max_output_tokens?: number
 }
 
-function asOpenAICompatibleModelList(input: unknown): { data: OpenAICompatibleModelItem[] } | null {
+function asOpenAICompatibleModelList(input: unknown): { data: OpenAICompatibleModelItem[]; rawLength: number } | null {
   if (!input || typeof input !== "object") return null
   const data = (input as { data?: unknown }).data
   if (!Array.isArray(data)) return null
-  return { data: data.filter((item): item is OpenAICompatibleModelItem => !!item && typeof item === "object") }
+  return {
+    data: data.filter((item): item is OpenAICompatibleModelItem => !!item && typeof item === "object"),
+    // Raw length before dropping non-object items so discovery can tell a
+    // genuinely empty catalog from one whose entries are all unusable.
+    rawLength: data.length,
+  }
 }
 
-function asOllamaTags(input: unknown): { models: { name: string }[] } | null {
+function asOllamaTags(input: unknown): { models: { name: string }[]; rawLength: number } | null {
   if (!input || typeof input !== "object") return null
   const models = (input as { models?: unknown }).models
   if (!Array.isArray(models)) return null
@@ -93,6 +98,7 @@ function asOllamaTags(input: unknown): { models: { name: string }[] } | null {
         typeof (item as { name?: unknown }).name === "string" &&
         (item as { name: string }).name.trim().length > 0,
     ),
+    rawLength: models.length,
   }
 }
 
@@ -234,6 +240,14 @@ async function discoverOpenAICompatibleModels(
     log.debug("OpenAI-compatible model list returned invalid schema", { host: endpoint.discoveryHost })
     throw new Error(`${providerID} model discovery failed: invalid response schema`)
   }
+  // A catalog with entries but no usable ids is a failed load, not an empty
+  // catalog: the mapper would otherwise silently publish zero models and the
+  // provider would look like it has no models at all.
+  const usable = parsed.data.some((item) => typeof item.id === "string" && item.id.trim().length > 0)
+  if (parsed.rawLength > 0 && !usable) {
+    log.debug("OpenAI-compatible model list had no usable model ids", { host: endpoint.discoveryHost })
+    throw new Error(`${providerID} model discovery failed: no usable model ids`)
+  }
   return parsed
 }
 
@@ -324,7 +338,7 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
           })
           throw new Error(`${providerID} model discovery failed: HTTP ${res.status}`)
         }
-        let data: { models: { name: string }[] } | null = null
+        let data: { models: { name: string }[]; rawLength: number } | null = null
         try {
           data = asOllamaTags(await res.json())
         } catch (error) {
@@ -341,6 +355,16 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
             host: endpoint.discoveryHost,
           })
           throw new Error(`${providerID} model discovery failed: invalid response schema`)
+        }
+        // Same rule as the OpenAI-compatible path: entries present but none
+        // usable means a failed load, while `{"models":[]}` is a real empty
+        // catalog that resolves to `{}`.
+        if (data.rawLength > 0 && data.models.length === 0) {
+          log.debug("Ollama-compatible model discovery had no usable model names", {
+            providerID,
+            host: endpoint.discoveryHost,
+          })
+          throw new Error(`${providerID} model discovery failed: no usable model names`)
         }
         const models: Record<string, Provider.Model> = {}
         for (const m of data.models) {

@@ -4,16 +4,38 @@ import type { ProviderID } from "../../../provider/schema"
 
 export type PinTarget = string | { providerID: string; modelID: string } | undefined
 
+/** Typed outcome for one configured pin. Callers branch on `code`, never on `reason`. */
+export type PinWarningCode =
+  | "invalid_format"
+  | "excluded"
+  | "provider_not_configured"
+  | "catalog_unavailable"
+  | "model_not_found"
+
+export type PinWarning = {
+  pin: string
+  target: string
+  code: PinWarningCode
+  /** Human-readable reason shown to the user. */
+  reason: string
+  /** Machine reason for an excluded pin (e.g. "configured-blacklist"); never prose. */
+  excludeReason?: string
+}
+
 /**
- * Resolves a provider to its local catalog view. The lookup may wait for
- * provider catalog discovery, which can contact providers; it never runs
- * inference. `models` is omitted and `catalogIncomplete` set when the
- * provider's catalog could not be fully loaded (discovery failure or
- * timeout), so callers can distinguish "stale pin" from "catalog unknown".
+ * One provider's catalog view. `status` separates "not configured" from
+ * "catalog could not be fully loaded", and `exclusion` reports why a specific
+ * model is not offered (config blacklist/whitelist or registry policy).
+ * `undefined` is shorthand for `{ status: "missing" }` so simple fakes stay
+ * terse.
  */
-export type ProviderLookup = (
-  providerID: string,
-) => Promise<{ models?: Record<string, unknown>; catalogIncomplete?: boolean } | undefined>
+export type ProviderLookupResult = {
+  status: "missing" | "ready" | "incomplete"
+  models?: Record<string, unknown>
+  exclusion?: (modelID: string) => string | undefined
+}
+
+export type ProviderLookup = (providerID: string) => Promise<ProviderLookupResult | undefined>
 
 /** Structural subset of the config schema: every field that pins an exact provider/model. */
 export type PinConfig = {
@@ -56,18 +78,37 @@ function defaultParse(target: string): { providerID: string; modelID: string } {
   return { providerID, modelID }
 }
 
+/** Maps a registry/config exclusion reason to the sentence shown to the user. */
+function exclusionText(reason: string): string {
+  switch (reason) {
+    case "configured-blacklist":
+      return "excluded by provider blacklist"
+    case "outside-configured-whitelist":
+      return "excluded by provider whitelist"
+    case "deprecated-model":
+      return "excluded: deprecated model"
+    case "experimental-model-disabled":
+      return "excluded: experimental models disabled"
+    default:
+      return "excluded by model policy"
+  }
+}
+
 /**
  * Flag pins that do not resolve in the provider catalog. String pins are
  * parsed with `parse` (the runtime's `Provider.parseModel` in real callers),
  * so pins are judged the same way the runtime resolves them; a parse failure
  * is reported as "invalid model format" without consulting the catalog.
+ * Exclusions are checked before "provider not configured" so a pin that is
+ * explicitly blacklisted in config is reported as excluded even when its
+ * provider is absent or its catalog is incomplete.
  */
 export async function pinWarnings(
   pins: (readonly [string, PinTarget])[],
   lookup: ProviderLookup,
   parse: (target: string) => { providerID: string; modelID: string } = defaultParse,
-) {
-  const warnings: { pin: string; target: string; reason: string }[] = []
+): Promise<PinWarning[]> {
+  const warnings: PinWarning[] = []
   for (const [pin, value] of pins) {
     if (!value) continue
     const target = typeof value === "string" ? value : `${value.providerID}/${value.modelID}`
@@ -78,56 +119,41 @@ export async function pinWarnings(
           ? parse(value)
           : { providerID: value.providerID.trim(), modelID: value.modelID.trim() }
     } catch {
-      warnings.push({ pin, target, reason: "invalid model format" })
+      warnings.push({ pin, target, code: "invalid_format", reason: "invalid model format" })
       continue
     }
     const provider = await lookup(resolved.providerID)
-    if (!provider) warnings.push({ pin, target, reason: "provider not configured" })
-    else if (provider.models && Object.hasOwn(provider.models, resolved.modelID)) continue
-    else if (provider.catalogIncomplete) warnings.push({ pin, target, reason: "catalog unavailable" })
-    else warnings.push({ pin, target, reason: "model not in provider catalog" })
+    const excluded = provider?.exclusion?.(resolved.modelID)
+    if (excluded) {
+      warnings.push({ pin, target, code: "excluded", reason: exclusionText(excluded), excludeReason: excluded })
+      continue
+    }
+    if (!provider || provider.status === "missing") {
+      warnings.push({ pin, target, code: "provider_not_configured", reason: "provider not configured" })
+      continue
+    }
+    if (provider.models && Object.hasOwn(provider.models, resolved.modelID)) continue
+    if (provider.status === "incomplete") {
+      warnings.push({ pin, target, code: "catalog_unavailable", reason: "catalog unavailable" })
+      continue
+    }
+    warnings.push({ pin, target, code: "model_not_found", reason: "model not in provider catalog" })
   }
   return warnings
 }
 
-/**
- * Parse provider discovery diagnostics into which catalogs could not be
- * loaded: `all` when the whole discovery run failed, otherwise the provider
- * ids whose loader, discovery, or plugin auth failed. Unknown source
- * prefixes are ignored.
- */
-export function incompleteCatalogs(diagnostics: readonly { source: string }[]): {
-  all: boolean
-  providers: Set<string>
-} {
-  const providers = new Set<string>()
-  let all = false
-  for (const diagnostic of diagnostics) {
-    if (diagnostic.source === "discovery") {
-      all = true
-      continue
-    }
-    const match = diagnostic.source.match(/^(?:discovery|loader|plugin-auth):(.+)$/)
-    if (match?.[1]) providers.add(match[1])
-  }
-  return { all, providers }
+/** Structural subset of the catalog-health view exposed by `Provider.catalogHealth()`. */
+type CatalogHealthView = { all: boolean; failed: Set<string>; completed: Set<string> }
+
+/** Structural subset of a config provider block: only the model filters matter here. */
+type ProviderFilterConfig = { blacklist?: readonly string[]; whitelist?: readonly string[] }
+
+type RegistryContext = {
+  health: CatalogHealthView
+  exclusions: Map<string, Map<string, string>>
+  config: { provider?: Record<string, ProviderFilterConfig | undefined> }
 }
 
-/**
- * Provider-catalog lookup backed by the live registry, shared by `debug
- * routing` and the doctor model pins check. Awaits discovery and computes
- * the incomplete-catalog set once per closure; a provider whose discovery
- * failed is reported as `catalogIncomplete` (even when the failed loader
- * dropped it from the registry) instead of "not configured", because the pin
- * may work again once the endpoint is reachable. An opted-in, allowed local
- * LLM runtime absent from the registry gets the same treatment: such runtimes
- * register only when their startup reachability probe succeeds, so the pin
- * works once the local server is started. A runtime that was never opted in
- * (config.provider / enabled_providers) or is filtered out by provider
- * settings stays "not configured", since starting a server would not help.
- * Keeps this module free of static provider imports — it is unit-tested with
- * fakes via model-pins.ts.
- */
 /** Mirrors the provider registry's opt-in and allow rules for local LLM runtimes. */
 async function localRuntimeOptedIn(providerID: string): Promise<boolean> {
   const { Config } = await import("../../../config/config")
@@ -144,27 +170,82 @@ async function localRuntimeOptedIn(providerID: string): Promise<boolean> {
   return !!(runtime.defaultHost || process.env[runtime.envVar] || configured?.options?.baseURL)
 }
 
+/**
+ * Provider-catalog lookup backed by the live registry, shared by `debug
+ * routing` and the doctor model pins check. Awaits discovery and memoizes the
+ * catalog health, registry exclusions, and config once per closure. A provider
+ * whose discovery failed is reported as `incomplete` (even when the failed
+ * loader dropped it from the registry) instead of "not configured", because the
+ * pin may work again once the endpoint is reachable. Config blacklist/whitelist
+ * exclusions are read directly from config, so they hold even offline, when the
+ * provider is absent, or when its catalog is incomplete. An opted-in, allowed
+ * local LLM runtime absent from the registry gets the same `incomplete`
+ * treatment: such runtimes register only when their startup reachability probe
+ * succeeds, so the pin works once the local server is started. A runtime that
+ * was never opted in (config.provider / enabled_providers) or is filtered out by
+ * provider settings stays "missing", since starting a server would not help.
+ * Keeps this module free of static provider imports — it is unit-tested with
+ * fakes via model-pins.ts.
+ */
+/** Exclusions derived from a model row's status, which live discovery may override. */
+const STATUS_EXCLUSIONS = new Set(["deprecated-model", "experimental-model-disabled"])
+
 export function registryLookup(): ProviderLookup {
-  let incomplete: Promise<{ all: boolean; providers: Set<string> }> | undefined
+  let context: Promise<RegistryContext> | undefined
+  const load = () =>
+    (context ??= (async () => {
+      const { Config } = await import("../../../config/config")
+      const { Provider } = await import("../../../provider/provider")
+      await Provider.ready()
+      const [health, snapshot, config] = await Promise.all([
+        Provider.catalogHealth(),
+        Provider.snapshot(),
+        Config.get(),
+      ])
+      const exclusions = new Map<string, Map<string, string>>()
+      for (const entry of snapshot.exclusions) {
+        const byModel = exclusions.get(entry.providerID) ?? new Map<string, string>()
+        byModel.set(entry.modelID, entry.reason)
+        exclusions.set(entry.providerID, byModel)
+      }
+      return { health, exclusions, config }
+    })())
   return async (providerID) => {
     const { Provider } = await import("../../../provider/provider")
     const { LOCAL_LLM_RUNTIMES } = await import("../../../provider/local-runtime")
-    incomplete ??= (async () => {
-      await Provider.ready()
-      return incompleteCatalogs((await Provider.snapshot()).discovery.diagnostics)
-    })()
-    const state = await incomplete
-    const catalogIncomplete = state.all || state.providers.has(providerID)
+    const { health, exclusions, config } = await load()
+    const configured = config.provider?.[providerID]
     const provider = await Provider.getProvider(providerID as ProviderID)
-    if (!provider) {
-      if (catalogIncomplete) return { catalogIncomplete: true }
-      // An opted-in, allowed local LLM runtime that is absent failed its
-      // startup reachability probe (the server is down); the pin is not stale.
-      if (Object.hasOwn(LOCAL_LLM_RUNTIMES, providerID) && (await localRuntimeOptedIn(providerID)))
-        return { catalogIncomplete: true }
+    // An opted-in, allowed local LLM runtime that is absent and never
+    // completed discovery failed its startup reachability probe (the server is
+    // down); the pin is not stale. A runtime that completed discovery and was
+    // dropped for an empty catalog is genuinely missing.
+    const runtimeDown =
+      !provider &&
+      !health.completed.has(providerID) &&
+      Object.hasOwn(LOCAL_LLM_RUNTIMES, providerID) &&
+      (await localRuntimeOptedIn(providerID))
+    const incomplete =
+      runtimeDown || (!health.completed.has(providerID) && (health.all || health.failed.has(providerID)))
+    // With a complete catalog, a pin missing from both the catalog and the
+    // recorded exclusions does not exist, so the config lists cannot explain it.
+    const catalogVerifiable = !incomplete && (!!provider || health.completed.has(providerID))
+    const exclusion = (modelID: string): string | undefined => {
+      // Prefer the reason the registry recorded: it already follows
+      // applyModelFilters' precedence for models that were actually loaded.
+      const recorded = exclusions.get(providerID)?.get(modelID)
+      // Saved fallback rows carry a status that live rows may not, so a status
+      // exclusion is not trustworthy while the catalog is incomplete.
+      if (recorded && !(incomplete && STATUS_EXCLUSIONS.has(recorded))) return recorded
+      if (catalogVerifiable) return undefined
+      // Absent provider or incomplete catalog: config lists still hold offline
+      // and before a model loads.
+      if (configured?.blacklist?.includes(modelID)) return "configured-blacklist"
+      if (configured?.whitelist && !configured.whitelist.includes(modelID)) return "outside-configured-whitelist"
       return undefined
     }
-    return { models: provider.models, catalogIncomplete }
+    if (!provider) return { status: incomplete ? "incomplete" : "missing", exclusion }
+    return { status: incomplete ? "incomplete" : "ready", models: provider.models, exclusion }
   }
 }
 
@@ -213,7 +294,7 @@ export const RoutingCommand = cmd({
         "Configuration loading and catalog discovery may contact providers without running inference.",
         "External CLI and gateway internal routing are outside this local preview.",
       ]
-      if (warnings.some((warning) => warning.reason === "catalog unavailable"))
+      if (warnings.some((warning) => warning.code === "catalog_unavailable"))
         notes.push("Some provider catalogs could not be loaded; rerun when those providers are reachable.")
       process.stdout.write(
         JSON.stringify(

@@ -86,6 +86,13 @@ export namespace Provider {
   // lists remain non-blocking so TUI startup stays responsive.
   export const DISCOVERY_WAIT_HEADER = "x-ax-code-wait-for-provider-discovery"
 
+  /** Which provider catalogs loaded completely, failed, or failed as a whole run. */
+  export type CatalogHealth = {
+    all: boolean
+    failed: Set<string>
+    completed: Set<string>
+  }
+
   function providerImportSpecifier(installedPath: string, subpath?: string) {
     const fsPath = isFileUrl(installedPath) ? fileURLToPath(installedPath) : installedPath
     const entry = Module.resolveEntry(fsPath, subpath)
@@ -514,6 +521,14 @@ export namespace Provider {
 
     log.info("provider init started", { command: "provider.init", status: "started" })
     const initFailures: { source: string; error: unknown }[] = []
+    // Catalog completeness is tracked explicitly rather than re-parsed from
+    // diagnostics: `failedCatalogs` holds ids whose loader, discovery, or
+    // plugin auth failed; `completedDiscovery` holds ids whose discovery
+    // finished successfully (which supersedes an earlier failure); and
+    // `discoveryFailedAll` marks a whole-run failure that taints every id.
+    const failedCatalogs = new Set<string>()
+    const completedDiscovery = new Set<string>()
+    let discoveryFailedAll = false
     const exclusions = new Map<string, { providerID: string; modelID: string; reason: string }>()
     const exclude = (providerID: string, modelID: string, reason: string) => {
       exclusions.set(JSON.stringify([providerID, modelID]), { providerID, modelID, reason })
@@ -847,6 +862,7 @@ export namespace Provider {
           mergeProvider(providerID, patch)
         } catch (err) {
           initFailures.push({ source: `plugin-auth:${plugin.auth!.provider}`, error: err })
+          failedCatalogs.add(plugin.auth!.provider)
           log.warn("plugin auth loader failed", { provider: plugin.auth!.provider, error: err })
         }
       }
@@ -897,6 +913,7 @@ export namespace Provider {
           }
         } catch (err) {
           initFailures.push({ source: `loader:${id}`, error: err })
+          failedCatalogs.add(id)
           log.warn("custom provider loader failed", { provider: id, error: err })
         }
       }),
@@ -976,9 +993,11 @@ export namespace Provider {
               providers[providerID].models[modelID] = model
             }
             applyModelFilters(providerID, providers[providerID])
+            completedDiscovery.add(providerID)
             revision++
           })().catch((e) => {
             initFailures.push({ source: `discovery:${id}`, error: e })
+            failedCatalogs.add(id)
             log.warn("state discovery error", { id, error: e })
           })
         }),
@@ -1013,6 +1032,7 @@ export namespace Provider {
       Object.keys(discoveryLoaders).length > 0
         ? runDiscovery().catch((err) => {
             initFailures.push({ source: "discovery", error: err })
+            discoveryFailedAll = true
             discoveryStatus.phase = "failed"
             revision++
             log.warn("provider discovery failed", { err })
@@ -1055,6 +1075,11 @@ export namespace Provider {
           phase: discoveryStatus.phase,
           diagnostics: initFailures.map(({ source }) => ({ source, code: "provider-initialization-failed" })),
         },
+      }),
+      catalogHealth: () => ({
+        all: discoveryFailedAll,
+        failed: new Set(failedCatalogs),
+        completed: new Set(completedDiscovery),
       }),
     }
   })
@@ -1113,6 +1138,22 @@ export namespace Provider {
   // discover. Never rejects: discovery swallows per-loader failures.
   export async function ready() {
     await state().then((s) => s.discovery)
+  }
+
+  /**
+   * Catalog completeness across the configured providers. `all` marks a failed
+   * discovery run, `failed` holds provider ids whose loader, discovery, or
+   * plugin auth failed, and `completed` holds ids whose discovery finished
+   * successfully. A provider's catalog is incomplete iff
+   * `!completed.has(id) && (all || failed.has(id))`, so a successful
+   * authoritative refresh supersedes an earlier failure. Kept out of
+   * `snapshot()` because it is diagnostic state, not credential-free model
+   * data.
+   */
+  export async function catalogHealth(): Promise<CatalogHealth> {
+    const s = await state()
+    await s.discovery
+    return s.catalogHealth()
   }
 
   // Drop the cached provider state so the next `list()` / `getSDK()`
