@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.8] - 2026-11-24
+
+### Fixed
+
+- Keep `ax-code debug routing` usable with a malformed configured primary model and show the configuration warning even when `--model` overrides it.
+
 ## [7.31.7] - 2026-11-23
 
 ### Changed
