@@ -316,28 +316,27 @@ export const RoutingCommand = cmd({
     await bootstrapReadonly(process.cwd(), async () => {
       const config = await Config.get()
       await Provider.ready()
-      const primary = args.model ? Provider.parseModel(args.model) : await Provider.defaultModel()
-      // An invalid `small_model` is already reported by `warnings` as
-      // "invalid model format"; echoing the parse failure instead of throwing
-      // keeps the rest of the routing preview printable.
-      const auxiliary = config.small_model
-        ? (() => {
-            try {
-              return Provider.parseModel(config.small_model)
-            } catch {
-              return { invalid: config.small_model }
-            }
-          })()
-        : "inherit-primary"
+      const previewConfiguredPin = (target: string): ReturnType<typeof Provider.parseModel> | { invalid: string } => {
+        try {
+          return Provider.parseModel(target)
+        } catch {
+          return { invalid: target }
+        }
+      }
+      const primary = args.model
+        ? Provider.parseModel(args.model)
+        : config.model
+          ? previewConfiguredPin(config.model)
+          : await Provider.defaultModel()
+      const primaryIsInvalid = "invalid" in primary
+      const auxiliary = config.small_model ? previewConfiguredPin(config.small_model) : "inherit-primary"
       const fallback = (config.llm_routing?.fallback ?? []).filter(
-        (target) => RoutePolicy.key(target) !== RoutePolicy.key(primary),
+        (target) => primaryIsInvalid || RoutePolicy.key(target) !== RoutePolicy.key(primary),
       )
-      // The first entry reports the primary selection (--model override,
-      // configured `model`, or most recent); configuredPins repeats the
-      // `model` key in that case, so drop the duplicate from the shared list.
+      const primaryPin = args.model ? "--model" : config.model ? "model" : "recent"
       const pins: (readonly [string, PinTarget])[] = [
-        [args.model ? "--model" : config.model ? "model" : "recent", primary],
-        ...configuredPins(config).filter(([pin]) => pin !== "model"),
+        [primaryPin, primaryIsInvalid ? primary.invalid : primary],
+        ...configuredPins(config).filter(([pin]) => pin !== primaryPin),
       ]
       const warnings = await pinWarnings(pins, registryLookup(), (target) => Provider.parseModel(target))
       const registry = await Provider.snapshot()

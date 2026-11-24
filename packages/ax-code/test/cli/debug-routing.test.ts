@@ -1,7 +1,17 @@
 import { afterEach, expect, test, vi } from "vitest"
-import { configuredPins, pinWarnings, registryLookup, type ProviderLookup } from "../../src/cli/cmd/debug/routing"
+import {
+  configuredPins,
+  pinWarnings,
+  registryLookup,
+  RoutingCommand,
+  type ProviderLookup,
+} from "../../src/cli/cmd/debug/routing"
 import { Config } from "../../src/config/config"
 import { Provider } from "../../src/provider/provider"
+
+vi.mock("../../src/cli/bootstrap", () => ({
+  bootstrapReadonly: async (_directory: string, run: () => Promise<void>) => run(),
+}))
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -169,6 +179,7 @@ test("pinWarnings reports an excluded pin even when the catalog is incomplete", 
 
 function mockRegistry(input: {
   health: { all: boolean; failed: string[]; completed: string[] }
+  model?: string
   exclusions?: { providerID: string; modelID: string; reason: string }[]
   config?: Record<string, unknown>
   provider?: { models: Record<string, unknown> } | undefined
@@ -186,12 +197,40 @@ function mockRegistry(input: {
   } as unknown as Awaited<ReturnType<typeof Provider.snapshot>>)
   const getProvider = vi.spyOn(Provider, "getProvider").mockImplementation(async () => input.provider as never)
   const config = vi.spyOn(Config, "get").mockResolvedValue({
+    model: input.model,
     provider: input.config ?? {},
     ...(input.enabled ? { enabled_providers: input.enabled } : {}),
     ...(input.disabled ? { disabled_providers: input.disabled } : {}),
   } as unknown as Awaited<ReturnType<typeof Config.get>>)
   return { ready, catalogHealth, snapshot, getProvider, config }
 }
+
+test.each([
+  {
+    override: undefined,
+    primary: { invalid: "gateway/" },
+    selectionSource: "config",
+  },
+  {
+    override: "gateway/working",
+    primary: { providerID: "gateway", modelID: "working" },
+    selectionSource: "command",
+  },
+])("debug routing reports a malformed configured primary with override $override", async (input) => {
+  mockRegistry({
+    health: { all: false, failed: [], completed: [] },
+    model: "gateway/",
+    provider: { models: { working: {} } },
+  })
+  const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true)
+  await RoutingCommand.handler({ model: input.override, $0: "ax-code", _: ["debug", "routing"] })
+  expect(stdout).toHaveBeenCalledOnce()
+  expect(JSON.parse(String(stdout.mock.calls[0]?.[0]))).toMatchObject({
+    primary: input.primary,
+    selectionSource: input.selectionSource,
+    warnings: [{ pin: "model", target: "gateway/", code: "invalid_format", reason: "invalid model format" }],
+  })
+})
 
 test("registryLookup treats a completed discovery as superseding an earlier failure", async () => {
   mockRegistry({
