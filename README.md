@@ -3,9 +3,10 @@
 AX Code is an open-source coding agent for the terminal, SSH, and CI. Connect a
 local or hosted model, give the agent a task, then review its changes and the
 checks it ran. Session events and available file snapshots let you inspect
-earlier steps, compare attempts, and recover changes. Council and Arena can
-evaluate candidate implementations in isolated Git worktrees using your
-project's checks. You choose which changes to keep and merge.
+earlier steps, compare attempts, and recover changes. Council gathers reviews
+from multiple models. Arena can build candidate implementations in isolated Git
+worktrees and rank them using your project's checks. You choose which changes
+to keep and merge.
 
 [![Latest release](https://img.shields.io/github/v/release/defai-digital/ax-code)](https://github.com/defai-digital/ax-code/releases/latest)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
