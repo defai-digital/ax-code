@@ -2,15 +2,15 @@
 
 Status: Active
 
-Scope: source-checkout integration
+Scope: current-state
 
-Last reviewed: 2026-09-19
+Last reviewed: 2026-11-26
 
 Owner: ax-code runtime
 
-The source checkout includes separate **MTPLX** (`mtplx`) and **oMLX** (`omlx`) presets under
-`/connect` → **Local LLM runtime**. These presets are not included in the v7.19.3 packaged binaries.
-They connect to an already-running server; AX Code does not install, launch, or tune these runtimes.
+The packaged CLI/TUI includes **MTPLX** (`mtplx`) and **oMLX** (`omlx`) presets under
+`/connect` → **Local LLM runtime**. Start and configure the server in its own runtime
+before connecting AX Code.
 
 ## Connect
 
@@ -37,8 +37,9 @@ mtplx serve --model /path/to/your/mtplx-model --host 127.0.0.1 --port 8000
 omlx serve --model-dir /path/to/your/models --host 127.0.0.1 --port 8001
 ```
 
-Use the endpoint corresponding to the server you started. Inspect its model IDs with
-`curl http://localhost:8000/v1/models` (change the port for your configuration).
+Use the endpoint corresponding to the server you started. After connecting, use
+`ax-code models mtplx` or `ax-code models omlx` to list the IDs AX Code can use.
+To inspect the server's raw listing, request `/v1/models` on its configured port.
 
 ## Coding tools and authentication
 
@@ -79,7 +80,7 @@ AXQuant's Qwen MTP packs include a separate `mtp.safetensors` head and a
 `axquant_omlx_compat.json`, which lists the 15 MTP tensors for this 27B pack.
 These files describe compatibility; turning on Lightning MTP alone does not import the head.
 
-For oMLX 0.6.4, use a complete, writable local model copy. In **Model Settings**, select
+The model card documents this workflow for oMLX 0.6.4. Use a complete, writable local model copy. In **Model Settings**, select
 **Import MTP side-car**, then enable **Lightning MTP**. The upstream importer prepares an
 MTP shard and updates that local copy's checkpoint index. Keep the original downloaded pack
 intact for other runtimes; do not edit a shared Hugging Face cache snapshot in place.

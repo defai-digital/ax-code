@@ -54,6 +54,7 @@ published SDK, see [Source access and public distribution](getting-started/sourc
 
 ## Runtime guides
 
+- [Model recovery](guides/model-recovery.md) — diagnose model pins and configure retry targets.
 - [Fixed-context questions](guides/fixed-context-questions.md) — ask about selected files through AX Trust.
 - [Goal assurance](guides/goal-assurance.md) — set completion criteria and run project checks.
 - [Harness controls](guides/harness-controls.md) — configure runtime controls and verification.
@@ -78,7 +79,6 @@ published SDK, see [Source access and public distribution](getting-started/sourc
 - [Execution Modes](guides/modes.md) — agent, hybrid, council, and arena behavior.
 - [Multi-Model Routing Best Practices](guides/multi-model-routing.md) — split premium reasoning and lower-cost support
   work without silently weakening correctness-sensitive tasks.
-- [Model recovery](guides/model-recovery.md) — exact model selection, explicit fallback configuration and diagnostics.
 - [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
 - [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.
 - [Performance](guides/performance.md) — coding tool profiles and local request-timing diagnostics.
@@ -95,7 +95,7 @@ published SDK, see [Source access and public distribution](getting-started/sourc
 - [Supported Providers and Models](providers/supported-providers.md) — provider IDs, credentials, and model discovery.
 - [Free-Tier API Quickstart](providers/free-tier-apis.md) — compatible no-cost paths, constraints, and safe evaluation.
 - [Custom and Gateway Providers](providers/custom-provider.md) — OpenAI- and Anthropic-compatible endpoints.
-- [MTPLX and oMLX Setup](providers/local-mlx-runtimes.md) — source-checkout local presets, discovery, tools, and authentication.
+- [MTPLX and oMLX Setup](providers/local-mlx-runtimes.md) — packaged local runtime presets, discovery, tool support, and authentication.
 - [AX Code Model Downloads](providers/ax-code-model-downloads.md) - reviewed HF collection revisions and verified R2 mirror availability.
 - [AX Engine Model Selection](providers/ax-engine-model-selection.md) — local model ranking and memory guidance.
 

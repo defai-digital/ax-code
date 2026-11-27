@@ -31,7 +31,8 @@ See [Installation and Runtime Channels](docs/getting-started/install-runtime.md)
 for signature verification, all install commands, and source launchers. The
 [AX Code Desktop app](docs/getting-started/install-runtime.md#desktop-installation)
 includes its own runtime and has a separate update channel. Source checkouts and
-Node.js SDK applications require Node.js 26 or later.
+Node.js SDK applications require Node.js 26 or later. For an existing install,
+see [Upgrade and recovery](docs/getting-started/upgrade.md).
 
 ## First session
 
@@ -56,14 +57,17 @@ and the [Security Policy](SECURITY.md).
 
 AX Code supports hosted APIs, vendor CLIs, private GPU endpoints, AX Trust
 gateways, and local runtimes. The [provider catalog](docs/providers/supported-providers.md)
-lists connection methods and model discovery behavior.
+lists connection methods and model discovery behavior. Run `ax-code models <provider-id>`
+for the exact model IDs available to your installation. If a saved model stops
+resolving, run `ax-code doctor` or see [Model recovery](docs/guides/model-recovery.md).
 
 For managed local inference on Apple Silicon, install AX Engine with
 `ax-code providers ax-engine install`. Tiel Coder 35B A3B MXFP4 MTP is the
 default managed pack. Check [AX Engine Model Selection](docs/providers/ax-engine-model-selection.md)
 for supported engine versions, model choices, memory requirements, and
 activation checks. To connect a running Ollama, LM Studio, MTPLX, oMLX, AX
-Studio, or other OpenAI-compatible endpoint, see [local runtime setup](docs/providers/local-mlx-runtimes.md).
+Studio, or other OpenAI-compatible endpoint, choose **Local LLM runtime** in
+`/connect`. See [local runtime setup](docs/providers/local-mlx-runtimes.md).
 
 ## Documentation
 

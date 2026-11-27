@@ -197,7 +197,7 @@ The CLI commands above install the standalone CLI/TUI. For the app and its bundl
 | Windows release assets               | Download `ax-code-windows-*.zip` from the public release index                                                            | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
 | Linux bash release installer         | `curl -fsSL https://download.automatosx.com/ax-code/install \| bash`                                                      | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
 | Linux release assets                 | Download `ax-code-linux-*.tar.gz` from the public release index                                                           | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
-| Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                      | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
+| Local bundled launcher               | `pnpm run setup:cli` after building the workspace SDK                                                                     | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
 | Local source launcher                | `pnpm run setup:cli -- --source`                                                                                          | `source`               | Contributor          | Contributor-only source debugging                                  |
 | Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                  | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
 
@@ -289,7 +289,7 @@ Choose the channel that owns the active installation:
 | ---------------------------- | -------------------------------------------------------------------- |
 | Standalone Unix installer    | `ax-code upgrade`                                                    |
 | Homebrew                     | `brew upgrade ax-code` (or `ax-code upgrade` from that installation) |
-| Windows PowerShell installer | Re-run the PowerShell installer below                                |
+| Windows PowerShell installer | `ax-code upgrade` or rerun the PowerShell installer below            |
 | Contributor checkout         | Rebuild that checkout; source mode does not auto-upgrade             |
 
 Existing legacy-tap users should follow the [shared tap migration](#move-an-existing-installation-from-the-legacy-tap). A second installation can shadow the
@@ -336,9 +336,10 @@ irm https://download.automatosx.com/ax-code/install.ps1 -OutFile ax-code-install
 ## Contributor Launcher Behavior
 
 These launchers run from a local source checkout. See [Contributing](../../CONTRIBUTING.md#working-from-source)
-for setup.
+for setup. Build the workspace SDK first with
+`pnpm --dir packages/sdk/js run build`.
 
-`pnpm run setup:cli` is intentionally compiled-path by default. It builds or reuses the local bundled binary under `packages/ax-code/dist/...` and installs a global launcher that points at that binary. This keeps local packaged-runtime checks close to what Homebrew and curl-installer users run.
+`pnpm run setup:cli` uses the locally bundled Node runtime by default. It builds or reuses the local bundled binary under `packages/ax-code/dist/...` and installs a global launcher that points at that binary. This keeps local packaged-runtime checks close to what Homebrew and curl-installer users run.
 
 That launcher usually lands in `~/.local/bin` or `PNPM_HOME`, which is typically earlier on PATH than Homebrew. If Homebrew already provides `ax-code`, `setup:cli` installs the checkout as `ax-code-src` and removes a previously written `ax-code` wrapper so `brew upgrade ax-code` keeps updating the `ax-code` command. Use `pnpm run setup:cli -- --override-homebrew` only when you intentionally want the checkout to take over `ax-code`. `ax-code doctor` still warns about that override as `PATH launchers`.
 

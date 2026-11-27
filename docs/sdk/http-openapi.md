@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-02
+Last reviewed: 2026-11-26
 Owner: ax-code sdk
 
 AX Code has two integration paths:
@@ -20,7 +20,7 @@ The HTTP/OpenAPI path is compatibility and generated-client infrastructure. It l
 
 | Need                                          | Recommended path                                   | Why                                                                                                 |
 | --------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| TypeScript or JavaScript in the same process  | Source-workspace `createAgent()` adapter           | Available only when the private AX Code runtime source package is deliberately resolvable           |
+| TypeScript or JavaScript in the same process  | Source-workspace `createAgent()` adapter           | Requires the resolvable `ax-code/sdk/programmatic` workspace export                                 |
 | First-party desktop/native GUI                | `@defai-digital/ax-code-sdk/grpc`                  | Narrower headless contract, server streaming, metadata/deadline friendly, and less WebView exposure |
 | TypeScript or JavaScript with a local backend | `@defai-digital/ax-code-sdk/headless`              | Keeps lifecycle and event projection typed without exposing the full HTTP SDK surface               |
 | Python, Go, Java, Rust, or another runtime    | Generate a client from `packages/sdk/openapi.json` | Reuses the HTTP contract without adding first-party package maintenance for every language          |

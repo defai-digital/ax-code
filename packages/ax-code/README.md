@@ -4,23 +4,17 @@ This package contains the main AX Code CLI and backend.
 
 ## Development
 
-Install dependencies from the repo root:
+Use Node.js 26 or later and the pnpm version specified in the root manifest.
+From the repository root:
 
 ```bash
-pnpm install
-```
-
-Run the CLI from this package (from `packages/ax-code`):
-
-```bash
-pnpm dev
-```
-
-Or use the root workspace wrapper (from the repo root; it builds the SDK types first and loads `../../.env` when present):
-
-```bash
+pnpm install --frozen-lockfile
 pnpm run dev
 ```
+
+The root launcher compiles the workspace SDK before starting the CLI and loads
+the repository's local `.env` when present. Run `pnpm dev` from
+`packages/ax-code` if the workspace SDK has already been built.
 
 ## Testing
 
@@ -92,12 +86,16 @@ Artifacts:
 
 ## CI
 
-GitHub Actions runs the `ax-code` workflow on `packages/ax-code/**` changes.
+The `ax-code` workflow selects checks for changes to the CLI, its workspace
+dependencies, and shared tooling. It runs typechecking and scans, eight
+deterministic shards, runtime contract tests, and advisory integration and
+quarantine checks. The deterministic jobs upload JUnit and risk reports.
+V8 coverage is opt-in. To enable it locally, pass `--coverage`; on GitHub Actions
+also set `AX_TEST_COVERAGE=1`.
 
-- PRs and pushes to `dev` or `main` run the deterministic lane: typecheck, grouped deterministic tests, risk summary artifact upload, and coverage artifact upload.
-- The deterministic lane writes coverage output and summaries under `.internal/reports/testing/`.
-- PR workflows try to download the latest successful `dev` coverage summary and include line/function trend deltas in the step summary. Branch trend is reported as unavailable until the vitest LCOV reporter emits branch counters.
-- `workflow_dispatch` can optionally run the live lane.
-- `ax-code-perf` is a separate manual workflow for perf sampling, optional regression gating, machine-readable summary upload, markdown report upload, and optional baseline promotion. It uploads the raw report, the verdict JSON, the markdown report, and optionally a promoted baseline artifact plus baseline summary artifact.
+Manual dispatch can enable the live tests. The separate `ax-code-perf` workflow
+runs benchmark sampling and optional regression gates, then uploads the results
+and any requested baseline.
 
-JUnit reports are written under `.internal/reports/testing/junit/`.
+Local test reports are written under `.internal/reports/testing/`, including JUnit
+files in `.internal/reports/testing/junit/`.

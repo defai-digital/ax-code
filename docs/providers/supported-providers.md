@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-11
+Last reviewed: 2026-11-26
 Owner: ax-code runtime
 
 This page lists the provider presets AX Code exposes in the default setup flows. The source of truth is the runtime provider allowlist in
@@ -72,8 +72,7 @@ Local LLM runtime lists these choices in order:
 | AX-Studio   | `ax-studio` | `http://localhost:18080/v1`           | `AX_STUDIO_HOST`          |
 | Others      | `local-llm` | Enter your OpenAI-compatible endpoint | `LOCAL_LLM_HOST`          |
 
-MTPLX and oMLX presets are available in the source checkout; v7.19.3 packaged binaries do not include them.
-See [MTPLX and oMLX setup](local-mlx-runtimes.md) for tool-capability configuration, optional authentication,
+MTPLX and oMLX are available in the packaged CLI/TUI. See [MTPLX and oMLX setup](local-mlx-runtimes.md) for tool-capability configuration, optional authentication,
 and the shared default-port caveat.
 
 Start your local server, select its menu entry, and confirm or edit the endpoint.
@@ -199,15 +198,15 @@ User file and image attachments are written to temporary files for the CLI to re
 URLs preserve the original file bytes; remote HTTP(S) URLs remain references. Temporary files are removed when the
 CLI process exits, including cancellation and spawn failures.
 
-| Provider id      | Display name            | Required local command | Fallback model id | Source                                                                                |
-| ---------------- | ----------------------- | ---------------------- | ----------------- | ------------------------------------------------------------------------------------- |
-| `claude-code`    | Anthropic (Claude Code) | `claude`               | `claude-code`     | Proprietary; bridged through the vendor CLI                                           |
-| `codex-cli`      | OpenAI (Codex CLI)      | `codex`                | `codex-cli`       | [openai/codex](https://github.com/openai/codex) (Apache-2.0)                          |
-| `grok-build-cli` | Grok Build CLI          | `grok`                 | `grok-build-cli`  | [xai-org/grok-build](https://github.com/xai-org/grok-build) (Apache-2.0)              |
-| `kimi-cli`       | Kimi Code CLI           | `kimi`                 | `kimi-cli`        | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) (MIT)                 |
-| `muse-cli`       | Muse Code CLI           | `muse`                 | `muse-cli`        | Proprietary; bridged through the vendor CLI                                           |
-| `dsh-cli`        | DeepSeek Harness        | `dsh`                  | `dsh-cli`         | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (MIT) |
-| `antigravity-cli` | Google Antigravity CLI | `agy` | `antigravity-cli` | [Google Antigravity](https://antigravity.google/docs/cli/headless/) |
+| Provider id       | Display name            | Required local command | Fallback model id | Source                                                                                |
+| ----------------- | ----------------------- | ---------------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| `claude-code`     | Anthropic (Claude Code) | `claude`               | `claude-code`     | Proprietary; bridged through the vendor CLI                                           |
+| `codex-cli`       | OpenAI (Codex CLI)      | `codex`                | `codex-cli`       | [openai/codex](https://github.com/openai/codex) (Apache-2.0)                          |
+| `grok-build-cli`  | Grok Build CLI          | `grok`                 | `grok-build-cli`  | [xai-org/grok-build](https://github.com/xai-org/grok-build) (Apache-2.0)              |
+| `kimi-cli`        | Kimi Code CLI           | `kimi`                 | `kimi-cli`        | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) (MIT)                 |
+| `muse-cli`        | Muse Code CLI           | `muse`                 | `muse-cli`        | Proprietary; bridged through the vendor CLI                                           |
+| `dsh-cli`         | DeepSeek Harness        | `dsh`                  | `dsh-cli`         | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (MIT) |
+| `antigravity-cli` | Google Antigravity CLI  | `agy`                  | `antigravity-cli` | [Google Antigravity](https://antigravity.google/docs/cli/headless/)                   |
 
 Antigravity keeps its fallback entry alongside the models returned by `agy models`, so selecting the fallback
 continues to use agy's saved default. Other fallback model ids are only listed when AX Code cannot read the CLI's own model cache or catalog. Once the CLI
@@ -283,21 +282,10 @@ refresh cannot bring them back. If your configuration still names one of them, p
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and offers only the models in the [AX Code collection](https://huggingface.co/collections/AutomatosX/ax-code): AutomatosX Tiel Coder 35B A3B, Cyber-Tiel Coder 35B A3B, and Swift 1.5 Qwen3.8-27B in MXFP4 and MXFP8 MTP, plus Qwen3.8 Flash Next MXFP4 MTP development packs. Native capabilities are checked when the model starts.
-
-| Provider id | Model id                          | Selection                              | Context | Output |
-| ----------- | --------------------------------- | -------------------------------------- | ------: | -----: |
-| `ax-engine` | `tiel-coder-35b-axq-mxfp4`        | Tiel Coder 35B A3B MXFP4 MTP (default) |  65,536 |  8,192 |
-| `ax-engine` | `tiel-coder-35b-axq-mxfp8`        | Tiel Coder 35B A3B MXFP8 MTP           |  65,536 |  8,192 |
-| `ax-engine` | `swift-1.5-qwen3.8-27b-axq-mxfp4` | Swift 1.5 Qwen3.8-27B MXFP4 MTP        |  65,536 |  8,192 |
-| `ax-engine` | `swift-1.5-qwen3.8-27b-axq-mxfp8` | Swift 1.5 Qwen3.8-27B MXFP8 MTP        |  65,536 |  8,192 |
-| `ax-engine` | `cyber-tiel-coder-35b-axq-mxfp4`  | Cyber-Tiel Coder 35B A3B MXFP4 MTP     |  65,536 |  8,192 |
-| `ax-engine` | `cyber-tiel-coder-35b-axq-mxfp8`  | Cyber-Tiel Coder 35B A3B MXFP8 MTP     |  65,536 |  8,192 |
-| `ax-engine` | `qwen3.8-flash-next-axq-mxfp4`    | Qwen3.8 Flash Next MXFP4 MTP           |  65,536 |  8,192 |
-
-The original Qwen3.8 27B packs, Ornith, Qwen3-Coder-Next and repositories outside the reviewed collection are excluded from managed selection. Historical records remain readable for status and cleanup.
-
-The default local model is `tiel-coder-35b-axq-mxfp4`. See [AX Engine Model Selection](ax-engine-model-selection.md) for the exact selected repositories, memory, and disk guidance.
+`ax-engine` manages local inference on eligible Apple Silicon Macs. The default
+pack is `tiel-coder-35b-axq-mxfp4`. Use `ax-code providers ax-engine models --json`
+for your runtime's catalog, and see [AX Engine Model Selection](ax-engine-model-selection.md)
+for managed model IDs, hardware requirements, and fit checks.
 
 For the existing separately configured loopback attach interface, `/v1/models` is authoritative: AX Code discovers the live model IDs, context/output limits, modalities, and structured tool-call support. A model that does not advertise structured tool calling is not used for coding-agent requests.
 
@@ -305,7 +293,7 @@ AX Engine uses the compact `core` tool profile by default (`bash`, file discover
 
 ### Installing the engine
 
-Local inference needs AX Engine 7.7.0 or later on Apple Silicon macOS. AX Code does not ship the engine: install it with `ax-code providers ax-engine install` (which downloads and verifies the pinned 8.0.4 release), with `brew install defai-digital/tap/ax-engine`, or by downloading a release from [github.com/defai-digital/ax-engine](https://github.com/defai-digital/ax-engine/releases). Cloud providers work without it, and AX Code only reports a missing engine when you select a local model or run `ax-code providers ax-engine status`.
+Local inference needs AX Engine 7.7.0 or later on Apple Silicon macOS. AX Code does not ship the engine: install it with `ax-code providers ax-engine install` (which downloads and verifies the release pinned by AX Code, 8.0.4 in AX Code 7.31.8), with `brew install defai-digital/tap/ax-engine`, or by downloading a release from [github.com/defai-digital/ax-engine](https://github.com/defai-digital/ax-engine/releases). Cloud providers work without it, and AX Code only reports a missing engine when you select a local model or run `ax-code providers ax-engine status`.
 
 AX Code then resolves the binary in this order:
 
@@ -319,13 +307,13 @@ It first checks `--version` and falls back to `install.version` from `ax-engine 
 
 Managed Tiel launches use the catalog window (65,536 context tokens and 8,192 output tokens), which is larger than `ax-engine serve`'s built-in 16,384-token default so the agent prompt fits. Shrink either budget with `provider.ax-engine.options.contextTokens` and `provider.ax-engine.options.maxOutputTokens` (`outputTokens` is the same output knob). The environment names are `AX_ENGINE_CONTEXT_TOKENS` and `AX_ENGINE_MAX_OUTPUT_TOKENS` (`AX_ENGINE_OUTPUT_TOKENS` is an alias). An override can only narrow the catalog ceiling: a larger or invalid value is reported and ignored, and a Tiel or Qwen3.8 window that is not a multiple of 1,024 is snapped down so prefix-cache blocks stay 1,024 tokens. The same numbers are what the running server and the model limit use. A live `/v1/models` card can shrink that window further, and it cannot raise it. Configured options win, and AX Code warns when an environment value is ignored. The same warning is emitted when `binaryPath` ignores `AX_ENGINE_BIN`, or when `connectionMode` / `baseURL` ignores `AX_ENGINE_HOST`. A smaller window can be too small for the full agent prompt; AX Code then refuses the model instead of sending a prompt the server cannot hold.
 
-Collection entries are development packs, and selection does not certify native support. MXFP8 admission and qualification remain subject to AX Engine checks. Collection entries advertise structured tool calling. A live `/v1/models` card still overrides that advertisement once the server is running. `mtpPolicy: disabled` turns MTP off even when the binary version cannot be read; `auto` and `required` still need AX Engine 7.4.0 or newer.
+Collection entries are development packs, and selection does not certify native support. Managed activation checks native compatibility for the selected pack. Collection entries advertise structured tool calling. A live `/v1/models` card still overrides that advertisement once the server is running. Managed runtime resolution requires a verified AX Engine 7.7.0 or newer for all policy settings.
 
 A PATH or overlay install that is missing `libmlx.dylib` / `mlx.metallib` is rejected. The overlay archive is the self-contained 8.0.4 macOS payload (binaries, MLX dylibs and metallib).
 
 AX Engine 7.10.0 and newer download the public AutomatosX packs natively: no Python environment, Hugging Face account or token is involved, every file is checked against its SHA-256, an interrupted transfer resumes, and the engine streams per-file byte progress that the TUI and Desktop show directly. The native path always fetches from `huggingface.co`, so `HF_ENDPOINT`, `HF_TOKEN` and `AX_ENGINE_HF_MAX_WORKERS` only affect the Python helper; `HF_HOME` and `HF_HUB_CACHE` still choose the cache directory. `ax-code providers ax-engine status` reports this as `nativeDownloads`. Engines from 7.7.0 to 7.9.x still run a Python helper that needs `huggingface_hub`; AX Code then picks the interpreter from `AX_ENGINE_PYTHON`, then `~/.local/share/ax-engine/download-env` (the venv the AX Engine docs create), then `~/.ax-engine/venv`. Updating the engine with `ax-code providers ax-engine install` removes that requirement; otherwise create the venv with `python3.13 -m venv ~/.local/share/ax-engine/download-env && ~/.local/share/ax-engine/download-env/bin/python -m pip install huggingface-hub`. The system `python3` on macOS is 3.9 and does not work. Without Hugging Face access, register weights you already have with `ax-code providers ax-engine prepare --model-path <dir>`. The engine itself needs macOS 26 or later on an M2 or newer Apple Silicon Mac; AX Code additionally enforces a per-model floor: 32 GB of unified memory for Swift 27B and 48 GB for Tiel Coder 35B.
 
-Installing the engine does not download a model. Pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`. A complete compatible base snapshot already in the Hugging Face cache is accepted for direct decode; `prepare --download` uses the catalog's preferred MTP package when available.
+Installing the engine does not download a model. Pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`. For a supported cached pack, use its exact catalog ID. Managed starts require MTP by default. [MTP policy](ax-engine-model-selection.md#managed-mtp-policy) describes how to select direct decoding explicitly.
 
 Use `/connect` -> **AX-Engine runtime** -> **Select a model**. AX Code configures
 and starts the local runtime automatically when the selected model is needed;
@@ -333,4 +321,5 @@ no URL or API key is required. **View status**, **Stop local runtime**, and
 **Disable** manage the local runtime. Selecting a model also replaces legacy
 manual attachment settings with managed local setup.
 
-The engine ships for Apple Silicon macOS only. On other hosts, use a hosted provider or an OpenAI-compatible provider gateway; AX Code servers are local-only.
+Managed AX Engine serves on loopback and is available on supported Apple Silicon
+Macs. On other hosts, connect a hosted provider or an OpenAI-compatible endpoint.

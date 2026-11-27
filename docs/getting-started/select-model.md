@@ -2,12 +2,12 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-26
 Owner: ax-code runtime
 
 ## Find a usable model
 
-First [connect a provider](connect-provider.md). In the terminal UI, enter `/models`, search within the connected providers and select a model. Favorites and recent choices help you return to it.
+First [connect a provider](connect-provider.md). In the terminal UI, enter `/model`, search within the connected providers and select a model. Favorites and recent choices help you return to it.
 
 The picker groups models by provider. Models without the required text output or tool-calling capabilities may be hidden or disabled. Managed local models can appear before their weights are downloaded; complete preparation before use.
 
@@ -44,10 +44,10 @@ Merge this field into your existing project or global `ax-code.json`; replace th
 
 Restart after editing configuration. Existing agent, session or recent choices can affect selection when no explicit model is supplied; check the active model before sending the task. Desktop maintains its own settings.
 
-If you connect through a gateway, use the gateway's exact IDs in `model`, `small_model`, and agent model pins. Run
-`ax-code doctor` for a summary of stale pins or `ax-code debug routing` for the full list. Titles and recaps can use
-the session model when `small_model` is unavailable, and optional complexity routing is skipped. Compaction uses
-`agent.compaction.model` when available and otherwise uses the session model.
+If you use a gateway, copy its exact IDs for `model`, `small_model`, and agent
+pins. Run `ax-code doctor` for a summary of model pin warnings, or
+`ax-code debug routing` for the full list. See [Model recovery](../guides/model-recovery.md)
+for auxiliary model selection and fallback behavior.
 
 ## Choose for the task
 

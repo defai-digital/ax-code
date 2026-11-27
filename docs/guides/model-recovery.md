@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-04
+Last reviewed: 2026-11-26
 Owner: ax-code runtime
 
 AX Code preserves exact provider/model selections. Connecting a provider does not
@@ -48,36 +48,34 @@ generation sites. External CLI and gateway internal attempts may remain opaque.
 
 ## Auxiliary work and existing configuration
 
-Without `small_model`, title, recap and compaction inherit the primary model.
-An explicit `small_model` or role-specific agent model still selects that exact
-target. Invalid pins fail instead of moving to another provider or model. Optional
-title/recap work retains its local-title/skip behavior. Compaction preserves the
-transcript when it fails and only changes models through configured recovery.
+When the runtime can resolve the primary, it uses these preferences for work
+that has yet to send a model request:
 
-Configured primary models, task/agent/command pins and saved recent selections
-also remain exact. Remove or correct an unavailable pin explicitly. Headless runs
-with no configured or recent selection require `--model`. The visible model picker
-can offer recommendations, but those suggestions do not become a recovery list.
+| Purpose                                       | Order                                                                                           |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Session title and recap                       | A usable `agent.title.model` or `agent.recap.model`, then `small_model`, then the session model |
+| Compaction                                    | A usable `agent.compaction.model`, then the session model                                       |
+| Optional complexity classification or routing | A usable configured auxiliary model. If unavailable, skip the optional routing step.            |
 
-The optional complexity classifier requires an explicit auxiliary model; without
-one, classification is skipped. It is anchored to the requested provider when a
-primary is supplied. Explicit primary choices survive agent-topic routing.
+Local sessions keep auxiliary work on their own provider. Use exact
+`provider/model` IDs for all pins. An unavailable catalog entry can fall through
+the applicable auxiliary sequence above. A malformed value is a configuration
+error. For headless automation, pass an explicit `--model` to make selection
+reproducible.
 
 ## Inspect the effective configuration
 
 ```sh
+ax-code doctor
 ax-code debug routing
 ax-code debug routing --model my-gateway/openai/gpt-oss-120b
 ```
 
-This prints the exact primary, ordered fallback, auxiliary selection, agent pins
-and retry limit. `warnings` lists every pin (`model`, `small_model`,
-`wiki.model`, `experimental.planner_architect_model`, agent models and
-fallback targets) whose provider is not configured or whose model is not in
-that provider's catalog; such a pin fails when it is used. It does not send a
-model request or probe model availability.
-Normal configuration loading may fetch configured remote settings. This is a
-configuration explanation, not a reconstruction of past gateway behavior.
+Use the **Model pins** section of `doctor` for a summary. `debug routing` shows the
+primary, ordered fallback, auxiliary preference, enabled agent pins, retry limits,
+and the full `warnings` list. An explicit `--model` previews another primary and
+still reports problems in the saved configuration. Configuration loading and
+catalog discovery can contact providers. The preview sends no inference request.
 
 User messages record whether selection came from a request, an agent pin,
 complexity/hybrid routing or session/config defaults. This source describes local
@@ -88,4 +86,17 @@ external providers retain responsibility for upstream routing and authorization.
 
 ## Provider state diagnostics
 
-`ax-code debug routing` also reports the registry discovery phase and model exclusion reasons. A pending or partially failed catalog is distinguishable from a completed successful discovery. A stopped local runtime or an offline dedicated private GPU endpoint does not degrade the phase; its pins are reported as catalog unavailable rather than stale. That quiet treatment applies only when the server cannot be reached (connection refused, DNS failure, timeout); an endpoint that answers with an HTTP error or an invalid model list is still reported as a discovery failure. These diagnostics do not send inference requests; normal provider initialization can still run metadata/auth discovery. Missing tool-capability metadata remains unknown; custom deployments should declare `tool_call: true` only when they accept tools.
+`debug routing` reports discovery status and model exclusion reasons. Use the
+warning code to decide what to check:
+
+| Warning code              | What to check                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
+| `invalid_format`          | Use a complete `provider/model` ID. A malformed enabled agent pin can prevent agent loading. |
+| `provider_not_configured` | Connect or enable the provider.                                                              |
+| `catalog_unavailable`     | Start the runtime or restore access, check the model list, then rerun the diagnostic.        |
+| `model_not_found`         | Check the exact model ID against the completed catalog.                                      |
+| `excluded`                | Inspect the reported provider filter or model policy and choose an eligible model.           |
+
+A stopped local server or unreachable dedicated GPU endpoint can make its catalog
+unavailable. An HTTP error or invalid response from a reachable endpoint still
+counts as a discovery failure.

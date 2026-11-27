@@ -2,21 +2,41 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-17
+Last reviewed: 2026-11-26
 Owner: ax-code runtime
 
-AX Code offers only the models in the [AX Code collection](https://huggingface.co/collections/AutomatosX/ax-code) through **AX Engine (Local)** on eligible Apple Silicon Macs. Tiel Coder is the default. The shipped list is `packages/ax-code/src/provider/ax-engine/collection.json`; a model added to the collection appears in a release after it is listed there and given a pinned definition.
+**AX Engine (Local)** manages the packs reviewed for the
+[AX Code collection](https://huggingface.co/collections/AutomatosX/ax-code). The
+table lists the managed aliases in AX Code 7.31.8. Each alias resolves to a
+specific model pack and revision. See [Model Downloads](ax-code-model-downloads.md)
+for repository links and revisions.
 
-| Model                           | Hugging Face repository                                                                                                               | AX Code selection                    |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| Tiel Coder 35B A3B MXFP4 MTP    | [AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP](https://huggingface.co/AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP)       | `tiel-coder-35b-axq-mxfp4` (default) |
-| Swift 1.5 Qwen3.8-27B MXFP4 MTP | [AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP](https://huggingface.co/AutomatosX/AX-Swift-1.5-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP) | `swift-1.5-qwen3.8-27b-axq-mxfp4`    |
+| Managed model                          | Model ID                          | Minimum unified memory |
+| -------------------------------------- | --------------------------------- | ---------------------: |
+| Tiel Coder 35B A3B MXFP4 MTP (default) | `tiel-coder-35b-axq-mxfp4`        |                 48 GiB |
+| Tiel Coder 35B A3B MXFP8 MTP           | `tiel-coder-35b-axq-mxfp8`        |                 64 GiB |
+| Swift 1.5 Qwen3.8-27B MXFP4 MTP        | `swift-1.5-qwen3.8-27b-axq-mxfp4` |                 32 GiB |
+| Swift 1.5 Qwen3.8-27B MXFP8 MTP        | `swift-1.5-qwen3.8-27b-axq-mxfp8` |                 64 GiB |
+| Cyber-Tiel Coder 35B A3B MXFP4 MTP     | `cyber-tiel-coder-35b-axq-mxfp4`  |                 64 GiB |
+| Cyber-Tiel Coder 35B A3B MXFP8 MTP     | `cyber-tiel-coder-35b-axq-mxfp8`  |                 64 GiB |
+| Qwen3.8 Flash Next MXFP4 MTP           | `qwen3.8-flash-next-axq-mxfp4`    |                192 GiB |
 
-The aliases pin revisions `5ab39b24bfd7f65203be9b7823b1840486f58b6d` and `13df5f8e3b42b8d78bf6f35fe71bf6b72f2863a6`, respectively. Both use the `mlx` selector, preserving the publisher's MXFP4 package. The model cards describe development requantizations with no certified quality-parity or MTP-speed claim; selecting them does not establish native execution or a speed improvement.
+## Install AX Engine
 
-AX Code does not ship the engine. Install the signed [AX Engine 8.0.4 release](https://github.com/defai-digital/ax-engine/releases/tag/v8.0.4) with `ax-code providers ax-engine install`, `brew install defai-digital/tap/ax-engine`, or a release download. 7.7.0 or later is accepted: 7.7.0 includes the Tiel sidecar namespace loader fix from commit `51137c71a6794964d52c32c95e275c0923ed8d0b`, and 7.10.0 or later downloads these packs natively without the Python `huggingface_hub` helper. Older Homebrew 7.4.0 binaries lack that fix and reject these packs with `MlxMtpRequiredButUnavailable`. Keep MTP required; explicit runtime overrides must also contain the fix. The [native prefill and decode measurements](../benchmarks/tiel-runtime-phases-2026-09-19.md) retain their original tested build identity and do not certify performance of the newer release.
+Managed inference requires **macOS 26 or later** on an Apple Silicon **M2 or
+newer**, plus the selected pack's memory and disk capacity.
 
-Qwen3.8 27B, Ornith, Qwen3-Coder-Next and all other repositories are excluded from new managed selection and downloads. Each selected repository appears once. Configured aliases and older cached revisions do not add choices after discovery. Other providers and the separately configured loopback attach interface retain their behavior. To run AX Engine's own dense default, start `ax-engine serve qwen3.8-27b:axq` and attach that local endpoint; measured product-path MTP is **31.05 tok/s** decode on Mac mini M4 Pro 64 GB and **76.90 tok/s** decode / **795.3 tok/s** prefill on M5 Max 128 GB. Those figures are not Tiel completion tok/s and not AX Code session speed. See [Tiel peer summary](../benchmarks/tiel-peer-2026-09-20.md#do-not-mix-with-qwen-38-27b).
+```bash
+ax-code providers ax-engine install
+ax-code providers ax-engine status --json
+```
+
+The installer in AX Code 7.31.8 downloads and verifies the pinned
+[AX Engine 8.0.4 archive](https://github.com/defai-digital/ax-engine/releases/tag/v8.0.4).
+AX Code accepts a verified external engine from version **7.7.0** onward. Engines
+from **7.10.0** download public packs natively. See
+[Installing the engine](supported-providers.md#installing-the-engine) for binary
+selection, Homebrew, and the older Python download path.
 
 ## Inspect the available models
 
@@ -31,26 +51,26 @@ Refreshing reads Hugging Face metadata without downloading weights or starting a
 
 ## Prepare the selected model
 
-Copy the exact model ID from the catalog. The default Tiel alias uses `mlx`:
+Copy the exact model ID and quantization selector from the catalog. The default
+Tiel alias uses `mlx`:
 
 ```bash
 ax-code providers ax-engine prepare \
   --model tiel-coder-35b-axq-mxfp4 --quantization mlx --download --start
 ```
 
-Excluded models fail new prepare, download, and managed activation requests before starting work. Existing model records remain available for status and cleanup; removed Qwen3.8, Ornith and Qwen3-Coder-Next IDs are never redirected to either Tiel artifact. Removing an option does not delete its weights or stop an existing server.
+The managed catalog admits only reviewed packs. To use a different model with an
+already-running engine, configure a [loopback attachment](../architecture/local-engine.md)
+or [connect an OpenAI-compatible endpoint](local-mlx-runtimes.md). Existing local
+model records remain available for status and cleanup.
 
 ## Memory and runtime verification
 
-Both selected aliases use a 65,536-token context, 8,192-token output limit, a 32 GiB download disk budget, and a per-pack memory floor (Swift 1.5 Qwen3.8-27B MXFP4: 32 GB unified memory, 16.3 GiB of weights; Tiel Coder 35B-A3B MXFP4: 48 GB, 20.5 GiB of weights). These are AX Code serving limits, not the upstream maximum context. (Raised from an initial 32,768-token context: that left only 24,576 usable input tokens after the output reserve, less than the fixed AX Code agent system prompt and tool schemas require, so a brand-new session could never send a first turn.)
-
-Each memory estimate includes weights, sidecars, KV cache, buffers, and host reserve. Use the live catalog's fit result for the current machine. These estimates are not hardware or model-quality certification.
-
-Larger packs keep a 64 GB floor (the 64 GiB figure is a conservative full-context planning budget for them). For a
-comfortable managed local-inference machine we recommend an Apple Silicon M4 Pro with 48 GB of unified memory or
-above (for example a Mac Mini M4 Pro 48 GB); a 32 GB M4 runs the Swift pack. The engine itself needs macOS 26 or later
-on an M2 or newer Mac. Smaller Apple Silicon Macs can still run AX Code itself from 8 GB with cloud/API models or
-lighter local runtimes.
+The managed aliases use a 65,536-token context and an 8,192-token output
+limit in AX Code 7.31.8. The Tiel MXFP4 and Swift MXFP4 entries each have a
+32 GiB download disk budget. Larger packs have their own requirements. Check
+`fit` in `ax-code providers ax-engine models --json` for the current machine,
+which accounts for local model files, memory, disk, and runtime readiness.
 
 Before managed activation, AX Code checks the active AX Engine model's text and structured tool contract. A `verification-required` state means preparation is complete but that live contract has not been established. Repository names or MTP sidecars alone do not prove reasoning, vision, MTP acceleration, or multi-turn coding quality.
 
@@ -123,11 +143,9 @@ such as 50 tok/s is neither a configured target nor an upper limit: faster
 hardware can produce tokens faster. Context size, output budgets, and request
 concurrency limits control capacity, not a fixed token generation rate.
 
-The current public Tiel versus MTPLX snapshot is the 20 September 2026 native-API
-campaign summarized in [Tiel peer summary](../benchmarks/tiel-peer-2026-09-20.md).
-On M5 Max 128 GiB the managed default Tiel pack completed at **194.88 tok/s**
-including TTFT (decode 217.85). Cyber-Tiel peak decode **249.01 tok/s** is the
-alternate pack, not the default. Those figures are not AX Code session speed.
+The [20 September 2026 Tiel versus MTPLX benchmark](../benchmarks/tiel-peer-2026-09-20.md)
+records the native API results with its tested versions, hardware, and metrics.
+Use full AX Code session timings when evaluating coding workflows.
 
 Compare measurements at the same input length, output budget, sampling settings,
 and cache state. Short-prompt decode measurements do not establish a minimum

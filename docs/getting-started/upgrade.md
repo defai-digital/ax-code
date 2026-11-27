@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-17
+Last reviewed: 2026-11-26
 Owner: AX Code maintainers
 
 Desktop and CLI installations have independent update channels. Use the channel that owns the installation you want to update; no private GitHub token is required.
@@ -43,18 +43,25 @@ options, and `check` subcommand.
 Without a target version, an upgrade keeps a newer installed version when release metadata is stale.
 An invalid reported version fails the check without running an installer.
 
-Check your installation before upgrading:
+Check the active CLI installation and see whether an update is available:
 
 ```bash
 ax-code --version
 ax-code doctor
-ax-code upgrade check --method curl
-ax-code upgrade --method curl
+ax-code upgrade check
 ```
 
+`ax-code upgrade check --json` writes a JSON result and exits with `0` when up
+to date, `1` when an update is available, or `2` when the check fails. Account
+for these exit codes in scripts.
+
+Run `ax-code upgrade` to update the active standalone installer channel. The
+`--method curl` option explicitly selects the standalone channel on macOS,
+Linux, and Windows. On Windows that channel runs the PowerShell installer.
+
 Older versions may not have `upgrade check`, or may still request GitHub release
-URLs. If an upgrade returns 404 or cannot find a release, run the current public
-installer again. You do not need to uninstall AX Code or delete user data:
+URLs. If an older CLI returns 404 or cannot find a release, rerun the current public
+installer for your platform.
 
 ```bash
 curl -fsSL https://download.automatosx.com/ax-code/install | bash

@@ -28,7 +28,7 @@ changes belong to AX Coder.
 ### Changed
 
 - `ax-code doctor` now identifies configured model pins that cannot be resolved.
-- Publish SDK 2.6.92 with the updated `small_model` configuration description.
+- Update the SDK source to 2.6.92 with the revised `small_model` configuration description.
 
 ### Fixed
 
@@ -63,7 +63,7 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Refresh the bundled model catalog and publish the paired SDK 2.6.91.
+- Refresh the bundled model catalog and prepare SDK source version 2.6.91.
 
 ### Fixed
 

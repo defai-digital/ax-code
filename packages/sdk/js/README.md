@@ -2,7 +2,7 @@
 
 TypeScript SDK for integrating the [AX Code](https://ax-code.app/en/docs/) coding-agent runtime into your own applications.
 
-Use it to supervise a compatible signed AX Code runtime through typed **headless** or **gRPC** boundaries, consume streaming events, project session state, and test application integrations. Source hosts that deliberately provide the private runtime package may also use the in-process `createAgent()` adapter.
+Use it to supervise a compatible signed AX Code runtime through typed **headless** or **gRPC** boundaries, consume streaming events, project session state, and test application integrations. Source hosts with access to a resolvable `ax-code` workspace package can also use the in-process `createAgent()` adapter.
 
 ## Install
 
@@ -16,14 +16,18 @@ The SDK is distributed through **GitHub Packages** as the public `@defai-digital
 Set `NODE_AUTH_TOKEN` through your secret manager to a classic GitHub PAT with `read:packages` and access to the package. Never commit a token. Other npm scopes continue to use their existing registry.
 
 ```bash
-pnpm add @defai-digital/ax-code-sdk@2.6.93
+pnpm add @defai-digital/ax-code-sdk
 ```
+
+For a reproducible install, pin a version from the
+[public GitHub Packages listing](https://github.com/orgs/defai-digital/packages/npm/package/ax-code-sdk).
+The SDK version in the source checkout can be ahead of the registry.
 
 For GitHub Actions, declare `permissions: packages: read` and pass `${{ secrets.GITHUB_TOKEN }}` as `NODE_AUTH_TOKEN` for the install step. Public npm packages on GitHub Packages still require registry authentication; they do not require a private-package access grant. Publication uses the dedicated `SDK_PACKAGES_TOKEN` secret and verifies that package visibility remains public.
 
 SDK release assets include the tarball, its SHA-512 integrity receipt, and a detached Sigstore provenance bundle. Publication verifies authenticated registry bytes and a separate job installs the package with read-only credentials. These assets describe the SDK source tag and the publisher revision separately.
 
-Requires **Node.js 26+** (or Deno with Node compatibility). Older Node.js versions are unsupported. Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`. SDK and runtime versions are independent. Check the runtime capability protocol before enabling app features; an SDK version check alone does not establish runtime compatibility.
+The supported Node.js runtime is **26 or later**. Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`. SDK and runtime versions are independent. Check the runtime capability protocol before enabling app features; an SDK version check alone does not establish runtime compatibility.
 
 The workspace package name `@ax-code/sdk` is private to this monorepo. Consumers install `@defai-digital/ax-code-sdk` from GitHub Packages with authentication.
 
@@ -42,11 +46,11 @@ Upgrade the report integration and runtime together. Other integration surfaces 
 | Native desktop boundary     | `@defai-digital/ax-code-sdk/grpc`             | Stable command/event contract, streaming, metadata, deadlines, and native host adapters |
 | Shared work-mode contracts  | `@defai-digital/ax-code-sdk/mode`             | Mode ids and helpers shared by TUI and app clients                                      |
 | Provider connection picker  | `@defai-digital/ax-code-sdk/provider-connect` | Provider-category taxonomy without runtime-source imports                               |
-| In-process source embedding | `@defai-digital/ax-code-sdk` `createAgent()`  | Lowest overhead and custom tools when the private runtime package is resolvable         |
+| In-process source embedding | `@defai-digital/ax-code-sdk` `createAgent()`  | Lowest overhead and custom tools when the runtime workspace package is resolvable       |
 
 Public applications should use `headless` or `grpc` with a compatible signed AX Code runtime. HTTP/OpenAPI stays behind those SDKs as a fallback and diagnostics layer. Legacy `@defai-digital/ax-code-sdk/v2` subpaths remain for runtime compatibility; new integrations should not start there.
 
-`createAgent()` loads the private `ax-code` source package at call time. The runtime is distributed as a signed executable; its source package remains private.
+`createAgent()` imports `ax-code/sdk/programmatic` at call time. Its source is in the public AX Code repository and is consumed as a workspace package. Apps using a signed AX Code executable use the headless or gRPC interface.
 
 ## Quick start (headless)
 
@@ -143,7 +147,7 @@ and is resolved at runtime with `resolveAxCodeGrpcProtoUrl()`.
 
 ## In-process agent (source hosts only)
 
-This path requires the private `ax-code` runtime package. It is not the public app-integration boundary.
+Use this path from a source workspace where Node.js can resolve `ax-code/sdk/programmatic`.
 
 ```ts
 import { createAgent, tool } from "@defai-digital/ax-code-sdk"
@@ -273,7 +277,7 @@ Generated HTTP SSE subscriptions preserve events across fragmented CRLF and UTF-
 
 The current generated contract baseline is AX Code source v7.23.0. SDK 2.6 does not infer unadvertised features from the runtime version. The current capability catalog does not advertise steering separately; check the read endpoint before offering steering, and handle unsupported-route errors. SDK 2.6 preserves the existing generated and headless entry points. New response-error metadata and request controls are additive; code catching `Error` continues to work.
 
-Applications upgrading older pins should first verify their signed runtime, then test capability negotiation, event projection, pending permissions/questions, cancellation, and backend shutdown. Consumer pin changes belong in the consuming repository after the target SDK is published. Validate the compiled package locally with `pnpm --dir packages/sdk/js run test:consumer`; this checks public imports, declarations, and proto assets in an isolated fixture without the private runtime source package.
+Applications upgrading older pins should first verify their signed runtime, then test capability negotiation, event projection, pending permissions/questions, cancellation, and backend shutdown. Consumer pin changes belong in the consuming repository after the target SDK is published. Validate the compiled package locally with `pnpm --dir packages/sdk/js run test:consumer`; this checks public imports, declarations, and proto assets in an isolated fixture without the runtime workspace package.
 
 ## Cross-language integrations
 
@@ -281,7 +285,7 @@ This package is the first-party TypeScript/JavaScript SDK. For Python, Go, Java,
 
 ## Migration from `@ax-code/sdk` 1.4.0
 
-| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.6.93)                                  |
+| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk`)                                         |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `import { createAxCode } from "@ax-code/sdk"`             | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"` |
 | `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createHeadlessClient } from "@defai-digital/ax-code-sdk/headless"` |
