@@ -1,31 +1,3 @@
-# Dependencies
-node_modules/
-
-# OS / editor noise
-.DS_Store
-*~
-.idea/
-.vscode/
-
-# Logs and temp files
-*.log
-.tmp/
-tmp/
-~$*
-
-# TypeScript build info
-*.tsbuildinfo
-
-# Internal-only working docs; never published to the public repo
-.internal/
-
-# Local agent working memory; never published to the public repo
-.ax-code/
-
-# Runtime output is committed; source-adjacent compiler output is not
+# Runtime output is committed. Keep source-adjacent compiler output local.
 spinner/src/**/*.js
-
-# Native compiler outputs and caches
-native/renderer/.zig-cache/
-native/renderer/zig-out/
 native/renderer/lib/

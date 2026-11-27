@@ -1,13 +1,10 @@
+# Local developer notes and generated source
 research
-dist
-gen
-app.log
 AX.md
+gen
 src/provider/models-snapshot.ts
-.tmp/*
+
+# Local session exports and test output
 session-*.md
-ax-code-log/
-*.heapsnapshot
 debug-312/
-debug-log/
 test/computer-e2e/last-report.json

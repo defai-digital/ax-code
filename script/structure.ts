@@ -1,11 +1,11 @@
 import fs from "fs"
 import path from "path"
-import { spawnSync } from "node:child_process"
+import { execFileSync } from "node:child_process"
 import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-in-v4"
 import { exists, readText, scan, writeText } from "../packages/ax-code/script/fs-compat"
 import { extractImportSpecifiers } from "./import-specifiers"
 import { requiredImplementationFacade, runtimeInterfaceImportAllowed } from "./runtime-boundary"
-import { INTERNAL_ONLY_ROOTS, unapprovedTrackedInternalPaths } from "./repository-policy"
+import { INTERNAL_ONLY_ROOTS, isInternalOnlyPath, unapprovedTrackedInternalPaths } from "./repository-policy"
 import {
   discoverWorkspacePackages,
   workspaceBoundaryViolations,
@@ -48,36 +48,18 @@ const old = [
   "test-reports",
   "test-results",
 ]
-const keep = [
-  ".ax-code",
-  ".ax-grok",
-  ".ax-wiki",
-  ".claude",
-  ".cursor",
-  ".gemini",
-  ".git",
+const allowed = new Set([
   ".github",
   ".husky",
-  ...INTERNAL_ONLY_ROOTS,
-  ".local",
-  ".pnpm-store",
-  ".qoder",
-  ".ruff_cache",
-  ".tmp",
-  ".turbo",
   ".vscode",
-  "ax-wiki",
+  ...INTERNAL_ONLY_ROOTS,
   "crates",
-  "debug-log",
   "docs",
-  "logo",
-  "nix",
-  "node_modules",
   "packages",
   "patches",
   "script",
   "tools",
-]
+])
 
 function rel(file: string) {
   return path.relative(root, file)
@@ -223,29 +205,8 @@ async function top() {
   return out
 }
 
-function roots() {
-  return fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((item) => item.isDirectory())
-    .map((item) => item.name)
-    .filter((name) => !keep.includes(name))
-    .sort()
-}
-
-function trackedInternalFiles() {
-  const result = spawnSync("git", ["ls-files", "--", ...INTERNAL_ONLY_ROOTS], {
-    cwd: root,
-  })
-  if (result.status !== 0) {
-    const message = (result.stderr?.toString() ?? "").trim()
-    throw new Error(message || "failed to inspect tracked internal-only files")
-  }
-  const tracked = result.stdout
-    .toString()
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-  return unapprovedTrackedInternalPaths(tracked)
+function trackedPaths() {
+  return execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean)
 }
 
 async function main() {
@@ -262,9 +223,11 @@ async function main() {
   const big = all.filter((item) => item.lines >= 800)
   const warm = all.filter((item) => item.lines >= 500).length
   const sums = await top()
-  const drift = roots()
-  const stale = old.filter((dir) => fs.existsSync(path.join(root, dir)))
-  const trackedInternal = trackedInternalFiles()
+  const tracked = trackedPaths()
+  const rootFolders = new Set(tracked.filter((name) => name.includes("/")).map((name) => name.split("/")[0]))
+  const stale = old.filter((dir) => rootFolders.has(dir))
+  const drift = [...rootFolders].filter((dir) => !allowed.has(dir) && !old.includes(dir)).sort()
+  const trackedInternal = unapprovedTrackedInternalPaths(tracked.filter(isInternalOnlyPath))
   const out = [] as string[]
   out.push("# Repo Structure Report")
   out.push("")
@@ -352,13 +315,13 @@ async function main() {
   out.push("")
   out.push("## Legacy Root Folders")
   if (stale.length) for (const dir of stale) out.push(`- ${dir}: present`)
-  else out.push("- ok: no legacy root folders found")
+  else out.push("- ok: no legacy root folders tracked")
   out.push("")
   out.push("## Unexpected Root Folders")
   if (drift.length) {
     for (const dir of drift) out.push(`- ${dir}`)
   } else {
-    out.push("- ok: no unexpected root folders found")
+    out.push("- ok: no unexpected root folders tracked")
   }
   out.push("")
 

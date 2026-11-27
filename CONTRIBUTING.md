@@ -69,12 +69,14 @@ Run tests in their owning package, or use `pnpm run test:scripts` for repository
 
 ## Files kept locally
 
-Keep project plans and working notes in `.internal/`. Keep credentials,
+Keep project plans, working notes, and one-off maintenance scripts in `.internal/`. Keep credentials,
 machine-specific config, session dumps, databases, and diagnostic exports local.
 Use sanitized fixtures and example config in shared paths. Before sharing an
 issue attachment, remove credentials, user data, and private repository details.
 
 The pre-commit hook and repository CI run `sh script/check-tracked-local.sh`
-against the staged `.gitignore`. For a file already tracked, use
+against the staged root and package `.gitignore` files. Put repository-wide
+ignores in the root file and package-specific outputs in that package's file.
+Use your Git exclude file for personal preferences. For a file already tracked, use
 `git rm --cached -- <path>` to remove it from the index while retaining the local
 copy. Past commits retain their original contents.

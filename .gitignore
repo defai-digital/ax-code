@@ -1,59 +1,16 @@
-.DS_Store
-node_modules
-.worktrees
-.sst
-.idea
-# Personal VS Code files stay local. settings.json is shared workspace config
-# (TS heap, workspace tsdk, tsgo, rust-analyzer crate root) and has no secrets.
-.vscode/*
-!.vscode/settings.json
-.codex
-*~
-playground
-tmp
-.tmp/
-**/.tmp/
-dist
-!packages/ax-tui/spinner/dist/
-!packages/ax-tui/chart/dist/
-!/packages/akitty-sdk/vendor/dist/
-dist-source
-ts-dist
-.turbo
-.ruff_cache
-**/.serena
-.serena/
-/result
-refs
-Session.vim
-a.out
-target
-
-# napi-rs build outputs
-packages/ax-code-*/index.js
-packages/ax-code-*/*.node
-crates/*/index.js
-crates/*/index.d.ts
-crates/*/*.node
-
-.scripts
-.direnv/
-debug-log/
-
-# Generated AX Wiki output (dogfooded self-wiki; regenerated on demand)
-/ax-wiki/
-/.ax-wiki/
-
-# Temp files
-~$*
-*.tsbuildinfo
-
-# Local credentials and signing material
+# Credentials and machine-specific configuration
 .env
 .env.*
 !.env.example
 !.env.sample
 !.env.template
+.envrc
+.direnv/
+.netrc
+.pypirc
+.git-credentials
+.npmrc
+!/.npmrc
 auth.json
 *.pem
 *.key
@@ -61,12 +18,45 @@ auth.json
 *.pfx
 *.jks
 *.keystore
+*.mobileprovision
 
-# Local runtime state and diagnostic exports
+# Local agent and editor settings
+.ax-code/
+.ax-grok/
+.claude/
+.codex
+.cursor/
+.gemini/
+.idea/
+.local/
+.qoder/
+.serena/
+.mcp.json
+AGENTS.md
+!/packages/ax-code/test/AGENTS.md
+CLAUDE.md
+GEMINI.md
+Session.vim
+**/.vscode/*
+# Shared workspace compiler and Rust settings.
+!/.vscode/settings.json
+
+# Internal planning, notes, and maintenance tools
+.internal
+ADRS/
+PRDS/
+TODOS/
+planning/
+/.github/TEAM_MEMBERS
+/script/internal-context.ts
+/script/review-adr139.ts
+
+# Runtime state and diagnostic exports
 ax-code.json
 ax-code.jsonc
 session-ses_*.md
 ax-code-log/
+debug-log/
 *.db
 *.db-journal
 *.db-shm
@@ -81,35 +71,54 @@ ax-code-log/
 *.sqlite3-wal
 *.log
 *.har
-coverage/
 *.profraw
 *.cpuprofile
 *.heapsnapshot
+report.[0-9]*.json
+/ax-wiki/
+/.ax-wiki/
 
-# Local config
-.ax-code/
-.ax-grok/
-.qoder/
-.cursor/
-.gemini/
-.mcp.json
+# Build, tooling, and test outputs
+node_modules
+.pnpm-store/
+.turbo
+.cache/
+.ruff_cache
+.pytest_cache/
+__pycache__/
+*.pyc
+.zig-cache/
+zig-out/
+.sst
+coverage/
+test-results/
+test-reports/
+playwright-report/
+dist
+# Distribution inputs for clean checkouts.
+!packages/ax-tui/spinner/dist/
+!packages/ax-tui/chart/dist/
+!/packages/akitty-sdk/vendor/dist/
+dist-source
+ts-dist
+target
+/result
+a.out
+*.tsbuildinfo
+packages/ax-code-*/index.js
+packages/ax-code-*/*.node
+crates/*/index.js
+crates/*/index.d.ts
+crates/*/*.node
 
-# Claude Code
-.claude/
-CLAUDE.md
-AGENTS.md
-!/packages/ax-code/test/AGENTS.md
-GEMINI.md
-
-# Internal project docs (not for public)
-.internal
-ADRS/
-PRDS/
-TODOS/
-planning/
-
-# Local dev files
-.local/
-
-# ADR-046 renderer parity harness scratch output
+# Local worktrees, scratch directories, and OS files
+.worktrees
+.scripts
+playground
+refs
+tmp
+.tmp/
 buffer_dump/
+.DS_Store
+*~
+~$*

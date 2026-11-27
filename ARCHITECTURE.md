@@ -45,7 +45,8 @@ manifests own their dependency edges and public `exports` contracts. Use
   `tools/` contains external distribution tooling such as Winget manifests.
 - `docs/` contains public guidance, integration contracts, and published measurements.
   Put dated reports and their input data under `docs/benchmarks/`. Keep local
-  planning and decision records in the ignored `.internal/` tree.
+  planning, decision records, and one-off maintenance scripts in the ignored
+  `.internal/` tree.
 - Root entry points serve distinct readers. `README.md` is the product quickstart,
   `CONTRIBUTING.md` covers source setup and validation, and `docs/README.md`
   indexes user documentation.
@@ -65,7 +66,8 @@ manifests own their dependency edges and public `exports` contracts. Use
 ## Structural verification
 
 Run `pnpm run check:structure` and `pnpm run test:scripts` for repository layout
-changes. The boundary checker discovers packages from the workspace YAML and
+changes. The root-folder audit uses paths in the Git index, so local reports
+and temporary directories do not affect the published layout check. The boundary checker discovers packages from the workspace YAML and
 checks root runtime modules and nested `src/`, `source/` and `test/` trees. It
 excludes tooling/benchmark trees (`script/`, `perf/`), declarations, dependency
 folders, `dist/`, `vendor/` and the AX TUI renderer receipt's generated files.
