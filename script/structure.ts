@@ -323,7 +323,7 @@ async function main() {
     out.push("- error: unapproved internal-only files are tracked; remove them from git index before publishing")
     for (const file of trackedInternal) out.push(`- ${file}`)
   } else {
-    out.push("- ok: only approved internal architecture documents are tracked")
+    out.push("- ok: no internal-only files are tracked")
   }
   out.push("")
   out.push("## V4 Guardrails")

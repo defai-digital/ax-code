@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const websiteOrigin = "https://ax-code.app"
+const repositoryUrl = "https://github.com/defai-digital/ax-code"
 const downloadOrigin = "https://download.ax-code.com"
 const docUrl = (slug) => `/en/docs/${slug ? `${slug}/` : ""}`
 const hash = (data) => createHash("sha256").update(data).digest("hex")
@@ -77,21 +78,22 @@ export function exportSnapshot(base = root) {
     ["CONTRIBUTING.md", "/en/docs/getting-started/source-access/"],
     ["CHANGELOG.md", `${downloadOrigin}/releases.json`],
   ])
-  const isPrivateRepositoryUrl = (target) => /^https:\/\/github\.com\/defai-digital\/ax-code(?:[\/#]|$)/.test(target)
+  const isSourceRepositoryUrl = (target) => /^https:\/\/github\.com\/defai-digital\/ax-code(?:[\/#]|$)/.test(target)
   const publicLink = (source, target) => {
     target = target.replace(`${websiteOrigin}/`, "/")
-    if (/^(?:https?:|mailto:|#|\/)/.test(target) && !isPrivateRepositoryUrl(target)) return target
+    if (target === repositoryUrl) return target
+    if (/^(?:https?:|mailto:|#|\/)/.test(target) && !isSourceRepositoryUrl(target)) return target
     let name
-    if (isPrivateRepositoryUrl(target)) {
-      const rest = target.slice("https://github.com/defai-digital/ax-code".length)
-      if (!rest || rest.startsWith("#")) return "/en/docs/"
+    if (isSourceRepositoryUrl(target)) {
+      const rest = target.slice(repositoryUrl.length)
+      if (rest.startsWith("#")) return "/en/docs/"
       if (rest.startsWith("/releases/download/")) return `${downloadOrigin}${rest}`
       if (rest.startsWith("/releases")) return `${downloadOrigin}/releases.json`
       if (rest.startsWith("/issues") || rest.startsWith("/discussions")) return "https://discord.gg/gf9UyPxaN2"
       if (rest.startsWith("/compare/")) return null
       if (rest.startsWith("/security")) return "/en/docs/security/"
       const match = rest.match(/^\/blob\/(?:main|HEAD|v\d+\.\d+\.\d+)\/(.*)$/)
-      if (!match) throw new Error(`Unmapped private GitHub URL: ${target}`)
+      if (!match) throw new Error(`Unmapped source repository URL: ${target}`)
       name = match[1]
     } else {
       if (/^[a-z][a-z0-9+.-]*:/i.test(target)) throw new Error(`Unsafe link scheme: ${target}`)

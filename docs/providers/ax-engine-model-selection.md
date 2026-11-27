@@ -14,9 +14,9 @@ AX Code offers only the models in the [AX Code collection](https://huggingface.c
 
 The aliases pin revisions `5ab39b24bfd7f65203be9b7823b1840486f58b6d` and `13df5f8e3b42b8d78bf6f35fe71bf6b72f2863a6`, respectively. Both use the `mlx` selector, preserving the publisher's MXFP4 package. The model cards describe development requantizations with no certified quality-parity or MTP-speed claim; selecting them does not establish native execution or a speed improvement.
 
-AX Code does not ship the engine. Install the signed [AX Engine 8.0.4 release](https://github.com/defai-digital/ax-engine/releases/tag/v8.0.4) with `ax-code providers ax-engine install`, `brew install defai-digital/tap/ax-engine`, or a release download. 7.7.0 or later is accepted: 7.7.0 includes the Tiel sidecar namespace loader fix from commit `51137c71a6794964d52c32c95e275c0923ed8d0b`, and 7.10.0 or later downloads these packs natively without the Python `huggingface_hub` helper. Older Homebrew 7.4.0 binaries lack that fix and reject these packs with `MlxMtpRequiredButUnavailable`. Keep MTP required; explicit runtime overrides must also contain the fix. The [native prefill and decode measurements](../guides/tiel-runtime-phases-2026-09-19.md) retain their original tested build identity and do not certify performance of the newer release.
+AX Code does not ship the engine. Install the signed [AX Engine 8.0.4 release](https://github.com/defai-digital/ax-engine/releases/tag/v8.0.4) with `ax-code providers ax-engine install`, `brew install defai-digital/tap/ax-engine`, or a release download. 7.7.0 or later is accepted: 7.7.0 includes the Tiel sidecar namespace loader fix from commit `51137c71a6794964d52c32c95e275c0923ed8d0b`, and 7.10.0 or later downloads these packs natively without the Python `huggingface_hub` helper. Older Homebrew 7.4.0 binaries lack that fix and reject these packs with `MlxMtpRequiredButUnavailable`. Keep MTP required; explicit runtime overrides must also contain the fix. The [native prefill and decode measurements](../benchmarks/tiel-runtime-phases-2026-09-19.md) retain their original tested build identity and do not certify performance of the newer release.
 
-Qwen3.8 27B, Ornith, Qwen3-Coder-Next and all other repositories are excluded from new managed selection and downloads. Each selected repository appears once. Configured aliases and older cached revisions do not add choices after discovery. Other providers and the separately configured loopback attach interface retain their behavior. To run AX Engine's own dense default, start `ax-engine serve qwen3.8-27b:axq` and attach that local endpoint; measured product-path MTP is **31.05 tok/s** decode on Mac mini M4 Pro 64 GB and **76.90 tok/s** decode / **795.3 tok/s** prefill on M5 Max 128 GB. Those figures are not Tiel completion tok/s and not AX Code session speed. See [Tiel peer summary](../guides/tiel-peer-2026-09-20.md#do-not-mix-with-qwen-38-27b).
+Qwen3.8 27B, Ornith, Qwen3-Coder-Next and all other repositories are excluded from new managed selection and downloads. Each selected repository appears once. Configured aliases and older cached revisions do not add choices after discovery. Other providers and the separately configured loopback attach interface retain their behavior. To run AX Engine's own dense default, start `ax-engine serve qwen3.8-27b:axq` and attach that local endpoint; measured product-path MTP is **31.05 tok/s** decode on Mac mini M4 Pro 64 GB and **76.90 tok/s** decode / **795.3 tok/s** prefill on M5 Max 128 GB. Those figures are not Tiel completion tok/s and not AX Code session speed. See [Tiel peer summary](../benchmarks/tiel-peer-2026-09-20.md#do-not-mix-with-qwen-38-27b).
 
 ## Inspect the available models
 
@@ -67,7 +67,7 @@ The default Tiel Coder pack uses the `auto` speculation profile so AX Engine sel
 the model's draft gate instead of the generic `agentic` profile's 0.80 override.
 This is separate from the MTP activation policy: `auto` tuning still uses
 `required` MTP. The old dense Qwen3.8-specific experimental environment is not
-applied to these MoE packs. See the [profile comparison](../guides/tiel-mtp-profile-2026-09-19.md)
+applied to these MoE packs. See the [profile comparison](../benchmarks/tiel-mtp-profile-2026-09-19.md)
 for measured gains. Swift retains `agentic` until its managed tool-use checks pass.
 The activation policy remains `required`; the engine must admit the actual drafter.
 To explicitly select a policy, set `provider.ax-engine.options.mtpPolicy` in `ax-code.json`:
@@ -124,7 +124,7 @@ hardware can produce tokens faster. Context size, output budgets, and request
 concurrency limits control capacity, not a fixed token generation rate.
 
 The current public Tiel versus MTPLX snapshot is the 20 September 2026 native-API
-campaign summarized in [Tiel peer summary](../guides/tiel-peer-2026-09-20.md).
+campaign summarized in [Tiel peer summary](../benchmarks/tiel-peer-2026-09-20.md).
 On M5 Max 128 GiB the managed default Tiel pack completed at **194.88 tok/s**
 including TTFT (decode 217.85). Cyber-Tiel peak decode **249.01 tok/s** is the
 alternate pack, not the default. Those figures are not AX Code session speed.

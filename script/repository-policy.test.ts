@@ -6,9 +6,6 @@ import {
   INTERNAL_ONLY_ROOTS,
   isApprovedTrackedInternalPath,
   isInternalOnlyPath,
-  isLocalDumpPath,
-  LOCAL_DUMP_PATHSPECS,
-  LOCAL_ONLY_PATHSPECS,
   LOCAL_ONLY_ROOT_FILES,
   unapprovedTrackedInternalPaths,
 } from "./repository-policy"
@@ -41,46 +38,12 @@ describe("repository internal-only path policy", () => {
     expect(LOCAL_ONLY_ROOT_FILES).toEqual(["AGENTS.md", "CLAUDE.md", "GEMINI.md"])
     // Exact root names keep nested fixtures trackable, so no path separators.
     expect(LOCAL_ONLY_ROOT_FILES.every((file) => !file.includes("/"))).toBe(true)
-    expect(LOCAL_ONLY_PATHSPECS).toBe(".internal AGENTS.md CLAUDE.md GEMINI.md")
   })
 
-  test("rejects accidental session dumps and user runtime config", () => {
-    expect(isLocalDumpPath("packages/ax-code/session-ses_2d8c.md")).toBe(true)
-    expect(isLocalDumpPath("session-ses_abc.md")).toBe(true)
-    expect(isLocalDumpPath("packages/ax-code/ax-code.json")).toBe(true)
-    expect(isLocalDumpPath("ax-code.json")).toBe(true)
-    expect(isLocalDumpPath("packages/ax-code/test/AGENTS.md")).toBe(false)
-    expect(isLocalDumpPath("packages/ax-code/src/session/llm.ts")).toBe(false)
-    const ignore = readFileSync(".gitignore", "utf8")
-    expect(ignore).toMatch(/^ax-code\.json$/m)
-    expect(ignore).toMatch(/^session-ses_\*\.md$/m)
-    expect(LOCAL_DUMP_PATHSPECS).toEqual([
-      ":(glob)session-ses_*.md",
-      ":(glob)**/session-ses_*.md",
-      "ax-code.json",
-      ":(glob)**/ax-code.json",
-    ])
-  })
-
-  test("pre-commit hook blocks staged local-only paths", () => {
-    // `.gitignore` cannot stop `git add -f`, so the hook is the local
-    // prevention layer. Deriving the expectation from the shared constant
-    // locks it to script/check-tracked-internal.ts instead of a copied literal.
-    const hook = readFileSync(".husky/pre-commit", "utf8")
-    expect(hook).toContain(`git ls-files -- ${LOCAL_ONLY_PATHSPECS}`)
-    expect(hook).toContain(`git ls-files -- ${LOCAL_DUMP_PATHSPECS.map((spec) => `'${spec}'`).join(" ")}`)
-    expect(hook).toContain("git rm --cached")
-  })
-
-  test("every local-only guard consumes the shared list", () => {
-    // The hook is shell and is locked by the pathspec assertion above. These
-    // two are TypeScript and must import the constant, so a newly declared
-    // local-only file cannot be handled in one guard and forgotten in another.
-    for (const file of ["script/check-tracked-internal.ts", "script/check-goal-bughunt.ts"]) {
-      const source = readFileSync(file, "utf8")
-      expect(source).toContain("LOCAL_ONLY_ROOT_FILES")
-      expect(source).not.toMatch(/"AGENTS\.md"/)
-    }
+  test("scope checker consumes the shared root file list", () => {
+    const source = readFileSync("script/check-goal-bughunt.ts", "utf8")
+    expect(source).toContain("LOCAL_ONLY_ROOT_FILES")
+    expect(source).not.toMatch(/"AGENTS\.md"/)
     // This one lives in another package and cannot import script/ policy, so it
     // must at least enumerate the whole class.
     const crossPackage = readFileSync("packages/ax-code/script/verify-cli-review-commit-scope.ts", "utf8")

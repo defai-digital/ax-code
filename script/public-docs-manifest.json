@@ -18,15 +18,15 @@
       "page": "architecture/stability"
     },
     {
-      "source": "docs/data/local-client-matrix-2026-09-19.json",
+      "source": "docs/benchmarks/data/local-client-matrix-2026-09-19.json",
       "asset": "data/local-client-matrix-2026-09-19.json"
     },
     {
-      "source": "docs/data/local-inference-2026-09-19.json",
+      "source": "docs/benchmarks/data/local-inference-2026-09-19.json",
       "asset": "data/local-inference-2026-09-19.json"
     },
     {
-      "source": "docs/data/local-inference-short-request.json",
+      "source": "docs/benchmarks/data/local-inference-short-request.json",
       "asset": "data/local-inference-short-request.json"
     },
     {
@@ -98,11 +98,11 @@
       "page": "guides/current-model-reasoning"
     },
     {
-      "source": "docs/guides/data/tiel-mtp-profile-2026-09-19.json",
+      "source": "docs/benchmarks/data/tiel-mtp-profile-2026-09-19.json",
       "asset": "guides/data/tiel-mtp-profile-2026-09-19.json"
     },
     {
-      "source": "docs/guides/data/tiel-runtime-phases-2026-09-19.json",
+      "source": "docs/benchmarks/data/tiel-runtime-phases-2026-09-19.json",
       "asset": "guides/data/tiel-runtime-phases-2026-09-19.json"
     },
     {
@@ -146,11 +146,11 @@
       "page": "guides/hooks"
     },
     {
-      "source": "docs/guides/local-client-matrix-2026-09-19.md",
+      "source": "docs/benchmarks/local-client-matrix-2026-09-19.md",
       "page": "guides/local-client-matrix-2026-09-19"
     },
     {
-      "source": "docs/guides/local-inference-results-2026-09-19.md",
+      "source": "docs/benchmarks/local-inference-results-2026-09-19.md",
       "page": "guides/local-inference-results-2026-09-19"
     },
     {
@@ -194,15 +194,15 @@
       "page": "guides/terminal-rendering"
     },
     {
-      "source": "docs/guides/tiel-mtp-profile-2026-09-19.md",
+      "source": "docs/benchmarks/tiel-mtp-profile-2026-09-19.md",
       "page": "guides/tiel-mtp-profile-2026-09-19"
     },
     {
-      "source": "docs/guides/tiel-peer-2026-09-20.md",
+      "source": "docs/benchmarks/tiel-peer-2026-09-20.md",
       "page": "guides/tiel-peer-2026-09-20"
     },
     {
-      "source": "docs/guides/tiel-runtime-phases-2026-09-19.md",
+      "source": "docs/benchmarks/tiel-runtime-phases-2026-09-19.md",
       "page": "guides/tiel-runtime-phases-2026-09-19"
     },
     {

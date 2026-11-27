@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, test } from "vitest"
+import { parse } from "yaml"
 
 const workflow = readFileSync(".github/workflows/models-drift.yml", "utf8")
 
@@ -53,11 +54,10 @@ describe("models drift workflow", () => {
     expect(workflow).toContain("models-snapshot.patch")
   })
 
-  test("snapshot PRs match the normal core and repository CI path filters", () => {
-    for (const file of ["ax-code-ci.yml", "repo-structure.yml"]) {
-      const ci = readFileSync(`.github/workflows/${file}`, "utf8")
-      const prPaths = ci.slice(ci.indexOf("  pull_request:"), ci.indexOf("  push:"))
-      expect(prPaths).toMatch(/"packages\/(?:ax-code\/)?\*\*"/)
-    }
+  test("snapshot PRs trigger the core and repository CI workflows", () => {
+    const core = parse(readFileSync(".github/workflows/ax-code-ci.yml", "utf8"))
+    const structure = parse(readFileSync(".github/workflows/repo-structure.yml", "utf8"))
+    expect(core.on.pull_request.paths).toContain("packages/ax-code/**")
+    expect(structure.on).toHaveProperty("pull_request", null)
   })
 })

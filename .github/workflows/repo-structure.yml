@@ -2,42 +2,10 @@ name: repo-structure
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/repo-structure.yml"
-      - ".github/**"
-      - ".internal/**"
-      - ".gitignore"
-      - "AGENTS.md"
-      - "CLAUDE.md"
-      - "GEMINI.md"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "crates/**"
-      - "script/**"
-      - "docs/**"
-      - "packages/**"
-      - "tools/**"
   push:
     branches:
       - dev
       - main
-    paths:
-      - ".github/workflows/repo-structure.yml"
-      - ".github/**"
-      - ".internal/**"
-      - ".gitignore"
-      - "AGENTS.md"
-      - "CLAUDE.md"
-      - "GEMINI.md"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "crates/**"
-      - "script/**"
-      - "docs/**"
-      - "packages/**"
-      - "tools/**"
   schedule:
     - cron: "17 9 * * 1"
   merge_group:
@@ -59,6 +27,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+
+      - name: Check local-only paths
+        run: sh script/check-tracked-local.sh
 
       - name: Lint GitHub workflows
         uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
@@ -97,9 +68,6 @@ jobs:
           name: ax-code-self-scan
           path: .internal/reports/qa/self-scan.md
           if-no-files-found: ignore
-
-      - name: Ensure only approved internal architecture files are tracked
-        run: pnpm exec tsx script/check-tracked-internal.ts
 
       # ax-code intentionally does not track or display monetary cost for
       # LLM calls. This guard prevents schema fields, identifiers, or slash

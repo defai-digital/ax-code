@@ -2,10 +2,10 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-26
 Owner: ax-code runtime
 
-Choose the Desktop app for a graphical workspace, or CLI-only for terminal, SSH, and CI workflows. The commands below follow the Desktop and CLI READMEs. Later sections cover CLI runtime labels from `ax-code doctor`, manual verification, upgrades, and contributor launchers.
+Choose the Desktop app for a graphical workspace, or CLI-only for terminal, SSH, and CI workflows. This guide covers release installers, signature verification, updates, and source launchers.
 
 ## Public availability
 
@@ -17,17 +17,13 @@ a verified Node runtime. Source checkouts and Node-based SDK applications must s
 Node.js 26+; package installation rejects older Node versions.
 
 AX Code Standard remains free for personal and commercial use under its existing license.
-Development source access is managed separately from public distribution. The
-planned proprietary Business components have separate licensing; this does not change
-Standard's license. See [Standard and Business](editions.md) for details and the
-[website guide](https://ax-code.app/en/download/) for public installation updates.
-Public installers and their signed assets must be reachable and verified before the
-website advertises a one-line installation command.
+See [Standard and Business](editions.md) for licensing and
+[Source access](source-access.md) for source and SDK distribution.
 
 ## Release availability
 
 Pushing a `vMAJOR.MINOR.PATCH` git tag starts the Release workflow. The
-[public release index](https://download.ax-code.com/releases.json) list only shows a
+[public release index](https://download.ax-code.com/releases.json) shows a
 version after that workflow has signed assets and published. Until then, Latest
 stays on the previous published tag. After validate succeeds, maintainers can
 see a Draft for the new tag; it is not public Latest.
@@ -173,7 +169,7 @@ $AX_CODE_VERSION = "<release>"
 $AxCodeMinisignPublicKey = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
 irm https://download.automatosx.com/ax-code/install.ps1 -OutFile ax-code-install.ps1
 irm https://download.automatosx.com/ax-code/install.ps1.minisig -OutFile ax-code-install.ps1.minisig
-# Optional: use a preinstalled minisign, or let install.ps1 bootstrap one when verifying the archive.
+# Use a trusted minisign already installed on PATH to verify the script.
 minisign -Vm ax-code-install.ps1 -x ax-code-install.ps1.minisig -P $AxCodeMinisignPublicKey
 Get-Content .\ax-code-install.ps1
 .\ax-code-install.ps1 -Version $AX_CODE_VERSION -NoModifyPath
@@ -212,7 +208,7 @@ The CLI commands above install the standalone CLI/TUI. For the app and its bundl
 
 `compiled` and `bun-bundled` are retired Bun-era runtime modes, retained only for legacy diagnostics. They are not supported user install channels.
 
-`pnpm dev` and `pnpm cli` compile the workspace SDK (`packages/sdk/js`) to `dist` with the repo TypeScript before launching, so a fresh checkout runs without a manual SDK build. The step invokes `typescript/bin/tsc` through `node` directly, so it does not depend on `node_modules/.bin` being linked. The bundled paths (`pnpm run setup:cli` and `pnpm --dir packages/ax-code run build`) still need `pnpm --dir packages/sdk/js run build` first.
+`pnpm dev` and `pnpm cli` compile the workspace SDK (`packages/sdk/js`) to `dist` with the repo TypeScript before launching, so a fresh checkout runs without a manual SDK build. The step invokes the workspace TypeScript Native compiler through `node` directly, so it does not depend on `node_modules/.bin` being linked. The bundled paths (`pnpm run setup:cli` and `pnpm --dir packages/ax-code run build`) still need `pnpm --dir packages/sdk/js run build` first.
 
 ## Platform Policy
 
@@ -339,8 +335,8 @@ irm https://download.automatosx.com/ax-code/install.ps1 -OutFile ax-code-install
 
 ## Contributor Launcher Behavior
 
-This section requires an authorized source checkout. It is not needed for public
-installation or upgrades; see [Source access](source-access.md).
+These launchers run from a local source checkout. See [Contributing](../../CONTRIBUTING.md#working-from-source)
+for setup.
 
 `pnpm run setup:cli` is intentionally compiled-path by default. It builds or reuses the local bundled binary under `packages/ax-code/dist/...` and installs a global launcher that points at that binary. This keeps local packaged-runtime checks close to what Homebrew and curl-installer users run.
 

@@ -35,10 +35,12 @@ describe("repo-structure workflow policy", () => {
     expect(knipIndex).toBeGreaterThan(structureIndex)
   })
 
-  test("guards the canonical internal planning folder", () => {
-    expect(workflow).toContain('".internal/**"')
-    expect(workflow).toContain("script/check-tracked-internal.ts")
-    expect(workflow).not.toContain("ax-internal")
+  test("checks local-only paths before installing dependencies and without path filters", () => {
+    const guard = workflow.indexOf("sh script/check-tracked-local.sh")
+    const install = workflow.indexOf("pnpm install --frozen-lockfile")
+    expect(guard).toBeGreaterThan(-1)
+    expect(guard).toBeLessThan(install)
+    expect(workflow).not.toMatch(/^\s+paths(?:-ignore)?:/m)
   })
 
   test("compiles SDK exports before self-scan imports the runtime", () => {

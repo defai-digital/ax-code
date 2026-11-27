@@ -39,3 +39,42 @@ Stuck or confused? [Open a question](https://github.com/defai-digital/ax-code/is
 ## Pull Requests
 
 We are not accepting external pull requests. PRs from non-team members will be closed. If you've found a bug and know the fix, please describe it in a bug report and we'll handle the implementation.
+
+## Working from source
+
+Use Node.js 26 or later and the pnpm version in `package.json`. Use the Rust
+toolchain in `rust-toolchain.toml` when building native addons.
+
+```bash
+git clone https://github.com/defai-digital/ax-code.git
+cd ax-code
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Use the [workspace map](ARCHITECTURE.md) to find the relevant package. See
+[Installation and Runtime Channels](docs/getting-started/install-runtime.md#contributor-launcher-behavior)
+for the packaged-runtime launcher and its SDK prerequisite.
+
+| Change                       | Verify                                                                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Documentation or repo layout | `pnpm run test:scripts` and `pnpm run check:structure`                                                     |
+| Core runtime                 | `pnpm --dir packages/ax-code run typecheck` and `pnpm --dir packages/ax-code run test:ci -- deterministic` |
+| HTTP routes or schema        | `pnpm --dir packages/sdk/js run build` and review the generated OpenAPI snapshot and clients               |
+| Native addons                | `pnpm build:native` and the tests for the affected package                                                 |
+
+For one core test file, run
+`AX_TEST_FILES=test/path/example.test.ts pnpm --dir packages/ax-code exec vitest run`.
+Run tests in their owning package, or use `pnpm run test:scripts` for repository scripts.
+
+## Files kept locally
+
+Keep project plans and working notes in `.internal/`. Keep credentials,
+machine-specific config, session dumps, databases, and diagnostic exports local.
+Use sanitized fixtures and example config in shared paths. Before sharing an
+issue attachment, remove credentials, user data, and private repository details.
+
+The pre-commit hook and repository CI run `sh script/check-tracked-local.sh`
+against the staged `.gitignore`. For a file already tracked, use
+`git rm --cached -- <path>` to remove it from the index while retaining the local
+copy. Past commits retain their original contents.

@@ -2,25 +2,14 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-10-17
+Last reviewed: 2026-11-26
 Owner: AX Code maintainers
 
-AX Code is a coding-agent runtime for reviewable, reversible work: every session is recorded as a
-structured event log with file snapshots, candidate implementations can be verified against your repository's own
-checks, and nothing merges automatically. [Why AX Code](why-ax-code.md) explains what that optimizes for, who it is
-for, and what it deliberately does not claim.
-
-Start with the [installation guide](getting-started/install-runtime.md): the Desktop app is recommended for a graphical workspace; choose the independent CLI/TUI for terminal, SSH, or CI work. Both use signed public installers and need no source checkout.
-
-Use this hub to configure a workflow, understand a runtime boundary, or integrate AX Code with another system.
-
-Internal process records (PRDs, ADRs, specifications, roadmaps, implementation plans, competitive reviews, and audit
-working files) live under `.internal/`, not in this public tree — see "Documentation boundaries" below. The public
-pages are the ones linked here.
-
-Public website: [ax-code.app/en/docs/](https://ax-code.app/en/docs/).
-For existing installations, start with [Upgrade and recovery](getting-started/upgrade.md).
-Source access and public downloads are separate; see [Source access](getting-started/source-access.md).
+Choose the [Desktop app or standalone CLI](getting-started/install-runtime.md),
+then [connect a provider](getting-started/connect-provider.md) and
+[review your first change](getting-started/start-here.md). For an existing installation,
+see [Upgrade and recovery](getting-started/upgrade.md). For source builds and the
+published SDK, see [Source access and public distribution](getting-started/source-access.md).
 
 ## Practical quickstarts
 
@@ -30,25 +19,14 @@ Source access and public downloads are separate; see [Source access](getting-sta
 
 ## Choose by task
 
-For opt-in shared terminal navigation through an external MCP client, see
-[Share a live TUI through MCP](guides/tui-mcp.md).
-
-For the experimental browser bridge (read pages, optionally click and fill), see
-[WebMCP browser bridge](guides/webmcp-bridge.md).
-
-For standalone questions about selected files through AX Trust caching, see
-[Fixed-context questions](guides/fixed-context-questions.md).
-
 | I want to…                                               | Start here                                                              |
 | -------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Decide whether AX Code fits my work                      | [Why AX Code](why-ax-code.md)                                           |
 | Understand AX Code before installing it                  | [Start Here](getting-started/start-here.md)                             |
 | Review, compare, or undo what an agent did               | [Execution Evidence](guides/execution-evidence.md)                      |
 | Get several models to attempt the same change            | [Verified Multi-Model Changes](guides/verified-multi-model-change.md)   |
 | Choose an install or runtime channel                     | [Installation and Runtime Channels](getting-started/install-runtime.md) |
 | Connect a hosted, CLI, custom, or local provider         | [Supported Providers and Models](providers/supported-providers.md)      |
 | Enable managed local inference on Apple Silicon          | [AX Engine Model Selection](providers/ax-engine-model-selection.md)     |
-| Read the current Tiel vs MTPLX speed numbers             | [Tiel peer summary (20 September 2026)](guides/tiel-peer-2026-09-20.md) |
 | Try AX Code with a free-tier model API                   | [Free-Tier API Quickstart](providers/free-tier-apis.md)                 |
 | Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
 | Administer cloud or network infrastructure safely        | [Cloud Operations Mode](guides/cloud-operations.md)                     |
@@ -75,6 +53,12 @@ For standalone questions about selected files through AX Trust caching, see
   contributor launchers.
 
 ## Runtime guides
+
+- [Fixed-context questions](guides/fixed-context-questions.md) — ask about selected files through AX Trust.
+- [Goal assurance](guides/goal-assurance.md) — set completion criteria and run project checks.
+- [Harness controls](guides/harness-controls.md) — configure runtime controls and verification.
+- [Current-model reasoning](guides/current-model-reasoning.md) — use the active model for reasoning tools.
+- [Terminal rendering](guides/terminal-rendering.md) — diagnose renderer and terminal behavior.
 
 - [Wiki evidence visualization](guides/wiki-visualization.md) — open a local graph of recorded Wiki page/source relationships, or export offline HTML. Includes radial, force, and page-focus screenshots from AX Code's own wiki.
 - [Conversation Recap](guides/conversation-recap.md) — catch up on recent work with `/recap` and configure idle banners.
@@ -112,13 +96,13 @@ For standalone questions about selected files through AX Trust caching, see
 - [Free-Tier API Quickstart](providers/free-tier-apis.md) — compatible no-cost paths, constraints, and safe evaluation.
 - [Custom and Gateway Providers](providers/custom-provider.md) — OpenAI- and Anthropic-compatible endpoints.
 - [MTPLX and oMLX Setup](providers/local-mlx-runtimes.md) — source-checkout local presets, discovery, tools, and authentication.
-- [Tiel peer summary (20 September 2026)](guides/tiel-peer-2026-09-20.md) — current Tiel / Cyber-Tiel vs MTPLX native-API numbers; 194.88 completion default, 249.01 peak decode.
-- [AX Code/OpenCode Client Retest](guides/local-client-matrix-2026-09-19.md) — six client/runtime combinations, active MTP, first/repeat timing, and code checks.
-- [Local Inference Measurements](guides/local-inference-results-2026-09-19.md) — dated AX Code/OpenCode and runtime testing with timing and comparability limits.
 - [AX Code Model Downloads](providers/ax-code-model-downloads.md) - reviewed HF collection revisions and verified R2 mirror availability.
 - [AX Engine Model Selection](providers/ax-engine-model-selection.md) — local model ranking and memory guidance.
 
 ## Integrations
+
+- [TUI MCP sharing](guides/tui-mcp.md) — opt-in navigation of a live terminal UI.
+- [WebMCP browser bridge](guides/webmcp-bridge.md) — connect tools exposed by pages in Chrome.
 
 - [MCP Integrations](integrations/mcp.md) — trust, permissions, resources, and server security.
 - [ACP](integrations/acp.md) — the Agent Client Protocol happy path for IDE hosts.
@@ -130,6 +114,17 @@ For standalone questions about selected files through AX Trust caching, see
 - [Native SDK Transport](sdk/native-transport.md) — gRPC-shaped desktop/native boundary and fallback behavior.
 - [HTTP and OpenAPI Compatibility](sdk/http-openapi.md) — server mode and generated clients for other languages.
 - [OpenAPI snapshot](../packages/sdk/openapi.json) — authoritative HTTP route and schema contract.
+
+## Historical benchmarks
+
+These reports record dated measurements and their test conditions. For current model support
+and setup, see [AX Engine Model Selection](providers/ax-engine-model-selection.md).
+
+- [Tiel versus MTPLX, 20 September 2026](benchmarks/tiel-peer-2026-09-20.md)
+- [Tiel native prefill and decode, 19 September 2026](benchmarks/tiel-runtime-phases-2026-09-19.md)
+- [Tiel MTP tuning profiles, 19 September 2026](benchmarks/tiel-mtp-profile-2026-09-19.md)
+- [AX Code and OpenCode client retest, 19 September 2026](benchmarks/local-client-matrix-2026-09-19.md)
+- [Local inference measurements, 19 September 2026](benchmarks/local-inference-results-2026-09-19.md)
 
 ## Architecture and reliability
 
@@ -150,8 +145,10 @@ For standalone questions about selected files through AX Trust caching, see
 
 ## Documentation boundaries
 
-`docs/` contains public guidance for behavior that exists in a released runtime. Planning material, release targets,
-implementation policy, and temporary analysis do not belong here:
+Use `getting-started/` for onboarding, `guides/` for workflows, `providers/` for model
+configuration, and `reference/` for contracts. Keep dated benchmark reports and their
+supporting data together under `benchmarks/`. Keep local planning and analysis in
+the ignored directories below.
 
 | Content                                                              | Location                               |
 | -------------------------------------------------------------------- | -------------------------------------- |

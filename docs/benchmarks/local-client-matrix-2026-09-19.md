@@ -1,6 +1,6 @@
 # AX Code and OpenCode client retest: 19 September 2026
 
-Status: Active
+Status: Historical
 
 Scope: measured diagnostic snapshot
 
@@ -105,7 +105,7 @@ identical serialized requests/token IDs with controlled output and cache conditi
 
 This report changes no cloud, private GPU, CLI-provider or AX Trust behavior. See the
 [local runtime setup guide](../providers/local-mlx-runtimes.md) for connection instructions and the
-[sanitized measurement data](../data/local-client-matrix-2026-09-19.json) for exact timings, counts,
+[sanitized measurement data](data/local-client-matrix-2026-09-19.json) for exact timings, counts,
 hashes, validation results and MTP evidence. Private project instructions, model responses, local
 paths and session headers are retained locally and are not published. Consequently, the complete
 private-context workload is not independently reproducible from the public report alone.

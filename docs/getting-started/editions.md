@@ -2,13 +2,12 @@
 
 Status: Active product direction; Business is planned
 Scope: current-state
-Last reviewed: 2026-09-16
+Last reviewed: 2026-11-26
 Owner: ax-code runtime
 
 AX Code Standard is the open-source coding workspace. AX Code Business is the planned,
 separately licensed proprietary offering for organizations that need managed AI access,
-central records, and connected business workflows. v8.0 is upcoming; this page describes
-the edition direction, not a statement that Business features have shipped.
+central records, and connected business workflows.
 
 ## Which edition should I choose?
 
@@ -72,13 +71,6 @@ not revoke the licenses of previously distributed code or relicense upstream wor
 
 ## Availability and installation
 
-Public source access and software licenses are separate. Runtime development source
-access is being restricted; the existing Apache-2.0, MIT and NOTICE obligations
-remain. Previously distributed copies retain their licenses. Shipped executable
-JavaScript is readable and is not a confidentiality boundary.
-
-Signed installers, archives and updates use `download.ax-code.com`; the shared
-public Homebrew tap is `defai-digital/tap`. The public TypeScript SDK remains
-`@defai-digital/ax-code-sdk` on GitHub Packages (authentication required). See the [installation guide](install-runtime.md),
-[upgrade guide](upgrade.md) and [public documentation](https://ax-code.app/en/docs/).
-Source-build instructions require an authorized checkout.
+The Standard CLI/TUI source is public. See [Source access and public distribution](source-access.md)
+for source, runtime downloads, and SDK access. Use the [installation guide](install-runtime.md)
+or [upgrade guide](upgrade.md) for signed runtime packages.

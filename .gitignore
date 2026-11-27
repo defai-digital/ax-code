@@ -2,7 +2,6 @@
 node_modules
 .worktrees
 .sst
-.env
 .idea
 # Personal VS Code files stay local. settings.json is shared workspace config
 # (TS heap, workspace tsdk, tsgo, rust-analyzer crate root) and has no secrets.
@@ -20,9 +19,6 @@ dist
 !/packages/akitty-sdk/vendor/dist/
 dist-source
 ts-dist
-desktop/packages/electron/resources/web-dist/
-desktop/packages/electron/resources/ax-computer/
-desktop/packages/electron/resources/ax-code/
 .turbo
 .ruff_cache
 **/.serena
@@ -30,15 +26,11 @@ desktop/packages/electron/resources/ax-code/
 /result
 refs
 Session.vim
-ax-code.json
-session-ses_*.md
 a.out
 target
 
 # napi-rs build outputs
 packages/ax-code-*/index.js
-packages/ax-code-*/index.d.ts
-!packages/ax-code-*/index.d.ts
 packages/ax-code-*/*.node
 crates/*/index.js
 crates/*/index.d.ts
@@ -56,9 +48,43 @@ debug-log/
 ~$*
 *.tsbuildinfo
 
-# Sensitive data
+# Local credentials and signing material
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
 auth.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Local runtime state and diagnostic exports
+ax-code.json
+ax-code.jsonc
+session-ses_*.md
+ax-code-log/
 *.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-journal
+*.sqlite3-shm
+*.sqlite3-wal
+*.log
+*.har
+coverage/
+*.profraw
+*.cpuprofile
+*.heapsnapshot
 
 # Local config
 .ax-code/
@@ -72,10 +98,11 @@ auth.json
 .claude/
 CLAUDE.md
 AGENTS.md
+!/packages/ax-code/test/AGENTS.md
 GEMINI.md
 
 # Internal project docs (not for public)
-.internal/
+.internal
 ADRS/
 PRDS/
 TODOS/
@@ -83,9 +110,6 @@ planning/
 
 # Local dev files
 .local/
-
-# Apple signing/notarization creds (local only)
-desktop/.env.local
 
 # ADR-046 renderer parity harness scratch output
 buffer_dump/

@@ -1,6 +1,6 @@
 # Local inference measurements: 19 September 2026
 
-Status: Active
+Status: Historical
 
 Scope: measured diagnostic snapshot
 
@@ -147,13 +147,13 @@ rates around 51–58 t/s are excluded from fresh-generation claims. Initial runs
 instructions or tool permissions are also excluded. Ollama and LM Studio were inspected for request
 construction only; no generation-rate result is claimed for them.
 
-The generic 62-token prompt is public as an [exact oMLX completion request](../data/local-inference-short-request.json).
+The generic 62-token prompt is public as an [exact oMLX completion request](data/local-inference-short-request.json).
 From the checkout root, after importing the sidecar, enabling MTP, and warming the model, it can be sent with:
 
 ```sh
 curl --no-buffer http://localhost:8000/v1/completions \
   -H 'Content-Type: application/json' \
-  --data-binary @docs/data/local-inference-short-request.json
+  --data-binary @docs/benchmarks/data/local-inference-short-request.json
 ```
 
 Change the request's model ID to the ID exposed by your server. The file includes the rendered template;
@@ -161,7 +161,7 @@ use the completions endpoint so a chat template is not applied a second time. Co
 and retain the final usage event. Cold model loading and warmup must be reported separately.
 
 Private project instructions, session prompts, local paths, and authentication details are not published.
-The [sanitized measurement data](../data/local-inference-2026-09-19.json) contains counts, timing, runtime identity, and input hashes rather than
+The [sanitized measurement data](data/local-inference-2026-09-19.json) contains counts, timing, runtime identity, and input hashes rather than
 prompt text. The full private-context replay is therefore not a standalone publicly reproducible workload.
 For a new comparison, use the same model revision, tokenizer/template, input IDs, output/stop rules,
 sampling, MTP mode, cache state, hardware, and serial execution; report complete-task success separately.

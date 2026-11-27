@@ -6,8 +6,10 @@ import { main, parseCompletionTable, renderSvg } from "./render-tiel-peer-chart"
 const ROOT = path.resolve(import.meta.dirname, "..")
 
 describe("render-tiel-peer-chart", () => {
-  test("parses the three README completion cells", () => {
-    const cells = parseCompletionTable(readFileSync(path.join(ROOT, "README.md"), "utf-8"))
+  test("parses the three benchmark completion cells", () => {
+    const cells = parseCompletionTable(
+      readFileSync(path.join(ROOT, "docs/benchmarks/tiel-peer-2026-09-20.md"), "utf-8"),
+    )
     expect(cells).toHaveLength(3)
     expect(cells.map((c) => [c.axCompletion, c.mtplxCompletion])).toEqual([
       [194.88, 177.44],
@@ -19,12 +21,14 @@ describe("render-tiel-peer-chart", () => {
   })
 
   test("renders a deterministic SVG", () => {
-    const cells = parseCompletionTable(readFileSync(path.join(ROOT, "README.md"), "utf-8"))
+    const cells = parseCompletionTable(
+      readFileSync(path.join(ROOT, "docs/benchmarks/tiel-peer-2026-09-20.md"), "utf-8"),
+    )
     expect(renderSvg(cells)).toBe(renderSvg(cells))
     expect(renderSvg(cells)).toContain("AX Engine vs MTPLX 2.11.3")
   })
 
-  test("committed SVG is not stale relative to the README table", () => {
+  test("committed SVG is not stale relative to the benchmark table", () => {
     expect(main(["--check"])).toBe(0)
   })
 })

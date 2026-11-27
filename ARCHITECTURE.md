@@ -43,8 +43,14 @@ manifests own their dependency edges and public `exports` contracts. Use
 - `script/` contains repository-wide automation. Package-local `script/`
   directories own that package's build, validation and publication tooling.
   `tools/` contains external distribution tooling such as Winget manifests.
-- `docs/` contains released, user-facing guidance. Local planning and decision
-  records belong in the ignored `.internal/` tree and must never be published.
+- `docs/` contains public guidance, integration contracts, and published measurements.
+  Put dated reports and their input data under `docs/benchmarks/`. Keep local
+  planning and decision records in the ignored `.internal/` tree.
+- Root entry points serve distinct readers. `README.md` is the product quickstart,
+  `CONTRIBUTING.md` covers source setup and validation, and `docs/README.md`
+  indexes user documentation.
+- The Desktop app has its own repository and release channel. This workspace owns
+  the CLI runtime and its public SDK contracts.
 - Core `src/` and `test/` follow domain ownership. CLI and HTTP surfaces compose
   domain modules; domain modules must not import CLI/server interface code.
 - Command implementations and helpers are grouped under `src/cli/cmd/doctor/`,
@@ -67,8 +73,8 @@ These exclusions do not replace each package's own build and integrity checks.
 
 For command moves, compile the SDK first (`pnpm --dir packages/sdk/js exec tsc`)
 so clean-checkout SDK exports resolve, then run `pnpm run typecheck`, affected
-CLI tests, core deterministic tests and the static gates listed in the root
-README. Verify source-inspection tests and self-scan baseline paths as well as
+CLI tests, core deterministic tests and the static gates in
+[Contributing](CONTRIBUTING.md#working-from-source). Verify source-inspection tests and self-scan baseline paths as well as
 module imports; both can refer to implementation files by filename.
 
 The structure report lists large source files as review signals. Extract a

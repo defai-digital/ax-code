@@ -2,19 +2,15 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-11
+Last reviewed: 2026-11-26
 Owner: AX Code maintainers
 
-Operator documentation, signed runtime downloads, the shared Homebrew tap and the
-public AX Code SDK are available without access to the development repository.
-Source-build and contributor commands require an authorized checkout. They are
-not required to install or upgrade the packaged runtime.
+The AX Code Standard CLI/TUI and SDK source is available in the
+[public GitHub repository](https://github.com/defai-digital/ax-code).
+See [LICENSE](../../LICENSE), [LICENSE-MIT](../../LICENSE-MIT), and [NOTICE](../../NOTICE)
+for licensing. The repository’s `CONTRIBUTING.md` contains source setup and the
+external contribution policy.
 
-Source access restrictions do not change the licenses of previously distributed
-copies. Existing Apache-2.0 and upstream MIT obligations remain applicable; see
-[LICENSE](../../LICENSE), [LICENSE-MIT](../../LICENSE-MIT) and [NOTICE](../../NOTICE).
-Distributed executable JavaScript remains readable.
-
-Use [installation](install-runtime.md), [upgrades](upgrade.md),
-[SDK documentation](../../packages/sdk/js/README.md) or the
-[community support channel](https://discord.gg/gf9UyPxaN2) for public use.
+[Signed installers](install-runtime.md) and [updates](upgrade.md) are available
+without a source checkout or GitHub credentials. The [JavaScript SDK](../../packages/sdk/js/README.md)
+is distributed through GitHub Packages, which requires package-read authentication.

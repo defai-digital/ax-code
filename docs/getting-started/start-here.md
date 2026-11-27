@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-17
+Last reviewed: 2026-11-26
 Owner: ax-code runtime
 
 Use this page to choose your workflow, install AX Code, and review your first change.
@@ -22,7 +22,7 @@ Start with the **Desktop app** for a graphical project workspace. It includes a 
 
 Choose **CLI-only** for the terminal UI, SSH, or scripts. After installing, open a terminal in your project and run `ax-code`. Use `/connect` to choose a provider, then ask a question about the project. Use `ax-code doctor` to diagnose that CLI installation.
 
-Follow the [installation guide](install-runtime.md) for both README-based install methods, supported platforms, and signature verification. Already installed? Read [upgrade and recovery](upgrade.md). Public installers do not require private GitHub credentials.
+Follow the [installation guide](install-runtime.md) for both installation channels, supported platforms, and signature verification. Already installed? Read [upgrade and recovery](upgrade.md). Public installers do not require private GitHub credentials.
 
 For either interface, request one small change, run your project checks, and review the diff before committing. Desktop and the standalone CLI have independent update channels.
 
