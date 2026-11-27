@@ -145,7 +145,8 @@ describe("SDK documentation contract", () => {
   test("README documents authenticated package installation and contains an install example", () => {
     const readme = readFileSync(resolve(packageRoot, "README.md"), "utf8")
     expect(readme).toContain("# @defai-digital/ax-code-sdk")
-    expect(readme).toContain("pnpm add @defai-digital/ax-code-sdk@")
+    expect(readme).toMatch(/^pnpm add @defai-digital\/ax-code-sdk$/m)
+    expect(readme).toContain("https://github.com/orgs/defai-digital/packages/npm/package/ax-code-sdk")
     expect(readme).toContain("```ts")
     expect(readme).not.toMatch(/first public version has not been published/i)
     expect(readme).not.toMatch(/^Status:/m)
