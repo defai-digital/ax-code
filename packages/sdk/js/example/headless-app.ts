@@ -1,7 +1,7 @@
 import {
   applyHeadlessProjectionEvent,
   createHeadlessClient,
-  createHeadlessProjectionState,
+  createHeadlessClientProjectionState,
   startHeadlessBackend,
 } from "@ax-code/sdk/headless"
 
@@ -17,7 +17,7 @@ try {
   })
   const compatibility = await client.checkCompatibility({ requiredFeatures: ["sessions", "asyncPrompt"] })
   if (!compatibility.compatible) throw new Error(compatibility.issues.join("; "))
-  const state = createHeadlessProjectionState()
+  const state = createHeadlessClientProjectionState()
   const session = await client.createSession({ title: "Headless app example" })
 
   await client.sendPrompt(session.id, {

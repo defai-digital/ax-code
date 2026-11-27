@@ -1,7 +1,8 @@
 /**
  * Example: Using the ax-code Programmatic SDK
  *
- * Run with: tsx packages/sdk/js/example/programmatic.ts
+ * Build the SDK first: pnpm --dir packages/sdk/js build
+ * Run with: pnpm --dir packages/ax-code exec tsx --import ./script/register-node.ts ../sdk/js/example/programmatic.ts
  */
 
 import { createAgent } from "@ax-code/sdk/programmatic"
@@ -76,7 +77,7 @@ async function example4_securityScan() {
     hooks: {
       onToolCall(tool, input) {
         console.log(`  Scanning with ${tool}...`)
-        return true // allow all tools
+        // `onToolCall` only observes; `onPermissionRequest` allows or denies.
       },
       onPermissionRequest() {
         return "allow" // auto-approve in CI

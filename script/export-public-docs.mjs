@@ -10,6 +10,35 @@ const repositoryUrl = "https://github.com/defai-digital/ax-code"
 const downloadOrigin = "https://download.ax-code.com"
 const docUrl = (slug) => `/en/docs/${slug ? `${slug}/` : ""}`
 const hash = (data) => createHash("sha256").update(data).digest("hex")
+// A docs-assets path in prose: either prefixed by the site origin or root-relative
+// (not preceded by a URL/path character, so e.g. `example.com/docs-assets/x` is not
+// ours). Stop at whitespace and Markdown/URL delimiters so surrounding punctuation
+// is not captured.
+const DOCS_ASSET_LINK_RE =
+  /(?:https:\/\/ax-code\.app(\/docs-assets\/[^\s)>\]"'`]+)|(?<![A-Za-z0-9._:/%-])(\/docs-assets\/[^\s)>\]"'`]+))/g
+
+// Remove fenced code blocks opened by 3+ backticks or 3+ tildes (optionally
+// indented up to three spaces) and closed by a line of the same character at
+// least as long (or end of file when unclosed). Indented four-space code blocks
+// stay scanned on purpose (fail closed).
+function stripFencedCode(text) {
+  const kept = []
+  let fence
+  for (const line of text.split("\n")) {
+    if (fence) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line)
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = undefined
+      continue
+    }
+    const open = /^ {0,3}(`{3,}|~{3,})/.exec(line)
+    if (open) {
+      fence = open[1]
+      continue
+    }
+    kept.push(line)
+  }
+  return kept.join("\n")
+}
 
 export function assertPublicSource(name) {
   const explicitlyPublic = new Set([
@@ -72,6 +101,10 @@ export function exportSnapshot(base = root) {
       url: entry.page !== undefined ? docUrl(entry.page) : `/docs-assets/${entry.asset}`,
     })
   }
+  // Docs asset URLs the manifest actually publishes, so page links cannot rot into 404s.
+  const publishedAssetUrls = new Set(
+    [...mapped.values()].filter((entry) => entry.asset !== undefined).map((entry) => entry.url),
+  )
   // These files are references only; they are never exported.
   const privateReferences = new Map([
     ["README.md", "/en/docs/"],
@@ -82,6 +115,10 @@ export function exportSnapshot(base = root) {
   const publicLink = (source, target) => {
     target = target.replace(`${websiteOrigin}/`, "/")
     if (target === repositoryUrl) return target
+    if (target.startsWith("/docs-assets/")) {
+      const path = target.split("#")[0].split("?")[0]
+      if (!publishedAssetUrls.has(path)) throw new Error(`Unpublished docs asset link: ${source} -> ${target}`)
+    }
     if (/^(?:https?:|mailto:|#|\/)/.test(target) && !isSourceRepositoryUrl(target)) return target
     let name
     if (isSourceRepositoryUrl(target)) {
@@ -134,6 +171,16 @@ export function exportSnapshot(base = root) {
               }),
         )
         .join("")
+      // Reference definitions and autolinks bypass the inline-link rewrite, so
+      // scan the non-code prose directly for any docs asset path that was not
+      // published. Fragments and queries do not change the target file.
+      const rewrittenProse = stripFencedCode(text).replace(/`[^`]*`/g, "")
+      for (const match of rewrittenProse.matchAll(DOCS_ASSET_LINK_RE)) {
+        const assetPath = (match[1] ?? match[2]).split("#")[0].split("?")[0]
+        if (!publishedAssetUrls.has(assetPath)) {
+          throw new Error(`Unpublished docs asset link: ${entry.source} -> ${match[0]}`)
+        }
+      }
       text = text.replace(
         /https:\/\/github\.com\/defai-digital\/ax-code(?![-\w])[^\s<>"')\]]*/g,
         (url) => publicLink(entry.source, url) ?? "the authorized source checkout",

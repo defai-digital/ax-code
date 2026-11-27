@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest"
-import { applyHeadlessProjectionEvent, createHeadlessProjectionState, type HeadlessRuntimeEvent } from "../src/headless.js"
+import {
+  applyHeadlessProjectionEvent,
+  createHeadlessClientProjectionState,
+  createHeadlessProjectionState,
+  type HeadlessRuntimeEvent,
+} from "../src/headless.js"
+import type { Event } from "../src/v2/index.js"
 
 const send = (state: unknown, event: unknown) =>
   applyHeadlessProjectionEvent(state as never, event as HeadlessRuntimeEvent)
@@ -28,5 +34,36 @@ describe("headless projection complete snapshots", () => {
     // The 20 lowest ids are evicted; the newest remain.
     expect(state.task_queue[0]?.id).toBe("tsk_0020")
     expect(state.task_queue.at(-1)?.id).toBe("tsk_0519")
+  })
+
+  test("ignores non-headless generated events for the client projection", () => {
+    const state = createHeadlessClientProjectionState()
+    const before = JSON.stringify(state)
+    const event = {
+      type: "command.executed",
+      properties: { name: "review", sessionID: "sess-1", arguments: "", messageID: "msg-1" },
+    } as Event
+
+    expect(applyHeadlessProjectionEvent(state, event)).toEqual({ handled: false, effects: [] })
+    expect(JSON.stringify(state)).toBe(before)
+  })
+
+  test("a generated vcs branch event without a branch clears the projection", () => {
+    const state = createHeadlessClientProjectionState()
+    state.vcs = { branch: "main" }
+
+    expect(applyHeadlessProjectionEvent(state, { type: "vcs.branch.updated", properties: {} } as Event)).toEqual({
+      handled: true,
+      effects: [],
+    })
+    expect(state.vcs).toBeUndefined()
+  })
+
+  test("a generated vcs branch event with a branch updates the projection", () => {
+    const state = createHeadlessClientProjectionState()
+
+    applyHeadlessProjectionEvent(state, { type: "vcs.branch.updated", properties: { branch: "dev" } } as Event)
+
+    expect(state.vcs).toEqual({ branch: "dev" })
   })
 })

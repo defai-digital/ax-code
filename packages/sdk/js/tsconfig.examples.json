@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig.json",
+  "extends": "@tsconfig/node24/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2024", "ESNext.Array", "dom", "dom.iterable"],
+    "skipLibCheck": true,
+    "types": ["node"],
+    "paths": {
+      "@ax-code/sdk": ["./src/index.ts"],
+      "@ax-code/sdk/testing": ["./src/testing/index.ts"],
+      "@ax-code/sdk/programmatic": ["./src/programmatic/index.ts"],
+      "@ax-code/sdk/grpc": ["./src/grpc.ts"],
+      "@ax-code/sdk/grpc/node": ["./src/grpc-node.ts"],
+      "@ax-code/sdk/headless": ["./src/headless.ts"],
+      "@ax-code/sdk/headless-ipc": ["./src/headless-ipc.ts"],
+      "@ax-code/sdk/headless/client": ["./src/headless/client.ts"],
+      "@ax-code/sdk/headless/event": ["./src/headless/event.ts"],
+      "@ax-code/sdk/headless/projection": ["./src/headless/projection.ts"],
+      "@ax-code/sdk/mode": ["./src/mode.ts"],
+      "@ax-code/sdk/provider-connect": ["./src/provider-connect.ts"],
+      "@ax-code/sdk/v2": ["./src/v2/index.ts"],
+      "@ax-code/sdk/v2/client": ["./src/v2/client.ts"],
+      "@ax-code/sdk/v2/gen/client": ["./src/v2/gen/client/index.ts"],
+      "@ax-code/sdk/v2/server": ["./src/v2/server.ts"],
+      "@ax-code/sdk/tui-debug": ["./src/tui-debug.ts"]
+    }
+  },
+  "include": ["example/*.ts"]
+}

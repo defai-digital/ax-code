@@ -391,11 +391,11 @@
     },
     {
       "source": "packages/sdk/js/example/headless-app.ts",
-      "asset": "sdk/examples/headless-app.ts"
+      "asset": "sdk/examples/headless-app.ts.txt"
     },
     {
       "source": "packages/sdk/js/example/programmatic.ts",
-      "asset": "sdk/examples/programmatic.ts"
+      "asset": "sdk/examples/programmatic.ts.txt"
     },
     {
       "source": "docs/reference/config.schema.json",

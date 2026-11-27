@@ -1,8 +1,53 @@
 import { describe, expect, test } from "vitest"
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync } from "node:fs"
+import { execFileSync } from "node:child_process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { approvedPath, assertPublicSource, exportSnapshot, syncSnapshot } from "./export-public-docs.mjs"
+
+// Temp repository with one page, one published JSON asset and the version files
+// exportSnapshot needs for metadata. Set git=true when the export must complete.
+function writeExportFixture(base: string, readme: string, { git = false } = {}) {
+  mkdirSync(join(base, "script"))
+  mkdirSync(join(base, "docs"))
+  mkdirSync(join(base, "packages/ax-code"), { recursive: true })
+  mkdirSync(join(base, "packages/sdk/js"), { recursive: true })
+  writeFileSync(
+    join(base, "script/public-docs-manifest.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      entries: [
+        { source: "docs/README.md", page: "" },
+        { source: "docs/published.json", asset: "sdk/examples/example.ts.txt" },
+      ],
+    }),
+  )
+  writeFileSync(join(base, "docs/README.md"), readme)
+  writeFileSync(join(base, "docs/published.json"), "{}\n")
+  writeFileSync(join(base, "packages/ax-code/package.json"), JSON.stringify({ version: "0.0.0" }))
+  writeFileSync(join(base, "packages/sdk/js/package.json"), JSON.stringify({ version: "0.0.0" }))
+  if (git) {
+    execFileSync("git", ["init"], { cwd: base, stdio: "ignore" })
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "user.name=test",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "init",
+      ],
+      { cwd: base, stdio: "ignore" },
+    )
+  }
+}
 
 describe("public documentation export", () => {
   test("refuses credentials and private source even when a manifest lists them", () => {
@@ -50,6 +95,106 @@ describe("public documentation export", () => {
     const hub = files.get("src/content/docs/index.md")!.toString()
     expect(hub).toContain("[`@defai-digital/ax-code-sdk`](/en/docs/sdk/javascript/)")
     expect(files.get("src/content/docs/guides/effort.md")!.toString()).not.toContain("](../../packages/ax-code/src")
+  })
+
+  test("publishes the SDK TypeScript examples as .ts.txt so Cloudflare serves them as text", () => {
+    const files = exportSnapshot()
+    expect(files.has("public/docs-assets/sdk/examples/headless-app.ts.txt")).toBe(true)
+    expect(files.has("public/docs-assets/sdk/examples/programmatic.ts.txt")).toBe(true)
+    expect([...files.keys()].filter((name) => /^public\/docs-assets\/sdk\/examples\/.*\.ts$/.test(name))).toEqual([])
+  })
+
+  test("rejects page links to docs assets the manifest does not publish", () => {
+    for (const [body, error] of [
+      ["# Public guide\n\n[example](/docs-assets/sdk/examples/unpublished.ts)\n", /Unpublished docs asset link/],
+      [
+        "# Public guide\n\n[example](https://ax-code.app/docs-assets/sdk/examples/unpublished.ts)\n",
+        /Unpublished docs asset link/,
+      ],
+      ["# Public guide\n\n[src]: /docs-assets/sdk/examples/unpublished.ts\n", /Unpublished docs asset link/],
+      [
+        "# Public guide\n\n<https://ax-code.app/docs-assets/sdk/examples/unpublished.ts>\n",
+        /Unpublished docs asset link/,
+      ],
+    ] as const) {
+      const base = mkdtempSync(join(tmpdir(), "ax-docs-links-"))
+      try {
+        writeExportFixture(base, body)
+        expect(() => exportSnapshot(base)).toThrow(error)
+      } finally {
+        rmSync(base, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test("ignores unpublished docs asset paths inside code blocks and inline code", () => {
+    for (const body of [
+      "# Public guide\n\n```bash\ncurl https://ax-code.app/docs-assets/sdk/examples/unpublished.ts\n```\n",
+      "# Public guide\n\nMention `/docs-assets/sdk/examples/unpublished.ts` as a literal path.\n",
+    ]) {
+      const base = mkdtempSync(join(tmpdir(), "ax-docs-links-"))
+      try {
+        writeExportFixture(base, body, { git: true })
+        expect(() => exportSnapshot(base)).not.toThrow()
+      } finally {
+        rmSync(base, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test("ignores unpublished docs asset paths inside tilde and long backtick fences", () => {
+    for (const body of [
+      "# Public guide\n\n~~~sh\ncurl /docs-assets/sdk/examples/unpublished.ts\n~~~\n",
+      "# Public guide\n\n````markdown\n```sh\ncurl /docs-assets/sdk/examples/unpublished.ts\n```\n````\n",
+    ]) {
+      const base = mkdtempSync(join(tmpdir(), "ax-docs-links-"))
+      try {
+        writeExportFixture(base, body, { git: true })
+        expect(() => exportSnapshot(base)).not.toThrow()
+      } finally {
+        rmSync(base, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test("still rejects an unpublished asset path in prose after a long fence", () => {
+    for (const body of [
+      "# Public guide\n\n~~~sh\ncurl /docs-assets/sdk/examples/example.ts.txt\n~~~\n\nSee /docs-assets/sdk/examples/unpublished.ts in prose.\n",
+      "# Public guide\n\n````markdown\n```sh\ncurl /docs-assets/sdk/examples/example.ts.txt\n```\n````\n\nSee /docs-assets/sdk/examples/unpublished.ts in prose.\n",
+    ]) {
+      const base = mkdtempSync(join(tmpdir(), "ax-docs-links-"))
+      try {
+        writeExportFixture(base, body, { git: true })
+        expect(() => exportSnapshot(base)).toThrow(/Unpublished docs asset link/)
+      } finally {
+        rmSync(base, { recursive: true, force: true })
+      }
+    }
+  })
+
+  test("accepts page links to docs assets the manifest publishes", () => {
+    const base = mkdtempSync(join(tmpdir(), "ax-docs-links-"))
+    try {
+      writeExportFixture(base, "# Public guide\n\n[example](/docs-assets/sdk/examples/example.ts.txt)\n", { git: true })
+      const files = exportSnapshot(base)
+      expect(files.has("public/docs-assets/sdk/examples/example.ts.txt")).toBe(true)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  test("does not flag another host's /docs-assets/ URL in prose", () => {
+    const base = mkdtempSync(join(tmpdir(), "ax-docs-links-"))
+    try {
+      writeExportFixture(
+        base,
+        "# Public guide\n\nSee https://example.com/docs-assets/x.png in the prose description.\n",
+        { git: true },
+      )
+      expect(() => exportSnapshot(base)).not.toThrow()
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
   })
 
   test("blocks unknown assets, local-only references and executable documentation HTML", () => {

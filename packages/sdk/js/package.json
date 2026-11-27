@@ -9,7 +9,7 @@
     "node": ">=26"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.examples.json --noEmit && tsx ./script/check-readme-snippets.ts",
     "validate:openapi": "tsx ./script/validate-openapi.ts",
     "build": "tsx ./script/build.ts",
     "test": "vitest run",

@@ -138,7 +138,9 @@ export interface AgentOptions {
   auth?: AuthConfig
   /** User-defined tools to register alongside built-in tools.
    *  Create each with the `tool()` helper from `@defai-digital/ax-code-sdk`. */
-  tools?: SdkTool[]
+  // `any` accepts every `SdkTool<I>` without inferring `I` at the call site;
+  // `SdkTool.execute` is contravariant under strictFunctionTypes.
+  tools?: SdkTool<any>[]
 }
 
 /** Direct API-key authentication, used when the host does not rely on `ax-code providers login`. */

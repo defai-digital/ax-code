@@ -2,7 +2,7 @@
 
 TypeScript SDK for integrating the [AX Code](https://ax-code.app/en/docs/) coding-agent runtime into your own applications.
 
-Use it to supervise a compatible signed AX Code runtime through typed **headless** or **gRPC** boundaries, consume streaming events, project session state, and test application integrations. Source hosts with access to a resolvable `ax-code` workspace package can also use the in-process `createAgent()` adapter.
+Use it to supervise a compatible signed AX Code runtime through typed **headless** or **gRPC** boundaries, consume streaming events, project session state, and test application integrations. AX Code source checkouts can also use the in-process `createAgent()` adapter, which resolves the runtime from the host.
 
 ## Install
 
@@ -46,11 +46,11 @@ Upgrade the report integration and runtime together. Other integration surfaces 
 | Native desktop boundary     | `@defai-digital/ax-code-sdk/grpc`             | Stable command/event contract, streaming, metadata, deadlines, and native host adapters |
 | Shared work-mode contracts  | `@defai-digital/ax-code-sdk/mode`             | Mode ids and helpers shared by TUI and app clients                                      |
 | Provider connection picker  | `@defai-digital/ax-code-sdk/provider-connect` | Provider-category taxonomy without runtime-source imports                               |
-| In-process source embedding | `@defai-digital/ax-code-sdk` `createAgent()`  | Lowest overhead and custom tools when the runtime workspace package is resolvable       |
+| In-process source embedding | `@defai-digital/ax-code-sdk` `createAgent()`  | Lowest overhead and custom tools; resolves the runtime from an AX Code source checkout  |
 
 Public applications should use `headless` or `grpc` with a compatible signed AX Code runtime. HTTP/OpenAPI stays behind those SDKs as a fallback and diagnostics layer. Legacy `@defai-digital/ax-code-sdk/v2` subpaths remain for runtime compatibility; new integrations should not start there.
 
-`createAgent()` imports `ax-code/sdk/programmatic` at call time. Its source is in the public AX Code repository and is consumed as a workspace package. Apps using a signed AX Code executable use the headless or gRPC interface.
+`createAgent()` resolves the runtime from an AX Code source checkout and must run under tsx with the runtime's registration shim, which sets up the Node compatibility shim, `#db` resolution, and `.txt` loading; see [In-process agent](#in-process-agent-source-hosts-only) for the working command and resolution order. The private `ax-code` runtime package is not published to any registry; apps using a signed AX Code executable use the headless or gRPC interface.
 
 ## Quick start (headless)
 
@@ -75,7 +75,7 @@ try {
 ```
 
 Desktop hosts may pass a verified absolute path as `binary`. See
-[example/headless-app.ts](https://ax-code.app/docs-assets/sdk/examples/headless-app.ts)
+[example/headless-app.ts](https://ax-code.app/docs-assets/sdk/examples/headless-app.ts.txt)
 for a projection-based app loop.
 
 ## Headless backend
@@ -86,14 +86,14 @@ for a projection-based app loop.
 import {
   startHeadlessBackend,
   createHeadlessClient,
-  createHeadlessProjectionState,
+  createHeadlessClientProjectionState,
   applyHeadlessProjectionEvent,
 } from "@defai-digital/ax-code-sdk/headless"
 
 const backend = await startHeadlessBackend({ directory: "/path/to/workspace" })
 try {
   const client = createHeadlessClient({ baseUrl: backend.url, headers: backend.headers })
-  const state = createHeadlessProjectionState()
+  const state = createHeadlessClientProjectionState()
   const session = await client.createSession({ title: "My session" })
 
   await client.sendPrompt(session.id, { parts: [{ type: "text", text: "Review this project" }] })
@@ -106,7 +106,7 @@ try {
 }
 ```
 
-`createHeadlessProjectionState` and `applyHeadlessProjectionEvent` are pure TypeScript. App UIs should treat `permission`, `question`, `session_diff`, `todo`, `session_status`, and `session_error` as primary state. Autonomous replies are opt-in; supervised apps should render pending permission and question requests.
+`createHeadlessClientProjectionState` and `applyHeadlessProjectionEvent` are pure TypeScript. `createHeadlessClientProjectionState` returns state typed for the generated events from `client.subscribe()`; `createHeadlessProjectionState<...>()` remains for custom state types. App UIs should treat `permission`, `question`, `session_diff`, `todo`, `session_status`, and `session_error` as primary state. Autonomous replies are opt-in; supervised apps should render pending permission and question requests.
 
 Autonomous projection keeps `isolation_escalation`, `bash_destructive`, `ops_approve`, `webmcp`, `hook`, and `computer` permissions pending, as well as any request whose metadata sets `requireInteractive: true`. Consumers must obtain an explicit human reply for these requests.
 
@@ -147,7 +147,7 @@ and is resolved at runtime with `resolveAxCodeGrpcProtoUrl()`.
 
 ## In-process agent (source hosts only)
 
-Use this path from a source workspace where Node.js can resolve `ax-code/sdk/programmatic`.
+Use this path from an AX Code source checkout. `createAgent()` resolves `ax-code/sdk/programmatic` next to the SDK, then from the current working directory, then from the entry script's directory. Run your script under tsx through the runtime package so its registration shim loads: `pnpm --dir packages/ax-code exec tsx --import ./script/register-node.ts <your script>`. The shim sets up the Node compatibility shim, `#db` resolution, and `.txt` loading.
 
 ```ts
 import { createAgent, tool } from "@defai-digital/ax-code-sdk"
@@ -189,7 +189,7 @@ try {
 ```
 
 More examples:
-[example/programmatic.ts](https://ax-code.app/docs-assets/sdk/examples/programmatic.ts).
+[example/programmatic.ts](https://ax-code.app/docs-assets/sdk/examples/programmatic.ts.txt).
 
 ## Testing
 

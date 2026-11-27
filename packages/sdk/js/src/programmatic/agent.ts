@@ -1,36 +1,20 @@
 import type { Agent, AgentOptions } from "./types.js"
-
-type Mod = {
-  createAgent(options: AgentOptions): Promise<Agent>
-}
-
-const load = Function('return import("ax-code/sdk/programmatic")') as () => Promise<Mod>
-
-function isMissingRuntimeError(error: unknown) {
-  if (!error || typeof error !== "object") return false
-  const value = error as { code?: unknown; message?: unknown }
-  if (value.code !== "ERR_MODULE_NOT_FOUND" && value.code !== "MODULE_NOT_FOUND") return false
-  return typeof value.message === "string" && value.message.includes("ax-code")
-}
+import { loadRuntime } from "./runtime-loader.js"
 
 /**
- * Create an in-process AX Code agent. Requires the private `ax-code` runtime
- * package to be resolvable. Public apps should use
- * `@defai-digital/ax-code-sdk/headless` or `@defai-digital/ax-code-sdk/grpc`
- * with a signed runtime binary.
+ * Create an in-process AX Code agent from an AX Code source checkout.
+ *
+ * Resolution first tries `ax-code/sdk/programmatic` next to the SDK, then from
+ * the current working directory, then from the entry script's directory. Run it
+ * under tsx with
+ * `pnpm --dir packages/ax-code exec tsx --import ./script/register-node.ts <your script>`,
+ * which sets up the Node compatibility shim, `#db` resolution, and `.txt` loading.
+ * The private `ax-code` runtime package is not published to any registry.
+ *
+ * Applications should use `@defai-digital/ax-code-sdk/headless` or
+ * `@defai-digital/ax-code-sdk/grpc` with a signed `ax-code` executable.
  */
 export async function createAgent(options: AgentOptions): Promise<Agent> {
-  let mod: Mod
-  try {
-    mod = await load()
-  } catch (error) {
-    if (isMissingRuntimeError(error)) {
-      throw new Error(
-        "The @defai-digital/ax-code-sdk programmatic agent requires the ax-code runtime package to be installed and resolvable. Install a compatible ax-code runtime alongside @defai-digital/ax-code-sdk, or use @defai-digital/ax-code-sdk/headless or @defai-digital/ax-code-sdk/grpc for app integrations.",
-        { cause: error },
-      )
-    }
-    throw error
-  }
+  const mod = await loadRuntime()
   return mod.createAgent(options)
 }

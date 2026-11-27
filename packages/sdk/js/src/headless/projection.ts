@@ -7,8 +7,23 @@
  * @module
  */
 
-import type { PermissionRequest, QuestionRequest } from "../v2/index.js"
-import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event.js"
+import type {
+  Event,
+  FileDiff,
+  Message,
+  Part,
+  PermissionRequest,
+  QuestionRequest,
+  Session,
+  SessionStatus,
+  Todo,
+} from "../v2/index.js"
+import {
+  isHeadlessRuntimeEvent,
+  type HeadlessRuntimeEvent,
+  type HeadlessRuntimeProbeKey,
+  type HeadlessRuntimeStatusEvent,
+} from "./event.js"
 
 // Keep this public SDK projection aligned with the runtime permission policy.
 // These requests must remain pending for an explicit human reply even when a
@@ -103,6 +118,43 @@ export function createHeadlessProjectionState<
   }
 }
 
+/**
+ * Projection state for events from `createHeadlessClient().subscribe()`, using
+ * the generated v2 types.
+ */
+export type HeadlessClientProjectionState = HeadlessProjectionState<
+  Session,
+  Todo,
+  FileDiff,
+  SessionStatus,
+  Message,
+  Part
+>
+
+/** Create an empty projection typed for events from `createHeadlessClient().subscribe()`. */
+export function createHeadlessClientProjectionState(
+  input: { streamHealth?: HeadlessStreamHealth } = {},
+): HeadlessClientProjectionState {
+  return createHeadlessProjectionState<Session, Todo, FileDiff, SessionStatus, Message, Part>(input)
+}
+
+// Any well-formed headless runtime event; the constraint for the internal
+// narrowing predicate below.
+type AnyHeadlessRuntimeEvent = HeadlessRuntimeEvent<
+  { id: string },
+  unknown,
+  unknown,
+  unknown,
+  { id: string; sessionID: string },
+  { id: string; messageID: string }
+>
+
+// Module-local type predicate over `unknown`. The exported guard stays a plain
+// boolean so it does not narrow generated `Event` unions for existing callers.
+function isHeadlessProjectionEvent<TEvent extends AnyHeadlessRuntimeEvent>(event: unknown): event is TEvent {
+  return isHeadlessRuntimeEvent(event)
+}
+
 /** Fold one runtime event into a projection and return any follow-up effects. */
 export function applyHeadlessProjectionEvent<
   TSession extends { id: string },
@@ -117,12 +169,55 @@ export function applyHeadlessProjectionEvent<
 >(
   state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem>,
   event: HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TGoal, TTaskQueueItem>,
+  options?: {
+    autonomous?: boolean
+    maxSessionMessages?: number
+  },
+): HeadlessProjectionApplyResult
+/**
+ * Accept events straight from `createHeadlessClient().subscribe()` for the
+ * generated-type projection. Non-headless events return
+ * `{ handled: false, effects: [] }`.
+ */
+export function applyHeadlessProjectionEvent(
+  state: HeadlessClientProjectionState,
+  event: Event,
+  options?: {
+    autonomous?: boolean
+    maxSessionMessages?: number
+  },
+): HeadlessProjectionApplyResult
+/** Implementation signature shared by the overloads above. */
+export function applyHeadlessProjectionEvent<
+  TSession extends { id: string },
+  TTodo,
+  TDiff,
+  TStatus,
+  TMessage extends { id: string; sessionID: string },
+  TPart extends { id: string; messageID: string },
+  TRisk = unknown,
+  TGoal = unknown,
+  TTaskQueueItem extends { id: string } = { id: string },
+>(
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem>,
+  event: HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TGoal, TTaskQueueItem> | Event,
   options: {
     autonomous?: boolean
     maxSessionMessages?: number
   } = {},
 ): HeadlessProjectionApplyResult {
   const effects: HeadlessProjectionEffect[] = []
+
+  // `client.subscribe()` yields the generated v2 `Event` union, which contains
+  // many non-headless events. Ignore those exactly like the unhandled branch
+  // below instead of requiring callers to pre-filter or cast.
+  if (
+    !isHeadlessProjectionEvent<
+      HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TGoal, TTaskQueueItem>
+    >(event)
+  ) {
+    return { handled: false, effects }
+  }
 
   switch (event.type) {
     case "server.connected":
@@ -251,7 +346,9 @@ export function applyHeadlessProjectionEvent<
       return { handled: true, effects }
 
     case "vcs.branch.updated":
-      state.vcs = { branch: event.properties.branch }
+      // Generated events may omit `branch`; only store a known string branch and
+      // clear the projection otherwise, mirroring the runtime's optional field.
+      state.vcs = typeof event.properties.branch === "string" ? { branch: event.properties.branch } : undefined
       return { handled: true, effects }
 
     case "mcp.tools.changed":
@@ -428,8 +525,9 @@ function upsertMessage<
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
   TGoal = unknown,
+  TTaskQueueItem extends { id: string } = { id: string },
 >(
-  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem>,
   message: TMessage,
   maxSessionMessages = DEFAULT_MAX_SESSION_MESSAGES,
 ) {
@@ -451,8 +549,9 @@ function removeMessage<
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
   TGoal = unknown,
+  TTaskQueueItem extends { id: string } = { id: string },
 >(
-  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem>,
   sessionID: string,
   messageID: string,
 ) {
@@ -470,7 +569,11 @@ function upsertPart<
   TPart extends { id: string; messageID: string },
   TRisk,
   TGoal,
->(state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>, part: TPart) {
+  TTaskQueueItem extends { id: string } = { id: string },
+>(
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem>,
+  part: TPart,
+) {
   const list = state.part[part.messageID] ?? []
   const result = binarySearch(list, part.id, (entry) => entry.id)
   if (result.found) mergePartSnapshotInPlace(state, list[result.index], part)
@@ -487,8 +590,9 @@ function appendPartTextDelta<
   TPart extends { id: string; messageID: string },
   TRisk,
   TGoal,
+  TTaskQueueItem extends { id: string } = { id: string },
 >(
-  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem>,
   messageID: string,
   partID: string,
   delta: string,
@@ -521,8 +625,9 @@ function removePart<
   TPart extends { id: string; messageID: string },
   TRisk,
   TGoal,
+  TTaskQueueItem extends { id: string } = { id: string },
 >(
-  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem>,
   messageID: string,
   partID: string,
 ) {

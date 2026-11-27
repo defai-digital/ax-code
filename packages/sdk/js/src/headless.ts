@@ -9,14 +9,14 @@
  * import {
  *   startHeadlessBackend,
  *   createHeadlessClient,
- *   createHeadlessProjectionState,
+ *   createHeadlessClientProjectionState,
  *   applyHeadlessProjectionEvent,
  * } from "@defai-digital/ax-code-sdk/headless"
  *
  * const backend = await startHeadlessBackend({ directory: "/path/to/workspace" })
  * try {
  *   const client = createHeadlessClient({ baseUrl: backend.url, headers: backend.headers })
- *   const state = createHeadlessProjectionState()
+ *   const state = createHeadlessClientProjectionState()
  *   const session = await client.createSession({ title: "App session" })
  *   // subscribe to events and apply to state...
  * } finally {
@@ -64,11 +64,13 @@ export type {
 
 export {
   createHeadlessProjectionState,
+  createHeadlessClientProjectionState,
   applyHeadlessProjectionEvent,
   runtimeProbeKeysForEvent,
 } from "./headless/projection.js"
 export type {
   HeadlessProjectionState,
+  HeadlessClientProjectionState,
   HeadlessStreamHealth,
   HeadlessProjectionEffect,
   HeadlessProjectionApplyResult,
