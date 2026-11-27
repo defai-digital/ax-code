@@ -58,16 +58,7 @@ jobs:
         run: pnpm --dir packages/sdk/js exec tsc
 
       - name: Run ax-code self-scan
-        run: pnpm run check:self-scan -- --report .internal/reports/qa/self-scan.md
-
-      - name: Upload ax-code self-scan report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          retention-days: 14
-          name: ax-code-self-scan
-          path: .internal/reports/qa/self-scan.md
-          if-no-files-found: ignore
+        run: pnpm run check:self-scan -- --summary-only
 
       # ax-code intentionally does not track or display monetary cost for
       # LLM calls. This guard prevents schema fields, identifiers, or slash

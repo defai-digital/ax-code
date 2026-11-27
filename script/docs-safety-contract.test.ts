@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import path from "path"
 import { readFile } from "node:fs/promises"
 
-const repoRoot = path.resolve(import.meta.dirname, "../../../..")
+const repoRoot = path.resolve(import.meta.dirname, "..")
 
 async function readRepoFile(relativePath: string) {
   return readFile(path.join(repoRoot, relativePath), "utf-8")
@@ -14,7 +14,8 @@ describe("public safety documentation contract", () => {
     const security = await readRepoFile("SECURITY.md")
     const sandbox = await readRepoFile("docs/guides/sandbox.md")
 
-    expect(readme).toContain("AX Code starts with autonomous mode on and the sandbox off (`full-access`) by default")
+    expect(readme).toMatch(/starts with autonomous mode enabled and `full-access` isolation/)
+    expect(readme).toContain("ax-code --sandbox workspace-write")
     expect(security).toContain("The runtime isolation default is `full-access` (sandbox off)")
     expect(sandbox).toContain("By default, AX Code starts in **full-access** with the sandbox off")
   })
@@ -27,24 +28,23 @@ describe("public safety documentation contract", () => {
   })
 
   test("public Homebrew instructions trust the shared tap before installation", async () => {
-    const documents = await Promise.all([
+    const [readme, installGuide, startHere] = await Promise.all([
       readRepoFile("README.md"),
       readRepoFile("docs/getting-started/install-runtime.md"),
       readRepoFile("docs/getting-started/start-here.md"),
     ])
 
-    // The start page links to the install guide instead of repeating the
-    // commands, so only documents that actually instruct Homebrew are checked.
-    const documenting = documents.filter((document) => document.includes("brew install"))
-    expect(documenting.length).toBeGreaterThanOrEqual(2)
-    for (const document of documenting) {
-      const install = document.indexOf("brew install")
-      const tap = document.indexOf("brew tap defai-digital/tap")
-      const trust = document.indexOf("brew trust defai-digital/tap")
-      expect(tap).toBeGreaterThanOrEqual(0)
-      expect(trust).toBeGreaterThanOrEqual(0)
-      expect(tap).toBeLessThan(install)
-      expect(trust).toBeLessThan(install)
+    expect(readme).toContain("docs/getting-started/install-runtime.md#macos-apple-silicon")
+    expect(startHere).toContain("](install-runtime.md")
+    expect(installGuide).toMatch(
+      /brew tap defai-digital\/tap\s+brew trust defai-digital\/tap\s+brew install defai-digital\/tap\/ax-code/,
+    )
+    for (const document of [readme, installGuide, startHere]) {
+      // Check any concrete install commands even if the entry points add examples later.
+      const install = document.indexOf("brew install defai-digital/tap/ax-code")
+      if (install === -1) continue
+      expect(document.slice(0, install)).toContain("brew tap defai-digital/tap")
+      expect(document.slice(0, install)).toContain("brew trust defai-digital/tap")
     }
   })
 

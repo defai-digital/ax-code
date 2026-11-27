@@ -9,6 +9,13 @@
 .netrc
 .pypirc
 .git-credentials
+.aws/
+.azure/
+.gnupg/
+.kube/
+.ssh/
+id_rsa
+id_ed25519
 .npmrc
 !/.npmrc
 auth.json

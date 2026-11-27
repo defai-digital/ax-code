@@ -52,7 +52,6 @@ const e2e = new Set([
   "test/provider/cli/cli-language-model.test.ts",
   "test/pty/pty-output-isolation.test.ts",
   "test/pty/pty-session.test.ts",
-  "test/script/root-structure-script.test.ts",
   "test/tool/debug_runtime_workflow.test.ts",
   "test/tool/glob.test.ts",
   "test/tool/grep.test.ts",

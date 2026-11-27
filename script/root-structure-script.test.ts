@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
 
-const repoRoot = path.resolve(import.meta.dirname, "../../../..")
+const repoRoot = path.resolve(import.meta.dirname, "..")
 const structureScript = path.join(repoRoot, "script/structure.ts")
 
 async function runStructureScript() {
@@ -25,6 +25,6 @@ describe("root structure script", () => {
     expect(result.stdout).toContain("## Workspace Dependency Cycles")
     expect(result.stdout).toContain("## Internal Files")
     expect(result.stdout).toContain("## Hotspot Thresholds")
-    expect(result.stdout).toContain("- ok: only approved internal architecture documents are tracked")
+    expect(result.stdout).toContain("- ok: no internal-only files are tracked")
   })
 })

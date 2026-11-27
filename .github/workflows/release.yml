@@ -152,7 +152,7 @@ jobs:
         run: pnpm run check:structure
 
       - name: Run AX Code self-scan
-        run: pnpm run check:self-scan -- --report .internal/reports/qa/self-scan.md
+        run: pnpm run check:self-scan -- --summary-only
 
       # The ax-code CI shards already cover this SHA on a normal tag.
       # A missing, cancelled, or failed shard still runs the suite here.

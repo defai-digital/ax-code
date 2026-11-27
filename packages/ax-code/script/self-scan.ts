@@ -70,6 +70,7 @@ function usage() {
     "Options:",
     "  --baseline <path>       Baseline JSON path, relative to repo root by default",
     "  --report <path>         Write a markdown report, relative to repo root by default",
+    "  --summary-only         Print scanner counts without finding details",
     "  --update-baseline       Replace the baseline with current findings",
     "  --help                  Show this help",
   ].join("\n")
@@ -456,6 +457,8 @@ async function main() {
   const reportPath = readOption(args, "--report")
   const resolvedReportPath = reportPath ? resolveRepoPath(reportPath, reportPath) : undefined
   const updateBaseline = hasFlag(args, "--update-baseline")
+  const summaryOnly = hasFlag(args, "--summary-only")
+  const logText = (report: string) => (summaryOnly ? report.split("\n## ", 1)[0].trimEnd() : report)
 
   const results = await runScans()
   const truncated = results.filter((result) => result.truncated)
@@ -469,7 +472,7 @@ async function main() {
       status: "fail",
     })
     await writeReport(resolvedReportPath, report)
-    console.error(report)
+    console.error(logText(report))
     process.exit(1)
   }
 
@@ -484,7 +487,7 @@ async function main() {
       status: "updated",
     })
     await writeReport(resolvedReportPath, report)
-    console.log(report)
+    console.log(logText(report))
     return
   }
 
@@ -511,12 +514,12 @@ async function main() {
   await writeReport(resolvedReportPath, report)
 
   if (newFindings.length > 0) {
-    console.error(report)
+    console.error(logText(report))
     console.error("New self-scan findings must be fixed or explicitly accepted with `--update-baseline`.")
     process.exit(1)
   }
 
-  console.log(report)
+  console.log(logText(report))
 }
 
 await main()

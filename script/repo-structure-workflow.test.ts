@@ -43,6 +43,13 @@ describe("repo-structure workflow policy", () => {
     expect(workflow).not.toMatch(/^\s+paths(?:-ignore)?:/m)
   })
 
+  test("public workflow scans log counts and keep detailed reports local", () => {
+    for (const source of [workflow, readFileSync(".github/workflows/release.yml", "utf8")]) {
+      expect(source).toContain("pnpm run check:self-scan -- --summary-only")
+      expect(source).not.toContain("self-scan.md")
+    }
+  })
+
   test("compiles SDK exports before self-scan imports the runtime", () => {
     const install = workflow.indexOf("pnpm install --frozen-lockfile")
     const build = workflow.indexOf("pnpm --dir packages/sdk/js exec tsc")

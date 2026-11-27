@@ -80,3 +80,6 @@ ignores in the root file and package-specific outputs in that package's file.
 Use your Git exclude file for personal preferences. For a file already tracked, use
 `git rm --cached -- <path>` to remove it from the index while retaining the local
 copy. Past commits retain their original contents.
+
+Public CI logs self-scan counts. To review individual findings locally, run
+`pnpm run check:self-scan -- --report .internal/reports/qa/self-scan.md`.

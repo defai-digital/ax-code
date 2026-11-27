@@ -15,8 +15,8 @@ new features belong in the existing domain before a new package is introduced.
 | `packages/integration-github`      | GitHub integration entry point                                                                                           |
 | `packages/util`                    | Dependency-light helpers with demonstrated reuse across packages                                                         |
 | `packages/script`                  | Shared build/release metadata helpers; distinct from executable repository scripts                                       |
-| `packages/ax-code-intel`           | Language-server orchestration and semantic results                                                                       |
-| `packages/ax-code-reason`          | Reusable reasoning and analysis services                                                                                 |
+| `packages/ax-code-intel`           | Workspace-only language-server orchestration and semantic results                                                        |
+| `packages/ax-code-reason`          | Workspace-only reasoning and analysis services                                                                           |
 | `packages/ax-agent-runtime`        | Private runtime incubation contracts; executable policy remains in the product                                           |
 | `packages/ax-wiki`                 | Publishable, model-independent wiki compiler                                                                             |
 | `packages/ax-wiki-viewer`          | Reusable offline wiki evidence viewer                                                                                    |
@@ -58,7 +58,8 @@ manifests own their dependency edges and public `exports` contracts. Use
   `run/`, `providers/` and `mcp/`. Root `doctor.ts`, `run.ts`, `providers.ts` and
   `mcp.ts` remain stable facades. Keep new helpers with their command family.
 - Cross-package runtime/test imports use package exports. Relative paths must
-  stay inside their workspace package. Workspace dependency cycles fail checks.
+  stay inside their workspace package. Workspace dependency cycles fail checks. Set `private: true` on packages
+  that are consumed only inside the workspace.
 - SDK generated code, AX TUI generated runtime files and vendored SDK/native
   snapshots retain their existing rebuild/verification workflows. Folder
   cleanup must not remove distribution artifacts needed by a clean checkout.
@@ -67,8 +68,9 @@ manifests own their dependency edges and public `exports` contracts. Use
 
 Run `pnpm run check:structure` and `pnpm run test:scripts` for repository layout
 changes. The root-folder audit uses paths in the Git index, so local reports
-and temporary directories do not affect the published layout check. The boundary checker discovers packages from the workspace YAML and
-checks root runtime modules and nested `src/`, `source/` and `test/` trees. It
+and temporary directories do not affect the published layout check. Repository-wide
+documentation and layout contract tests live in `script/`. The boundary checker
+discovers packages from the workspace YAML and checks runtime modules and nested `src/`, `source/` and `test/` trees. It
 excludes tooling/benchmark trees (`script/`, `perf/`), declarations, dependency
 folders, `dist/`, `vendor/` and the AX TUI renderer receipt's generated files.
 These exclusions do not replace each package's own build and integrity checks.
