@@ -9,6 +9,8 @@ import type { Socket } from "node:net"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
+import { ModelsDev } from "../../src/provider/models"
+import type { Config } from "../../src/config/config"
 import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import { Auth } from "../../src/auth"
@@ -2717,9 +2719,9 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
                   id: "my-separated-gpt-alias",
                   name: "GPT 5 5",
                 },
-                "gpt-5": {
-                  id: "gpt-5",
-                  name: "GPT-5",
+                "gpt-5.4": {
+                  id: "gpt-5.4",
+                  name: "GPT-5.4",
                 },
               },
             },
@@ -2759,7 +2761,7 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
       expect(providers[ProviderID.make("openai")]?.models["my-gpt-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("openai")]?.models["my-spaced-gpt-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("openai")]?.models["my-separated-gpt-alias"]).toBeUndefined()
-      expect(providers[ProviderID.make("openai")]?.models["gpt-5"]).toBeDefined()
+      expect(providers[ProviderID.make("openai")]?.models["gpt-5.4"]).toBeDefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["glm-5v-turbo"]).toBeUndefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["my-glm-vision-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["my-spaced-glm-vision-alias"]).toBeUndefined()
@@ -4511,3 +4513,273 @@ test.each([false, true])(
     }
   },
 )
+
+// --- Validated deprecated-model override -----------------------------------
+//
+// models.dev can mark an ax-code-validated plan model as deprecated. The
+// runtime keeps a small explicit allow-list visible (see model-support.ts) and
+// everything else still follows the upstream status. These fixtures exercise
+// that decision without depending on today's upstream data.
+
+type ProviderList = Awaited<ReturnType<typeof Provider.list>>
+type ProviderSnapshot = Awaited<ReturnType<typeof Provider.snapshot>>
+
+function deprecatedCatalogModel(id: string, status: "active" | "deprecated" = "deprecated") {
+  return {
+    id,
+    name: id,
+    release_date: "2026-01-01",
+    attachment: false,
+    reasoning: false,
+    tool_call: true,
+    limit: { context: 200_000, output: 8_192 },
+    modalities: { input: ["text"], output: ["text"] },
+    status,
+  }
+}
+
+async function withModelsCatalog(
+  fixture: Record<string, unknown>,
+  init: () => Promise<void>,
+  fn: (providers: ProviderList, snapshot: ProviderSnapshot) => Promise<void>,
+  config?: Partial<Config.Info>,
+) {
+  await using tmp = await tmpdir({
+    config,
+    init: async (dir) => {
+      await fs.writeFile(path.join(dir, "models-fixture.json"), JSON.stringify(fixture))
+    },
+  })
+  vi.stubEnv("AX_CODE_MODELS_PATH", path.join(tmp.path, "models-fixture.json"))
+  ModelsDev.Data.reset()
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      init,
+      fn: async () => {
+        const providers = await Provider.list()
+        const snapshot = await Provider.snapshot()
+        await fn(providers, snapshot)
+      },
+    })
+  } finally {
+    ModelsDev.Data.reset()
+  }
+}
+
+test.each([
+  {
+    providerID: "minimax-coding-plan",
+    name: "MiniMax Token Plan",
+    envKey: "MINIMAX_TOKEN_PLAN_API_KEY",
+    api: "https://api.minimax.io/anthropic/v1",
+  },
+  {
+    providerID: "minimax-cn-coding-plan",
+    name: "MiniMax Token Plan (China)",
+    envKey: "MINIMAX_TOKEN_PLAN_CN_API_KEY",
+    api: "https://api.minimaxi.com/anthropic/v1",
+  },
+])(
+  "keeps validated $providerID/MiniMax-M3 visible when upstream marks it deprecated",
+  async ({ providerID, name, envKey, api }) => {
+    await withModelsCatalog(
+      {
+        [providerID]: {
+          id: providerID,
+          name,
+          env: [envKey],
+          npm: "@ai-sdk/anthropic",
+          api,
+          models: { "MiniMax-M3": deprecatedCatalogModel("MiniMax-M3") },
+        },
+      },
+      async () => Env.set(envKey, `test-${providerID}`),
+      async (providers) => {
+        const model = providers[ProviderID.make(providerID)]?.models[ModelID.make("MiniMax-M3")]
+        expect(model).toBeDefined()
+        expect(model?.api.url).toBe(api)
+        expect(model?.api.npm).toBe("@ai-sdk/anthropic")
+        // The TUI picker keeps models whose status is not "deprecated"
+        // (src/cli/tui/component/dialog-model.tsx:143), so an override that
+        // stays deprecated would still be hidden there.
+        expect(model?.status).toBe("active")
+        expect(model?.status !== "deprecated").toBe(true)
+      },
+    )
+  },
+)
+
+test("keeps validated kimi-cloud-plan/kimi-k2.7-code visible when upstream marks it deprecated", async () => {
+  await withModelsCatalog(
+    {
+      "kimi-cloud-plan": {
+        id: "kimi-cloud-plan",
+        name: "Kimi Cloud Plan",
+        env: ["KIMI_CLOUD_PLAN_API_KEY"],
+        npm: "@ai-sdk/openai-compatible",
+        api: "https://api.moonshot.ai/v1",
+        models: { "kimi-k2.7-code": deprecatedCatalogModel("kimi-k2.7-code") },
+      },
+    },
+    async () => Env.set("KIMI_CLOUD_PLAN_API_KEY", "test-kimi-cloud-plan"),
+    async (providers) => {
+      const model = providers[ProviderID.make("kimi-cloud-plan")]?.models[ModelID.make("kimi-k2.7-code")]
+      expect(model).toBeDefined()
+      expect(model?.api.url).toBe("https://api.moonshot.ai/v1")
+      // Kept by the TUI picker's `status !== "deprecated"` filter
+      // (src/cli/tui/component/dialog-model.tsx:143).
+      expect(model?.status).toBe("active")
+    },
+  )
+})
+
+test("still excludes deprecated models outside the validated set", async () => {
+  await withModelsCatalog(
+    {
+      openai: {
+        id: "openai",
+        name: "OpenAI",
+        env: ["OPENAI_API_KEY"],
+        npm: "@ai-sdk/openai",
+        models: {
+          "gpt-5.1": deprecatedCatalogModel("gpt-5.1"),
+          "gpt-5.4": deprecatedCatalogModel("gpt-5.4", "active"),
+        },
+      },
+    },
+    async () => Env.set("OPENAI_API_KEY", "test-openai"),
+    async (providers, snapshot) => {
+      expect(providers[ProviderID.make("openai")]?.models[ModelID.make("gpt-5.1")]).toBeUndefined()
+      const active = providers[ProviderID.make("openai")]?.models[ModelID.make("gpt-5.4")]
+      expect(active).toBeDefined()
+      // Models outside the override set keep their upstream status untouched.
+      expect(active?.status).toBe("active")
+      expect(snapshot.exclusions).toContainEqual({
+        providerID: "openai",
+        modelID: "gpt-5.1",
+        reason: "deprecated-model",
+      })
+    },
+  )
+})
+
+test("deprecated-model override does not bypass the configured blacklist", async () => {
+  await withModelsCatalog(
+    {
+      "minimax-coding-plan": {
+        id: "minimax-coding-plan",
+        name: "MiniMax Token Plan",
+        env: ["MINIMAX_TOKEN_PLAN_API_KEY"],
+        npm: "@ai-sdk/anthropic",
+        api: "https://api.minimax.io/anthropic/v1",
+        models: { "MiniMax-M3": deprecatedCatalogModel("MiniMax-M3") },
+      },
+    },
+    async () => Env.set("MINIMAX_TOKEN_PLAN_API_KEY", "test-minimax-blacklist"),
+    async (providers, snapshot) => {
+      expect(providers[ProviderID.make("minimax-coding-plan")]?.models[ModelID.make("MiniMax-M3")]).toBeUndefined()
+      expect(snapshot.exclusions).toContainEqual({
+        providerID: "minimax-coding-plan",
+        modelID: "MiniMax-M3",
+        reason: "configured-blacklist",
+      })
+    },
+    {
+      provider: {
+        "minimax-coding-plan": {
+          options: { apiKey: "test-minimax-blacklist" },
+          blacklist: ["MiniMax-M3"],
+        },
+      },
+    },
+  )
+})
+
+test.each([
+  {
+    providerID: "minimax-coding-plan",
+    upstreamID: "MiniMax-M3",
+    name: "MiniMax Token Plan",
+    envKey: "MINIMAX_TOKEN_PLAN_API_KEY",
+    api: "https://api.minimax.io/anthropic/v1",
+  },
+  {
+    providerID: "kimi-cloud-plan",
+    upstreamID: "kimi-k2.7-code",
+    name: "Kimi Cloud Plan",
+    envKey: "KIMI_CLOUD_PLAN_API_KEY",
+    api: "https://api.moonshot.ai/v1",
+  },
+])(
+  "keeps a deprecated alias of a validated $providerID model selectable",
+  async ({ providerID, upstreamID, name, envKey, api }) => {
+    await withModelsCatalog(
+      {
+        [providerID]: {
+          id: providerID,
+          name,
+          env: [envKey],
+          npm: "@ai-sdk/openai-compatible",
+          api,
+          models: { [upstreamID]: deprecatedCatalogModel(upstreamID) },
+        },
+      },
+      async () => Env.set(envKey, `test-${providerID}-alias`),
+      async (providers) => {
+        const alias = providers[ProviderID.make(providerID)]?.models[ModelID.make("fast")]
+        expect(alias).toBeDefined()
+        // The alias inherits the upstream `deprecated` row; the override must
+        // match its canonical id and expose it as active, exactly like the
+        // picker's `status !== "deprecated"` filter expects.
+        expect(alias?.status).toBe("active")
+        expect(alias?.api.id).toBe(upstreamID)
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make("fast"))
+        expect(resolved.id).toBe("fast")
+        expect(resolved.api.id).toBe(upstreamID)
+      },
+      {
+        provider: {
+          [providerID]: {
+            options: { apiKey: `test-${providerID}-alias` },
+            models: { fast: { id: upstreamID } },
+          },
+        },
+      },
+    )
+  },
+)
+
+test("blacklisting a validated deprecated alias still excludes it", async () => {
+  await withModelsCatalog(
+    {
+      "minimax-coding-plan": {
+        id: "minimax-coding-plan",
+        name: "MiniMax Token Plan",
+        env: ["MINIMAX_TOKEN_PLAN_API_KEY"],
+        npm: "@ai-sdk/anthropic",
+        api: "https://api.minimax.io/anthropic/v1",
+        models: { "MiniMax-M3": deprecatedCatalogModel("MiniMax-M3") },
+      },
+    },
+    async () => Env.set("MINIMAX_TOKEN_PLAN_API_KEY", "test-minimax-alias-blacklist"),
+    async (providers, snapshot) => {
+      expect(providers[ProviderID.make("minimax-coding-plan")]?.models[ModelID.make("fast")]).toBeUndefined()
+      // The alias key, not the upstream id, is what the blacklist matches.
+      expect(snapshot.exclusions).toContainEqual({
+        providerID: "minimax-coding-plan",
+        modelID: "fast",
+        reason: "configured-blacklist",
+      })
+    },
+    {
+      provider: {
+        "minimax-coding-plan": {
+          options: { apiKey: "test-minimax-alias-blacklist" },
+          blacklist: ["fast"],
+          models: { fast: { id: "MiniMax-M3" } },
+        },
+      },
+    },
+  )
+})

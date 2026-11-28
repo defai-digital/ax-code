@@ -51,7 +51,7 @@ import {
 } from "./model-info"
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
-import { isModelSupportedForProvider, modelSupportDecision } from "./model-support"
+import { isModelSupportedForProvider, keepsDeprecatedModelVisible, modelSupportDecision } from "./model-support"
 import { defaultModelIDForProvider, MODEL_FORMAT_HELP, modelFamilyDefault } from "./implicit-default"
 import { isNonChatModelID, modelSelectableForProvider, type SelectableModel } from "./model-selectability"
 import {
@@ -655,12 +655,17 @@ export namespace Provider {
           delete provider.models[modelID]
           continue
         }
+        // An alias row (`fast` with `api.id: "MiniMax-M3"`) inherits the
+        // upstream status, so the override must match the canonical id too.
+        const validatedDeprecatedModel =
+          model.status === "deprecated" &&
+          (keepsDeprecatedModelVisible(providerID, modelID) || keepsDeprecatedModelVisible(providerID, model.api.id))
         const exclusion =
           modelID === "gpt-5-chat-latest"
             ? "unsupported-model-policy"
             : model.status === "alpha" && !Flag.AX_CODE_ENABLE_EXPERIMENTAL_MODELS
               ? "experimental-model-disabled"
-              : model.status === "deprecated"
+              : model.status === "deprecated" && !validatedDeprecatedModel
                 ? "deprecated-model"
                 : configProvider?.blacklist?.includes(modelID)
                   ? "configured-blacklist"
@@ -674,6 +679,9 @@ export namespace Provider {
           delete provider.models[modelID]
           continue
         }
+        // Kept past the upstream deprecation: present as active so every
+        // consumer (TUI picker, server routes, desktop clients) lists it.
+        if (validatedDeprecatedModel) model.status = "active"
 
         // Managed (AX Trust / custom API) entries store discovered card limits,
         // so only a hand-written provider's limit.context is a user choice.

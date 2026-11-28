@@ -26,6 +26,24 @@ const ALIBABA_PLAN_PROVIDER_IDS = new Set([
   "alibaba-token-plan-cn",
 ])
 const MINIMAX_PLAN_PROVIDER_IDS = new Set(["minimax-coding-plan", "minimax-cn-coding-plan"])
+
+// models.dev now marks a few plan models that ax-code has already validated as
+// `deprecated`. Keep exactly these visible so a plan that ships a single model
+// (Kimi Cloud Plan) or whose current flagship is affected (MiniMax Token Plan)
+// does not lose its picker entry. Only the `"deprecated-model"` exclusion is
+// overridden: every other support, status, blacklist, and whitelist rule still
+// applies, and any model absent from this set keeps following the upstream
+// catalog. See `applyModelFilters` in provider-impl.ts.
+const VALIDATED_DEPRECATED_MODEL_KEYS = new Set<string>([
+  "minimax-coding-plan/MiniMax-M3",
+  "minimax-cn-coding-plan/MiniMax-M3",
+  "kimi-cloud-plan/kimi-k2.7-code",
+])
+
+export function keepsDeprecatedModelVisible(providerID: string, modelID: string) {
+  return VALIDATED_DEPRECATED_MODEL_KEYS.has(`${providerID}/${modelID}`)
+}
+
 export const GROQ_CHAT_MODEL_ALLOWLIST = new Set<string>([
   "qwen/qwen3.8-27b",
   "openai/gpt-oss-120b",
