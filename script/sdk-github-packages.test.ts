@@ -29,6 +29,8 @@ describe("SDK package boundary", () => {
     expect(manifest.dependencies).toEqual({ zod: "4.4.3" })
     expect(manifest.exports["."]).toEqual({ types: "./dist/index.d.ts", import: "./dist/index.js" })
     expect(manifest.publishConfig).toEqual({ registry: "https://npm.pkg.github.com", access: "public" })
+    expect(manifest.description).toBeTruthy()
+    expect(manifest.description).not.toMatch(/internal/i)
     for (const key of ["scripts", "devDependencies", "private", "packageManager"])
       expect(manifest).not.toHaveProperty(key)
   })

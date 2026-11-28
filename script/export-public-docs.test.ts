@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync } from "node:fs"
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, existsSync } from "node:fs"
 import { execFileSync } from "node:child_process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -114,6 +114,10 @@ describe("public documentation export", () => {
       ["# Public guide\n\n[src]: /docs-assets/sdk/examples/unpublished.ts\n", /Unpublished docs asset link/],
       [
         "# Public guide\n\n<https://ax-code.app/docs-assets/sdk/examples/unpublished.ts>\n",
+        /Unpublished docs asset link/,
+      ],
+      [
+        "# Public guide\n\n<https://ax-code.app/docs-assets/sdk/examples/example.ts.txt\\missing.txt>\n",
         /Unpublished docs asset link/,
       ],
     ] as const) {
@@ -294,6 +298,154 @@ describe("public documentation export", () => {
       expect(() => syncSnapshot(website, { pages })).toThrow(/changed outside exporter/)
     } finally {
       rmSync(website, { recursive: true, force: true })
+    }
+  })
+
+  test("scoped exports rebuild and check assets linked from the selected pages", () => {
+    const base = mkdtempSync(join(tmpdir(), "ax-docs-scoped-assets-"))
+    const website = mkdtempSync(join(tmpdir(), "ax-docs-scoped-assets-site-"))
+    try {
+      writeExportFixture(base, "# Public guide\n\n[example](/docs-assets/sdk/examples/example.ts.txt)\n", { git: true })
+      syncSnapshot(website, { base })
+      const page = ""
+      const metadataPath = join(website, "src/content/docs-snapshot.json")
+      const assetDestination = "public/docs-assets/sdk/examples/example.ts.txt"
+      const previousAsset = JSON.parse(readFileSync(metadataPath, "utf8")).files.find(
+        (record: { destination: string }) => record.destination === assetDestination,
+      )
+      writeFileSync(join(base, "docs/published.json"), '{"changed":true}\n')
+      expect(() => syncSnapshot(website, { base, check: true, pages: [page] })).toThrow(
+        /Stale public docs snapshot: public\/docs-assets\/sdk\/examples\/example\.ts\.txt/,
+      )
+      syncSnapshot(website, { base, pages: [page] })
+      expect(readFileSync(join(website, assetDestination), "utf8")).toBe('{"changed":true}\n')
+      const updatedAsset = JSON.parse(readFileSync(metadataPath, "utf8")).files.find(
+        (record: { destination: string }) => record.destination === assetDestination,
+      )
+      expect(updatedAsset.sha256).not.toBe(previousAsset.sha256)
+      expect(() => syncSnapshot(website, { base, check: true, pages: [page] })).not.toThrow()
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+      rmSync(website, { recursive: true, force: true })
+    }
+  })
+
+  test("scoped exports add newly linked assets missing from the previous snapshot", () => {
+    const base = mkdtempSync(join(tmpdir(), "ax-docs-scoped-new-asset-"))
+    const website = mkdtempSync(join(tmpdir(), "ax-docs-scoped-new-asset-site-"))
+    try {
+      writeExportFixture(base, "# Public guide\n\n[example](/docs-assets/sdk/examples/example.ts.txt)\n", { git: true })
+      syncSnapshot(website, { base })
+      const manifestPath = join(base, "script/public-docs-manifest.json")
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
+      manifest.entries.push({ source: "docs/extra.json", asset: "sdk/examples/extra.ts.txt" })
+      writeFileSync(manifestPath, JSON.stringify(manifest))
+      writeFileSync(join(base, "docs/extra.json"), '{"extra":true}\n')
+      writeFileSync(join(base, "docs/README.md"), "# Public guide\n\n[extra](/docs-assets/sdk/examples/extra.ts.txt)\n")
+      const assetDestination = "public/docs-assets/sdk/examples/extra.ts.txt"
+      expect(existsSync(join(website, assetDestination))).toBe(false)
+      syncSnapshot(website, { base, pages: [""] })
+      expect(readFileSync(join(website, assetDestination), "utf8")).toBe('{"extra":true}\n')
+      const metadata = JSON.parse(readFileSync(join(website, "src/content/docs-snapshot.json"), "utf8"))
+      expect(metadata.files.some((record: { destination: string }) => record.destination === assetDestination)).toBe(
+        true,
+      )
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+      rmSync(website, { recursive: true, force: true })
+    }
+  })
+
+  test("scoped exports track assets referenced by GitHub blob reference definitions", () => {
+    const base = mkdtempSync(join(tmpdir(), "ax-docs-scoped-ref-"))
+    const website = mkdtempSync(join(tmpdir(), "ax-docs-scoped-ref-site-"))
+    try {
+      writeExportFixture(
+        base,
+        "# Public guide\n\n[example][src]\n\n[src]: https://github.com/defai-digital/ax-code/blob/main/docs/published.json\n",
+        { git: true },
+      )
+      syncSnapshot(website, { base })
+      const assetDestination = "public/docs-assets/sdk/examples/example.ts.txt"
+      expect(readFileSync(join(website, assetDestination), "utf8")).toBe("{}\n")
+      writeFileSync(join(base, "docs/published.json"), '{"changed":true}\n')
+      expect(() => syncSnapshot(website, { base, check: true, pages: [""] })).toThrow(
+        /Stale public docs snapshot: public\/docs-assets\/sdk\/examples\/example\.ts\.txt/,
+      )
+      syncSnapshot(website, { base, pages: [""] })
+      expect(readFileSync(join(website, assetDestination), "utf8")).toBe('{"changed":true}\n')
+      expect(() => syncSnapshot(website, { base, check: true, pages: [""] })).not.toThrow()
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+      rmSync(website, { recursive: true, force: true })
+    }
+  })
+
+  test("scoped exports ignore assets mentioned only inside fenced code blocks", () => {
+    const base = mkdtempSync(join(tmpdir(), "ax-docs-scoped-code-asset-"))
+    const website = mkdtempSync(join(tmpdir(), "ax-docs-scoped-code-asset-site-"))
+    try {
+      writeExportFixture(base, "# Public guide\n\n```sh\ncurl /docs-assets/sdk/examples/example.ts.txt\n```\n", {
+        git: true,
+      })
+      syncSnapshot(website, { base })
+      const assetDestination = "public/docs-assets/sdk/examples/example.ts.txt"
+      const originalAsset = readFileSync(join(website, assetDestination))
+      const originalSha = JSON.parse(readFileSync(join(website, "src/content/docs-snapshot.json"), "utf8")).files.find(
+        (record: { destination: string }) => record.destination === assetDestination,
+      ).sha256
+      writeFileSync(join(base, "docs/published.json"), '{"changed":true}\n')
+      syncSnapshot(website, { base, pages: [""] })
+      expect(readFileSync(join(website, assetDestination))).toEqual(originalAsset)
+      const record = JSON.parse(readFileSync(join(website, "src/content/docs-snapshot.json"), "utf8")).files.find(
+        (candidate: { destination: string }) => candidate.destination === assetDestination,
+      )
+      expect(record.sha256).toBe(originalSha)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+      rmSync(website, { recursive: true, force: true })
+    }
+  })
+
+  test("scoped exports reuse validated prose links instead of rescanning rendered output", () => {
+    const cases = [
+      {
+        name: "hard break after a published asset",
+        body: "# Public guide\n\nSee /docs-assets/sdk/examples/example.ts.txt  \n",
+        linked: true,
+      },
+      {
+        name: "published asset at the end of an H1 in inline code",
+        body: "# Serving `/docs-assets/sdk/examples/example.ts.txt`\n",
+        linked: false,
+      },
+      {
+        name: "unpublished asset in H1 inline code",
+        body: "# Serving `/docs-assets/sdk/examples/unpublished.ts`\n",
+        linked: false,
+      },
+    ]
+    for (const testCase of cases) {
+      const base = mkdtempSync(join(tmpdir(), "ax-docs-scoped-links-"))
+      const website = mkdtempSync(join(tmpdir(), "ax-docs-scoped-links-site-"))
+      try {
+        writeExportFixture(base, testCase.body, { git: true })
+        expect(() => exportSnapshot(base)).not.toThrow()
+        syncSnapshot(website, { base })
+        const assetDestination = "public/docs-assets/sdk/examples/example.ts.txt"
+        if (testCase.linked) {
+          writeFileSync(join(base, "docs/published.json"), '{"changed":true}\n')
+          syncSnapshot(website, { base, pages: [""] })
+          expect(readFileSync(join(website, assetDestination), "utf8")).toBe('{"changed":true}\n')
+        } else {
+          writeFileSync(join(base, "docs/published.json"), '{"changed":true}\n')
+          syncSnapshot(website, { base, pages: [""] })
+          expect(readFileSync(join(website, assetDestination), "utf8")).toBe("{}\n")
+        }
+      } finally {
+        rmSync(base, { recursive: true, force: true })
+        rmSync(website, { recursive: true, force: true })
+      }
     }
   })
 

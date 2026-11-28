@@ -41,7 +41,7 @@ export function publicManifest(workspace, catalog) {
   return {
     name: publicName,
     version: workspace.version,
-    description: "Typed AX Code runtime client for internal applications",
+    description: "TypeScript SDK for integrating the AX Code coding-agent runtime into applications",
     type: "module",
     license: "Apache-2.0",
     engines: { node: ">=26" },

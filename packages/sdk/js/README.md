@@ -13,7 +13,7 @@ The SDK is distributed through **GitHub Packages** as the public `@defai-digital
 //npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
 ```
 
-Set `NODE_AUTH_TOKEN` through your secret manager to a classic GitHub PAT with `read:packages` and access to the package. Never commit a token. Other npm scopes continue to use their existing registry.
+Set `NODE_AUTH_TOKEN` through your secret manager to a classic GitHub PAT with `read:packages`. Never commit a token. Other npm scopes continue to use their existing registry.
 
 ```bash
 pnpm add @defai-digital/ax-code-sdk
@@ -185,8 +185,11 @@ try {
   if (e instanceof ProviderError && e.isRetryable) console.log("Rate limited, retry later")
   else if (e instanceof ToolError) console.log(`Tool "${e.tool}" failed: ${e.message}`)
   else if (e instanceof TimeoutError) console.log(`Timed out after ${e.timeout}ms`)
+  else throw e
 }
 ```
+
+These checks also work for errors thrown by the runtime's own copy of the SDK.
 
 More examples:
 [example/programmatic.ts](https://ax-code.app/docs-assets/sdk/examples/programmatic.ts.txt).
@@ -275,9 +278,9 @@ Generated HTTP SSE subscriptions preserve events across fragmented CRLF and UTF-
 | `client.steering(sessionID)`                      | This runtime exposes the session steering endpoint and its current generation              |
 | Signed runtime verification                       | Binary identity and provenance, independently of capability responses                      |
 
-The current generated contract baseline is AX Code source v7.23.0. SDK 2.6 does not infer unadvertised features from the runtime version. The current capability catalog does not advertise steering separately; check the read endpoint before offering steering, and handle unsupported-route errors. SDK 2.6 preserves the existing generated and headless entry points. New response-error metadata and request controls are additive; code catching `Error` continues to work.
+The generated contract is regenerated from the AX Code runtime source, and CI verifies that it is current, so a given SDK release matches the runtime source at its release commit. Runtime compatibility is established through capability negotiation, not version numbers. SDK 2.6 does not infer unadvertised features from the runtime version. The current capability catalog does not advertise steering separately; check the read endpoint before offering steering, and handle unsupported-route errors. SDK 2.6 preserves the existing generated and headless entry points. New response-error metadata and request controls are additive; code catching `Error` continues to work.
 
-Applications upgrading older pins should first verify their signed runtime, then test capability negotiation, event projection, pending permissions/questions, cancellation, and backend shutdown. Consumer pin changes belong in the consuming repository after the target SDK is published. Validate the compiled package locally with `pnpm --dir packages/sdk/js run test:consumer`; this checks public imports, declarations, and proto assets in an isolated fixture without the runtime workspace package.
+Applications upgrading older pins should install the exact published version in their own project (`pnpm add --save-exact @defai-digital/ax-code-sdk@<version>`, using the `.npmrc` from [Install](#install)), then verify their signed runtime and run their own tests for capability negotiation, event projection, pending permissions/questions, cancellation, and backend shutdown. Consumer pin changes belong in the consuming repository after the target SDK is published. `pnpm --dir packages/sdk/js run test:consumer` is a maintainer check in the AX Code repository that verifies the working-tree package (public imports, declarations, and proto assets) in an isolated fixture before publication; it does not check the version an application pins.
 
 ## Cross-language integrations
 

@@ -8,6 +8,34 @@ import type { Message as ApiMessage, Part as ApiPart } from "../v2/gen/types.gen
 // Error Classes
 // ============================================================
 
+// Registry-wide brand shared by every copy of this module, so `instanceof`
+// works when the runtime throws errors from a different installed SDK copy.
+const AX_CODE_ERROR_BRAND = Symbol.for("@defai-digital/ax-code-sdk/error")
+
+// Module-private registry of the SDK's own error classes. Application
+// subclasses are never registered, so their own static properties cannot
+// influence branding or cross-copy matching.
+const SDK_ERROR_KINDS = new Map<Function, string>()
+const SDK_ERROR_KIND_NAMES = new Set<string>()
+
+// Walk `new.target` up the constructor chain to the nearest registered SDK
+// class. An application subclass therefore brands as the SDK class it extends
+// (for example `class Retryable extends ProviderError {}`).
+function errorKindOf(target: unknown): string | undefined {
+  let current: unknown = target
+  while (typeof current === "function") {
+    const kind = SDK_ERROR_KINDS.get(current)
+    if (kind !== undefined) return kind
+    current = Object.getPrototypeOf(current)
+  }
+  return undefined
+}
+
+function isErrorValue(value: unknown): boolean {
+  const isError = (Error as unknown as { isError?: (candidate: unknown) => boolean }).isError
+  return typeof isError === "function" ? isError(value) : value instanceof Error
+}
+
 /** Base error class for all ax-code SDK errors */
 export class AxCodeError extends Error {
   readonly code: string
@@ -15,6 +43,29 @@ export class AxCodeError extends Error {
     super(message)
     this.name = "AxCodeError"
     this.code = code
+    const kind = errorKindOf(new.target)
+    if (kind) {
+      Object.defineProperty(this, AX_CODE_ERROR_BRAND, {
+        value: kind,
+        enumerable: false,
+        writable: false,
+        configurable: false,
+      })
+    }
+  }
+
+  static [Symbol.hasInstance](value: unknown): boolean {
+    const kind = SDK_ERROR_KINDS.get(this)
+    // Only the SDK classes opt in to cross-copy matching; application
+    // subclasses keep ordinary prototype semantics.
+    if (kind === undefined) return Function.prototype[Symbol.hasInstance].call(this, value)
+    if (Function.prototype[Symbol.hasInstance].call(this, value)) return true
+    if (typeof value !== "object" || value === null) return false
+    // Only branded Error objects match, never look-alike plain objects.
+    if (!isErrorValue(value)) return false
+    const brand = (value as Record<symbol, unknown>)[AX_CODE_ERROR_BRAND]
+    if (typeof brand !== "string" || !SDK_ERROR_KIND_NAMES.has(brand)) return false
+    return this === AxCodeError || brand === kind
   }
 }
 
@@ -84,6 +135,15 @@ export class DisposedError extends AxCodeError {
     this.name = "DisposedError"
   }
 }
+
+SDK_ERROR_KINDS.set(AxCodeError, "AxCodeError")
+SDK_ERROR_KINDS.set(ProviderError, "ProviderError")
+SDK_ERROR_KINDS.set(TimeoutError, "TimeoutError")
+SDK_ERROR_KINDS.set(ToolError, "ToolError")
+SDK_ERROR_KINDS.set(PermissionError, "PermissionError")
+SDK_ERROR_KINDS.set(AgentNotFoundError, "AgentNotFoundError")
+SDK_ERROR_KINDS.set(DisposedError, "DisposedError")
+for (const kind of SDK_ERROR_KINDS.values()) SDK_ERROR_KIND_NAMES.add(kind)
 
 // ============================================================
 // User-defined tools

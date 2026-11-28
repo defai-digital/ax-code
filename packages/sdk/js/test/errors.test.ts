@@ -68,4 +68,10 @@ describe("error classes", () => {
     expect(new AgentNotFoundError("a") instanceof AxCodeError).toBe(true)
     expect(new DisposedError() instanceof AxCodeError).toBe(true)
   })
+
+  test("branding does not change enumerable keys or JSON output", () => {
+    const provider = new ProviderError("x", { status: 429 })
+    expect(Object.keys(provider)).toEqual(["code", "name", "status", "provider"])
+    expect(JSON.stringify(provider)).toBe('{"code":"PROVIDER_ERROR","name":"ProviderError","status":429}')
+  })
 })

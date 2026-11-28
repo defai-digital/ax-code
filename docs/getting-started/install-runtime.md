@@ -364,7 +364,7 @@ The source launcher should report `Runtime: Node vX.Y.Z (source)`.
 
 The repository enforces `pnpm@10.33.4` through the root `packageManager` field and `only-allow pnpm`: the `preinstall` hook blocks non-pnpm installs, and root `pre<script>` hooks block `npm run <script>` with the same requirement. Node.js must match the root `package.json` engine (`>=26`), which also provides `--experimental-ffi` for source-mode TUI commands.
 
-Source installs resolve `@defai-digital/ax-tui` from `packages/ax-tui` in this checkout. `pnpm install` does not fetch that framework from a registry. The committed `.npmrc` still selects GitHub Packages for the `@defai-digital` scope, which the published SDK uses. Installing that SDK needs a classic GitHub PAT with `read:packages` in `NODE_AUTH_TOKEN`. Standalone runtime users do not need registry credentials. GitHub Actions that publish or install the SDK use a job token with `packages: read`.
+Source installs resolve `@defai-digital/ax-tui` from `packages/ax-tui` in this checkout. `pnpm install` does not fetch that framework from a registry. The committed `.npmrc` still selects GitHub Packages for the `@defai-digital` scope, which the published SDK uses. Installing that SDK needs a classic GitHub PAT with `read:packages` in `NODE_AUTH_TOKEN`. Standalone runtime users do not need registry credentials. GitHub Actions install the SDK with a job token that has `packages: read`; publication uses the dedicated `SDK_PACKAGES_TOKEN` secret.
 
 Do not use root `pnpm test`; the root script intentionally exits with `do not run tests from root`. For `packages/ax-code`, run tests from `packages/ax-code/`.
 

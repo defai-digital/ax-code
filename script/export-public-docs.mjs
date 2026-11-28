@@ -17,6 +17,18 @@ const hash = (data) => createHash("sha256").update(data).digest("hex")
 const DOCS_ASSET_LINK_RE =
   /(?:https:\/\/ax-code\.app(\/docs-assets\/[^\s)>\]"'`]+)|(?<![A-Za-z0-9._:/%-])(\/docs-assets\/[^\s)>\]"'`]+))/g
 
+// Docs asset links in published prose. Fenced blocks and inline code are not
+// published links, so they are removed exactly as in the exporter's validation.
+function docsAssetLinks(text) {
+  const links = []
+  for (const match of stripFencedCode(text)
+    .replace(/`[^`]*`/g, "")
+    .matchAll(DOCS_ASSET_LINK_RE)) {
+    links.push({ link: match[0], path: (match[1] ?? match[2]).split("#")[0].split("?")[0] })
+  }
+  return links
+}
+
 // Remove fenced code blocks opened by 3+ backticks or 3+ tildes (optionally
 // indented up to three spaces) and closed by a line of the same character at
 // least as long (or end of file when unclosed). Indented four-space code blocks
@@ -81,7 +93,7 @@ export function approvedPath(base, name) {
   return path
 }
 
-export function exportSnapshot(base = root) {
+function buildSnapshot(base) {
   const manifest = JSON.parse(readFileSync(join(base, "script/public-docs-manifest.json"), "utf8"))
   if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.entries)) throw new Error("Unsupported export manifest")
   const mapped = new Map()
@@ -146,6 +158,7 @@ export function exportSnapshot(base = root) {
     throw new Error(`Unapproved linked asset: ${source} -> ${target}`)
   }
   const files = new Map()
+  const linkedAssets = new Map()
   const pages = []
   const records = []
   for (const entry of mapped.values()) {
@@ -171,20 +184,23 @@ export function exportSnapshot(base = root) {
               }),
         )
         .join("")
-      // Reference definitions and autolinks bypass the inline-link rewrite, so
-      // scan the non-code prose directly for any docs asset path that was not
-      // published. Fragments and queries do not change the target file.
-      const rewrittenProse = stripFencedCode(text).replace(/`[^`]*`/g, "")
-      for (const match of rewrittenProse.matchAll(DOCS_ASSET_LINK_RE)) {
-        const assetPath = (match[1] ?? match[2]).split("#")[0].split("?")[0]
-        if (!publishedAssetUrls.has(assetPath)) {
-          throw new Error(`Unpublished docs asset link: ${entry.source} -> ${match[0]}`)
-        }
-      }
       text = text.replace(
         /https:\/\/github\.com\/defai-digital\/ax-code(?![-\w])[^\s<>"')\]]*/g,
         (url) => publicLink(entry.source, url) ?? "the authorized source checkout",
       )
+      // Reference definitions and autolinks bypass the inline-link rewrite, so
+      // scan the non-code prose directly for any docs asset path that was not
+      // published. Run this after the source-URL rewrite so GitHub blob links
+      // that become `/docs-assets/...` are validated and recorded too.
+      // Fragments and queries do not change the target file.
+      const linkedDestinations = new Set()
+      for (const { link, path: assetPath } of docsAssetLinks(text)) {
+        if (!publishedAssetUrls.has(assetPath)) {
+          throw new Error(`Unpublished docs asset link: ${entry.source} -> ${link}`)
+        }
+        linkedDestinations.add(`public${assetPath}`)
+      }
+      linkedAssets.set(entry.source, linkedDestinations)
       if (
         /github\.com\/defai-digital\/ax-code(?:[\/#\s]|$)|raw\.githubusercontent\.com\/defai-digital\/ax-code\/|api\.github\.com\/repos\/defai-digital\/ax-code(?:[\/?#]|$)/.test(
           text,
@@ -232,11 +248,17 @@ export function exportSnapshot(base = root) {
     files: records,
   }
   files.set("src/content/docs-snapshot.json", Buffer.from(JSON.stringify(metadata, null, 2) + "\n"))
-  return files
+  return { files, linkedAssets }
+}
+
+export function exportSnapshot(base = root) {
+  return buildSnapshot(base).files
 }
 
 export function syncSnapshot(website, { check = false, base = root, pages } = {}) {
-  let files = exportSnapshot(base)
+  const snapshot = buildSnapshot(base)
+  let files = snapshot.files
+  const linkedAssets = snapshot.linkedAssets
   const metadataPath = "src/content/docs-snapshot.json"
   if (pages !== undefined) {
     if (!Array.isArray(pages) || pages.length === 0 || new Set(pages).size !== pages.length)
@@ -248,6 +270,24 @@ export function syncSnapshot(website, { check = false, base = root, pages } = {}
     if (selected.length !== pages.length) throw new Error("Unknown scoped documentation page")
     const sources = new Set(selected.map((page) => page.source))
     const records = current.files.filter((record) => sources.has(record.source))
+    // Rebuild the assets linked from the selected pages' exported prose too;
+    // every other asset still comes from the previous snapshot.
+    const linkedDestinations = new Set()
+    for (const page of selected) {
+      const pageRecord = records.find((record) => record.source === page.source)
+      if (!pageRecord) throw new Error(`Missing exported page record: ${page.source}`)
+      // Reuse the prose links the exporter validated instead of rescanning the
+      // rendered output, which transforms hard breaks, titles, and frontmatter.
+      const pageDestinations = linkedAssets.get(page.source)
+      if (!pageDestinations) throw new Error(`Missing linked asset record: ${page.source}`)
+      for (const destination of pageDestinations) {
+        if (linkedDestinations.has(destination)) continue
+        const assetRecord = current.files.find((record) => record.destination === destination)
+        if (!assetRecord) throw new Error(`Linked docs asset missing from export for ${page.slug}: ${destination}`)
+        linkedDestinations.add(destination)
+        records.push(assetRecord)
+      }
+    }
     const destinations = new Set(records.map((record) => record.destination))
     // Verify the old snapshot before merging. Scoped export must never bless manual edits.
     for (const record of previous.files) {
