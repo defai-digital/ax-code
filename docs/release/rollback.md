@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-09-03
+Last reviewed: 2026-11-28
 Owner: AX Code release engineering
 
 This runbook describes how to withdraw a published **stable** (`latest` channel) AX Code CLI

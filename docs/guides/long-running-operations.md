@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-13
+Last reviewed: 2026-11-28
 Owner: AX Code maintainers
 
 AX Code bounds one interactive Super-Long run at 72 hours. For operation over
@@ -20,6 +20,7 @@ ax-code runtime start --dir /absolute/path/project
 ax-code runtime attach --dir /absolute/path/project --continue
 ax-code runtime status --dir /absolute/path/project
 ax-code runtime list                  # every managed runtime on this machine
+ax-code runtime restart --dir /absolute/path/project
 ax-code runtime stop --dir /absolute/path/project
 ```
 
@@ -285,3 +286,8 @@ the action changes to `/models`. Failed provider discovery points to `/status`;
 `/connect` and `/providers` remain available to repair configuration. A selected
 model is a configuration choice, not a credential or runtime readiness check.
 The hints also appear for returning users whose configuration needs attention.
+
+## Related
+
+- [Loop Mode & Scheduled Tasks](loop-mode.md)
+- [Headless CLI (`ax-code run`)](headless-cli.md)

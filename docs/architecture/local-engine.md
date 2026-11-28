@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-19
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 Related: [ax-engine LOCAL-ENGINE-CLIENTS](https://github.com/defai-digital/ax-engine/blob/main/docs/LOCAL-ENGINE-CLIENTS.md)
 

@@ -2,8 +2,10 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
+
+Find, select, and configure default models for interactive TUI sessions and headless `ax-code run` invocations.
 
 ## Find a usable model
 

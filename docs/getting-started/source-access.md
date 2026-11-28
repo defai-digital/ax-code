@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-28
 Owner: AX Code maintainers
 
 The AX Code Standard CLI/TUI and SDK source is available in the

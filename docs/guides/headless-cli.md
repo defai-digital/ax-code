@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-11
+Last reviewed: 2026-11-28
 Owner: AX Code runtime maintainers
 
 `ax-code run` is the one-shot, non-interactive entry point for AI coding agents and scripts. It submits a single
@@ -187,13 +187,12 @@ locally owned servers, keeping the behavior uniform.
 ## Structured output
 
 `-o/--output-file <path>` writes the final assistant text to a file. `--output-schema <file>` validates the final text
-as JSON against a JSON Schema file; a mismatch is reported as an `error` event with `result.status` `error` and exit
-
-1. The schema file is preflighted before the model runs — an
-   unreadable, unparseable, or non-object schema is a usage error before anything is submitted. On success the parsed
-   schema is also sent to the model as the run's `json_schema` output format, and the server retries an invalid reply up
-   to twice before the CLI's own final validation runs as the backstop. The final output is the serialized structured
-   object (one line of JSON): it is what stdout, `--output-file`, and `result.text` carry:
+as JSON against a JSON Schema file; a mismatch is reported as an `error` event with `result.status` `error` and exit 1.
+The schema file is preflighted before the model runs — an
+unreadable, unparseable, or non-object schema is a usage error before anything is submitted. On success the parsed
+schema is also sent to the model as the run's `json_schema` output format, and the server retries an invalid reply up
+to twice before the CLI's own final validation runs as the backstop. The final output is the serialized structured
+object (one line of JSON): it is what stdout, `--output-file`, and `result.text` carry:
 
 ```bash
 ax-code run --model qwen --output-schema ./answer.schema.json -- "Return a JSON object with a summary field"
@@ -290,7 +289,7 @@ ax-code run --model qwen --file docs/spec.md -- "Summarize the attached spec"
 
 ## Machine-readable commands
 
-`ax-code run --format json` emits a newline-delimited event stream (see [JSON stream](#json-stream---format-json)); it is
+`ax-code run --format json` emits a newline-delimited event stream (see [JSON stream](#json-stream---format-json)); it is the
 selected stream format for headless runs. Commands that accept `--json` write one JSON document to stdout on
 success. Parser usage errors (such as an unknown option or missing required argument) also write one document to
 stderr: `{"error":{"code":"usage","message":"..."}}`, with exit code 1 and empty stdout. Handler-level
@@ -367,3 +366,9 @@ When wrapping `ax-code run` from a script, CI step, or another agent:
 - A signal that arrives while the process is still loading, before the `run` command is active, ends the process with
   exit 130 and no output; once the command is active, SIGINT and SIGTERM always produce the single terminal `result`
   line with status `cancelled`.
+
+## Related
+
+- [Loop Mode & Scheduled Tasks](loop-mode.md)
+- [Operating AX Code for Long-Running Work](long-running-operations.md)
+- [Performance configuration and diagnostics](performance.md)

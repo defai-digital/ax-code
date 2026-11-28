@@ -2,123 +2,158 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-28
 Owner: AX Code maintainers
 
-Choose the [Desktop app or standalone CLI](getting-started/install-runtime.md),
-then [connect a provider](getting-started/connect-provider.md) and
-[review your first change](getting-started/start-here.md). For an existing installation,
-see [Upgrade and recovery](getting-started/upgrade.md). For source builds and the
-published SDK, see [Source access and public distribution](getting-started/source-access.md).
+AX Code is an open-source coding agent for the terminal, SSH, and CI. New here? Follow
+the four steps below, then use the task table or the section index to find a guide.
 
-## Practical quickstarts
+1. [Install the CLI](getting-started/install-runtime.md) (or the Desktop app).
+2. [Connect a provider](getting-started/connect-provider.md).
+3. [Choose a model](getting-started/select-model.md).
+4. [Review your first change](getting-started/start-here.md).
 
-1. [Connect your first provider](getting-started/connect-provider.md)
-2. [Choose and change models](getting-started/select-model.md)
-3. [Create and use your first AX Wiki](getting-started/wiki-quickstart.md)
+Already installed? See [Upgrade and recovery](getting-started/upgrade.md).
 
-## Choose by task
+## Find a guide by task
 
-| I want to…                                               | Start here                                                              |
-| -------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Understand AX Code before installing it                  | [Start Here](getting-started/start-here.md)                             |
-| Review, compare, or undo what an agent did               | [Execution Evidence](guides/execution-evidence.md)                      |
-| Get several models to attempt the same change            | [Verified Multi-Model Changes](guides/verified-multi-model-change.md)   |
-| Choose an install or runtime channel                     | [Installation and Runtime Channels](getting-started/install-runtime.md) |
-| Connect a hosted, CLI, custom, or local provider         | [Supported Providers and Models](providers/supported-providers.md)      |
-| Enable managed local inference on Apple Silicon          | [AX Engine Model Selection](providers/ax-engine-model-selection.md)     |
-| Try AX Code with a free-tier model API                   | [Free-Tier API Quickstart](providers/free-tier-apis.md)                 |
-| Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
-| Administer cloud or network infrastructure safely        | [Cloud Operations Mode](guides/cloud-operations.md)                     |
-| Run unattended or in CI                                  | [Autonomous Mode](guides/autonomous.md)                                 |
-| Call the one-shot `ax-code run` CLI from scripts or CI   | [Headless CLI](guides/headless-cli.md)                                  |
-| Run recurring prompts or schedule durable tasks          | [Loop Mode and Scheduled Tasks](guides/loop-mode.md)                    |
-| Hear a sound or spoken alert when a run needs attention  | [Audio Notifications](guides/audio-notifications.md)                    |
-| Keep scheduled work running across process or host exits | [Long-Running Operations](guides/long-running-operations.md)            |
-| Choose local, cloud, hybrid, council, or arena execution | [Execution Modes](guides/modes.md)                                      |
-| Connect external tools and data                          | [MCP Integrations](integrations/mcp.md)                                 |
-| Let the agent read and act in Chrome through WebMCP      | [WebMCP browser bridge](guides/webmcp-bridge.md)                        |
-| Embed AX Code in an application                          | [`@defai-digital/ax-code-sdk`](../packages/sdk/js/README.md)            |
-| Generate a client for another language                   | [HTTP and OpenAPI Compatibility](sdk/http-openapi.md)                   |
-| Build a desktop or native host                           | [Native SDK Transport](sdk/native-transport.md)                         |
+| I want to…                                             | Start here                                                            |
+| ------------------------------------------------------ | --------------------------------------------------------------------- |
+| Understand what AX Code is for                         | [Why AX Code](why-ax-code.md)                                         |
+| Review, compare, replay, or undo what an agent did     | [Execution Evidence](guides/execution-evidence.md)                    |
+| Get several models to attempt or review the same change | [Verified Multi-Model Changes](guides/verified-multi-model-change.md) |
+| Restrict filesystem and network access                 | [Sandbox Mode](guides/sandbox.md)                                     |
+| Run unattended or in CI                                | [Autonomous Mode](guides/autonomous.md)                               |
+| Call `ax-code run` from scripts                        | [Headless CLI](guides/headless-cli.md)                                |
+| Run recurring prompts or durable scheduled tasks       | [Loop Mode and Scheduled Tasks](guides/loop-mode.md)                  |
+| Connect a hosted, CLI, custom, or local provider       | [Supported Providers and Models](providers/supported-providers.md)    |
+| Run models locally on Apple Silicon                    | [AX Engine Model Selection](providers/ax-engine-model-selection.md)   |
+| Try AX Code with a free-tier model API                 | [Free-Tier API Quickstart](providers/free-tier-apis.md)               |
+| Fix a saved model that no longer resolves              | [Model Recovery](guides/model-recovery.md)                            |
+| Connect external tools and data                        | [MCP Integrations](integrations/mcp.md)                               |
+| Let the agent read and act in Chrome                   | [WebMCP Browser Bridge](guides/webmcp-bridge.md)                      |
+| Embed AX Code in an application                        | [`@defai-digital/ax-code-sdk`](../packages/sdk/js/README.md)          |
+| Build a source-backed project wiki                     | [AX Wiki Quickstart](getting-started/wiki-quickstart.md)              |
 
 ## Getting started
 
-- [Standard and Business](getting-started/editions.md) — open-source Standard, free commercial use, planned proprietary Business, and public-access status.
+- [Start Here](getting-started/start-here.md) — product mental model and the shortest path for each use case.
+- [Installation and Runtime Channels](getting-started/install-runtime.md) — platforms, installers, signature
+  verification, and contributor launchers.
+- [Connect a Provider](getting-started/connect-provider.md) — first provider connection in the TUI or CLI.
+- [Choose and Change Models](getting-started/select-model.md) — select, switch, and pin models.
+- [Upgrade and Recovery](getting-started/upgrade.md) — update channels, concurrent upgrades, and rollback.
+- [AX Wiki Quickstart](getting-started/wiki-quickstart.md) — create and use your first project wiki.
+- [Standard and Business](getting-started/editions.md) — open-source Standard and the planned Business offering.
+- [Source Access and Public Distribution](getting-started/source-access.md) — source builds and the published SDK.
+- [Why AX Code](why-ax-code.md) — what AX Code optimizes for, who it is for, and what it does not claim.
 
-- [Why AX Code](why-ax-code.md) — what AX Code optimizes for, its intended audience, how it differs, and what it does
-  not claim.
-- [Start Here](getting-started/start-here.md) — product mental model and the shortest paths by use case.
-- [Installation and Runtime Channels](getting-started/install-runtime.md) — supported platforms, packages, updates, and
-  contributor launchers.
+## Guides
 
-## Runtime guides
+### Review and verify agent work
 
-- [Model recovery](guides/model-recovery.md) — diagnose model pins and configure retry targets.
-- [Fixed-context questions](guides/fixed-context-questions.md) — ask about selected files through AX Trust.
-- [Goal assurance](guides/goal-assurance.md) — set completion criteria and run project checks.
-- [Harness controls](guides/harness-controls.md) — configure runtime controls and verification.
-- [Current-model reasoning](guides/current-model-reasoning.md) — use the active model for reasoning tools.
-- [Terminal rendering](guides/terminal-rendering.md) — diagnose renderer and terminal behavior.
-
-- [Wiki evidence visualization](guides/wiki-visualization.md) — open a local graph of recorded Wiki page/source relationships, or export offline HTML. Includes radial, force, and page-focus screenshots from AX Code's own wiki.
-- [Conversation Recap](guides/conversation-recap.md) — catch up on recent work with `/recap` and configure idle banners.
-- [Audio Notifications](guides/audio-notifications.md) — system sounds and opt-in spoken alerts when a run needs your attention.
 - [Execution Evidence](guides/execution-evidence.md) — graph, compare, replay, risk, rollback, branch, trace, and
   audit export.
-- [Verified Multi-Model Changes](guides/verified-multi-model-change.md) — the council and arena workflow end to end.
-- [Sandbox Mode](guides/sandbox.md) — isolation modes, protected paths, network controls, and precedence.
-- [Cloud Operations Mode](guides/cloud-operations.md) — plan/approve/apply workflow, approval tokens, and the `cloudops` agent posture.
-- [Autonomous Mode](guides/autonomous.md) — unattended execution, approvals, headless use, and safeguards.
-- [Headless CLI](guides/headless-cli.md) — the one-shot `ax-code run` command for scripting, CI, and agent callers.
-- [TUI Languages and Setup](guides/tui-language-and-setup.md) — interface and conversation languages, first-time setup.
-- [TUI Animations](guides/tui-animations.md) — opening and ending pairs, terminal capabilities, and rendering fallbacks.
-- [Loop Mode and Scheduled Tasks](guides/loop-mode.md) — recurring prompts, durable schedules, and long-run limits.
-- [Long-Running Operations](guides/long-running-operations.md) — supervised service examples, recovery semantics, and
-  operational checks.
-- [Execution Modes](guides/modes.md) — agent, hybrid, council, and arena behavior.
-- [Multi-Model Routing Best Practices](guides/multi-model-routing.md) — split premium reasoning and lower-cost support
-  work without silently weakening correctness-sensitive tasks.
-- [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
-- [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.
-- [Performance](guides/performance.md) — coding tool profiles and local request-timing diagnostics.
-- [AX TUI performance](guides/ax-tui-performance.md) — renderer workloads, CPU profiles, and native/WASM Unicode width evaluation.
-- [Memory usage](guides/memory-usage.md) — memory profiles, cache retention, and background output limits.
-- [Local Evidence Cache](guides/evidence-cache.md) — optional SQLite and RocksDB evidence reuse, qualification, and rollback.
-- [Lifecycle Hooks](guides/hooks.md) — hook events and bundled policy packs.
-- [Herdr State Reporting](guides/herdr.md) — map lifecycle hooks to herdr idle/working/blocked state.
-- [Project Auto-Accept](guides/project-auto-accept.md) — opt-in approval mode and exactly what it can and cannot approve.
-- [Run Report](guides/run-report.md) — workspace usage, activity, model/tool breakdowns, and per-session reports.
+- [Verified Multi-Model Changes](guides/verified-multi-model-change.md) — the Council and Arena workflow end to end.
+- [Goal Assurance](guides/goal-assurance.md) — completion criteria and project checks.
+- [Run Report](guides/run-report.md) — workspace usage, activity, and per-session reports.
+- [Conversation Recap](guides/conversation-recap.md) — catch up with `/recap` and idle banners.
+- [Local Evidence Cache](guides/evidence-cache.md) — optional evidence reuse, qualification, and rollback.
 
-## Providers
+### Safety, permissions, and policy
+
+- [Sandbox Mode](guides/sandbox.md) — isolation modes, protected paths, network controls, and precedence.
+- [Autonomous Mode](guides/autonomous.md) — unattended execution, approvals, and safeguards.
+- [Project Auto-Accept](guides/project-auto-accept.md) — opt-in approval mode and its exact limits.
+- [Cloud Operations Mode](guides/cloud-operations.md) — plan, approve, and apply workflow for infrastructure.
+- [Lifecycle Hooks](guides/hooks.md) — hook events and bundled policy packs.
+- [Herdr State Reporting](guides/herdr.md) — map lifecycle hooks to herdr idle, working, and blocked states.
+- [Harness Controls](guides/harness-controls.md) — runtime controls and verification settings.
+- [Isolation Policy Packs](policies/README.md) — machine-readable policy examples.
+- [Windows Runtime Integrity](guides/windows-runtime-integrity.md) — signatures, installed-file verification, and
+  antivirus evidence.
+
+### Models, modes, and routing
+
+- [Execution Modes](guides/modes.md) — agent, hybrid, Council, and Arena behavior.
+- [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
+- [Multi-Model Routing Best Practices](guides/multi-model-routing.md) — split premium reasoning and lower-cost
+  support work safely.
+- [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.
+- [Current-Model Reasoning](guides/current-model-reasoning.md) — use the active model for reasoning tools.
+- [Fixed-Context Questions](guides/fixed-context-questions.md) — ask about selected files through AX Trust.
+- [Model Recovery](guides/model-recovery.md) — diagnose model pins and configure retry targets.
+
+### Automation and long-running work
+
+- [Headless CLI](guides/headless-cli.md) — the one-shot `ax-code run` command for scripts, CI, and agent callers.
+- [Loop Mode and Scheduled Tasks](guides/loop-mode.md) — recurring prompts, durable schedules, and limits.
+- [Long-Running Operations](guides/long-running-operations.md) — supervised services, recovery, and operational
+  checks.
+- [Audio Notifications](guides/audio-notifications.md) — sounds and spoken alerts when a run needs attention.
+
+### Terminal UI
+
+- [TUI Languages and Setup](guides/tui-language-and-setup.md) — interface and conversation languages, first-time
+  setup.
+- [TUI Animations](guides/tui-animations.md) — opening and ending animations, capabilities, and fallbacks.
+- [Terminal Rendering](guides/terminal-rendering.md) — diagnose renderer and terminal behavior.
+- [TUI MCP Sharing](guides/tui-mcp.md) — opt-in navigation of a live terminal UI by another agent.
+
+### Performance and diagnostics
+
+- [Performance](guides/performance.md) — coding tool profiles and request-timing diagnostics.
+- [Memory Usage](guides/memory-usage.md) — memory profiles, cache retention, and background output limits.
+- [AX TUI Performance](guides/ax-tui-performance.md) — renderer workloads, CPU profiles, and Unicode width evaluation.
+- [TypeScript Native Support](guides/typescript-native.md) — compiler, language service, and diagnostics.
+
+## Providers and models
 
 - [Supported Providers and Models](providers/supported-providers.md) — provider IDs, credentials, and model discovery.
-- [Free-Tier API Quickstart](providers/free-tier-apis.md) — compatible no-cost paths, constraints, and safe evaluation.
+- [Free-Tier API Quickstart](providers/free-tier-apis.md) — no-cost evaluation paths and their constraints.
 - [Custom and Gateway Providers](providers/custom-provider.md) — OpenAI- and Anthropic-compatible endpoints.
-- [MTPLX and oMLX Setup](providers/local-mlx-runtimes.md) — packaged local runtime presets, discovery, tool support, and authentication.
-- [AX Code Model Downloads](providers/ax-code-model-downloads.md) - reviewed HF collection revisions and verified R2 mirror availability.
-- [AX Engine Model Selection](providers/ax-engine-model-selection.md) — local model ranking and memory guidance.
+- [Local Runtimes (MTPLX, oMLX, and others)](providers/local-mlx-runtimes.md) — local presets, discovery, tool
+  support, and authentication.
+- [AX Engine Model Selection](providers/ax-engine-model-selection.md) — managed local models and memory guidance.
+- [AX Code Model Downloads](providers/ax-code-model-downloads.md) — reviewed model revisions and mirror availability.
+- [Model Download Publication](providers/model-download-publication.md) — how download revisions are reviewed and
+  published.
 
 ## Integrations
 
-- [TUI MCP sharing](guides/tui-mcp.md) — opt-in navigation of a live terminal UI.
-- [WebMCP browser bridge](guides/webmcp-bridge.md) — connect tools exposed by pages in Chrome.
-
 - [MCP Integrations](integrations/mcp.md) — trust, permissions, resources, and server security.
-- [ACP](integrations/acp.md) — the Agent Client Protocol happy path for IDE hosts.
+- [WebMCP Browser Bridge](guides/webmcp-bridge.md) — use tools exposed by pages in Chrome.
+- [ACP](integrations/acp.md) — Agent Client Protocol setup for IDE hosts.
 - [AX Wiki](integrations/wiki.md) — source-backed repository knowledge and CI workflow.
+- [Wiki Evidence Visualization](guides/wiki-visualization.md) — graph Wiki page and source relationships, or export
+  offline HTML.
 
-## SDK and service boundaries
+## SDK and server
 
 - [`@defai-digital/ax-code-sdk`](../packages/sdk/js/README.md) — first-party TypeScript and JavaScript embedding.
-- [Native SDK Transport](sdk/native-transport.md) — gRPC-shaped desktop/native boundary and fallback behavior.
 - [HTTP and OpenAPI Compatibility](sdk/http-openapi.md) — server mode and generated clients for other languages.
+- [Native SDK Transport](sdk/native-transport.md) — gRPC-shaped desktop and native boundary.
 - [OpenAPI snapshot](../packages/sdk/openapi.json) — authoritative HTTP route and schema contract.
+
+## Architecture
+
+- [Semantic Layer](architecture/semantic-layer.md) — graph and LSP provenance, audit, and replay boundaries.
+- [Local Engine Architecture](architecture/local-engine.md) — why AX Code uses an AX Engine sidecar.
+- [Runtime Stability](architecture/stability.md) — cancellation, crash, stream, timeout, and TUI reliability.
+
+## Reference
+
+- [Configuration JSON Schema](reference/config.schema.json) — generated configuration contract.
+- [Skill and Plugin Catalog](reference/skills-and-plugins.md) — bundled skills, project skills, plugins, and evals.
+- [Release Verification](release/README.md) — minisign public key, verification command, and release notes.
+- [Release Rollback](release/rollback.md) — select and install a previous release.
+- [Security Policy](../SECURITY.md) — threat model, credential storage, and supported versions.
+- [Changelog](../CHANGELOG.md) — release history.
 
 ## Historical benchmarks
 
-These reports record dated measurements and their test conditions. For current model support
-and setup, see [AX Engine Model Selection](providers/ax-engine-model-selection.md).
+Dated measurements with their test conditions. They are not updated after publication; for current
+model support, see [AX Engine Model Selection](providers/ax-engine-model-selection.md).
 
 - [Tiel versus MTPLX, 20 September 2026](benchmarks/tiel-peer-2026-09-20.md)
 - [Tiel native prefill and decode, 19 September 2026](benchmarks/tiel-runtime-phases-2026-09-19.md)
@@ -126,49 +161,31 @@ and setup, see [AX Engine Model Selection](providers/ax-engine-model-selection.m
 - [AX Code and OpenCode client retest, 19 September 2026](benchmarks/local-client-matrix-2026-09-19.md)
 - [Local inference measurements, 19 September 2026](benchmarks/local-inference-results-2026-09-19.md)
 
-## Architecture and reliability
+## Maintaining these docs
 
-- [Semantic Layer](architecture/semantic-layer.md) — graph and LSP provenance, audit, and replay boundaries.
-- [Local Engine Architecture](architecture/local-engine.md) — why AX Code uses an AX Engine sidecar.
-- [Runtime Stability](architecture/stability.md) — cancellation, crash, stream, timeout, and TUI reliability contracts.
+| Directory          | Contents                                        |
+| ------------------ | ----------------------------------------------- |
+| `getting-started/` | Onboarding: install, connect, first change      |
+| `guides/`          | Task-oriented workflows                         |
+| `providers/`       | Provider and model configuration                |
+| `integrations/`    | MCP, ACP, Wiki, and other external surfaces     |
+| `sdk/`             | Embedding and service boundaries                |
+| `architecture/`    | Released design and reliability contracts       |
+| `reference/`       | Generated contracts and catalogs                |
+| `release/`         | Verification, rollback, and release notes       |
+| `benchmarks/`      | Dated reports with their data under `data/`     |
 
-## Reference
-
-- [Configuration JSON Schema](reference/config.schema.json) — generated configuration input contract.
-
-- [TypeScript Native Support](guides/typescript-native.md) — source compiler, language service, diagnostics, and compatibility.
-- [Skill and Plugin Catalog](reference/skills-and-plugins.md) — bundled skills, project skills, plugins, and evals.
-- [Isolation Policy Packs](policies/README.md) — machine-readable policy examples.
-- [Release Verification](release/README.md) — canonical minisign public key and verification command.
-- [Windows Runtime Integrity](guides/windows-runtime-integrity.md) — signatures, installed-file verification, and antivirus evidence.
-- [Security Policy](../SECURITY.md) — threat model, credential storage, and supported versions.
-
-## Documentation boundaries
-
-Use `getting-started/` for onboarding, `guides/` for workflows, `providers/` for model
-configuration, and `reference/` for contracts. Keep dated benchmark reports and their
-supporting data together under `benchmarks/`. Keep local planning and analysis in
-the ignored directories below.
-
-| Content                                                              | Location                               |
-| -------------------------------------------------------------------- | -------------------------------------- |
-| Architecture decisions                                               | `.internal/adr/`                       |
-| Product requirements and technical specifications                    | `.internal/prd/` and `.internal/spec/` |
-| Roadmaps, implementation plans, release targets, reviews, and audits | `.internal/reports/`                   |
-| Released behavior and public integration guidance                    | `docs/`                                |
-
-Every public Markdown page should declare its status, scope, last-reviewed date, and owner near the top. Prefer links to
-generated contracts or implementation sources over copied route lists and other high-drift snapshots.
-
-## Maintenance checklist
+`docs/` contains released behavior and public integration guidance only. Architecture decisions
+(`.internal/adr/`), product requirements and specifications (`.internal/prd/`, `.internal/spec/`), and
+roadmaps, plans, reviews, and audits (`.internal/reports/`) stay in the ignored `.internal/` tree.
 
 Before a release or a substantial documentation change:
 
 1. Verify commands, defaults, flags, provider IDs, and runtime labels against their implementation.
-2. Update the narrowest authoritative guide instead of repeating the same behavior in several front-door pages.
-3. Run `pnpm run test:scripts` to catch broken local links, orphaned pages, and missing page metadata.
-4. Update the approved export manifest and run `node script/export-public-docs.mjs --website /path/to/ax-code.app`,
-   then run the website check, build and Workers smoke checks. Website builds use the committed snapshot and do not
-   require source access. New public pages and assets must be explicitly approved in the manifest.
-5. Keep proposals, project-development notes, release targets, and historical decision records under `.internal/`,
-   not in the public navigation.
+2. Update the narrowest authoritative guide instead of repeating the same behavior on several front-door pages.
+   Prefer links to generated contracts over copied route lists and other high-drift snapshots.
+3. Give every page `Status`, `Scope`, `Last reviewed`, and `Owner` lines near the top, and link it from this index.
+4. Run `pnpm run test:scripts` to catch broken local links, orphaned pages, and missing page metadata.
+5. Add new public pages and assets to `script/public-docs-manifest.json`, run
+   `node script/export-public-docs.mjs --website /path/to/ax-code.app`, then run the website check, build, and
+   Workers smoke checks. Website builds use the committed snapshot and do not require source access.

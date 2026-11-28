@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-10
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 AX Code talks to models through standard provider protocols. Any endpoint that speaks an **OpenAI-compatible** (`/v1/chat/completions`) or **Anthropic-compatible** (`/v1/messages`) API can be added as a custom provider by pointing `baseURL` at it — no code changes and no waiting for a built-in preset.
@@ -63,7 +63,7 @@ the startup fallback. Ordinary custom API providers retain manual refresh.
 For each request AX Code needs three things from a provider entry:
 
 - **`npm`** — the AI SDK adapter that speaks the wire protocol. Use `@ai-sdk/openai-compatible` for OpenAI-style endpoints and `@ai-sdk/anthropic` for Anthropic-style endpoints. Only `@ai-sdk/*` adapters are bundled/installable.
-- **`options.baseURL`** — the gateway URL. Falls back to the provider `api` field, then to the model's own `api.url`. Supports `${ENV_VAR}` substitution.
+- **`options.baseURL`** — the gateway URL. Falls back to the provider `api` field, then to the model's own `api.url`. Supports `{env:ENV_VAR}` substitution.
 - **A credential** — resolved in order from `options.apiKey`, then the persisted auth store, then the provider's `env` variables.
 
 Manual configuration also needs an explicit **`models`** map. The interactive
@@ -86,7 +86,7 @@ Most aggregators (LiteLLM, one-api, new-api, free/self-hosted gateways) expose a
       "npm": "@ai-sdk/openai-compatible",
       "options": {
         "baseURL": "https://gateway.example.com/v1",
-        "apiKey": "${MY_GATEWAY_API_KEY}",
+        "apiKey": "{env:MY_GATEWAY_API_KEY}",
       },
       "models": {
         "gpt-4o": {
@@ -104,7 +104,7 @@ Most aggregators (LiteLLM, one-api, new-api, free/self-hosted gateways) expose a
 
 - The key `"my-gateway"` is the provider id you select in `/connect` and `ax-code models`.
 - Each key under `models` is the local selection ID. Set the entry's `id` to the **exact model ID the gateway expects** when it differs from that key; otherwise the key is used for manually declared models without an existing catalog mapping.
-- Prefer `${ENV_VAR}` over a literal key so the secret stays out of committed config.
+- Prefer `{env:ENV_VAR}` over a literal key so the secret stays out of committed config.
 
 ### Gateway model aliases after changing endpoints
 
@@ -138,7 +138,7 @@ Relays that expose `/v1/messages` (the Claude API shape) use the Anthropic adapt
       "npm": "@ai-sdk/anthropic",
       "options": {
         "baseURL": "https://gateway.example.com",
-        "apiKey": "${MY_GATEWAY_API_KEY}",
+        "apiKey": "{env:MY_GATEWAY_API_KEY}",
       },
       "models": {
         "claude-sonnet-4-6": {
@@ -154,14 +154,7 @@ Relays that expose `/v1/messages` (the Claude API shape) use the Anthropic adapt
 }
 ```
 
-Some Anthropic-shaped relays also honor the Claude environment variables directly. For a quick headless run without editing config you can set:
-
-```sh
-export ANTHROPIC_BASE_URL="https://gateway.example.com"
-export ANTHROPIC_AUTH_TOKEN="sk-..."
-```
-
-A config entry is still recommended when you want the gateway to appear as its own selectable provider with a curated model list.
+A config entry is recommended so the gateway appears as its own selectable provider with a curated model list and explicit `options.baseURL` and `options.apiKey` (or `ANTHROPIC_API_KEY`).
 
 ## Model fields
 
@@ -192,3 +185,9 @@ If a model is missing, confirm the provider id, the model key, and that the gate
 - **Auth errors** — confirm the credential resolution order: `options.apiKey` wins, otherwise an `env`/auth-store key is used.
 - **Stalled streams** — gateways sometimes buffer SSE. Tune `options.chunkTimeout` (per-chunk) and `options.timeout` (whole request) on the provider.
 - **Tool calls rejected** — set `"tool_call": true` on the model and confirm the upstream model behind the gateway actually supports tools.
+
+## Related
+
+- [Supported Providers and Models](supported-providers.md)
+- [MTPLX and oMLX local runtimes](local-mlx-runtimes.md)
+- [AX Trust DeepSeek Flash example](../examples/ax-trust-deepseek-flash.json)

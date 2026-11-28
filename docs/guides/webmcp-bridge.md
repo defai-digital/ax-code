@@ -2,7 +2,7 @@
 
 Status: Experimental
 Scope: public, current-state
-Last reviewed: 2026-10-10
+Last reviewed: 2026-11-28
 Owner: AX Code maintainers
 
 The WebMCP bridge lets the agent open pages in an isolated Chrome window,
@@ -633,3 +633,8 @@ See Chrome's [WebMCP debugging guide](https://developer.chrome.com/docs/devtools
 and the upstream [DevTools MCP tool reference](https://github.com/ChromeDevTools/chrome-devtools-mcp/blob/main/docs/tool-reference.md).
 Upstream main can differ from AX Code's pinned bridge; only the local tool
 schemas describe the supported arguments.
+
+## Related
+
+- [MCP Integrations](../integrations/mcp.md)
+- [Skill / plugin catalog](../reference/skills-and-plugins.md)

@@ -2,7 +2,7 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-08-18  
+Last reviewed: 2026-11-28  
 Owner: ax-code runtime
 
 The run report is a local web page served by the built-in HTTP server: a workspace overview plus a per-session drill-down. Open it from the TUI sidebar (**Analysis → run report**, opens the current session's report), from the command palette with `session.report.web`, or from the CLI with `ax-code run-report [--index] [--open]`. AX Code Desktop embeds the same pages.

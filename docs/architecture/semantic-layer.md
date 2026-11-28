@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-05-03
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 This document describes the semantic layer that exists today in AX Code. It is a current-state contract, not a roadmap.
@@ -38,8 +38,8 @@ The `lsp` tool is the live-semantic interface. The `code_intelligence` tool is t
 
 Current gating:
 
-- `code_intelligence` is enabled by default but can be disabled with feature flags
-- `lsp` currently requires the experimental LSP tool flag
+- `code_intelligence` is enabled by default (disable with `AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE=0`)
+- `lsp` requires `AX_CODE_EXPERIMENTAL_LSP_TOOL=1` (or `AX_CODE_EXPERIMENTAL=1`)
 
 ## Envelope Contract
 

@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 **AX Engine (Local)** manages the packs reviewed for the
@@ -67,8 +67,9 @@ model records remain available for status and cleanup.
 ## Memory and runtime verification
 
 The managed aliases use a 65,536-token context and an 8,192-token output
-limit in AX Code 7.31.8. The Tiel MXFP4 and Swift MXFP4 entries each have a
-32 GiB download disk budget. Larger packs have their own requirements. Check
+limit in AX Code 7.31.8. Tiel MXFP4 (`tiel-coder-35b-axq-mxfp4`) has a 32 GiB
+download disk budget, and Swift MXFP4 (`swift-1.5-qwen3.8-27b-axq-mxfp4`) has a
+24 GiB download disk budget. Larger packs have their own requirements. Check
 `fit` in `ax-code providers ax-engine models --json` for the current machine,
 which accounts for local model files, memory, disk, and runtime readiness.
 
@@ -166,3 +167,10 @@ It checks executable availability on every resolution and invalidates cached
 versions when launcher or native-server file identity changes. Failed probes
 remain retryable. This reduces repeated setup work; it does not change model
 decode speed. A development backend must be restarted to load source changes.
+
+## Related
+
+- [Supported Providers and Models](supported-providers.md)
+- [AX Code model downloads](ax-code-model-downloads.md)
+- [MTPLX and oMLX local runtimes](local-mlx-runtimes.md)
+- [Local Engine Architecture](../architecture/local-engine.md)

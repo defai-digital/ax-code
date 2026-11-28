@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-10-18
+Last reviewed: 2026-11-28
 Owner: AX Code runtime
 
 Discoverable registry of built-in skills and how to add project skills.
@@ -15,6 +15,7 @@ The default `/` menu is a control plane (`/plan`, `/review`, `/debug`, `/status`
 
 | Skill                     | Purpose                                                                             | Slash                     |
 | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------- |
+| `analysis-output`         | Analyze data, create charts/reports, or work with governed datasets via AX BI MCP   | Agent-only                |
 | `debug-n-fix`             | Debug then fix with verification                                                    | Use `/debug`              |
 | `debug-only`              | Investigation without code changes                                                  | Agent-only                |
 | `improve-overall`         | Broad quality improvements                                                          | Agent-only                |

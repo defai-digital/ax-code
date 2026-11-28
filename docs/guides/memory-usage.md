@@ -1,10 +1,10 @@
 # Memory usage
 
-Status: Current
+Status: Active
 
 Scope: current-state
 
-Last reviewed: 2026-09-13
+Last reviewed: 2026-11-28
 
 Owner: ax-code runtime
 
@@ -74,3 +74,9 @@ For constrained hosts, use a cloud provider, one active coding session and a sma
 Use the packaged CLI for ordinary use; `pnpm run dev` is a contributor source workflow with a different startup/module-loading cost. Inspect AX Code together with its language-server and build children in Activity Monitor or the platform process monitor. A reduced cache bound does not establish a fixed reduction in physical memory.
 
 The memory changes have deterministic retention and semantic-equivalence tests. They have not been qualified by a load test on a physical 8 GB Mac. Low mode is not a guarantee that an arbitrary project will fit on an 8 GB machine.
+
+## Related
+
+- [Performance configuration and diagnostics](performance.md)
+- [Evidence cache](evidence-cache.md)
+- [TypeScript native support](typescript-native.md)

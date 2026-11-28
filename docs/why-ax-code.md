@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-12
+Last reviewed: 2026-11-28
 Owner: AX Code maintainers
 
 Most coding agents optimize the moment of writing code. AX Code optimizes the moment after: deciding whether to keep what the agent produced.

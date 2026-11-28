@@ -4,7 +4,7 @@ Status: Active
 
 Scope: current-state
 
-Last reviewed: 2026-09-14
+Last reviewed: 2026-11-28
 
 Owner: ax-code runtime
 
@@ -42,3 +42,8 @@ Council/Arena localization changes presentation labels only. Member evidence, su
 For contributors, `pnpm --dir packages/ax-code run check:tui-locales` validates complete catalogs, placeholders, NFC normalization, reviewed shared spellings, core menu source guards, and native dialog rendering with live language changes. Maintain separate reviewed catalogs for each language; do not derive Traditional Chinese solely through character conversion.
 
 Vietnamese catalogs use NFC. Display truncation preserves grapheme clusters, including decomposed input. Native rendering checks cover 36- and 80-column terminals. Terminals configured to render ambiguous-width characters as two cells require separate terminal-specific qualification; the current renderer does not expose an ambiguous-wide test mode.
+
+## Related
+
+- [Terminal rendering](terminal-rendering.md)
+- [Audio notifications](audio-notifications.md)

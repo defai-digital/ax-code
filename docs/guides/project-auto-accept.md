@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-16
+Last reviewed: 2026-11-28
 Owner: AX Code maintainers
 
 Project auto-accept is off by default. Enable it in your user config or in a
@@ -85,3 +85,9 @@ level and publishes `permission.auto_accepted`. The authenticated runtime contro
 route is `PUT /permission/auto-accept` with `{ "enabled": true | false }`;
 `GET /permission/auto-accept` reports the effective state. The toggle never writes
 configuration or persistent "Always allow" grants.
+
+## Related
+
+- [Sandbox Mode](sandbox.md)
+- [Autonomous Mode](autonomous.md)
+- [Lifecycle Hooks](hooks.md)

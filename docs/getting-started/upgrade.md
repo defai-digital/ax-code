@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-28
 Owner: AX Code maintainers
 
 Desktop and CLI installations have independent update channels. Use the channel that owns the installation you want to update; no private GitHub token is required.

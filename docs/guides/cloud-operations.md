@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-04
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 Cloud Operations Mode is a ready-made posture for administering infrastructure — cloud providers (AWS, GCP, Cloudflare, OVHcloud, DigitalOcean, RunPod) and network devices (VyOS, Juniper Junos) — where a mistake affects live systems and git rollback cannot restore state. It ships as the built-in **`cloudops` agent**: a system prompt plus a permission posture that you enable with one selection instead of hand-writing rules.

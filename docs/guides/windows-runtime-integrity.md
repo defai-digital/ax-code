@@ -1,8 +1,8 @@
 # Windows runtime integrity and antivirus reports
 
-Status: Current source; release qualification pending
+Status: Active
 Scope: Windows CLI installation, update verification, and operator diagnostics
-Last reviewed: 2026-09-17
+Last reviewed: 2026-11-28
 Owner: AX Code runtime maintainers
 
 AX Code uses separate controls for publisher identity, distribution integrity,

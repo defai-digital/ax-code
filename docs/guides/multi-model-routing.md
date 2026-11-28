@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-11-04
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 This guide captures the recommended way to run ax-code with a premium reasoning model and cheaper same-provider aux models.
@@ -77,3 +77,9 @@ The last group should stay on the session model unless the user explicitly pins 
 
 - Auxiliary model selection is explicit: `Provider.getSmallModel()` reads `small_model`; absent that setting, callers inherit the primary model. It does not scan the catalog for a cheap tier.
 - There is no mid-run escalation from a stuck worker to a stronger model.
+
+## Related
+
+- [Auto-Route](auto-route.md) — keyword specialist routing and complexity classification
+- [Model recovery](model-recovery.md) — fallback, retry, and privacy contract
+- [Execution Modes](modes.md) — council review, arena best-of-N, and hybrid placement

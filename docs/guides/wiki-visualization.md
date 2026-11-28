@@ -1,11 +1,8 @@
 # View Wiki evidence in a browser
 
 Status: Active
-
 Scope: current-state
-
-Last reviewed: 2026-10-15
-
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 Run this command from a project that already has an AX Wiki:
@@ -145,3 +142,8 @@ paths to page markdown without frontmatter; without it the reader shows summarie
 idempotent. Use `{ injectStyles: false }` and the exported `viewerCss` string when
 the host manages styles. Node hosts can import `renderWikiGraphHtml` from
 `@ax-code/ax-wiki-viewer/node`; its result contains `html` and the matching `csp`.
+
+## Related
+
+- [AX Wiki](../integrations/wiki.md)
+- [Semantic Layer](../architecture/semantic-layer.md)

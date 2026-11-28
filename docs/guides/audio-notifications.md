@@ -1,8 +1,8 @@
 # Audio notifications
 
-Status: Current
+Status: Active
 Scope: AX Code TUI sound and spoken alerts
-Last reviewed: 2026-09-12
+Last reviewed: 2026-11-28
 Owner: AX Code runtime maintainers
 
 The TUI can play a system sound — or speak a short templated phrase — whenever AX Code needs your attention:
@@ -78,3 +78,9 @@ Use your platform's player (`afplay` on macOS, `paplay` on Linux, PowerShell `[S
 ## Building an external notifier
 
 External tools (status bars, mobile push, a desktop app) can subscribe to the server's event stream and react to `permission.asked`, `question.asked`, `session.status`, and `session.error` — see [HTTP and OpenAPI Compatibility](../sdk/http-openapi.md).
+
+## Related
+
+- [Lifecycle hooks](hooks.md)
+- [Terminal rendering](terminal-rendering.md)
+- [TUI languages and first-time setup](tui-language-and-setup.md)

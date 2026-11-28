@@ -1,8 +1,8 @@
 # Goal assurance
 
-Status: Current
+Status: Active
 Scope: Goal acceptance checks and source freshness
-Last reviewed: 2026-09-14
+Last reviewed: 2026-11-28
 Owner: AX Code runtime maintainers
 
 Code-change plans produced by the goal planner declare executable acceptance
@@ -255,3 +255,8 @@ unrelated local `ax-code.json` configuration out of commits.
 For this repository, `vitest run --dir test/cli/tui` preserves the normal lane's
 exclusions while scanning the TUI directory. Group runners may still select exact
 files with `AX_TEST_FILES`; directory selection does not disable exclusions.
+
+## Related
+
+- [Loop Mode](loop-mode.md)
+- [Autonomous Mode](autonomous.md)

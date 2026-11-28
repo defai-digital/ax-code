@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-11
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 Autonomous mode lets ax-code complete tasks without waiting for human confirmation at each low-risk step. When enabled, permission prompts are auto-approved unless they are explicitly blocked, and question dialogs are auto-answered with a best-practice heuristic that favors recommended, default, common, simple, and minimal choices while avoiding risky or over-engineered options.
@@ -36,19 +36,7 @@ The setting persists across sessions in `ax-code.json`.
 
 ## How It Works
 
-Autonomous mode operates at three layers:
-
-### Source of Truth
-
-This page summarizes user-facing behavior. When behavior changes, verify the docs against:
-
-- `packages/ax-code/src/session/processor.ts` for permission auto-approve, loop behavior, rejection handling, and autonomous caps.
-- `packages/ax-code/src/session/system.ts` and provider prompt files under `packages/ax-code/src/session/prompt/` for autonomous workflow instructions.
-- `packages/ax-code/src/question/` and `packages/ax-code/test/question/question.test.ts` for question auto-answer heuristics and escalation behavior.
-- `packages/ax-code/src/session/blast-radius.ts` for autonomous step/file-change caps.
-- `packages/ax-code/test/session/system.test.ts`, `packages/ax-code/test/session/prompt.test.ts`, and related session tests for prompt and decision-ledger behavior.
-
-Keep safety guarantees here aligned with sandbox documentation; autonomous mode changes approval behavior, not isolation enforcement.
+Autonomous mode operates at four layers:
 
 ### 1. Permission Auto-Approve (Server-Side)
 
@@ -271,3 +259,16 @@ Even with autonomous mode on:
 5. **Avoid over-engineering** — autonomous continuation reminds the agent to prefer the simplest common-practice change and avoid abstractions without 3+ concrete use cases
 6. **Session snapshots are recorded** — every tool call is logged for audit/replay
 7. **Abort always works** — pressing Esc (interrupt) stops the agent immediately
+
+## Source of Truth
+
+- `packages/ax-code/src/session/processor.ts` — permission auto-approve, loop behavior, rejection handling, and autonomous caps
+- `packages/ax-code/src/session/system.ts` and `packages/ax-code/src/session/prompt/` — autonomous workflow instructions
+- `packages/ax-code/src/question/` and `packages/ax-code/test/question/question.test.ts` — question auto-answer heuristics and escalation
+- `packages/ax-code/src/session/blast-radius.ts` — autonomous step and file-change caps
+
+## Related
+
+- [Sandbox Mode](sandbox.md)
+- [Loop Mode](loop-mode.md)
+- [Project auto-accept](project-auto-accept.md)

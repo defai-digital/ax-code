@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-28
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 AX Code does not provide model quota. A “free” run uses quota or credits offered by an external model provider, whose
@@ -115,8 +115,8 @@ At this page's review date, the services named by that catalog map to AX Code as
 
 | AX Code relationship                  | Catalog services                                                                                                                                                               | Meaning                                                                                                                                                                                                  |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default setup preset                  | Google Gemini (`google`), Groq (`groq`), OpenRouter (`openrouter`), Hugging Face (`huggingface`), UnoRouter (`unorouter`)                                                      | Visible in the normal provider setup flow and covered above.                                                                                                                                             |
-| Registry-backed, not a default preset | Mistral (`mistral`), Cohere (`cohere`), Zhipu AI (`zhipuai`), AnyAPI (`anyapi`), Cerebras (`cerebras`), NVIDIA NIM (`nvidia`), Cloudflare Workers AI (`cloudflare-workers-ai`) | Metadata and an adapter exist in the bundled registry, but the provider is not part of the curated default setup flow. Explicit configuration does not guarantee that a free model supports agent tools. |
+| Default setup preset                  | Google Gemini (`google`), Groq (`groq`), OpenRouter (`openrouter`), Hugging Face (`huggingface`), UnoRouter (`unorouter`), NVIDIA NIM (`nvidia`, under Private GPU cloud) | Visible in the normal provider setup flow (`nvidia` is under Private GPU cloud; the others are covered above). |
+| Registry-backed, not a default preset | Mistral (`mistral`), Cohere (`cohere`), Zhipu AI (`zhipuai`), AnyAPI (`anyapi`), Cerebras (`cerebras`), Cloudflare Workers AI (`cloudflare-workers-ai`)                    | Metadata and an adapter exist in the bundled registry, but the provider is not part of the curated default setup flow. Explicit configuration does not guarantee that a free model supports agent tools. |
 | Custom protocol only                  | Api.Airforce, Kluster AI, LLM7.io, Pollinations AI                                                                                                                             | No AX Code preset. Configure the exact endpoint and model only if its current API is compatible with the [custom provider contract](custom-provider.md).                                                 |
 
 In particular, the `github-copilot` preset is not the `github-models` API listed by some catalogs. Do not substitute
@@ -134,3 +134,8 @@ GLM 4, GLM-5, and GLM-5.2 SKUs stay filtered out.
   `ax-code.json`.
 - Treat `429` and temporary unavailability as normal free-tier constraints. Wait for the provider's retry window or
   choose another currently listed free model.
+
+## Related
+
+- [Supported Providers and Models](supported-providers.md)
+- [Custom and Gateway Providers](custom-provider.md)

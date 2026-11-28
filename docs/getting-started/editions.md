@@ -1,8 +1,8 @@
 # AX Code Standard and Business
 
-Status: Active product direction; Business is planned
+Status: Active
 Scope: current-state
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 AX Code Standard is the open-source coding workspace. AX Code Business is the planned,

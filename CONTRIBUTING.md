@@ -1,6 +1,15 @@
 # Contributing to AX Code
 
-AX Code is developed internally by DEFAI Digital. We do not accept code contributions (pull requests) at this time.
+AX Code is developed internally by DEFAI Digital. We do not accept code contributions (pull requests) at this time,
+but bug reports, feature requests, and questions are welcome. This page also explains how to build and test the
+repository from source.
+
+- [How you can help](#how-you-can-help)
+- [Issue guidelines](#issue-guidelines)
+- [Working from source](#working-from-source)
+- [Files kept locally](#files-kept-locally)
+
+Security vulnerabilities follow the private process in the [Security Policy](SECURITY.md), not public issues.
 
 ## How You Can Help
 

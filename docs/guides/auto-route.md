@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-10
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 Auto-route controls two independent routing behaviors in ax-code:
@@ -37,7 +37,7 @@ This page summarizes user-facing behavior. When behavior changes, verify the doc
 - `packages/ax-code/src/agent/router.ts` for keyword routing rules and `classifyComplexity()`.
 - `packages/ax-code/src/session/prompt.ts` for when keyword routing is skipped and when complexity classification runs.
 - `packages/ax-code/src/server/routes/smart-llm.ts` for default, environment, config, and persistence behavior.
-- `packages/ax-code/src/config/schema.ts` for routing config fields and deprecation notes.
+- `packages/ax-code/src/config/schema-impl.ts` for routing config fields and deprecation notes.
 - `packages/ax-code/src/cli/tui/app.tsx` for slash command names, aliases, labels, and status-bar actions.
 - `packages/ax-code/test/agent/router.test.ts` and TUI sync tests for expected activation behavior.
 
@@ -136,3 +136,9 @@ The environment variable overrides the config file setting.
 - You work offline or with unreliable network
 - You want to minimize token usage
 - You always pin a model explicitly
+
+## Related
+
+- [Multi-Model Routing Best Practices](multi-model-routing.md) — splitting primary, reasoning, and auxiliary models
+- [Model recovery](model-recovery.md) — fallback and `small_model` behavior
+- [Execution Modes](modes.md) — hybrid local/cloud placement, council, and arena

@@ -2,8 +2,10 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
+
+Generate, validate, view, and maintain an AX Wiki for your repository using the `ax-code wiki` CLI or TUI.
 
 ## Before you start
 

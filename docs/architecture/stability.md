@@ -1,8 +1,8 @@
 # Stability
 
-Status: Active  
-Scope: current-state  
-Last reviewed: 2026-07-18  
+Status: Active
+Scope: current-state
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 How AX Code stays reliable for long interactive sessions and headless runs.
@@ -14,8 +14,8 @@ How AX Code stays reliable for long interactive sessions and headless runs.
 | **TUI lifecycle**  | Suspend/resume, crash terminal restore, session leave memory prune                     | ADR-047; `cli/tui/util/*`                                    |
 | **Process faults** | Abort/cancel/broken-pipe ignored; real crashes still exit                              | `util/harmless-interrupt`, TUI crash handler, CLI boot hooks |
 | **Timeouts**       | Tool/LSP/MCP bounds without unhandledRejection                                         | `util/timeout.withTimeout`                                   |
-| **Streams**        | Idle watchdog, resilient reconnect                                                     | `session/llm-impl` idle watchdog; `resilient-stream`         |
-| **Permissions**    | Double-submit latch + reply timeout                                                    | `permission-submit-latch`, permission prompt                 |
+| **Streams**        | Idle watchdog, resilient reconnect                                                     | `session/llm-impl` idle watchdog; `cli/tui/util/resilient-stream` |
+| **Permissions**    | Double-submit latch + reply timeout                                                    | `cli/tui/util/permission-submit-latch`, permission prompt         |
 | **Repo wiki**      | Path containment, atomic manifest-last writes, protected content, pre-write validation | `packages/ax-wiki`; `src/wiki/*`                             |
 
 ## Compiler checks

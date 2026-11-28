@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-25
+Last reviewed: 2026-11-28
 Owner: AX Code runtime
 
 Every AX Code session is recorded while it runs. This page covers the commands that turn that recording into something you can review, compare, export, and undo.

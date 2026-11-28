@@ -2,8 +2,10 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
+
+Connect your first cloud, CLI, local, or gateway model provider in the AX Code terminal UI or CLI.
 
 ## Choose a connection
 

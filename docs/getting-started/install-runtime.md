@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 Choose the Desktop app for a graphical workspace, or CLI-only for terminal, SSH, and CI workflows. This guide covers release installers, signature verification, updates, and source launchers.
@@ -198,15 +198,15 @@ The CLI commands above install the standalone CLI/TUI. For the app and its bundl
 | Linux bash release installer         | `curl -fsSL https://download.automatosx.com/ax-code/install \| bash`                                                      | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
 | Linux release assets                 | Download `ax-code-linux-*.tar.gz` from the public release index                                                           | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
 | Local bundled launcher               | `pnpm run setup:cli` after building the workspace SDK                                                                     | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
-| Local source launcher                | `pnpm run setup:cli -- --source`                                                                                          | `source`               | Contributor          | Contributor-only source debugging                                  |
-| Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                  | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
+| Local source launcher                | `pnpm run setup:cli -- --source`                                                                                          | `node-source`          | Contributor          | Contributor-only source debugging                                  |
+| Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                  | `node-source`          | Contributor          | Short-lived development runs without replacing the global launcher |
 
-`node-bundled` and `source` are runtime modes, not package-manager names. They describe which executable loads the app code:
+`node-bundled` and `node-source` are runtime modes, not package-manager names. They describe which executable loads the app code:
 
 - `node-bundled`: Node.js loads the bundled release runtime (all supported user install channels).
-- `source`: Node loads files directly from a checkout.
+- `node-source`: Node loads files directly from a checkout.
 
-`compiled` and `bun-bundled` are retired Bun-era runtime modes, retained only for legacy diagnostics. They are not supported user install channels.
+`compiled`, `source`, and `bun-bundled` are retired Bun-era runtime modes, retained only for legacy diagnostics. They are not supported user install channels.
 
 `pnpm dev` and `pnpm cli` compile the workspace SDK (`packages/sdk/js`) to `dist` with the repo TypeScript before launching, so a fresh checkout runs without a manual SDK build. The step invokes the workspace TypeScript Native compiler through `node` directly, so it does not depend on `node_modules/.bin` being linked. The bundled paths (`pnpm run setup:cli` and `pnpm --dir packages/ax-code run build`) still need `pnpm --dir packages/sdk/js run build` first.
 
@@ -358,7 +358,7 @@ pnpm run setup:cli -- --source
 ax-code-src doctor      # or `ax-code doctor` if Homebrew is not installed
 ```
 
-The source launcher should report `Runtime: Node vX.Y.Z (source)`.
+The source launcher should report `Runtime: Node vX.Y.Z (node-source)`.
 
 ## Toolchain Requirements
 

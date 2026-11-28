@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-27
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 AX Code has three composable automation primitives:
@@ -186,3 +186,8 @@ and provider pacing only starts after a grace window from run start
 (default 2 hours, `super_long.pacing_grace_minutes`) so the productive
 early phase of an agentic run keeps full tool-call throughput; the
 marathon tail is paced per the model's declared rate-limit tier.
+
+## Related
+
+- [Operating AX Code for Long-Running Work](long-running-operations.md)
+- [Headless CLI (`ax-code run`)](headless-cli.md)

@@ -4,7 +4,7 @@ Status: Active
 
 Scope: current-state
 
-Last reviewed: 2026-10-13
+Last reviewed: 2026-11-28
 
 Owner: ax-code runtime
 
@@ -105,3 +105,10 @@ For a known-file lookup or simple count, use a focused search or one aggregate c
 Use one investigator for one call path. Parallel read-only tasks should have distinct deliverables and owned paths or subsystems, with existing evidence supplied in their briefs. Independent review can revisit evidence for a separate verification question. Repeating discovery in multiple fresh contexts costs model rounds even when the evidence cache hits; cache hits do not bypass current-content validation or permissions.
 
 Language servers now start on demand by default. See [Memory usage](memory-usage.md) for speculative prewarming opt-in and the tradeoff with first semantic-query latency. Prompt guidance and local tests do not establish a particular reduction in live model calls or physical RAM.
+
+## Related
+
+- [Memory usage](memory-usage.md)
+- [Harness controls and verified evaluation](harness-controls.md)
+- [Model Effort](effort.md)
+- [Evidence cache](evidence-cache.md)

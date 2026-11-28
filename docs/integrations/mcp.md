@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-10-09
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 AX Code can connect to Model Context Protocol servers for external tools, prompts, and resources. MCP is powerful, so AX Code treats MCP configuration and MCP-provided content as a trust boundary.
@@ -182,3 +182,8 @@ A rejected dynamic registration is not resolved merely by creating an ordinary F
 ### Token-based template
 
 The built-in `figma` template runs the separate `figma-developer-mcp` package with `FIGMA_API_KEY`. It is distinct from Figma's official Desktop and hosted MCP servers.
+
+## Related
+
+- [WebMCP browser bridge](../guides/webmcp-bridge.md)
+- [Skill / plugin catalog](../reference/skills-and-plugins.md)

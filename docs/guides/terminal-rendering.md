@@ -1,8 +1,8 @@
 # Terminal rendering
 
-Status: Current
+Status: Active
 Scope: TUI terminal profile selection, overrides, and visual capability boundaries
-Last reviewed: 2026-10-30
+Last reviewed: 2026-11-28
 Owner: AX Code TUI maintainers
 
 AX Code chooses a terminal profile from the environment when it starts. The
@@ -195,3 +195,9 @@ installed. The recommended font is **Cascadia Code NF**: install it, then set
 it as the profile font under Settings > Profiles > Appearance > Font face. A
 one-time in-app hint points Windows Terminal users at this setup; it never
 shows when icons already render or when `AX_CODE_NERD_FONT=0` opts out.
+
+## Related
+
+- [TUI opening and ending animations](tui-animations.md)
+- [TUI languages and first-time setup](tui-language-and-setup.md)
+- [Audio notifications](audio-notifications.md)

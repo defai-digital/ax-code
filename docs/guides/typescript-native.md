@@ -1,8 +1,8 @@
 # TypeScript native support
 
-Status: Active in source; packaged runtime release pending
+Status: Active
 Scope: current-state source toolchain and language service
-Last reviewed: 2026-09-14
+Last reviewed: 2026-11-28
 Owner: AX Code maintainers
 
 AX Code uses the official Go-based TypeScript 7.0.2 compiler for workspace
@@ -94,3 +94,8 @@ query flushes the deferred close before reopening; other queries wait for this
 replacement. This sends the full changed document; unchanged documents still reuse overlapping requests. Other
 server versions keep their negotiated synchronization mode. An interrupted
 replacement remains incomplete until the language server restarts.
+
+## Related
+
+- [Memory usage](memory-usage.md)
+- [Performance configuration and diagnostics](performance.md)

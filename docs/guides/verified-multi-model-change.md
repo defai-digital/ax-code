@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-21
+Last reviewed: 2026-11-28
 Owner: AX Code runtime
 
 A workflow page for the job "I have a consequential change, I want more than one attempt at it, and I want the repository's own checks to decide which attempt is worth keeping."

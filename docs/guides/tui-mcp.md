@@ -2,7 +2,7 @@
 
 Status: Experimental
 Scope: public, current-state
-Last reviewed: 2026-10-20
+Last reviewed: 2026-11-28
 Owner: AX Code maintainers
 
 TUIMCP is an experimental, opt-in MCP adapter for the AX Code TUI on macOS
@@ -194,3 +194,8 @@ if (dispatched.status === "applied") {
 The client validates requests and structured replies. Domain rejections are
 returned explicitly; transport failures and malformed replies throw. No call
 retries, refreshes a stale mutation fence, or selects another TUI automatically.
+
+## Related
+
+- [Terminal rendering](terminal-rendering.md)
+- [Headless CLI (`ax-code run`)](headless-cli.md)

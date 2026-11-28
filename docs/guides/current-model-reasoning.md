@@ -4,7 +4,7 @@ Status: Active
 
 Scope: current-state
 
-Last reviewed: 2026-09-14
+Last reviewed: 2026-11-28
 
 Owner: ax-code runtime
 
@@ -12,11 +12,11 @@ AX Code selects reasoning controls using the upstream model ID and SDK protocol.
 
 | Model IDs                                                | Available effort                                        | Autonomous / repeated tool failure | Auxiliary requests           |
 | -------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------- | ---------------------------- |
-| `qwen3.8-max`, `qwen3.8-flash`                           | low, medium, xhigh; high is an existing alias for xhigh | xhigh                              | Thinking disabled            |
-| `glm-5.3`                                                | low, high, max; deep aliases max                        | max                                | Low effort; thinking enabled |
+| `qwen3.8-max`, `qwen3.8-flash`, `qwen4-max-preview`      | low, medium, xhigh; high is an existing alias for xhigh | xhigh                              | Thinking disabled            |
+| `glm-5.3` (and later `glm-5.x` releases)                 | low, high, max; deep aliases max                        | max                                | Low effort; thinking enabled |
 | `deepseek-v4-pro`, `deepseek-v4-flash`, `deepseek-flash` | low, high, max                                          | high; explicit xdeep selects max   | Thinking disabled            |
 | `MiniMax-M3`                                             | Existing thinking / none switch; no effort levels       | Provider thinking default          | Thinking disabled            |
-| `MiniMax-M2.7`                                           | No effort or disabling switch                           | Always-on thinking                 | Always-on thinking           |
+| `MiniMax-M3.1` (and later `M3.x`), `MiniMax-M2.7`        | No effort or disabling switch                           | Always-on thinking                 | Always-on thinking           |
 
 Explicit model/agent reasoning options and selected variants override automatic effort policy. A negative reasoning capability declaration prevents automatic effort variants and these auxiliary controls. GLM and DeepSeek keep the provider's default when ordinary requests do not select an effort. Auxiliary requests use their own controls without changing the user's saved selection.
 
@@ -53,3 +53,8 @@ A gateway may expose the same model ID using a different parameter dialect. To r
 This is a local profile opt-out, not a command to disable model thinking. It is removed before sending the request. Existing explicitly configured variants remain user controls. The native DeepSeek SDK does not gain effort variants from this profile because its installed serializer does not support them.
 
 API acceptance, tool continuation, and exact client replay are compatibility evidence. They do not prove that an upstream honors every effort hint, that its cache hits more often, or that coding quality or speed improves. Use the paired [harness evaluation](harness-controls.md) for task-level comparisons.
+
+## Related
+
+- [Model Effort](effort.md) — how effort levels map to UI controls and provider options
+- [Harness Controls](harness-controls.md) — paired task-level evaluation

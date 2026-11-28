@@ -1,8 +1,8 @@
 # ACP (Agent Client Protocol) happy path
 
-Status: Active  
-Scope: documented happy path for IDE hosts  
-Last reviewed: 2026-07-12
+Status: Active
+Scope: documented happy path for IDE hosts
+Last reviewed: 2026-11-28
 Owner: AX Code runtime
 
 AX Code exposes an ACP server so IDEs (for example Zed) can host the agent without a custom transport.
@@ -18,7 +18,7 @@ AX Code exposes an ACP server so IDEs (for example Zed) can host the agent witho
 # Current directory as workspace
 ax-code acp
 
-# Explicit workspace
+# Explicit workspace (`--cwd` is accepted as an alias)
 ax-code acp --dir /path/to/project
 ```
 
@@ -59,15 +59,15 @@ omitted media type uses the saved file's type. Text resources are decoded as UTF
 
 ## What works today
 
-| Capability                 | Status                                        |
-| -------------------------- | --------------------------------------------- |
-| initialize / capabilities  | Supported                                     |
-| session/new                | Supported                                     |
-| session/prompt             | Supported (session completes before response) |
-| session/load               | Supported for session id + mode restore       |
-| Client file read/write     | Supported                                     |
-| Streaming `session/update` | Partial / not full progressive stream         |
-| Full terminal bridge       | Placeholder                                   |
+| Capability                 | Status                                                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------- |
+| initialize / capabilities  | Supported                                                                                   |
+| session/new                | Supported                                                                                   |
+| session/prompt             | Supported (session completes before response)                                               |
+| session/load               | Supported (restores session id, mode, and replays message history)                          |
+| Client file read/write     | Supported                                                                                   |
+| Streaming `session/update` | Supported (`agent_message_chunk`, `agent_thought_chunk`, `tool_call_update`, `plan`, `usage_update`) |
+| Full terminal bridge       | Placeholder                                                                                 |
 
 Details and limitations: `packages/ax-code/src/acp/README.md`.
 
@@ -78,3 +78,8 @@ AX_CODE_ENABLE_QUESTION_TOOL=1 ax-code acp
 ```
 
 Only enable when the host UI can answer question prompts.
+
+## Related
+
+- [MCP Integrations](mcp.md)
+- [HTTP and OpenAPI Compatibility](../sdk/http-openapi.md)

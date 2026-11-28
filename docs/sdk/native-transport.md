@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: desktop-native transport contract
-Last reviewed: 2026-09-02
+Last reviewed: 2026-11-28
 Owner: ax-code sdk
 
 AX Code now exposes an optional gRPC-shaped transport contract for desktop and native GUI apps. The contract is intentionally narrower than the full HTTP/OpenAPI route tree: it focuses on the headless runtime capabilities a GUI needs to feel native, while keeping HTTP/OpenAPI available internally for compatibility, diagnostics, and generated clients.
@@ -237,3 +237,8 @@ local-only policy. Keep `/doc` limited to the loopback server.
 The HTTP compatibility bridge rejects cross-origin WebSocket upgrades by default. Add an origin to the explicit server CORS allowlist only when that browser origin is part of the trusted app shell.
 
 Do not expose the full HTTP API, PTY WebSocket, or OpenAPI docs to arbitrary WebViews. If a WebView is used, keep it as a renderer and route privileged operations through the native host using the gRPC/native facade.
+
+## Related
+
+- [HTTP and OpenAPI Compatibility](http-openapi.md)
+- [SDK README](../../packages/sdk/js/README.md)

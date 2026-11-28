@@ -36,10 +36,24 @@ patterns for compatible tooling; its patterns must match the YAML. Package
 manifests own their dependency edges and public `exports` contracts. Use
 `workspace:` for local dependencies, including aliases such as `ax-tui`.
 
+## Rust workspace
+
+`crates/` is the Cargo workspace. Native addons reach JavaScript through the
+matching `*-native` binding packages above; the WASM diff build ships through
+`packages/ax-code-diff-wasm`.
+
+| Crate                                                    | Responsibility                          |
+| -------------------------------------------------------- | --------------------------------------- |
+| `ax-code-diff`, `ax-code-diff-core`, `ax-code-diff-wasm` | Diff engine, shared core and WASM build |
+| `ax-code-fs`                                             | Filesystem addon                        |
+| `ax-code-index`                                          | Code index addon                        |
+| `ax-code-parser`                                         | Parser addon                            |
+| `ax-code-terminal`                                       | Terminal addon                          |
+| `ax-code-daemon`                                         | Background daemon                       |
+| `ax-code-bench`                                          | Native benchmarks                       |
+
 ## Placement and boundaries
 
-- `crates/` is the Rust Cargo workspace. Binding packages under `packages/`
-  provide the JavaScript-facing distribution boundary.
 - `script/` contains repository-wide automation. Package-local `script/`
   directories own that package's build, validation and publication tooling.
   `tools/` contains external distribution tooling such as Winget manifests.

@@ -1,8 +1,8 @@
 # TUI opening and ending animations
 
-Status: Current
+Status: Active
 Scope: TUI opening and ending animations and rendering fallbacks
-Last reviewed: 2026-10-16
+Last reviewed: 2026-11-28
 Owner: AX Code TUI maintainers
 
 See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
@@ -231,3 +231,7 @@ separates the animal from the dark valley. Singapore uses a carved Merlion profi
 facade ribs on the hotel towers, and wave-displaced reflections sampled from the
 actual skyline. These improvements retain the existing text fallback, paired
 selection, three-second timing, input dismissal, and graphics capability checks.
+
+## Related
+
+- [Terminal rendering](terminal-rendering.md)

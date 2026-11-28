@@ -1,15 +1,13 @@
 # AX Wiki
 
-Status: Active  
-Scope: current-state  
-Last reviewed: 2026-10-26
+Status: Active
+Scope: current-state
+Last reviewed: 2026-11-28
 Owner: AX Code runtime
 
 AX Wiki is AX Code's native repository-wiki compiler. It turns tracked source, configuration, tests, workflows, and existing documentation into a small source-backed Markdown knowledge base under `.ax-wiki/`. It uses the same provider configuration and model routing as AX Code; there is no separate executable or credential store.
 
-Plain-text `.txt` sources, including agent prompts and tool descriptions, are
-eligible for discovery and freshness checks. Normal exclusions, permissions, file
-size limits and binary-file checks still apply.
+Plain-text `.txt` sources, including agent prompts and tool descriptions, are eligible for discovery and freshness checks. Normal exclusions, permissions, file size limits and binary-file checks still apply.
 
 `ax-code wiki viz` draws the compiled pages and the files they cite. Screenshots of that map are in [Wiki evidence visualization](../guides/wiki-visualization.md).
 
@@ -366,3 +364,8 @@ Run `ax-code wiki update` followed by `ax-code wiki lint` in a provider-authenti
 | Wiki is stale                              | Run `ax-code wiki update`, then `ax-code wiki lint`                          |
 | Missing/broken page or citation            | Run `ax-code wiki generate`; inspect custom page selectors if configured     |
 | Architecture answer needs exact references | Use `code_intelligence` or LSP; the wiki is conceptual navigation            |
+
+## Related
+
+- [View Wiki evidence in a browser](../guides/wiki-visualization.md)
+- [Semantic Layer](../architecture/semantic-layer.md)

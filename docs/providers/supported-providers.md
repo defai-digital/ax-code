@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 This page lists the provider presets AX Code exposes in the default setup flows. The source of truth is the runtime provider allowlist in
@@ -13,7 +13,7 @@ This page lists the provider presets AX Code exposes in the default setup flows.
 
 Use `/connect` in the terminal UI or `ax-code providers login <provider-id>` for interactive setup. Headless and CI environments can also provide the listed environment variables.
 
-### Managing connected providers
+## Managing connected providers
 
 The session view keeps a top bar with the session ID (click to copy), title, and live status, followed by a **Providers** entry showing the connected count; click it or **manage** to open the provider manager, which is also available as the `/providers` command. From there you can select a model, disable, or disconnect each provider, or jump to the full `/connect` flow.
 
@@ -323,3 +323,11 @@ manual attachment settings with managed local setup.
 
 Managed AX Engine serves on loopback and is available on supported Apple Silicon
 Macs. On other hosts, connect a hosted provider or an OpenAI-compatible endpoint.
+
+## Related
+
+- [Custom and Gateway Providers](custom-provider.md)
+- [Free-Tier API Quickstart](free-tier-apis.md)
+- [MTPLX and oMLX local runtimes](local-mlx-runtimes.md)
+- [AX Engine Model Selection](ax-engine-model-selection.md)
+- [AX Code model downloads](ax-code-model-downloads.md)

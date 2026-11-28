@@ -2,7 +2,7 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-09-12  
+Last reviewed: 2026-11-28  
 Owner: ax-code runtime
 
 AX Code can place work on local inference, hosted/CLI providers, or both (hybrid), and can fan out high-stakes work across multiple connected providers (council review and arena best-of-N). This page documents **shipped** behavior for those modes.
@@ -88,6 +88,7 @@ In `ax-code.json`:
 | `modes.hybrid.*`                    | Local preference, high-complexity escalate to cloud, local provider id                                                                                                            |
 | `modes.council.*`                   | Enable, member cap, timeout, reasoning-model timeout scale, per-member timeout overrides, debate rounds, opt-in chairman / adaptive fan-out (both default off)                    |
 | `modes.arena.enabled`               | Must be `true` for the `arena` tool (default off). Mid-session edits are picked up on the next tool call (`Config.getFresh`). Or pass `enableIfDisabled: true` on the arena tool. |
+| `modes.arena.timeoutMs`             | Per-contestant timeout in ms for arena fan-out (falls back to `modes.council.timeoutMs`, then `60000`)                                                                            |
 | `modes.arena.strategy`              | `verify_first` (recommended for implement), `diversity`, or `hybrid_score`                                                                                                        |
 | `modes.arena.reasoningTimeoutScale` | Timeout multiplier for contestants whose model declares reasoning capability (falls back to `modes.council.reasoningTimeoutScale`, then 3)                                        |
 | `modes.arena.memberTimeoutMs`       | Absolute per-contestant timeout overrides keyed by `"providerID"` or `"providerID/modelID"` (falls back to `modes.council.memberTimeoutMs`)                                       |

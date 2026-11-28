@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-11
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 AX Code includes a built-in execution sandbox that can restrict what the AI agent does on your system. By default, AX Code starts in **full-access** with the sandbox off, so filesystem writes and network access are unrestricted. Enable `workspace-write` or `read-only` before working with untrusted repositories or running unattended tasks.
@@ -39,17 +39,6 @@ The setting persists across sessions in `ax-code.json`.
 | Read operations (read, glob, grep)   | Unrestricted | Unrestricted       |
 
 ## Configuration
-
-### Source of Truth
-
-This page summarizes user-facing behavior. When behavior changes, verify the docs against:
-
-- `packages/ax-code/src/isolation/index.ts` for mode resolution, protected paths, network checks, write checks, bash checks, and `IsolationDeniedError`.
-- `packages/ax-code/src/config/schema.ts` for config shape, defaults, and descriptions.
-- `packages/ax-code/src/server/routes/isolation.ts` for runtime toggle behavior and persistence.
-- `packages/ax-code/test/isolation/isolation.test.ts` and `packages/ax-code/test/tool/bash.test.ts` for expected enforcement behavior.
-
-Keep duplicated claims in the root README brief and link back here for details.
 
 ### Toggle from the TUI
 
@@ -198,3 +187,17 @@ defaults. Only Kimi Code in `workspace-write` fails before the CLI starts and st
 message — it has no sandbox and writes outside the workspace, so there is no safe mapping. This is not retried or
 downgraded. Autonomous mode never widens the mode. See
 [Isolation modes and CLI providers](../providers/supported-providers.md#isolation-modes-and-cli-providers).
+
+## Source of Truth
+
+- `packages/ax-code/src/isolation/index.ts` — mode resolution, protected paths, network checks, write checks, bash checks, and `IsolationDeniedError`
+- `packages/ax-code/src/config/schema.ts` — config shape, defaults, and descriptions
+- `packages/ax-code/src/server/routes/isolation.ts` — runtime toggle behavior and persistence
+- `packages/ax-code/test/isolation/isolation.test.ts` and `packages/ax-code/test/tool/bash.test.ts` — enforcement tests
+
+## Related
+
+- [Autonomous Mode](autonomous.md)
+- [Lifecycle Hooks](hooks.md)
+- [Isolation Policy Packs](../policies/README.md)
+- [Security Policy](../../SECURITY.md)

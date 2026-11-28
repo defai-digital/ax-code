@@ -2,12 +2,10 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-26
+Last reviewed: 2026-11-28
 Owner: ax-code sdk
 
-AX Code has two integration paths:
-
-Install `@defai-digital/ax-code-sdk` from GitHub Packages with package read access. See [SDK installation](../../packages/sdk/js/README.md#install) for scoped registry and authentication setup.
+AX Code supports these SDK and HTTP integration paths. Install `@defai-digital/ax-code-sdk` from GitHub Packages with package read access (see [SDK installation](../../packages/sdk/js/README.md#install) for scoped registry and authentication setup):
 
 - Use [`@defai-digital/ax-code-sdk`](../../packages/sdk/js/README.md) for first-party TypeScript and JavaScript app integration.
 - Use `@defai-digital/ax-code-sdk/headless` or `@defai-digital/ax-code-sdk/grpc` for first-party app and desktop GUI work.
@@ -20,7 +18,7 @@ The HTTP/OpenAPI path is compatibility and generated-client infrastructure. It l
 
 | Need                                          | Recommended path                                   | Why                                                                                                 |
 | --------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| TypeScript or JavaScript in the same process  | Source-workspace `createAgent()` adapter           | Requires the resolvable `ax-code/sdk/programmatic` workspace export                                 |
+| TypeScript or JavaScript in the same process  | `@defai-digital/ax-code-sdk/programmatic` (`createAgent()`) | Requires a source checkout where `ax-code/sdk/programmatic` resolves                        |
 | First-party desktop/native GUI                | `@defai-digital/ax-code-sdk/grpc`                  | Narrower headless contract, server streaming, metadata/deadline friendly, and less WebView exposure |
 | TypeScript or JavaScript with a local backend | `@defai-digital/ax-code-sdk/headless`              | Keeps lifecycle and event projection typed without exposing the full HTTP SDK surface               |
 | Python, Go, Java, Rust, or another runtime    | Generate a client from `packages/sdk/openapi.json` | Reuses the HTTP contract without adding first-party package maintenance for every language          |
@@ -108,3 +106,8 @@ pnpm --dir packages/sdk/js run validate:openapi
 ```
 
 This validates that `packages/sdk/openapi.json` is parseable JSON, declares OpenAPI 3.x, and contains the core routes needed by generated clients.
+
+## Related
+
+- [gRPC and Native SDK Transport](native-transport.md)
+- [SDK README](../../packages/sdk/js/README.md)

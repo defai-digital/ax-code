@@ -2,7 +2,7 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-07-18  
+Last reviewed: 2026-11-28  
 Owner: ax-code runtime
 
 AX Code uses **effort** (also called thinking level) to control how hard the active model reasons. Effort is **not** a work mode and is **not** a placement mode.
@@ -47,7 +47,9 @@ Effort levels are generated automatically for supported models on these provider
 | Codex CLI                   | `model_reasoning_effort` config override                      | Minimal, Fast, Balanced, Deep, Max          |
 | Grok Build CLI              | `--reasoning-effort`                                          | Fast, Balanced, Deep                        |
 
-Providers whose effort API is unverified or incompatible (Groq's hosted API, OpenRouter, DeepSeek/Alibaba/MiniMax/GLM/Mistral families, unsupported CLI providers, and third-party gateways) expose **no** built-in levels; `/effort` explains this instead of failing silently. Define custom levels under `provider.<id>.models.<model>.variants` in `ax-code.json` when a provider documents a supported option shape.
+Current OpenAI-compatible profiles for Qwen 3.8 / Qwen 4 Max Preview, GLM 5.3+, DeepSeek V4, and MiniMax M3 (plus OpenRouter GLM 5.x, Kimi-on-Anthropic, and Meta Muse Spark) also expose built-in effort levels; see [Current model reasoning controls](current-model-reasoning.md).
+
+Providers or models whose effort API is unverified or incompatible (Groq's hosted API and `gpt-oss`, most OpenRouter models, older DeepSeek/Alibaba/MiniMax/GLM/Mistral models without a current profile, Ornith, unsupported CLI providers, and third-party gateways) expose **no** built-in levels; `/effort` explains this instead of failing silently. Define custom levels under `provider.<id>.models.<model>.variants` in `ax-code.json` when a provider documents a supported option shape.
 
 ## How to set effort
 
@@ -98,6 +100,7 @@ Define or disable provider variants under `provider.<id>.models.<model>.variants
 
 ## Related
 
+- [Current model reasoning controls](current-model-reasoning.md) — Qwen, GLM, DeepSeek, and MiniMax reasoning profiles
 - [Execution Modes](modes.md) — Agent / Council / Arena and hybrid placement
 - [Supported Providers](../providers/supported-providers.md) — which providers expose models
 - OpenCode model variants: https://opencode.ai/docs/models/

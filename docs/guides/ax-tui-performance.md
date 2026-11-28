@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-11-09
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 AX TUI keeps its Zig native renderer as the production backend. Tree-sitter
@@ -637,3 +637,8 @@ and GC regression, virtual-list behavior, scheduling, native/WASM width parity,
 and terminal/application acceptance. TypeScript, generated renderer output,
 native vendor hashes, ABI layout, package payload and repository structure
 checks passed. This change does not modify native sources or native artifacts.
+
+## Related
+
+- [Terminal rendering](terminal-rendering.md)
+- [Performance configuration and diagnostics](performance.md)

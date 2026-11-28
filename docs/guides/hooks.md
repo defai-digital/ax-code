@@ -2,7 +2,7 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-08-23
+Last reviewed: 2026-11-28
 Owner: ax-code runtime
 
 Lifecycle hooks let you run shell commands on agent events without rebuilding the runtime. They complement permission rules and the isolation sandbox: **hooks are deterministic side effects** (“always format”, “never force-push”), while prompts remain advisory.
@@ -28,6 +28,8 @@ Lifecycle hooks let you run shell commands on agent events without rebuilding th
 
 The four session lifecycle events (`SessionStart`, `SessionEnd`, `PostCompact`, `Interrupt`), `PostToolUseFailure`, and the `PermissionRequest`, `StopFailure` and `Notification` events (ADR-259) are observation-only: they fire and forget, never block the lifecycle path, and their payloads carry ids/reasons/timestamps only — never conversation text, summaries, or tool output. `PermissionRequest` carries the tool name, patterns and risk class but never tool arguments; `StopFailure` carries the error name and code but not the message; payload strings are redacted at the same boundary as logs. Subagent sessions do not fire `SessionStart` (they already surface via `SubagentStop`). `SubagentStop` fires for children started by both `task` and `task_parallel`.
 
+These names map to AX Code’s internal plugin triggers (`tool.execute.before` / `tool.execute.after`) plus session-level prompt, compaction, subagent, and stop hooks. Synthetic continuation prompts (internal `agentRouting: "preserve"` prompts) do not fire `UserPromptSubmit`.
+
 ## PostToolUse feedback reaches the model
 
 A `PostToolUse` hook can hand text back to the model. It is appended to the tool result inside a
@@ -40,8 +42,6 @@ A `PostToolUse` hook can hand text back to the model. It is appended to the tool
 Feedback is capped at 4,000 characters per hook and 8,000 characters per tool call, so a noisy hook cannot flood the
 context. This is what makes the `format-after-edit` pack useful: its reminder now lands in the model's next turn instead
 of only in the log.
-
-These names map to AX Code’s internal plugin triggers (`tool.execute.before` / `tool.execute.after`) plus session-level prompt, compaction, subagent, and stop hooks. Synthetic continuation prompts (internal `agentRouting: "preserve"` prompts) do not fire `UserPromptSubmit`.
 
 ## Enable packs
 
@@ -59,7 +59,7 @@ Then create `.ax-code/hooks.json` in your project:
 }
 ```
 
-## Official packs (≥5)
+## Built-in packs
 
 | Pack                    | Events      | Description                             |
 | ----------------------- | ----------- | --------------------------------------- |
@@ -123,6 +123,8 @@ check:
 
 Observation-only events ignore the decoder entirely — they can never block.
 Entries without the `protocol` field behave exactly as before.
+
+### Environment variables
 
 Environment variables available to hook commands:
 
