@@ -4750,6 +4750,45 @@ test.each([
   },
 )
 
+test("a configured alias cannot transfer the deprecation exception to another model", async () => {
+  const providerID = "minimax-coding-plan"
+  const aliasID = "MiniMax-M3"
+  const targetID = "MiniMax-M2.7"
+  await withModelsCatalog(
+    {
+      [providerID]: {
+        id: providerID,
+        name: "MiniMax Token Plan",
+        env: ["MINIMAX_TOKEN_PLAN_API_KEY"],
+        npm: "@ai-sdk/anthropic",
+        api: "https://api.minimax.io/anthropic/v1",
+        models: {
+          [aliasID]: deprecatedCatalogModel(aliasID),
+          [targetID]: deprecatedCatalogModel(targetID),
+        },
+      },
+    },
+    async () => Env.set("MINIMAX_TOKEN_PLAN_API_KEY", "test-minimax-remap"),
+    async (providers, snapshot) => {
+      expect(providers[ProviderID.make(providerID)]?.models[ModelID.make(aliasID)]).toBeUndefined()
+      expect(snapshot.exclusions).toContainEqual(
+        expect.objectContaining({
+          providerID,
+          modelID: aliasID,
+          reason: "deprecated-model",
+        }),
+      )
+    },
+    {
+      provider: {
+        [providerID]: {
+          models: { [aliasID]: { id: targetID } },
+        },
+      },
+    },
+  )
+})
+
 test("blacklisting a validated deprecated alias still excludes it", async () => {
   await withModelsCatalog(
     {

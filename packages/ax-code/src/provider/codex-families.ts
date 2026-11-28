@@ -14,6 +14,7 @@ export function codexFamilyId(input: { id?: string; family?: string }): string |
   if (!segment || segment === "codex-cli") return undefined
   if (/image|embedding|realtime|whisper|tts|audio|moderation/.test(segment)) return undefined
   if (/^(o[0-9]|chatgpt)/.test(segment)) return undefined
+  if (/(?:^|-)healthcare(?:-|$)/.test(segment)) return undefined
   if (segment.includes("codex-spark") || segment.endsWith("-spark")) return "gpt-codex-spark"
   if (segment.includes("codex")) return undefined
   if (segment.includes("mini")) return "gpt-mini"

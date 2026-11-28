@@ -655,11 +655,9 @@ export namespace Provider {
           delete provider.models[modelID]
           continue
         }
-        // An alias row (`fast` with `api.id: "MiniMax-M3"`) inherits the
-        // upstream status, so the override must match the canonical id too.
+        // The deprecation exception follows the model sent to the provider.
         const validatedDeprecatedModel =
-          model.status === "deprecated" &&
-          (keepsDeprecatedModelVisible(providerID, modelID) || keepsDeprecatedModelVisible(providerID, model.api.id))
+          model.status === "deprecated" && keepsDeprecatedModelVisible(providerID, model.api.id)
         const exclusion =
           modelID === "gpt-5-chat-latest"
             ? "unsupported-model-policy"

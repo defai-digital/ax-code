@@ -18,7 +18,15 @@ describe("codex families", () => {
     expect(codexFamilyId({ id: "gpt-5.3-codex" })).toBeUndefined()
   })
 
-  test("uses the bundled OpenAI catalog's newest Codex CLI families", () => {
+  test("does not let a specialized API model displace the Codex flagship", () => {
+    const models = {
+      "gpt-6-astra": { id: "gpt-6-astra", release_date: "2026-09-04" },
+      "gpt-6-astra-healthcare": { id: "gpt-6-astra-healthcare", release_date: "2026-11-24" },
+    }
+    expect(latestCodexFamilyModels(models).map((model) => model.id)).toEqual(["gpt-6-astra"])
+  })
+
+  test("selects Codex CLI families with fallbacks for missing OpenAI rows", () => {
     const openai = (
       bundledSnapshot as {
         openai?: { models?: Record<string, { id: string; name?: string; family?: string; release_date?: string }> }
@@ -26,7 +34,8 @@ describe("codex families", () => {
     ).openai?.models
     expect(openai).toBeDefined()
     expect(openai?.["gpt-6-astra"]).toMatchObject({ id: "gpt-6-astra", release_date: "2026-09-04" })
-    expect(latestCodexFamilyModels(openai!).map((model) => model.id)).toEqual([
+    const catalog = { ...Object.fromEntries(codexFallbackModels().map((model) => [model.id, model])), ...openai }
+    expect(latestCodexFamilyModels(catalog).map((model) => model.id)).toEqual([
       "gpt-6-astra",
       "gpt-5.4-mini",
       "gpt-5.3-codex-spark",
