@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.31.9] - 2026-11-28
+
+### Changed
+
+- Refresh the bundled model catalog and reorganize the installation, provider, and SDK documentation.
+
+### Fixed
+
+- Keep the general-purpose Codex CLI flagship selectable when upstream adds specialized API models, and retain the Spark fallback when its catalog entry is missing.
+- Keep validated MiniMax and Kimi plan models visible after upstream deprecation while applying the exception only to the model the provider actually serves.
+
 ## [7.31.8] - 2026-11-24
 
 ### Fixed
